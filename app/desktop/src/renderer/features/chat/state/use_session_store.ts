@@ -12,6 +12,7 @@ import { use_store } from "@/lib/store";
 
 const initial_session_state: SessionStoreState = {
   sessions_by_workspace: {},
+  agent_sessions_by_agent_id: {},
   archived_sessions_by_workspace: {},
   session_attach_request: null,
   hydrated: false,
@@ -59,6 +60,25 @@ export function use_session_store() {
     });
   }, [commit]);
 
+  /** 缓存一个 Agent 自己的会话摘要；它是 Agents 侧栏进入会话时唯一的摘要来源。 */
+  const set_agent_session = useCallback((agent_id: string, session: DesktopSessionSummary) => {
+    const current = state_ref.current;
+    if (Object.is(current.agent_sessions_by_agent_id[agent_id], session)) return;
+    commit({
+      ...current,
+      agent_sessions_by_agent_id: { ...current.agent_sessions_by_agent_id, [agent_id]: session },
+    });
+  }, [commit]);
+
+  /** 移除一个 Agent 自己的会话摘要（归档 / 删除后目录不再可见）。 */
+  const remove_agent_session = useCallback((agent_id: string) => {
+    const current = state_ref.current;
+    if (!(agent_id in current.agent_sessions_by_agent_id)) return;
+    const next_agent_sessions = { ...current.agent_sessions_by_agent_id };
+    delete next_agent_sessions[agent_id];
+    commit({ ...current, agent_sessions_by_agent_id: next_agent_sessions });
+  }, [commit]);
+
   /** 批量替换一个 Workspace 的 Agent Session 导航列表。 */
   const set_workspace_sessions = useCallback((workspace_id: string, entries: DesktopWorkspaceSession[]) => {
     const current = state_ref.current;
@@ -76,13 +96,19 @@ export function use_session_store() {
     commit({ ...current, sessions_by_workspace });
   }, [commit]);
 
-  /** 移除指定 Agent 在全部 Workspace 下的 Session 导航条目。 */
+  /** 移除指定 Agent 在全部 Workspace 下的 Session 导航条目，并清掉它自己的会话摘要。 */
   const remove_agent_sessions = useCallback((agent_id: string) => {
     const current = state_ref.current;
     const next_sessions = filter_agent_from_entries(current.sessions_by_workspace, agent_id);
     const next_archived = filter_agent_from_entries(current.archived_sessions_by_workspace, agent_id);
-    if (next_sessions === current.sessions_by_workspace && next_archived === current.archived_sessions_by_workspace) return;
-    commit({ ...current, sessions_by_workspace: next_sessions, archived_sessions_by_workspace: next_archived });
+    const next_agent_sessions = { ...current.agent_sessions_by_agent_id };
+    delete next_agent_sessions[agent_id];
+    if (
+      next_sessions === current.sessions_by_workspace
+      && next_archived === current.archived_sessions_by_workspace
+      && Object.keys(next_agent_sessions).length === Object.keys(current.agent_sessions_by_agent_id).length
+    ) return;
+    commit({ ...current, sessions_by_workspace: next_sessions, archived_sessions_by_workspace: next_archived, agent_sessions_by_agent_id: next_agent_sessions });
   }, [commit]);
 
   /** 缓存指定 Workspace 的已归档 Session 列表。 */
@@ -113,13 +139,15 @@ export function use_session_store() {
     remove_workspace,
     prepend_session,
     remove_session,
+    set_agent_session,
+    remove_agent_session,
     set_workspace_sessions,
     replace_all_sessions,
     remove_agent_sessions,
     set_archived_sessions,
     set_session_attach_request,
     mark_hydrated,
-  }), [mark_hydrated, prepend_session, remove_agent_sessions, remove_session, remove_workspace, replace_all_sessions, set_archived_sessions, set_session_attach_request, set_workspace_sessions, state_ref, store]);
+  }), [mark_hydrated, prepend_session, remove_agent_session, remove_agent_sessions, remove_session, remove_workspace, replace_all_sessions, set_agent_session, set_archived_sessions, set_session_attach_request, set_workspace_sessions, state_ref, store]);
 }
 
 /** 从按 Workspace 分组的导航索引中移除一个 Workspace 键。 */

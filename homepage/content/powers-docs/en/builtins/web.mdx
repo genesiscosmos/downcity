@@ -67,6 +67,23 @@ const web = new WebPower();
 WebPower closes browser processes and pages it owns. The persistent profile keeps login state.
 For a cloud browser, select Remote CDP and enter its HTTP or WebSocket endpoint.
 
+## Browser proxy
+
+Local Chrome applies the network proxy resolved by Desktop: explicit Desktop settings, then
+system proxy settings, then Global Env. SDK / CLI usage reads `DOWNCITY_PROXY_URL`,
+`HTTPS_PROXY`, `HTTP_PROXY`, and `ALL_PROXY` in that order, including lowercase forms of
+standard variables. With no configured proxy, Chrome follows the system network settings.
+
+Local browsers support HTTP, HTTPS, SOCKS4, and SOCKS5 proxy URLs without usernames or
+passwords. Bypass rules come from `DOWNCITY_NO_PROXY`, `NO_PROXY`, and `no_proxy`;
+loopback addresses always connect directly.
+
+Existing browser sessions stay open after a proxy change. Find them with
+`browser_list_sessions` and close them with `browser_close_session`. Creating the next
+session restarts an owned browser with the new settings. If a running Web Power browser
+has different or unknown proxy settings, close its Chrome window and retry.
+Remote CDP proxy settings are managed by the owner of the remote browser.
+
 ## Fixed SDK configuration
 
 Constructor configuration overrides saved City/Desktop configuration:

@@ -36,6 +36,7 @@ import { use_store_selector } from "@/lib/store";
 import { is_chat_busy } from "@/types/DesktopView";
 import { get_group_chat_key, get_session_key } from "../lib/chat_cache_key";
 import { baybar_tab_id, use_baybar_close_tab, use_baybar_open, type BayBarTab, type BayBarTranslate } from "@/layouts/BayBar";
+import { SESSION_ORIGIN_TYPE_WORK } from "@downcity/type";
 import { use_translation } from "@/locales/i18n";
 import type { AgentComposerProps, GroupComposerProps, RichTextEditorProps } from "@/types/ChatComponents";
 import type { ReactNode } from "react";
@@ -128,14 +129,15 @@ export function AgentComposerPanel(props: AgentComposerProps) {
   const editor = use_agent_composer(props);
   const { workspace_id, agent_id } = props.selection;
   const session_id = props.selection.kind === "session" ? props.selection.session_id : props.selection.draft_id;
-  const session_key = get_session_key(workspace_id, agent_id, session_id);
+  const origin_type = props.selection.kind === "session" ? props.selection.origin_type : SESSION_ORIGIN_TYPE_WORK;
+  const session_key = get_session_key(workspace_id, agent_id, session_id, origin_type);
   const busy = use_store_selector(props.stores.chat_stream, (state) => is_chat_busy(state.chat_runtime_by_session[session_key]));
   const has_pending_queue = use_store_selector(props.stores.composer, (state) => Boolean(state.queued_messages_by_session[session_key]?.length));
   return <ComposerPanel
     editor={editor}
     busy={busy}
     has_pending_queue={has_pending_queue}
-    stop_session={() => props.actions.stop_session(workspace_id, agent_id, session_id)}
+    stop_session={() => props.actions.stop_session(workspace_id, agent_id, session_id, origin_type)}
     queue={<AgentPanelQueue {...props} />}
   />;
 }
@@ -160,19 +162,20 @@ export function GroupComposerPanel(props: GroupComposerProps) {
 function AgentPanelQueue({ selection, stores, actions }: AgentComposerProps) {
   const { workspace_id, agent_id } = selection;
   const session_id = selection.kind === "session" ? selection.session_id : selection.draft_id;
-  const session_key = get_session_key(workspace_id, agent_id, session_id);
+  const origin_type = selection.kind === "session" ? selection.origin_type : SESSION_ORIGIN_TYPE_WORK;
+  const session_key = get_session_key(workspace_id, agent_id, session_id, origin_type);
   const messages = use_store_selector(stores.composer, (state) => state.queued_messages_by_session[session_key]);
   const paused = use_store_selector(stores.composer, (state) => state.queue_paused_by_session[session_key]);
   if (!messages?.length) return null;
   return <MessageQueue
     queued_messages={messages}
     queue_paused={paused ?? false}
-    remove_queued_message={(id) => actions.remove_queued_message(workspace_id, agent_id, session_id, id)}
-    send_queued_message={(id) => actions.send_queued_message(workspace_id, agent_id, session_id, id)}
-    update_queued_message={(id, text) => actions.update_queued_message(workspace_id, agent_id, session_id, id, text)}
-    toggle_queued_message_paused={(id) => actions.toggle_queued_message_paused(workspace_id, agent_id, session_id, id)}
-    set_queue_paused={(value) => actions.set_queue_paused(workspace_id, agent_id, session_id, value)}
-    move_queued_message={(id, direction) => actions.move_queued_message(workspace_id, agent_id, session_id, id, direction)}
+    remove_queued_message={(id) => actions.remove_queued_message(workspace_id, agent_id, session_id, id, origin_type)}
+    send_queued_message={(id) => actions.send_queued_message(workspace_id, agent_id, session_id, id, origin_type)}
+    update_queued_message={(id, text) => actions.update_queued_message(workspace_id, agent_id, session_id, id, text, origin_type)}
+    toggle_queued_message_paused={(id) => actions.toggle_queued_message_paused(workspace_id, agent_id, session_id, id, origin_type)}
+    set_queue_paused={(value) => actions.set_queue_paused(workspace_id, agent_id, session_id, value, origin_type)}
+    move_queued_message={(id, direction) => actions.move_queued_message(workspace_id, agent_id, session_id, id, direction, origin_type)}
   />;
 }
 

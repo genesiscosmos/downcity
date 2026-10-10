@@ -10,6 +10,7 @@
 
 import { useCallback, useEffect, useMemo, useRef } from "react";
 import type { RespondSessionInteractionInput } from "@downcity/agent";
+import { SESSION_ORIGIN_TYPE_AGENT, SESSION_ORIGIN_TYPE_WORK } from "@downcity/type";
 import type { JSONContent } from "@tiptap/core";
 import type { DesktopChatRewriteInput, DesktopSessionConfiguration, DesktopSessionSummary } from "../../common/types/DesktopApi.ts";
 import { get_session_key, is_workspace_chat_key } from "@/features/chat/lib/chat_cache_key";
@@ -38,7 +39,7 @@ const active_workspace_storage_key = "downcity.active_workspace_id";
 /** 从当前导航目标解析需要受 LRU 保护的 Agent Session 缓存键。 */
 function get_active_session_cache_key(selection: NavigationTarget | null): string | undefined {
   if (selection?.kind !== "session") return undefined;
-  return get_session_key(selection.workspace_id, selection.agent_id, selection.session_id);
+  return get_session_key(selection.workspace_id, selection.agent_id, selection.session_id, selection.origin_type);
 }
 
 /** 订阅一个领域 store 的最小切片。 */
@@ -63,7 +64,7 @@ export function use_desktop_controller(): DesktopController {
   const active_group_session_ids_ref = useRef(new Map<string, string>());
   const previous_selection_ref = useRef<NavigationTarget | null>(null);
   const selection_by_sidebar_mode_ref = useRef<Partial<Record<SidebarMode, NavigationTarget>>>({});
-  const send_message_ref = useRef<(workspace_id: string, agent_id: string, session_id: string, input: JSONContent, mode: ChatSubmitMode, skip_orphan_check?: boolean) => Promise<void>>(async () => undefined);
+  const send_message_ref = useRef<(workspace_id: string, agent_id: string, session_id: string, input: JSONContent, mode: ChatSubmitMode, skip_orphan_check?: boolean, origin_type?: string) => Promise<void>>(async () => undefined);
   const navigation_actions = use_desktop_navigation_actions({
     catalog,
     navigation,
@@ -145,8 +146,19 @@ export function use_desktop_controller(): DesktopController {
       void Promise.all(next_agents.map(async (agent) => ({
         agent_id: agent.agent_id,
         sessions: await window.downcity.chat.list_sessions(agent.agent_id),
+        // Agent 自己的会话落在另一个分区，必须单独取：它不进 Workspace 会话目录，
+        // 但刷新后恢复到该会话时，路由仍需要它自己的摘要才能渲染。
+        // 单个 Agent 读不到不应拖垮整份目录：它只是缺一条摘要，
+        // 而整体失败会让侧栏停在未水合状态，连能读的会话也不显示。
+        agent_session: await window.downcity.chat
+          .list_sessions(agent.agent_id, undefined, SESSION_ORIGIN_TYPE_AGENT)
+          .then((sessions) => sessions[0])
+          .catch(() => undefined),
       }))).then((sessions_by_agent) => {
         session.replace_all_sessions(group_agent_sessions_by_workspace(sessions_by_agent));
+        for (const entry of sessions_by_agent) {
+          if (entry.agent_session) session.set_agent_session(entry.agent_id, entry.agent_session);
+        }
       }).catch((reason) => settings.set_error(to_error_message(reason))).finally(() => session.mark_hydrated());
     }).catch((reason) => {
       settings.set_error(to_error_message(reason));
@@ -175,8 +187,8 @@ export function use_desktop_controller(): DesktopController {
   }, [composer]);
 
   /** 提交队首消息；同一 Session 同时只执行一个提交循环。 */
-  const process_next_queue = useCallback(async (workspace_id: string, agent_id: string, session_id: string): Promise<void> => {
-    const session_key = get_session_key(workspace_id, agent_id, session_id);
+  const process_next_queue = useCallback(async (workspace_id: string, agent_id: string, session_id: string, origin_type?: string): Promise<void> => {
+    const session_key = get_session_key(workspace_id, agent_id, session_id, origin_type);
     if (chat_lifecycle.is_session_unavailable(session_key) || chat_lifecycle.is_queue_processing(session_key) || composer.state_ref.current.queue_paused_by_session[session_key] || is_chat_busy(chat_stream.state_ref.current.chat_runtime_by_session[session_key])) return;
     const queued = composer.state_ref.current.queued_messages_by_session[session_key]?.[0];
     if (!queued || queued.paused) return;
@@ -187,7 +199,7 @@ export function use_desktop_controller(): DesktopController {
     });
     let accepted = false;
     try {
-      await window.downcity.chat.send(agent_id, workspace_id, session_id, queued.input);
+      await window.downcity.chat.send(agent_id, workspace_id, session_id, queued.input, origin_type);
       accepted = true;
       commit_queue({
         ...composer.state_ref.current.queued_messages_by_session,
@@ -203,7 +215,7 @@ export function use_desktop_controller(): DesktopController {
     } finally {
       chat_lifecycle.finish_queue_processing(session_key);
       if (accepted && !is_chat_busy(chat_stream.state_ref.current.chat_runtime_by_session[session_key])) {
-        void process_next_queue(workspace_id, agent_id, session_id);
+        void process_next_queue(workspace_id, agent_id, session_id, origin_type);
       }
     }
   }, [chat_lifecycle, chat_stream, commit_queue, composer, settings]);
@@ -244,8 +256,8 @@ export function use_desktop_controller(): DesktopController {
 
   // ---- Chat 流式订阅：mutation 批处理 + runtime / 队列接力 ----
   useEffect(() => {
-    const unsubscribe_mutation = window.downcity.chat.on_mutation(({ agent_id, workspace_id, session_id, mutation }) => {
-      const session_key = get_session_key(workspace_id, agent_id, session_id);
+    const unsubscribe_mutation = window.downcity.chat.on_mutation(({ agent_id, workspace_id, session_id, origin_type, mutation }) => {
+      const session_key = get_session_key(workspace_id, agent_id, session_id, origin_type);
       if (chat_lifecycle.is_session_deleted(session_key)) return;
       if (mutation.variant === "file_diff") {
         chat_stream.set_file_diff(session_key, {
@@ -266,7 +278,7 @@ export function use_desktop_controller(): DesktopController {
       }
     });
     const unsubscribe_runtime = window.downcity.chat.on_runtime(({ runtime }) => {
-      const session_key = get_session_key(runtime.workspace_id, runtime.agent_id, runtime.session_id);
+      const session_key = get_session_key(runtime.workspace_id, runtime.agent_id, runtime.session_id, runtime.origin_type);
       if (chat_lifecycle.is_session_deleted(session_key)) return;
       chat_stream.set_runtime(session_key, runtime);
       if (!is_chat_busy(runtime)) void process_next_queue(runtime.workspace_id, runtime.agent_id, runtime.session_id);
@@ -295,8 +307,8 @@ export function use_desktop_controller(): DesktopController {
    * 同一 Session 同时收到窗口 focus 与 visibilitychange 时复用同一个 Promise，避免
    * 重复 IPC；request_id 继续负责删除等跨生命周期操作的迟到响应屏蔽。
    */
-  const load_session_snapshot = useCallback((workspace_id: string, agent_id: string, session_id: string): Promise<void> => {
-    const session_key = get_session_key(workspace_id, agent_id, session_id);
+  const load_session_snapshot = useCallback((workspace_id: string, agent_id: string, session_id: string, origin_type: string): Promise<void> => {
+    const session_key = get_session_key(workspace_id, agent_id, session_id, origin_type);
     if (chat_lifecycle.is_session_unavailable(session_key)) return Promise.resolve();
     const pending_load = chat_lifecycle.get_snapshot_load(session_key);
     if (pending_load) return pending_load;
@@ -307,8 +319,8 @@ export function use_desktop_controller(): DesktopController {
       let snapshot_succeeded = false;
       try {
         const [snapshot, configuration] = await Promise.all([
-          window.downcity.chat.get_snapshot(agent_id, workspace_id, session_id),
-          window.downcity.chat.get_configuration(agent_id, workspace_id, session_id),
+          window.downcity.chat.get_snapshot(agent_id, workspace_id, session_id, origin_type),
+          window.downcity.chat.get_configuration(agent_id, workspace_id, session_id, origin_type),
         ]);
         if (!chat_lifecycle.is_snapshot_request_current(session_key, request_id)) return;
         chat_stream.merge_messages(session_key, snapshot.messages);
@@ -338,23 +350,23 @@ export function use_desktop_controller(): DesktopController {
    * 不能用 controller 的同名 action——后者会把该模式上次记住的 selection 一并写回，
    * 覆盖掉下面刚设好的会话目标。
    */
-  const open_session = useCallback(async (workspace_id: string, agent_id: string, session_id: string) => {
-    const session_key = get_session_key(workspace_id, agent_id, session_id);
+  const open_session = useCallback(async (workspace_id: string, agent_id: string, session_id: string, origin_type: string = SESSION_ORIGIN_TYPE_WORK) => {
+    const session_key = get_session_key(workspace_id, agent_id, session_id, origin_type);
     if (chat_lifecycle.is_session_unavailable(session_key)) return;
     hydrated_navigation_keys_ref.current.add(`session:${session_key}`);
     settings.set_error("");
-    const selection: NavigationTarget = { kind: "session", workspace_id, agent_id, session_id };
+    const selection: NavigationTarget = { kind: "session", workspace_id, agent_id, session_id, origin_type };
     const sidebar_mode = get_sidebar_mode_for_target(selection);
     if (sidebar_mode) navigation.set_sidebar_mode(sidebar_mode);
-    navigation.set_active_workspace_id(workspace_id);
+    if (origin_type !== SESSION_ORIGIN_TYPE_AGENT) navigation.set_active_workspace_id(workspace_id);
     navigation.set_selection(selection);
-    await load_session_snapshot(workspace_id, agent_id, session_id);
+    await load_session_snapshot(workspace_id, agent_id, session_id, origin_type);
   }, [chat_lifecycle, load_session_snapshot, navigation, settings]);
 
-  const select_session = useCallback(async (workspace_id: string, agent_id: string, session_id: string) => {
-    const session_key = get_session_key(workspace_id, agent_id, session_id);
+  const select_session = useCallback(async (workspace_id: string, agent_id: string, session_id: string, origin_type?: string) => {
+    const session_key = get_session_key(workspace_id, agent_id, session_id, origin_type);
     if (chat_lifecycle.is_session_unavailable(session_key)) return;
-    await open_session(workspace_id, agent_id, session_id);
+    await open_session(workspace_id, agent_id, session_id, origin_type);
   }, [chat_lifecycle, open_session]);
 
   /** 刷新恢复 Session 时，通过既有快照入口补齐消息、配置与运行态。 */
@@ -362,11 +374,11 @@ export function use_desktop_controller(): DesktopController {
     const hydrate_session = () => {
       const selection = navigation.state_ref.current.selection;
       if (selection?.kind !== "session") return;
-      const session_key = get_session_key(selection.workspace_id, selection.agent_id, selection.session_id);
+      const session_key = get_session_key(selection.workspace_id, selection.agent_id, selection.session_id, selection.origin_type);
       const navigation_key = `session:${session_key}`;
       if (hydrated_navigation_keys_ref.current.has(navigation_key)) return;
       hydrated_navigation_keys_ref.current.add(navigation_key);
-      void select_session(selection.workspace_id, selection.agent_id, selection.session_id);
+      void select_session(selection.workspace_id, selection.agent_id, selection.session_id, selection.origin_type);
     };
     hydrate_session();
     return navigation.store.subscribe(hydrate_session);
@@ -382,8 +394,8 @@ export function use_desktop_controller(): DesktopController {
   }, [chat_stream, navigation.state_ref, navigation.store]);
 
   /** 刷新当前 Agent Session 的 canonical 快照，恢复窗口切换期间错过的 mutation。 */
-  const refresh_session_snapshot = useCallback((workspace_id: string, agent_id: string, session_id: string): Promise<void> => (
-    load_session_snapshot(workspace_id, agent_id, session_id)
+  const refresh_session_snapshot = useCallback((workspace_id: string, agent_id: string, session_id: string, origin_type: string): Promise<void> => (
+    load_session_snapshot(workspace_id, agent_id, session_id, origin_type)
   ), [load_session_snapshot]);
 
   /** 窗口重新可见或获得焦点时同步当前 Session，避免漏掉后台期间的交互事件。 */
@@ -391,7 +403,7 @@ export function use_desktop_controller(): DesktopController {
     const refresh_current_session = () => {
       if (document.visibilityState === "hidden") return;
       const current = navigation.state_ref.current.selection;
-      if (current?.kind === "session") void refresh_session_snapshot(current.workspace_id, current.agent_id, current.session_id);
+      if (current?.kind === "session") void refresh_session_snapshot(current.workspace_id, current.agent_id, current.session_id, current.origin_type);
     };
     document.addEventListener("visibilitychange", refresh_current_session);
     window.addEventListener("focus", refresh_current_session);
@@ -444,12 +456,12 @@ export function use_desktop_controller(): DesktopController {
   }, [catalog, chat_stream, composer, navigation]);
 
   /** 创建分支 Session，将其加入导航列表并立即打开。 */
-  const fork_session = useCallback(async (workspace_id: string, agent_id: string, session_id: string, message_id: string) => {
+  const fork_session = useCallback(async (workspace_id: string, agent_id: string, session_id: string, message_id: string, origin_type?: string) => {
     settings.set_error("");
     try {
-      const forked_session = await window.downcity.chat.fork_session(agent_id, workspace_id, session_id, message_id);
+      const forked_session = await window.downcity.chat.fork_session(agent_id, workspace_id, session_id, message_id, origin_type);
       session.prepend_session(workspace_id, agent_id, forked_session);
-      await select_session(workspace_id, agent_id, forked_session.session_id);
+      await select_session(workspace_id, agent_id, forked_session.session_id, forked_session.origin_type);
     } catch (reason) {
       settings.set_error(to_error_message(reason));
       throw reason;
@@ -457,34 +469,34 @@ export function use_desktop_controller(): DesktopController {
   }, [select_session, session, settings]);
 
   /** 重写历史用户消息，并将承载新 Turn 的 Session 设为当前会话。 */
-  const rewrite_session_message = useCallback(async (workspace_id: string, agent_id: string, session_id: string, input: DesktopChatRewriteInput) => {
+  const rewrite_session_message = useCallback(async (workspace_id: string, agent_id: string, session_id: string, input: DesktopChatRewriteInput, origin_type?: string) => {
     settings.set_error("");
-    const source_key = get_session_key(workspace_id, agent_id, session_id);
+    const session_key = get_session_key(workspace_id, agent_id, session_id, origin_type);
     try {
-      if (input.action === "replace" && (composer.state_ref.current.queued_messages_by_session[source_key]?.length ?? 0) > 0) {
+      if (input.action === "replace" && (composer.state_ref.current.queued_messages_by_session[session_key]?.length ?? 0) > 0) {
         throw new Error(translate("chat:message.replace_blocked_queue"));
       }
-      const result = await window.downcity.chat.rewrite_session_message(agent_id, workspace_id, session_id, input);
+      const result = await window.downcity.chat.rewrite_session_message(agent_id, workspace_id, session_id, input, origin_type);
       session.prepend_session(workspace_id, agent_id, result.session);
-      const result_key = get_session_key(workspace_id, agent_id, result.session.session_id);
+      const result_key = get_session_key(workspace_id, agent_id, result.session.session_id, result.session.origin_type);
       if (result.source_disposition === "archived") {
         // replace 事务显式转移草稿所有权；队列在提交前已被拒绝，不能静默迁移或删除。
-        composer.move_draft(source_key, result_key);
+        composer.move_draft(session_key, result_key);
         session.remove_session(workspace_id, agent_id, session_id);
-        chat_lifecycle.discard_session(source_key);
-        discard_session_render_state(source_key);
+        chat_lifecycle.discard_session(session_key);
+        discard_session_render_state(session_key);
       }
       if (result.warning) settings.set_error(result.warning);
-      await select_session(workspace_id, agent_id, result.session.session_id);
+      await select_session(workspace_id, agent_id, result.session.session_id, result.session.origin_type);
     } catch (reason) {
       settings.set_error(to_error_message(reason));
       throw reason;
     }
   }, [chat_lifecycle, composer, discard_session_render_state, select_session, session, settings]);
 
-  const rename_session = useCallback(async (workspace_id: string, agent_id: string, session_id: string, title: string) => {
+  const rename_session = useCallback(async (workspace_id: string, agent_id: string, session_id: string, title: string, origin_type?: string) => {
     try {
-      const normalized_title = await window.downcity.chat.rename_session(agent_id, workspace_id, session_id, title);
+      const normalized_title = await window.downcity.chat.rename_session(agent_id, workspace_id, session_id, title, origin_type);
       const entries = session.state_ref.current.sessions_by_workspace[workspace_id] ?? [];
       const updated = entries.map((item) => item.agent_id === agent_id && item.session.session_id === session_id
         ? { ...item, session: { ...item.session, title: normalized_title, updated_at: Date.now() } }
@@ -496,10 +508,12 @@ export function use_desktop_controller(): DesktopController {
     }
   }, [session, settings]);
 
-  const archive_session = useCallback(async (workspace_id: string, agent_id: string, session_id: string) => {
+  const archive_session = useCallback(async (workspace_id: string, agent_id: string, session_id: string, origin_type?: string) => {
     try {
-      await window.downcity.chat.archive_session(agent_id, workspace_id, session_id);
+      await window.downcity.chat.archive_session(agent_id, workspace_id, session_id, origin_type);
       session.remove_session(workspace_id, agent_id, session_id);
+      // Agent 自己的会话不在 Workspace 目录里，归档后要单独从它的摘要桶中收回。
+      if (origin_type === SESSION_ORIGIN_TYPE_AGENT) session.remove_agent_session(agent_id);
       const current_selection = navigation.state_ref.current.selection;
       if (current_selection?.kind === "session" && current_selection.workspace_id === workspace_id && current_selection.agent_id === agent_id && current_selection.session_id === session_id) {
         const draft_id = get_draft_session_id(agent_id);
@@ -513,13 +527,14 @@ export function use_desktop_controller(): DesktopController {
     }
   }, [navigation, reset_draft_configuration, session, settings]);
 
-  const remove_session = useCallback(async (workspace_id: string, agent_id: string, session_id: string) => {
-    const session_key = get_session_key(workspace_id, agent_id, session_id);
+  const remove_session = useCallback(async (workspace_id: string, agent_id: string, session_id: string, origin_type?: string) => {
+    const session_key = get_session_key(workspace_id, agent_id, session_id, origin_type);
     chat_lifecycle.begin_session_delete(session_key);
     try {
-      await window.downcity.chat.remove_session(agent_id, workspace_id, session_id);
+      await window.downcity.chat.remove_session(agent_id, workspace_id, session_id, origin_type);
       chat_lifecycle.finish_session_delete(session_key);
       session.remove_session(workspace_id, agent_id, session_id);
+      if (origin_type === SESSION_ORIGIN_TYPE_AGENT) session.remove_agent_session(agent_id);
       discard_session_render_state(session_key);
       const fallback_selection: NavigationTarget = { kind: "draft", workspace_id, agent_id, draft_id: get_draft_session_id(agent_id) };
       if (previous_selection_ref.current?.kind === "session" && previous_selection_ref.current.workspace_id === workspace_id && previous_selection_ref.current.agent_id === agent_id && previous_selection_ref.current.session_id === session_id) {
@@ -544,45 +559,29 @@ export function use_desktop_controller(): DesktopController {
   }, [chat_lifecycle, discard_session_render_state, navigation, reset_draft_configuration, session, settings]);
 
   /**
-   * 解析打开 Agent 会话时用作初始目录的 Workspace。
-   *
-   * 顺序：当前 active workspace → 第一个已登记 workspace → 宿主默认 workspace。
-   * 前两者都不可用时才问主进程，避免每次打开都多一次 IPC。
-   */
-  const resolve_active_workspace_id = useCallback(async (): Promise<string> => {
-    const current = catalog.state_ref.current.workspaces;
-    const active = current.find((workspace) => workspace.workspace_id === navigation.state_ref.current.active_workspace_id);
-    const target = active ?? current[0];
-    if (target) return target.workspace_id;
-    const fallback = await window.downcity.workspace.get_default();
-    catalog.add_workspace(fallback);
-    return fallback.workspace_id;
-  }, [catalog, navigation.state_ref]);
-
-  /**
    * 打开 Agent 自己的会话：它就是 Agent 的对话入口。
    *
    * 关键点（中文）
    * - 目标确定：session_id 就是 agent_id，不再靠「最近会话」启发式猜测。
-   * - 首次打开时把当前 active workspace 作为初始目录；之后目录跟着会话自己走，
-   *   因此这里回读摘要里的 workspace_id，而不是沿用调用时的值。
+   * - 主进程提供固定 main Workspace，打开主会话不改变用户选中的项目。
    */
   const open_agent_chat = useCallback(async (agent_id: string) => {
     settings.set_error("");
     try {
-      const workspace_id = await resolve_active_workspace_id();
-      const summary = await window.downcity.chat.open_agent_session(agent_id, workspace_id);
-      // 会话可能属于另一个 Workspace：以它自己记录的为准，避免快照与投影落在不同键上。
-      const session_workspace_id = summary.workspace_id || workspace_id;
-      await select_session(session_workspace_id, agent_id, summary.session_id);
+      const summary = await window.downcity.chat.open_agent_session(agent_id);
+      const session_workspace_id = summary.workspace_id;
+      if (!session_workspace_id) throw new Error("Agent 主会话缺少专属工作目录");
+      // 它属于 `agent` 来源分区，不进 Workspace 会话目录，只作为 Agents 侧栏进入会话的摘要。
+      session.set_agent_session(agent_id, summary);
+      await select_session(session_workspace_id, agent_id, summary.session_id, summary.origin_type);
     } catch (reason) {
       settings.set_error(to_error_message(reason));
     }
-  }, [resolve_active_workspace_id, select_session, settings]);
+  }, [select_session, session, settings]);
 
   /** 加载一个更早历史 Segment。 */
-  const load_earlier_history = useCallback(async (workspace_id: string, agent_id: string, session_id: string) => {
-    const session_key = get_session_key(workspace_id, agent_id, session_id);
+  const load_earlier_history = useCallback(async (workspace_id: string, agent_id: string, session_id: string, origin_type?: string) => {
+    const session_key = get_session_key(workspace_id, agent_id, session_id, origin_type);
     const current_history = chat_stream.state_ref.current.history_by_session[session_key];
     if (!current_history?.has_more || !current_history.next_before_sequence || current_history.loading) return;
     const loading_history = { ...current_history, loading: true };
@@ -590,7 +589,7 @@ export function use_desktop_controller(): DesktopController {
     chat_stream.begin_session_snapshot(session_key);
     let snapshot_succeeded = false;
     try {
-      const page = await window.downcity.chat.get_history(agent_id, workspace_id, session_id, current_history.next_before_sequence);
+      const page = await window.downcity.chat.get_history(agent_id, workspace_id, session_id, current_history.next_before_sequence, origin_type);
       chat_stream.merge_messages(session_key, page.messages);
       const next_history = { loading: false, has_more: page.has_more, next_before_sequence: page.next_before_sequence };
       chat_stream.set_history(session_key, next_history);
@@ -614,22 +613,23 @@ export function use_desktop_controller(): DesktopController {
   const clear_session_attach_request = useCallback(() => {
     const request = session.state_ref.current.session_attach_request;
     if (request?.pending_input) {
-      composer.set_draft(get_session_key(request.workspace_id, request.agent_id, request.session_id), request.pending_input);
+      composer.set_draft(get_session_key(request.workspace_id, request.agent_id, request.session_id, request.origin_type), request.pending_input);
     }
     session.set_session_attach_request(null);
   }, [composer, session]);
 
   /** 把孤儿 Session 重新绑定到用户选择的 Workspace，并进入该 Session。 */
-  const rebind_session_workspace = useCallback(async (agent_id: string, session_id: string, workspace_id: string) => {
+  const rebind_session_workspace = useCallback(async (agent_id: string, session_id: string, workspace_id: string, origin_type?: string) => {
     settings.set_error("");
     const pending_input = session.state_ref.current.session_attach_request?.pending_input;
     session.set_session_attach_request(null);
     try {
-      const rebound_session = await window.downcity.chat.rebind_session_workspace(agent_id, session_id, workspace_id);
+      const rebound_session = await window.downcity.chat.rebind_session_workspace(agent_id, session_id, workspace_id, origin_type);
       // 从全部旧分组移除该 Session，再放入新 Workspace 分组。
       session.replace_all_sessions(rebind_entries(session.state_ref.current.sessions_by_workspace, agent_id, session_id, workspace_id, rebound_session));
       if (pending_input) {
-        await send_message_ref.current(workspace_id, agent_id, session_id, pending_input, "send", true);
+        // 重新绑定的会话可能不是默认工作分区：沿用它的分区，否则发送会落到不存在的会话。
+        await send_message_ref.current(workspace_id, agent_id, session_id, pending_input, "send", true, rebound_session.origin_type);
       }
     } catch (reason) {
       settings.set_error(to_error_message(reason));
@@ -637,12 +637,12 @@ export function use_desktop_controller(): DesktopController {
   }, [session, settings]);
 
   /** 新建 Workspace 并立即绑定孤儿 Session，然后进入该 Session。 */
-  const create_workspace_for_session = useCallback(async (value: CreateWorkspaceFormValue, agent_id: string, session_id: string) => {
+  const create_workspace_for_session = useCallback(async (value: CreateWorkspaceFormValue, agent_id: string, session_id: string, origin_type?: string) => {
     settings.set_error("");
     try {
       const workspace = await window.downcity.workspace.create(value);
       catalog.add_workspace(workspace);
-      await rebind_session_workspace(agent_id, session_id, workspace.workspace_id);
+      await rebind_session_workspace(agent_id, session_id, workspace.workspace_id, origin_type);
     } catch (reason) {
       settings.set_error(to_error_message(reason));
     }
@@ -662,13 +662,13 @@ export function use_desktop_controller(): DesktopController {
   }, [catalog, session, settings]);
 
   // ---- 发送与队列 ----
-  const update_draft = useCallback((workspace_id: string, agent_id: string, session_id: string, input: JSONContent) => {
-    composer.set_draft(get_session_key(workspace_id, agent_id, session_id), input);
+  const update_draft = useCallback((workspace_id: string, agent_id: string, session_id: string, input: JSONContent, origin_type?: string) => {
+    composer.set_draft(get_session_key(workspace_id, agent_id, session_id, origin_type), input);
   }, [composer]);
 
-  const send_message = useCallback(async (workspace_id: string, agent_id: string, session_id: string, input: JSONContent, mode: ChatSubmitMode = "send", skip_orphan_check = false) => {
+  const send_message = useCallback(async (workspace_id: string, agent_id: string, session_id: string, input: JSONContent, mode: ChatSubmitMode = "send", skip_orphan_check = false, origin_type?: string) => {
     if (is_chat_composer_empty(input)) return;
-    const session_key = get_session_key(workspace_id, agent_id, session_id);
+    const session_key = get_session_key(workspace_id, agent_id, session_id, origin_type);
     settings.set_error("");
     composer.remove_draft(session_key);
     if (is_draft_session_id(session_id)) {
@@ -681,10 +681,11 @@ export function use_desktop_controller(): DesktopController {
         };
         const created = await window.downcity.chat.create_session(agent_id, workspace_id, draft_configuration);
         session.prepend_session(workspace_id, agent_id, created.session);
-        target_key = get_session_key(workspace_id, agent_id, created.session.session_id);
+        // 草稿落盘后的分区以新会话自己的为准（创建即带来源，不在客户端猜）。
+        target_key = get_session_key(workspace_id, agent_id, created.session.session_id, created.session.origin_type);
         chat_stream.remove_configuration(session_key);
         chat_stream.set_configuration(target_key, created.configuration);
-        navigation.set_selection({ kind: "session", workspace_id, agent_id, session_id: created.session.session_id });
+        navigation.set_selection({ kind: "session", workspace_id, agent_id, session_id: created.session.session_id, origin_type: created.session.origin_type });
         await window.downcity.chat.send(agent_id, workspace_id, created.session.session_id, input);
         composer.remove_draft(target_key);
       } catch (reason) {
@@ -695,8 +696,9 @@ export function use_desktop_controller(): DesktopController {
       return;
     }
     // 孤儿 Session 的 Workspace 已从 Registry 移除；发送前必须由用户显式选择 Workspace 绑定。
-    if (!skip_orphan_check && !catalog.state_ref.current.workspaces.some((workspace) => workspace.workspace_id === workspace_id)) {
-      session.set_session_attach_request({ agent_id, session_id, workspace_id, pending_input: input });
+    if (origin_type !== SESSION_ORIGIN_TYPE_AGENT && !skip_orphan_check && !catalog.state_ref.current.workspaces.some((workspace) => workspace.workspace_id === workspace_id)) {
+      // 记下分区：取消绑定后要把草稿还原到它自己的那个会话槽位，而不是默认分区。
+      session.set_session_attach_request({ agent_id, session_id, workspace_id, origin_type: origin_type ?? SESSION_ORIGIN_TYPE_WORK, pending_input: input });
       return;
     }
     if (mode !== "steer" && (mode === "queue" || is_chat_busy(chat_stream.state_ref.current.chat_runtime_by_session[session_key]) || (composer.state_ref.current.queued_messages_by_session[session_key]?.length ?? 0) > 0)) {
@@ -708,11 +710,11 @@ export function use_desktop_controller(): DesktopController {
         paused: mode === "queue",
       };
       composer.append_queued(session_key, queued);
-      if (!is_chat_busy(chat_stream.state_ref.current.chat_runtime_by_session[session_key])) void process_next_queue(workspace_id, agent_id, session_id);
+      if (!is_chat_busy(chat_stream.state_ref.current.chat_runtime_by_session[session_key])) void process_next_queue(workspace_id, agent_id, session_id, origin_type);
       return;
     }
     try {
-      await window.downcity.chat.send(agent_id, workspace_id, session_id, input);
+      await window.downcity.chat.send(agent_id, workspace_id, session_id, input, origin_type);
     } catch (reason) {
       composer.set_draft(session_key, input);
       settings.set_error(to_error_message(reason));
@@ -721,8 +723,8 @@ export function use_desktop_controller(): DesktopController {
 
   useEffect(() => { send_message_ref.current = send_message; }, [send_message]);
 
-  const set_session_model = useCallback(async (workspace_id: string, agent_id: string, session_id: string, model_id: string) => {
-    const session_key = get_session_key(workspace_id, agent_id, session_id);
+  const set_session_model = useCallback(async (workspace_id: string, agent_id: string, session_id: string, model_id: string, origin_type?: string) => {
+    const session_key = get_session_key(workspace_id, agent_id, session_id, origin_type);
     try {
       if (is_draft_session_id(session_id)) {
         const current = chat_stream.state_ref.current.configuration_by_session[session_key] ?? { model_id, approval_mode: "ask" };
@@ -735,15 +737,15 @@ export function use_desktop_controller(): DesktopController {
         chat_stream.set_configuration(session_key, { ...base_configuration, model_id, ...(reasoning_effort ? { reasoning_effort } : {}) });
         return;
       }
-      const configuration = await window.downcity.chat.set_model(agent_id, workspace_id, session_id, model_id);
+      const configuration = await window.downcity.chat.set_model(agent_id, workspace_id, session_id, model_id, origin_type);
       chat_stream.set_configuration(session_key, configuration);
     } catch (reason) {
       settings.set_error(to_error_message(reason));
     }
   }, [catalog, chat_stream, settings]);
 
-  const set_session_reasoning_effort = useCallback(async (workspace_id: string, agent_id: string, session_id: string, reasoning_effort?: string) => {
-    const session_key = get_session_key(workspace_id, agent_id, session_id);
+  const set_session_reasoning_effort = useCallback(async (workspace_id: string, agent_id: string, session_id: string, reasoning_effort?: string, origin_type?: string) => {
+    const session_key = get_session_key(workspace_id, agent_id, session_id, origin_type);
     try {
       if (is_draft_session_id(session_id)) {
         const current = chat_stream.state_ref.current.configuration_by_session[session_key] ?? { model_id: catalog.state_ref.current.agents.find((item) => item.agent_id === agent_id)?.model_id || "", approval_mode: "ask" };
@@ -751,7 +753,7 @@ export function use_desktop_controller(): DesktopController {
         chat_stream.set_configuration(session_key, { ...base_configuration, ...(reasoning_effort ? { reasoning_effort } : {}) });
         return;
       }
-      const configuration = await window.downcity.chat.set_reasoning_effort(agent_id, workspace_id, session_id, reasoning_effort);
+      const configuration = await window.downcity.chat.set_reasoning_effort(agent_id, workspace_id, session_id, reasoning_effort, origin_type);
       chat_stream.set_configuration(session_key, configuration);
     } catch (reason) {
       settings.set_error(to_error_message(reason));
@@ -763,8 +765,9 @@ export function use_desktop_controller(): DesktopController {
     agent_id: string,
     session_id: string,
     approval_mode: DesktopSessionConfiguration["approval_mode"],
+    origin_type?: string,
   ) => {
-    const session_key = get_session_key(workspace_id, agent_id, session_id);
+    const session_key = get_session_key(workspace_id, agent_id, session_id, origin_type);
     try {
       if (is_draft_session_id(session_id)) {
         const agent = catalog.state_ref.current.agents.find((item) => item.agent_id === agent_id);
@@ -772,16 +775,16 @@ export function use_desktop_controller(): DesktopController {
         chat_stream.set_configuration(session_key, { ...current, approval_mode });
         return;
       }
-      const configuration = await window.downcity.chat.set_approval_mode(agent_id, workspace_id, session_id, approval_mode);
+      const configuration = await window.downcity.chat.set_approval_mode(agent_id, workspace_id, session_id, approval_mode, origin_type);
       chat_stream.set_configuration(session_key, configuration);
     } catch (reason) {
       settings.set_error(to_error_message(reason));
     }
   }, [catalog, chat_stream, settings]);
 
-  const stop_session = useCallback(async (workspace_id: string, agent_id: string, session_id: string) => {
+  const stop_session = useCallback(async (workspace_id: string, agent_id: string, session_id: string, origin_type?: string) => {
     try {
-      await window.downcity.chat.stop(agent_id, workspace_id, session_id);
+      await window.downcity.chat.stop(agent_id, workspace_id, session_id, origin_type);
     } catch (reason) {
       settings.set_error(to_error_message(reason));
     }
@@ -792,9 +795,10 @@ export function use_desktop_controller(): DesktopController {
     agent_id: string,
     session_id: string,
     input: RespondSessionInteractionInput,
+    origin_type?: string,
   ) => {
     try {
-      await window.downcity.chat.respond(agent_id, workspace_id, session_id, input);
+      await window.downcity.chat.respond(agent_id, workspace_id, session_id, input, origin_type);
     } catch (reason) {
       settings.set_error(to_error_message(reason));
       throw reason;
@@ -802,18 +806,18 @@ export function use_desktop_controller(): DesktopController {
   }, [settings]);
 
   // ---- 队列消息操作 ----
-  const remove_queued_message = useCallback((workspace_id: string, agent_id: string, session_id: string, message_id: string) => {
-    const session_key = get_session_key(workspace_id, agent_id, session_id);
+  const remove_queued_message = useCallback((workspace_id: string, agent_id: string, session_id: string, message_id: string, origin_type?: string) => {
+    const session_key = get_session_key(workspace_id, agent_id, session_id, origin_type);
     composer.replace_queue(session_key, (composer.state_ref.current.queued_messages_by_session[session_key] ?? []).filter((item) => item.message_id !== message_id || item.sending));
   }, [composer]);
 
-  const send_queued_message = useCallback(async (workspace_id: string, agent_id: string, session_id: string, message_id: string) => {
-    const session_key = get_session_key(workspace_id, agent_id, session_id);
+  const send_queued_message = useCallback(async (workspace_id: string, agent_id: string, session_id: string, message_id: string, origin_type?: string) => {
+    const session_key = get_session_key(workspace_id, agent_id, session_id, origin_type);
     const queued = composer.state_ref.current.queued_messages_by_session[session_key]?.find((item) => item.message_id === message_id);
     if (!queued || queued.sending) return;
     composer.replace_queue(session_key, (composer.state_ref.current.queued_messages_by_session[session_key] ?? []).map((item) => item.message_id === message_id ? { ...item, sending: true } : item));
     try {
-      await window.downcity.chat.send(agent_id, workspace_id, session_id, queued.input);
+      await window.downcity.chat.send(agent_id, workspace_id, session_id, queued.input, origin_type);
       composer.replace_queue(session_key, (composer.state_ref.current.queued_messages_by_session[session_key] ?? []).filter((item) => item.message_id !== message_id));
     } catch (reason) {
       composer.replace_queue(session_key, (composer.state_ref.current.queued_messages_by_session[session_key] ?? []).map((item) => item.message_id === message_id ? { ...item, sending: false } : item));
@@ -822,27 +826,27 @@ export function use_desktop_controller(): DesktopController {
     }
   }, [composer, settings]);
 
-  const update_queued_message = useCallback((workspace_id: string, agent_id: string, session_id: string, message_id: string, text: string) => {
+  const update_queued_message = useCallback((workspace_id: string, agent_id: string, session_id: string, message_id: string, text: string, origin_type?: string) => {
     const normalized_text = text.trim();
     if (!normalized_text) return;
-    const session_key = get_session_key(workspace_id, agent_id, session_id);
+    const session_key = get_session_key(workspace_id, agent_id, session_id, origin_type);
     composer.replace_queue(session_key, (composer.state_ref.current.queued_messages_by_session[session_key] ?? []).map((item) => item.message_id === message_id && !item.sending ? { ...item, input: create_chat_composer(normalized_text) } : item));
   }, [composer]);
 
-  const toggle_queued_message_paused = useCallback((workspace_id: string, agent_id: string, session_id: string, message_id: string) => {
-    const session_key = get_session_key(workspace_id, agent_id, session_id);
+  const toggle_queued_message_paused = useCallback((workspace_id: string, agent_id: string, session_id: string, message_id: string, origin_type?: string) => {
+    const session_key = get_session_key(workspace_id, agent_id, session_id, origin_type);
     composer.replace_queue(session_key, (composer.state_ref.current.queued_messages_by_session[session_key] ?? []).map((item) => item.message_id === message_id && !item.sending ? { ...item, paused: !item.paused } : item));
-    if (!composer.state_ref.current.queue_paused_by_session[session_key] && !is_chat_busy(chat_stream.state_ref.current.chat_runtime_by_session[session_key])) void process_next_queue(workspace_id, agent_id, session_id);
+    if (!composer.state_ref.current.queue_paused_by_session[session_key] && !is_chat_busy(chat_stream.state_ref.current.chat_runtime_by_session[session_key])) void process_next_queue(workspace_id, agent_id, session_id, origin_type);
   }, [chat_stream, composer, process_next_queue]);
 
-  const set_queue_paused = useCallback((workspace_id: string, agent_id: string, session_id: string, paused: boolean) => {
-    const session_key = get_session_key(workspace_id, agent_id, session_id);
+  const set_queue_paused = useCallback((workspace_id: string, agent_id: string, session_id: string, paused: boolean, origin_type?: string) => {
+    const session_key = get_session_key(workspace_id, agent_id, session_id, origin_type);
     composer.set_queue_paused(session_key, paused);
-    if (!paused && !is_chat_busy(chat_stream.state_ref.current.chat_runtime_by_session[session_key])) void process_next_queue(workspace_id, agent_id, session_id);
+    if (!paused && !is_chat_busy(chat_stream.state_ref.current.chat_runtime_by_session[session_key])) void process_next_queue(workspace_id, agent_id, session_id, origin_type);
   }, [chat_stream, composer, process_next_queue]);
 
-  const move_queued_message = useCallback((workspace_id: string, agent_id: string, session_id: string, message_id: string, direction: "up" | "down") => {
-    const session_key = get_session_key(workspace_id, agent_id, session_id);
+  const move_queued_message = useCallback((workspace_id: string, agent_id: string, session_id: string, message_id: string, direction: "up" | "down", origin_type?: string) => {
+    const session_key = get_session_key(workspace_id, agent_id, session_id, origin_type);
     const queue = [...(composer.state_ref.current.queued_messages_by_session[session_key] ?? [])];
     const index = queue.findIndex((item) => item.message_id === message_id);
     const target = direction === "up" ? index - 1 : index + 1;

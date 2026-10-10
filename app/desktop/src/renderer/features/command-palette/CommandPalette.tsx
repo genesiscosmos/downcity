@@ -461,7 +461,7 @@ export function CommandPalette({ open, on_close, controller }: CommandPalettePro
 function resolve_active_session(selection: NavigationTarget | null, controller: DesktopController): CommandActiveSession | null {
   if (selection?.kind !== "session") return null;
   const snapshot = controller.stores.chat_stream.get_snapshot();
-  const key = get_session_key(selection.workspace_id, selection.agent_id, selection.session_id);
+  const key = get_session_key(selection.workspace_id, selection.agent_id, selection.session_id, selection.origin_type);
   return {
     workspace_id: selection.workspace_id,
     agent_id: selection.agent_id,

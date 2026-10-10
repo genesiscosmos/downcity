@@ -9,7 +9,7 @@
 
 import { spawn } from "node:child_process";
 import type { ChildProcess } from "node:child_process";
-import { access, mkdir, readFile, unlink } from "node:fs/promises";
+import { access, mkdir, readFile, unlink, writeFile } from "node:fs/promises";
 import path from "node:path";
 import type {
   BrowserActInput,
@@ -24,8 +24,13 @@ import type {
 } from "@/web/types/WebPower.js";
 import type { LocalBrowserProviderOptions } from "@/web/types/WebProviderOptions.js";
 import { PlaywrightBrowserProvider } from "@/web/providers/PlaywrightBrowserProvider.js";
+import {
+  local_browser_proxy_key,
+  resolve_local_browser_proxy_args,
+} from "@/web/providers/LocalBrowserProxy.js";
 
 const STARTUP_FILE = "DevToolsActivePort";
+const PROXY_KEY_FILE = "downcity-proxy.sha256";
 const DEFAULT_TIMEOUT_MS = 30_000;
 
 /** 拥有本地浏览器进程并暴露统一 BrowserProvider 协议。 */
@@ -38,6 +43,8 @@ export class LocalBrowserProvider implements BrowserProvider {
   private browser_process: ChildProcess | null = null;
   /** 并发启动共享的初始化 Promise。 */
   private initialization: Promise<PlaywrightBrowserProvider> | null = null;
+  /** 当前浏览器启动时的代理配置摘要。 */
+  private proxy_key: string | null = null;
   /** Provider 是否已释放。 */
   private disposed = false;
 
@@ -48,7 +55,7 @@ export class LocalBrowserProvider implements BrowserProvider {
   }
 
   async create_session(input: BrowserCreateSessionInput): Promise<BrowserObservation> {
-    return await (await this.ensure_delegate()).create_session(input);
+    return await (await this.ensure_delegate(true)).create_session(input);
   }
 
   async observe(input: BrowserObserveInput): Promise<BrowserObservation> {
@@ -75,6 +82,8 @@ export class LocalBrowserProvider implements BrowserProvider {
   async dispose(): Promise<void> {
     if (this.disposed) return;
     this.disposed = true;
+    // 初始化也可能持有子进程；先等待其结束，再统一释放资源。
+    await this.initialization?.catch(() => undefined);
     const delegate = this.delegate;
     this.delegate = null;
     await delegate?.dispose();
@@ -84,34 +93,68 @@ export class LocalBrowserProvider implements BrowserProvider {
   }
 
   /** 初始化或复用当前 profile 已暴露的 CDP 浏览器。 */
-  private async ensure_delegate(): Promise<PlaywrightBrowserProvider> {
+  private async ensure_delegate(refresh_proxy = false): Promise<PlaywrightBrowserProvider> {
     if (this.disposed) throw new Error("LocalBrowserProvider is disposed");
-    if (this.delegate) return this.delegate;
-    this.initialization ??= this.initialize_delegate();
+    if (this.initialization) return await this.initialization;
+    if (this.delegate && !refresh_proxy) return this.delegate;
+    this.initialization = this.prepare_delegate();
     try {
       return await this.initialization;
-    } catch (error) {
+    } finally {
       this.initialization = null;
-      throw error;
     }
   }
 
+  /** 新建 session 前检查代理；已有页面继续可观察、可关闭，不在配置变更时丢失。 */
+  private async prepare_delegate(): Promise<PlaywrightBrowserProvider> {
+    const proxy_args = resolve_local_browser_proxy_args();
+    const proxy_key = local_browser_proxy_key(proxy_args);
+    if (this.delegate) {
+      if (this.proxy_key === proxy_key) return this.delegate;
+      const { sessions } = await this.delegate.list_sessions();
+      if (sessions.length) {
+        throw new Error("Browser proxy settings changed. Close existing browser sessions before creating a new session.");
+      }
+      if (!this.browser_process) {
+        throw new Error("Browser proxy settings changed. Close the previously running Web Power browser and retry; this provider does not own that process.");
+      }
+      await this.delegate.dispose();
+      this.delegate = null;
+      await stop_process(this.browser_process);
+      this.browser_process = null;
+      await unlink(path.join(this.options.profile_path, STARTUP_FILE)).catch(() => undefined);
+    }
+    return await this.initialize_delegate(proxy_args, proxy_key);
+  }
+
   /** 准备 profile、启动浏览器并创建 CDP delegate。 */
-  private async initialize_delegate(): Promise<PlaywrightBrowserProvider> {
+  private async initialize_delegate(proxy_args: string[], proxy_key: string): Promise<PlaywrightBrowserProvider> {
     const profile_path = path.resolve(this.options.profile_path);
     await mkdir(profile_path, { recursive: true, mode: 0o700 });
     const startup_path = path.join(profile_path, STARTUP_FILE);
+    const proxy_key_path = path.join(profile_path, PROXY_KEY_FILE);
     const existing_endpoint = await read_cdp_endpoint(startup_path);
     if (existing_endpoint) {
       const existing = this.create_delegate(existing_endpoint);
+      let reachable = false;
       try {
-        const observation = await existing.create_session({});
+        // 探测只验证 CDP，不访问默认网页，避免把网页网络错误误判为进程失效。
+        const observation = await existing.create_session({ url: "about:blank" });
         await existing.close_session({ session_id: observation.session_id });
-        this.delegate = existing;
-        return existing;
+        reachable = true;
       } catch {
         await existing.dispose();
         await unlink(startup_path).catch(() => undefined);
+      }
+      if (reachable) {
+        const existing_proxy_key = await readFile(proxy_key_path, "utf8").catch(() => "");
+        if (existing_proxy_key.trim() !== proxy_key) {
+          await existing.dispose();
+          throw new Error("The running Web Power browser has different or unknown proxy settings. Close that browser and retry.");
+        }
+        this.proxy_key = proxy_key;
+        this.delegate = existing;
+        return existing;
       }
     }
 
@@ -121,6 +164,7 @@ export class LocalBrowserProvider implements BrowserProvider {
       `--user-data-dir=${profile_path}`,
       "--no-first-run",
       "--no-default-browser-check",
+      ...proxy_args,
       "about:blank",
     ], { stdio: "ignore", windowsHide: true });
     this.browser_process = browser_process;
@@ -136,12 +180,14 @@ export class LocalBrowserProvider implements BrowserProvider {
         wait_for_cdp_endpoint(startup_path, this.options.timeout_ms ?? DEFAULT_TIMEOUT_MS),
         startup_error,
       ]);
+      await writeFile(proxy_key_path, proxy_key, { mode: 0o600 });
     } catch (error) {
       if (this.browser_process === browser_process) this.browser_process = null;
       await stop_process(browser_process);
       throw error;
     }
     const delegate = this.create_delegate(endpoint);
+    this.proxy_key = proxy_key;
     this.delegate = delegate;
     return delegate;
   }
@@ -237,5 +283,9 @@ async function stop_process(browser_process: ChildProcess): Promise<void> {
   await wait_for_exit(browser_process, 3_000);
   if (browser_process.exitCode === null && browser_process.signalCode === null) {
     browser_process.kill("SIGKILL");
+    await wait_for_exit(browser_process, 3_000);
+    if (browser_process.exitCode === null && browser_process.signalCode === null) {
+      throw new Error("Local browser could not be stopped; its profile cannot be reused yet");
+    }
   }
 }

@@ -64,7 +64,7 @@ export function project_workspace_session_rows(options: {
     groups,
     workspace_id,
     resolve_agent_live_status: (session_workspace_id, agent_id, session) => (
-      resolve_chat_session_live_status(chat_runtimes[get_session_key(session_workspace_id, agent_id, session.session_id)], session.executing)
+      resolve_chat_session_live_status(chat_runtimes[get_session_key(session_workspace_id, agent_id, session.session_id, session.origin_type)], session.executing)
     ),
     // Group 的实时状态只在当前打开的 GroupSession 上产生，因此侧栏能区分「等成员响应」与「正在推进」；
     // 未打开时的等待与失败仍由未读通知表达。
@@ -80,7 +80,7 @@ export function project_workspace_session_rows(options: {
     label: entry.kind === "agent" ? agents_by_id.get(entry.agent_id)?.name : groups_by_id.get(entry.group_id)?.name,
     // 实时优先于未读：Runtime 描述此刻正在发生的事，未读只是过去的结果（见 chat_row_status）。
     status: resolve_chat_row_status(entry.live_status, entry.kind === "agent"
-      ? get_session_unread_attention(notification_state, entry.workspace_id, entry.agent_id, entry.session.session_id)
+      ? get_session_unread_attention(notification_state, entry.workspace_id, entry.agent_id, entry.session.session_id, entry.session.origin_type)
       : get_group_session_unread_attention(notification_state, entry.group_id, entry.session.session_id)),
   }));
 }

@@ -17,11 +17,12 @@ import type {
  * Tool 与 Action 共享同一个集合，因为它们都是「模型或 Session 做过一件事」的记录，
  * 在时间线上必须按 canonical 顺序连续排列。Action 不是正文，因此不单独成块。
  *
- * Reasoning 不在这里：它有自己的 `thinking` 块，不参与活动分组。
+ * Reasoning 同样按原始顺序进入活动分组，完成后保留可展开记录。
  */
 export type AgentActivityPart =
   | SessionAgentToolPart
-  | SessionAgentActionPart;
+  | SessionAgentActionPart
+  | SessionAgentReasoningPart;
 
 /** Agent Message 中按 canonical 顺序排列的一层展示块。 */
 export type AgentMessageBlock =
@@ -49,15 +50,6 @@ export interface AgentMessageProjection {
   /** 常显的最终内容块；为空表示这条消息没有结论正文。 */
   content_blocks: AgentMessageBlock[];
   /** Copy 与 Quote 使用的普通文本，不包含 Reasoning 或 Tool 输出。 */ text: string;
-  /**
-   * 正在输出的推理；`undefined` 表示当前没有推理在输出。
-   *
-   * 它不是展示块，而是一个独立字段：思考行不参与过程折叠，也不与相邻活动合并，
-   * 因此没有块的身份。它由 canonical `state === "streaming"` 驱动：
-   * 推理一开始（`text` 还是空串）就出现，一收口就消失。
-   * 历史推理没有展示位置，因此不存在「已思考」这一态。
-   */
-  thinking: SessionAgentReasoningPart | undefined;
 }
 
 /**
@@ -107,7 +99,7 @@ export type AgentActionVisualKind = "command" | "fork" | "compaction" | "generic
  * 它是活动 Part 唯一的图标选择键：Tool 与 Action 各有自己的识别规则。
  * 图标表按 `Record<AgentActivityVisualKind, …>` 定义，新增种类由类型系统强制补全。
  */
-export type AgentActivityVisualKind = AgentToolVisualKind | AgentActionVisualKind;
+export type AgentActivityVisualKind = AgentToolVisualKind | AgentActionVisualKind | "reasoning";
 
 /** 一次编辑的旧文与新文。 */
 export interface AgentActivityEditPair {
@@ -117,6 +109,7 @@ export interface AgentActivityEditPair {
 
 /** 活动展开详情的一种可渲染形态。 */
 export type AgentActivityDetail =
+  | { /** 推理详情使用 Markdown 正文。 */ type: "reasoning"; /** 完整推理文本。 */ text: string }
   | { /** 详情形态固定为等宽代码。 */ type: "code"; /** 完整正文。 */ text: string }
   | { /** 详情形态固定为命令与控制台输出。 */ type: "console"; /** 完整正文。 */ text: string }
   | { /** 详情形态固定为编辑前后对照。 */ type: "edit"; /** 按顺序排列的编辑对。 */ pairs: readonly AgentActivityEditPair[] };
@@ -144,7 +137,7 @@ export interface AgentActivityDiffStat {
  */
 export interface AgentActivityPresentation {
   /** 图表种类，决定行首图标。 */
-  visual_kind: AgentToolVisualKind | AgentActionVisualKind;
+  visual_kind: AgentActivityVisualKind;
   /**
    * Tool 调用的身份；只有 Tool Part 有。
    *

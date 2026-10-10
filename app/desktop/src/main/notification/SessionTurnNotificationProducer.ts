@@ -42,7 +42,7 @@ export class SessionTurnNotificationProducer {
 
   /** 消费一条 Session 运行态；不需要关注的落点会收回尚未查看的等待输入通知。 */
   handle_runtime(runtime: DesktopChatRuntime): void {
-    const topic_key = `session_turn:agent_session:${runtime.agent_id}:${runtime.workspace_id}:${runtime.session_id}`;
+    const topic_key = `session_turn:agent_session:${runtime.agent_id}:${runtime.workspace_id}:${runtime.session_id}:${runtime.origin_type}`;
     const previous = this.last_attention_by_topic.get(topic_key);
     const attention_status = get_attention_status(runtime.status);
 
@@ -72,6 +72,7 @@ export class SessionTurnNotificationProducer {
         agent_id: runtime.agent_id,
         workspace_id: runtime.workspace_id,
         session_id: runtime.session_id,
+        origin_type: runtime.origin_type,
       },
       scopes: [{ kind: "agent", agent_id: runtime.agent_id }],
       title,

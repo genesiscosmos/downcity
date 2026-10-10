@@ -110,8 +110,9 @@ function normalize_notification_target(input: unknown): DesktopNotificationTarge
     const agent_id = normalize_text(candidate.agent_id);
     const workspace_id = normalize_text(candidate.workspace_id);
     const session_id = normalize_text(candidate.session_id);
-    if (!agent_id || !workspace_id || !session_id) throw new Error("notification target is incomplete");
-    return { kind: "agent_session", agent_id, workspace_id, session_id };
+    const origin_type = normalize_text(candidate.origin_type);
+    if (!agent_id || !workspace_id || !session_id || !origin_type) throw new Error("notification target is incomplete");
+    return { kind: "agent_session", agent_id, workspace_id, session_id, origin_type };
   }
   if (candidate.kind === "group_session") {
     const group_id = normalize_text(candidate.group_id);

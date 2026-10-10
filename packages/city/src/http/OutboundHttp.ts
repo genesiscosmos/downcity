@@ -319,7 +319,7 @@ function should_bypass_proxy(url_string: string): boolean {
   } catch {
     return false;
   }
-  const rules = read_no_proxy_rules();
+  const rules = resolve_outbound_no_proxy_rules();
   if (rules.includes("*")) return true;
   const target_ipv4 = parse_ipv4(host);
   return rules.some((rule) => {
@@ -368,8 +368,8 @@ function matches_ipv4_cidr(
   return ((address & cidr.mask) >>> 0) === cidr.network;
 }
 
-/** 读取 NO_PROXY 规则列表。 */
-function read_no_proxy_rules(): string[] {
+/** 读取当前进程的代理绕过规则，供 HTTP 与本地浏览器共用。 */
+export function resolve_outbound_no_proxy_rules(): string[] {
   const value = NO_PROXY_ENV_KEYS.map((key) => String(process.env[key] || "").trim())
     .filter(Boolean)
     .join(",");

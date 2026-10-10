@@ -166,5 +166,5 @@ export function resolve_agent_chat_target(
       .filter((entry) => entry.agent_id === agent_id && workspace_ids.has(workspace_id))
       .map((entry) => ({ workspace_id, session: entry.session })))
     .sort((left, right) => right.session.updated_at - left.session.updated_at)[0];
-  return latest ? { kind: "session", workspace_id: latest.workspace_id, agent_id, session_id: latest.session.session_id } : undefined;
+  return latest ? { kind: "session", workspace_id: latest.workspace_id, agent_id, session_id: latest.session.session_id, origin_type: latest.session.origin_type } : undefined;
 }

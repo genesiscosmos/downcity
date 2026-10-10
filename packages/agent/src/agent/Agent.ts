@@ -109,6 +109,8 @@ export class Agent {
 
   /** 未加入容器时使用的隔离进程内存储。 */
   private storage_provider: StorageProvider = new AgentMemoryStorageProvider();
+  /** 宿主提供的项目目录解析能力，仅用于派发工作会话。 */
+  private readonly resolve_work_workspace: AgentOptions["resolve_work_workspace"];
 
   /** 当前绑定的容器运行环境；独立运行时为空。 */
   private host?: CityRuntime;
@@ -123,6 +125,7 @@ export class Agent {
     this.description = String(options.description || "").trim();
     this.model = options.model;
     this.workspace = options.workspace;
+    this.resolve_work_workspace = options.resolve_work_workspace;
     this.instruction = normalize_instruction_input(options.instruction);
     this.session_class = options.session_class;
     this.session_composer = options.session_composer;
@@ -375,6 +378,10 @@ export class Agent {
       get_session: async (session_id, origin_type) =>
         await this.session_manager.get(session_id, origin_type),
       create_session: async (input) => await this.session_manager.create(input),
+      resolve_workspace: async (workspace_id) => {
+        if (!this.resolve_work_workspace) throw new Error("session_start requires a host project Workspace resolver");
+        return await this.resolve_work_workspace(workspace_id);
+      },
     });
     this.session_tools = create_session_tools(work);
     return this.session_tools;

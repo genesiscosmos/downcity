@@ -118,11 +118,13 @@ function read_paragraph_margin_em(): number {
   return Number(token[1]);
 }
 
-test("Agent 消息是上下两段，不再有头像列", () => {
+test("Agent 消息左右布局，左列头像与按钮竖排", () => {
   const root = read_class_name(layout_source, "agent_message_root_class_name");
-  assert.ok(root.includes("flex-col"), `Agent 消息根容器不是列：${root}`);
-  // 「并排」的旧写法：一行 + 顶部对齐 + 头像与正文之间的 gap。
-  assert.ok(!root.includes("flex-row") && !root.includes("items-start") && !/\bgap-2\b/.test(root), `Agent 消息根容器还在并排布局：${root}`);
+  assert.ok(root.includes("items-start") && !root.includes("flex-col"), `消息没有左右排列：${root}`);
+  const rail = read_class_name(layout_source, "agent_message_rail_class_name");
+  assert.ok(rail.includes("flex-col") && rail.includes("shrink-0"), `左列没有固定竖排：${rail}`);
+  assert.ok(frames.AgentMessageFrame.includes("{rail_action}"), "头像列没有折叠操作入口");
+  assert.ok(frames.AgentMessageFrame.includes("agent_message_stack_class_name"), "右侧内容没有共享容器");
 });
 
 test("Agent 正文不被左内边距推离消息列左缘", () => {
@@ -324,8 +326,8 @@ test("消息动作栏靠左、高度固定，且贴近它上面的正文", () =>
   const actions = read_class_name(layout_source, "agent_message_actions_class_name");
   assert.ok(!/\bml-auto\b/.test(actions), `动作栏被推到行末：会与下方消息的右缘对齐：${actions}`);
   assert.ok(/\bh-6\b/.test(actions), `动作栏没有固定高度：悬停出现时会把下方内容推走：${actions}`);
-  // 插在最后一条正文之后，而不是 Footer。
-  assert.ok(agent_message_content.includes("last_text_index"), "动作栏没有按「最后一条正文」定位");
+  // 所有正文和文件改动渲染后，再展示消息动作栏。
+  assert.ok(agent_message_content.indexOf("{has_text_content ? actions : null}") > agent_message_content.indexOf("{content_blocks.map"), "动作栏没有放在完整内容下方");
   assert.ok(!consumers.AgentMessage.includes("message-action-toolbar"), "AgentMessage 又内联了动作栏样式：它应走 message_layout 的常量");
 
   // 与正文同组，组内间距必须小于块间距（`gap-3`），否则工具栏看起来是另一个展示块。
@@ -336,22 +338,16 @@ test("消息动作栏靠左、高度固定，且贴近它上面的正文", () =>
   assert.ok(agent_message_content.includes("agent_message_actions_group_class_name"), "动作栏没有与正文包成一组");
 });
 
-/**
- * 折叠开关的位置守卫。
- *
- * 它在身份行末尾、时间之后（顺序：谁说的 → 什么时候 → 还能展开过程吗），整组靠左。
- * 开关必须在时间戳之后渲染，否则悬停出现的时间会把开关的位置推来推去。
- */
-test("折叠开关在身份行末尾、时间之后，整组靠左", () => {
-  assert.ok(frames.AgentMessageFrame.includes("identity_trailing"), "AgentMessageFrame 没有渲染身份行末尾控件");
-  // 时间戳在前、开关在后。
-  assert.ok(/ChatMessageTimestamp[\s\S]*identity_trailing\b/.test(frames.AgentMessageFrame), "折叠开关没有排在时间戳之后：悬停出现的时间会把它推走");
-  // 身份行不把任何东西推到行末：整组靠左。
+/** 折叠入口在头像下方，不生成工具摘要栏。 */
+test("折叠入口在正文中，身份行只展示身份与时间", () => {
+  assert.ok(!frames.AgentMessageFrame.includes("identity_trailing"), "身份行仍包含过程折叠控件");
+  assert.ok(consumers.AgentMessage.includes("aria-expanded={process_open}"), "消息没有可访问的过程折叠入口");
+  assert.ok(consumers.AgentMessage.includes("rail_action={process_toggle}"), "折叠按钮没有传入左侧头像列");
+  assert.ok(!agent_message_content.includes("absolute -left-7"), "正文仍保留浮动折叠按钮");
+  assert.ok(!agent_message_content.includes("AgentProcessSummary"), "仍在展示工具摘要折叠栏");
   const header = read_class_name(layout_source, "agent_message_identity_header_class_name");
-  assert.ok(!/\bjustify-between\b/.test(header), `身份行把控件推到两端：时间与开关不再相邻：${header}`);
+  assert.ok(!/\bjustify-between\b/.test(header), `身份行应靠左展示：${header}`);
   assert.ok(!layout_source.includes("agent_message_identity_meta_class_name"), "右侧元信息组已无人使用，应删除");
-  // 开关不得再出现在正文渲染器里。
-  assert.ok(!agent_message_content.includes("process_toggle"), "折叠开关又回到了正文渲染器");
 });
 
 test("两个形态共用同一份身份行与 Footer 几何", () => {

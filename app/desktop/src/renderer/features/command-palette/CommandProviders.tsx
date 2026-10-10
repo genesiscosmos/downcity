@@ -262,10 +262,10 @@ function use_session_commands(controller: DesktopController) {
   const session = selection?.kind === "session" ? selection : null;
   // 只订阅当前 Session 的运行态与历史游标切片，而不是整个 chat_stream，避免流式输出触发命令重新注册。
   const runtime = use_desktop_selector(controller.stores.chat_stream, (state) =>
-    session ? state.chat_runtime_by_session[get_session_key(session.workspace_id, session.agent_id, session.session_id)] : undefined,
+    session ? state.chat_runtime_by_session[get_session_key(session.workspace_id, session.agent_id, session.session_id, session.origin_type)] : undefined,
   );
   const has_more_history = use_desktop_selector(controller.stores.chat_stream, (state) =>
-    session ? Boolean(state.history_by_session[get_session_key(session.workspace_id, session.agent_id, session.session_id)]?.has_more) : false,
+    session ? Boolean(state.history_by_session[get_session_key(session.workspace_id, session.agent_id, session.session_id, session.origin_type)]?.has_more) : false,
   );
   const is_busy = is_chat_busy(runtime);
 
@@ -283,7 +283,7 @@ function use_session_commands(controller: DesktopController) {
         disabled_reason: translate("command_palette.disabled.chat-stop"),
         run: () => {
           if (!session) return;
-          return actions.stop_session(session.workspace_id, session.agent_id, session.session_id);
+          return actions.stop_session(session.workspace_id, session.agent_id, session.session_id, session.origin_type);
         },
       },
       {
@@ -296,7 +296,7 @@ function use_session_commands(controller: DesktopController) {
         when: () => session !== null,
         run: () => {
           if (!session) return;
-          return actions.archive_session(session.workspace_id, session.agent_id, session.session_id);
+          return actions.archive_session(session.workspace_id, session.agent_id, session.session_id, session.origin_type);
         },
       },
       {
@@ -312,7 +312,7 @@ function use_session_commands(controller: DesktopController) {
         disabled_reason: translate("command_palette.disabled.chat-history"),
         run: () => {
           if (!session || !active_workspace_id) return;
-          return actions.load_earlier_history(session.workspace_id, session.agent_id, session.session_id);
+          return actions.load_earlier_history(session.workspace_id, session.agent_id, session.session_id, session.origin_type);
         },
       },
     ],

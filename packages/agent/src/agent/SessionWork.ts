@@ -53,6 +53,8 @@ export interface SessionWorkOptions {
   get_session: (session_id: string, origin_type: string) => Promise<AgentSession>;
   /** 新建一条属于当前 Agent 的会话。 */
   create_session: (input?: { workspace?: WorkspaceRuntime }) => Promise<AgentSession>;
+  /** 将模型显式指定的项目 ID 交给宿主解析；不继承主会话目录。 */
+  resolve_workspace: (workspace_id: string) => Promise<WorkspaceRuntime>;
 }
 
 /** Agent 会话的会话工作运行时。 */
@@ -65,15 +67,19 @@ export class SessionWork implements SessionWorkContract {
 
   /** 开一条工作会话并立刻把任务交给它。 */
   async spawn(input: {
+    /** 完整工作指令。 */
     query: string;
+    /** 工作短标题。 */
     title?: string;
-    workspace?: WorkspaceRuntime;
+    /** 宿主登记的目标项目 Workspace ID。 */
+    workspace_id: string;
   }): Promise<{ session_id: string }> {
     const query = String(input.query || "").trim();
     if (!query) throw new Error("session_start requires a non-empty query");
-    const session = await this.options.create_session(
-      input.workspace ? { workspace: input.workspace } : undefined,
-    );
+    const workspace_id = String(input.workspace_id || "").trim();
+    if (!workspace_id) throw new Error("session_start requires a project workspace_id");
+    const workspace = await this.options.resolve_workspace(workspace_id);
+    const session = await this.options.create_session({ workspace });
     const title = String(input.title || "").trim();
     if (title) await session.rename(title);
     // 不等待 Turn 结束：派活的意义就是 Agent 会话立刻能继续。

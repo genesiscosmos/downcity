@@ -237,7 +237,8 @@ function normalize_notification_target(input: unknown): DesktopNotificationTarge
     const agent_id = require_text(candidate.agent_id, "target agent_id");
     const workspace_id = require_text(candidate.workspace_id, "target workspace_id");
     const session_id = require_text(candidate.session_id, "target session_id");
-    return { kind: "agent_session", agent_id, workspace_id, session_id };
+    const origin_type = require_text(candidate.origin_type, "target origin_type");
+    return { kind: "agent_session", agent_id, workspace_id, session_id, origin_type };
   }
   if (candidate.kind === "group_session") {
     return {
@@ -256,9 +257,12 @@ function normalize_notification_target(input: unknown): DesktopNotificationTarge
   throw new Error("notification target kind is invalid");
 }
 
-/** 为通知目标生成不依赖展示文案的稳定比较键。 */
+/**
+ * 为通知目标生成稳定身份键；Agent Session 的 Workspace 绑定可变，不参与已读与可见性匹配。
+ * 来源分区仍属于 Session 身份，避免同名的不同来源会话互相清除通知。
+ */
 function get_notification_target_key(target: DesktopNotificationTarget): string {
-  if (target.kind === "agent_session") return stable_json_stringify(["agent_session", target.agent_id, target.workspace_id, target.session_id]);
+  if (target.kind === "agent_session") return stable_json_stringify(["agent_session", target.agent_id, target.session_id, target.origin_type]);
   if (target.kind === "group_session") return stable_json_stringify(["group_session", target.group_id, target.session_id]);
   return stable_json_stringify(["power", target.power_id, target.route]);
 }

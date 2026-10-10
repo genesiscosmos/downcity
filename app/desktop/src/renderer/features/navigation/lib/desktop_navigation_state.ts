@@ -1,5 +1,6 @@
 /** Desktop 页面导航状态的序列化、校验与降级恢复。 */
 
+import { SESSION_ORIGIN_TYPE_WORK, is_agent_session_origin } from "@downcity/type";
 import type { DesktopNavigationCatalog, RestorableNavigationTarget } from "@/types/DesktopNavigation";
 import type { NavigationTarget, SidebarMode } from "@/types/DesktopView";
 
@@ -14,15 +15,20 @@ export function is_restorable_navigation_target(target: NavigationTarget): targe
 /**
  * 从稳定导航目标推导一级侧栏，避免持久化第二份可能漂移的状态。
  *
- * 判据是**这个页面属于谁**：会话（含草稿与 GroupSession）住在某个 Workspace 里，
+ * 判据是**这个页面属于谁**：工作会话（含草稿与 GroupSession）住在某个 Workspace 里，
  * 因此归 Works；Agent profile 与 Group 配置回答「有哪些 Agent」，归 Agents；
  * 功能型 Power 的页面归它自己的一级入口（`power:<id>`）。
+ *
+ * Agent 自己的会话（`origin.type = "agent"`）是这条规则里唯一的例外：它虽然也是一条
+ * Session，却不属于任何 Workspace 的会话列表（它只从 Agents 面板进入）。把它归到 Works，
+ * 侧栏会立刻从 Agents 切走，用户看不到自己刚点的那一行，也就不存在回到它的入口。
  *
  * 这个函数是这条对应的唯一事实源：`use_navigation_actions` 里那份按目标推导模式
  * 的逻辑也走它，因此「打开一个页面时侧栏跳到哪」与「刷新后恢复到哪」不可能分叉。
  */
 export function get_sidebar_mode_for_navigation(target: RestorableNavigationTarget): SidebarMode {
   if (target.kind === "agent" || target.kind === "group") return "chat";
+  if (target.kind === "session" && is_agent_session_origin({ type: target.origin_type })) return "chat";
   if (target.kind === "power_workspace") return `power:${target.power_id}`;
   return "workspace";
 }
@@ -30,12 +36,9 @@ export function get_sidebar_mode_for_navigation(target: RestorableNavigationTarg
 /**
  * 推导任意导航目标所属的一级侧栏；设置页不属于任何业务入口，返回 `undefined`。
  *
- * 规则是「侧栏切到能看见这个目标的那张面板」。以今天的布局，会话条目只长在 Works 树里，
- * 因此所有会话类目标（会话、草稿、GroupSession、Group 草稿）都落 Works——
- * 把用户留在一张不列会话的面板上，等于让他在侧栏里找不到自己刚打开的那一条。
- *
- * 可恢复目标直接走 `get_sidebar_mode_for_navigation`（那条对应只写一份）；
- * 这里只补上刷新后不再有语义、因而不参与恢复的那几个目标：草稿属于它所在的 Workspace，
+ * 规则是「侧栏切到能看见这个目标的那张面板」。以今天的布局，工作会话条目长在 Works 树里，
+ * Agent 自己的会话条目长在 Agents 面板里（见 `get_sidebar_mode_for_navigation`），
+ * 因此这里只补上刷新后不再有语义、因而不参与恢复的那几个目标：草稿属于它所在的 Workspace，
  * 创建页属于它将要创建的对象。
  */
 export function get_sidebar_mode_for_target(target: NavigationTarget): SidebarMode | undefined {
@@ -57,7 +60,7 @@ export function parse_navigation_target(serialized: string | null): RestorableNa
       return { kind: "workspace_file", workspace_id: value.workspace_id, relative_path: value.relative_path, ...(line ? { line } : {}) };
     }
     if (value.kind === "agent" && has_string(value, "agent_id")) return { kind: "agent", agent_id: value.agent_id };
-    if (value.kind === "session" && has_string(value, "workspace_id") && has_string(value, "agent_id") && has_string(value, "session_id")) return { kind: "session", workspace_id: value.workspace_id, agent_id: value.agent_id, session_id: value.session_id };
+    if (value.kind === "session" && has_string(value, "workspace_id") && has_string(value, "agent_id") && has_string(value, "session_id")) return { kind: "session", workspace_id: value.workspace_id, agent_id: value.agent_id, session_id: value.session_id, origin_type: has_string(value, "origin_type") ? value.origin_type : SESSION_ORIGIN_TYPE_WORK };
     if (value.kind === "group" && has_string(value, "group_id")) return { kind: "group", group_id: value.group_id };
     if (value.kind === "group_session" && has_string(value, "group_id") && has_string(value, "workspace_id") && has_string(value, "session_id")) return { kind: "group_session", group_id: value.group_id, workspace_id: value.workspace_id, session_id: value.session_id };
     if (value.kind === "power_workspace" && has_string(value, "power_id")) return { kind: "power_workspace", power_id: value.power_id };

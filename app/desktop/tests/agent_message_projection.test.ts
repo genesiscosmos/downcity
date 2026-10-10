@@ -38,32 +38,30 @@ test("没有活动时过程为空，全部块都是内容", () => {
   assert.deepEqual(projection.content_blocks.map((block) => block.type), ["text"]);
 });
 
-test("正在输出的推理是独立字段，不进任何块", () => {
+test("正在输出的推理按顺序并入连续活动，正文不包含推理", () => {
   const tool = create_tool(1);
   const running = create_text("reasoning", 2, "正在想", "streaming");
   const end = create_text("text", 3, "结论");
   const projection = project_agent_message([tool, running, end]);
 
-  // 思考行不参与过程折叠，也不与相邻活动合并，因此没有块的身份。
+  // 思考和工具共享活动块与过程折叠，保持原始 Part 顺序。
   assert.deepEqual(projection.process_blocks.map((block) => block.type), ["activity"]);
   assert.deepEqual(projection.content_blocks.map((block) => block.type), ["text"]);
-  assert.equal(projection.thinking?.text, "正在想");
+  assert.deepEqual(projection.process_blocks[0]?.type === "activity" ? projection.process_blocks[0].parts : [], [tool, running]);
   // 推理不是正文，不进入 Copy / Quote 文本。
   assert.equal(projection.text, "结论");
 });
 
-test("推理一开始就有字段（此时还没有任何文本）", () => {
-  const projection = project_agent_message([create_text("reasoning", 1, "", "streaming")]);
-  assert.equal(projection.thinking?.text, "");
-  assert.deepEqual(projection.process_blocks, []);
+test("推理开始时即显示活动，尚无正文也能表达运行状态", () => {
+  const part = create_text("reasoning", 1, "", "streaming");
+  const projection = project_agent_message([part]);
+  assert.deepEqual(projection.process_blocks, [{ type: "activity", parts: [part] }]);
   assert.deepEqual(projection.content_blocks, []);
 });
 
-test("已收口的推理不保留字段，也不影响过程切分点", () => {
-  const done = create_text("reasoning", 1, "已经想完", "done");
-  // 推理收口后连字段都不保留：历史消息里没有思考行，也就不存在「已思考」这一态。
-  assert.equal(project_agent_message([done]).thinking, undefined);
-  // 它也不是活动，因此不会把前面的活动组切断，也不会改变内容切分点。
+test("已完成推理保留活动记录，与工具共同决定过程切分", () => {
+  const done = create_text("reasoning", 2, "已经想完", "done");
+  assert.deepEqual(project_agent_message([done]).process_blocks, [{ type: "activity", parts: [done] }]);
   const tool = create_tool(1);
   const end = create_text("text", 3, "结论");
   const projection = project_agent_message([tool, done, end]);
@@ -71,17 +69,13 @@ test("已收口的推理不保留字段，也不影响过程切分点", () => {
   assert.deepEqual(projection.content_blocks.map((block) => block.type), ["text"]);
 });
 
-test("多段推理只保留最后一条的状态", () => {
-  const running = project_agent_message([
-    create_text("reasoning", 1, "第一段", "streaming"),
-    create_text("reasoning", 2, "第二段", "streaming"),
-  ]);
-  assert.equal(running.thinking?.text, "第二段");
-  // 后一条已收口时，前一条的输出态也不再算数。
-  assert.equal(project_agent_message([
-    create_text("reasoning", 1, "第一段", "streaming"),
-    create_text("reasoning", 2, "第二段", "done"),
-  ]).thinking, undefined);
+test("多段推理保留原始顺序，关闭推理展示时不影响正文", () => {
+  const parts = [create_text("reasoning", 1, "第一段", "done"), create_text("reasoning", 2, "第二段", "streaming")];
+  assert.deepEqual(project_agent_message(parts).process_blocks, [{ type: "activity", parts }]);
+  const hidden = project_agent_message([...parts, create_text("text", 3, "回答")], false);
+  assert.deepEqual(hidden.process_blocks, []);
+  assert.deepEqual(hidden.content_blocks.map((block) => block.type), ["text"]);
+  assert.equal(hidden.text, "回答");
 });
 
 test("未知 Data 和空 Text 不展示也不切断连续 Activity", () => {
@@ -117,7 +111,7 @@ test("Action 并入相邻活动，不切断活动组也不产生独立 Block", (
 
   assert.equal(projection.process_blocks.length, 1);
   assert.equal(projection.process_blocks[0]?.type, "activity");
-  assert.deepEqual(projection.process_blocks[0]?.type === "activity" ? projection.process_blocks[0].parts.map((part) => part.type) : [], ["tool", "action"]);
+  assert.deepEqual(projection.process_blocks[0]?.type === "activity" ? projection.process_blocks[0].parts.map((part) => part.type) : [], ["tool", "action", "reasoning"]);
 });
 
 test("Action 不产生独立 Block，也不改变内容切分", () => {

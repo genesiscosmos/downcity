@@ -35,8 +35,8 @@ await session.set({ workspace: repo_b });   // move to another repo with history
 await session.set({ workspace: null });     // leave the project context
 ```
 
-Only `workspace_id` is written to disk; the instance stays with the host and comes back through
-`AgentOptions.resolve_workspace`. Passing a Workspace to `get()` different from the persisted one is
+Only `workspace_id` is written to disk; the host resolves and injects the instance through
+`get(..., { workspace })`. Passing a Workspace to `get()` different from the persisted one is
 also not an error; it becomes the new current directory:
 
 ```ts

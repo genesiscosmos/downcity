@@ -15,6 +15,7 @@ import {
 function create_session(session_id: string, workspace_id: string, updated_at: number, executing = false): DesktopSessionSummary {
   return {
     session_id,
+    origin_type: "work",
     workspace_id,
     title: session_id,
     preview_text: "",
@@ -183,9 +184,10 @@ test("Agent 主体入口优先恢复最近打开的 Session，而不是最近更
     workspace_id: "project-a",
     agent_id: "writer",
     session_id: "last-opened",
+    origin_type: "work",
   });
 
-  assert.deepEqual(target, { kind: "session", workspace_id: "project-a", agent_id: "writer", session_id: "last-opened" });
+  assert.deepEqual(target, { kind: "session", workspace_id: "project-a", agent_id: "writer", session_id: "last-opened", origin_type: "work" });
 });
 
 test("最近打开目标失效后回退到最近更新的 Session", () => {
@@ -198,9 +200,10 @@ test("最近打开目标失效后回退到最近更新的 Session", () => {
     workspace_id: "project-a",
     agent_id: "writer",
     session_id: "removed",
+    origin_type: "work",
   });
 
-  assert.deepEqual(target, { kind: "session", workspace_id: "project-b", agent_id: "writer", session_id: "latest" });
+  assert.deepEqual(target, { kind: "session", workspace_id: "project-b", agent_id: "writer", session_id: "latest", origin_type: "work" });
 });
 
 test("Agent 主体入口可以恢复最近打开的 Draft", () => {

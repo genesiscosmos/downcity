@@ -4,8 +4,8 @@
  * ## 为什么需要它
  *
  * 消息的执行过程在正文**上方**（canonical 顺序，不可颠倒，见 `AgentMessageContent`）。
- * 展开过程时消息行顶部在文档流里不动，插入的高度全部压在正文前面，正文因此被推下去。
- * 要让正文原地不动、整条消息向上长，必须在提交后把滚动位置下移同样的位移。
+ * 过程展开或收起时，滚动容器可能因为跟随底部而改变视口位置。
+ * 消息将独立折叠行作为锚点交给滚动容器，使入口保持原位、内容从入口下方展开。
  *
  * 而滚动位置由 `use_chat_scroll` 独占：它要登记自己写入的 scrollTop，否则随后触发的
  * scroll 事件会被读成「用户向上浏览」而无声关掉自动跟随。消息层因此不能自己写 scrollTop，
@@ -46,8 +46,7 @@ export function ChatScrollAnchorProvider({ preserve_element_position, children }
  * 调用时机：在**改变布局之前**（也就是点击展开的同一个事件处理里），传入要保住的元素。
  * 补偿在下一次提交后、绘制前生效。
  *
- * 只有需要「保位置」的布局变化才调用它：展开过程要保正文位置，
- * 折叠则故意不调用，让视口自然落到本条 turn 的结果正文上。
+ * 展开和收起过程都传入同一个折叠行元素，保持操作入口的位置。
  */
 export function use_chat_scroll_anchor(): (element: HTMLElement) => void {
   return useContext(ChatScrollAnchorContext);

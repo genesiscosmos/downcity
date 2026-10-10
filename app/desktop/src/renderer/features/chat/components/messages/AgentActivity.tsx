@@ -1,15 +1,16 @@
-/** Agent Message 中连续 Tool 与 Action 的活动展示。 */
+/** Agent Message 中 Reasoning、Tool 与 Action 共用的活动行和展开详情。 */
 
 import { useEffect, useMemo, useState, type ComponentType, type ReactNode } from "react";
-import type { RespondSessionInteractionInput, SessionAgentActionPart, SessionAgentToolPart } from "@downcity/agent";
-import { TbArrowsMinimize, TbChevronRight, TbCommand, TbFileSearch, TbGitFork, TbMessageQuestion, TbPencil, TbPencilPlus, TbPuzzle, TbSearch, TbTextScan2 } from "react-icons/tb";
+import type { RespondSessionInteractionInput, SessionAgentActionPart, SessionAgentReasoningPart, SessionAgentToolPart } from "@downcity/agent";
+import { TbBrain, TbArrowsMinimize, TbChevronRight, TbCommand, TbFileSearch, TbGitFork, TbMessageQuestion, TbPencil, TbPencilPlus, TbPuzzle, TbSearch, TbTextScan2 } from "react-icons/tb";
 import { AgentInteraction } from "@/features/chat/components/messages/AgentInteraction";
 import { use_chat_power_lookup } from "@/features/chat/components/messages/ChatPowerLookup";
 import { use_open_interaction_tab } from "@/features/chat/panel/InteractionPanel";
 import { PowerIcon } from "@/features/power/lib/PowerIcon";
-import { chat_power_names, resolve_agent_action_presentation, resolve_agent_tool_presentation, resolve_power_state_text, select_activity_summary_part, should_auto_open_agent_activity, should_auto_open_agent_tool } from "@/features/chat/lib/message/agent_activity_presentation";
+import { chat_power_names, resolve_agent_action_presentation, resolve_agent_reasoning_presentation, resolve_agent_tool_presentation, resolve_power_state_text, select_activity_summary_part, should_auto_open_agent_activity, should_auto_open_agent_tool } from "@/features/chat/lib/message/agent_activity_presentation";
 import type { AgentActivityDetail, AgentActivityDiffStat, AgentActivityEditPair, AgentActivityPart, AgentActivityPresentation, AgentActivityTone, AgentActivityVisualKind, ChatPowerLookup } from "@/features/chat/types/AgentMessage";
 import { cn } from "@/lib/utils";
+import { Markdown } from "@/components/markdown/Markdown";
 import { use_translation } from "@/locales/i18n";
 
 /**
@@ -18,9 +19,10 @@ import { use_translation } from "@/locales/i18n";
  * `power` 不在这张表里：power 的图标由 `PowerIcon` 按 power 名解析，与 Sidebar、
  * 命令面板共用同一份事实源。同一个 power 在这三处必须长得一样。
  *
- * Reasoning 也不在这张表里：它不再是一条活动行，而是 Footer 里的一行思考摘要（见 `AgentMessage`）。
+ * Reasoning 与工具复用活动结构，通过 reasoning 图标和状态表达思考。
  */
 const AGENT_ACTIVITY_ICONS: Record<Exclude<AgentActivityVisualKind, "power">, ComponentType<{ className?: string; "aria-hidden"?: boolean }>> = {
+  reasoning: TbBrain,
   read: TbTextScan2,
   write: TbPencilPlus,
   edit: TbPencil,
@@ -80,6 +82,7 @@ function AgentActivityItem({ part, respond_interaction, lookup, power_names }: {
   switch (part.type) {
     case "tool": return <AgentTool part={part} respond_interaction={respond_interaction} lookup={lookup} power_names={power_names} />;
     case "action": return <AgentAction part={part} />;
+    case "reasoning": return <AgentReasoning part={part} />;
     default: return assert_never(part);
   }
 }
@@ -128,6 +131,12 @@ function AgentTool({ part, respond_interaction, lookup, power_names }: { part: S
 function AgentAction({ part }: { part: SessionAgentActionPart }) {
   const translate_chat = use_translation("chat");
   return <ActivityRow {...row_from_presentation(resolve_agent_action_presentation(part), translate_chat, new Map())} />;
+}
+
+/** 推理使用相同 ActivityRow，生成中和已完成均可展开查看正文。 */
+function AgentReasoning({ part }: { /** canonical 推理记录。 */ part: SessionAgentReasoningPart }) {
+  const translate_chat = use_translation("chat");
+  return <ActivityRow {...row_from_presentation(resolve_agent_reasoning_presentation(part), translate_chat, new Map())} />;
 }
 
 /** 活动行内容。 */
@@ -179,8 +188,8 @@ function row_from_presentation(presentation: AgentActivityPresentation, translat
     tone: presentation.tone,
     diff_stat: presentation.diff_stat,
     state: translate(presentation.state_key),
-    identity: presentation.summary,
-    summary: "",
+    identity: presentation.visual_kind === "reasoning" ? "" : presentation.summary,
+    summary: presentation.visual_kind === "reasoning" ? presentation.summary : "",
     body: presentation.detail || presentation.error
       ? <ActivityDetail detail={presentation.detail} error={presentation.error} input_streaming={presentation.input_streaming} />
       : undefined,
@@ -189,6 +198,7 @@ function row_from_presentation(presentation: AgentActivityPresentation, translat
 
 /** 由一条活动 Part 生成活动行内容；Tool 与 Action 走展示映射。 */
 function summarize_activity(part: AgentActivityPart, translate: (key: string, options?: Record<string, string>) => string, lookup: ChatPowerLookup, power_names: ReadonlySet<string>): ActivityRowSummary {
+  if (part.type === "reasoning") return row_from_presentation(resolve_agent_reasoning_presentation(part), translate, lookup);
   if (part.type === "tool") return row_from_presentation(resolve_agent_tool_presentation(part, power_names), translate, lookup);
   return row_from_presentation(resolve_agent_action_presentation(part), translate, lookup);
 }
@@ -228,15 +238,7 @@ function ActivityRow({ icon, tone, diff_stat, state, identity, summary, badge, b
   }, [auto_open, auto_open_key]);
 
   const has_expandable = Boolean(body) || Boolean(extra_body);
-  const summary_content = <span className="activity-tool-main">
-    {icon}
-    {state ? <span className="activity-tool-state">{state}</span> : null}
-    <span className="activity-tool-identity">{identity}</span>
-    {summary ? <span className="activity-tool-target" title={summary}>{summary}</span> : null}
-    {badge ? <span className="activity-tool-pill activity-tool-count">{badge}</span> : null}
-    {diff_stat ? <DiffStatTag stat={diff_stat} /> : null}
-    {has_expandable ? <TbChevronRight className="activity-tool-chevron" aria-hidden /> : null}
-  </span>;
+  const summary_content = <ActivitySummaryContent icon={icon} state={state} identity={identity} summary={summary} diff_stat={diff_stat} badge={badge} expandable={has_expandable} />;
   const row_class = cn("activity-tool-row", AGENT_ACTIVITY_TONE_CLASS[tone]);
   const summary_class = cn("activity-tool-summary", summary_class_name);
   if (!has_expandable) return <div className={row_class}><div className={summary_class}>{summary_content}</div></div>;
@@ -245,6 +247,24 @@ function ActivityRow({ icon, tone, diff_stat, state, identity, summary, badge, b
     {body}
     {extra_body}
   </details>;
+}
+
+/** 工具行和消息级折叠行共用的图标、状态、身份与摘要结构。 */
+function ActivitySummaryContent({ icon, state, identity, summary, diff_stat, badge, expandable = true }: Pick<ActivityRowSummary, "icon" | "state" | "identity" | "summary" | "diff_stat"> & {
+  /** 活动组的额外记录数；为空时不显示。 */
+  badge?: string;
+  /** 是否显示展开箭头；消息折叠行始终可展开。 */
+  expandable?: boolean;
+}) {
+  return <span className="activity-tool-main">
+    {icon}
+    {state ? <span className="activity-tool-state">{state}</span> : null}
+    <span className="activity-tool-identity">{identity}</span>
+    {summary ? <span className="activity-tool-target" title={summary}>{summary}</span> : null}
+    {badge ? <span className="activity-tool-pill activity-tool-count">{badge}</span> : null}
+    {diff_stat ? <DiffStatTag stat={diff_stat} /> : null}
+    {expandable ? <TbChevronRight className="activity-tool-chevron" aria-hidden /> : null}
+  </span>;
 }
 
 /**
@@ -280,6 +300,7 @@ function ActivityDetail({ detail, error, input_streaming }: {
 
 /** 按详情形态渲染正文。 */
 function ActivityDetailBody({ detail, streaming }: { detail: AgentActivityDetail; streaming: boolean }) {
+  if (detail.type === "reasoning") return <div className="px-2.5 py-2 text-xs text-muted-foreground"><Markdown text={detail.text} mode={streaming ? "streaming" : "static"} /></div>;
   if (detail.type === "edit") return <EditDiff pairs={detail.pairs} streaming={streaming} />;
   return <pre className={detail.type === "console" ? "activity-tool-console" : undefined}>{detail.text}{streaming ? <InputCaret /> : null}</pre>;
 }

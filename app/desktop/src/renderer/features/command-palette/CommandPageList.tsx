@@ -97,7 +97,7 @@ export function use_command_page_items(
         .map<CommandPageItem>((entry) => {
           const agent = agents.find((item) => item.agent_id === entry.agent_id);
           return {
-            id: `session:${get_session_key(active_workspace_id, entry.agent_id, entry.session.session_id)}`,
+            id: `session:${get_session_key(active_workspace_id, entry.agent_id, entry.session.session_id, entry.session.origin_type)}`,
             title: entry.session.title || entry.session.session_id,
             subtitle: [agent?.name, format_date(entry.session.updated_at, language, { dateStyle: "short" })].filter(Boolean).join(" · "),
             icon: <TbScript className="size-4" />,

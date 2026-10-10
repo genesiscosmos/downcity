@@ -14,6 +14,7 @@ import { AgentChatMainView } from "@/features/agent/components/AgentChatDetails"
 import { create_missing_workspace } from "@/features/chat/lib/chat_view_defaults";
 import { empty_items } from "@/features/chat/lib/chat_view_defaults";
 import { use_translation } from "@/locales/i18n";
+import { SESSION_ORIGIN_TYPE_WORK } from "@downcity/type";
 
 /** Agent Draft 路由订阅 Chat Surface 所需的最小目录集合。 */
 export function AgentDraftRouteMainView({ selection, controller, sidebar_collapsed }: { /** Agent Draft 导航目标。 */ selection: Extract<NavigationTarget, { kind: "draft" }>; /** Desktop 稳定控制器。 */ controller: DesktopController; /** 全局 Sidebar 是否折叠。 */ sidebar_collapsed: boolean }) {
@@ -32,7 +33,7 @@ export function AgentDraftChatSurface({ selection, agent, workspaces, settings, 
   const translate = use_translation("chat");
   const open_file = use_chat_file_panel();
   const { workspace_id, agent_id, draft_id } = selection;
-  const draft_session = useMemo<DesktopSessionSummary>(() => ({ session_id: draft_id, session_path: "", title: translate("conversation.new"), preview_text: "", created_at: 0, updated_at: 0, message_count: 0, executing: false }), [draft_id, translate]);
+  const draft_session = useMemo<DesktopSessionSummary>(() => ({ session_id: draft_id, origin_type: SESSION_ORIGIN_TYPE_WORK, session_path: "", title: translate("conversation.new"), preview_text: "", created_at: 0, updated_at: 0, message_count: 0, executing: false }), [draft_id, translate]);
   const switch_workspace = useCallback((target_workspace_id: string) => controller.actions.switch_draft_context(target_workspace_id, agent_id), [agent_id, controller.actions]);
   // Power 目录是全局事实，订阅一次后交给 SessionView 注入活动行。
   const powers = use_desktop_selector(controller.stores.catalog, (state) => state.powers);

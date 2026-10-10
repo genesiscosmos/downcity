@@ -11,6 +11,9 @@ import { z } from "zod";
 /** `session_start` 输入：开一条会话并交给它任务。 */
 export const session_start_input = z
   .object({
+    workspace_id: z.string().trim().min(1).describe(
+      "Target project Workspace ID. Obtain it from context.workspaces.list; do not use the main session's private Workspace.",
+    ),
     query: z.string().trim().min(1).describe(
       "The task handed to the new session. Write it as a complete instruction: the new session only sees this text.",
     ),

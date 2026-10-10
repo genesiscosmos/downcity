@@ -103,7 +103,7 @@ export const WorkspaceSidebar = memo(function WorkspaceSidebar({ controller, ope
     for (const rows of rows_by_workspace.values()) {
       for (const { entry } of rows) {
         map.set(entry.key, entry.kind === "agent"
-          ? { key: entry.key, kind: "agent", workspace_id: entry.workspace_id, agent_id: entry.agent_id, session_id: entry.session.session_id }
+          ? { key: entry.key, kind: "agent", workspace_id: entry.workspace_id, agent_id: entry.agent_id, session_id: entry.session.session_id, origin_type: entry.session.origin_type }
           : { key: entry.key, kind: "group", workspace_id: entry.workspace_id, group_id: entry.group_id, session_id: entry.session.session_id });
       }
     }
@@ -150,7 +150,7 @@ export const WorkspaceSidebar = memo(function WorkspaceSidebar({ controller, ope
     const failed: string[] = [];
     for (const target of targets) {
       try {
-        if (target.kind === "agent") await controller.actions.archive_session(target.workspace_id, target.agent_id ?? "", target.session_id);
+        if (target.kind === "agent") await controller.actions.archive_session(target.workspace_id, target.agent_id ?? "", target.session_id, target.origin_type);
         else await controller.actions.archive_group_session(target.group_id ?? "", target.session_id);
       } catch {
         failed.push(target.session_id);
@@ -170,7 +170,7 @@ export const WorkspaceSidebar = memo(function WorkspaceSidebar({ controller, ope
     const failed: string[] = [];
     for (const target of targets) {
       try {
-        if (target.kind === "agent") await controller.actions.remove_session(target.workspace_id, target.agent_id ?? "", target.session_id);
+        if (target.kind === "agent") await controller.actions.remove_session(target.workspace_id, target.agent_id ?? "", target.session_id, target.origin_type);
         else await controller.actions.remove_group_session(target.group_id ?? "", target.session_id);
       } catch {
         failed.push(target.session_id);

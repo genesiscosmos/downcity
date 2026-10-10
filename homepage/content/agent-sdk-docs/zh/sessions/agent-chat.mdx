@@ -1,106 +1,80 @@
 ---
-title: Agent 会话
-description: Agent 自己就是一条 Session；用 agent.session() 取用它，与其他会话共用同一套规则
+title: Agent 主会话
+description: 主会话在自己的 main 目录中持续对话，工作会话在明确指定的项目中执行
 ---
-`agent.session()` 返回 Agent 自己那条会话。**它就是 Agent**：一个 Agent 一条，`session_id` 等于 Agent 的 `id`，角色为 `origin.type = "agent"`。
+Agent 主会话的 `origin.type` 是 `agent`，`session_id` 等于 Agent 的 `id`。它保存用户与 Agent 的持续对话，并可以派发、查看、回复和停止工作会话。
 
-关键的一点是它没有特殊规则。它是一条普通 Session，与其他会话共用同一套机制与能力——包括工作区、`set` / `get`、消息、审批、订阅。
+## Desktop 中的专属目录
 
-## 取用并说话
+Desktop 为每个 Agent 提供固定目录：
+
+```text
+~/.downcity/agents/<agent_id>/main/
+```
+
+这是主会话自己的 Workspace，为文件、Shell 和 Power 提供执行环境。它不出现在 Works 项目列表里；切换项目或重新打开 Agent 都不会改变主会话目录。会话消息仍保存在 `sessions/agent/<agent_id>/`，与 `main` 中的文件分开。
+
+项目任务由 `work` 会话执行。派发时必须明确指定项目 Workspace，不能继承主会话的 `main` 目录。
+
+## SDK 取用与恢复
+
+SDK 不决定目录在磁盘上的位置，目录由宿主提供。首次取用可以传入专属 Workspace：
 
 ```ts
 const agent = new Agent({
   id: "coder",
   model,
-  workspace,
+  resolve_work_workspace: async (workspace_id) => {
+    const workspace = project_workspaces.get(workspace_id);
+    if (!workspace) throw new Error("Project Workspace not found");
+    return workspace;
+  },
 });
 
-const session = await agent.session();
-const turn = await session.prompt({ query: "这个 SessionMessages 是干嘛的" });
-const result = await turn.finished;
-console.log(result.text);
+await agent.sessions.self({ workspace: main_workspace });
+
+// self 的 Workspace 只用于创建；已有会话通过 get 明确恢复运行时实例。
+const session = await agent.sessions.get(agent.id, "agent", {
+  workspace: main_workspace,
+});
+const turn = await session.prompt({ query: "请检查项目 CI，并派发修复任务" });
+await turn.finished;
 ```
 
-首次取用时创建，之后每次返回同一条。因此换渠道、换进程、隔天再打开，拿到的都是同一条会话与同一份历史：
+`project_workspaces` 和 `main_workspace` 由宿主创建和持有。`resolve_work_workspace` 仅解析项目工作目标，不负责恢复主会话，也不自动选择项目。宿主应拒绝未登记的项目与主会话私有目录。
 
-```ts
-// 新的进程、Telegram 频道、第二天
-const session = await agent.session();
-const page = await session.messages();
-```
+Workspace 实例不落盘，Session 只保存 `workspace_id`。每次重启后由宿主重新注入实例；仅有持久化 ID 并不意味着文件与 Shell 已经可用。`get()` 在缓存实例存在但目录实例尚未恢复时也会应用注入。
 
-它被归档或删除后，下一次取用会重建一条。
+## 派发工作
 
-## 会话角色
-
-全部会话只有一种概念，角色由 `origin.type` 区分：
-
-| 角色 | `origin.type` | `session_id` | 用途 |
-| --- | --- | --- | --- |
-| Agent 自己的会话 | `agent` | 等于 Agent 的 `id` | 用户与 Agent 的持续对话 |
-| 工作会话 | `work` | 生成的 id | Agent 派出去干的活 |
-| 任务会话 | `task` | 生成的 id | 定时任务触发 |
-| 群聊会话 | `group` | 生成的 id | 群聊中的成员会话 |
-
-`work` 是默认角色。`agent.sessions.list()` 默认只看 `work` 分区，因此 Agent 自己的会话不会混进业务列表：
-
-```ts
-const work_sessions = await agent.sessions.list();
-const own = await agent.sessions.get(agent.id, "agent");
-```
-
-## 工作区能力
-
-与所有会话一样，Agent 会话也带工作区能力。目录是宿主注入的执行资源，不是会话身份：
-
-```ts
-const session = await agent.session({ workspace: repo_a });   // 创建时注入
-session.get("workspace");                                      // 当前实例
-session.get("workspace_id");                                   // 持久化标识
-
-await session.set({ workspace: repo_b });   // 换目录
-await session.set({ workspace: null });     // 脱离项目上下文
-```
-
-`set` 与 `get` 是会话上唯一的配置读写入口，`model` 与 `workspace` 共用它。落盘的是 `workspace_id`；实例由宿主持有，不进 Session。
-
-恢复时目录不会自动还原——只有持有 Workspace 的一方知道现在有哪些目录可用：
-
-```ts
-// 不注入：该会话没有项目上下文，但历史与 workspace_id 仍可读
-const without = await agent.sessions.get(session.id, "agent");
-without.get("workspace");      // undefined
-without.get("workspace_id");   // "repo-a"
-
-// 注入：宿主把实例交给会话
-const with_workspace = await agent.sessions.get(session.id, "agent", { workspace: repo_a });
-with_workspace.get("workspace");   // repo_a
-```
-
-解析失败不是错误。历史会话指向本次宿主没有提供的目录属于正常情况：此时它没有文件工具与 Shell，但纯模型对话仍可用。
-
-## Agent 自己安排活
-
-Agent 会话多一组工具，其他会话拿不到，因此活不会再派活。
+只有 `agent` 会话拥有以下工具：
 
 | 工具 | 用途 |
 | --- | --- |
-| `session_start` | 开一条工作会话并把任务交给它，立即返回 |
-| `session_check` | 列出全部会话与状态；带 `session_id` 读取某一条的详情 |
-| `session_reply` | 代答某条会话正在等待的用户响应 |
-| `session_stop` | 停止某条会话当前正在跑的 Turn |
+| `session_start` | 在明确指定的项目中创建工作会话，接受任务后立即返回 |
+| `session_check` | 列出工作会话，或读取指定会话的消息与待响应交互 |
+| `session_reply` | 代答工作会话的审批或问题 |
+| `session_stop` | 停止指定工作会话 |
 
-派出去之后 Agent 会话立刻空闲，用户可以继续说别的事；新会话继承当时的目录。关心进展时 Agent 自己调用 `session_check`，不需要每轮注入清单：
-
-```text
-用户：CI 上挂了三个测试，帮我修了
-Agent：我去看，修完说
-用户：顺便把 README 的安装步骤从 npm 改成 pnpm
-```
+模型先通过 `context.workspaces.list` 查看可用目录，再提供项目 ID：
 
 ```text
-用户：那个测试修得怎么样了
-Agent：（调用 session_check）还在跑，已经改了 4 个文件
+session_start({
+  workspace_id: "project-workspace-id",
+  query: "修复 CI 中失败的三个测试，说明原因与验证结果。",
+  title: "修复 CI"
+})
 ```
 
-会话卡在需要用户确认时，用户仍在同一段对话里回答，Agent 用 `session_reply` 把答复送回那条会话。
+工作会话只收到完整任务文本与目标项目目录，不继承主会话历史或私有目录。派发后用户仍可继续与主会话交流，Agent 使用 `session_check` 查询进度。
+
+## 会话身份
+
+| 来源 | 标识 | 目录 |
+| --- | --- | --- |
+| `agent` | Agent ID | Desktop 固定的 `main` 目录 |
+| `work` | SDK 生成 | 显式指定的项目 Workspace |
+| `task` | SDK 生成 | 任务定义指定的执行目录 |
+| `group` | SDK 生成 | 群聊执行上下文指定的目录 |
+
+`agent.sessions.list()` 默认只列出 `work` 分区，因此主会话不会混入项目会话列表。归档或删除主会话后，再次取用会重建会话，专属 `main` 目录中的文件仍独立于会话历史。

@@ -10,7 +10,7 @@
  * - 这组能力只注入 `origin.type === "agent"` 的会话，因此活不会再派活。
  */
 
-import type { SessionInteractionResponse, WorkspaceRuntime } from "@downcity/type";
+import type { SessionInteractionResponse } from "@downcity/type";
 import type {
   SessionCheckDetailToolOutput,
   SessionToolSummary,
@@ -24,8 +24,8 @@ export interface SessionWorkContract {
     query: string;
     /** 可选短标题，用于清单展示。 */
     title?: string;
-    /** 新会话的初始目录；省略时使用 Agent 会话当前的目录。 */
-    workspace?: WorkspaceRuntime;
+    /** 显式指定的项目 Workspace ID，由宿主解析为执行目录。 */
+    workspace_id: string;
   }): Promise<{ session_id: string }>;
 
   /** 列出当前 Agent 的全部工作会话摘要，按最近更新倒序。 */

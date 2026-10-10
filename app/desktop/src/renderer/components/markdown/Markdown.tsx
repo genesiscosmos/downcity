@@ -26,7 +26,7 @@ const markdown_controls: ControlsConfig = {
  * 渲染静态或流式 Markdown。
  *
  * 组件只拥有 Markdown 语义，不识别 Chat、Workspace 或 Plugin。业务容器负责字号、
- * 行高和宽度；HTML 清洗、KaTeX 与 URL 加固交给 Streamdown 默认安全管线维护。
+ * 行高和宽度；HTML 清洗与 KaTeX 使用默认插件，URL 校验保留 Desktop 文件导航语义。
  * 流式状态通过 Context 下传，图表据此决定解析失败时是显示源码还是报错。
  */
 export function Markdown({ text, mode }: MarkdownProps) {

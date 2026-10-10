@@ -33,7 +33,7 @@ await session.set({ workspace: repo_b });   // 带旧消息换到另一个仓库
 await session.set({ workspace: null });     // 脱离项目上下文
 ```
 
-落盘的是 `workspace_id`，实例由宿主持有；恢复时由 `AgentOptions.resolve_workspace` 还原。
+落盘的是 `workspace_id`，实例由宿主持有；恢复时由宿主解析实例并通过 `get(..., { workspace })` 注入。
 `get()` 传入的 Workspace 与持久化值不同时也不会报错，而是成为该会话新的当前目录：
 
 ```ts
@@ -73,7 +73,7 @@ if (page.has_more) {
 }
 ```
 
-`list()` 默认只查询 `chat` 分区；查询其他来源时传入 `origin_type`。列表项是轻量摘要，不包含完整 Message。常用字段为 `session_id`、`origin`、`title`、`preview_text`、`message_count`、`model_label`、`updated_at` 与 `executing`。`cursor` 是透明游标，只能原样传回 SDK。
+`list()` 默认只查询 `work` 分区；查询其他来源时传入 `origin_type`。列表项是轻量摘要，不包含完整 Message。常用字段为 `session_id`、`origin`、`title`、`preview_text`、`message_count`、`model_label`、`updated_at` 与 `executing`。`cursor` 是透明游标，只能原样传回 SDK。
 
 `query` 用于轻量包含匹配，适合侧边栏筛选；不要把它当作全文检索语法。
 

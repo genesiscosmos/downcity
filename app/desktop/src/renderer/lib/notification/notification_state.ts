@@ -17,8 +17,9 @@ export function create_agent_session_notification_target(
   workspace_id: string,
   agent_id: string,
   session_id: string,
+  origin_type: string,
 ): DesktopAgentSessionNotificationTarget {
-  return { kind: "agent_session", workspace_id, agent_id, session_id };
+  return { kind: "agent_session", workspace_id, agent_id, session_id, origin_type };
 }
 
 /** 创建 GroupSession 的稳定通知目标。 */
@@ -35,7 +36,7 @@ export function notification_target_from_navigation(
   power_routes: Readonly<Record<string, PowerJsonObject>> = {},
 ): DesktopNotificationTarget | undefined {
   if (target?.kind === "session") {
-    return create_agent_session_notification_target(target.workspace_id, target.agent_id, target.session_id);
+    return create_agent_session_notification_target(target.workspace_id, target.agent_id, target.session_id, target.origin_type);
   }
   if (target?.kind === "group_session") {
     return create_group_session_notification_target(target.group_id, target.session_id);
@@ -56,11 +57,13 @@ export function get_session_unread_attention(
   workspace_id: string,
   agent_id: string,
   session_id: string,
+  origin_type: string,
 ): ChatAttention | null {
   return highest_session_attention(state, (target) => target.kind === "agent_session"
     && target.workspace_id === workspace_id
     && target.agent_id === agent_id
-    && target.session_id === session_id);
+    && target.session_id === session_id
+    && target.origin_type === origin_type);
 }
 
 /** 读取一个 Agent 任意 Session 的未读注意力等级；无未读时返回 null。 */

@@ -37,8 +37,8 @@ test("无 Sidebar 的 Power 不进入 Rail 顺序", () => {
 });
 
 test("前两个数字映射到固定一级导航，功能型 Power 从第三个数字起跟随", () => {
-  assert.equal(resolve_sidebar_shortcut_mode("1", powers), "workspace");
-  assert.equal(resolve_sidebar_shortcut_mode("2", powers), "chat");
+  assert.equal(resolve_sidebar_shortcut_mode("1", powers), "chat");
+  assert.equal(resolve_sidebar_shortcut_mode("2", powers), "workspace");
 });
 
 test("后续数字与 Rail 图标顺序一致", () => {

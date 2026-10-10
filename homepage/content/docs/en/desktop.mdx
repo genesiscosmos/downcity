@@ -1,0 +1,14 @@
+---
+title: Desktop messages
+description: Read Agent replies and execution history in the desktop app
+---
+
+<!-- User-facing guide to reading and collapsing Desktop Agent messages. -->
+
+Agent messages use two columns. The left column stacks the avatar and optional collapse button. The right column shows an info bar with the Agent name and timestamp, followed by the message body and file changes, with spacing between the info bar and body. Message actions such as copy, quote, and fork appear below all content, including the file changes card when present.
+
+Messages with execution history have an arrow button below the avatar in the left column. The button stays visible and gains a subtle background on hover. Its arrow points right when collapsed and down when expanded. Click it to toggle the history, or use the keyboard.
+
+History starts expanded while the Agent is working and collapses when the message finishes. Collapsing hides the history and keeps the final answer fully visible, without a tool summary row. If a message only contains execution history, the arrow remains available to reopen it.
+
+Both actions use the button as a scroll anchor. Once you toggle it manually, that message keeps your choice. Messages without execution history display the answer directly without a collapse button.

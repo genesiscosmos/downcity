@@ -20,8 +20,7 @@ import {
   type SessionMessage,
   type SessionMutation,
 } from "@downcity/agent";
-import { City } from "@downcity/city";
-import type { PowerNotificationInput, PowerSnapshot } from "@downcity/city/power";
+import { City } from "@downcity/city";import type { PowerNotificationInput, PowerSnapshot } from "@downcity/city/power";
 import { clipboard, shell } from "electron";
 import { LocalStorageProvider } from "@downcity/city";
 import path from "node:path";
@@ -36,7 +35,14 @@ import {
   type LocalWorkspaceConfig,
   create_agent_id,
 } from "@downcity/city/local";
+import { SESSION_ORIGIN_TYPE_AGENT } from "@downcity/type";
+import { AgentMainWorkspaces, get_agent_main_workspace_id, get_agent_main_workspace_path } from "./AgentMainWorkspace.js";
 import { get_agent_session_target_key, get_group_session_target_key } from "@/notification/notification_target_key.js";
+import {
+  get_session_cache_key,
+  parse_session_cache_key,
+  resolve_session_origin_type,
+} from "./SessionAddressKey.js";
 import type {
   DesktopAgentConnection,
   DesktopAgentSummary,
@@ -174,6 +180,8 @@ export class AgentController {
   private readonly power_loader: LocalPowerLoader;
   /** Desktop 进程内的 Agent 索引与 transport 转发器。 */
   private readonly city: City;
+  /** Agent 专属 main 目录的并发装配入口，Workspace 实例仍由 City 持有。 */
+  private readonly agent_main_workspaces: AgentMainWorkspaces;
   /** 当前 Desktop City 宿主实例标识。 */
   private readonly host_instance_id = create_city_host_instance_id();
   /** 已订阅 Session 的取消订阅函数。 */
@@ -247,6 +255,7 @@ export class AgentController {
         },
       },
     });
+    this.agent_main_workspaces = new AgentMainWorkspaces(this.city, this.data);
     this.power_loader = create_desktop_power_loader(this.data);
     this.ready_promise = this.initialize_agents();
   }
@@ -391,7 +400,7 @@ export class AgentController {
     const existed = this.data.workspaces.remove(normalized_workspace_id);
     // 清理该 Workspace 下全部 Session 的订阅与运行态。
     for (const [session_key, unsubscribe] of [...this.session_unsubscribes]) {
-      if (session_key.split(":")[1] === normalized_workspace_id) {
+      if (parse_session_cache_key(session_key)?.workspace_id === normalized_workspace_id) {
         unsubscribe();
         this.session_unsubscribes.delete(session_key);
         this.runtimes.delete(session_key);
@@ -402,7 +411,7 @@ export class AgentController {
     const model_ids = this.read_session_model_ids();
     let model_ids_dirty = false;
     for (const session_key of Object.keys(model_ids)) {
-      if (session_key.split(":")[1] === normalized_workspace_id) {
+      if (parse_session_cache_key(session_key)?.workspace_id === normalized_workspace_id) {
         delete model_ids[session_key];
         model_ids_dirty = true;
       }
@@ -411,7 +420,7 @@ export class AgentController {
     const reasoning = this.read_session_reasoning_efforts();
     let reasoning_dirty = false;
     for (const session_key of Object.keys(reasoning)) {
-      if (session_key.split(":")[1] === normalized_workspace_id) {
+      if (parse_session_cache_key(session_key)?.workspace_id === normalized_workspace_id) {
         delete reasoning[session_key];
         reasoning_dirty = true;
       }
@@ -538,7 +547,7 @@ export class AgentController {
       throw error;
     }
     for (const [session_key, unsubscribe] of this.session_unsubscribes) {
-      if (!session_key.startsWith(`${current.agent_id}:`)) continue;
+      if (parse_session_cache_key(session_key)?.agent_id !== current.agent_id) continue;
       unsubscribe();
       this.session_unsubscribes.delete(session_key);
       this.runtimes.delete(session_key);
@@ -570,12 +579,13 @@ export class AgentController {
     const runtime_agent = this.city.agents.get(current.agent_id);
     if (runtime_agent) await this.city.agents.remove(current.agent_id);
     for (const [session_key, unsubscribe] of this.session_unsubscribes) {
-      if (!session_key.startsWith(`${current.agent_id}:`)) continue;
+      if (parse_session_cache_key(session_key)?.agent_id !== current.agent_id) continue;
       unsubscribe();
       this.session_unsubscribes.delete(session_key);
       this.runtimes.delete(session_key);
       this.restored_session_models.delete(session_key);
     }
+    await this.city.workspaces.remove(get_agent_main_workspace_id(current.agent_id));
     this.data.agents.remove(current.agent_id);
     return true;
   }
@@ -853,11 +863,12 @@ export class AgentController {
     return await to_desktop_group_summary(group, this.require_group_config(group.id).model_id, summaries, next_session_id);
   }
 
-  /** 列出一个 native Agent 的 Session；Workspace 可选过滤，不传时返回全部。 */
-  async list_sessions(agent_id: string, workspace_id?: string): Promise<DesktopSessionSummary[]> {
-    const page = await this.require_native_agent(agent_id).sessions.list(
-      workspace_id ? { workspace_id } : undefined,
-    );
+  /** 列出一个 native Agent 指定来源分区的 Session；Workspace 可选过滤，不传时返回全部。 */
+  async list_sessions(agent_id: string, workspace_id?: string, origin_type?: string): Promise<DesktopSessionSummary[]> {
+    const page = await this.require_native_agent(agent_id).sessions.list({
+      ...(workspace_id ? { workspace_id } : {}),
+      ...(origin_type ? { origin_type } : {}),
+    });
     return page.items.map((session) => to_desktop_session_summary(this.data.root_path, session));
   }
 
@@ -896,7 +907,23 @@ export class AgentController {
       for (const session of items) {
         // 未绑定 Workspace 的孤儿 Session 在侧栏里也不可见，与归档同类处理。
         if (!session.workspace_id) continue;
-        agent_session_keys.add(get_agent_session_target_key(config.agent_id, session.workspace_id, session.session_id));
+        agent_session_keys.add(get_agent_session_target_key(config.agent_id, session.workspace_id, session.session_id, session.origin.type));
+      }
+    }));
+    // Agent 自己的会话不属于默认工作分区，默认列表不会带出它；
+    // 但它仍是可打开的活动会话，漏枚举会让对账把它的未读通知当成幽灵清掉。
+    await Promise.all(this.data.agents.list().map(async (config) => {
+      const agent = this.city.agents.get(config.agent_id);
+      if (!agent) return;
+      try {
+        const page = await agent.sessions.list({ origin_type: SESSION_ORIGIN_TYPE_AGENT });
+        for (const session of page.items) {
+          if (!session.workspace_id) continue;
+          agent_session_keys.add(get_agent_session_target_key(config.agent_id, session.workspace_id, session.session_id, session.origin.type));
+        }
+      } catch {
+        // Agent 会话的枚举失败已由上轮 `unresolved_agent_ids` 表达：该 Agent 的通知一律保留。
+        unresolved_agent_ids.add(config.agent_id);
       }
     }));
     const group_session_keys = new Set<string>();
@@ -917,14 +944,15 @@ export class AgentController {
   }
 
   /** 把 Session 重新绑定到另一个 Workspace，并返回新上下文下的摘要。 */
-  async rebind_session_workspace(agent_id: string, session_id: string, workspace_id: string): Promise<DesktopSessionSummary> {
+  async rebind_session_workspace(agent_id: string, session_id: string, workspace_id: string, origin_type?: string): Promise<DesktopSessionSummary> {
     await this.ready_promise;
     const agent = this.require_native_agent(agent_id);
+    if (origin_type === SESSION_ORIGIN_TYPE_AGENT) throw new Error("Agent 主会话使用固定 main 目录，不能绑定项目 Workspace");
     const config = this.data.workspaces.get(workspace_id);
     if (!config) throw new Error(`Workspace is not registered: ${workspace_id}`);
     const workspace = this.city.workspaces.get(workspace_id)
       ?? this.city.workspaces.add(await create_desktop_workspace(this.data, config));
-    const session = await agent.sessions.get(session_id, "work");
+    const session = await agent.sessions.get(session_id, resolve_session_origin_type(origin_type));
     await session.set({ workspace });
     return to_desktop_session_summary(this.data.root_path, await session.get_info());
   }
@@ -940,21 +968,24 @@ export class AgentController {
    *
    * 关键点（中文）
    * - 它的 session_id 就是 agent_id，角色为 `agent`，因此不需要记住「哪条是主会话」。
-   * - 首次打开时把当前 Workspace 注入给它；之后目录跟着会话自己走，
-   *   故 `workspace_id` 只在不一致时用于切换。
+   * - 主会话始终使用 agents/<agent_id>/main 专属目录，不跟随当前项目。
    * - 它不属于 `work` 分区，因此不会被普通会话列表带出。
    */
-  async open_agent_session(agent_id: string, workspace_id: string): Promise<DesktopSessionSummary> {
+  async open_agent_session(agent_id: string): Promise<DesktopSessionSummary> {
     await this.ready_promise;
+    const workspace = await this.require_agent_main_workspace(agent_id);
     const agent = this.require_native_agent(agent_id);
-    const workspace = this.city.workspaces.get(workspace_id)
-      ?? await this.require_workspace(agent_id, workspace_id);
-    const session = await agent.sessions.self({ workspace });
-    // 投影键必须用会话自己的目录：它可能属于另一个 Workspace，
-    // 用调用方传入的值会让订阅与后续读写落在不同的 cache key 上。
-    const session_workspace_id = session.get("workspace_id") ?? workspace_id;
-    this.observe_session(agent_id, session_workspace_id, session);
+    await agent.sessions.self({ workspace });
+    // 宿主明确恢复专属目录，同时纠正曾经绑定到项目目录的主会话。
+    const session = await agent.sessions.get(agent_id, SESSION_ORIGIN_TYPE_AGENT, { workspace });
+    this.observe_session(agent_id, workspace.id, session, SESSION_ORIGIN_TYPE_AGENT);
     return to_desktop_session_summary(this.data.root_path, await session.get_info());
+  }
+
+  /** 创建或取用 Agent 私有 main Workspace；仅登记运行时实例，不加入用户项目列表。 */
+  private async require_agent_main_workspace(agent_id: string) {
+    this.require_native_agent(agent_id);
+    return await this.agent_main_workspaces.require(agent_id);
   }
 
   /** 在当前 Workspace 创建 Session，并在返回前原子应用完整初始配置。 */
@@ -963,9 +994,9 @@ export class AgentController {
     const workspace = this.city.workspaces.get(workspace_id)
       ?? await this.require_workspace(agent_id, workspace_id);
     const session = await agent.sessions.create({ workspace });
-    this.observe_session(agent_id, workspace_id, session);
+    this.observe_session(agent_id, workspace_id, session, resolve_session_origin_type(session.origin.type));
     try {
-      let actual_configuration = await this.read_session_configuration(workspace_id, session);
+      let actual_configuration = await this.read_session_configuration(workspace_id, session, resolve_session_origin_type(session.origin.type));
       if (configuration.model_id && configuration.model_id !== actual_configuration.model_id) {
         actual_configuration = await this.set_model(agent_id, workspace_id, session.id, configuration.model_id);
       }
@@ -987,38 +1018,40 @@ export class AgentController {
   }
 
   /** 从 canonical Message 锚点创建分支 Session，并纳入 Desktop 实时投影。 */
-  async fork_session(agent_id: string, workspace_id: string, session_id: string, message_id: string): Promise<DesktopSessionSummary> {
-    const source = await this.get_session(agent_id, workspace_id, session_id);
+  async fork_session(agent_id: string, workspace_id: string, session_id: string, message_id: string, origin_type?: string): Promise<DesktopSessionSummary> {
+    const resolved_origin_type = resolve_session_origin_type(origin_type);
+    const source = await this.get_session(agent_id, workspace_id, session_id, resolved_origin_type);
     const source_info = await source.get_info();
     const forked = await source.fork({ message_id });
     const source_title = String(source_info.title || "新会话").trim();
     try {
       await forked.rename(`${source_title}（分支）`);
-      this.copy_session_configuration_projection(agent_id, workspace_id, session_id, forked.id);
-      this.observe_session(agent_id, workspace_id, forked);
+      this.copy_session_configuration_projection(agent_id, workspace_id, session_id, forked.id, resolved_origin_type);
+      this.observe_session(agent_id, workspace_id, forked, resolved_origin_type);
       return to_desktop_session_summary(this.data.root_path, await forked.get_info());
     } catch (reason) {
-      await this.require_native_agent(agent_id).sessions.remove(forked.id).catch(() => false);
-      this.release_session_projection(agent_id, workspace_id, forked.id);
+      await this.require_native_agent(agent_id).sessions.remove(forked.id, resolved_origin_type).catch(() => false);
+      this.release_session_projection(agent_id, workspace_id, forked.id, resolved_origin_type);
       throw reason;
     }
   }
 
   /** 从历史用户消息之前创建新 Session，并以完整修改后输入启动新 Turn。 */
-  async rewrite_session_message(agent_id: string, workspace_id: string, session_id: string, input: DesktopChatRewriteInput): Promise<DesktopChatRewriteResult> {
-    const source_key = get_session_key(agent_id, workspace_id, session_id);
+  async rewrite_session_message(agent_id: string, workspace_id: string, session_id: string, input: DesktopChatRewriteInput, origin_type?: string): Promise<DesktopChatRewriteResult> {
+    const resolved_origin_type = resolve_session_origin_type(origin_type);
+    const source_key = get_session_key(agent_id, workspace_id, session_id, resolved_origin_type);
     if (this.rewriting_session_keys.has(source_key)) throw new Error("Session 正在重写历史消息");
     this.rewriting_session_keys.add(source_key);
     try {
-      return await this.perform_session_message_rewrite(agent_id, workspace_id, session_id, input);
+      return await this.perform_session_message_rewrite(agent_id, workspace_id, session_id, input, resolved_origin_type);
     } finally {
       this.rewriting_session_keys.delete(source_key);
     }
   }
 
   /** 在已取得源 Session rewrite 互斥权后执行完整替换事务。 */
-  private async perform_session_message_rewrite(agent_id: string, workspace_id: string, session_id: string, input: DesktopChatRewriteInput): Promise<DesktopChatRewriteResult> {
-    const source = await this.get_session(agent_id, workspace_id, session_id);
+  private async perform_session_message_rewrite(agent_id: string, workspace_id: string, session_id: string, input: DesktopChatRewriteInput, origin_type: string): Promise<DesktopChatRewriteResult> {
+    const source = await this.get_session(agent_id, workspace_id, session_id, origin_type);
     if ((await source.status()).state === "running") throw new Error("Session 正在执行，不能编辑历史消息");
     const message_id = String(input.message_id || "").trim();
     if (!message_id) throw new Error("message_id is required");
@@ -1035,20 +1068,20 @@ export class AgentController {
     let prepared_session: DesktopSessionSummary;
     try {
       await forked.rename(input.action === "fork" ? `${source_title}（分支）` : source_title);
-      this.copy_session_configuration_projection(agent_id, workspace_id, session_id, forked.id);
-      this.observe_session(agent_id, workspace_id, forked);
+      this.copy_session_configuration_projection(agent_id, workspace_id, session_id, forked.id, origin_type);
+      this.observe_session(agent_id, workspace_id, forked, origin_type);
       prepared_session = to_desktop_session_summary(this.data.root_path, await forked.get_info());
     } catch (error) {
-      await this.require_native_agent(agent_id).sessions.remove(forked.id).catch(() => false);
-      this.release_session_projection(agent_id, workspace_id, forked.id);
+      await this.require_native_agent(agent_id).sessions.remove(forked.id, origin_type).catch(() => false);
+      this.release_session_projection(agent_id, workspace_id, forked.id, origin_type);
       throw error;
     }
     let sent: DesktopChatSendResult;
     try {
-      sent = await this.submit_session_query(agent_id, workspace_id, forked.id, query);
+      sent = await this.submit_session_query(agent_id, workspace_id, forked.id, query, origin_type);
     } catch (error) {
-      await this.require_native_agent(agent_id).sessions.remove(forked.id).catch(() => false);
-      this.release_session_projection(agent_id, workspace_id, forked.id);
+      await this.require_native_agent(agent_id).sessions.remove(forked.id, origin_type).catch(() => false);
+      this.release_session_projection(agent_id, workspace_id, forked.id, origin_type);
       throw error;
     }
     const session = await forked.get_info()
@@ -1057,8 +1090,8 @@ export class AgentController {
     if (input.action === "fork") return { session, turn_id: sent.turn_id, source_disposition: "preserved" };
     try {
       // 归档是新 Turn 已被接受后的最终提交点；失败时保留两个 Session，不删除正在执行的新 Turn。
-      await this.require_native_agent(agent_id).sessions.archive({ id: session_id });
-      this.release_session_projection(agent_id, workspace_id, session_id);
+      await this.require_native_agent(agent_id).sessions.archive({ id: session_id, origin_type });
+      this.release_session_projection(agent_id, workspace_id, session_id, origin_type);
       return { session, turn_id: sent.turn_id, source_disposition: "archived" };
     } catch (reason) {
       await forked.rename(`${source_title}（分支）`).catch(() => undefined);
@@ -1086,15 +1119,15 @@ export class AgentController {
   }
 
   /** 将 Desktop 按 Session 保存的模型配置覆盖复制到 forked Session。 */
-  private copy_session_configuration_projection(agent_id: string, workspace_id: string, source_session_id: string, target_session_id: string): void {
-    const source_key = get_session_key(agent_id, workspace_id, source_session_id);
+  private copy_session_configuration_projection(agent_id: string, workspace_id: string, source_session_id: string, target_session_id: string, origin_type: string): void {
+    const source_key = get_session_key(agent_id, workspace_id, source_session_id, origin_type);
     const model_id = this.read_session_model_ids()[source_key];
     if (model_id) {
-      this.persist_session_model_id(agent_id, workspace_id, target_session_id, model_id);
-      this.restored_session_models.set(get_session_key(agent_id, workspace_id, target_session_id), model_id);
+      this.persist_session_model_id(agent_id, workspace_id, target_session_id, model_id, origin_type);
+      this.restored_session_models.set(get_session_key(agent_id, workspace_id, target_session_id, origin_type), model_id);
     }
     const reasoning_effort = this.read_session_reasoning_efforts()[source_key];
-    if (reasoning_effort) this.persist_session_reasoning_effort(agent_id, workspace_id, target_session_id, reasoning_effort);
+    if (reasoning_effort) this.persist_session_reasoning_effort(agent_id, workspace_id, target_session_id, reasoning_effort, origin_type);
   }
 
   /** 更新 Session 的 canonical 标题。 */
@@ -1103,23 +1136,24 @@ export class AgentController {
     workspace_id: string,
     session_id: string,
     title: string,
+    origin_type?: string,
   ): Promise<string> {
-    return await (await this.get_session(agent_id, workspace_id, session_id)).rename(title);
+    return await (await this.get_session(agent_id, workspace_id, session_id, origin_type)).rename(title);
   }
 
   /** 归档 Session，并释放 Desktop 对它的进程内投影。 */
-  async archive_session(agent_id: string, workspace_id: string, session_id: string): Promise<void> {
+  async archive_session(agent_id: string, workspace_id: string, session_id: string, origin_type?: string): Promise<void> {
     void workspace_id;
-    this.assert_session_not_rewriting(agent_id, workspace_id, session_id);
-    await this.require_native_agent(agent_id).sessions.archive({ id: session_id });
-    this.release_session_projection(agent_id, workspace_id, session_id);
+    this.assert_session_not_rewriting(agent_id, workspace_id, session_id, origin_type);
+    await this.require_native_agent(agent_id).sessions.archive({ id: session_id, origin_type: resolve_session_origin_type(origin_type) });
+    this.release_session_projection(agent_id, workspace_id, session_id, origin_type);
   }
 
   /** 永久删除 Session，并释放 Desktop 对它的进程内投影。 */
-  async remove_session(agent_id: string, workspace_id: string, session_id: string): Promise<boolean> {
-    this.assert_session_not_rewriting(agent_id, workspace_id, session_id);
-    const removed = await this.require_native_agent(agent_id).sessions.remove(session_id);
-    this.release_session_projection(agent_id, workspace_id, session_id);
+  async remove_session(agent_id: string, workspace_id: string, session_id: string, origin_type?: string): Promise<boolean> {
+    this.assert_session_not_rewriting(agent_id, workspace_id, session_id, origin_type);
+    const removed = await this.require_native_agent(agent_id).sessions.remove(session_id, resolve_session_origin_type(origin_type));
+    this.release_session_projection(agent_id, workspace_id, session_id, origin_type);
     return removed;
   }
 
@@ -1132,14 +1166,15 @@ export class AgentController {
   }
 
   /** 读取一个 native Session 的 canonical 消息和运行态。 */
-  async get_chat_snapshot(agent_id: string, workspace_id: string, session_id: string): Promise<DesktopChatSnapshot> {
-    const session = await this.get_session(agent_id, workspace_id, session_id);
+  async get_chat_snapshot(agent_id: string, workspace_id: string, session_id: string, origin_type?: string): Promise<DesktopChatSnapshot> {
+    const resolved_origin_type = resolve_session_origin_type(origin_type);
+    const session = await this.get_session(agent_id, workspace_id, session_id, resolved_origin_type);
     const page = await session.messages();
     // 打开会话是用户访问的明确信号：在这里回收其他空闲实例，当前会话作为保护项。
-    this.trim_idle_session_runtimes(get_session_key(agent_id, workspace_id, session_id));
+    this.trim_idle_session_runtimes(get_session_key(agent_id, workspace_id, session_id, resolved_origin_type));
     return {
       messages: page.items.filter((message: SessionMessage) => message.visibility === "visible"),
-      runtime: await this.read_runtime(agent_id, workspace_id, session),
+      runtime: await this.read_runtime(agent_id, workspace_id, session, resolved_origin_type),
       has_more: page.has_more,
       ...(page.next_before_sequence ? { next_before_sequence: page.next_before_sequence } : {}),
     };
@@ -1151,8 +1186,9 @@ export class AgentController {
     workspace_id: string,
     session_id: string,
     before_sequence: number,
+    origin_type?: string,
   ): Promise<DesktopChatHistoryPage> {
-    const session = await this.get_session(agent_id, workspace_id, session_id);
+    const session = await this.get_session(agent_id, workspace_id, session_id, origin_type);
     const page = await session.messages({ before_sequence });
     return {
       messages: page.items.filter((message: SessionMessage) => message.visibility === "visible"),
@@ -1164,8 +1200,7 @@ export class AgentController {
   /** 列出当前 Workspace 根目录的直接文件，并按最近修改时间倒序返回。 */
   async list_workspace_files(workspace_id: string): Promise<DesktopWorkspaceFile[]> {
     await this.ready_promise;
-    const config = this.data.workspaces.get(workspace_id);
-    if (!config) throw new Error(`Workspace not found: ${workspace_id}`);
+    const config = this.get_workspace_file_context(workspace_id);
     const entries = await readdir(config.workspace_path, { withFileTypes: true });
     const files = await Promise.all(entries
       .filter((entry) => entry.isFile() && !entry.name.startsWith("."))
@@ -1216,11 +1251,18 @@ export class AgentController {
     this.workspace_file_watcher.release_subscriber(subscriber_id);
   }
 
+  /** 读取宿主持有的 Workspace 路径，包含不在项目 Repository 中的主会话目录。 */
+  private get_workspace_file_context(workspace_id: string) {
+    const workspace_path = this.data.workspaces.get(workspace_id)?.workspace_path
+      ?? this.city.workspaces.get(workspace_id)?.path;
+    if (!workspace_path) throw new Error(`Workspace not found: ${workspace_id}`);
+    return { workspace_path };
+  }
+
   /** 解析并校验 Workspace 内部路径，同时阻止目录穿越与符号链接越界。 */
   private async resolve_workspace_path(workspace_id: string, relative_path: string): Promise<{ root_path: string; target_path: string }> {
     await this.ready_promise;
-    const config = this.data.workspaces.get(workspace_id);
-    if (!config) throw new Error(`Workspace not found: ${workspace_id}`);
+    const config = this.get_workspace_file_context(workspace_id);
     const normalized_path = normalize_workspace_relative_path(relative_path);
     const root_path = await realpath(config.workspace_path);
     const candidate_path = path.resolve(root_path, normalized_path);
@@ -1233,8 +1275,7 @@ export class AgentController {
   /** 读取 Workspace 根目录下的文件，禁止绝对路径和目录穿越。 */
   async read_workspace_file(workspace_id: string, relative_path: string): Promise<DesktopChatFileInput> {
     await this.ready_promise;
-    const config = this.data.workspaces.get(workspace_id);
-    if (!config) throw new Error(`Workspace not found: ${workspace_id}`);
+    const config = this.get_workspace_file_context(workspace_id);
     const normalized_path = String(relative_path || "").trim();
     if (!normalized_path || path.isAbsolute(normalized_path) || normalized_path.includes("..") || normalized_path.includes("/") || normalized_path.includes("\\")) throw new Error("Workspace file path is invalid");
     const file_path = path.join(config.workspace_path, normalized_path);
@@ -1246,16 +1287,17 @@ export class AgentController {
   }
 
   /** 向 Session 提交输入；后续执行结果通过实时事件广播。 */
-  async send_message(agent_id: string, workspace_id: string, session_id: string, input: JSONContent): Promise<DesktopChatSendResult> {
-    this.assert_session_not_rewriting(agent_id, workspace_id, session_id);
+  async send_message(agent_id: string, workspace_id: string, session_id: string, input: JSONContent, origin_type?: string): Promise<DesktopChatSendResult> {
+    this.assert_session_not_rewriting(agent_id, workspace_id, session_id, origin_type);
     const query = chat_input_to_session_query(input);
-    return await this.submit_session_query(agent_id, workspace_id, session_id, query);
+    return await this.submit_session_query(agent_id, workspace_id, session_id, query, origin_type);
   }
 
   /** 提交已经完成边界转换的 canonical query，并统一维护 Desktop 运行态。 */
-  private async submit_session_query(agent_id: string, workspace_id: string, session_id: string, query: AgentSessionPromptInput["query"]): Promise<DesktopChatSendResult> {
-    const session = await this.get_execution_session(agent_id, workspace_id, session_id);
-    this.update_runtime({ agent_id, workspace_id, session_id, status: "submitted", updated_at: Date.now() });
+  private async submit_session_query(agent_id: string, workspace_id: string, session_id: string, query: AgentSessionPromptInput["query"], origin_type?: string): Promise<DesktopChatSendResult> {
+    const resolved_origin_type = resolve_session_origin_type(origin_type);
+    const session = await this.get_execution_session(agent_id, workspace_id, session_id, resolved_origin_type);
+    this.update_runtime({ agent_id, workspace_id, session_id, origin_type: resolved_origin_type, status: "submitted", updated_at: Date.now() });
     try {
       const turn = await session.prompt({ query });
       void turn.finished.catch((reason: unknown) => {
@@ -1263,6 +1305,7 @@ export class AgentController {
           agent_id,
           workspace_id,
           session_id,
+          origin_type: resolved_origin_type,
           status: "failed",
           turn_id: turn.id,
           error: to_error_message(reason),
@@ -1275,6 +1318,7 @@ export class AgentController {
         agent_id,
         workspace_id,
         session_id,
+        origin_type: resolved_origin_type,
         status: "failed",
         error: to_error_message(reason),
         updated_at: Date.now(),
@@ -1284,17 +1328,18 @@ export class AgentController {
   }
 
   /** 拒绝在 rewrite 提交点期间改变源 Session。 */
-  private assert_session_not_rewriting(agent_id: string, workspace_id: string, session_id: string): void {
-    if (this.rewriting_session_keys.has(get_session_key(agent_id, workspace_id, session_id))) {
+  private assert_session_not_rewriting(agent_id: string, workspace_id: string, session_id: string, origin_type?: string): void {
+    if (this.rewriting_session_keys.has(get_session_key(agent_id, workspace_id, session_id, origin_type))) {
       throw new Error("Session 正在重写历史消息，请稍后再试");
     }
   }
 
   /** 停止当前 Session Turn。 */
-  async stop_session(agent_id: string, workspace_id: string, session_id: string): Promise<void> {
-    const session = await this.get_session(agent_id, workspace_id, session_id);
+  async stop_session(agent_id: string, workspace_id: string, session_id: string, origin_type?: string): Promise<void> {
+    const resolved_origin_type = resolve_session_origin_type(origin_type);
+    const session = await this.get_session(agent_id, workspace_id, session_id, resolved_origin_type);
     await session.stop();
-    this.update_runtime({ agent_id, workspace_id, session_id, status: "stopped", updated_at: Date.now() });
+    this.update_runtime({ agent_id, workspace_id, session_id, origin_type: resolved_origin_type, status: "stopped", updated_at: Date.now() });
   }
 
   /** 响应当前 Session 等待中的审批或问题。 */
@@ -1303,45 +1348,50 @@ export class AgentController {
     workspace_id: string,
     session_id: string,
     input: RespondSessionInteractionInput,
+    origin_type?: string,
   ): Promise<void> {
-    const session = await this.get_session(agent_id, workspace_id, session_id);
+    const session = await this.get_session(agent_id, workspace_id, session_id, origin_type);
     await session.respond(input);
   }
 
   /** 读取 Session 当前运行态。 */
-  async get_runtime(agent_id: string, workspace_id: string, session_id: string): Promise<DesktopChatRuntime> {
-    return await this.read_runtime(agent_id, workspace_id, await this.get_session(agent_id, workspace_id, session_id));
+  async get_runtime(agent_id: string, workspace_id: string, session_id: string, origin_type?: string): Promise<DesktopChatRuntime> {
+    const resolved_origin_type = resolve_session_origin_type(origin_type);
+    return await this.read_runtime(agent_id, workspace_id, await this.get_session(agent_id, workspace_id, session_id, resolved_origin_type), resolved_origin_type);
   }
 
   /** 读取 Session 当前模型与审批模式。 */
-  async get_configuration(agent_id: string, workspace_id: string, session_id: string): Promise<DesktopSessionConfiguration> {
-    return await this.read_session_configuration(workspace_id, await this.get_session(agent_id, workspace_id, session_id));
+  async get_configuration(agent_id: string, workspace_id: string, session_id: string, origin_type?: string): Promise<DesktopSessionConfiguration> {
+    const resolved_origin_type = resolve_session_origin_type(origin_type);
+    return await this.read_session_configuration(workspace_id, await this.get_session(agent_id, workspace_id, session_id, resolved_origin_type), resolved_origin_type);
   }
 
   /** 解析 Federation 模型并切换当前 Session。 */
-  async set_model(agent_id: string, workspace_id: string, session_id: string, model_id: string): Promise<DesktopSessionConfiguration> {
+  async set_model(agent_id: string, workspace_id: string, session_id: string, model_id: string, origin_type?: string): Promise<DesktopSessionConfiguration> {
+    const resolved_origin_type = resolve_session_origin_type(origin_type);
     const workspace = await this.require_workspace(agent_id, workspace_id);
-    const session = await this.get_session(agent_id, workspace_id, session_id);
+    const session = await this.get_session(agent_id, workspace_id, session_id, resolved_origin_type);
     const model = await resolve_desktop_agent_model(this.data, model_id, workspace.get_env());
-    const configured_effort = this.read_session_reasoning_efforts()[get_session_key(agent_id, workspace_id, session_id)];
+    const configured_effort = this.read_session_reasoning_efforts()[get_session_key(agent_id, workspace_id, session_id, resolved_origin_type)];
     const reasoning_effort = select_model_reasoning_effort(model, configured_effort);
-    this.persist_session_reasoning_effort(agent_id, workspace_id, session_id, reasoning_effort);
+    this.persist_session_reasoning_effort(agent_id, workspace_id, session_id, reasoning_effort, resolved_origin_type);
     await session.set({ model: configure_desktop_agent_model(model, reasoning_effort) });
-    this.persist_session_model_id(agent_id, workspace_id, session_id, model_id);
-    this.restored_session_models.set(get_session_key(agent_id, workspace_id, session_id), model_id);
-    return await this.read_session_configuration(workspace_id, session);
+    this.persist_session_model_id(agent_id, workspace_id, session_id, model_id, resolved_origin_type);
+    this.restored_session_models.set(get_session_key(agent_id, workspace_id, session_id, resolved_origin_type), model_id);
+    return await this.read_session_configuration(workspace_id, session, resolved_origin_type);
   }
 
   /** 设置当前 Session 的推理强度，并让后续 Turn 使用该档位。 */
-  async set_reasoning_effort(agent_id: string, workspace_id: string, session_id: string, reasoning_effort?: string): Promise<DesktopSessionConfiguration> {
+  async set_reasoning_effort(agent_id: string, workspace_id: string, session_id: string, reasoning_effort?: string, origin_type?: string): Promise<DesktopSessionConfiguration> {
+    const resolved_origin_type = resolve_session_origin_type(origin_type);
     const workspace = await this.require_workspace(agent_id, workspace_id);
-    const session = await this.get_session(agent_id, workspace_id, session_id);
-    const model_id = (await this.read_session_configuration(workspace_id, session)).model_id;
+    const session = await this.get_session(agent_id, workspace_id, session_id, resolved_origin_type);
+    const model_id = (await this.read_session_configuration(workspace_id, session, resolved_origin_type)).model_id;
     const model = await resolve_desktop_agent_model(this.data, model_id, workspace.get_env());
     const selected_effort = select_model_reasoning_effort(model, reasoning_effort);
     await session.set({ model: configure_desktop_agent_model(model, selected_effort) });
-    this.persist_session_reasoning_effort(agent_id, workspace_id, session_id, selected_effort);
-    return await this.read_session_configuration(workspace_id, session);
+    this.persist_session_reasoning_effort(agent_id, workspace_id, session_id, selected_effort, resolved_origin_type);
+    return await this.read_session_configuration(workspace_id, session, resolved_origin_type);
   }
 
   /** 更新当前 Session 的安全审批模式。 */
@@ -1350,10 +1400,12 @@ export class AgentController {
     workspace_id: string,
     session_id: string,
     approval_mode: SessionApprovalMode,
+    origin_type?: string,
   ): Promise<DesktopSessionConfiguration> {
-    const session = await this.get_session(agent_id, workspace_id, session_id);
+    const resolved_origin_type = resolve_session_origin_type(origin_type);
+    const session = await this.get_session(agent_id, workspace_id, session_id, resolved_origin_type);
     await session.set({ security: { approval_mode } });
-    return await this.read_session_configuration(workspace_id, session);
+    return await this.read_session_configuration(workspace_id, session, resolved_origin_type);
   }
 
   /** 释放 Desktop 进程拥有的全部 native Agent。 */
@@ -1445,6 +1497,11 @@ export class AgentController {
       instruction: config.instruction,
       model,
       tools,
+      resolve_work_workspace: async (workspace_id) => {
+        // 仅允许用户登记的项目，主会话的私有 main Workspace 不属于项目 Repository。
+        if (!this.data.workspaces.get(workspace_id)) throw new Error(`Project Workspace is not registered: ${workspace_id}`);
+        return await this.require_workspace(config.agent_id, workspace_id);
+      },
     });
   }
 
@@ -1460,32 +1517,43 @@ export class AgentController {
     });
   }
 
-  /** 读取 Session，并确保实时 mutation 只订阅一次；孤儿 Session 仅允许只读恢复历史。 */
-  private async get_session(agent_id: string, workspace_id: string, session_id: string): Promise<AgentSession> {
+  /**
+   * 读取 Session，并确保实时 mutation 只订阅一次；孤儿 Session 仅允许只读恢复历史。
+   *
+   * `origin_type` 必须与摘要一起传递：它是 Session 身份的一半，缺省时才落到默认工作分区。
+   */
+  private async get_session(agent_id: string, workspace_id: string, session_id: string, origin_type?: string): Promise<AgentSession> {
+    const resolved_origin_type = resolve_session_origin_type(origin_type);
+    if (resolved_origin_type === SESSION_ORIGIN_TYPE_AGENT) {
+      const workspace = await this.require_agent_main_workspace(agent_id);
+      const session = await this.require_native_agent(agent_id).sessions.get(session_id, resolved_origin_type, { workspace });
+      this.observe_session(agent_id, workspace.id, session, resolved_origin_type);
+      return session;
+    }
     const config = this.data.workspaces.get(workspace_id);
     if (config) {
       const workspace = await this.require_workspace(agent_id, workspace_id);
       const session = await this.require_native_agent(agent_id).sessions.get(
         session_id,
-        "work",
+        resolved_origin_type,
         { workspace },
       );
-      this.observe_session(agent_id, workspace_id, session);
+      this.observe_session(agent_id, workspace_id, session, resolved_origin_type);
       return session;
     }
     // 孤儿 Session：其 Workspace 已从 Registry 移除，不登记也不订阅实时事件，
     // 只允许打开查看历史；发送前必须由用户重新绑定 Workspace。
-    return await this.get_orphan_session(agent_id, workspace_id, session_id);
+    return await this.get_orphan_session(agent_id, workspace_id, session_id, resolved_origin_type);
   }
 
   /** 恢复孤儿 Session 的只读实例；不写入 Registry，不产生任何副作用。 */
-  private async get_orphan_session(agent_id: string, workspace_id: string, session_id: string): Promise<AgentSession> {
+  private async get_orphan_session(agent_id: string, workspace_id: string, session_id: string, origin_type: string): Promise<AgentSession> {
     const agent = this.require_native_agent(agent_id);
     const existing_workspace = this.city.workspaces.get(workspace_id);
     if (existing_workspace) {
-      return await agent.sessions.get(session_id, "work", { workspace: existing_workspace });
+      return await agent.sessions.get(session_id, origin_type, { workspace: existing_workspace });
     }
-    return await agent.sessions.get(session_id, "work", { workspace: await this.get_orphan_workspace(workspace_id) });
+    return await agent.sessions.get(session_id, origin_type, { workspace: await this.get_orphan_workspace(workspace_id) });
   }
 
   /** 为已移除登记的孤儿 Workspace 创建内存实例；使用默认目录，并纳入 City 索引以通过宿主校验。 */
@@ -1505,21 +1573,21 @@ export class AgentController {
   }
 
   /** 读取即将执行模型调用的 Session；孤儿 Session 必须先绑定 Workspace 才能执行。 */
-  private async get_execution_session(agent_id: string, workspace_id: string, session_id: string): Promise<AgentSession> {
-    if (!this.data.workspaces.get(workspace_id)) {
+  private async get_execution_session(agent_id: string, workspace_id: string, session_id: string, origin_type?: string): Promise<AgentSession> {
+    if (origin_type !== SESSION_ORIGIN_TYPE_AGENT && !this.data.workspaces.get(workspace_id)) {
       throw new Error("关联 Workspace 未添加，请先选择 Workspace 后再发送");
     }
-    const session = await this.get_session(agent_id, workspace_id, session_id);
-    await this.restore_session_model(agent_id, workspace_id, session);
+    const session = await this.get_session(agent_id, workspace_id, session_id, origin_type);
+    await this.restore_session_model(agent_id, workspace_id, session, resolve_session_origin_type(origin_type));
     return session;
   }
 
   /** 建立 SDK Session 到 Renderer 的唯一事件桥。 */
-  private observe_session(agent_id: string, workspace_id: string, session: AgentSession): void {
-    const session_key = get_session_key(agent_id, workspace_id, session.id);
+  private observe_session(agent_id: string, workspace_id: string, session: AgentSession, origin_type: string): void {
+    const session_key = get_session_key(agent_id, workspace_id, session.id, origin_type);
     if (this.session_unsubscribes.has(session_key)) return;
     const unsubscribe = session.subscribe((mutation: SessionMutation) => {
-      this.events.mutation({ agent_id, workspace_id, session_id: session.id, mutation });
+      this.events.mutation({ agent_id, workspace_id, session_id: session.id, origin_type, mutation });
       if (mutation.variant === "part" && mutation.type === "tool") {
         const current = this.runtimes.get(session_key);
         // Tool 在等待用户响应时阻塞，因此 Tool 状态就是等待输入的唯一依据；
@@ -1537,6 +1605,7 @@ export class AgentController {
           agent_id,
           workspace_id,
           session_id: session.id,
+          origin_type,
           status,
           ...(mutation.turn_id ? { turn_id: mutation.turn_id } : current.turn_id ? { turn_id: current.turn_id } : {}),
           updated_at: mutation.created_at,
@@ -1547,6 +1616,7 @@ export class AgentController {
         agent_id,
         workspace_id,
         session_id: session.id,
+        origin_type,
         status: mutation.type === "start"
           ? "streaming"
           : mutation.status === "completed"
@@ -1563,8 +1633,8 @@ export class AgentController {
   }
 
   /** 释放一个 Session 的订阅、运行态和 Desktop 模型覆盖。 */
-  private release_session_projection(agent_id: string, workspace_id: string, session_id: string): void {
-    const session_key = get_session_key(agent_id, workspace_id, session_id);
+  private release_session_projection(agent_id: string, workspace_id: string, session_id: string, origin_type?: string): void {
+    const session_key = get_session_key(agent_id, workspace_id, session_id, origin_type);
     this.session_unsubscribes.get(session_key)?.();
     this.session_unsubscribes.delete(session_key);
     this.runtimes.delete(session_key);
@@ -1607,14 +1677,15 @@ export class AgentController {
       this.session_unsubscribes.delete(session_key);
       this.runtimes.delete(session_key);
       this.restored_session_models.delete(session_key);
-      const agent = this.city.agents.get(session_key.split(":")[0] ?? "");
-      agent?.sessions.release(session_key.split(":")[2] ?? "");
+      const address = parse_session_cache_key(session_key);
+      if (!address) continue;
+      this.city.agents.get(address.agent_id)?.sessions.release(address.session_id, address.origin_type);
     }
   }
 
   /** 从 SDK status 恢复应用重启或首次进入时的运行态。 */
-  private async read_runtime(agent_id: string, workspace_id: string, session: AgentSession): Promise<DesktopChatRuntime> {
-    const session_key = get_session_key(agent_id, workspace_id, session.id);
+  private async read_runtime(agent_id: string, workspace_id: string, session: AgentSession, origin_type: string): Promise<DesktopChatRuntime> {
+    const session_key = get_session_key(agent_id, workspace_id, session.id, origin_type);
     const current = this.runtimes.get(session_key);
     if (current) return current;
     const status = await session.status();
@@ -1622,6 +1693,7 @@ export class AgentController {
       agent_id,
       workspace_id,
       session_id: session.id,
+      origin_type,
       status: status.state === "running" ? "streaming" : "idle",
       ...(status.active_turn_id ? { turn_id: status.active_turn_id } : {}),
       updated_at: Date.now(),
@@ -1631,11 +1703,11 @@ export class AgentController {
   }
 
   /** 把 SDK Session 配置收敛成可序列化 Renderer 投影。 */
-  private async read_session_configuration(workspace_id: string, session: AgentSession): Promise<DesktopSessionConfiguration> {
+  private async read_session_configuration(workspace_id: string, session: AgentSession, origin_type: string): Promise<DesktopSessionConfiguration> {
     const status = await session.status();
     const agent_config = this.data.agents.get(session.agent_id);
     const default_model_id = typeof agent_config?.execution?.model_id === "string" ? agent_config.execution.model_id : "";
-    const session_key = get_session_key(session.agent_id, workspace_id, session.id);
+    const session_key = get_session_key(session.agent_id, workspace_id, session.id, origin_type);
     const configured_model = session.get("model") as { modelId?: unknown } | undefined;
     const runtime_model_id = typeof configured_model?.modelId === "string" ? configured_model.modelId : "";
     const reasoning_effort = this.read_session_reasoning_efforts()[session_key];
@@ -1647,8 +1719,8 @@ export class AgentController {
   }
 
   /** 恢复 Desktop 为 Session 单独保存的模型覆盖。 */
-  private async restore_session_model(agent_id: string, workspace_id: string, session: AgentSession): Promise<void> {
-    const session_key = get_session_key(agent_id, workspace_id, session.id);
+  private async restore_session_model(agent_id: string, workspace_id: string, session: AgentSession, origin_type: string): Promise<void> {
+    const session_key = get_session_key(agent_id, workspace_id, session.id, origin_type);
     const model_id = this.read_session_model_ids()[session_key];
     if (!model_id || this.restored_session_models.get(session_key) === model_id) return;
     const workspace = await this.require_workspace(agent_id, workspace_id);
@@ -1666,11 +1738,11 @@ export class AgentController {
   }
 
   /** 保存一个 Session 的稳定模型 ID。 */
-  private persist_session_model_id(agent_id: string, workspace_id: string, session_id: string, model_id: string): void {
+  private persist_session_model_id(agent_id: string, workspace_id: string, session_id: string, model_id: string, origin_type?: string): void {
     const current = this.read_session_model_ids();
     this.data.settings.set(session_model_settings_key, {
       ...current,
-      [get_session_key(agent_id, workspace_id, session_id)]: model_id,
+      [get_session_key(agent_id, workspace_id, session_id, origin_type)]: model_id,
     });
   }
 
@@ -1681,16 +1753,16 @@ export class AgentController {
   }
 
   /** 保存一个 Session 的推理档位覆盖。 */
-  private persist_session_reasoning_effort(agent_id: string, workspace_id: string, session_id: string, reasoning_effort?: string): void {
+  private persist_session_reasoning_effort(agent_id: string, workspace_id: string, session_id: string, reasoning_effort?: string, origin_type?: string): void {
     const current = this.read_session_reasoning_efforts();
-    const key = get_session_key(agent_id, workspace_id, session_id);
+    const key = get_session_key(agent_id, workspace_id, session_id, origin_type);
     if (reasoning_effort?.trim()) current[key] = reasoning_effort.trim(); else delete current[key];
     this.data.settings.set(session_reasoning_settings_key, current);
   }
 
   /** 保存并广播 Session 运行态。 */
   private update_runtime(runtime: DesktopChatRuntime): void {
-    this.runtimes.set(get_session_key(runtime.agent_id, runtime.workspace_id, runtime.session_id), runtime);
+    this.runtimes.set(get_session_key(runtime.agent_id, runtime.workspace_id, runtime.session_id, runtime.origin_type), runtime);
     this.events.runtime({ runtime });
   }
 
@@ -1790,6 +1862,7 @@ export class AgentController {
   /** 校验 Agent，并按需把指定 Workspace 登记到 Desktop City。 */
   private async require_workspace(agent_id: string, workspace_id: string) {
     this.require_native_agent(agent_id);
+    if (workspace_id === get_agent_main_workspace_id(agent_id)) return await this.require_agent_main_workspace(agent_id);
     const existing = this.city.workspaces.get(workspace_id);
     if (existing) return existing;
     const config = this.data.workspaces.get(workspace_id);
@@ -1887,6 +1960,8 @@ function to_desktop_group_message(message: import("@downcity/agent").GroupMessag
 function to_desktop_session_summary(root_path: string, session: AgentSessionSummary, archived = false): DesktopSessionSummary {
   return {
     session_id: session.session_id,
+    origin_type: session.origin.type,
+    ...(session.origin.type === SESSION_ORIGIN_TYPE_AGENT ? { workspace_path: get_agent_main_workspace_path(root_path, session.agent_id) } : {}),
     session_path: path.join(root_path, "agents", session.agent_id, archived ? "archived-sessions" : "sessions", session.origin.type, session.session_id),
     title: session.title || "新会话",
     preview_text: session.preview_text || "",
@@ -1898,10 +1973,8 @@ function to_desktop_session_summary(root_path: string, session: AgentSessionSumm
   };
 }
 
-/** 生成不会与其他 Agent Session 冲突的主进程缓存键。 */
-function get_session_key(agent_id: string, workspace_id: string, session_id: string): string {
-  return `${agent_id}:${workspace_id}:${session_id}`;
-}
+/** 主进程 Session 地址键的短别名；拼法与拆法见 `SessionAddressKey.ts`。 */
+const get_session_key = get_session_cache_key;
 
 /** 把未知失败统一转换为可序列化文本。 */
 function to_error_message(reason: unknown): string {

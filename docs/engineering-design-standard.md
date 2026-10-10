@@ -235,7 +235,7 @@ Agent 不持有单一 Workspace。AgentSessions 是 Agent 唯一的 Session 集�
 ~/.downcity/agents/<agent_id>/
 ```
 
-该目录包含 Agent 的 Session 与日志。Session 按来源存放在 `<agent_root>/sessions/<origin_type>/<session_id>/`，归档后进入 `<agent_root>/archived-sessions/<origin_type>/<session_id>/`；来源类型是任意非空字符串，默认值为 `chat`，路径层会对它做安全、可逆的单目录段编码。每个 Session 目录包含 `session.db` 与 `attachments/`，只有创建或恢复时传入 Workspace，Session 的 `session_state` 才记录 `workspace_id`。执行期 `PluginContext.storage.path/files` 指向当前 Agent/Plugin 的私有目录 `~/.downcity/agents/<agent_id>/plugins/<plugin_id>/`，Workspace 路径始终只指向真实项目。Plugin 的唯一宿主配置不进入运行时目录，保存在 `~/.downcity/plugins/<plugin_id>/config.toml`；Plugin 唯一实例的 lifecycle storage 由 City 另行分配。
+该目录包含 Agent 的 Session、日志及 Desktop 主会话专属 `main/` 目录。主会话使用固定私有 Workspace，不绑定项目；`session_start` 必须明确指定项目 `workspace_id`，宿主通过 `AgentOptions.resolve_work_workspace` 校验和注入项目实例，不继承主会话目录。专属 Workspace 仅由 City 运行时持有，不登记到用户项目 Repository。Session 按来源存放在 `<agent_root>/sessions/<origin_type>/<session_id>/`，归档后进入 `<agent_root>/archived-sessions/<origin_type>/<session_id>/`；来源类型是任意非空字符串，默认值为 `chat`，路径层会对它做安全、可逆的单目录段编码。每个 Session 目录包含 `session.db` 与 `attachments/`，只有创建或恢复时传入 Workspace，Session 的 `session_state` 才记录 `workspace_id`。执行期 `PluginContext.storage.path/files` 指向当前 Agent/Plugin 的私有目录 `~/.downcity/agents/<agent_id>/plugins/<plugin_id>/`，Workspace 路径始终只指向真实项目。Plugin 的唯一宿主配置不进入运行时目录，保存在 `~/.downcity/plugins/<plugin_id>/config.toml`；Plugin 唯一实例的 lifecycle storage 由 City 另行分配。
 
 Agent 不负责：
 

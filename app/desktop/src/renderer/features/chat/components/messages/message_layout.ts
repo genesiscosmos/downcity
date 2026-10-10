@@ -8,15 +8,8 @@
  * 「头像列宽 28px + 间距 8px」与「头像列宽 32px + px-1」两套值，用户消息的元信息行
  * 也一度是 `h-6 gap-1` 与 `gap-1.5 px-1` 两种写法。
  *
- * 更早的 Agent 布局是「头像占左侧一列、正文右移」，由此带出三个问题：
- *
- * 1. 正文左缘与身份行、与工具活动各错开一次，整列没有统一的左边缘；
- * 2. 头像曾带 `sticky`，长消息滚动时它脱离自己的 Header 悬在视口上。
- *    现在是**整个身份行**一起吸顶（见 `agent_message_identity_header_class_name`）：
- *    头像与名字是一个按钮、一件事，分开动才是那个旧缺陷。
- * 3. 头像与名称是两个按钮却只做同一个动作，键盘用户要为同一件事按两次 Tab。
- *
- * 现在 Agent 消息是上下两段（身份在上、正文在下），用户消息是右侧气泡 + 下方元信息行。
+ * Agent 消息采用左右布局：左侧头像与折叠按钮竖排，右侧信息栏、正文与文件改动竖排。
+ * 右侧所有内容共用同一左边缘；用户消息采用右侧气泡与下方元信息行。
  * 两个表面、两种角色都由 layouts 里的 frame 组件消费这里的类名——
  * **不要在组件里就地补类名**，那正是分叉的起点。
  *
@@ -39,12 +32,14 @@ export interface MessageIdentity {
 // Agent 消息
 // ---------------------------------------------------------------------------
 
-/**
- * Agent 消息根容器：上下两段（身份在上、正文在下），宽度占满消息列。
- *
- * `flex-col` 是这条布局的核心：内容是列，不是「头像列 + 正文列」的一行。
- */
-export const agent_message_root_class_name = "group is-agent flex w-full flex-col gap-1 py-2 !m-0 !p-0";
+/** Agent 消息根容器：左侧身份列、右侧内容列，列间距为 12px。 */
+export const agent_message_root_class_name = "group is-agent flex w-full items-start gap-3 py-2 !m-0 !p-0";
+
+/** 左列固定宽度，头像与可选折叠按钮竖向排列，不参与吸顶。 */
+export const agent_message_rail_class_name = "flex w-6 shrink-0 flex-col items-center gap-2 py-0.5";
+
+/** 右列占满剩余空间，信息栏与主体保留 8px 间距。 */
+export const agent_message_stack_class_name = "flex min-w-0 flex-1 flex-col gap-2";
 
 /**
  * 身份行容器：头像 + 名称 + 右侧附加控件，滚动时吸顶。
@@ -66,14 +61,13 @@ export const agent_message_root_class_name = "group is-agent flex w-full flex-co
  * `top-0` 相对滚动视口顶边，不相对正文列的 `p-2`：吸住时向上对齐到视口边缘，
  * 与“吸顶”的字面意思一致。
  */
-export const agent_message_identity_header_class_name = "sticky top-0 z-10 flex min-w-0 items-center gap-2 bg-background";
+export const agent_message_identity_header_class_name = "sticky top-0 z-10 flex min-h-7 min-w-0 items-center gap-2 bg-background";
 
 /**
- * 消息动作栏（复制 / 引用 / 分支）与它所属正文的间距。
+ * 完整消息内容与其下方动作栏（复制 / 引用 / 分支）的分组。
  *
- * **比块间距小**：工具栏是它上面那段正文的附属动作，不是独立展示块。
- * 用容器自己的 `gap-3`（与正文块同级）会把它与正文拉成两个块，
- * 所以它跟正文包在同一组里，组内间距取更小的一档。
+ * 正文、文件和文件改动按原始顺序展示，动作栏放在全部内容下方。
+ * 组内使用比内容块间距更小的 `gap-1`，让动作栏贴近消息末尾。
  */
 export const agent_message_actions_group_class_name = "flex min-w-0 flex-col gap-1";
 
@@ -89,11 +83,7 @@ export const agent_message_actions_group_class_name = "flex min-w-0 flex-col gap
 export const agent_message_actions_class_name = "message-action-toolbar pointer-events-none flex h-6 items-center gap-0.5 opacity-0 transition-opacity group-hover:pointer-events-auto group-hover:opacity-100 focus-within:pointer-events-auto focus-within:opacity-100";
 
 /**
- * 身份行：头像 + 名称，后面跟时间与折叠开关。
- *
- * 顺序是「谁说的 → 什么时候 → 还能展开过程吗」，整组靠左，行右侧留空。
- * 时间戳与开关都是**直接子节点**，不再包一层右侧元信息组：靠左排列时那层容器
- * 与身份行的 `gap-2` 重复，去掉后少一个 DOM 层级。
+ * 右侧信息栏的名称区域；名称后方展示时间，头像与折叠按钮由左列承载。
  *
  * `py-0.5` 现在**不再是**触控垫高：头像 24px 本身已满足 WCAG 2.2 的
  * 24px 目标尺寸下限（20px 时代才需要靠它补到 24px）。它现在只负责身份行

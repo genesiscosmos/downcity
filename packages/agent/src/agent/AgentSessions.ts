@@ -195,6 +195,7 @@ export class AgentSessions implements AgentSessionsContract<AgentSession> {
    *   因此不新增索引，也不维护额外状态。
    * - 同一进程内并发调用会收敛到同一个创建过程，不会产生第二条。
    * - 被归档或删除后，下一次调用自然重建一条。
+   * - Workspace 仅用于首次创建；已有会话的目录实例由宿主通过 get/set 明确恢复。
    */
   async self(input?: { workspace?: WorkspaceRuntime }): Promise<AgentSession> {
     const existing = await this.find_agent_session();
@@ -223,8 +224,7 @@ export class AgentSessions implements AgentSessionsContract<AgentSession> {
   /**
    * 尝试恢复已存在的 Agent 会话；不存在或已失效时返回空。
    *
-   * 关键点（中文）：查找不传 Workspace；传 Workspace 只在创建时生效，
-   * 否则「已存在时忽略该参数」会退化成一次静默切目录。
+   * 关键点（中文）：查找不切换目录，宿主负责注入恢复后的 Workspace 实例。
    */
   private async find_agent_session(): Promise<AgentSession | undefined> {
     const origin = create_agent_session_origin();
@@ -327,8 +327,12 @@ export class AgentSessions implements AgentSessionsContract<AgentSession> {
       storage,
     });
     await session.initialize();
-    if (requested_workspace_id && requested_workspace_id !== persisted_workspace_id) {
-      await session.set({ workspace: input?.workspace ?? null });
+    if (input?.workspace && (
+      requested_workspace_id !== persisted_workspace_id
+      || session.get("workspace") !== input.workspace
+    )) {
+      // 持久化 ID 相同不代表缓存实例已经恢复目录；宿主注入也必须更新执行资源。
+      await session.set({ workspace: input.workspace }, { persist_action: false });
     }
     return session;
   }

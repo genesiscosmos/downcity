@@ -4,6 +4,8 @@ import { useCallback, useRef, type MouseEvent, type ReactNode } from "react";
 import type { RespondSessionInteractionInput, SessionMessage, SessionTurnFileDiffSummary } from "@downcity/agent";
 import { TbAlertTriangle, TbDots, TbSettings } from "react-icons/tb";
 import { Button } from "@/components/ui/button";
+import { AgentAvatar } from "@/components/AgentAvatar";
+import { is_agent_session_origin } from "@downcity/type";
 import { ChatSurfaceLayout } from "@/features/chat/components/ChatLayout";
 import { ChatTextSelectionQuote } from "@/features/chat/components/ChatTextSelectionQuote";
 import { ChatWorkspaceSelector } from "@/features/chat/components/ChatWorkspaceSelector";
@@ -84,11 +86,12 @@ const empty_powers: readonly { power_id: string; title: string; icon_url?: strin
 export function SessionView(props: SessionViewProps) {
   const translate_chat = use_translation("chat");
   const translate_resources = use_translation("resources");
+  const translate_navigation = use_translation("navigation");
   // 只在 Agent 会话里存在：它由 AgentChatMainView 提供，Group 会话下为空，
   // 因此同一个头部在两处都能复用，不需要额外的开关。
   const open_agent_config = use_open_agent_config();
   const { session, messages, runtime, settings } = props;
-  const scroll_surface_id = get_session_key(props.workspace_id, props.agent.agent_id, session.session_id);
+  const scroll_surface_id = get_session_key(props.workspace_id, props.agent.agent_id, session.session_id, session.origin_type);
   // 滚动锚点以「首条消息 ID」为内容标识：只有历史前插会改变它，追加消息不会。
   const { scroll_ref, content_ref, handle_scroll, preserve_prepend_position, preserve_element_position, is_following, latest_visible, scroll_to_bottom } = use_chat_scroll(scroll_surface_id, settings.auto_scroll, messages[0]?.message_id ?? "");
   const busy = is_chat_busy(runtime);
@@ -115,6 +118,7 @@ export function SessionView(props: SessionViewProps) {
     props.open_file(file.relative_path, file.line);
   }, [props.open_file, props.workspace_id, props.workspaces]);
   const load_earlier = () => props.load_earlier_history ? preserve_prepend_position(props.load_earlier_history) : Promise.resolve();
+  const is_main_session = is_agent_session_origin({ type: session.origin_type });
   const workspace_tag = props.workspace_missing
     ? <span className="inline-flex h-5 max-w-40 shrink-0 items-center gap-1 rounded-full bg-amber-500/10 px-2 text-3xs font-normal text-amber-600 dark:text-amber-400"><TbAlertTriangle className="size-3 shrink-0" /><span className="truncate">{translate_chat("message.workspace_missing")}</span></span>
     : props.workspace_draft_mode
@@ -123,7 +127,10 @@ export function SessionView(props: SessionViewProps) {
   const session_title = session.title || translate_chat("conversation.new");
 
   return <ChatSurfaceLayout
-    header_left={<div className="flex min-w-0 max-w-[min(100%,36rem)] items-center gap-2"><span className="min-w-0 truncate text-xs font-medium text-foreground" title={session_title}>{session_title}</span>{workspace_tag}</div>}
+    // 主会话左侧只表达 Agent 身份，不展示会话标题或专属目录标签。
+    header_left={is_main_session
+      ? <button type="button" onClick={open_agent_config} className="flex min-w-0 items-center gap-2 rounded-control px-1 py-0.5 text-left transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" title={translate_navigation("sidebar.agent_settings")} aria-label={`${translate_navigation("sidebar.agent_settings")} · ${props.agent.name}`}><AgentAvatar agent={props.agent} class_name="size-5" /><span className="min-w-0 truncate text-xs font-medium text-foreground">{props.agent.name}</span></button>
+      : <div className="flex min-w-0 max-w-[min(100%,36rem)] items-center gap-2"><span className="min-w-0 truncate text-xs font-medium text-foreground" title={session_title}>{session_title}</span>{workspace_tag}</div>}
     header_right={<div className="flex shrink-0 items-center gap-1">
       {open_agent_config ? <Button size="icon" title={translate_resources("agent_details.main_chat")} aria-label={translate_resources("agent_details.main_chat")} onClick={open_agent_config}><TbSettings /></Button> : null}
       {props.rename_session && props.archive_session && props.remove_session ? <SessionActionsMenu session={session} on_rename={props.rename_session} on_archive={props.archive_session} on_remove={props.remove_session} trigger={<Button size="icon" title={translate_chat("conversation.actions")} aria-label={translate_chat("conversation.actions")}><TbDots /></Button>} /> : null}

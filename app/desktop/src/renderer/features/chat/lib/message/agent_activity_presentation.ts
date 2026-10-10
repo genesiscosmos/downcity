@@ -15,7 +15,7 @@
  * - 本模块是纯函数，不依赖 React；组件负责 DOM、图标与交互。
  */
 
-import type { SessionAgentActionPart, SessionAgentToolPart } from "@downcity/agent";
+import type { SessionAgentActionPart, SessionAgentReasoningPart, SessionAgentToolPart } from "@downcity/agent";
 import type {
   AgentActionVisualKind,
   AgentActivityDetail,
@@ -28,6 +28,22 @@ import type {
   AgentToolVisualKind,
   ChatPowerLookup,
 } from "@/features/chat/types/AgentMessage";
+
+/** 推理与工具共用活动展示协议；摘要取最后一个非空行，详情保留完整正文。 */
+export function resolve_agent_reasoning_presentation(part: SessionAgentReasoningPart): AgentActivityPresentation {
+  const running = part.state === "streaming";
+  const summary = part.text.trim().split("\n").map((line) => line.trim()).filter(Boolean).at(-1) ?? "";
+  return {
+    visual_kind: "reasoning",
+    state_key: running ? "activity.thinking" : "activity.thought",
+    tone: running ? "running" : "complete",
+    diff_stat: null,
+    summary,
+    detail: part.text.trim() ? { type: "reasoning", text: part.text } : null,
+    error: "",
+    input_streaming: running,
+  };
+}
 
 /** 输入字段的候选名，按优先级排列。 */
 type FieldNames = readonly string[];
@@ -328,8 +344,8 @@ export function should_auto_open_agent_activity(parts: readonly AgentActivityPar
 /**
  * 活动组折叠摘要选中的 Part。
  *
- * Tool 与 Action 都是一次具体操作，因此两者一视同仁，摘要反映最后发生的那一件事。
- * 活动集合里没有 Reasoning（它不进活动分组），所以最后一项就是最后发生的事；
+ * Reasoning、Tool 与 Action 均按 canonical 顺序展示，摘要反映最后发生的那一件事。
+ * 最后一项就是最近活动，推理不会被移动到正文或操作栏后；
  * 空数组返回 undefined，调用方只在成组时使用它，组内至少有一项。
  */
 export function select_activity_summary_part(parts: readonly AgentActivityPart[]): AgentActivityPart | undefined {

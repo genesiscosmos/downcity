@@ -18,7 +18,7 @@ const rail_power_priority = ["skill", "messenger", "task", "memory", "web"] as c
  * 两边一分叉，用户按 ⌘1 就会落到 Rail 上的第二个图标。
  * 功能型 Power 从 ⌘3 起按 Rail 顺序跟随。
  */
-const core_sidebar_modes: SidebarMode[] = ["workspace", "chat"];
+const core_sidebar_modes: SidebarMode[] = ["chat", "workspace"];
 
 /**
  * 按用户可见顺序排列 Rail 上的一级功能入口。

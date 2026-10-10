@@ -1,106 +1,72 @@
 ---
-title: Agent Session
-description: The agent itself is a session; get it with agent.session() and it follows the same rules as every other session
+title: Agent main session
+description: Keep the main conversation in a private directory and dispatch work into explicitly selected projects
 ---
-`agent.session()` returns the session that belongs to the agent itself. **It is the agent**: one per agent, with a `session_id` equal to the agent's `id` and a role of `origin.type = "agent"`.
+An Agent's main session has `origin.type = "agent"` and uses the Agent ID as its session ID. It keeps the ongoing conversation and can dispatch, inspect, reply to, and stop work sessions.
 
-The important part is that it has no special rules. It is an ordinary session, sharing the same mechanism and capabilities as every other session — workspace, `set` / `get`, messages, approvals, subscriptions.
+## Private directory in Desktop
 
-## Get it and talk
+Desktop gives each Agent a fixed directory:
+
+```text
+~/.downcity/agents/<agent_id>/main/
+```
+
+This is the main session's own Workspace, providing files, Shell, and Power execution. It is not a user project and does not appear in the Works project list. Switching projects or reopening the Agent does not change this directory. Conversation history remains under `sessions/agent/<agent_id>/`, separate from files in `main`.
+
+Project tasks run in `work` sessions. Dispatch must explicitly select a project Workspace; work sessions do not inherit the main session's private directory.
+
+## SDK access and restoration
+
+The SDK does not choose the directory location. The host creates and owns the Workspace instances:
 
 ```ts
 const agent = new Agent({
   id: "coder",
   model,
-  workspace,
+  resolve_work_workspace: async (workspace_id) => {
+    const workspace = project_workspaces.get(workspace_id);
+    if (!workspace) throw new Error("Project Workspace not found");
+    return workspace;
+  },
 });
 
-const session = await agent.session();
-const turn = await session.prompt({ query: "What does SessionMessages do?" });
-const result = await turn.finished;
-console.log(result.text);
+await agent.sessions.self({ workspace: main_workspace });
+
+// self uses its Workspace argument only for creation.
+// Restore the instance explicitly when opening an existing session.
+const session = await agent.sessions.get(agent.id, "agent", {
+  workspace: main_workspace,
+});
+const turn = await session.prompt({ query: "Inspect project CI and dispatch a repair task." });
+await turn.finished;
 ```
 
-The first call creates it; every later call returns the same one. A different channel, a new process, or the next day all reach the same session and the same history:
+`resolve_work_workspace` resolves explicit project targets. It does not restore the main session or choose a default project. The host should reject unknown projects and the main session's private Workspace.
 
-```ts
-// A new process, a Telegram channel, or the next day
-const session = await agent.session();
-const page = await session.messages();
-```
+Only `workspace_id` is persisted. After restarting, the host must inject the Workspace instance again; a stored ID alone does not enable files or Shell. `get()` also applies the supplied instance when a cached session has not yet recovered its Workspace.
 
-If it is archived or deleted, the next call creates a new one.
+## Dispatching work
 
-## Session roles
-
-There is only one concept; roles are distinguished by `origin.type`:
-
-| Role | `origin.type` | `session_id` | Purpose |
-| --- | --- | --- | --- |
-| The agent's own session | `agent` | the agent's `id` | The user's ongoing conversation with the agent |
-| Work session | `work` | generated | Work the agent started elsewhere |
-| Task session | `task` | generated | Triggered by a scheduled task |
-| Group session | `group` | generated | Member sessions inside a group |
-
-`work` is the default role. `agent.sessions.list()` reads the `work` partition by default, so the agent's own session never mixes into business lists:
-
-```ts
-const work_sessions = await agent.sessions.list();
-const own = await agent.sessions.get(agent.id, "agent");
-```
-
-## Workspace capability
-
-Like every session, the agent session carries workspace capability. The directory is an execution resource the host injects, not session identity:
-
-```ts
-const session = await agent.session({ workspace: repo_a });   // inject at creation
-session.get("workspace");                                      // current instance
-session.get("workspace_id");                                   // persisted identifier
-
-await session.set({ workspace: repo_b });   // switch directory
-await session.set({ workspace: null });     // leave the project context
-```
-
-`set` and `get` are the only configuration handle on a session, shared by `model` and `workspace`. Only `workspace_id` is persisted; the instance stays with the host and never enters the session.
-
-A restored session does not get its directory back automatically — only whoever holds the workspaces knows which ones are available now:
-
-```ts
-// Without injection: no project context, but history and workspace_id still read
-const without = await agent.sessions.get(session.id, "agent");
-without.get("workspace");      // undefined
-without.get("workspace_id");   // "repo-a"
-
-// With injection: the host hands the instance to the session
-const with_workspace = await agent.sessions.get(session.id, "agent", { workspace: repo_a });
-with_workspace.get("workspace");   // repo_a
-```
-
-A failed lookup is not an error. A historical session pointing at a directory this host does not provide is normal: it then has no file tools and no shell, while plain model conversation still works.
-
-## The agent starts its own work
-
-The agent session receives a group of tools that other sessions do not, so work cannot spawn more work.
+Only `agent` sessions receive these tools:
 
 | Tool | Purpose |
 | --- | --- |
-| `session_start` | Start a work session with a task and return immediately |
-| `session_check` | List every session and its state, or read one with `session_id` |
-| `session_reply` | Answer a pending user interaction on another session |
-| `session_stop` | Stop the turn running on another session |
+| `session_start` | Create work in an explicitly selected project and return immediately after acceptance |
+| `session_check` | List work sessions or inspect one session's messages and pending interactions |
+| `session_reply` | Answer a work session's approval or question |
+| `session_stop` | Stop a work session |
 
-Once work is started the agent session is free again and the user can keep talking; the new session inherits the current directory. To report progress the agent calls `session_check` itself, so no per-turn list injection is needed:
-
-```text
-User: Three tests are failing on CI, fix them
-Agent: I'll take a look and report back
-User: Also switch the README install steps from npm to pnpm
-```
+Discover projects with `context.workspaces.list`, then provide the selected project ID:
 
 ```text
-User: How is that test fix going?
-Agent: (calls session_check) Still running, 4 files changed so far
+session_start({
+  workspace_id: "project-workspace-id",
+  query: "Fix the three failing CI tests and report the cause and validation results.",
+  title: "Repair CI"
+})
 ```
 
-When a session needs user confirmation, the user still answers in the same conversation and the agent routes the answer back with `session_reply`.
+A work session receives the complete task text and target project Workspace. It does not inherit the main conversation or private directory. Users can keep talking to the main session while work runs, and the Agent can check progress with `session_check`.
+
+`agent.sessions.list()` lists the `work` partition by default, keeping the main session out of project conversation lists. Archiving or deleting the main session allows it to be recreated on the next access; files in `main` remain separate from its conversation history.

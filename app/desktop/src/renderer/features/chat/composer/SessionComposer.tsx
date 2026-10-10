@@ -23,6 +23,7 @@ import { use_store_selector } from "@/lib/store";
 import { use_baybar_set_tab_label, use_baybar_tab_active, type BayBarTab, type BayBarTranslate } from "@/layouts/BayBar";
 import { is_chat_busy } from "@/types/DesktopView";
 import { get_session_key } from "../lib/chat_cache_key";
+import { SESSION_ORIGIN_TYPE_WORK } from "@downcity/type";
 import { use_translation } from "@/locales/i18n";
 import type { AgentComposerProps } from "@/types/ChatComponents";
 export function SessionComposer(props: AgentComposerProps) {
@@ -30,7 +31,9 @@ export function SessionComposer(props: AgentComposerProps) {
   const { selection, stores, actions } = props;
   const { workspace_id, agent_id } = selection;
   const session_id = selection.kind === "session" ? selection.session_id : selection.draft_id;
-  const session_key = get_session_key(workspace_id, agent_id, session_id);
+  // 会话的分区来自导航目标；草稿尚未落盘，只能落在默认分区。
+  const origin_type = selection.kind === "session" ? selection.origin_type : SESSION_ORIGIN_TYPE_WORK;
+  const session_key = get_session_key(workspace_id, agent_id, session_id, origin_type);
   const editor = use_agent_composer(props);
   const busy = use_store_selector(stores.chat_stream, (state) => is_chat_busy(state.chat_runtime_by_session[session_key]));
   const has_pending_queue = use_store_selector(stores.composer, (state) => Boolean(state.queued_messages_by_session[session_key]?.length));
@@ -75,8 +78,9 @@ export function SessionComposer(props: AgentComposerProps) {
 export function agent_composer_tab(props: AgentComposerProps, t_chat: BayBarTranslate): BayBarTab {
   const { workspace_id, agent_id } = props.selection;
   const session_id = props.selection.kind === "session" ? props.selection.session_id : props.selection.draft_id;
+  const origin_type = props.selection.kind === "session" ? props.selection.origin_type : SESSION_ORIGIN_TYPE_WORK;
   return {
-    id: composer_tab_id(get_session_key(workspace_id, agent_id, session_id)),
+    id: composer_tab_id(get_session_key(workspace_id, agent_id, session_id, origin_type)),
     label: props.session_label || t_chat("conversation.new"),
     icon: <TbArrowsDiagonal />,
     sections: [{
@@ -91,7 +95,8 @@ export function agent_composer_tab(props: AgentComposerProps, t_chat: BayBarTran
 function SessionMessageQueue({ selection, stores, actions }: AgentComposerProps) {
   const { workspace_id, agent_id } = selection;
   const session_id = selection.kind === "session" ? selection.session_id : selection.draft_id;
-  const session_key = get_session_key(workspace_id, agent_id, session_id);
+  const origin_type = selection.kind === "session" ? selection.origin_type : SESSION_ORIGIN_TYPE_WORK;
+  const session_key = get_session_key(workspace_id, agent_id, session_id, origin_type);
   const messages = use_store_selector(stores.composer, (state) => state.queued_messages_by_session[session_key]);
   const paused = use_store_selector(stores.composer, (state) => state.queue_paused_by_session[session_key]);
   if (!messages?.length) return null;

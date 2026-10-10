@@ -89,8 +89,8 @@ export class DesktopNotificationCenter {
   }
 
   /** Session 被归档或删除后清理其精确目标通知。 */
-  handle_agent_session_closed(agent_id: string, workspace_id: string, session_id: string): void {
-    this.controller.mark_target_read({ kind: "agent_session", agent_id, workspace_id, session_id });
+  handle_agent_session_closed(agent_id: string, workspace_id: string, session_id: string, origin_type: string): void {
+    this.controller.mark_target_read({ kind: "agent_session", agent_id, workspace_id, session_id, origin_type });
   }
 
   /**
@@ -143,7 +143,7 @@ export class DesktopNotificationCenter {
     return this.controller.prune_targets((target) => {
       if (target.kind === "agent_session") {
         if (existing.unresolved_agent_ids.has(target.agent_id)) return true;
-        return existing.agent_session_keys.has(get_agent_session_target_key(target.agent_id, target.workspace_id, target.session_id));
+        return existing.agent_session_keys.has(get_agent_session_target_key(target.agent_id, target.workspace_id, target.session_id, target.origin_type));
       }
       if (target.kind === "group_session") {
         if (existing.unresolved_group_ids.has(target.group_id)) return true;

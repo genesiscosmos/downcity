@@ -1,5 +1,6 @@
 /** 单聊输入绑定：按会话读取草稿和配置，为编辑器提供明确的输入能力。 */
 import { useMemo } from "react";
+import { SESSION_ORIGIN_TYPE_WORK } from "@downcity/type";
 import { use_store_selector } from "@/lib/store";
 import { get_session_key } from "@/features/chat/lib/chat_cache_key";
 import { empty_chat_content } from "@/features/chat/lib/chat_view_defaults";
@@ -15,7 +16,9 @@ export function use_agent_composer({ selection, stores, actions }: AgentComposer
   const translate = use_translation("chat");
   const { workspace_id, agent_id } = selection;
   const session_id = selection.kind === "draft" ? selection.draft_id : selection.session_id;
-  const session_key = get_session_key(workspace_id, agent_id, session_id);
+  // 会话的分区来自导航目标；草稿尚未落盘，只能落在默认分区。
+  const origin_type = selection.kind === "session" ? selection.origin_type : SESSION_ORIGIN_TYPE_WORK;
+  const session_key = get_session_key(workspace_id, agent_id, session_id, origin_type);
   const draft = use_store_selector(stores.composer, state => state.draft_content_by_session[session_key]);
   const focus_request = use_store_selector(stores.composer, state => read_composer_focus_request(state.focus_request_by_session, session_key));
   const configuration = use_store_selector(stores.chat_stream, state => state.configuration_by_session[session_key]);
@@ -28,9 +31,9 @@ export function use_agent_composer({ selection, stores, actions }: AgentComposer
     list_files: () => window.downcity.chat.list_workspace_files(workspace_id),
     read_file: (relative_path: string) => window.downcity.chat.read_workspace_file(workspace_id, relative_path),
   }), [workspace_id]);
-  const set_model = (model_id: string) => actions.set_session_model(workspace_id, agent_id, session_id, model_id);
-  const set_reasoning_effort = (effort?: string) => actions.set_session_reasoning_effort(workspace_id, agent_id, session_id, effort);
-  const set_approval_mode = (mode: "ask" | "always-allow") => actions.set_session_approval_mode(workspace_id, agent_id, session_id, mode);
+  const set_model = (model_id: string) => actions.set_session_model(workspace_id, agent_id, session_id, model_id, origin_type);
+  const set_reasoning_effort = (effort?: string) => actions.set_session_reasoning_effort(workspace_id, agent_id, session_id, effort, origin_type);
+  const set_approval_mode = (mode: "ask" | "always-allow") => actions.set_session_approval_mode(workspace_id, agent_id, session_id, mode, origin_type);
   const commands: ChatSlashCommand[] = [
     ...models.map(model => ({ command_id: `model:${model.model_id}`, title: `/model ${model.name}`, description: translate("commands.switch_model", { model: model.model_id }), keywords: ["model", model.model_id], run: () => set_model(model.model_id) })),
     ...(["ask", "always-allow"] as const).map(mode => ({ command_id: `approval:${mode}`, title: `/approval ${mode}`, description: translate(mode === "ask" ? "commands.ask_before_run" : "commands.allow_automatically"), keywords: ["approval"], run: () => set_approval_mode(mode) })),
@@ -44,8 +47,8 @@ export function use_agent_composer({ selection, stores, actions }: AgentComposer
     placeholder: translate("composer.placeholder"),
     busy: false,
     spellcheck_enabled,
-    update_draft: input => actions.update_draft(workspace_id, agent_id, session_id, input),
-    send_message: (input, mode = "send") => actions.send_message(workspace_id, agent_id, session_id, input, mode),
+    update_draft: input => actions.update_draft(workspace_id, agent_id, session_id, input, origin_type),
+    send_message: (input, mode = "send") => actions.send_message(workspace_id, agent_id, session_id, input, mode, false, origin_type),
     attachments,
     commands,
     toolbar: <>

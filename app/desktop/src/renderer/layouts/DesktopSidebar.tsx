@@ -39,10 +39,9 @@ export const DesktopSidebar = memo(function DesktopSidebar({ controller, open_cr
   const power_workspaces = useMemo(() => order_rail_powers(powers), [powers]);
   const unread_attention_by_mode = useMemo(() => {
     const entries: [SidebarMode, ChatAttention][] = [];
-    // 未读圆点只落在 Works 上：会话（含 Group 群聊）现在只有那一个入口，
-    // 在那里亮一次就等于说清了“哪里有事”；Agents 面板的行内仍各自显示状态图标。
+    // Agent Session 与 Group Session 的未读状态归到 Agent 会话入口。
     const chat_attention = get_chat_unread_attention(notification_state);
-    if (chat_attention) entries.push(["workspace", chat_attention]);
+    if (chat_attention) entries.push(["chat", chat_attention]);
     for (const power of power_workspaces) {
       // Power 通知不区分注意力等级；有未读时统一按「有新结果」展示。
       if (has_unread_power_notification(notification_state, power.power_id)) entries.push([`power:${power.power_id}`, "completed"]);

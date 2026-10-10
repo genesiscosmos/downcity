@@ -10,8 +10,8 @@
  */
 
 /** 拼合一条 Agent Session 通知目标的可达键。 */
-export function get_agent_session_target_key(agent_id: string, workspace_id: string, session_id: string): string {
-  return `${agent_id}\u0000${workspace_id}\u0000${session_id}`;
+export function get_agent_session_target_key(agent_id: string, workspace_id: string, session_id: string, origin_type: string): string {
+  return `${agent_id}\u0000${workspace_id}\u0000${session_id}\u0000${origin_type}`;
 }
 
 /** 拼合一条 GroupSession 通知目标的可达键。 */

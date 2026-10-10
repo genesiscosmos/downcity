@@ -376,6 +376,14 @@ export type DesktopInvokePowerActionInput =
 export interface DesktopSessionSummary {
   /** Session 的稳定标识。 */
   session_id: string;
+  /**
+   * Session 所在的来源分区。
+   *
+   * 关键点（中文）：它和 `session_id` 共同构成 Session 在 SDK 中的身份，
+   * 同一 `session_id` 可以合法地存在于多个分区。Renderer 必须原样回传，
+   * 不能根据标识形态推断分区。
+   */
+  origin_type: string;
   /** Session 在当前设备上的真实存储目录。 */
   session_path: string;
   /** Session 的可见标题。 */
@@ -390,6 +398,8 @@ export interface DesktopSessionSummary {
   message_count: number;
   /** Session 绑定的 Workspace ID；未绑定时为空。 */
   workspace_id?: string;
+  /** 主会话专属工作目录的绝对路径；不将其登记为用户项目。 */
+  workspace_path?: string;
   /** 当前 Session 是否仍在执行。 */
   executing: boolean;
 }
@@ -434,6 +444,8 @@ export interface DesktopChatRuntime {
   workspace_id: string;
   /** 运行态所属 Session。 */
   session_id: string;
+  /** 运行态所属 Session 的来源分区；与摘要中的同名字段一致。 */
+  origin_type: string;
   /** 当前运行阶段。 */
   status: DesktopChatRuntimeStatus;
   /** 当前活跃 Turn 标识。 */
@@ -452,6 +464,8 @@ export interface DesktopChatMutationEvent {
   workspace_id: string;
   /** Mutation 所属 Session。 */
   session_id: string;
+  /** Mutation 所属 Session 的来源分区。 */
+  origin_type: string;
   /** SDK canonical Session mutation。 */
   mutation: SessionMutation;
 }
@@ -884,46 +898,46 @@ export interface DesktopApi {
     read_workspace_file(workspace_id: string, relative_path: string): Promise<DesktopChatFileInput>;
     /** 读取当前 Federation 中可用于 Agent 对话的模型目录。 */
     list_models(): Promise<DesktopModelSummary[]>;
-    /** 列出指定 Agent 的 Session；可传入 Workspace 过滤，不传时返回全部。 */
-    list_sessions(agent_id: string, workspace_id?: string): Promise<DesktopSessionSummary[]>;
-    /** 打开 Agent 自己的会话，不存在时创建，并把传入的 Workspace 作为初始目录。 */
-    open_agent_session(agent_id: string, workspace_id: string): Promise<DesktopSessionSummary>;
+    /** 列出指定 Agent 的 Session；可传入 Workspace 与来源分区过滤，不传时返回全部 Work 会话。 */
+    list_sessions(agent_id: string, workspace_id?: string, origin_type?: string): Promise<DesktopSessionSummary[]>;
+    /** 打开 Agent 主会话，由宿主恢复固定的 agents/<agent_id>/main 专属目录。 */
+    open_agent_session(agent_id: string): Promise<DesktopSessionSummary>;
     /** 把 Session 重新绑定到另一个 Workspace，并返回新上下文下的摘要。 */
-    rebind_session_workspace(agent_id: string, session_id: string, workspace_id: string): Promise<DesktopSessionSummary>;
+    rebind_session_workspace(agent_id: string, session_id: string, workspace_id: string, origin_type?: string): Promise<DesktopSessionSummary>;
     /** 使用完整初始配置创建新的 Session。 */
     create_session(agent_id: string, workspace_id: string, configuration: DesktopSessionConfiguration): Promise<DesktopCreateSessionResult>;
     /** 从指定消息创建一个新的分支 Session。 */
-    fork_session(agent_id: string, workspace_id: string, session_id: string, message_id: string): Promise<DesktopSessionSummary>;
+    fork_session(agent_id: string, workspace_id: string, session_id: string, message_id: string, origin_type?: string): Promise<DesktopSessionSummary>;
     /** 从历史用户消息之前创建 Session 并发送修改后的文本。 */
-    rewrite_session_message(agent_id: string, workspace_id: string, session_id: string, input: DesktopChatRewriteInput): Promise<DesktopChatRewriteResult>;
+    rewrite_session_message(agent_id: string, workspace_id: string, session_id: string, input: DesktopChatRewriteInput, origin_type?: string): Promise<DesktopChatRewriteResult>;
     /** 修改 Session 的用户可见标题。 */
-    rename_session(agent_id: string, workspace_id: string, session_id: string, title: string): Promise<string>;
+    rename_session(agent_id: string, workspace_id: string, session_id: string, title: string, origin_type?: string): Promise<string>;
     /** 将 Session 移入归档。 */
-    archive_session(agent_id: string, workspace_id: string, session_id: string): Promise<void>;
+    archive_session(agent_id: string, workspace_id: string, session_id: string, origin_type?: string): Promise<void>;
     /** 永久删除 Session。 */
-    remove_session(agent_id: string, workspace_id: string, session_id: string): Promise<boolean>;
+    remove_session(agent_id: string, workspace_id: string, session_id: string, origin_type?: string): Promise<boolean>;
     /** 列出指定 Agent 的已归档 Session；可传入 Workspace 过滤，不传时返回全部。 */
     list_archived_sessions(agent_id: string, workspace_id?: string): Promise<DesktopSessionSummary[]>;
-    /** 读取 Session canonical 消息和当前运行态。 */
-    get_snapshot(agent_id: string, workspace_id: string, session_id: string): Promise<DesktopChatSnapshot>;
+    /** 读取 Session canonical 消息和当前运行态。`origin_type` 缺省为默认工作分区。 */
+    get_snapshot(agent_id: string, workspace_id: string, session_id: string, origin_type?: string): Promise<DesktopChatSnapshot>;
     /** 读取 Session 的一个更早历史 Segment。 */
-    get_history(agent_id: string, workspace_id: string, session_id: string, before_sequence: number): Promise<DesktopChatHistoryPage>;
+    get_history(agent_id: string, workspace_id: string, session_id: string, before_sequence: number, origin_type?: string): Promise<DesktopChatHistoryPage>;
     /** 提交输入并在 Session 接受后返回。 */
-    send(agent_id: string, workspace_id: string, session_id: string, input: JSONContent): Promise<DesktopChatSendResult>;
+    send(agent_id: string, workspace_id: string, session_id: string, input: JSONContent, origin_type?: string): Promise<DesktopChatSendResult>;
     /** 停止当前 Session Turn。 */
-    stop(agent_id: string, workspace_id: string, session_id: string): Promise<void>;
+    stop(agent_id: string, workspace_id: string, session_id: string, origin_type?: string): Promise<void>;
     /** 响应 Session 当前等待的审批或问题。 */
-    respond(agent_id: string, workspace_id: string, session_id: string, input: RespondSessionInteractionInput): Promise<void>;
+    respond(agent_id: string, workspace_id: string, session_id: string, input: RespondSessionInteractionInput, origin_type?: string): Promise<void>;
     /** 读取当前 Session 运行态。 */
-    get_runtime(agent_id: string, workspace_id: string, session_id: string): Promise<DesktopChatRuntime>;
+    get_runtime(agent_id: string, workspace_id: string, session_id: string, origin_type?: string): Promise<DesktopChatRuntime>;
     /** 读取当前 Session 的模型与审批配置。 */
-    get_configuration(agent_id: string, workspace_id: string, session_id: string): Promise<DesktopSessionConfiguration>;
+    get_configuration(agent_id: string, workspace_id: string, session_id: string, origin_type?: string): Promise<DesktopSessionConfiguration>;
     /** 切换当前 Session 模型。 */
-    set_model(agent_id: string, workspace_id: string, session_id: string, model_id: string): Promise<DesktopSessionConfiguration>;
+    set_model(agent_id: string, workspace_id: string, session_id: string, model_id: string, origin_type?: string): Promise<DesktopSessionConfiguration>;
     /** 设置当前 Session 的推理强度档位。 */
-    set_reasoning_effort(agent_id: string, workspace_id: string, session_id: string, reasoning_effort?: string): Promise<DesktopSessionConfiguration>;
+    set_reasoning_effort(agent_id: string, workspace_id: string, session_id: string, reasoning_effort?: string, origin_type?: string): Promise<DesktopSessionConfiguration>;
     /** 切换当前 Session 审批模式。 */
-    set_approval_mode(agent_id: string, workspace_id: string, session_id: string, approval_mode: SessionApprovalMode): Promise<DesktopSessionConfiguration>;
+    set_approval_mode(agent_id: string, workspace_id: string, session_id: string, approval_mode: SessionApprovalMode, origin_type?: string): Promise<DesktopSessionConfiguration>;
     /** 订阅 canonical Session mutation。 */
     on_mutation(callback: (event: DesktopChatMutationEvent) => void): () => void;
     /** 订阅 Session 运行态变化。 */

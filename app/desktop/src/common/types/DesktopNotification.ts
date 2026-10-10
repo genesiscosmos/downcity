@@ -17,6 +17,13 @@ export interface DesktopAgentSessionNotificationTarget {
   workspace_id: string;
   /** 目标 Session 的稳定标识。 */
   session_id: string;
+  /**
+   * 目标 Session 的来源分区。
+   *
+   * 与摘要同义：它是 Session 身份的一半。缺失时旧值会把 Agent 自己的会话
+   * （`session_id` 等于 `agent_id`）当成同名的普通工作会话，两者在通知里无法区分。
+   */
+  origin_type: string;
 }
 
 /** GroupSession 通知所指向的稳定业务对象。 */

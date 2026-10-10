@@ -45,6 +45,7 @@ const target = {
   agent_id: "writer",
   workspace_id: "workspace",
   session_id: "session",
+  origin_type: "work",
 };
 const agent_scope = [{ kind: "agent" as const, agent_id: "writer" }];
 const group_target = { kind: "group_session" as const, group_id: "crew", session_id: "group-session" };
@@ -103,7 +104,7 @@ test("打开未读目标后统一持久化已读并清除角标", () => {
 test("Session Turn 生产者对等待输入、失败和完成都产生通知", () => {
   const fixture = create_fixture();
   const producer = new SessionTurnNotificationProducer(fixture.controller);
-  const base = { agent_id: "writer", workspace_id: "workspace", session_id: "session", turn_id: "turn-1", updated_at: 10 };
+  const base = { agent_id: "writer", workspace_id: "workspace", session_id: "session", origin_type: "work", turn_id: "turn-1", updated_at: 10 };
 
   producer.handle_runtime({ ...base, status: "waiting_input" });
   assert.equal(fixture.controller.get_state().notifications[0]?.kind, "session_turn_waiting_input");
@@ -120,6 +121,7 @@ test("Session Turn 生产者按 Turn 去重并阻止终态回退", () => {
     agent_id: "writer",
     workspace_id: "workspace",
     session_id: "session",
+    origin_type: "work",
     status: "completed" as const,
     turn_id: "turn-1",
     updated_at: 10,
@@ -142,6 +144,7 @@ test("Session 重新进入运行态会收回尚未查看的等待输入通知", 
     agent_id: "writer",
     workspace_id: "workspace",
     session_id: "session",
+    origin_type: "work",
     status: "waiting_input" as const,
     turn_id: "turn-1",
     updated_at: 10,
@@ -156,7 +159,7 @@ test("Session 重新进入运行态会收回尚未查看的等待输入通知", 
 test("同一 Session 的不同落点聚合为一条未读通知", () => {
   const fixture = create_fixture();
   const producer = new SessionTurnNotificationProducer(fixture.controller);
-  const base = { agent_id: "writer", workspace_id: "workspace", session_id: "session", updated_at: 10 };
+  const base = { agent_id: "writer", workspace_id: "workspace", session_id: "session", origin_type: "work", updated_at: 10 };
 
   producer.handle_runtime({ ...base, status: "failed", turn_id: "turn-1" });
   producer.handle_runtime({ ...base, status: "completed", turn_id: "turn-2", updated_at: 20 });
@@ -206,7 +209,7 @@ test("Renderer 按 Agent 聚合并按 Session 精确查询未读注意力", () =
   assert.equal(get_agent_unread_attention(state, "writer"), "completed");
   assert.equal(get_chat_unread_attention(state), "completed");
   assert.equal(get_group_unread_attention(state, "writer"), null);
-  assert.deepEqual(notification_target_from_navigation({ kind: "session", workspace_id: "workspace", agent_id: "writer", session_id: "session" }), target);
+  assert.deepEqual(notification_target_from_navigation({ kind: "session", workspace_id: "workspace", agent_id: "writer", session_id: "session", origin_type: "work" }), target);
   assert.equal(notification_target_from_navigation({ kind: "agent", agent_id: "writer" }), undefined);
 });
 
@@ -285,8 +288,8 @@ test("Power 可以清除自身命名空间内的一个未读主题", () => {
 
 test("结构化目标键不会因业务 ID 包含分隔符而碰撞", () => {
   const fixture = create_fixture();
-  const first_target = { kind: "agent_session" as const, agent_id: "a:b", workspace_id: "c", session_id: "d" };
-  const second_target = { kind: "agent_session" as const, agent_id: "a", workspace_id: "b:c", session_id: "d" };
+  const first_target = { kind: "agent_session" as const, agent_id: "a:b", workspace_id: "c", session_id: "d", origin_type: "work" };
+  const second_target = { kind: "agent_session" as const, agent_id: "a", workspace_id: "b:c", session_id: "d", origin_type: "work" };
   fixture.controller.publish({ kind: "session_turn_completed", topic_key: "first", target: first_target, scopes: [{ kind: "agent", agent_id: "a:b" }], title: "first", created_at: 1 });
   fixture.controller.publish({ kind: "session_turn_completed", topic_key: "second", target: second_target, scopes: [{ kind: "agent", agent_id: "a" }], title: "second", created_at: 2 });
 
@@ -465,11 +468,16 @@ test("枚举失败的 Agent 下通知不被误删", () => {
   assert.deepEqual(fixture.controller.get_state().notifications.map((notification) => notification.topic_key), ["session:writer"]);
 });
 
-test("可达键把三类标识完整区分开，不因分隔符碰撞", () => {
-  // Agent / Workspace / Session 标识都可能含冒号，用冒号拼合会让不同目标碰撞。
+test("可达键把四类标识完整区分开，不因分隔符碰撞", () => {
+  // Agent / Workspace / Session / 分区标识都可能含冒号，用冒号拼合会让不同目标碰撞。
   assert.notEqual(
-    get_agent_session_target_key("a:b", "c", "d"),
-    get_agent_session_target_key("a", "b:c", "d"),
+    get_agent_session_target_key("a:b", "c", "d", "work"),
+    get_agent_session_target_key("a", "b:c", "d", "work"),
+  );
+  // 同一标识在不同分区是不同的会话，可达键必须区分它们。
+  assert.notEqual(
+    get_agent_session_target_key("a", "b", "d", "work"),
+    get_agent_session_target_key("a", "b", "d", "agent"),
   );
   assert.notEqual(
     get_group_session_target_key("g", "s1"),

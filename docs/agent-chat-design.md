@@ -42,13 +42,9 @@ Agent 自己那条会话是 Session，Agent 派出去干的活是 Session，任�
 
 ### 2.2 Agent 自己的会话也是 Session
 
-它没有特殊规则。工作区能力对它和对别的 Session 一样：创建时给、会话内 `set` 换、`get` 读。因此删除此前所有为它单立的规则：
+底层仍共用 Session 的 `set/get`、消息、审批和工具能力。Desktop 主会话的目录由宿主固定为 `~/.downcity/agents/<agent_id>/main`，用于持续对话、私有文件和派发工作；它不绑定用户的项目 Workspace，也不进入 Works 项目列表。
 
-- 「chat 是窄门面，不透出 set / get」
-- 「chat 不带 workspace」
-- 「Agent 与 Session 是两套底座」
-
-需要区分的是**角色**，不是类型。
+工作会话使用用户明确指定的项目 Workspace。主会话的私有目录不能成为项目工作默认目录。主会话首次创建通过 `self({ workspace })` 注入专属目录，恢复时由宿主用 `get(agent_id, "agent", { workspace })` 注入；`self()` 不修改已存在会话的目录。
 
 ### 2.3 Workspace 是宿主注入的执行资源
 
@@ -353,7 +349,7 @@ Agent 会话多四个工具，其他会话拿不到。用户不需要知道它�
 
 ```ts
 // 模型在 Agent 会话里收到「CI 挂了三个测试，帮我修了」时：
-// session_start({ query: "修 packages/agent 下挂掉的三个测试", title: "修 CI" })
+// session_start({ workspace_id: "project-id", query: "修 packages/agent 下挂掉的三个测试", title: "修 CI" })
 // → { session_id: "session-..." }   对话立刻空闲
 
 // 用户问「那个测试修得怎么样了」：
@@ -364,7 +360,7 @@ Agent 会话多四个工具，其他会话拿不到。用户不需要知道它�
 // session_reply({ session_id, interaction_id, outcome, payload })
 ```
 
-`session_start` 开出的会话继承调用点的当前目录（来源是 Turn 开始的冻结快照），之后各自独立。
+`session_start` 必须传入项目 `workspace_id`，由宿主的 `AgentOptions.resolve_work_workspace` 解析并校验。禁止继承主会话的 main 目录；Desktop 仅接受用户项目 Repository 中的目标。
 
 ## 6. 模型侧能力
 
@@ -381,7 +377,7 @@ Agent 自己的会话多一组工具，其他 Session 拿不到，因此「会�
 
 判断依据是会话角色而非工具来源：只有 `origin.type === "agent"` 的会话拿到这组工具。
 
-`session_start` 开出的会话继承调用点那一段对话当前的目录，来源是 `ToolCallContext.workspace`——它已是该 Turn 的冻结快照。
+`session_start` 不读取 `ToolCallContext.workspace`。其目标项目来自显式 `workspace_id`，宿主负责解析实例；Agent 不回查 City registry。
 
 ### 6.1 工具与 Power 怎么读会话状态
 

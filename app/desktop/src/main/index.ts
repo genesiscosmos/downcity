@@ -36,6 +36,7 @@ import type {
 import type { JSONContent } from "@tiptap/core";
 import type { DesktopNotificationState, DesktopNotificationViewState } from "../common/types/DesktopNotification.js";
 import type { RespondSessionInteractionInput, SessionApprovalMode } from "@downcity/agent";
+import { SESSION_ORIGIN_TYPE_WORK } from "@downcity/type";
 
 const current_directory = path.dirname(fileURLToPath(import.meta.url));
 const development_macos_icon_path = path.join(current_directory, "../../build/icon.iconset/icon_512x512@2x.png");
@@ -222,10 +223,10 @@ ipcMain.handle("group:archive-session", async (_event, group_id: string, session
   return result;
 });
 ipcMain.handle("group:list-archived-sessions", (_event, group_id: string) => require_agent_controller().list_archived_group_sessions(group_id));
-ipcMain.handle("chat:list-sessions", (_event, agent_id: string, workspace_id?: string) => require_agent_controller().list_sessions(agent_id, workspace_id));
-ipcMain.handle("chat:open-agent-session", (_event, agent_id: string, workspace_id: string) => require_agent_controller().open_agent_session(agent_id, workspace_id));
-ipcMain.handle("chat:rebind-session-workspace", async (_event, agent_id: string, session_id: string, workspace_id: string) => {
-  const result = await require_agent_controller().rebind_session_workspace(agent_id, session_id, workspace_id);
+ipcMain.handle("chat:list-sessions", (_event, agent_id: string, workspace_id?: string, origin_type?: string) => require_agent_controller().list_sessions(agent_id, workspace_id, origin_type));
+ipcMain.handle("chat:open-agent-session", (_event, agent_id: string) => require_agent_controller().open_agent_session(agent_id));
+ipcMain.handle("chat:rebind-session-workspace", async (_event, agent_id: string, session_id: string, workspace_id: string, origin_type?: string) => {
+  const result = await require_agent_controller().rebind_session_workspace(agent_id, session_id, workspace_id, origin_type);
   // 换绑后旧通知里的 workspace_id 已失效，行内不再显示它；不清掉就会只剩图标在报警。
   require_notification_center().handle_agent_session_rebound(agent_id, session_id);
   return result;
@@ -237,37 +238,37 @@ ipcMain.handle("power:list", () => require_power_controller().list());
 ipcMain.handle("power:get", (_event, power_id: string) => require_power_controller().get(power_id));
 ipcMain.handle("power:invoke", (_event, power_id: string, input: import("../common/types/DesktopApi.js").DesktopInvokePowerActionInput) => require_power_controller().invoke(power_id, input));
 ipcMain.handle("chat:create-session", (_event, agent_id: string, workspace_id: string, configuration: import("../common/types/DesktopApi.js").DesktopSessionConfiguration) => require_agent_controller().create_session(agent_id, workspace_id, configuration));
-ipcMain.handle("chat:fork-session", (_event, agent_id: string, workspace_id: string, session_id: string, message_id: string) => require_agent_controller().fork_session(agent_id, workspace_id, session_id, message_id));
-ipcMain.handle("chat:rewrite-session-message", async (_event, agent_id: string, workspace_id: string, session_id: string, input: import("../common/types/DesktopApi.js").DesktopChatRewriteInput) => {
-  const result = await require_agent_controller().rewrite_session_message(agent_id, workspace_id, session_id, input);
+ipcMain.handle("chat:fork-session", (_event, agent_id: string, workspace_id: string, session_id: string, message_id: string, origin_type?: string) => require_agent_controller().fork_session(agent_id, workspace_id, session_id, message_id, origin_type));
+ipcMain.handle("chat:rewrite-session-message", async (_event, agent_id: string, workspace_id: string, session_id: string, input: import("../common/types/DesktopApi.js").DesktopChatRewriteInput, origin_type?: string) => {
+  const result = await require_agent_controller().rewrite_session_message(agent_id, workspace_id, session_id, input, origin_type);
   // replace 会把源 Session 归档出活动列表，未读通知必须同步收掉：
   // 否则 Rail 与 Agent 图标继续报警，而用户在任何会话列表里都找不到它。
   if (result.source_disposition === "archived") {
-    require_notification_center().handle_agent_session_closed(agent_id, workspace_id, session_id);
+    require_notification_center().handle_agent_session_closed(agent_id, workspace_id, session_id, origin_type ?? SESSION_ORIGIN_TYPE_WORK);
   }
   return result;
 });
-ipcMain.handle("chat:rename-session", (_event, agent_id: string, workspace_id: string, session_id: string, title: string) => require_agent_controller().rename_session(agent_id, workspace_id, session_id, title));
-ipcMain.handle("chat:archive-session", async (_event, agent_id: string, workspace_id: string, session_id: string) => {
-  await require_agent_controller().archive_session(agent_id, workspace_id, session_id);
-  require_notification_center().handle_agent_session_closed(agent_id, workspace_id, session_id);
+ipcMain.handle("chat:rename-session", (_event, agent_id: string, workspace_id: string, session_id: string, title: string, origin_type?: string) => require_agent_controller().rename_session(agent_id, workspace_id, session_id, title, origin_type));
+ipcMain.handle("chat:archive-session", async (_event, agent_id: string, workspace_id: string, session_id: string, origin_type?: string) => {
+  await require_agent_controller().archive_session(agent_id, workspace_id, session_id, origin_type);
+  require_notification_center().handle_agent_session_closed(agent_id, workspace_id, session_id, origin_type ?? SESSION_ORIGIN_TYPE_WORK);
 });
-ipcMain.handle("chat:remove-session", async (_event, agent_id: string, workspace_id: string, session_id: string) => {
-  const removed = await require_agent_controller().remove_session(agent_id, workspace_id, session_id);
-  require_notification_center().handle_agent_session_closed(agent_id, workspace_id, session_id);
+ipcMain.handle("chat:remove-session", async (_event, agent_id: string, workspace_id: string, session_id: string, origin_type?: string) => {
+  const removed = await require_agent_controller().remove_session(agent_id, workspace_id, session_id, origin_type);
+  require_notification_center().handle_agent_session_closed(agent_id, workspace_id, session_id, origin_type ?? SESSION_ORIGIN_TYPE_WORK);
   return removed;
 });
 ipcMain.handle("chat:list-archived-sessions", (_event, agent_id: string, workspace_id?: string) => require_agent_controller().list_archived_sessions(agent_id, workspace_id));
-ipcMain.handle("chat:get-snapshot", (_event, agent_id: string, workspace_id: string, session_id: string) => require_agent_controller().get_chat_snapshot(agent_id, workspace_id, session_id));
-ipcMain.handle("chat:get-history", (_event, agent_id: string, workspace_id: string, session_id: string, before_sequence: number) => require_agent_controller().get_chat_history(agent_id, workspace_id, session_id, before_sequence));
-ipcMain.handle("chat:send", (_event, agent_id: string, workspace_id: string, session_id: string, input: JSONContent) => require_agent_controller().send_message(agent_id, workspace_id, session_id, input));
-ipcMain.handle("chat:stop", (_event, agent_id: string, workspace_id: string, session_id: string) => require_agent_controller().stop_session(agent_id, workspace_id, session_id));
-ipcMain.handle("chat:respond", (_event, agent_id: string, workspace_id: string, session_id: string, input: RespondSessionInteractionInput) => require_agent_controller().respond_interaction(agent_id, workspace_id, session_id, input));
-ipcMain.handle("chat:get-runtime", (_event, agent_id: string, workspace_id: string, session_id: string) => require_agent_controller().get_runtime(agent_id, workspace_id, session_id));
-ipcMain.handle("chat:get-configuration", (_event, agent_id: string, workspace_id: string, session_id: string) => require_agent_controller().get_configuration(agent_id, workspace_id, session_id));
-ipcMain.handle("chat:set-model", (_event, agent_id: string, workspace_id: string, session_id: string, model_id: string) => require_agent_controller().set_model(agent_id, workspace_id, session_id, model_id));
-ipcMain.handle("chat:set-reasoning-effort", (_event, agent_id: string, workspace_id: string, session_id: string, reasoning_effort?: string) => require_agent_controller().set_reasoning_effort(agent_id, workspace_id, session_id, reasoning_effort));
-ipcMain.handle("chat:set-approval-mode", (_event, agent_id: string, workspace_id: string, session_id: string, approval_mode: SessionApprovalMode) => require_agent_controller().set_approval_mode(agent_id, workspace_id, session_id, approval_mode));
+ipcMain.handle("chat:get-snapshot", (_event, agent_id: string, workspace_id: string, session_id: string, origin_type?: string) => require_agent_controller().get_chat_snapshot(agent_id, workspace_id, session_id, origin_type));
+ipcMain.handle("chat:get-history", (_event, agent_id: string, workspace_id: string, session_id: string, before_sequence: number, origin_type?: string) => require_agent_controller().get_chat_history(agent_id, workspace_id, session_id, before_sequence, origin_type));
+ipcMain.handle("chat:send", (_event, agent_id: string, workspace_id: string, session_id: string, input: JSONContent, origin_type?: string) => require_agent_controller().send_message(agent_id, workspace_id, session_id, input, origin_type));
+ipcMain.handle("chat:stop", (_event, agent_id: string, workspace_id: string, session_id: string, origin_type?: string) => require_agent_controller().stop_session(agent_id, workspace_id, session_id, origin_type));
+ipcMain.handle("chat:respond", (_event, agent_id: string, workspace_id: string, session_id: string, input: RespondSessionInteractionInput, origin_type?: string) => require_agent_controller().respond_interaction(agent_id, workspace_id, session_id, input, origin_type));
+ipcMain.handle("chat:get-runtime", (_event, agent_id: string, workspace_id: string, session_id: string, origin_type?: string) => require_agent_controller().get_runtime(agent_id, workspace_id, session_id, origin_type));
+ipcMain.handle("chat:get-configuration", (_event, agent_id: string, workspace_id: string, session_id: string, origin_type?: string) => require_agent_controller().get_configuration(agent_id, workspace_id, session_id, origin_type));
+ipcMain.handle("chat:set-model", (_event, agent_id: string, workspace_id: string, session_id: string, model_id: string, origin_type?: string) => require_agent_controller().set_model(agent_id, workspace_id, session_id, model_id, origin_type));
+ipcMain.handle("chat:set-reasoning-effort", (_event, agent_id: string, workspace_id: string, session_id: string, reasoning_effort?: string, origin_type?: string) => require_agent_controller().set_reasoning_effort(agent_id, workspace_id, session_id, reasoning_effort, origin_type));
+ipcMain.handle("chat:set-approval-mode", (_event, agent_id: string, workspace_id: string, session_id: string, approval_mode: SessionApprovalMode, origin_type?: string) => require_agent_controller().set_approval_mode(agent_id, workspace_id, session_id, approval_mode, origin_type));
 ipcMain.handle("settings:get", () => settings_controller.get());
 ipcMain.handle("settings:update", async (_event, patch) => {
   settings_controller.update(patch);

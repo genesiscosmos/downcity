@@ -336,9 +336,9 @@ function WorkspaceSessions({ controller, agents, rows, hydrated, selected_sessio
           ? <SessionActionsMenu
             session={entry.session}
             trigger={<RowMenuButton status={status} label={translate_common("actions.more")} />}
-            on_rename={(title) => controller.actions.rename_session(entry.workspace_id, entry.agent_id, entry.session.session_id, title)}
-            on_archive={() => controller.actions.archive_session(entry.workspace_id, entry.agent_id, entry.session.session_id)}
-            on_remove={() => controller.actions.remove_session(entry.workspace_id, entry.agent_id, entry.session.session_id)}
+            on_rename={(title) => controller.actions.rename_session(entry.workspace_id, entry.agent_id, entry.session.session_id, title, entry.session.origin_type)}
+            on_archive={() => controller.actions.archive_session(entry.workspace_id, entry.agent_id, entry.session.session_id, entry.session.origin_type)}
+            on_remove={() => controller.actions.remove_session(entry.workspace_id, entry.agent_id, entry.session.session_id, entry.session.origin_type)}
             on_enter_selection={() => session_selection.select(entry.key)}
           />
           : <GroupSessionActionsMenu

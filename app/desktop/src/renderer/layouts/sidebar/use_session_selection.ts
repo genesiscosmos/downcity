@@ -61,6 +61,8 @@ export interface SessionSelectionTarget {
   group_id?: string;
   /** 会话标识。 */
   session_id: string;
+  /** Agent 会话的来源分区；批量操作必须带上它才能定位到正确分区。 */
+  origin_type?: string;
 }
 
 /** 一次选择动作可用的有序 key；范围选择按它取连续段。 */

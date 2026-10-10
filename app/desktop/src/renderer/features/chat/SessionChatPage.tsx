@@ -2,6 +2,7 @@
 import { useCallback } from "react";
 
 import type { RespondSessionInteractionInput } from "@downcity/agent";
+import { SESSION_ORIGIN_TYPE_AGENT } from "@downcity/type";
 
 import { use_desktop_selector } from "@/app/use_desktop";
 
@@ -25,10 +26,14 @@ export function AgentSessionRouteMainView({ selection, controller, sidebar_colla
   const agent = agents.find((item) => item.agent_id === selection.agent_id);
   const workspaces = use_desktop_selector(controller.stores.catalog, (state) => state.workspaces);
   const settings = use_desktop_selector(controller.stores.settings, (state) => state.settings);
-  const session_key = get_session_key(selection.workspace_id, selection.agent_id, selection.session_id);
-  const session = use_desktop_selector(controller.stores.session, (state) => (state.sessions_by_workspace[selection.workspace_id] ?? []).find((item) => item.agent_id === selection.agent_id && item.session.session_id === selection.session_id)?.session);
+  const session_key = get_session_key(selection.workspace_id, selection.agent_id, selection.session_id, selection.origin_type);
+  // 摘要按分区来源定位：Agent 自己的会话不在 Workspace 会话目录里，
+  // 只在 Agents 侧栏对应的那个桶中（否则这里会永远渲染空态）。
+  const session = use_desktop_selector(controller.stores.session, (state) => selection.origin_type === SESSION_ORIGIN_TYPE_AGENT
+    ? state.agent_sessions_by_agent_id[selection.agent_id]
+    : (state.sessions_by_workspace[selection.workspace_id] ?? []).find((item) => item.agent_id === selection.agent_id && item.session.session_id === selection.session_id)?.session);
   if (!agent || !session) return <WelcomeView />;
-  return <AgentChatMainView agent={agent} controller={controller} workspace_id={selection.workspace_id} workspace_path={workspaces.find((item) => item.workspace_id === selection.workspace_id)?.workspace_path} view_key={`agent-session:${agent.agent_id}:${session.session_id}`} session_key={session_key} session_title={session.title}>
+  return <AgentChatMainView agent={agent} controller={controller} workspace_id={selection.workspace_id} workspace_path={session.workspace_path ?? workspaces.find((item) => item.workspace_id === selection.workspace_id)?.workspace_path} view_key={`agent-session:${agent.agent_id}:${session.session_id}`} session_key={session_key} session_title={session.title}>
     <AgentSessionChatSurface selection={selection} agent={agent} session={session} workspaces={workspaces} agents={agents} settings={settings} controller={controller} />
   </AgentChatMainView>;
 }
@@ -37,8 +42,11 @@ export function AgentSessionRouteMainView({ selection, controller, sidebar_colla
 export function AgentSessionChatSurface({ selection, agent, session, workspaces, agents, settings, controller }: { /** 当前 Session 导航目标。 */ selection: Extract<NavigationTarget, { kind: "session" }>; /** Session 所属 Agent。 */ agent: DesktopAgentSummary; /** 当前 Session 摘要。 */ session: DesktopSessionSummary; /** 可用 Workspace。 */ workspaces: DesktopWorkspaceSummary[]; /** 可用 Agent。 */ agents: DesktopAgentSummary[]; /** Chat 设置。 */ settings: DesktopSettings; /** Desktop 稳定控制器。 */ controller: DesktopController }) {
   // 对话里的文件在右侧面板就地打开，不再切走整个主视图到 Workspace 页。
   const open_file = use_chat_file_panel();
-  const { workspace_id, agent_id, session_id } = selection;
-  const session_key = get_session_key(workspace_id, agent_id, session_id);
+  const { workspace_id, agent_id, session_id, origin_type } = selection;
+  const is_main_session = origin_type === SESSION_ORIGIN_TYPE_AGENT;
+  const current_workspace = workspaces.find((workspace) => workspace.workspace_id === workspace_id)
+    ?? { ...create_missing_workspace(workspace_id), name: `${agent.name} main`, workspace_path: session.workspace_path ?? "" };
+  const session_key = get_session_key(workspace_id, agent_id, session_id, origin_type);
   const messages = use_desktop_selector(controller.stores.chat_stream, (state) => state.messages_by_session[session_key]);
   const runtime = use_desktop_selector(controller.stores.chat_stream, (state) => state.chat_runtime_by_session[session_key]);
   const latest_file_diff = use_desktop_selector(controller.stores.chat_stream, (state) => state.file_diff_by_session[session_key]);
@@ -48,20 +56,20 @@ export function AgentSessionChatSurface({ selection, agent, session, workspaces,
   // Power 目录是全局事实，订阅一次后交给 SessionView 注入活动行。
   const powers = use_desktop_selector(controller.stores.catalog, (state) => state.powers);
   const switch_workspace = useCallback((target_workspace_id: string) => controller.actions.create_session(target_workspace_id, agent_id), [agent_id, controller.actions]);
-  const rename_session = useCallback((title: string) => controller.actions.rename_session(workspace_id, agent_id, session_id, title), [agent_id, controller.actions, session_id, workspace_id]);
-  const archive_session = useCallback(() => controller.actions.archive_session(workspace_id, agent_id, session_id), [agent_id, controller.actions, session_id, workspace_id]);
-  const remove_session = useCallback(() => controller.actions.remove_session(workspace_id, agent_id, session_id), [agent_id, controller.actions, session_id, workspace_id]);
-  const respond_interaction = useCallback((input: RespondSessionInteractionInput) => controller.actions.respond_interaction(workspace_id, agent_id, session_id, input), [agent_id, controller.actions, session_id, workspace_id]);
-  const fork_message = useCallback((message_id: string) => controller.actions.fork_session(workspace_id, agent_id, session_id, message_id), [agent_id, controller.actions, session_id, workspace_id]);
-  const rewrite_message = useCallback((input: DesktopChatRewriteInput) => controller.actions.rewrite_session_message(workspace_id, agent_id, session_id, input), [agent_id, controller.actions, session_id, workspace_id]);
-  const load_earlier_history = useCallback(() => controller.actions.load_earlier_history(workspace_id, agent_id, session_id), [agent_id, controller.actions, session_id, workspace_id]);
+  const rename_session = useCallback((title: string) => controller.actions.rename_session(workspace_id, agent_id, session_id, title, origin_type), [agent_id, controller.actions, origin_type, session_id, workspace_id]);
+  const archive_session = useCallback(() => controller.actions.archive_session(workspace_id, agent_id, session_id, origin_type), [agent_id, controller.actions, origin_type, session_id, workspace_id]);
+  const remove_session = useCallback(() => controller.actions.remove_session(workspace_id, agent_id, session_id, origin_type), [agent_id, controller.actions, origin_type, session_id, workspace_id]);
+  const respond_interaction = useCallback((input: RespondSessionInteractionInput) => controller.actions.respond_interaction(workspace_id, agent_id, session_id, input, origin_type), [agent_id, controller.actions, origin_type, session_id, workspace_id]);
+  const fork_message = useCallback((message_id: string) => controller.actions.fork_session(workspace_id, agent_id, session_id, message_id, origin_type), [agent_id, controller.actions, origin_type, session_id, workspace_id]);
+  const rewrite_message = useCallback((input: DesktopChatRewriteInput) => controller.actions.rewrite_session_message(workspace_id, agent_id, session_id, input, origin_type), [agent_id, controller.actions, origin_type, session_id, workspace_id]);
+  const load_earlier_history = useCallback(() => controller.actions.load_earlier_history(workspace_id, agent_id, session_id, origin_type), [agent_id, controller.actions, origin_type, session_id, workspace_id]);
   return <SessionView
     open_file={open_file}
     workspace_id={workspace_id}
     agent={agent}
-    workspace={workspaces.find((workspace) => workspace.workspace_id === workspace_id) ?? create_missing_workspace(workspace_id)}
-    workspace_missing={!workspaces.some((workspace) => workspace.workspace_id === workspace_id)}
-    workspaces={workspaces}
+    workspace={current_workspace}
+    workspace_missing={!is_main_session && !workspaces.some((workspace) => workspace.workspace_id === workspace_id)}
+    workspaces={is_main_session ? [...workspaces, current_workspace] : workspaces}
     switch_workspace={switch_workspace}
     session={session}
     messages={messages ?? empty_items}

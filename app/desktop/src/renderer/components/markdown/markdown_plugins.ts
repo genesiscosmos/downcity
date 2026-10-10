@@ -2,6 +2,8 @@
 
 import type { ComponentProps } from "react";
 import { defaultRehypePlugins, defaultRemarkPlugins, Streamdown } from "streamdown";
+import rehype_sanitize, { defaultSchema as default_schema } from "rehype-sanitize";
+import { rehype_desktop_urls } from "./rehype_desktop_urls.ts";
 // 相对路径加显式扩展名：本模块被 node:test 直接加载，`@/` 别名与无扩展名在 Node 侧都无法解析。
 import { rehype_mermaid_blocks } from "./rehype_mermaid_blocks.ts";
 import { remark_gfm_without_autolink } from "./remark_gfm_without_autolink.ts";
@@ -24,8 +26,14 @@ export const markdown_remark_plugins: NonNullable<ComponentProps<typeof Streamdo
  */
 export const markdown_rehype_plugins: NonNullable<ComponentProps<typeof Streamdown>["rehypePlugins"]> = [
   defaultRehypePlugins.raw,
-  defaultRehypePlugins.sanitize,
+  [rehype_sanitize, {
+    ...default_schema,
+    protocols: {
+      ...default_schema.protocols,
+      href: ["http", "https", "file"],
+    },
+  }],
   defaultRehypePlugins.katex,
-  defaultRehypePlugins.harden,
+  rehype_desktop_urls,
   rehype_mermaid_blocks,
 ];

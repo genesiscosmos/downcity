@@ -32,7 +32,14 @@ import {
 } from "@/tools/session/SessionToolSchemas.js";
 
 /** `session_start` 的输入。 */
-type SessionStartInput = { query: string; title?: string };
+type SessionStartInput = {
+  /** 完整工作指令；新会话只接收这段文本。 */
+  query: string;
+  /** 工作短标题，用于列表展示。 */
+  title?: string;
+  /** 目标项目 Workspace ID，必须由宿主登记。 */
+  workspace_id: string;
+};
 
 /** `session_check` 的输入。 */
 type SessionCheckInput = { session_id?: string; limit?: number };
@@ -61,14 +68,11 @@ export type ChatSessionToolSet = ReturnType<typeof create_session_tools>;
 export function create_session_tools(work: SessionWorkContract) {
   const session_start = define_agent_tool<SessionStartInput, ActionResult<SessionStartToolOutput>>({
     description:
-      "Start a new session to carry out one piece of work, then return immediately. Use it when a request is larger than one reply: the user keeps talking with you while the work runs elsewhere. Write the query as a complete instruction, because the new session only sees that text.",
+      "Start a new session to carry out one piece of work, then return immediately. Use it when a request is larger than one reply: the user keeps talking with you while the work runs elsewhere. Write the query as a complete instruction, because the new session only sees that text. Specify the target project workspace_id; discover available projects with context.workspaces.list. Never use the main session's private Workspace for project work.",
     input_schema: session_start_input,
-    execute: async (input, context): Promise<ActionResult<SessionStartToolOutput>> => {
-      // 新会话继承当前对话的目录：用户说的「顺便」通常仍指同一个项目。
-      const result = await work.spawn({
-        ...input,
-        ...(context.workspace ? { workspace: context.workspace } : {}),
-      });
+    execute: async (input): Promise<ActionResult<SessionStartToolOutput>> => {
+      // 目标项目必须显式给出，禁止把主会话的 main 目录当成工作目录。
+      const result = await work.spawn(input);
       return {
         output: { session_id: result.session_id, status: "started" },
         messages: [],
