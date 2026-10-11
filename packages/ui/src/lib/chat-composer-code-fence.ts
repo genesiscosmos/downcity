@@ -14,7 +14,7 @@
  *
  * ## 与 Desktop 的关系
  *
- * 这份实现与 `private/apps/desktop/src/common/chat/chatComposerCodeFence.ts` 同源。
+ * 这份实现与 `Desktop/src/common/chat/chatComposerCodeFence.ts` 同源。
  * 两处必须一起改：Desktop 的序列化在 common 里（Main 侧也要用），
  * 而 UI SDK 是独立发包，不能反向依赖 app 的目录。
  */
