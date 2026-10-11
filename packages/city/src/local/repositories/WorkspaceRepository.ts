@@ -129,7 +129,8 @@ export class WorkspaceRepository {
 /** 规范化 Workspace ID。 */
 export function normalize_workspace_id(input: string): string {
   const workspace_id = String(input || "").trim().toLowerCase();
-  if (!/^[a-z0-9][a-z0-9_-]*$/u.test(workspace_id)) {
+  // 主会话 Workspace 使用 agent-main:<agent_id> 格式，因此允许冒号作为分隔符。
+  if (!/^[a-z0-9][a-z0-9_:-]*$/u.test(workspace_id)) {
     throw new Error(`Invalid workspace_id: ${input}`);
   }
   return workspace_id;

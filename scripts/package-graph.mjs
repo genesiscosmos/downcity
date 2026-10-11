@@ -112,7 +112,7 @@ export function create_workflow_outputs(graph) {
 /** 读取 workspace package manifests。 */
 function read_workspace_manifests(workspace_root, include_cli) {
   const package_paths = find_package_manifests(workspace_root, "packages");
-  const cli_manifest_path = "app/cli/package.json";
+  const cli_manifest_path = "packages/cli/package.json";
   if (include_cli && existsSync(path.join(workspace_root, cli_manifest_path))) {
     package_paths.push(cli_manifest_path);
   }

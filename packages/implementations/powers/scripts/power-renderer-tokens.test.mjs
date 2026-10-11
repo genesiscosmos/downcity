@@ -3,7 +3,7 @@
  *
  * ## 为什么需要它
  *
- * `app/desktop/tests/design_token_drift.test.ts` 只扫 `app/desktop/src/renderer`，
+ * `private/apps/desktop/tests/design_token_drift.test.ts` 只扫 `private/apps/desktop/src/renderer`，
  * 而 **Power Renderer 是另一个包**（`packages/implementations/powers` 下的 renderer 目录）。
  * 于是那一整套收敛在 Power 里全都不成立：字号写成任意值、弱化文字叠透明度、圆角用命名档位，
  * 还有手搭的空态。

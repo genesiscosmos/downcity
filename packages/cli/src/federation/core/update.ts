@@ -25,7 +25,7 @@ export async function updateCli(cwd = process.cwd()): Promise<{
   const workspaceRoot = findDowncityWorkspaceRoot(cwd);
 
   if (workspaceRoot) {
-    await run(resolve_command_name("pnpm"), ["-C", "app/cli", "build"], workspaceRoot);
+    await run(resolve_command_name("pnpm"), ["-C", "packages/cli", "build"], workspaceRoot);
     const deploy_dir = path.join(os.tmpdir(), `downcity-cli-deploy-${Date.now()}`);
     await run(
       resolve_command_name("pnpm"),

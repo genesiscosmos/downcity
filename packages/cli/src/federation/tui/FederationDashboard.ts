@@ -136,8 +136,8 @@ function build_federation_dashboard_state(): federation_dashboard_state {
 
 function read_federation_cli_version(): string {
   try {
-    // 文件位于 app/cli/src/federation/tui/FederationDashboard.ts，
-    // 构建后位于 app/cli/bin/federation/tui/FederationDashboard.js，
+    // 文件位于 packages/cli/src/federation/tui/FederationDashboard.ts，
+    // 构建后位于 packages/cli/bin/federation/tui/FederationDashboard.js，
     // 因此 ../../../package.json 始终指向 CLI 包根目录的 package.json。
     const package_json_path = new URL("../../../package.json", import.meta.url);
     const package_json = JSON.parse(readFileSync(package_json_path, "utf8")) as {

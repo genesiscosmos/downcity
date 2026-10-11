@@ -8,7 +8,7 @@
  * 这个安全性原先是本文件守护的；daemon API 重构后它成了无人执行的孤儿（导入名与路径模型都已变化），
  * 本次按当前契约重写，而不是删除。
  *
- * ## 当前契约（app/cli/src/city/process/daemon/Manager.ts）
+ * ## 当前契约（packages/cli/src/city/process/daemon/Manager.ts）
  *
  * | 状态 | 行为 |
  * | --- | --- |

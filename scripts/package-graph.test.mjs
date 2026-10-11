@@ -41,5 +41,5 @@ test("分组 package 与应用 package 都按 manifest 身份解析真实目录"
   assert.equal(resolve_package_path(workspace_root, "sandbox-microsandbox"), "packages/implementations/sandboxes/microsandbox");
   assert.equal(resolve_package_path(workspace_root, "services"), "packages/implementations/services");
   assert.equal(resolve_package_path(workspace_root, "workspace-cloudflare-computer"), "packages/implementations/workspaces/cloudflare-computer");
-  assert.equal(resolve_package_path(workspace_root, "cli"), "app/cli");
+  assert.equal(resolve_package_path(workspace_root, "cli"), "packages/cli");
 });

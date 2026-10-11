@@ -515,7 +515,7 @@
 /*
  * 输入框里的围栏代码块。
  *
- * 与 Desktop Composer（`app/desktop/src/renderer/styles/base.css` 的 `.chat-input-editor pre`）
+ * 与 Desktop Composer（`private/apps/desktop/src/renderer/styles/base.css` 的 `.chat-input-editor pre`）
  * 同源：同一段代码在发送前后的两种状态，形状不一致就会在发送那一下看出来。
  *
  * - 底色用 `--surface-subtle`（一档中性填充，不按主题色现算）：

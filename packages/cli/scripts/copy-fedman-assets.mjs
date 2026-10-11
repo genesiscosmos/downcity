@@ -4,12 +4,12 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const package_root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
-const fedman_dist = resolve(package_root, "../fedman/dist");
+const fedman_dist = resolve(process.env.DOWNCITY_FEDMAN_DIST ?? "");
 const target_dir = resolve(package_root, "bin/federation/fedman");
 const fedman_index = await stat(resolve(fedman_dist, "index.html")).catch(() => null);
 
 if (!fedman_index?.isFile()) {
-  throw new Error("Fedman build output is missing. Run app/fedman build first.");
+  throw new Error("Fedman build output is missing. Set DOWNCITY_FEDMAN_DIST to the built Fedman dist directory.");
 }
 
 await rm(target_dir, { recursive: true, force: true });

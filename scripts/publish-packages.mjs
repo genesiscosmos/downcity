@@ -32,7 +32,7 @@ import path from "node:path";
 import { resolve_publish_layers } from "../.github/scripts/resolve-publish-matrix.mjs";
 
 const workspace_root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const cli_package_path = "app/cli";
+const cli_package_path = "packages/cli";
 const cli_package = read_package_manifest(cli_package_path);
 const exec_file = promisify(execFile);
 const registry_url = "https://registry.npmjs.org/";
