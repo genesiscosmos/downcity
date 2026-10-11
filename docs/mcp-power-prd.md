@@ -2,7 +2,7 @@
 
 > 状态：待评审
 >
-> 范围：`packages/implementations/powers`、`packages/city`（最小契约扩展）、`app/desktop`、`homepage`
+> 范围：`packages/implementations/powers`、`packages/city`（最小契约扩展）、`private/apps/desktop`、`homepage`
 >
 > 目标：让 Downcity 作为 MCP client 接入外部 MCP server，并把每个 server 的工具直接投影为模型可调用的 Power
 >
@@ -313,7 +313,7 @@ packages/implementations/powers/src/mcp/types/McpSettings.ts        # 配置草�
 - `packages/implementations/powers/src/renderers.ts` 增加 `mcp` 渲染器。
 - `packages/implementations/powers/package.json` 增加 `./mcp` 导出与 `@modelcontextprotocol/client` 依赖。
 - `packages/implementations/powers/readmes/mcp.readme.md` 用户文档。
-- `homepage/content/docs/{en,zh}/plugin/mcp.mdx` 与 `meta.json`：面向用户说明如何配置 MCP server。
+- `private/apps/homepage/content/docs/{en,zh}/plugin/mcp.mdx` 与 `meta.json`：面向用户说明如何配置 MCP server。
 
 ## 8. 分阶段实施
 

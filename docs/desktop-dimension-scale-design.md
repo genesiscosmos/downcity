@@ -4,10 +4,10 @@
 >
 > 目标范围（实施时）：
 >
-> - 修改 `app/desktop/src/renderer/styles/tokens.css`（圆角角色令牌）
-> - 修改 `app/desktop/src/renderer/styles/{base,chat,markdown,mermaid}.css`（19 处 `border-radius` 字面量）
-> - 迁移 `app/desktop/src/renderer/` 下约 202 处圆角调用点
-> - 新增 `app/desktop/tests/radius_scale.test.ts`
+> - 修改 `private/apps/desktop/src/renderer/styles/tokens.css`（圆角角色令牌）
+> - 修改 `private/apps/desktop/src/renderer/styles/{base,chat,markdown,mermaid}.css`（19 处 `border-radius` 字面量）
+> - 迁移 `private/apps/desktop/src/renderer/` 下约 202 处圆角调用点
+> - 新增 `private/apps/desktop/tests/radius_scale.test.ts`
 >
 > 文档性质：**判据 + 圆角合同 + 间距/size 的取舍理由**。前半部分解决的问题是「下一个尺度该不该语义化」，后半部分是「圆角具体怎么做」。
 
@@ -478,8 +478,8 @@ radius ≤ 短边 × 1/4
 **实施时需要跑的三件事**（同字号那轮）：
 
 ```bash
-cd app/desktop && node --test tests/*.test.ts
-cd app/desktop && ./node_modules/.bin/tsc -p tsconfig.web.json --noEmit && ./node_modules/.bin/tsc -p tsconfig.node.json --noEmit
+cd private/apps/desktop && node --test tests/*.test.ts
+cd private/apps/desktop && ./node_modules/.bin/tsc -p tsconfig.web.json --noEmit && ./node_modules/.bin/tsc -p tsconfig.node.json --noEmit
 ```
 
 另加：因为要改 `tokens.css` 的 `--radius-*` 映射，需确认 Tailwind 真的产出了新工具类（照 `tailwind_tokens.test.ts` 的编程式编译做法）。

@@ -63,17 +63,17 @@ flowchart TB
 
 | 文件 | 引用内容 | 按 §2.2 判定 |
 |---|---|---|
-| [CompilePowerHooks.ts](/Users/wangenius/Documents/github/downcity/open-source-sdk/packages/city/src/power/core/CompilePowerHooks.ts:21) | `SESSION_HOOK_POINTS` | 归位：协议常量 |
-| [PowerContext.ts](/Users/wangenius/Documents/github/downcity/open-source-sdk/packages/city/src/power/core/PowerContext.ts:20) | `AgentSessionCollection`、`Logger` | 归位：`Logger` 是端口；`AgentSessionCollection` 需收窄 |
-| [PowerActionExecution.ts](/Users/wangenius/Documents/github/downcity/open-source-sdk/packages/city/src/power/core/PowerActionExecution.ts:15) | `JsonValue`、`generate_id` | `JsonValue` 归位；`generate_id` 是实现，不搬 |
-| [PowerToolRuntime.ts](/Users/wangenius/Documents/github/downcity/open-source-sdk/packages/city/src/power/tool/PowerToolRuntime.ts:12) | `JsonObject`、`JsonValue`、`ActionResult` | 归位：已有定义 + 跨侧数据契约 |
-| [ActionScheduleRuntime.ts](/Users/wangenius/Documents/github/downcity/open-source-sdk/packages/city/src/power/schedule/ActionScheduleRuntime.ts:10) | `AgentStorage`、`Logger` | 已随 §6.4 整簇删除 |
+| [CompilePowerHooks.ts](packages/city/src/power/core/CompilePowerHooks.ts:21) | `SESSION_HOOK_POINTS` | 归位：协议常量 |
+| [PowerContext.ts](packages/city/src/power/core/PowerContext.ts:20) | `AgentSessionCollection`、`Logger` | 归位：`Logger` 是端口；`AgentSessionCollection` 需收窄 |
+| [PowerActionExecution.ts](packages/city/src/power/core/PowerActionExecution.ts:15) | `JsonValue`、`generate_id` | `JsonValue` 归位；`generate_id` 是实现，不搬 |
+| [PowerToolRuntime.ts](packages/city/src/power/tool/PowerToolRuntime.ts:12) | `JsonObject`、`JsonValue`、`ActionResult` | 归位：已有定义 + 跨侧数据契约 |
+| [ActionScheduleRuntime.ts](packages/city/src/power/schedule/ActionScheduleRuntime.ts:10) | `AgentStorage`、`Logger` | 已随 §6.4 整簇删除 |
 
 `SESSION_HOOK_POINTS` 最典型：它是 Session 的检查点常量，power 只需要知道检查点名字，却要向上取。
 
-`JsonValue`、`JsonObject` 属于纯冗余：`@downcity/type` 里已有同定义（[Json.ts](/Users/wangenius/Documents/github/downcity/open-source-sdk/packages/type/src/types/json/Json.ts:23)），power 绕路从 agent 取。
+`JsonValue`、`JsonObject` 属于纯冗余：`@downcity/type` 里已有同定义（[Json.ts](packages/type/src/types/json/Json.ts:23)），power 绕路从 agent 取。
 
-`generate_id` 值得单独说明。它不满足 §2.2 的第 2、3 条——一个随机串生成器没有需要两侧达成一致的语义，谁生成的 ID 都是合法的不透明串。[shell/utils/Id.ts](/Users/wangenius/Documents/github/downcity/open-source-sdk/packages/city/src/shell/utils/Id.ts:1) 的注释已经说明它当初就是靠复制绕开这个问题的。正确处理是**保留本包实现、删掉上向引用**，而不是统一。哪天真成了跨包契约（比如 ID 需要能被解析出结构），它才够格进定义层。
+`generate_id` 值得单独说明。它不满足 §2.2 的第 2、3 条——一个随机串生成器没有需要两侧达成一致的语义，谁生成的 ID 都是合法的不透明串。[shell/utils/Id.ts](packages/city/src/shell/utils/Id.ts:1) 的注释已经说明它当初就是靠复制绕开这个问题的。正确处理是**保留本包实现、删掉上向引用**，而不是统一。哪天真成了跨包契约（比如 ID 需要能被解析出结构），它才够格进定义层。
 
 这条区分很重要：否则"统一"会把实现也拖进定义层，方向问题换个形式回来。
 
@@ -86,9 +86,9 @@ Agent.dispose()          → city.release_agent(this)   [Agent.ts:300]
 City.remove_agent(id)    → agent.dispose()            [City.ts:374]
 ```
 
-City 的索引删除实际上不是自己完成的，而是等主体在 dispose 里回调进来才执行 `agents_by_id.delete()`。这个循环靠 `removing_agent_ids`（[City.ts:66](/Users/wangenius/Documents/github/downcity/open-source-sdk/packages/city/src/city/runtime/City.ts:66)）掩盖时序。
+City 的索引删除实际上不是自己完成的，而是等主体在 dispose 里回调进来才执行 `agents_by_id.delete()`。这个循环靠 `removing_agent_ids`（[City.ts:66](packages/city/src/city/runtime/City.ts:66)）掩盖时序。
 
-`Agent.dispose_promise` 会记忆 rejection（[Agent.ts:292](/Users/wangenius/Documents/github/downcity/open-source-sdk/packages/agent/src/agent/Agent.ts:292)），一次失败的 dispose 会让 Agent 永久留在 City 索引里，没有重试路径。
+`Agent.dispose_promise` 会记忆 rejection（[Agent.ts:292](packages/agent/src/agent/Agent.ts:292)），一次失败的 dispose 会让 Agent 永久留在 City 索引里，没有重试路径。
 
 **这是所有权问题，不是依赖层次问题。** 定义层即使完全归位，这个环依然存在。它由 §5.3 单独处理。
 
@@ -96,7 +96,7 @@ City 的索引删除实际上不是自己完成的，而是等主体在 dispose 
 
 | | Agent | Group |
 |---|---|---|
-| 绑定签名 | `attach(city: CityRuntime)` [Agent.ts:200](/Users/wangenius/Documents/github/downcity/open-source-sdk/packages/agent/src/agent/Agent.ts:200) | `attach(owner: object, storage_provider)` [Group.ts:51](/Users/wangenius/Documents/github/downcity/open-source-sdk/packages/agent/src/group/Group.ts:51) |
+| 绑定签名 | `attach(city: CityRuntime)` [Agent.ts:200](packages/agent/src/agent/Agent.ts:200) | `attach(owner: object, storage_provider)` [Group.ts:51](packages/agent/src/group/Group.ts:51) |
 | 宿主类型 | 强类型协议 | 裸 `object`，不可检查 |
 | 存储来源 | 从 city 内部读 | 由调用方额外传参 |
 | 解绑 | `detach(city)`，只清 `city` | `detach(owner)`，把 storage 重置为新内存 provider |
@@ -105,15 +105,15 @@ City 的索引删除实际上不是自己完成的，而是等主体在 dispose 
 
 ### 3.4 执行期回查容器
 
-[Agent.assert_workspace](/Users/wangenius/Documents/github/downcity/open-source-sdk/packages/agent/src/agent/Agent.ts:332) 在每次 Session 创建或恢复时执行 `city.workspaces.get(id) !== workspace`。
+[Agent.assert_workspace](packages/agent/src/agent/Agent.ts:332) 在每次 Session 创建或恢复时执行 `city.workspaces.get(id) !== workspace`。
 
 这与 `apply_powers` 确立的"编译成闭包、执行时不回查"原则直接矛盾。同一个 Agent 内部，能力走值推送，Workspace 走回查，两套规则并存。
 
 ### 3.5 Power 层内部范式分裂
 
-`@downcity/city/power` 提供了 `abstract class Power`（[runtime.ts:64](/Users/wangenius/Documents/github/downcity/open-source-sdk/packages/city/src/power/runtime.ts:64)），外部 power 全部继承：`MemoryPower`、`WebPower`、`ChatPower`、`TaskPower`、`SkillPower`。
+`@downcity/city/power` 提供了 `abstract class Power`（[runtime.ts:64](packages/city/src/power/runtime.ts:64)），外部 power 全部继承：`MemoryPower`、`WebPower`、`ChatPower`、`TaskPower`、`SkillPower`。
 
-但 city 自有的两个 power 走工厂函数返回对象字面量：[create_city_power](/Users/wangenius/Documents/github/downcity/open-source-sdk/packages/city/src/city/power/builtin/CityPower.ts:49)、[create_shell_power](/Users/wangenius/Documents/github/downcity/open-source-sdk/packages/city/src/city/power/builtin/shell/ShellPower.ts:280)。
+但 city 自有的两个 power 走工厂函数返回对象字面量：[create_city_power](packages/city/src/city/power/builtin/CityPower.ts:49)、[create_shell_power](packages/city/src/city/power/builtin/shell/ShellPower.ts:280)。
 
 同一层里两套写法。返回值本身就是 power（有 `name`、`actions`、`system()`），应当继承基类。
 
@@ -200,7 +200,7 @@ private async remove_agent(agent_id: string): Promise<Agent | null> {
 
 `Agent.dispose()` 在已绑定时抛出明确错误，提示改用 `city.agents.remove(id)`。这把"已注册主体不能自行释放"变成可检查的不变量。
 
-删除 `removing_agent_ids`、`removal_promises`、`workspace_removal_promises` 这套时序掩盖。Group 同理，`release_group`（[City.ts:525](/Users/wangenius/Documents/github/downcity/open-source-sdk/packages/city/src/city/runtime/City.ts:525)）不再依赖 `group.detach()` 的回调。
+删除 `removing_agent_ids`、`removal_promises`、`workspace_removal_promises` 这套时序掩盖。Group 同理，`release_group`（[City.ts:525](packages/city/src/city/runtime/City.ts:525)）不再依赖 `group.detach()` 的回调。
 
 ### 5.4 删除执行期回查
 
@@ -267,16 +267,16 @@ export class CityPower extends Power {
 
 已归位到 `@downcity/type`：
 
-- `SESSION_HOOK_POINTS`：新建 [SessionHookPoints.ts](/Users/wangenius/Documents/github/downcity/open-source-sdk/packages/type/src/types/session/SessionHookPoints.ts)。
-- `ActionResult`、`ActionResultMessage`、`is_action_result`、`SessionSystemMessage`：新建 [SessionActionContract.ts](/Users/wangenius/Documents/github/downcity/open-source-sdk/packages/type/src/types/session/SessionActionContract.ts)。
+- `SESSION_HOOK_POINTS`：新建 [SessionHookPoints.ts](packages/type/src/types/session/SessionHookPoints.ts)。
+- `ActionResult`、`ActionResultMessage`、`is_action_result`、`SessionSystemMessage`：新建 [SessionActionContract.ts](packages/type/src/types/session/SessionActionContract.ts)。
 - `JsonValue`、`JsonObject`、`SessionAgentContent`：定义已存在，改指向定义层。
 
 删除的重复定义：`agent/src/session/input/SessionHookPoints.ts`、`agent/src/types/action/ActionResult.ts`、`agent/src/types/session/SessionPrompts.ts`、`city/src/shell/utils/Id.ts`。
 
 实施中的两个判定修正：
 
-- **`Logger` 不迁移。** 原计划移入定义层，实际发现 power 层已有 `PowerLogger` 窄端口（[PowerContext.ts](/Users/wangenius/Documents/github/downcity/open-source-sdk/packages/city/src/power/types/PowerContext.ts:28)）。两处直接引用 agent `Logger` 类的地方改为使用已有端口即可。`Logger` 是 379 行含 ANSI 与 JSONL 落盘的实现，本就不满足判据第 2 条。
-- **`AgentSessionCollection` 不迁移。** 它是 agent 的公开实现面，迁入定义层会污染定义层。改为把适配逻辑移到容器边界：[PowerSessionBridge.ts](/Users/wangenius/Documents/github/downcity/open-source-sdk/packages/city/src/city/power/PowerSessionBridge.ts) 负责把 Agent Session 集合投影为 power 已有的 `PowerSessionCollection` 端口。`create_power_context` 的入参从 `get_sessions` 延迟读取改为 `sessions` 直接传入。
+- **`Logger` 不迁移。** 原计划移入定义层，实际发现 power 层已有 `PowerLogger` 窄端口（[PowerContext.ts](packages/city/src/power/types/PowerContext.ts:28)）。两处直接引用 agent `Logger` 类的地方改为使用已有端口即可。`Logger` 是 379 行含 ANSI 与 JSONL 落盘的实现，本就不满足判据第 2 条。
+- **`AgentSessionCollection` 不迁移。** 它是 agent 的公开实现面，迁入定义层会污染定义层。改为把适配逻辑移到容器边界：[PowerSessionBridge.ts](packages/city/src/city/power/PowerSessionBridge.ts) 负责把 Agent Session 集合投影为 power 已有的 `PowerSessionCollection` 端口。`create_power_context` 的入参从 `get_sessions` 延迟读取改为 `sessions` 直接传入。
 
 验收结果：
 
@@ -290,7 +290,7 @@ export class CityPower extends Power {
 
 契约与主体侧：
 
-- [CityRuntime](/Users/wangenius/Documents/github/downcity/open-source-sdk/packages/type/src/types/city/CityRuntime.ts) 收窄为只含 `storage`。删除 `release_agent`（反向回调）与 `workspaces`（`assert_workspace` 删除后已无消费者）。
+- [CityRuntime](packages/type/src/types/city/CityRuntime.ts) 收窄为只含 `storage`。删除 `release_agent`（反向回调）与 `workspaces`（`assert_workspace` 删除后已无消费者）。
 - Agent 与 Group 统一为 `bind(host: CityRuntime)` / `unbind()`，删除 `attach`/`detach` 与裸 `object` 宿主参数。
 - 删除 `Agent.assert_workspace` 与 `Agent.resolve_system_messages` 中的回查调用。
 - `Agent.dispose()` / `Group.dispose()` 在已绑定时抛出明确错误，提示改用容器入口。
@@ -305,26 +305,26 @@ export class CityPower extends Power {
 
 时间工具归位（第一阶段残留）：
 
-- 新建 [Time.ts](/Users/wangenius/Documents/github/downcity/open-source-sdk/packages/type/src/types/time/Time.ts)，含 `resolve_runtime_timezone`、`format_date_in_timezone`、`format_date_time_in_timezone`、`format_year_in_timezone`。
+- 新建 [Time.ts](packages/type/src/types/time/Time.ts)，含 `resolve_runtime_timezone`、`format_date_in_timezone`、`format_date_time_in_timezone`、`format_year_in_timezone`。
 - `agent/src/utils/Time.ts` 改为重导出定义层函数，只保留 Agent 侧独有的 `get_timestamp`。
 - city power 与 powers 实现的引用改指向定义层。
 
-应用侧调用点同步修正（回滚路径统一走容器入口）：`app/cli` 的 `CliCityRuntime`、`AgentChatRemote`；`app/desktop` 的 `AgentController`。
+应用侧调用点同步修正（回滚路径统一走容器入口）：`packages/cli` 的 `CliCityRuntime`、`AgentChatRemote`；`private/apps/desktop` 的 `AgentController`。
 
 验收结果：
 
 - `release_agent`、`attach`/`detach`、四个时序字段、`memory_session_started`/`storage_owner`/`mark_session_started`/`on_session_routed` 全部为 0 处残留。
 - `packages/city/src/power/**` 对 `@downcity/agent` 引用为 0；时间函数不再从 agent 取用；`@downcity/type` 不依赖实现包。
-- `type`、`agent`、`city`、`implementations/powers` 构建通过；`app/cli` 与 `app/desktop` 主进程 typecheck 通过。
+- `type`、`agent`、`city`、`implementations/powers` 构建通过；`packages/cli` 与 `private/apps/desktop` 主进程 typecheck 通过。
 - `packages/agent` 87 项中 86 项通过（唯一失败为基线已有的 `replace_hooks` 问题）。
 - `implementations/powers` 的 memory 与 task 测试 20/20 通过。
 - `packages/city` 279 项中 264 项通过，失败均为沙箱环境限制（`EPERM`、`grantpt`、`/private/tmp` 符号链接），与本改动无关；与新增不变量相关的失败为 0。
 
 ### 6.3 第三阶段实施记录
 
-- [CityPower](/Users/wangenius/Documents/github/downcity/open-source-sdk/packages/city/src/city/power/builtin/CityPower.ts) 改为 `extends Power`，删除 `create_city_power` 工厂。动作 id 仍在构造期一次性展开。
-- [ShellPower](/Users/wangenius/Documents/github/downcity/open-source-sdk/packages/city/src/city/power/builtin/shell/ShellPower.ts) 改为 `extends Power`，删除 `create_shell_power` 工厂。
-- [SkillPower](/Users/wangenius/Documents/github/downcity/open-source-sdk/packages/implementations/powers/src/skill/Power.ts) 删除 `Object.assign(this, createSkillPowerDefinition(...))` 混合写法，改为正统的类字段：`name`/`title`/`description` 声明为字段，`actions` 在构造函数中装配，`system()` 覆写为方法。`createSkillPowerDefinition` 工厂删除，拆出 `createSkillPowerActions` 作为纯值构造器保留。
+- [CityPower](packages/city/src/city/power/builtin/CityPower.ts) 改为 `extends Power`，删除 `create_city_power` 工厂。动作 id 仍在构造期一次性展开。
+- [ShellPower](packages/city/src/city/power/builtin/shell/ShellPower.ts) 改为 `extends Power`，删除 `create_shell_power` 工厂。
+- [SkillPower](packages/implementations/powers/src/skill/Power.ts) 删除 `Object.assign(this, createSkillPowerDefinition(...))` 混合写法，改为正统的类字段：`name`/`title`/`description` 声明为字段，`actions` 在构造函数中装配，`system()` 覆写为方法。`createSkillPowerDefinition` 工厂删除，拆出 `createSkillPowerActions` 作为纯值构造器保留。
 - 调用点更新：`City` 构造函数改用 `new CityPower(...)` 与 `new ShellPower()`。
 
 区分保留：`create_action()`、`create_power_tools()`、`createSkillPowerActions()` 返回纯值或字典，属于值构造器，保留；只有返回 power 本体的工厂被改为类。
@@ -333,7 +333,7 @@ export class CityPower extends Power {
 
 - 仓库内 7 个 power 全部 `extends Power`：`CityPower`、`ShellPower`、`MemoryPower`、`WebPower`、`ChatPower`、`TaskPower`、`SkillPower`。
 - `create_city_power`、`create_shell_power`、`Object.assign(this` 均为 0 处残留。
-- `packages/city`、`packages/implementations/powers` typecheck 与构建通过；`app/cli`、`app/desktop` 主进程 typecheck 通过。
+- `packages/city`、`packages/implementations/powers` typecheck 与构建通过；`packages/cli`、`private/apps/desktop` 主进程 typecheck 通过。
 - `implementations/powers` 的 memory / task / skill 测试 24/24 通过。
 - `packages/city` 失败清单与第二阶段一致，无新增失败。
 

@@ -81,7 +81,7 @@ export interface SessionInteractionCloseInput {
 
 - **行为变更**：等待审批不再自动超时。原先 2 小时的审批窗口消失，审批要么得到用户响应，要么在 Turn/Session 结束时被标记为 cancelled 并把所属 Tool 标为 failed。
 - **协议变更**：`SessionInteractionStatus` 六态 → 五态；`ShellApprovalStatus` 三态 → 二态。属公开协议，需随包版本发布。
-- **验证**：三个包重新构建通过，`packages/agent` 75/75，`packages/city` 250/264（两个基线失败），`app/cli` typecheck 通过。
+- **验证**：三个包重新构建通过，`packages/agent` 75/75，`packages/city` 250/264（两个基线失败），`packages/cli` typecheck 通过。
 
 ## 3. 待改项，按风险分四批
 
@@ -172,7 +172,7 @@ await this.session_messages.persist_action({
 `action_type` 不是精确协议。desktop 用子串匹配做展示分派：
 
 ```ts
-// app/desktop/.../agent_activity_presentation.ts:128
+// private/apps/desktop/.../agent_activity_presentation.ts:128
 function resolve_agent_action_visual_kind(action_type: string): AgentActionVisualKind {
   const normalized = action_type.toLowerCase();
   if (normalized.includes("fork")) return "fork";

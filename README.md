@@ -217,7 +217,7 @@ downcity/
 │   ├── edgefed/
 │   ├── localfed/
 │   └── ui/
-├── homepage/
+├── private/apps/homepage/
 ├── scripts/
 ├── package.json
 └── pnpm-workspace.yaml
@@ -232,7 +232,7 @@ The `templates/*` projects are convenient developer starters and showcases. The 
 - Agent SDK docs: [downcity.ai/agent-sdk-docs](https://downcity.ai/agent-sdk-docs)
 - UI SDK docs: [downcity.ai/ui-sdk-docs](https://downcity.ai/ui-sdk-docs)
 - Chinese overview: [README.zh-CN.md](./README.zh-CN.md)
-- Package docs: [packages/agent/README.md](./packages/agent/README.md), [packages/type/README.md](./packages/type/README.md), [packages/implementations/services/README.md](./packages/implementations/services/README.md), [app/cli/README.md](./app/cli/README.md), [packages/ui/README.md](./packages/ui/README.md)
+- Package docs: [packages/agent/README.md](./packages/agent/README.md), [packages/type/README.md](./packages/type/README.md), [packages/implementations/services/README.md](./packages/implementations/services/README.md), [packages/cli/README.md](./packages/cli/README.md), [packages/ui/README.md](./packages/ui/README.md)
 
 ## Local Development
 
@@ -256,7 +256,7 @@ Typecheck:
 ```bash
 pnpm typecheck
 pnpm -C packages/ui typecheck
-pnpm -C homepage typecheck
+pnpm --dir private/apps/homepage typecheck
 ```
 
 Run in development mode:

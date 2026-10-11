@@ -46,7 +46,7 @@
 
 ### 根因（精确到文件）
 
-`i18next` 单例在 `app/lib/locales/index.ts` 中固定 `lng: "en"`，语言只由 `root.tsx` 的 `useEffect` 在浏览器端切换。因此**服务端预渲染时 `i18n.language` 永远是 `en`**。
+`i18next` 单例在 `private/apps/homepage/app/lib/locales/index.ts` 中固定 `lng: "en"`，语言只由 `root.tsx` 的 `useEffect` 在浏览器端切换。因此**服务端预渲染时 `i18n.language` 永远是 `en`**。
 
 上一轮已经为 `community.faq.tsx` 修过这一个 bug（审计文档 7.2 节：「i18next 单例固定 lng: "en"，useTranslation() 在服务端拿不到路径语言」），但**同类写法在其余 15 个文件里仍然存在**：
 
@@ -412,7 +412,7 @@ https://downcity.ai/docs/             → 200，但内容是
 - `/en/blog/what-is-an-agent-harness/`（约 1380 词）
 - `/zh/blog/what-is-an-agent-harness/`（约 1900 汉字，独立重写、非直译）
 
-工程上新增：`blog` fumadocs 集合、`app/lib/blog-source.ts`、`app/routes/blog/page.tsx`、`SeoArticleStructuredData`、`create_article_structured_data`、路由／预渲染／sitemap／`_redirects`／`llms.txt` 接线。
+工程上新增：`blog` fumadocs 集合、`private/apps/homepage/app/lib/blog-source.ts`、`app/routes/blog/page.tsx`、`SeoArticleStructuredData`、`create_article_structured_data`、路由／预渲染／sitemap／`_redirects`／`llms.txt` 接线。
 
 关键设计：文章页 **不挂 DocsLayout 侧边栏**（root.tsx 的 `showGlobalChrome` 因此为真，navbar 与 Footer 正常显示），H1 由路由从 frontmatter 输出，MDX 正文禁止再写 `# 标题`（避开文档区现存的重复 h1 问题）。
 

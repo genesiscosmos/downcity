@@ -49,6 +49,9 @@ export interface AgentSessionCollection {
   /** 在指定 Workspace 中创建一个属于当前 Agent 的 Session。 */
   create(options?: AgentCreateSessionOptions): Promise<AgentSession>;
 
+  /** 监听本地新会话初始化完成；监听器完成后创建才返回，取消函数释放订阅。 */
+  on_created(listener: (session: AgentSession) => void | Promise<void>): () => void;
+
   /** 在指定 Workspace 中恢复一个已经属于当前 Agent 的 Session。 */
   get(
     session_id: string,

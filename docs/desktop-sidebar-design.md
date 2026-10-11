@@ -1,7 +1,7 @@
 # Desktop 侧栏行契约（Sidebar Row Contract）
 
-> 状态：**已实施**。几何出口是 `app/desktop/src/renderer/layouts/sidebar/sidebarRow.ts`，
-> 守卫是 `app/desktop/tests/sidebar_row_contract.test.ts`。
+> 状态：**已实施**。几何出口是 `private/apps/desktop/src/renderer/layouts/sidebar/sidebarRow.ts`，
+> 守卫是 `private/apps/desktop/tests/sidebar_row_contract.test.ts`。
 >
 > 本文回答三个问题：**是什么坏了**、**行现在长什么样**、**下一处改动该从哪里取数**。
 
@@ -602,7 +602,7 @@ Workspace A  [▶ 24]─4─名称                    ⏳  ⋯   根：箭头 + 
 
 ### 9.1 病灶：收敛没有跨包
 
-`design_token_drift.test.ts` 只扫 `app/desktop/src/renderer`。
+`design_token_drift.test.ts` 只扫 `private/apps/desktop/src/renderer`。
 **Power Renderer 在另一个包里**，于是 desktop 那套收敛在 Power 里完全不存在：
 
 | 位置 | 写法 | 为什么是问题 |

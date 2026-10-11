@@ -1,9 +1,0 @@
----
-title: "Example: Client / Server Mode"
-description: One process exposes Agent capability, another consumes it through RemoteAgent
----
-This mode usually looks like:
-
-- the server process owns the local `Agent`
-- the server exposes HTTP or RPC through the containing `City` with `city.http()` / `city.rpc()`
-- the client process creates `RemoteAgent`

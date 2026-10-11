@@ -2,7 +2,7 @@
 
 > 状态：设计稿，待实施
 >
-> 适用范围：`@downcity/agent`、`@downcity/city` 调用点、`@downcity/powers`、`app/desktop`、`app/cli`、homepage `agent-sdk-docs`
+> 适用范围：`@downcity/agent`、`@downcity/city` 调用点、`@downcity/powers`、`private/apps/desktop`、`packages/cli`、homepage `agent-sdk-docs`
 >
 > 更新时间：2026-10-08
 >

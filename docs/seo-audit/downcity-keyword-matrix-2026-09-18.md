@@ -259,10 +259,10 @@ Downcity 目前**只有产品页 + 文档，没有一篇信息型内容**。而�
 | 文件 | 作用 |
 |---|---|
 | `source.config.ts` | 新增 `blog` 集合（`content/blog`） |
-| `app/lib/blog-source.ts` | blog source 装载，`baseUrl: /blog` |
+| `private/apps/homepage/app/lib/blog-source.ts` | blog source 装载，`baseUrl: /blog` |
 | `app/routes/blog/page.tsx` | 文章路由：`/en/blog/<slug>/` 与 `/zh/blog/<slug>/`，输出 H1、文章版式与 BlogPosting JSON-LD |
 | `app/types/seo.ts` | 新增 `SeoArticleStructuredData` |
-| `app/lib/structured-data.ts` | 新增 `create_article_structured_data`，`author/publisher` 复用首页 Organization、`about` 指向 Downcity 软件实体，与首页实体图共享 `@id` |
+| `private/apps/homepage/app/lib/structured-data.ts` | 新增 `create_article_structured_data`，`author/publisher` 复用首页 Organization、`about` 指向 Downcity 软件实体，与首页实体图共享 `@id` |
 | `app/routes.ts`、`react-router.config.ts`、`app/routes/sitemap.xml.ts` | 路由注册、预渲染扫描、sitemap 收录 |
 | `public/_redirects` | `/blog` 与 `/blog/*` → 英文文章（当前只有一篇，故意不发布空壳列表页） |
 | `public/llms.txt` | 加入文章入口，供 AI 引擎引用 |

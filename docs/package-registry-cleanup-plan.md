@@ -42,7 +42,7 @@
 | `@downcity/sandbox-microsandbox` / `-native` | 0.1.4 / 0.1.2 | `packages/implementations/sandboxes/*` |
 | `@downcity/workspace-cloudflare-computer` | 0.1.21 | `packages/implementations/workspaces/cloudflare-computer` |
 | `@downcity/ui` | 0.1.280 | `packages/ui` |
-| `downcity`（CLI） | 1.1.487 | `app/cli` |
+| `downcity`（CLI） | 1.1.487 | `packages/cli` |
 
 ### 2.2 孤儿包（仓库内引用为 0，能力已迁走）
 
@@ -190,7 +190,7 @@
 
 **`plugins-docs` 的 builtins 表要按新导出重写，不能只换包名前缀**
 
-`homepage/content/plugins-docs/{en,zh}/builtins/overview.mdx` 的 import 路径表当前是这个形态：
+`private/apps/homepage/content/plugins-docs/{en,zh}/builtins/overview.mdx` 的 import 路径表当前是这个形态：
 
 ```text
 | `image` | `@downcity/plugins/image` |
@@ -214,9 +214,9 @@
 
 这两处是"线上 0.2.x"的实际来源。
 
-**B1. `official/edge-worker`**
+**B1. `private/services/edge-worker`**
 
-当前 [package.json](/Users/wangenius/Documents/github/downcity/official/edge-worker/package.json:19) 写的是精确版本 `"@downcity/city": "0.2.268"`，锁文件里同时存在 `@downcity/city@0.2.268` 与 `@downcity/city@0.2.270`。
+当前 [package.json](/Users/wangenius/Documents/github/downcity/private/services/edge-worker/package.json:19) 写的是精确版本 `"@downcity/city": "0.2.268"`，锁文件里同时存在 `@downcity/city@0.2.268` 与 `@downcity/city@0.2.270`。
 
 **改前必须先用类型检查确认**，因为这 12 处根导入依赖的是 0.2.x 根导出里的 City access SDK 类型，而那部分能力现在归 `@downcity/federation` 和 `@downcity/services`：
 
@@ -262,7 +262,7 @@ city 的 `1.1.x` / `0.2.x` 已经全部标过 deprecated，无需重复处理。
 
 仓库已有 `scripts/package-graph.mjs`（发布拓扑）和 `.github/scripts/validate-published-dependencies.mjs`（发布前校验依赖已发布），但**没有任何检查覆盖"文档引用的包名/子路径是否真实存在"**。这是这次能积累出一团乱的根本缺口。
 
-已新增 `scripts/verify-doc-package-references.mjs`：扫描 `homepage/content/**/*.mdx` 中所有 `@downcity/<name>` 与 `@downcity/<name>/<subpath>` 引用，对子路径断言其存在于该包 `exports`，对包名断言其存在于 workspace（只有包名缺失时记为 warning，因为存在对外部包与历史叙述的合法引用）。
+已新增 `private/scripts/verify-doc-package-references.mjs`：扫描 `private/apps/homepage/content/**/*.mdx` 中所有 `@downcity/<name>` 与 `@downcity/<name>/<subpath>` 引用，对子路径断言其存在于该包 `exports`，对包名断言其存在于 workspace（只有包名缺失时记为 warning，因为存在对外部包与历史叙述的合法引用）。
 
 已接入 `package.json` 的 `release:test`（`verify-doc-package-references.mjs` 接在 `node --test` 之后）与 `release-integrity.yml` 已监控的路径，同时提供独立命令 `pnpm docs:verify`。接入时点为 A1 完成后——错误数从 27 降到 0，CI 才能保持绿灯。
 
@@ -270,9 +270,9 @@ city 的 `1.1.x` / `0.2.x` 已经全部标过 deprecated，无需重复处理。
 
 盘点时遇到的这三类**不是**冗余，清理时不要误删：
 
-**`@downcity/shell` 的 4 处引用** —— 全部是"不再存在独立包"的说明性文字，例如 `homepage/content/docs/zh/agent/sdk-architecture.mdx:96` 的"不再存在独立的 `@downcity/shell` 包"。属于正确内容，已核对。
+**`@downcity/shell` 的 4 处引用** —— 全部是"不再存在独立包"的说明性文字，例如 `private/apps/homepage/content/docs/zh/agent/sdk-architecture.mdx:96` 的"不再存在独立的 `@downcity/shell` 包"。属于正确内容，已核对。
 
-**`@downcity/ui-bridge`（2 处）** —— `homepage/content/ui-sdk-docs/{en,zh}/host-integration.mdx` 里明确写着"以后如果需要可以再加一个这样的包"，是假设性命名，不是失效引用。
+**`@downcity/ui-bridge`（2 处）** —— `private/apps/homepage/content/ui-sdk-docs/{en,zh}/host-integration.mdx` 里明确写着"以后如果需要可以再加一个这样的包"，是假设性命名，不是失效引用。
 
 另外 `plugins-docs` 这个文档集本身的目录名与路由 `/plugins-docs` 仍叫 plugin，内容讲的却是 power，`meta.json` 的 title 是 "Agent Powers Docs"。改它牵连导航、URL 与 SEO 收录，属于独立议题。
 
@@ -299,7 +299,7 @@ city 的 `1.1.x` / `0.2.x` 已经全部标过 deprecated，无需重复处理。
 | 站内链接 | 85 处引用（含 blog 已发布文章）全部改为新路径 |
 | 旧 URL 保留 | `public/_redirects` 新增 6 条 301：`/en|zh/plugins-docs*` → `/en|zh/powers-docs*`，原无语言前缀规则的目标同步指向新路径 |
 
-验证：`pnpm -C homepage build` 成功，预渲染 34 个 powers-docs 页面；markdown 端点新生成 32 个、旧路径 0 个；`pnpm -C homepage test:seo` 23 项全过；`docs:verify` 与 `release:test` 均通过。旧的 `/plugins-docs` 链接经 301 保留，不会断链或丢失收录。
+验证：`pnpm --dir private/apps/homepage build` 成功，预渲染 34 个 powers-docs 页面；markdown 端点新生成 32 个、旧路径 0 个；`pnpm --dir private/apps/homepage test:seo` 23 项全过；`docs:verify` 与 `release:test` 均通过。旧的 `/plugins-docs` 链接经 301 保留，不会断链或丢失收录。
 
 ### 5.3 已修复：全部 plugin 命名的文档路径收敛为 power
 
@@ -314,7 +314,7 @@ city 的 `1.1.x` / `0.2.x` 已经全部标过 deprecated，无需重复处理。
 | 首页源码 | `HomeSdkCodePanel.tsx` 的示例代码（`@downcity/plugins`、`create_builtin_plugin_registrations`、`plugins:` 键）修正为真实 API；`HomeSdkWorld` 的 `HomeSdkWorldPluginKind`/`plugin_kind`/`tone: "plugin"`/`--sdk-map-plugin`/`plugin_*` 布局 key、`navbar`/`Footer` 路径变量与文案、`home.json` 的 footer label、营销页文案全部收敛 |
 | redirects | 上一轮新增的 `plugins-docs` → `powers-docs` 兼容 301 已删除 |
 
-验证：`pnpm -C homepage typecheck` 通过；`pnpm -C homepage build` 成功；`pnpm -C homepage test:seo` 23 项全过；构建产物中无任何 `plugin` 命名的路径；`docs:verify` 与 `release:test` 通过。`find homepage/content -name '*plugin*'` 与全仓库路径字符串搜索均为空。
+验证：`pnpm --dir private/apps/homepage typecheck` 通过；`pnpm --dir private/apps/homepage build` 成功；`pnpm --dir private/apps/homepage test:seo` 23 项全过；构建产物中无任何 `plugin` 命名的路径；`docs:verify` 与 `release:test` 通过。`find private/apps/homepage/content -name '*plugin*'` 与全仓库路径字符串搜索均为空。
 
 ### 5.4 校验脚本已覆盖符号层
 
@@ -330,7 +330,7 @@ city 的 `1.1.x` / `0.2.x` 已经全部标过 deprecated，无需重复处理。
 | A2 | 语义修正：`plugins:` → `powers:`、builtins 表 | 已完成 | 代码块内统一为 `powers:`；`image`/`sound` 两行已重写为 City capability |
 | A3 | 词汇与 API 对齐（`plugin`/`插件` → `Power`） | 已完成 | 243 个 mdx 改动；详见下方 A3 结果 |
 | D | 文档引用校验（包名、子路径、导出符号） | 已完成 | `pnpm docs:verify` 零 error；已接入 `release:test` |
-| B | `official/edge-worker`、local-proxy 模板 | 未开始 | 先跑对应 `typecheck` 确认类型归属 |
+| B | `private/services/edge-worker`、local-proxy 模板 | 未开始 | 先跑对应 `typecheck` 确认类型归属 |
 | C | 11 个孤儿包标 deprecated | 未开始 | 需 npm 凭据 |
 
 A1 的实际结果：改动 138 个 mdx 文件，包含子路径 32 处、`Plugin*` 符号改名、`create_builtin_power_registrations` 32 处、`define_power_renderer` 4 处，以及代码块内的 `plugins:` → `powers:`。blog 目录未动（已发布的历史文章不重写）。

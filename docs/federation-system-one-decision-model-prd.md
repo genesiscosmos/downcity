@@ -2,7 +2,7 @@
 
 > 状态：待评审（只做设计，不落地实现）
 >
-> 适用范围：`@downcity/type`（仅目录字段）、`@downcity/federation`、homepage city-sdk 文档、`app/cli` 与 `app/desktop` 的模型目录消费端
+> 适用范围：`@downcity/type`（仅目录字段）、`@downcity/federation`、homepage city-sdk 文档、`packages/cli` 与 `private/apps/desktop` 的模型目录消费端
 >
 > 关联输入：`docs/city-ai-channel-city-model-prd.md`、`docs/downcity-model-protocol.md`
 >
@@ -46,7 +46,7 @@ AIChannel 子类实现能力
 
 - `AIChannel` 只声明 `stream()` 加 `image_create / image_fetch / image_result / video / tts / asr`；`AIModelActions` 有 `[modality: string]` 索引签名，扩展新 action 不需要改接口形态。
 - `AIService` 在构造函数里遍历 `MODALITIES = ["video", "tts", "asr"]` 注册 action，每个都可复用 `handleModality()` 的「解析模型 → 执行 → 计量 → 结算」编排。
-- `CityModelDescriptor.modalities` 是能力投影，消费端靠它判断「这个模型能不能当对话模型」：`app/cli` 的 `is_city_ai_execution_model` 与 `app/desktop` 的 `is_text_model` 都只认 `text | stream | openai`。
+- `CityModelDescriptor.modalities` 是能力投影，消费端靠它判断「这个模型能不能当对话模型」：`packages/cli` 的 `is_city_ai_execution_model` 与 `private/apps/desktop` 的 `is_text_model` 都只认 `text | stream | openai`。
 - `AIModelSpec` 目前没有任何字段表达「这是哪一类模型」。非语言能力的载荷类型（`AIImageCreateResult`、`AIActionMessage`）都住在联邦内部的 `types/AI.ts`。
 
 差距有三处：
@@ -387,8 +387,8 @@ export type UserDecisionResult = AIDecisionResult;
 | --- | --- |
 | `@downcity/type` `CityModelDescriptor` | 新增 `model_type` |
 | `AIInvoker.resolve_model()` 兜底描述符 | 补 `model_type: "language"` |
-| `app/cli` `AgentChatModel` / `AgentChatRemote` | 视图类型补字段，过滤逻辑保持只看 `modalities` |
-| `app/desktop` `DesktopModelSummary` / `DesktopAgentAssembly` | 同上 |
+| `packages/cli` `AgentChatModel` / `AgentChatRemote` | 视图类型补字段，过滤逻辑保持只看 `modalities` |
+| `private/apps/desktop` `DesktopModelSummary` / `DesktopAgentAssembly` | 同上 |
 | 测试里的描述符字面量 | 补字段 |
 
 CLI 与 Desktop 的对话模型过滤**保持现有行为**：继续用 `text / stream / openai` 匹配 `modalities`。决策模型既不带这些 modality，也不实现 `stream()`，因此天然不在候选里。

@@ -1,6 +1,0 @@
-{
-  "title": "模型无关 & 本地优先",
-  "description": "无论你使用 OpenAI 做通用推理，还是使用 DeepSeek 承载高吞吐任务，Downcity 都保持一致的模型接入体验。",
-  "runtime": "支持运行时",
-  "models": "支持模型"
-}

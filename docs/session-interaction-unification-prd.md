@@ -2,7 +2,7 @@
 
 > 状态：已落地（第 3、4 章全部实现并验证）
 >
-> 适用范围：`packages/type`、`packages/agent`、`packages/city`、`app/desktop`、`app/cli`
+> 适用范围：`packages/type`、`packages/agent`、`packages/city`、`private/apps/desktop`、`packages/cli`
 >
 > 前置：本轮已落地的「审批端口下移到执行方」改动。本 PRD 是该改动的收敛，不是回退。
 
@@ -256,8 +256,8 @@ pnpm -C packages/type build && pnpm -C packages/agent build && pnpm -C packages/
 pnpm -r --filter './packages/**' typecheck
 pnpm -C packages/agent test      # 基线 87
 pnpm -C packages/city test       # 基线 279，1 个既有失败（session-config-turn-boundary）
-pnpm -C app/desktop test         # 基线 506
-pnpm -C app/cli typecheck
+pnpm -C private/apps/desktop test         # 基线 506
+pnpm -C packages/cli typecheck
 pnpm release:test                # 20
 ```
 
@@ -281,8 +281,8 @@ pnpm release:test                # 20
 改动已落地，验证结果：
 
 - `packages/type`、`packages/agent`、`packages/city` 构建通过；全部 workspace 包与两个 app typecheck 零错误。
-- `packages/agent` 87/87；`packages/city` 266/279（唯一失败为既有基线 `session-config-turn-boundary`）；`app/desktop` 508/508；`release:test` 20/20。
-- `app/cli` typecheck 通过；其测试因沙箱缺 esbuild 二进制无法运行，属环境问题。
+- `packages/agent` 87/87；`packages/city` 266/279（唯一失败为既有基线 `session-config-turn-boundary`）；`private/apps/desktop` 508/508；`release:test` 20/20。
+- `packages/cli` typecheck 通过；其测试因沙箱缺 esbuild 二进制无法运行，属环境问题。
 
 实现过程中的四个判断：
 

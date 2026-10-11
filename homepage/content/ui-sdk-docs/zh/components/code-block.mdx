@@ -1,9 +1,0 @@
----
-title: CodeBlock
-description: 展示普通源码或构建期语法高亮结果
----
-`CodeBlock` 提供语言标签、横向滚动和复制操作；顶栏与代码内容之间不使用分割线。浅色模式使用 GitHub Light，暗色模式使用 One Dark Pro。传入 `code` 时使用内置轻量 token 着色；完整语法高亮应由 MDX、Markdown 或宿主构建流程提前完成，组件本身不会在浏览器加载 Shiki。
-
-<ComponentPreview name="code-block" />
-
-构建工具也可以把高亮后的 `children`、`data-raw` 和 `data-language` 直接传给组件。

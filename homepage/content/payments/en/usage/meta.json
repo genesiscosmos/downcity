@@ -1,9 +1,0 @@
-{
-  "title": "Usage Service",
-  "pages": [
-    "index",
-    "event-model",
-    "querying-and-summary",
-    "billing-integration"
-  ]
-}

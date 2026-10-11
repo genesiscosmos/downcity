@@ -1,9 +1,0 @@
-{
-  "title": "City CLI",
-  "pages": [
-    "index",
-    "quickstart",
-    "models-and-tables",
-    "operations-and-debug"
-  ]
-}

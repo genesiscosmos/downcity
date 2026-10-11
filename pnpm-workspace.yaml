@@ -1,21 +1,11 @@
 packages:
-  - homepage
-  - packages/agent
-  - packages/city
-  - app/desktop
-  - packages/implementations/workspaces/*
-  - packages/federation
-  - packages/implementations/services
+  - packages/*
+  - packages/implementations/databases/*
   - packages/implementations/powers
   - packages/implementations/sandboxes/*
-  - packages/type
-  - app/cli
-  - app/fedman
-  - packages/ui
-  - packages/implementations/databases/*
+  - packages/implementations/services
+  - packages/implementations/workspaces/*
   - templates/*
-  - templates/agent/*
-  - examples/*
 
 allowBuilds:
   better-sqlite3: true

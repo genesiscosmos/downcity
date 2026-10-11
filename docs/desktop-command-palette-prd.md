@@ -6,12 +6,12 @@
 >
 > 目标范围：
 >
-> - 新增 `app/desktop/src/renderer/features/command-palette/`
-> - 修改 `app/desktop/src/renderer/app/DesktopShell.tsx`（删除现有占位面板）
-> - 修改 `app/desktop/src/renderer/components/ui/dialog.tsx`（增加模态探针标记）
-> - 修改 `app/desktop/src/renderer/types/DesktopView.ts` 与 `app/desktop/src/renderer/app/use_desktop.ts`（新增 `report_error` action）
-> - 修改 `app/desktop/src/renderer/locales/{en,zh}/common.json`
-> - 新增 `app/desktop/tests/command_palette_*.test.ts`
+> - 新增 `private/apps/desktop/src/renderer/features/command-palette/`
+> - 修改 `private/apps/desktop/src/renderer/app/DesktopShell.tsx`（删除现有占位面板）
+> - 修改 `private/apps/desktop/src/renderer/components/ui/dialog.tsx`（增加模态探针标记）
+> - 修改 `private/apps/desktop/src/renderer/types/DesktopView.ts` 与 `private/apps/desktop/src/renderer/app/use_desktop.ts`（新增 `report_error` action）
+> - 修改 `private/apps/desktop/src/renderer/locales/{en,zh}/common.json`
+> - 新增 `private/apps/desktop/tests/command_palette_*.test.ts`
 >
 > 文档性质：可执行的产品与工程交付合同。目标是让 Desktop 拥有一个键盘优先、可扩展、与现有 7 个 domain store 边界一致的命令面板，而不是把 duobox 的目录结构照搬过来。
 
@@ -23,7 +23,7 @@
 
 Desktop 已经存在一个占位意义上的"命令面板"，但它是残缺的：
 
-`app/desktop/src/renderer/app/DesktopShell.tsx` 中通过本地 `useState` 维护 `command_palette_open`，`⌘/Ctrl+P` 打开，然后渲染两个硬编码按钮：
+`private/apps/desktop/src/renderer/app/DesktopShell.tsx` 中通过本地 `useState` 维护 `command_palette_open`，`⌘/Ctrl+P` 打开，然后渲染两个硬编码按钮：
 
 ```text
 打开设置      ⌘,
@@ -104,7 +104,7 @@ lib/shortcuts/
 ### 2.2 Desktop 现状（与本次相关的部分）
 
 ```text
-app/desktop/src/renderer/
+private/apps/desktop/src/renderer/
   app/DesktopShell.tsx                   占位面板 + 唯一的全局 keydown 监听器
   app/use_desktop.ts                     组合 7 个 domain store 与 DesktopActions
   types/DesktopView.ts                   NavigationTarget / SidebarMode / DesktopActions
@@ -159,8 +159,8 @@ D6. 不新增运行时依赖；纯逻辑（注册表、排序、键位格式化�
 | S3 | 300 条候选、10 字符查询下，`filter_and_rank` 单次调用 < 2 ms | Node 基准脚本，记录在测试输出 |
 | S4 | 根页面命令数量 ≤ 24，任一命令最多 2 次键盘操作可达 | 命令清单审查（5.1） |
 | S5 | 面板不提供任何不可逆命令 | 命令清单审查 |
-| S6 | `pnpm -C app/desktop test` 全绿，含新增 3 个测试文件 | CI / 本地 |
-| S7 | `pnpm -C app/desktop typecheck` 通过（node + web 两份 tsconfig） | CI / 本地 |
+| S6 | `pnpm -C private/apps/desktop test` 全绿，含新增 3 个测试文件 | CI / 本地 |
+| S7 | `pnpm -C private/apps/desktop typecheck` 通过（node + web 两份 tsconfig） | CI / 本地 |
 | S8 | en / zh key 完全一致、无空文案 | `desktop_i18n.test.ts` |
 | S9 | 9 个主题（duobox / dim / forest / graph / haze / mono / ocean / sunset / vercel）下，命令标题与背景对比度 ≥ 4.5:1 | 逐主题手动检查 |
 | S10 | `package.json` 的 `dependencies` 不新增条目 | diff 审查 |
@@ -299,7 +299,7 @@ const command_group_order = ["navigation", "goto", "create", "chat", "appearance
 ### 6.1 文件清单
 
 ```text
-app/desktop/src/renderer/features/command-palette/
+private/apps/desktop/src/renderer/features/command-palette/
   types.ts                CommandGroupId / CommandContext / CommandDefinition / CommandPage
   registry.ts             CommandRegistry + command_registry 单体
   use_commands.ts         use_register_commands / use_commands
@@ -479,7 +479,7 @@ const command_shortcuts: Partial<Record<string, readonly string[]>> = {
 **必须记录的取舍：** 这张表会成为第二份键位事实源。为把漂移风险压到最低，采取三条约束：
 
 - 表里只放 `DesktopShell` 现有分支与 `resolve_sidebar_shortcut_mode` 已经实现的键位，**不新增任何键位**。面板不发明快捷键。
-- `command_shortcuts` 与 `DesktopShell` 的键位分支必须在同一个 PR 内成对修改；`app/desktop/tests/command_palette_shortcut.test.ts` 对表做快照断言，键位被改动时测试失败，强制修改者回到 shell 里同步。
+- `command_shortcuts` 与 `DesktopShell` 的键位分支必须在同一个 PR 内成对修改；`private/apps/desktop/tests/command_palette_shortcut.test.ts` 对表做快照断言，键位被改动时测试失败，强制修改者回到 shell 里同步。
 - **P1 必须收敛**：引入 6.6 之外的快捷键目录（`features/shortcuts/`），让 `Settings > Shortcuts` 与命令面板从同一份数据读键位，并让 `DesktopShell` 的监听器按该目录派发。届时删除 `command_shortcuts`。这一项写入 15.2 的后续阶段，不允许无限期悬置。
 
 `Settings > Shortcuts` 的"打开命令面板 ⌘P"条目维持不变。
@@ -846,7 +846,7 @@ command_palette.disabled.session-list        还没有选择 Workspace
 
 ### 12.1 自动化测试
 
-新增 3 个文件，遵循 `app/desktop/tests/*.test.ts` + `node --test` 约定。它们必须只依赖纯模块，不 import 任何 `.tsx`。
+新增 3 个文件，遵循 `private/apps/desktop/tests/*.test.ts` + `node --test` 约定。它们必须只依赖纯模块，不 import 任何 `.tsx`。
 
 **`command_palette_registry.test.ts`**
 
@@ -896,9 +896,9 @@ command_palette.disabled.session-list        还没有选择 Workspace
 
 ### 12.3 回归
 
-- `pnpm -C app/desktop typecheck`（node + web 两份 tsconfig）。
-- `pnpm -C app/desktop test` 全量通过，含既有 39 个测试文件。
-- `pnpm -C app/desktop build`（macOS 生产构建）通过。
+- `pnpm -C private/apps/desktop typecheck`（node + web 两份 tsconfig）。
+- `pnpm -C private/apps/desktop test` 全量通过，含既有 39 个测试文件。
+- `pnpm -C private/apps/desktop build`（macOS 生产构建）通过。
 - 确认 `package.json` 依赖未变动（S10）。
 - 确认 `Settings > Shortcuts` 页面文案未回退（⌘P 仍然被文档化）。
 
@@ -1027,7 +1027,7 @@ Electron 默认菜单在 macOS 上未占用 `⌘P`，当前安全。但如果后
 ### 16.1 已落地的文件
 
 ```text
-app/desktop/src/renderer/features/command-palette/
+private/apps/desktop/src/renderer/features/command-palette/
   types.ts                命令类型 + 分组顺序 + 页面/文案 key 常量 + ShellCommandEnvironment
   registry.ts             CommandRegistry（严格模式冲突抛错 / 生产降级）+ command_registry 单体
   filter.ts               filter_and_rank / normalize_query
@@ -1038,7 +1038,7 @@ app/desktop/src/renderer/features/command-palette/
   CommandPalette.tsx      面板外壳：浮层、输入、键盘、分组渲染、页脚
   index.ts                只导出 CommandProviders 与 CommandPalette
 
-app/desktop/tests/
+private/apps/desktop/tests/
   command_palette_registry.test.ts   7 个用例
   command_palette_filter.test.ts     13 个用例
   command_palette_shortcut.test.ts   6 个用例
@@ -1090,14 +1090,14 @@ app/desktop/tests/
    - renderer 阶段输出 `✓ 5381 modules transformed`，**即包含本次新增的 8 个文件的整个模块图已成功解析并转译**；
    - 随后的 chunk 渲染（mermaid 等重依赖）触发容器 OOM kill。
 
-   **这是环境内存限制，不是代码问题。** 在任何与依赖安装平台一致、且内存充足的环境中执行 `pnpm -C app/desktop build` 即可完成该项验证。为确保验证结论不依赖该环境，另做了低内存的双向确认：
+   **这是环境内存限制，不是代码问题。** 在任何与依赖安装平台一致、且内存充足的环境中执行 `pnpm -C private/apps/desktop build` 即可完成该项验证。为确保验证结论不依赖该环境，另做了低内存的双向确认：
    - `tsc -p tsconfig.web.json --noEmit`（含 `@/` 与 `@common/` 路径别名）通过；
    - 以 esbuild 从 `DesktopShell.tsx` 入口做整图打包（含 `@/app/use_desktop`、`@/features/chat/lib/chat_cache_key`、`@/features/navigation/lib/sidebar_shortcut`、`@/features/plugin/lib/PluginIcon`、`@/locales/*` 等传递依赖），无解析错误、无循环依赖告警。
 3. **`settings.json` 的 `shortcuts.*` 文案未扩充。** 面板新增的命令（如“切换 Workspace…”）未进入 `Settings > Shortcuts` 的静态清单。该清单位于 `SettingsView.tsx`，仍是手写字符串；把它改为从命令注册表生成是 P1 收敛快捷键单一事实源（§15.2）的一部分。当前状态下 `Settings > Shortcuts` 与面板之间不存在事实冲突（前者只列出全局键位，后者展示同一批键位），但这条边界需要在 P1 一并处理。
 
 ### 16.5 下一步建议
 
-1. 在 darwin 环境执行 `pnpm -C app/desktop build` 与真机验收（§12.2）。
+1. 在 darwin 环境执行 `pnpm -C private/apps/desktop build` 与真机验收（§12.2）。
 2. 验收通过后按 §15.2 启动 P1：建立 `features/shortcuts/` 单一键位事实源，删除 `command_shortcuts` 映射表，并让 `Settings > Shortcuts` 从该目录读取。
 3. P1 同时设计 Plugin 命令贡献协议（需要先有宿主侧贡献点基础设施）。
 

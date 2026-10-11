@@ -11,7 +11,7 @@
 
 ## 一、包体预算
 
-测量方式：`pnpm build` 后统计 `app/desktop/out/renderer/assets/`。
+测量方式：`pnpm build` 后统计 `private/apps/desktop/out/renderer/assets/`。
 
 | 指标 | 基线（A1 前） | 当前（A1 + B + C1 后） | 变化 | 预算 |
 |---|---|---|---|---|
@@ -54,7 +54,7 @@ C1 把着色搬进 Worker 后，JS chunk 从 351 涨到 393、磁盘从 22 MB �
 复核命令：
 
 ```bash
-cd app/desktop/out/renderer/assets
+cd private/apps/desktop/out/renderer/assets
 for symbol in mermaidAPI registerDiagram addDiagrams getDiagramFromText; do
   printf '%-24s %s\n' "$symbol" "$(grep -o "$symbol" index-*.js | wc -l)"
 done

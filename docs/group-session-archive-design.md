@@ -2,7 +2,7 @@
 
 > 状态：**已实施**。能力落在 `packages/agent`（`GroupSessions.archive` / `archived` / `clean_archive` / `purge`），
 > 主进程与渲染层依次接上；守卫是 `packages/agent/scripts/group-session-archive.test.mjs`
-> 与 `app/desktop/tests/workspace_session_list.test.ts`。
+> 与 `private/apps/desktop/tests/workspace_session_list.test.ts`。
 >
 > 本文回答四个问题：**为什么现在没有**、**归档怎么做**、
 > **各层各改什么**、**哪些边界必须先定**。

@@ -70,7 +70,7 @@ Downcity 当前并不是缺少“人类交互暂停”或“memory 能力”：
 - `packages/implementations/plugins/src/memory/MemoryPlugin.ts`
 - `packages/implementations/plugins/src/memory/types/Memory.ts`
 - `packages/implementations/plugins/src/memory/runtime/Store.ts`
-- `homepage/content/plugins-docs/zh/builtins/memory.mdx`
+- `private/apps/homepage/content/plugins-docs/zh/builtins/memory.mdx`
 
 当前缺口不是“实现 memory”，而是：
 

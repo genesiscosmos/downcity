@@ -2,7 +2,7 @@
 
 > 状态：已实施（2026-09-08；自动化验证与生产构建通过，GUI 手动验收待产品确认）
 >
-> 目标范围：`app/desktop/src/renderer/features/chat/`
+> 目标范围：`private/apps/desktop/src/renderer/features/chat/`
 >
 > 后续演进范围：`packages/ui/` 的 Chat Message 公共组件
 >
@@ -664,7 +664,7 @@ Desktop 宿主能力通过最小 props 注入：
 ## 十二、目标文件结构
 
 ```text
-app/desktop/src/renderer/features/chat/
+private/apps/desktop/src/renderer/features/chat/
 ├─ components/
 │  ├─ SessionTimeline.tsx
 │  ├─ SessionMessageList.tsx
@@ -983,9 +983,9 @@ session_message_projection.test.ts
 
 ```bash
 pnpm --filter @downcity/desktop typecheck
-node --test app/desktop/tests/agent_message_projection.test.ts
-node --test app/desktop/tests/agent_tool_presentation.test.ts
-node --test app/desktop/tests/session_message_projection.test.ts
+node --test private/apps/desktop/tests/agent_message_projection.test.ts
+node --test private/apps/desktop/tests/agent_tool_presentation.test.ts
+node --test private/apps/desktop/tests/session_message_projection.test.ts
 pnpm --filter @downcity/desktop test
 ```
 
@@ -1044,7 +1044,7 @@ Interaction 必须以 canonical status 为事实源。本地答案和 submitting
 
 > 状态：已实施
 >
-> 范围：`app/desktop/src/renderer/features/chat/` 的 Tool 展示层与 `styles/chat.css` 活动区
+> 范围：`private/apps/desktop/src/renderer/features/chat/` 的 Tool 展示层与 `styles/chat.css` 活动区
 
 ### 21.1 触发原因
 
@@ -1090,7 +1090,7 @@ pnpm --filter @downcity/desktop test        # 285/285 通过
 
 > 状态：已实施
 >
-> 范围：`app/desktop/src/renderer/features/chat/` 的消息投影、活动展示与 `styles/chat.css` 活动区
+> 范围：`private/apps/desktop/src/renderer/features/chat/` 的消息投影、活动展示与 `styles/chat.css` 活动区
 
 ### 22.1 触发原因
 
@@ -1141,7 +1141,7 @@ pnpm --filter @downcity/desktop test        # 306/306 通过
 
 > 状态：已实施
 >
-> 范围：`app/desktop/src/renderer/components/markdown/`、`styles/mermaid.css`、`locales/*/markdown.json`
+> 范围：`private/apps/desktop/src/renderer/components/markdown/`、`styles/mermaid.css`、`locales/*/markdown.json`
 
 ### 23.1 触发原因
 
@@ -1179,7 +1179,7 @@ pnpm --filter @downcity/desktop test        # 309/309 通过
 
 > 状态：已实施（自动化守卫通过；GUI 目检待产品确认）
 >
-> 范围：`app/desktop/src/renderer/styles/markdown.css`、`app/desktop/tests/markdown_code_block.test.ts`
+> 范围：`private/apps/desktop/src/renderer/styles/markdown.css`、`private/apps/desktop/tests/markdown_code_block.test.ts`
 
 代码块不是自有组件，而是 Streamdown 渲染的 DOM（`[data-streamdown]`）加上一层覆写样式。原实现把这层覆写做成了「重排库的 DOM」：把元信息行绝对定位到右上角、藏掉语言标签、只留一个 hover 淡入的复制按钮。结果是两个可复现的错误：容器底色在浅色主题下只有 `rgb(251,251,251)`（背景 255），而 ocean / forest 这类主题的 `muted` 是饱和色，同一混色把整块染成蓝底或绿底；复制按钮 26px、代码区上内边距 11px，纵向必然压住首行，且代码区横向滚动时浮层会被长行穿过。
 
@@ -1347,8 +1347,8 @@ Markdown 内部按 em 派生的取值随之变化（两侧同基准 14px）：
 ### 24.6 验证
 
 ```bash
-cd app/desktop && node --test tests/*.test.ts   # 410/411；唯一失败为既有的 qq 渠道断言
-cd app/desktop && ./node_modules/.bin/tsc -p tsconfig.web.json --noEmit && ./node_modules/.bin/tsc -p tsconfig.node.json --noEmit   # 通过
+cd private/apps/desktop && node --test tests/*.test.ts   # 410/411；唯一失败为既有的 qq 渠道断言
+cd private/apps/desktop && ./node_modules/.bin/tsc -p tsconfig.web.json --noEmit && ./node_modules/.bin/tsc -p tsconfig.node.json --noEmit   # 通过
 ```
 
 - **`tailwind_merge_classes.test.ts`**：跑**真正的 `cn`**（而不是比对源码文本），验证四个真实
@@ -1377,7 +1377,7 @@ GUI 观感未经人工目测确认。本节的取值（字号 14px / 行高 1.8 
 
 > 状态：已实施
 >
-> 范围：`app/desktop/src/renderer/styles/markdown.css`、`styles/mermaid.css`、`tests/markdown_spacing.test.ts`、`tests/chat_message_layout.test.ts`
+> 范围：`private/apps/desktop/src/renderer/styles/markdown.css`、`styles/mermaid.css`、`tests/markdown_spacing.test.ts`、`tests/chat_message_layout.test.ts`
 
 ### 25.1 触发原因
 
@@ -1477,8 +1477,8 @@ GUI 观感未经人工目测确认。本节的取值（字号 14px / 行高 1.8 
 ### 25.6 验证
 
 ```bash
-cd app/desktop && node --test tests/*.test.ts        # 500/500
-cd app/desktop && npx tsc -p tsconfig.web.json --noEmit && npx tsc -p tsconfig.node.json --noEmit
+cd private/apps/desktop && node --test tests/*.test.ts        # 500/500
+cd private/apps/desktop && npx tsc -p tsconfig.web.json --noEmit && npx tsc -p tsconfig.node.json --noEmit
 ```
 
 **本环境不能验证的事**：GUI 观感未经人工目测。取值是按「原意图的最低值 + 2px 可感知下限」
@@ -1606,7 +1606,7 @@ cd app/desktop && npx tsc -p tsconfig.web.json --noEmit && npx tsc -p tsconfig.n
 
 ```bash
 pnpm --filter @downcity/desktop typecheck
-cd app/desktop && node --test tests/agent_message_projection.test.ts tests/agent_activity_presentation.test.ts tests/chat_message_layout.test.ts
+cd private/apps/desktop && node --test tests/agent_message_projection.test.ts tests/agent_activity_presentation.test.ts tests/chat_message_layout.test.ts
 ```
 
 `agent_message_projection.test.ts` 重写为覆盖：过程/内容切分、无活动时过程为空、

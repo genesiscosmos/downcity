@@ -108,16 +108,6 @@ const HELP_ITEMS = [
     detail: "用于单独开发 UI SDK，不会自动启动 homepage 或 console。",
   },
   {
-    name: "dev:homepage",
-    summary: "启动 homepage 开发模式。",
-    detail: "等价于 `homepage`，都会执行 `pnpm -C homepage dev`。",
-  },
-  {
-    name: "homepage",
-    summary: "启动 homepage 开发模式。",
-    detail: "保留一个更短的命令入口，便于日常使用。",
-  },
-  {
     name: "release:test",
     summary: "验证 package graph、版本、workspace 改写和发布器不变量。",
     detail: "该命令也是 Release Integrity CI 的统一入口，不会执行实际发布。",
@@ -128,12 +118,7 @@ const HELP_ITEMS = [
     detail:
       "从仓库 .env 读取 NPM_TOKEN，支持全部或指定 package，按独立版本执行 patch build、tarball 审计、pnpm 拓扑发布与 Registry 校验；不会自动 commit 或 push。",
   },
-  {
-    name: "homepage:deploy",
-    summary: "在本地构建并部署 homepage 到 Cloudflare Pages。",
-    detail:
-      "首次使用前执行 `pnpm dlx wrangler@4.95.0 login`，默认部署到 downcity Pages 项目。",
-  },
+
 ];
 
 const nameWidth = Math.max(...HELP_ITEMS.map((item) => item.name.length));

@@ -705,10 +705,10 @@ tools.plugin_call = tools.plugin_call || plugin_tools.plugin_call;
 
 因为这是 SDK 用户可见行为变化，需要更新 homepage 中的用户文档：
 
-- `homepage/content/agent-sdk-docs/zh/local-agent/quickstart.mdx`
-- `homepage/content/agent-sdk-docs/zh/local-agent/tools-and-plugins.mdx`
-- `homepage/content/agent-sdk-docs/zh/plugins/plugin-call-surfaces.mdx`
-- `homepage/content/agent-sdk-docs/zh/plugins/plugin-availability.mdx`
+- `private/apps/homepage/content/agent-sdk-docs/zh/local-agent/quickstart.mdx`
+- `private/apps/homepage/content/agent-sdk-docs/zh/local-agent/tools-and-plugins.mdx`
+- `private/apps/homepage/content/agent-sdk-docs/zh/plugins/plugin-call-surfaces.mdx`
+- `private/apps/homepage/content/agent-sdk-docs/zh/plugins/plugin-availability.mdx`
 - 英文对应文档
 
 ## 14. 对外行为变化

@@ -45,7 +45,7 @@
 
 ### 2.3 所有权与单一事实源
 
-- Desktop 发布版本的唯一事实源是 `app/desktop/package.json` 的 `version`。
+- Desktop 发布版本的唯一事实源是 `private/apps/desktop/package.json` 的 `version`。
 - 某个版本的产物一旦写入 `releases/packages/macos/<version>/`，即视为不可变。
 - 最新稳定版的唯一事实源是 R2 中的 `releases/manifests/macos-latest.json`。
 - Homepage 不内置“最新版本号”，只通过 latest manifest 投影；manifest 不可用时隐藏动态版本信息，但下载入口仍返回明确错误，不静默指向旧文件。
@@ -55,8 +55,8 @@
 
 ### 3.1 Downcity 已具备的基础
 
-- `app/desktop` 已使用 Electron 40、electron-vite 与 electron-builder。
-- `app/desktop/electron-builder.yml` 已声明 macOS 的 DMG/ZIP target，以及 Windows NSIS、Linux AppImage target。
+- `private/apps/desktop` 已使用 Electron 40、electron-vite 与 electron-builder。
+- `private/apps/desktop/electron-builder.yml` 已声明 macOS 的 DMG/ZIP target，以及 Windows NSIS、Linux AppImage target。
 - Desktop 已有 macOS/Windows/Linux 图标资源。
 - 根脚本已有 `build:desktop`，可先构建 City 与 Desktop。
 - Homepage 已部署到 Cloudflare Pages，已有独立部署脚本。
@@ -69,7 +69,7 @@
 3. 没有“从已公证 `.app` 封装 DMG/ZIP”的分阶段流程，失败后只能从头重来。
 4. 没有稳定的 artifact 命名、SHA-256、文件大小和 latest manifest 协议。
 5. 没有大文件分片上传、断点续传、重试、远端同内容跳过和上传状态清理。
-6. 没有 R2 release bucket 的仓库级 binding 配置。当前 `homepage/wrangler.toml` 被 `.gitignore` 排除，不能作为团队可复现配置。
+6. 没有 R2 release bucket 的仓库级 binding 配置。当前 `private/apps/homepage/wrangler.toml` 被 `.gitignore` 排除，不能作为团队可复现配置。
 7. Homepage 没有 `/download/macos`、`/download/macos/latest.json` 与版本文件读取路由。
 8. Homepage 没有 Desktop 下载 CTA；现有入口主要面向 npm CLI 与 SDK 文档。
 9. Desktop 未配置 updater feed，也未依赖 `electron-updater`。这不阻塞下载安装，但当前不能承诺 App 内自动更新。
@@ -99,7 +99,7 @@
 以版本 `0.1.1` 为例：
 
 ```text
-app/desktop/dist/
+private/apps/desktop/dist/
   mac-arm64/Downcity.app
   downcity-0.1.1.dmg
   downcity-0.1.1.dmg.blockmap
@@ -241,33 +241,33 @@ DOWNCITY_RELEASE_R2_BUCKET    # 默认 downcity
 
 修改：
 
-- `app/desktop/package.json`
+- `private/apps/desktop/package.json`
   - 增加 release 分阶段命令。
   - 保留当前开发 `build` 与 `build:unpack` 语义。
-- `app/desktop/electron-builder.yml`
+- `private/apps/desktop/electron-builder.yml`
   - 增加稳定 artifact name：`downcity-${version}.${ext}`。
   - macOS release 限定 arm64、开启 hardened runtime、配置 Developer ID identity。
   - 加入 entitlements 和 `notarize: false`，公证由独立脚本拥有。
   - 加入 generic publish URL `https://downcity.ai/download/macos`，使 electron-builder 生成 updater metadata。
   - 保留 Windows/Linux 声明，但本次不新增它们的发布入口。
-- 新增 `app/desktop/electron-builder.mac.yml`
+- 新增 `private/apps/desktop/electron-builder.mac.yml`
   - 只承载 macOS 平台依赖裁剪，避免平台二进制进入 arm64 安装包。
-- 新增 `app/desktop/resources/entitlements.mac.plist`
+- 新增 `private/apps/desktop/resources/entitlements.mac.plist`
   - 仅声明 Electron/原生模块实际需要的权限；实现前通过签名与运行测试确认最小集合。
-- 新增 `app/desktop/scripts/build-mac-app.mjs`
+- 新增 `private/apps/desktop/scripts/build-mac-app.mjs`
   - 清理 stale `dist/mac-arm64`、构建 icon、执行生产构建、签名、验证运行时文件。
 
 ### 6.2 根发布脚本
 
 新增：
 
-- `scripts/desktop-release-version.sh`
-- `scripts/build-desktop-mac-release.sh`
-- `scripts/notarize-desktop-mac-app.sh`
-- `scripts/package-desktop-mac-release.sh`
-- `scripts/publish-desktop-release.sh`
-- `scripts/publish-desktop-release-to-r2.sh`
-- `scripts/r2-multipart-upload.mjs`
+- `private/scripts/desktop-release-version.sh`
+- `private/scripts/build-desktop-mac-release.sh`
+- `private/scripts/notarize-desktop-mac-app.sh`
+- `private/scripts/package-desktop-mac-release.sh`
+- `private/scripts/publish-desktop-release.sh`
+- `private/scripts/publish-desktop-release-to-r2.sh`
+- `private/scripts/r2-multipart-upload.mjs`
 
 修改根 `package.json`，仅增加上述脚本入口和 `@aws-sdk/client-s3` 开发依赖。R2 上传器属于仓库发布基础设施，不进入任何 SDK/CLI/Desktop runtime package。
 
@@ -275,20 +275,20 @@ DOWNCITY_RELEASE_R2_BUCKET    # 默认 downcity
 
 新增 Pages Functions：
 
-- `homepage/functions/download/macos.js`
+- `private/apps/homepage/functions/download/macos.js`
   - 读取 latest manifest，并 302 到版本化 DMG 路由。
-- `homepage/functions/download/macos/latest.json.js`
+- `private/apps/homepage/functions/download/macos/latest.json.js`
   - 返回 latest manifest，支持 GET/HEAD、ETag 与短缓存。
-- `homepage/functions/download/macos/[version]/[filename].js`
+- `private/apps/homepage/functions/download/macos/[version]/[filename].js`
   - 严格校验 semver 与 Downcity artifact 文件名，从 R2 流式返回版本文件。
-- `homepage/functions/download/macos/latest-mac.yml.js`
+- `private/apps/homepage/functions/download/macos/latest-mac.yml.js`
   - 读取版本化 updater metadata，并把相对 artifact URL 改写到版本路由。
 
 Pages 配置：
 
 - 将 Homepage Wrangler 配置纳入版本管理，声明 `RELEASES -> downcity` R2 binding。
 - 调整 `.gitignore`，只对白名单配置解除忽略，不放开所有本地 Wrangler 文件。
-- 更新 `scripts/deploy-homepage.sh`，确保从 `homepage` 配置上下文部署 Pages Functions，而不只上传静态 `build/client`。
+- 更新 `private/scripts/deploy-homepage.sh`，确保从 `homepage` 配置上下文部署 Pages Functions，而不只上传静态 `build/client`。
 
 ### 6.4 Homepage 用户入口
 
@@ -308,7 +308,7 @@ Windows/Linux tab 只展示 CLI，不展示尚未正式发布的 Desktop 安装�
 - 缺少签名 identity、notary profile、Xcode tools 或 R2 凭据时在有副作用前失败。
 - 未公证或 stapler validate 失败的 `.app` 不允许封装、上传。
 - 任一 required artifact 缺失时拒绝上传。
-- manifest 的版本必须等于 `app/desktop/package.json` 版本。
+- manifest 的版本必须等于 `private/apps/desktop/package.json` 版本。
 - 同一版本 key 已存在且 SHA-256 不同视为不可变性冲突，禁止覆盖。
 - multipart 失败保留不含凭据的本地续传状态；成功后原子删除状态文件。
 - 新 manifest 提交失败不影响旧版本下载。
@@ -392,4 +392,4 @@ Desktop private app 版本由 release build 递增；本次没有 npm package �
 6. 首期生成 updater-compatible 资产，但不实现应用内自动更新。
 7. 不包含下载统计。
 
-确认本设计后再开始修改代码。实施时将避开工作区中现有的 Session、Agent、Desktop UI 等未提交改动，只修改本设计列出的 release、Homepage 下载入口与必要构建配置文件；若 `app/desktop/package.json` 的并行改动尚未收口，会先基于当前内容做最小合并，不覆盖已有变更。
+确认本设计后再开始修改代码。实施时将避开工作区中现有的 Session、Agent、Desktop UI 等未提交改动，只修改本设计列出的 release、Homepage 下载入口与必要构建配置文件；若 `private/apps/desktop/package.json` 的并行改动尚未收口，会先基于当前内容做最小合并，不覆盖已有变更。

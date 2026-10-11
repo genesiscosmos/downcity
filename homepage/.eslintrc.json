@@ -1,9 +1,0 @@
-{
-  "root": true,
-  "extends": ["next/core-web-vitals"],
-  "parserOptions": {
-    "ecmaVersion": 2020
-  },
-  "ignorePatterns": ["node_modules/", ".next/", "out/"]
-}
-

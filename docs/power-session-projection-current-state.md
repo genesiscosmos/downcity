@@ -196,9 +196,9 @@ sequenceDiagram
 
 | 宿主 | 位置 | 方式 |
 | --- | --- | --- |
-| Desktop | `app/desktop/src/main/agent/AgentController.ts` | `new City({ embassy, storage, power_host })`，之后 `list_registrations()` + `initialize_desktop_powers()` 逐个 `powers.add` |
-| CLI daemon | `app/cli/src/city/agent/CliCityRuntime.ts` | `new City({ ..., powers: await list_registrations() })` |
-| CLI 单机 | `app/cli/src/city/agent/AgentChatRemote.ts` | 同上 |
+| Desktop | `private/apps/desktop/src/main/agent/AgentController.ts` | `new City({ embassy, storage, power_host })`，之后 `list_registrations()` + `initialize_desktop_powers()` 逐个 `powers.add` |
+| CLI daemon | `packages/cli/src/city/agent/CliCityRuntime.ts` | `new City({ ..., powers: await list_registrations() })` |
+| CLI 单机 | `packages/cli/src/city/agent/AgentChatRemote.ts` | 同上 |
 
 `initialize_desktop_powers` 用 `Promise.allSettled` 并发 `powers.add`，逐条记录失败后继续。Desktop 的 `ready_promise` 覆盖它，`index.ts` 在 `await ready()` 之后才 `create_window()`；启动链抛错则 `app.quit()`。
 

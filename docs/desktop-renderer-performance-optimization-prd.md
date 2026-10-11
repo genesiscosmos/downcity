@@ -2,7 +2,7 @@
 
 > 状态：**全部阶段已实施（A1 / B / C1 / D1 已落地；C2 实施后已移除；A2 完成评估）**
 > 目标版本：`@downcity/desktop` 0.1.0（Electron 40.10.6 / React 19.2.6 / Vite 7.1.6）
-> 关联代码：`app/desktop/`
+> 关联代码：`private/apps/desktop/`
 > 实测基线：2026-09-21，渲染进程 RSS 约 1.8 GB，主进程约 538 MB，应用合计约 2.4 GB
 > 修订：2026-09-21 二次评审。对 `out/renderer/assets` 产物与相关源码逐条复核后，修正了三处事实错误（P1 根因、P4 判断、`optimizeDeps` 作用范围）与一处内存归因偏差。修正依据见 4.6，变更明细见 11。
 > 实施：2026-09-21。已完成阶段 A1、B、C1、C2、D1，A2 完成评估；包体基线与预算见 `docs/desktop-performance-budget.md`。
@@ -75,7 +75,7 @@ Desktop 处于 0.1.0 快速迭代期，功能面在扩大（Agent / Group / Work
 ### 2.2 现状代码结构（与本次相关的部分）
 
 ```text
-app/desktop/src/renderer/
+private/apps/desktop/src/renderer/
   main.tsx                                  入口（StrictMode + MotionConfig）
   app/DesktopShell.tsx                      壳层：侧栏 + BayBar + 命令面板
   app/use_desktop.ts                        会话加载、快照与历史翻页编排
@@ -141,7 +141,7 @@ app/desktop/src/renderer/
 
 ### 4.1 P1：主 bundle 静态内含重库
 
-**实测产物（`app/desktop/out/renderer/assets/`）：**
+**实测产物（`private/apps/desktop/out/renderer/assets/`）：**
 
 | 产物 | 大小 | 说明 |
 |---|---|---|
@@ -209,10 +209,10 @@ app/desktop/src/renderer/
 
 ```bash
 # 1. 产物体积与分块数量
-cd app/desktop && du -sh out/renderer/assets && ls out/renderer/assets/*.js | wc -l
+cd private/apps/desktop && du -sh out/renderer/assets && ls out/renderer/assets/*.js | wc -l
 
 # 2. 主包是否内含 mermaid 核心
-cd app/desktop/out/renderer/assets
+cd private/apps/desktop/out/renderer/assets
 grep -c 'mermaidAPI\|registerDiagram\|addDiagrams' index-*.js
 
 # 3. 全语言 chunk 的来源分块
@@ -399,7 +399,7 @@ function get_mermaid() {
 
 #### 5.5.3 单元测试
 
-**新增：** `app/desktop/tests/chat_virtual_list.test.ts`（若采用 5.2 的窗口化路径）、`app/desktop/tests/mermaid_dynamic_import.test.ts`
+**新增：** `private/apps/desktop/tests/chat_virtual_list.test.ts`（若采用 5.2 的窗口化路径）、`private/apps/desktop/tests/mermaid_dynamic_import.test.ts`
 
 - 窗口化：行高估算与回写、可视窗口计算、滚动恢复、历史前插后行定位、卸载后重建一致性；
 - mermaid 动态导入：渲染队列仍串行、id 稳定、主题切换后重渲染正确。
@@ -496,45 +496,45 @@ function get_mermaid() {
 
 | 文件 | 作用 | 本轮动作 |
 |---|---|---|
-| `app/desktop/src/renderer/components/markdown/mermaid/render_mermaid.ts` | mermaid 渲染管线 | **静态导入改动态（A1）** |
-| `app/desktop/src/renderer/components/markdown/mermaid/MermaidDiagram.tsx` | 图表懒渲染组件 | 无渲染上限（C2 已移除） |
-| `app/desktop/src/renderer/lib/workspace/workspace_code_highlighter.ts` | shiki 高亮（主线程，40 语言） | 迁移 Worker（C1）；**语言清单不改** |
-| `app/desktop/src/renderer/features/chat/components/SessionMessageList.tsx` | 消息分段投影与渐进挂载 | 长会话回收（B2） |
-| `app/desktop/src/renderer/features/chat/components/ChatMessageViewportRow.tsx` | 消息行容器 | 随 B 调整 |
-| `app/desktop/src/renderer/features/chat/lib/use_chat_scroll.ts` | 滚动跟随与历史前插恢复 | 随 B 调整（锚定策略） |
-| `app/desktop/src/renderer/features/chat/lib/chat_render_cache.ts` | 会话级渲染缓存 LRU（保留 8 个） | 参考，不改 |
-| `app/desktop/src/main/agent/AgentController.ts` | Main 进程控制器 | 投影 Map 加 LRU（D1） |
-| `app/desktop/src/common/types/DesktopApi.ts` | IPC 类型 | **不改**（分页字段已在位） |
-| `app/desktop/electron.vite.config.ts` | 构建配置 | **不改**（`optimizeDeps` 保留） |
+| `private/apps/desktop/src/renderer/components/markdown/mermaid/render_mermaid.ts` | mermaid 渲染管线 | **静态导入改动态（A1）** |
+| `private/apps/desktop/src/renderer/components/markdown/mermaid/MermaidDiagram.tsx` | 图表懒渲染组件 | 无渲染上限（C2 已移除） |
+| `private/apps/desktop/src/renderer/lib/workspace/workspace_code_highlighter.ts` | shiki 高亮（主线程，40 语言） | 迁移 Worker（C1）；**语言清单不改** |
+| `private/apps/desktop/src/renderer/features/chat/components/SessionMessageList.tsx` | 消息分段投影与渐进挂载 | 长会话回收（B2） |
+| `private/apps/desktop/src/renderer/features/chat/components/ChatMessageViewportRow.tsx` | 消息行容器 | 随 B 调整 |
+| `private/apps/desktop/src/renderer/features/chat/lib/use_chat_scroll.ts` | 滚动跟随与历史前插恢复 | 随 B 调整（锚定策略） |
+| `private/apps/desktop/src/renderer/features/chat/lib/chat_render_cache.ts` | 会话级渲染缓存 LRU（保留 8 个） | 参考，不改 |
+| `private/apps/desktop/src/main/agent/AgentController.ts` | Main 进程控制器 | 投影 Map 加 LRU（D1） |
+| `private/apps/desktop/src/common/types/DesktopApi.ts` | IPC 类型 | **不改**（分页字段已在位） |
+| `private/apps/desktop/electron.vite.config.ts` | 构建配置 | **不改**（`optimizeDeps` 保留） |
 | `packages/agent/src/session/messages/SessionMessages.ts` | 消息分页实现 | **不改**（默认 50 / 上限 200） |
 
 ### 9.3 变更文件清单
 
 **新增：**
 
-- `app/desktop/src/renderer/lib/workspace/highlight.worker.ts`
-- `app/desktop/tests/chat_virtual_list.test.ts`（若采用窗口化路径）
-- `app/desktop/tests/mermaid_dynamic_import.test.ts`
+- `private/apps/desktop/src/renderer/lib/workspace/highlight.worker.ts`
+- `private/apps/desktop/tests/chat_virtual_list.test.ts`（若采用窗口化路径）
+- `private/apps/desktop/tests/mermaid_dynamic_import.test.ts`
 - `docs/desktop-performance-budget.md`
 
 **修改：**
 
-- `app/desktop/src/renderer/components/markdown/mermaid/render_mermaid.ts`
-- `app/desktop/src/renderer/components/markdown/mermaid/MermaidDiagram.tsx`
-- `app/desktop/src/renderer/lib/workspace/workspace_code_highlighter.ts`
-- `app/desktop/src/renderer/features/chat/components/SessionMessageList.tsx`
-- `app/desktop/src/renderer/features/chat/components/ChatMessageViewportRow.tsx`
-- `app/desktop/src/renderer/features/chat/lib/use_chat_scroll.ts`
-- `app/desktop/src/main/agent/AgentController.ts`
+- `private/apps/desktop/src/renderer/components/markdown/mermaid/render_mermaid.ts`
+- `private/apps/desktop/src/renderer/components/markdown/mermaid/MermaidDiagram.tsx`
+- `private/apps/desktop/src/renderer/lib/workspace/workspace_code_highlighter.ts`
+- `private/apps/desktop/src/renderer/features/chat/components/SessionMessageList.tsx`
+- `private/apps/desktop/src/renderer/features/chat/components/ChatMessageViewportRow.tsx`
+- `private/apps/desktop/src/renderer/features/chat/lib/use_chat_scroll.ts`
+- `private/apps/desktop/src/main/agent/AgentController.ts`
 
 **不再改动（原文档列为修改项）：**
 
-- `app/desktop/electron.vite.config.ts` — `optimizeDeps` 保留；无 `manualChunks` 需求
-- `app/desktop/src/common/types/DesktopApi.ts` — 分页字段已在位
-- `app/desktop/src/renderer/features/chat/state/use_chat_lifecycle.ts` — 无分页改动需求
-- `app/desktop/src/renderer/features/chat/lib/chat_virtual_list.ts` — 选型确定前不新建
-- `app/desktop/src/renderer/features/chat/components/ChatVirtualList.tsx` — 同上
-- `app/desktop/tests/chat_snapshot_paging.test.ts` — 分页已实现，无需新增
+- `private/apps/desktop/electron.vite.config.ts` — `optimizeDeps` 保留；无 `manualChunks` 需求
+- `private/apps/desktop/src/common/types/DesktopApi.ts` — 分页字段已在位
+- `private/apps/desktop/src/renderer/features/chat/state/use_chat_lifecycle.ts` — 无分页改动需求
+- `private/apps/desktop/src/renderer/features/chat/lib/chat_virtual_list.ts` — 选型确定前不新建
+- `private/apps/desktop/src/renderer/features/chat/components/ChatVirtualList.tsx` — 同上
+- `private/apps/desktop/tests/chat_snapshot_paging.test.ts` — 分页已实现，无需新增
 
 ---
 
@@ -551,7 +551,7 @@ function get_mermaid() {
 
 ## 十一、修订记录
 
-本次修订基于对 `app/desktop/out/renderer/assets` 产物与相关源码的逐条复核，修正以下内容：
+本次修订基于对 `private/apps/desktop/out/renderer/assets` 产物与相关源码的逐条复核，修正以下内容：
 
 | 原文档 | 问题 | 修订 |
 |---|---|---|

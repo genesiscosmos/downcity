@@ -2,7 +2,7 @@
 
 > 状态：P0 全部完成；P1-1 / P1-2 完成，并已按奥卡姆剃刀收敛掉隐式兜底与自动恢复；P1-4 / P1-5 待做
 >
-> 适用范围：`@downcity/federation`、`@downcity/plugins`、`templates/edgefed`、`templates/localfed`、`app/cli` 的 Federation 模板生成器、homepage 文档
+> 适用范围：`@downcity/federation`、`@downcity/plugins`、`templates/edgefed`、`templates/localfed`、`packages/cli` 的 Federation 模板生成器、homepage 文档
 >
 > 关联输入：`image-generation-federation-queue-prd.md`、`telegram-document-attachment-failure-prd.md`
 >
@@ -174,7 +174,7 @@ Telegram 收到没有 `document` 字段的纯文本请求，返回 `400 Bad Requ
 
 | 位置 | 约定 |
 | --- | --- |
-| `CloudflareWorkersTemplate`（`app/cli` 生成器） | 显式 `queue.use` + `queue()` consumer，失败重投由消费者负责 |
+| `CloudflareWorkersTemplate`（`packages/cli` 生成器） | 显式 `queue.use` + `queue()` consumer，失败重投由消费者负责 |
 | `templates/localfed` | 未注册 adapter：异步能力返回 `503 + code`，不静默降级 |
 | `templates/edgefed` | 同上；`health().queue` 为 `false`，部署期即可发现 |
 | homepage | 写明「图像生成依赖异步调度能力；需在部署侧注册队列 adapter」 |
@@ -286,8 +286,8 @@ npm undici 只导出 `FormData`，**不导出 `Blob` / `File`**（`typeof u.File
 | `packages/implementations/plugins/src/chat/types/ChatReliability.ts` | 新增 `ChatDeliveryAcceptance` 类型 | 不变 |
 | `packages/implementations/plugins/src/chat/runtime/ChatAgentActions.ts` | 返回体增加 `status`；新增 `chat.delivery`（P1-5） | 不变 |
 | `packages/implementations/plugins/src/chat/runtime/ChatRuntime.ts` | 两个 Agent 发送入口改为返回受理回执 | 不变 |
-| `templates/*`、`app/cli/.../CloudflareWorkersTemplate.ts` | 调度能力装配与启动期校验 | 部署层 → SDK，方向不变 |
-| `homepage/content/**` | 能力与部署文档 | 不变 |
+| `templates/*`、`packages/cli/.../CloudflareWorkersTemplate.ts` | 调度能力装配与启动期校验 | 部署层 → SDK，方向不变 |
+| `private/apps/homepage/content/**` | 能力与部署文档 | 不变 |
 
 ---
 

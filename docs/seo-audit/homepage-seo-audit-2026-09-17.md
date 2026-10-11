@@ -1,7 +1,7 @@
 # Downcity Homepage SEO 现状审计与优化方案
 
 > 审计日期：2026-09-17（Asia/Shanghai）
-> 审计方式：源码审查 + 本地构建产物（`homepage/build/client`，2026-09-10 构建）实测 + 项目自带 `test:seo` 回归测试（8/8 通过）
+> 审计方式：源码审查 + 本地构建产物（`private/apps/homepage/build/client`，2026-09-10 构建）实测 + 项目自带 `test:seo` 回归测试（8/8 通过）
 > 站点：https://downcity.ai （React Router 7 SSR + Cloudflare Pages 预渲染，中英双语，508 个 MDX 文档页）
 
 ---
@@ -36,7 +36,7 @@
 > 渲染 meta 描述符，属性键会直接进入 React，因此在开发期持续打印
 > `Invalid DOM property hreflang` 告警。
 >
-> **最终采用的做法**：`app/lib/seo.ts` 改用 React 接受的驼峰 `hrefLang`，产物由
+> **最终采用的做法**：`private/apps/homepage/app/lib/seo.ts` 改用 React 接受的驼峰 `hrefLang`，产物由
 > 浏览器按小写解析，语义不变；`seo-ready.test.mjs` 不再断言属性名拼写，改为断言
 > hreflang 注解存在（含 `x-default`），因为真正的回归风险是注解缺失而非大小写。
 > 下方原文保留为当时记录。
@@ -45,7 +45,7 @@
 
 **问题诊断**
 
-`app/lib/seo.ts` 中使用了 JSX 风格驼峰写法：
+`private/apps/homepage/app/lib/seo.ts` 中使用了 JSX 风格驼峰写法：
 
 ```ts
 { tagName: "link", rel: "alternate", hrefLang: "en", href: english_url }
@@ -63,7 +63,7 @@ React Router 的 `meta` 返回的 `hrefLang` 被原样序列化进 HTML，导致
 
 **优化方案**
 
-1. `app/lib/seo.ts`：把 `hrefLang` 改为小写 `hreflang`（若 React Router 拒绝，改用 `{ tagName: "link", rel: "alternate", hreflang: ... }` 不可行时，在 `Layout` 的 `links` 函数或手写 head 标签输出）。
+1. `private/apps/homepage/app/lib/seo.ts`：把 `hrefLang` 改为小写 `hreflang`（若 React Router 拒绝，改用 `{ tagName: "link", rel: "alternate", hreflang: ... }` 不可行时，在 `Layout` 的 `links` 函数或手写 head 标签输出）。
 2. 同步修正 `scripts/seo-ready.test.mjs`：将断言从 `html.includes(href=...)` 改为 `/hreflang="en"/i` 且排除 `hrefLang`（正则上强制小写）。
 3. 全站 HTML 页面统一复验：`grep -r 'hrefLang=' build/client --include='*.html'` 必须为 0 条。
 
@@ -133,7 +133,7 @@ hreflang 信号与 sitemap 完全一致，双语收录映射关系稳定。
 
 **问题诊断**
 
-`homepage/llm.txt` 源文件内容只有 `# DOWNCITY` 一个标题行，且构建产物中没有输出。GPTBot、PerplexityBot、ClaudeBot 等爬虫日益重要，对开发者工具类站点，被 AI 引用能带来高质量技术受众。
+`private/apps/homepage/llm.txt` 源文件内容只有 `# DOWNCITY` 一个标题行，且构建产物中没有输出。GPTBot、PerplexityBot、ClaudeBot 等爬虫日益重要，对开发者工具类站点，被 AI 引用能带来高质量技术受众。
 
 **优化方案**
 
@@ -237,7 +237,7 @@ FAQ 页有机会获得富结果展示；文档页搜索结果展示面包屑路�
 
 ## 五、最关键的 3 个行动项
 
-1. **修复 `app/lib/seo.ts` 中 `hrefLang` → `hreflang`，并同步加固 `seo-ready.test.mjs` 的断言**（当前全站页面级 hreflang 实际失效，这是唯一的真 bug，工作量 30 分钟）。
+1. **修复 `private/apps/homepage/app/lib/seo.ts` 中 `hrefLang` → `hreflang`，并同步加固 `seo-ready.test.mjs` 的断言**（当前全站页面级 hreflang 实际失效，这是唯一的真 bug，工作量 30 分钟）。
 2. **给 `/zh/` 首页写差异化的中文 title**（当前与英文完全相同，中文搜索无竞争力，工作量 15 分钟）。
 3. **接入 Google Search Console 并提交 sitemap**（后续一切数据驱动优化的前提，工作量 30 分钟）。
 
@@ -250,8 +250,8 @@ FAQ 页有机会获得富结果展示；文档页搜索结果展示面包屑路�
 
 | # | 文件 | 修改 | 产物验证结果 |
 |---|---|---|---|
-| 1 | `app/lib/seo.ts` | `hrefLang` → 小写 `hreflang`（附成因注释）；默认 `og:image` 改 `/og-image.png`；`twitter:card` 默认改 `summary_large_image` | 全站 550+ 页 HTML 输出 `<link rel="alternate" hreflang="en\|zh-CN\|x-default">`，驼峰残留 0 条；og:image 1200×630 |
-| 2 | `app/lib/homepage-positioning.ts` | zh `meta_title` 差异化为 `Downcity — 开源 Agent Harness 与 Agent 产品化 Kit` | `zh/index.html` title 含中文品类词，与英文 title 不再重复 |
+| 1 | `private/apps/homepage/app/lib/seo.ts` | `hrefLang` → 小写 `hreflang`（附成因注释）；默认 `og:image` 改 `/og-image.png`；`twitter:card` 默认改 `summary_large_image` | 全站 550+ 页 HTML 输出 `<link rel="alternate" hreflang="en\|zh-CN\|x-default">`，驼峰残留 0 条；og:image 1200×630 |
+| 2 | `private/apps/homepage/app/lib/homepage-positioning.ts` | zh `meta_title` 差异化为 `Downcity — 开源 Agent Harness 与 Agent 产品化 Kit` | `zh/index.html` title 含中文品类词，与英文 title 不再重复 |
 | 3 | `scripts/seo-ready.test.mjs` | ① canonical/hreflang 断言改用精确正则 + 强制小写属性名；② 新增 8 个营销页的驼峰 `hrefLang` 反向扫描；③ 新增「中英文首页 title 差异化」测试；④ 新增「默认分享图用横图」测试；测试数 8 → 10 | 旧产物会红、新产物全绿，回归已堵住 |
 
 验证命令（本机可复现）：`cd homepage && pnpm build && pnpm test:seo`
@@ -284,7 +284,7 @@ FAQ 页有机会获得富结果展示；文档页搜索结果展示面包屑路�
 
 | 文件 | 说明 |
 |---|---|
-| `app/lib/doc-breadcrumb.ts`（新增） | 从 Fumadocs 页面树构建面包屑：优先采信树内可见名称，缺失时回退 slug 兜底名；集合根层名称用固定映射表（Docs/文档、City SDK、Payments 等），与导航一致 |
+| `private/apps/homepage/app/lib/doc-breadcrumb.ts`（新增） | 从 Fumadocs 页面树构建面包屑：优先采信树内可见名称，缺失时回退 slug 兜底名；集合根层名称用固定映射表（Docs/文档、City SDK、Payments 等），与导航一致 |
 | 6 个 `*/page.tsx` | 面包屑在 **loader 内**序列化为最终 JSON 字符串后返回——页面树不进入 loader 返回值，避免被 React Router 序列化进每个文档页的客户端载荷（实测该方案曾使页面从 81.8KB 膨胀到 87.5KB；现控制在 82.7KB） |
 | 新增测试 | 4 个代表性页面面包屑 ≥2 层、position 连续、URL 规范、最后一层等于页面 canonical；集合根页恰好单层指向自身，全站禁止空 `itemListElement` |
 

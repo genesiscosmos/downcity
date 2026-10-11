@@ -1,4 +1,0 @@
-{
-  "loading": "Loading Power…", "missing_config": "This Power does not provide configuration.", "missing_slot": "This Power does not provide {{slot}}.", "missing_surface": "This Power does not provide a UI.", "cancel": "Cancel", "confirm": "Confirm",
-  "tree": { "expand": "Expand", "collapse": "Collapse" }
-}

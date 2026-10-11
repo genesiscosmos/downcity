@@ -92,6 +92,10 @@ export class RemoteAgent {
  */
 class RemoteAgentSessions implements AgentSessions<RemoteAgentSession> {
   private readonly transport: RemoteAgentTransport;
+  /** 当前客户端注册的新会话监听器；只响应经由本实例创建的会话。 */
+  private readonly creation_listeners = new Set<
+    (session: RemoteAgentSession) => void | Promise<void>
+  >();
 
   constructor(transport: RemoteAgentTransport) {
     this.transport = transport;
@@ -100,7 +104,22 @@ class RemoteAgentSessions implements AgentSessions<RemoteAgentSession> {
   /** 新建一个远程 session。 */
   async create(input?: AgentCreateSessionInput): Promise<RemoteAgentSession> {
     const info = await this.transport.create_session(input);
-    return new RemoteSession(this.transport, info);
+    const session = new RemoteSession(this.transport, info);
+    await this.notify_created(session);
+    return session;
+  }
+
+  /** 监听当前客户端新建的远程 session。 */
+  on_created(listener: (session: RemoteAgentSession) => void | Promise<void>): () => void {
+    this.creation_listeners.add(listener);
+    return () => { this.creation_listeners.delete(listener); };
+  }
+
+  /** 等待全部监听器完成；监听器失败不改变已完成的远程创建结果。 */
+  private async notify_created(session: RemoteAgentSession): Promise<void> {
+    await Promise.allSettled(
+      [...this.creation_listeners].map(async (listener) => await listener(session)),
+    );
   }
 
   /** 获取一个远程 session。 */

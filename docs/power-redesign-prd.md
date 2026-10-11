@@ -2,7 +2,7 @@
 
 > 状态：待评审
 >
-> 范围：`packages/city`、`packages/implementations/plugins`、`app/cli`、`app/desktop`、`app/fedman`、`homepage`
+> 范围：`packages/city`、`packages/implementations/plugins`、`packages/cli`、`private/apps/desktop`、`private/apps/fedman`、`homepage`
 >
 > 目标：把 Plugin 收敛为 Power，取消 `plugin_call` / `plugin_read` 通用入口，让每个 Power 直接成为一个模型工具
 >
@@ -466,9 +466,9 @@ flowchart TB
     APPS --> PUB
 ```
 
-`app/cli` 需要处理的点包括：`city plugin action` 子命令改名为 `city power action`；`CliAgentContext.plugins` 类型改名；`ToolActivityPresentation` 中 `plugin_read` / `plugin_call` 的展示分支删除，改为按工具名归类的通用分支；`OverviewRoutes` 与 `http/plugins/plugins.ts` 的响应字段改名。
+`packages/cli` 需要处理的点包括：`city plugin action` 子命令改名为 `city power action`；`CliAgentContext.plugins` 类型改名；`ToolActivityPresentation` 中 `plugin_read` / `plugin_call` 的展示分支删除，改为按工具名归类的通用分支；`OverviewRoutes` 与 `http/plugins/plugins.ts` 的响应字段改名。
 
-`app/desktop` 需要处理的点包括：`agent_activity_presentation.ts` 中 `normalized.startsWith("plugin_")` 的判断删除；Plugin 页面、渲染协议、控制器按新命名迁移。
+`private/apps/desktop` 需要处理的点包括：`agent_activity_presentation.ts` 中 `normalized.startsWith("plugin_")` 的判断删除；Plugin 页面、渲染协议、控制器按新命名迁移。
 
 `packages/implementations/plugins` 改名为 `packages/implementations/powers`，同步更新 `pnpm-workspace.yaml`、根 `package.json` 的 `build:plugins`、`dev:plugins`、`plugins:patch:build` 与 `scripts/build-packages.sh`、`scripts/help.mjs`、`scripts/package-graph.test.mjs`。
 
@@ -557,7 +557,7 @@ flowchart TB
 
 改名与行为统一按一次改动落地，但内部按两个可验证阶段推进。阶段 A 只做命名迁移，行为保持不变；阶段 B 才改变行为。
 
-阶段 A 已完成并验证：`packages/type`、`packages/agent`、`packages/city`、`packages/implementations/powers`、`app/cli`、`app/desktop`（node + web 两份 tsconfig）、`app/fedman` 全部 `tsc --noEmit` 零错误；`release:test` 20/20 通过。
+阶段 A 已完成并验证：`packages/type`、`packages/agent`、`packages/city`、`packages/implementations/powers`、`packages/cli`、`private/apps/desktop`（node + web 两份 tsconfig）、`private/apps/fedman` 全部 `tsc --noEmit` 零错误；`release:test` 20/20 通过。
 
 迁移采用 `git mv` 加标识符替换，不保留兼容别名。`@downcity/plugins` 包与目录已改名为 `@downcity/powers`，构建 key 从 `plugins` 改为 `powers`。
 
@@ -569,7 +569,7 @@ flowchart TB
 
 **核心 system prompt 硬编码了旧工具。** `packages/agent/src/executor/composer/system/default/assets/core.prompt.ts.txt` 的 `# Plugin System` 一节直接指示模型使用 `plugin_read` / `plugin_call`。该文件是 prompt 源码，由 `packages/agent/scripts/agent-compiler.mjs` 生成同路径的 `core.prompt.ts`。阶段 A 做了机械改名，阶段 B 必须重写这一节以描述 per-power 工具模型，否则模型会被指示调用不存在的工具。
 
-**`app/desktop` 存在同名但无关的 `plugin`。** `src/renderer/components/markdown/markdown_plugins.ts` 及其消费者（`Markdown.tsx`、`markdown_math.test.ts`、`markdown_mermaid.test.ts`）是 remark/rehype 插件；`electron.vite.config.ts` 与 `app/fedman/vite.config.ts` 是 vite 插件。这些已在迁移中显式排除，未改动。后续任何批量改名都必须保持这份排除清单。
+**`private/apps/desktop` 存在同名但无关的 `plugin`。** `src/renderer/components/markdown/markdown_plugins.ts` 及其消费者（`Markdown.tsx`、`markdown_math.test.ts`、`markdown_mermaid.test.ts`）是 remark/rehype 插件；`electron.vite.config.ts` 与 `private/apps/fedman/vite.config.ts` 是 vite 插件。这些已在迁移中显式排除，未改动。后续任何批量改名都必须保持这份排除清单。
 
 ### 17.3 用户数据目录（已决定并实现）
 
@@ -585,7 +585,7 @@ flowchart TB
 
 - `packages/city/test/`、`packages/implementations/powers/scripts/`、`packages/agent/scripts/` 下的 `.mjs` 测试仍在引用旧命名，其中 `plugin-tools.test.mjs`、`multi-agent-plugin-isolation.test.mjs` 直接测试 `plugin_call` / `plugin_read`，属阶段 B 的重写对象。
 - `pnpm-lock.yaml` 仍含旧包名，需要一次 `pnpm install` 刷新。
-- `homepage/` 的 `content/powers-docs/` 与 `content/agent-sdk-docs/` 中的 `@downcity/powers` 引用属阶段 B 的文档更新。
+- `private/apps/homepage/` 的 `content/powers-docs/` 与 `content/agent-sdk-docs/` 中的 `@downcity/powers` 引用属阶段 B 的文档更新。
 
 ### 17.5 阶段 B 进度（部分完成）
 
@@ -596,12 +596,12 @@ flowchart TB
 3. **`access` 与 `returns`。** `PowerAction` 新增可选 `returns` 与 `access`；`PowerActionReadView` 同步；工具通过 `needs_approval` 在动作声明 `access: "write"` 时请求审批。未声明等同 `read`，因此本次迁移不改变既有审批行为。
 4. **prompt 重写。** agent 核心 prompt 的 Power System 一节已改写为 per-power 工具模型，并由 `agent-compiler.mjs` 重生成了 `core.prompt.ts`（再无 `power_call` / `power_read` 字样）。内建 power 的 `skill` / `chat` / `task` prompt 中 11 处 `power_call(...)` 示例已改为 `<power>({ action, args })`。
 
-验证：`packages/type`、`packages/agent`、`packages/city`、`packages/implementations/powers`、`app/cli`、`app/fedman` 均 `tsc --noEmit` 零错误。per-power 工具面用脚本单独验证：工具名正确、无动作 power 不暴露、`access: "write"` 动作返回 `needs_approval: true`、描述列动作 id 与摘要。
+验证：`packages/type`、`packages/agent`、`packages/city`、`packages/implementations/powers`、`packages/cli`、`private/apps/fedman` 均 `tsc --noEmit` 零错误。per-power 工具面用脚本单独验证：工具名正确、无动作 power 不暴露、`access: "write"` 动作返回 `needs_approval: true`、描述列动作 id 与摘要。
 
 未完成：
 
 - **内建 power 动作未标注 `access` / `returns`。** 契约已支持，但除 city power 外的 36 个动作尚未逐个声明，因此审批 gate 目前对这些动作空转。city power 的四个写动作（`image.create`、`image.result`、`sound.asr`、`sound.tts`）已声明。
-- **宿主展示分支未清理。** `app/cli/.../ToolActivityPresentation.ts` 与 `app/desktop/.../agent_activity_presentation.ts` 仍按 `power_call` / `power_` 前缀归类，需改为按工具名归类。
+- **宿主展示分支未清理。** `packages/cli/.../ToolActivityPresentation.ts` 与 `private/apps/desktop/.../agent_activity_presentation.ts` 仍按 `power_call` / `power_` 前缀归类，需改为按工具名归类。
 - **测试未迁移。** `packages/city/test/power-tools.test.mjs`、`multi-agent-power-isolation.test.mjs` 等仍调用已删除的工具。
 - **`pnpm-lock.yaml` 未刷新。**
 - **数据目录迁移未实现**（见 15.3）。
@@ -620,7 +620,7 @@ City 自有能力已改为普通 `PowerDefinition`，与其它 power 走同一�
 6. **组合根简化。** `City.get_session_tools()` 不再合并两套工具，`get_session_hooks()` 不再拼接 city 专属 system block：三个领域 power 与其他 power 一样经 `PowerRegistry` 进入 tools 与 system，`merge_session_tools` 与 `SessionHooks` 的手工拼装随之删除。
 7. **私有文件分区。** 由 `agents/<id>/methods/<m>/` 改为 `agents/<id>/powers/<group>/`，不再与旧的 method 概念挂钩；分区键是组名，因此组在 power 之间搬迁不改变落盘路径。
 
-验证：`packages/type`、`packages/agent`、`packages/city`、`packages/implementations/powers`、`app/cli`、`app/fedman`、`app/desktop`（node + web）全部 `tsc --noEmit` 零错误。另以一个临时脚本对构建产物做了行为验证（已删除）：7 个组、15 个动作 id 全部为合法点号形式、`returns` 无缺失、9 个动作可转出 JSON Schema、四个写动作归为 `write`、未知参数被拒绝、无 shell 时 `sandbox.get` 返回 `available: false`、`usage.get` 返回 `not available` 且拒绝非法枚举值。
+验证：`packages/type`、`packages/agent`、`packages/city`、`packages/implementations/powers`、`packages/cli`、`private/apps/fedman`、`private/apps/desktop`（node + web）全部 `tsc --noEmit` 零错误。另以一个临时脚本对构建产物做了行为验证（已删除）：7 个组、15 个动作 id 全部为合法点号形式、`returns` 无缺失、9 个动作可转出 JSON Schema、四个写动作归为 `write`、未知参数被拒绝、无 shell 时 `sandbox.get` 返回 `available: false`、`usage.get` 返回 `not available` 且拒绝非法枚举值。
 
 新增待确认项：
 
@@ -649,7 +649,7 @@ City 自有能力已改为普通 `PowerDefinition`，与其它 power 走同一�
 2. **重写引用已删 API 的测试。** `city-tool.test.mjs` → `city-power.test.mjs`（重写为点号动作 id 与 `{ action, args }` 形态）；`power-tools.test.mjs` 重写为 per-power 工具面；`image-method.test.mjs`、`sound-method.test.mjs` 改为调用 city power 的 `image.*` / `sound.*` 动作；`multi-agent-power-isolation.test.mjs` 改为直接调用 `skill` 工具；`city-power-runtime.test.mjs` 的 snapshot 断言改为按 power 名筛选，以容纳自动注册的 `city` power。
 3. **宿主展示分支。** CLI 与 Desktop 不再按 `power_call` / `power_` 前缀归类，改按契约识别：输入带字符串 `action` 字段的工具就是 power 工具。这样第三方 power 也能自动获得正确展示，不需要枚举名字。
 
-测试结果：`packages/city` 277 项中 264 通过、1 失败、12 跳过；`app/desktop` 的 `agent_activity_presentation` 19/19；`release:test` 20/20。
+测试结果：`packages/city` 277 项中 264 通过、1 失败、12 跳过；`private/apps/desktop` 的 `agent_activity_presentation` 19/19；`release:test` 20/20。
 
 ### 17.9 两个已知项
 

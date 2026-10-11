@@ -11,7 +11,7 @@
 
 ## 证据与边界
 
-已读取：`homepage/app/routes/home.tsx`、`app/lib/seo.ts`、`app/lib/homepage-positioning.ts`、`app/root.tsx`、`react-router.config.ts`、`public/robots.txt`、`scripts/seo-ready.test.mjs`，以及 https://downcity.ai/ 、https://downcity.ai/sitemap.xml 。
+已读取：`private/apps/homepage/app/routes/home.tsx`、`private/apps/homepage/app/lib/seo.ts`、`private/apps/homepage/app/lib/homepage-positioning.ts`、`app/root.tsx`、`react-router.config.ts`、`public/robots.txt`、`scripts/seo-ready.test.mjs`，以及 https://downcity.ai/ 、https://downcity.ai/sitemap.xml 。
 
 线上使用文本提取，不等同于完整 HTML / DOM 检查。无法以文本提取缺失断言 JSON-LD 或区块不存在。本次 Shell 执行失败，SEO 测试未成功运行；没有新增通过结果。没有验证线上 canonical、状态码链、结构化数据有效性、移动端 CWV 或索引状态。
 

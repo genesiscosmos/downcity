@@ -109,6 +109,8 @@ export class AgentSessions implements AgentSessionsContract<AgentSession> {
   private readonly session_composer: SessionComposer;
   private readonly get_agent_model: AgentSessionsOptions["get_agent_model"];
   private readonly sessions_by_id = new Map<string, AgentManagedSession>();
+  /** 新会话初始化后的宿主订阅；恢复已有会话时不触发。 */
+  private readonly creation_listeners = new Set<(session: AgentSession) => void | Promise<void>>();
   /** Agent 会话创建链；并发调用共享同一创建过程，避免产生第二条。 */
   private agent_session_creation_chain: Promise<void> = Promise.resolve();
 
@@ -122,6 +124,26 @@ export class AgentSessions implements AgentSessionsContract<AgentSession> {
     this.session_class = options.session_class || Session;
     this.session_composer = options.session_composer ?? new DefaultSessionComposer();
     this.get_agent_model = options.get_agent_model;
+  }
+
+  /** 监听新会话；宿主可在任务启动前建立消息和运行态投影。 */
+  on_created(listener: (session: AgentSession) => void | Promise<void>): () => void {
+    this.creation_listeners.add(listener);
+    return () => { this.creation_listeners.delete(listener); };
+  }
+
+  /** 通知宿主；投影失败不能把已经持久化的会话创建判为失败。 */
+  private async notify_created(session: AgentSession): Promise<void> {
+    await Promise.all([...this.creation_listeners].map(async (listener) => {
+      try {
+        await listener(session);
+      } catch (error) {
+        this.logger.error("Session creation listener failed", {
+          session_id: session.id,
+          error: String(error),
+        });
+      }
+    }));
   }
 
   /**
@@ -217,6 +239,7 @@ export class AgentSessions implements AgentSessionsContract<AgentSession> {
         storage: context.store.create_session(session_id, origin, context.workspace_id),
       });
       await session.initialize();
+      await this.notify_created(session);
       return session;
     });
   }
@@ -277,6 +300,7 @@ export class AgentSessions implements AgentSessionsContract<AgentSession> {
       ),
     });
     await session.initialize();
+    await this.notify_created(session);
     return session;
   }
 

@@ -135,7 +135,7 @@ Linux 侧的验证尚未进行。P0 只覆盖 macOS，`bwrap` 在目标发行版
 
 `mounts` 的语义在实现中收紧为「语义授权」（Workspace 与显式授权目录），不枚举后端派生的系统与工具链规则。原因是 `mounts` 同时被文件工具的路径翻译消费，若回报全部生效规则，沙箱内绝对路径的翻译结果会随后端变化。完整生效策略由 `policy_digest` 承担，需要按路径回答时用 `explain_path`。
 
-验证：`packages/type`、`packages/city`、`packages/implementations/sandboxes/microsandbox`、`packages/agent`、`app/cli`、`app/desktop` 全部 typecheck 通过；`packages/city` 全部 46 个测试文件通过，唯一失败的 `session-config-turn-boundary`（审批模式投影）在改动前即已失败，与本次无关。
+验证：`packages/type`、`packages/city`、`packages/implementations/sandboxes/microsandbox`、`packages/agent`、`packages/cli`、`private/apps/desktop` 全部 typecheck 通过；`packages/city` 全部 46 个测试文件通过，唯一失败的 `session-config-turn-boundary`（审批模式投影）在改动前即已失败，与本次无关。
 
 ## 8. P2 已完成
 
@@ -164,8 +164,8 @@ Linux 侧的验证尚未进行。P0 只覆盖 macOS，`bwrap` 在目标发行版
 
 CLI 与 Desktop 的 Provider 装配已从 microsandbox 换成 native：
 
-- `app/cli/src/city/sandbox/PlatformSandbox.ts` 返回 `NativeSandboxProvider`。
-- `app/desktop/src/main/agent/DesktopPlatformSandbox.ts` 返回 `NativeSandboxProvider`。
+- `packages/cli/src/city/sandbox/PlatformSandbox.ts` 返回 `NativeSandboxProvider`。
+- `private/apps/desktop/src/main/agent/DesktopPlatformSandbox.ts` 返回 `NativeSandboxProvider`。
 - 两个应用的 `package.json` 依赖从 `@downcity/sandbox-microsandbox` 换成 `@downcity/sandbox-native`。
 - 两个应用源码中已无 `MicrosandboxProvider` 引用；两个包 typecheck 均 0 错误。
 

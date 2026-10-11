@@ -4,12 +4,12 @@
 >
 > 目标范围：
 >
-> - 修改 `app/desktop/src/renderer/styles/tokens.css`（9 级档位 + 清空 Tailwind 默认字号命名空间）
-> - 修改 `app/desktop/src/renderer/lib/utils.ts`（把档位注册进 tailwind-merge 的 `font-size` 组）
-> - 修改 `app/desktop/src/renderer/features/chat/components/messages/message_layout.ts`（消息正文改走语义档位）
-> - 修改 `app/desktop/src/renderer/styles/{chat,base,mermaid}.css`（字号改引语义令牌）
-> - 迁移 `app/desktop/src/renderer/` 下 61 个文件、311 处字号调用点
-> - 新增 `app/desktop/tests/font_scale.test.ts`；重写 `app/desktop/tests/tailwind_merge_classes.test.ts`
+> - 修改 `private/apps/desktop/src/renderer/styles/tokens.css`（9 级档位 + 清空 Tailwind 默认字号命名空间）
+> - 修改 `private/apps/desktop/src/renderer/lib/utils.ts`（把档位注册进 tailwind-merge 的 `font-size` 组）
+> - 修改 `private/apps/desktop/src/renderer/features/chat/components/messages/message_layout.ts`（消息正文改走语义档位）
+> - 修改 `private/apps/desktop/src/renderer/styles/{chat,base,mermaid}.css`（字号改引语义令牌）
+> - 迁移 `private/apps/desktop/src/renderer/` 下 61 个文件、311 处字号调用点
+> - 新增 `private/apps/desktop/tests/font_scale.test.ts`；重写 `private/apps/desktop/tests/tailwind_merge_classes.test.ts`
 >
 > 文档性质：字号的设计合同。**新增界面时的选档依据以本文为准**，不依赖任何调用点的历史取值。
 
@@ -424,8 +424,8 @@ themeCSS 里的 `14px` / `12px` / `12.5px`），不用 9 级档位。
 ### 8.3 验证
 
 ```bash
-cd app/desktop && node --test tests/*.test.ts        # 430/431；唯一失败为既有的 qq 渠道断言
-cd app/desktop && ./node_modules/.bin/tsc -p tsconfig.web.json --noEmit && ./node_modules/.bin/tsc -p tsconfig.node.json --noEmit
+cd private/apps/desktop && node --test tests/*.test.ts        # 430/431；唯一失败为既有的 qq 渠道断言
+cd private/apps/desktop && ./node_modules/.bin/tsc -p tsconfig.web.json --noEmit && ./node_modules/.bin/tsc -p tsconfig.node.json --noEmit
 ```
 
 **完整 `electron-vite build` 在本环境跑不起来**（缺 `@rollup/rollup-linux-arm64-gnu` 原生模块），因此「扫描器是否命中」这条链路由 `font_scale.test.ts` 的第九条断言代替：它把源码里出现的每一个 `text-*` token 原样喂进 Tailwind 编译并断言能产出规则。发布前建议在本地补一次真实构建。
@@ -440,5 +440,5 @@ cd app/desktop && ./node_modules/.bin/tsc -p tsconfig.web.json --noEmit && ./nod
 - **`markdown.css` 的 `em` 比值未重算**（`h1` 1.55em、`code` 0.92em）。它们在 `base` 下的取值与改动前一致，重算属于排版审美调整，不属于字号收敛。
 - **`3xl`（1.875rem）当前无调用点。** 它是 9 级阶梯的成员，保留定义并在此记录，避免被误认为「死令牌」而删除或改值。
 - **消息列宽仍是 `max-w-[840px]`。** 正文 14px 下每行约 59 个汉字（15px 时约 55）。本次未同步调宽，因为宽度会连带影响 Composer、表格与代码块。
-- **`homepage/` 与 `packages/ui/` 不在范围内。** homepage 是 Tailwind v3 + 自带 `tailwind.config.ts` 的营销站，`packages/ui` 尚未被 desktop 引用（desktop 的 `package.json` 里没有 `@downcity/ui`）。等 desktop 开始消费 `packages/ui` 时，需要让它在 `packages/ui/src/styles.css` 里声明同一套 `--text-*`，否则会出现第二套字号体系。
+- **`private/apps/homepage/` 与 `packages/ui/` 不在范围内。** homepage 是 Tailwind v3 + 自带 `tailwind.config.ts` 的营销站，`packages/ui` 尚未被 desktop 引用（desktop 的 `package.json` 里没有 `@downcity/ui`）。等 desktop 开始消费 `packages/ui` 时，需要让它在 `packages/ui/src/styles.css` 里声明同一套 `--text-*`，否则会出现第二套字号体系。
 - **没有做视觉回归截图对比。** 除标题档外全应用字号都动了（幅度 ±1px 以内），建议在真实构建后用关键界面（会话正文与工具活动行、设置-模型列表、用量图表、命令面板、创作向导）做一次目视确认。

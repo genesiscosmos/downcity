@@ -1,4 +1,0 @@
-{
-  "loading": "正在加载 Power…", "missing_config": "Power 未提供 config。", "missing_slot": "Power 未提供 {{slot}}。", "missing_surface": "此 Power 未提供功能界面", "cancel": "取消", "confirm": "确认",
-  "tree": { "expand": "展开", "collapse": "折叠" }
-}

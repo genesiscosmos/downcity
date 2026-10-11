@@ -2,7 +2,7 @@
 
 > 状态：**已实施（领域 store、路由级订阅、持久消息索引、双 Chat 分段与渲染缓存生命周期完成）**
 > 目标版本：`@downcity/desktop` 0.1.0（React 19.2.6）
-> 关联代码：`app/desktop/src/renderer/`
+> 关联代码：`private/apps/desktop/src/renderer/`
 
 ## 一、背景与目标
 
@@ -199,7 +199,7 @@ export function use_chat_stream_store() {
 ## 四、文件结构
 
 ```
-app/desktop/src/renderer/
+private/apps/desktop/src/renderer/
   hooks/
     use_desktop_controller.ts      # 组合 7 个 store 与稳定 actions（瘦身）
     store/

@@ -1,7 +1,0 @@
-<?xml version="1.0" encoding="UTF-8"?>
-<!-- Downcity 品牌图标：位图源统一来自 public/icon-512.png。 -->
-<svg xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="title desc" viewBox="0 0 512 512">
-  <title id="title">Downcity icon</title>
-  <desc id="desc">Downcity color brand icon.</desc>
-  <image href="/icon-512.png" width="512" height="512" />
-</svg>

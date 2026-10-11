@@ -1,9 +1,0 @@
-{
-  "title": "AI 模型服务",
-  "pages": [
-    "index",
-    "provider",
-    "chat-completions",
-    "calling"
-  ]
-}

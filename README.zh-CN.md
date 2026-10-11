@@ -217,7 +217,7 @@ downcity/
 │   ├── edgefed/
 │   ├── localfed/
 │   └── ui/
-├── homepage/
+├── private/apps/homepage/
 ├── scripts/
 ├── package.json
 └── pnpm-workspace.yaml
@@ -231,7 +231,7 @@ downcity/
 - City SDK 文档：[downcity.ai/city-sdk-docs](https://downcity.ai/city-sdk-docs)
 - Agent SDK 文档：[downcity.ai/agent-sdk-docs](https://downcity.ai/agent-sdk-docs)
 - UI SDK 文档：[downcity.ai/ui-sdk-docs](https://downcity.ai/ui-sdk-docs)
-- 包文档：[packages/agent/README.md](./packages/agent/README.md)、[packages/type/README.md](./packages/type/README.md)、[packages/implementations/services/README.md](./packages/implementations/services/README.md)、[app/cli/README.md](./app/cli/README.md)、[packages/ui/README.md](./packages/ui/README.md)
+- 包文档：[packages/agent/README.md](./packages/agent/README.md)、[packages/type/README.md](./packages/type/README.md)、[packages/implementations/services/README.md](./packages/implementations/services/README.md)、[packages/cli/README.md](./packages/cli/README.md)、[packages/ui/README.md](./packages/ui/README.md)
 
 ## 本地开发
 
@@ -255,7 +255,7 @@ pnpm build:homepage
 ```bash
 pnpm typecheck
 pnpm -C packages/ui typecheck
-pnpm -C homepage typecheck
+pnpm --dir private/apps/homepage typecheck
 ```
 
 开发模式：

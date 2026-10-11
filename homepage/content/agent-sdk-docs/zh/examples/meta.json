@@ -1,8 +1,0 @@
-{
-  "title": "SDK Examples",
-  "pages": [
-    "minimal-local-agent",
-    "remote-agent-basic",
-    "live-ui-example"
-  ]
-}

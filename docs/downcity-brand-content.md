@@ -11,7 +11,7 @@ Brand content 不是关键词包装或首页 slogan 集合，而是对「我们�
 本稿依据：
 - Genesis Cosmos 官网 https://genesiscosmos.com/ （本次读取的公开使命与观点）。
 - 本仓库 README.md / README.zh-CN.md。
-- homepage/app/lib/homepage-positioning.ts 与首页结构。
+- private/apps/homepage/private/apps/homepage/app/lib/homepage-positioning.ts 与首页结构。
 
 下文明确区分公开原文、产品资料与建议表达。愿景不是已交付能力；拟定人群与购买动机不是已验证客户研究。没有虚构客户、增长数字或市场领先结论。
 

@@ -73,5 +73,5 @@
 - 只修改本任务相关文件。
 - 若公开 API 发生变化，运行 `@downcity/plugins` 对应 patch/build 流程。
 - 补跑 plugins typecheck、WebPlugin 测试和受影响的 City Plugin 测试。
-- 更新 `homepage/content/plugins-docs/zh/builtins/web.mdx` 与英文文档。
+- 更新 `private/apps/homepage/content/plugins-docs/zh/builtins/web.mdx` 与英文文档。
 - 使用明确作用域的 commit message，例如 `feat(plugins): redesign web provider boundary`。

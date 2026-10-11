@@ -1,9 +1,0 @@
-{
-  "title": "Integration Patterns",
-  "pages": [
-    "embed-in-node-app",
-    "agent-with-city-ai-service",
-    "multi-agent-in-one-repo",
-    "expose-over-http"
-  ]
-}

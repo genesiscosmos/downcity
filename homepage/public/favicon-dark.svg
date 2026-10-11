@@ -1,7 +1,0 @@
-<?xml version="1.0" encoding="UTF-8"?>
-<!-- 深色主题入口沿用同一份品牌图标，避免主题切换时出现不同 Logo。 -->
-<svg xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="title desc" viewBox="0 0 512 512">
-  <title id="title">Downcity icon</title>
-  <desc id="desc">Downcity color favicon for dark theme.</desc>
-  <image href="/icon-512.png" width="512" height="512" />
-</svg>
