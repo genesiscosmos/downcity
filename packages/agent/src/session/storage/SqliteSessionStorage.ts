@@ -7,6 +7,7 @@
 
 import path from "node:path";
 import { DatabaseSync, type SQLInputValue } from "node:sqlite";
+import { normalize_session_id } from "@/session/SessionIdentity.js";
 import type {
   SessionAgentActionPart,
   SessionAgentMessage,
@@ -78,7 +79,7 @@ export class SqliteSessionStorage implements SessionStorage {
   private disposed = false;
 
   constructor(options: SqliteSessionStorageOptions) {
-    this.session_id = String(options.session_id || "").trim();
+    this.session_id = normalize_session_id(options.session_id);
     this.agent_id = String(options.agent_id || "").trim();
     this.workspace_id = String(options.workspace_id || "").trim() || undefined;
     this.origin = structuredClone(options.origin);

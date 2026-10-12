@@ -8,6 +8,7 @@
  */
 
 import { isDeepStrictEqual } from "node:util";
+import { normalize_session_id } from "@/session/SessionIdentity.js";
 import type {
   AgentArchiveSessionResult,
   AgentArchiveSessionsInput,
@@ -85,7 +86,7 @@ export class LocalSessionStore implements SessionStore {
     origin: SessionOrigin,
     workspace_id = this.workspace_id,
   ): SessionStorage {
-    const resolved_session_id = String(session_id || "").trim();
+    const resolved_session_id = normalize_session_id(session_id);
     if (!resolved_session_id) {
       throw new Error("SessionStore.create_session requires a non-empty session_id");
     }
@@ -114,7 +115,7 @@ export class LocalSessionStore implements SessionStore {
 
   /** 打开已有 Session，并以数据库中的完整 origin 作为唯一事实。 */
   async open_session(session_id: string, origin_type = SESSION_ORIGIN_TYPE_WORK): Promise<SessionStorage> {
-    const resolved_session_id = String(session_id || "").trim();
+    const resolved_session_id = normalize_session_id(session_id);
     if (!resolved_session_id) {
       throw new Error("SessionStore.open_session requires a non-empty session_id");
     }
@@ -409,6 +410,6 @@ export class LocalSessionStore implements SessionStore {
 
   /** 返回来源分区内唯一的 Session Store 缓存键。 */
   private session_cache_key(session_id: string, origin_type: string): string {
-    return `${origin_type}\u0000${session_id}`;
+    return `${origin_type}\u0000${normalize_session_id(session_id)}`;
   }
 }

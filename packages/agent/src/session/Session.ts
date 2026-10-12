@@ -55,6 +55,7 @@ import { SessionInteractions } from "@/session/messages/SessionInteractions.js";
 import { DefaultSessionComposer } from "@/session/input/composer/DefaultSessionComposer.js";
 import type { SessionComposer } from "@/types/session/SessionComposer.js";
 import { generate_id } from "@/utils/Id.js";
+import { generate_session_id, normalize_session_id } from "@/session/SessionIdentity.js";
 import { nanoid } from "nanoid";
 import { build_session_info } from "@/session/storage/Browse.js";
 import type { SessionStorage } from "@/types/store/SessionStorage.js";
@@ -91,6 +92,8 @@ export class Session implements AgentSession {
 
   private readonly store: SessionStorage;
   private readonly create_session_store: SessionOptions["create_session_store"];
+  /** 集合提供的短 ID 分配器，新建 fork 时检查碰撞。 */
+  private readonly allocate_session_id: () => Promise<string>;
   private readonly register_forked_session: SessionOptions["register_forked_session"];
   private readonly get_tools: SessionOptions["get_tools"];
   private readonly logger: SessionOptions["logger"];
@@ -116,7 +119,7 @@ export class Session implements AgentSession {
   private runtime_port: SessionPort | null = null;
 
   constructor(options: SessionOptions) {
-    this.id = String(options.session_id || "").trim();
+    this.id = normalize_session_id(options.session_id);
     this.agent_id = String(options.agent_id || "").trim();
     this.agent_name = String(options.agent_name || "").trim() || this.agent_id;
     this.agent_description = String(options.agent_description || "").trim();
@@ -124,6 +127,7 @@ export class Session implements AgentSession {
     this.origin = options.origin;
     this.store = options.store;
     this.create_session_store = options.create_session_store;
+    this.allocate_session_id = options.allocate_session_id ?? (async () => generate_session_id());
     this.register_forked_session = options.register_forked_session;
     this.get_tools = options.get_tools;
     this.logger = options.logger;
@@ -556,9 +560,7 @@ export class Session implements AgentSession {
           include_message,
         })
       : messages;
-    const forked = this.create_fork_session(
-      `fork-${Date.now()}-${nanoid(8)}`,
-    );
+    const forked = this.create_fork_session(await this.allocate_session_id());
     await forked.initialize();
     const session_config = this.state.get_config();
     if (session_config.model) {
@@ -664,6 +666,7 @@ export class Session implements AgentSession {
       origin: this.origin,
       store: this.create_session_store(session_id),
       create_session_store: this.create_session_store,
+      allocate_session_id: this.allocate_session_id,
       register_forked_session: this.register_forked_session,
       session_id: session_id,
       get_tools: this.get_tools,

@@ -50,6 +50,29 @@ function resolve_shell_execution_context(
   };
 }
 
+/**
+ * 从 Shell 响应生成失败原因，供一次性命令和交互会话统一使用。
+ * 审批未通过不等于用户主动拒绝；命令错误保留退出码和输出尾部，
+ * 输出已被读取时使用快照预览，避免丢失诊断信息。
+ */
+function resolve_shell_response_error(response: ShellActionResponse): string | undefined {
+  const snapshot = response.shell;
+  if (!snapshot) return "Shell action did not return a shell snapshot.";
+  if (snapshot.approval_status === "denied") {
+    return "Host execution was not approved.";
+  }
+  const exit_code = snapshot.exit_code;
+  if (snapshot.status !== "failed" && (typeof exit_code !== "number" || exit_code === 0)) {
+    return undefined;
+  }
+  const summary = typeof exit_code === "number"
+    ? `Shell command exited with code ${exit_code}.`
+    : "Shell command failed.";
+  const output = String(response.chunk?.output || snapshot.last_output_preview || "").trim();
+  return output ? `${summary}\n${output.slice(-2000)}` : summary;
+}
+
+/** 把交互会话响应整理为模型可见结果，失败时附带明确原因。 */
 function flatten_shell_action_response(params: {
   /**
    * shell action 响应。
@@ -69,11 +92,10 @@ function flatten_shell_action_response(params: {
   }
   const chunk = params.response.chunk;
   const exit_code = typeof shell_snapshot.exit_code === "number" ? shell_snapshot.exit_code : null;
-  const success =
-    shell_snapshot.approval_status !== "denied" &&
-    (exit_code === null || exit_code === 0);
+  const error = resolve_shell_response_error(params.response);
   return {
-    success,
+    success: error === undefined,
+    ...(error ? { error } : {}),
     shell_id: shell_snapshot.shell_id,
     status: shell_snapshot.status,
     cmd: shell_snapshot.cmd,
@@ -131,11 +153,10 @@ function flatten_shell_exec_response(params: {
   }
   const chunk = params.response.chunk;
   const exit_code = typeof shell_snapshot.exit_code === "number" ? shell_snapshot.exit_code : null;
-  const success =
-    shell_snapshot.approval_status !== "denied" &&
-    (exit_code === null || exit_code === 0);
+  const error = resolve_shell_response_error(params.response);
   return {
-    success,
+    success: error === undefined,
+    ...(error ? { error } : {}),
     status: shell_snapshot.status,
     cmd: shell_snapshot.cmd,
     cwd: shell_snapshot.cwd,

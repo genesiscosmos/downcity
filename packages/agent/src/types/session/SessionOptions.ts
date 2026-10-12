@@ -75,6 +75,9 @@ export interface SessionOptions {
   /** 为 fork 创建另一个 Session 的领域持久化视图。 */
   create_session_store: (session_id: string) => SessionStorage;
 
+  /** 宿主为 fork 分配未占用的小写短 ID；独立 Session 可省略并使用随机 ID。 */
+  allocate_session_id?: () => Promise<string>;
+
   /**
    * 将 fork 创建的子 Session 交回 AgentSessions 登记。
    *

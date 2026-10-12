@@ -8,6 +8,7 @@
  */
 
 import path from "node:path";
+import { normalize_session_id } from "@/session/SessionIdentity.js";
 import { normalize_session_origin_type } from "@downcity/type";
 
 /** 把标识转换为安全、可逆的单层目录名。 */
@@ -70,7 +71,7 @@ export function get_agent_session_path(
 ): string {
   return path.join(
     get_agent_sessions_path(storage_root_path, origin_type),
-    encode_path_segment(String(session_id || "").trim()),
+    encode_path_segment(normalize_session_id(session_id)),
   );
 }
 
@@ -94,7 +95,7 @@ export function get_agent_archived_session_path(
 ): string {
   return path.join(
     get_agent_archived_sessions_path(storage_root_path, origin_type),
-    encode_path_segment(String(session_id || "").trim()),
+    encode_path_segment(normalize_session_id(session_id)),
   );
 }
 

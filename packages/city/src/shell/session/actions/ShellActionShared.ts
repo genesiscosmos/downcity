@@ -33,8 +33,9 @@ export function resolve_execution_target(value: unknown): "sandbox" | "host" {
   return value === "host" ? "host" : "sandbox";
 }
 
+/** 审批拒绝也可能来自入口或调用身份缺失，不能归因于用户操作。 */
 function approval_denied_message(): string {
-  return "User denied host execution.";
+  return "Host execution was not approved.";
 }
 
 /**

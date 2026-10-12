@@ -12,6 +12,7 @@
  * - 一个 Agent 至多一条，惰性创建；被归档或删除后下一次取用自然重建。
  */
 
+import { normalize_session_id } from "@/session/SessionIdentity.js";
 import {
   SESSION_ORIGIN_TYPE_AGENT,
   type SessionOrigin,
@@ -24,7 +25,7 @@ export function create_agent_session_origin(): SessionOrigin {
 
 /** Agent 自己那条会话的稳定标识：就是 Agent 的 id。 */
 export function resolve_agent_session_id(agent_id: string): string {
-  const resolved = String(agent_id || "").trim();
+  const resolved = normalize_session_id(agent_id);
   if (!resolved) throw new Error("Agent session requires a non-empty agent id");
   return resolved;
 }

@@ -7,7 +7,7 @@
  * - Session 对象创建细节集中在这里，避免 facade 和 lifecycle 重复依赖 Session 构造逻辑。
  */
 
-import { nanoid } from "nanoid";
+import { allocate_session_id, normalize_session_id } from "@/session/SessionIdentity.js";
 import type { ModelClient, AgentTool as Tool } from "@downcity/type";
 import type { Logger } from "@/utils/logger/Logger.js";
 import type {
@@ -196,7 +196,7 @@ export class AgentSessions implements AgentSessionsContract<AgentSession> {
    * 通过 `create()` 获取内部生成的 ID；需要恢复时必须先调用 `get()`。
    */
   runtime(session_id: string, origin_type = SESSION_ORIGIN_TYPE_WORK): SessionPort {
-    const resolved_session_id = String(session_id || "").trim();
+    const resolved_session_id = normalize_session_id(session_id);
     const resolved_origin_type = normalize_session_origin_type(origin_type);
     const session = this.sessions_by_id.get(
       this.session_cache_key(resolved_session_id, resolved_origin_type),
@@ -283,7 +283,7 @@ export class AgentSessions implements AgentSessionsContract<AgentSession> {
     input?: AgentCreateSessionInput & { workspace?: WorkspaceRuntime },
   ): Promise<AgentSession> {
     const origin = normalize_session_origin(input?.origin);
-    const session_id = `session-${Date.now()}-${nanoid(8)}`;
+    const session_id = await this.allocate_session_id(origin);
     const context = this.resolve_session_context({
       origin,
       creating: true,
@@ -317,7 +317,7 @@ export class AgentSessions implements AgentSessionsContract<AgentSession> {
     origin_type = SESSION_ORIGIN_TYPE_WORK,
     input?: { workspace?: WorkspaceRuntime },
   ): Promise<AgentSession> {
-    const resolved_session_id = String(session_id || "").trim();
+    const resolved_session_id = normalize_session_id(session_id);
     if (!resolved_session_id) {
       throw new Error("sessions.get requires a non-empty session_id");
     }
@@ -369,7 +369,7 @@ export class AgentSessions implements AgentSessionsContract<AgentSession> {
    * - 该方法不处理任何 Power 自有数据。
    */
   async remove(session_id: string, origin_type = SESSION_ORIGIN_TYPE_WORK): Promise<boolean> {
-    const resolved_session_id = String(session_id || "").trim();
+    const resolved_session_id = normalize_session_id(session_id);
     if (!resolved_session_id) {
       throw new Error("sessions.remove requires a non-empty session_id");
     }
@@ -392,7 +392,7 @@ export class AgentSessions implements AgentSessionsContract<AgentSession> {
    * 清空一个 Session 的消息目录。
    */
   async clear_messages(session_id: string, origin_type = SESSION_ORIGIN_TYPE_WORK): Promise<boolean> {
-    const resolved_session_id = String(session_id || "").trim();
+    const resolved_session_id = normalize_session_id(session_id);
     if (!resolved_session_id) {
       throw new Error("sessions.clear_messages requires a non-empty session_id");
     }
@@ -430,7 +430,7 @@ export class AgentSessions implements AgentSessionsContract<AgentSession> {
   async archive(
     input: AgentArchiveSessionInput,
   ): Promise<AgentArchiveSessionResult> {
-    const session_id = String(input?.id || "").trim();
+    const session_id = normalize_session_id(input?.id || "");
     if (!session_id) {
       throw new Error("sessions.archive requires a non-empty id");
     }
@@ -483,9 +483,10 @@ export class AgentSessions implements AgentSessionsContract<AgentSession> {
     /** 已由集合层创建或打开的单 Session Storage。 */
     storage?: SessionStorage;
   }): AgentManagedSession {
-    const resolved_session_id = String(
+    const resolved_session_id = normalize_session_id(
       input?.session_id || input?.storage?.session_id || "",
-    ).trim() || `session-${Date.now()}-${nanoid(8)}`;
+    );
+    if (!resolved_session_id) throw new Error("Session creation requires an allocated ID");
     const resolved_origin = normalize_session_origin(input?.origin);
     const cache_key = this.session_cache_key(resolved_session_id, resolved_origin.type);
     const cached = this.sessions_by_id.get(cache_key);
@@ -505,6 +506,7 @@ export class AgentSessions implements AgentSessionsContract<AgentSession> {
       origin: resolved_origin,
       store: input?.storage || context.store.create_session(resolved_session_id, resolved_origin, context.workspace_id),
       create_session_store: (session_id) => context.store.create_session(session_id, resolved_origin, context.workspace_id),
+      allocate_session_id: () => this.allocate_session_id(resolved_origin),
       register_forked_session: (session) => this.register_forked_session(session),
       session_id: resolved_session_id,
       get_tools: () => context.get_tools(),
@@ -530,7 +532,7 @@ export class AgentSessions implements AgentSessionsContract<AgentSession> {
    *   而旧订阅仍然挂在被丢弃的实例上。
    */
   release(session_id: string, origin_type = SESSION_ORIGIN_TYPE_WORK): boolean {
-    const resolved_session_id = String(session_id || "").trim();
+    const resolved_session_id = normalize_session_id(session_id);
     if (!resolved_session_id) return false;
     const cache_key = this.session_cache_key(
       resolved_session_id,
@@ -558,7 +560,22 @@ export class AgentSessions implements AgentSessionsContract<AgentSession> {
 
   /** 返回来源分区内唯一的 Session 运行时缓存键。 */
   private session_cache_key(session_id: string, origin_type: string): string {
-    return `${origin_type}\u0000${session_id}`;
+    return `${origin_type}\u0000${normalize_session_id(session_id)}`;
+  }
+
+  /** 检查持久化与进程内预留标识，避免并发创建复用尚未初始化的 ID。 */
+  private readonly reserved_session_ids = new Set<string>();
+
+  /** 为新建和 fork 统一分配 ID；已分配的标识在进程生命周期内不复用。 */
+  private async allocate_session_id(origin: SessionOrigin): Promise<string> {
+    const store = this.resolve_session_context({ origin }).store;
+    return await allocate_session_id(async (session_id) => {
+      const key = this.session_cache_key(session_id, origin.type);
+      if (this.reserved_session_ids.has(key)) return true;
+      this.reserved_session_ids.add(key);
+      if (await store.has_session(session_id, origin.type)) return true;
+      return false;
+    });
   }
 
   private load_instruction_system_blocks(): AgentSessionSystemBlock[] {
