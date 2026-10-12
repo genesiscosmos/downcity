@@ -10,7 +10,6 @@ import type {
 import type {
   GroupSessionDataStore,
   GroupSessionHistoryMeta,
-  GroupSessionTurnCheckpoint,
 } from "@/types/group/GroupSessionStore.js";
 
 /** 单个 GroupSession 的本地文件存储。 */
@@ -113,9 +112,9 @@ export class LocalGroupSessionDataStore implements GroupSessionDataStore {
     }
     const raw = JSON.parse(
       (await this.files.read_file(this.metadata_file_path)).toString("utf8"),
-    ) as Omit<Partial<GroupSessionHistoryMeta>, "v" | "pending_turns"> & {
-      readonly v?: unknown;
-      readonly pending_turns?: unknown[];
+    ) as Omit<Partial<GroupSessionHistoryMeta>, "v" | "pending_message_ids"> & {
+      /** 读取时先校验版本，禁止未声明的 schema。 */ readonly v?: unknown;
+      /** 原始检查点需归一化为不重复的有效消息 ID。 */ readonly pending_message_ids?: unknown[];
     };
     if (raw.v !== 1 && raw.v !== 2) {
       throw new Error(`Unsupported GroupSession metadata version: ${String(raw.v)}`);
@@ -139,12 +138,7 @@ export class LocalGroupSessionDataStore implements GroupSessionDataStore {
       ...(raw.member_session_ids && typeof raw.member_session_ids === "object"
         ? { member_session_ids: normalize_member_session_ids(raw.member_session_ids) }
         : {}),
-      ...(Array.isArray(raw.pending_turns)
-        ? { pending_turns: normalize_pending_turns(raw.pending_turns, raw.v === 1 ? "auto" : undefined) }
-        : {}),
-      ...(Array.isArray(raw.auto_frontier_message_ids)
-        ? { auto_frontier_message_ids: normalize_message_ids(raw.auto_frontier_message_ids) }
-        : {}),
+      pending_message_ids: Array.isArray(raw.pending_message_ids) ? normalize_message_ids(raw.pending_message_ids) : [],
     };
     if (raw.v === 1) await this.write_metadata_unlocked(metadata);
     return metadata;
@@ -296,6 +290,7 @@ const dispatch_turn_statuses = new Set<GroupDispatchTurnStatus>([
   "completed",
   "failed",
   "stopped",
+  "superseded",
 ]);
 
 /** 防止损坏的持久化记录进入 GroupSession 调度恢复流程。 */
@@ -329,27 +324,6 @@ function assert_dispatch_turn(value: GroupDispatchTurnRecord): void {
 
 function normalize_member_session_ids(input: object): Record<string, string> {
   return Object.fromEntries(Object.entries(input).filter(([agent_id, session_id]) => Boolean(agent_id.trim()) && typeof session_id === "string" && session_id.trim()));
-}
-
-function normalize_pending_turns(
-  input: unknown[],
-  default_dispatch_stage?: GroupSessionTurnCheckpoint["dispatch_stage"],
-): GroupSessionTurnCheckpoint[] {
-  return input.flatMap((item) => {
-    if (!item || typeof item !== "object") return [];
-    const candidate = item as Partial<GroupSessionTurnCheckpoint>;
-    const turn_id = typeof candidate.turn_id === "string" ? candidate.turn_id.trim() : "";
-    const root_message_id = typeof candidate.root_message_id === "string" ? candidate.root_message_id.trim() : "";
-    const context_message_ids = Array.isArray(candidate.context_message_ids)
-      ? normalize_message_ids(candidate.context_message_ids)
-      : [];
-    const dispatch_stage = candidate.dispatch_stage === "user" || candidate.dispatch_stage === "auto"
-      ? candidate.dispatch_stage
-      : default_dispatch_stage;
-    return turn_id && root_message_id && dispatch_stage
-      ? [{ turn_id, root_message_id, context_message_ids, dispatch_stage }]
-      : [];
-  });
 }
 
 function normalize_message_ids(input: unknown[]): string[] {

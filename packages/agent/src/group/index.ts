@@ -2,16 +2,18 @@
 export { Group } from "./Group.js";
 export { GroupSession } from "./GroupSession.js";
 export { GroupSessions } from "./GroupSessions.js";
-export { AiDispatchStrategy } from "@/types/group/DispatchStrategy.js";
+export { DecisionDispatchStrategy } from "@/types/group/DispatchStrategy.js";
 export type {
-  DispatchAssignment,
+  GroupDecisionModel,
+  GroupDecisionInput,
+  GroupDecisionResult,
+  DispatchInput,
   DispatchDecision,
   DispatchGroupProfile,
   DispatchMemberProfile,
-  DispatchStage,
   DispatchTrigger,
   DispatchStrategy,
-  AiDispatchStrategyOptions,
+  DecisionDispatchStrategyOptions,
 } from "@/types/group/DispatchStrategy.js";
 export type { GroupContract, GroupMessage, GroupOptions } from "@/types/group/Group.js";
 export type {

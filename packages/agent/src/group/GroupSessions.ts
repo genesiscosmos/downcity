@@ -130,7 +130,7 @@ export class GroupSessions implements GroupSessionsContract {
       group_id: this.group.id,
       group_name: this.group.name,
       instruction: this.group.instruction,
-      model: this.group.model,
+      model: this.group.members.find((member) => member.model)?.model,
       members: this.group.members,
       dispatch_strategy: this.group.dispatch_strategy,
       ...(workspace ? { workspace } : {}),

@@ -1,8 +1,8 @@
 /** Group 群聊主体的本地实现。 */
 
-import { AiDispatchStrategy } from "@/types/group/DispatchStrategy.js";
-import type { DispatchStrategy } from "@/types/group/DispatchStrategy.js";
-import type { ModelClient, StorageProvider, CityRuntime } from "@downcity/type";
+import { DecisionDispatchStrategy } from "@/types/group/DispatchStrategy.js";
+import type { DispatchStrategy, GroupDecisionModel } from "@/types/group/DispatchStrategy.js";
+import type { StorageProvider, CityRuntime } from "@downcity/type";
 import type { GroupContract, GroupOptions } from "@/types/group/Group.js";
 import type { Agent } from "@/agent/Agent.js";
 import { GroupSessions } from "@/group/GroupSessions.js";
@@ -15,7 +15,7 @@ export class Group implements GroupContract {
   readonly id: string;
   readonly name: string;
   readonly instruction?: string;
-  readonly model?: ModelClient;
+  readonly model?: GroupDecisionModel;
   readonly members: readonly Agent[];
   readonly dispatch_strategy: DispatchStrategy;
   readonly sessions: GroupSessions;
@@ -41,7 +41,7 @@ export class Group implements GroupContract {
     this.name = String(options.name || this.id).trim() || this.id;
     this.instruction = options.instruction?.trim() || undefined;
     this.model = options.model;
-    this.dispatch_strategy = options.dispatch_strategy || new AiDispatchStrategy({ model: this.model });
+    this.dispatch_strategy = options.dispatch_strategy || new DecisionDispatchStrategy({ model: this.model });
     this.sessions = new GroupSessions(this);
   }
 

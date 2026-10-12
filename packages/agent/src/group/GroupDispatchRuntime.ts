@@ -26,12 +26,21 @@ export class GroupDispatchStoppedError extends Error {
   }
 }
 
+/** 新用户输入使本次判断失效；属于正常重新判断，不是执行失败。 */
+export class GroupDispatchSupersededError extends Error {
+  constructor() {
+    super("Group dispatch superseded by new user input");
+    this.name = "GroupDispatchSupersededError";
+  }
+}
+
 /** GroupSession 私有的调度运行机制，不构成独立 Session。 */
 export class GroupDispatchRuntime {
   private readonly dispatch_strategy: GroupDispatchRuntimeOptions["dispatch_strategy"];
   private store?: GroupSessionDataStore;
   private queue_tail: Promise<void> = Promise.resolve();
   private active_abort_controller?: AbortController;
+  private input_generation = 0;
   private stopping = false;
   private disposed = false;
 
@@ -64,6 +73,7 @@ export class GroupDispatchRuntime {
   decide(input: GroupDispatchInput): Promise<GroupDispatchResult> {
     this.assert_available();
     const store = this.require_store();
+    const input_generation = this.input_generation;
     const created_at = Date.now();
     const queued_turn: GroupDispatchTurnRecord = {
       dispatch_id: `group-dispatch-${nanoid(12)}`,
@@ -77,10 +87,16 @@ export class GroupDispatchRuntime {
     const persist_queued = store.append_dispatch_turn(queued_turn);
     const operation = this.queue_tail.then(async () => {
       await persist_queued;
-      return await this.execute_turn(input, queued_turn);
+      return await this.execute_turn(input, queued_turn, input_generation);
     });
     this.queue_tail = operation.then(() => undefined, () => undefined);
     return operation;
+  }
+
+  /** 使正在判断或尚未开始的旧上下文失效，不影响已开始的成员执行。 */
+  supersede(): void {
+    this.input_generation += 1;
+    this.active_abort_controller?.abort(new GroupDispatchSupersededError());
   }
 
   /** 中断当前模型调用，并让尚未开始的调度 Turn 按队列顺序收口。 */
@@ -105,11 +121,17 @@ export class GroupDispatchRuntime {
   private async execute_turn(
     input: GroupDispatchInput,
     queued_turn: GroupDispatchTurnRecord,
+    input_generation: number,
   ): Promise<GroupDispatchResult> {
     const store = this.require_store();
     if (this.stopping || this.disposed) {
       await this.persist_terminal_turn(queued_turn, "stopped", "Group dispatch stopped");
       throw new GroupDispatchStoppedError();
+    }
+    if (input_generation !== this.input_generation) {
+      const error = new GroupDispatchSupersededError();
+      await this.persist_terminal_turn(queued_turn, "superseded", error.message);
+      throw error;
     }
     const abort_controller = new AbortController();
     this.active_abort_controller = abort_controller;
@@ -119,13 +141,13 @@ export class GroupDispatchRuntime {
       updated_at: Date.now(),
     });
     try {
+      abort_controller.signal.throwIfAborted();
       const strategy_decision = await this.dispatch_strategy.decide_dispatch({
         ...input,
         abort_signal: abort_controller.signal,
       });
-      if (this.stopping || this.disposed || abort_controller.signal.aborted) {
-        throw new GroupDispatchStoppedError();
-      }
+      abort_controller.signal.throwIfAborted();
+      if (this.stopping || this.disposed) throw new GroupDispatchStoppedError();
       const decision = normalize_dispatch_decision(strategy_decision, input.members);
       await store.append_dispatch_turn({
         ...queued_turn,
@@ -133,8 +155,16 @@ export class GroupDispatchRuntime {
         decision,
         updated_at: Date.now(),
       });
+      abort_controller.signal.throwIfAborted();
       return { dispatch_id: queued_turn.dispatch_id, decision };
     } catch (error) {
+      const superseded = abort_controller.signal.reason instanceof GroupDispatchSupersededError
+        ? abort_controller.signal.reason
+        : error instanceof GroupDispatchSupersededError ? error : undefined;
+      if (superseded && !this.stopping && !this.disposed) {
+        await this.persist_terminal_turn(queued_turn, "superseded", superseded.message);
+        throw superseded;
+      }
       if (
         error instanceof GroupDispatchStoppedError ||
         this.stopping ||
@@ -157,7 +187,7 @@ export class GroupDispatchRuntime {
   /** 提交没有 decision 的失败或停止终态。 */
   private async persist_terminal_turn(
     turn: GroupDispatchTurnRecord,
-    status: "failed" | "stopped",
+    status: "failed" | "stopped" | "superseded",
     error: string,
   ): Promise<void> {
     await this.require_store().append_dispatch_turn({
@@ -179,55 +209,19 @@ export class GroupDispatchRuntime {
   }
 }
 
-/** 在持久化和执行之前统一校验自定义策略与 AI 策略的调度结果。 */
+/** 在持久化和执行之前统一校验成员集合，拒绝未知或重复成员。 */
 function normalize_dispatch_decision(
   decision: DispatchDecision,
   members: readonly DispatchMemberProfile[],
 ): DispatchDecision {
-  if (typeof decision?.reason !== "string") throw new Error("Group dispatch requires a reason");
-  const reason = decision.reason.trim();
-  if (!reason) throw new Error("Group dispatch requires a non-empty reason");
-  if (!Array.isArray(decision.stages)) throw new Error("Group dispatch requires stages");
-  if (typeof decision.terminal !== "boolean") throw new Error("Group dispatch requires terminal");
-  if (decision.stages.length === 0 && !decision.terminal) {
-    throw new Error("Group dispatch cannot continue without any stage");
-  }
+  if (!Array.isArray(decision?.member_ids)) throw new Error("Group dispatch requires member_ids");
   const valid_member_ids = new Set(members.map((member) => member.agent_id));
-  const stage_ids = new Set<string>();
-  const stages = decision.stages.map((stage) => {
-    if (typeof stage?.stage_id !== "string") {
-      throw new Error("Group dispatch requires a stage_id");
+  const selected_ids = new Set<string>();
+  for (const member_id of decision.member_ids) {
+    if (!valid_member_ids.has(member_id) || selected_ids.has(member_id)) {
+      throw new Error(`Group dispatch selected unknown or duplicate member: ${member_id}`);
     }
-    const stage_id = stage.stage_id.trim();
-    if (!stage_id) throw new Error("Group dispatch requires a non-empty stage_id");
-    if (stage_ids.has(stage_id)) throw new Error(`Group dispatch contains duplicate stage "${stage_id}"`);
-    stage_ids.add(stage_id);
-    if (!Array.isArray(stage.assignments) || stage.assignments.length === 0) {
-      throw new Error(`Group dispatch stage "${stage_id}" requires assignments`);
-    }
-    const selected_member_ids = new Set<string>();
-    const assignments = stage.assignments.map((assignment) => {
-      if (typeof assignment?.member_id !== "string") {
-        throw new Error(`Group dispatch stage "${stage_id}" requires assignment member_id`);
-      }
-      const member_id = assignment.member_id.trim();
-      if (!valid_member_ids.has(member_id)) {
-        throw new Error(`Group dispatch selected unknown member: ${member_id}`);
-      }
-      if (selected_member_ids.has(member_id)) {
-        throw new Error(`Group dispatch selected member more than once in stage "${stage_id}"`);
-      }
-      selected_member_ids.add(member_id);
-      if (typeof assignment.instruction !== "string") {
-        throw new Error(`Group dispatch assignment for "${member_id}" requires an instruction`);
-      }
-      const instruction = assignment.instruction.trim();
-      if (!instruction) {
-        throw new Error(`Group dispatch assignment for "${member_id}" requires an instruction`);
-      }
-      return { member_id, instruction };
-    });
-    return { stage_id, assignments };
-  });
-  return { reason, stages, terminal: decision.terminal };
+    selected_ids.add(member_id);
+  }
+  return { member_ids: [...selected_ids] };
 }

@@ -1,3 +1,4 @@
+/** Group 成员选择、整轮执行、持久化、恢复与取消回归测试。 */
 import test from "node:test";
 import fs from "node:fs/promises";
 import os from "node:os";
@@ -47,56 +48,12 @@ const test_dispatch_strategy = {
     if (trigger === "auto") return create_test_decision();
     const collective = /你们|大家|各自|分别|同时|一起|所有人/.test(current_message.text);
     const selected_members = collective ? members : members.slice(0, 1);
-    return create_test_decision([selected_members.map((member) => ({
-      member_id: member.agent_id,
-      instruction: "测试策略：直接完成当前任务，只代表自己发言。",
-    }))]);
+    return create_test_decision(selected_members.map((member) => member.agent_id));
   },
 };
 
-function create_test_decision(stages = [], terminal = true, reason = "测试调度") {
-  return {
-    reason,
-    stages: stages.map((assignments, stage_index) => ({
-      stage_id: `test-stage-${stage_index}`,
-      assignments,
-    })),
-    terminal,
-  };
-}
-
-function create_dispatch_input(stages = [], next = "stop", reason = "测试调度") {
-  return {
-    reason,
-    stages: stages.map((assignments) => ({ assignments })),
-    next,
-  };
-}
-
-function create_dispatch_tool_call(input, tool_call_id = "dispatch-call") {
-  return {
-    type: "tool_call",
-    tool_call_id,
-    tool_name: "dispatch_group",
-    input,
-  };
-}
-
-// Group.model 同时服务调度与标题；调度测试只声明调度响应，标题请求由统一包装器处理。
-function create_dispatch_model(options) {
-  return new MockModelClient({
-    ...options,
-    doGenerate: async (call) => {
-      const dispatch_call = call.tools?.some((tool) => tool.name === "dispatch_group");
-      if (dispatch_call) return await options.doGenerate(call);
-      return {
-        content: [{ type: "text", text: "测试群聊标题" }],
-        finishReason: { unified: "stop", raw: "stop" },
-        usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2 },
-        warnings: [],
-      };
-    },
-  });
+function create_test_decision(member_ids = []) {
+  return { member_ids };
 }
 
 class RecordingSession extends Session {
@@ -138,108 +95,73 @@ test("Group broadcasts user messages and collects member replies", async () => {
   await city.close();
 });
 
-test("Group.model uses AI dispatch to select only the returned members", async () => {
+test("Group decision selects responders and receives the whole completed round", async () => {
   RecordingSession.created = [];
-  let dispatch_calls = 0;
-  const model_calls = [];
-  const dispatch_model = create_dispatch_model({
-    modelId: "group-dispatch-model",
-    doGenerate: async (call) => {
-      model_calls.push(call);
-      return {
-        content: [create_dispatch_tool_call(dispatch_calls++ === 0
-          ? create_dispatch_input([[{ member_id: "reviewer", instruction: "审查这个变更。" }]], "continue")
-          : create_dispatch_input([], "stop", "审查已经完成"))],
-        finishReason: { unified: "stop", raw: "stop" },
-        usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2 },
-        warnings: [],
-      };
+  const calls = [];
+  const model = {
+    async decision(input) {
+      calls.push(input);
+      return { answers: input.questions.map((question) => ({
+        question_id: question.id,
+        value: calls.length === 1,
+      })) };
     },
-  });
+  };
   const city = new City();
-  const architect = new Agent({ id: "architect", name: "架构师", description: "负责系统架构设计", session_class: RecordingSession });
-  const reviewer = new Agent({ id: "reviewer", name: "审查员", description: "负责代码质量审查", session_class: RecordingSession });
+  const architect = new Agent({ id: "architect", name: "架构师", description: "系统设计", session_class: RecordingSession });
+  const reviewer = new Agent({ id: "reviewer", name: "审查员", description: "代码审查", session_class: RecordingSession });
   city.agents.add(architect);
   city.agents.add(reviewer);
-  const group = new Group({
-    id: "ai-delivery",
-    name: "交付小组",
-    instruction: "交付可靠的软件变更",
-    model: dispatch_model,
-    members: [architect, reviewer],
-  });
+  const group = new Group({ id: "decision-group", instruction: "交付可靠的软件变更", model, members: [architect, reviewer] });
   city.groups.add(group);
-  const group_session = await group.sessions.create();
-  await group_session.prompt({ query: "请审查这个变更" });
-  await wait_for_group_idle(group_session);
-  assert.deepEqual(RecordingSession.created.map((entry) => entry.agent_id), ["reviewer"]);
-  const dispatch_prompt = model_calls[0].messages[1].content[0].text;
-  assert.match(dispatch_prompt, /- 名称: 交付小组/);
-  assert.match(dispatch_prompt, /- 目标: 交付可靠的软件变更/);
-  assert.match(dispatch_prompt, /名称: 架构师\n  能力描述: 负责系统架构设计/);
-  assert.match(dispatch_prompt, /名称: 审查员\n  能力描述: 负责代码质量审查/);
-  assert.equal(dispatch_prompt.match(/请审查这个变更/g)?.length, 1);
-  assert.match(model_calls[0].messages[0].content[0].text, /next=continue 仅用于下一步选择必须依赖本轮成员的实际输出/);
-  assert.match(model_calls[0].messages[0].content[0].text, /stages=\[\]、next=stop/);
-  assert.match(RecordingSession.created[0].query, /Group: 交付小组/);
-  assert.match(RecordingSession.created[0].query, /Group objective: 交付可靠的软件变更/);
-  assert.match(RecordingSession.created[0].query, /Your identity: 审查员 \(reviewer\)/);
-  assert.match(RecordingSession.created[0].query, /Your description: 负责代码质量审查/);
-  assert.match(RecordingSession.created[0].query, /Assignment:\n审查这个变更。/);
-  assert.doesNotMatch(RecordingSession.created[0].query, /判断是否需要回复|如果不需要你发言/);
+  const session = await group.sessions.create();
+  await session.prompt({ query: "大家评审方案" });
+  await wait_for_group_idle(session);
+  assert.deepEqual(RecordingSession.created.map((entry) => entry.agent_id), ["architect", "reviewer"]);
+  assert.equal(calls.length, 2);
+  const first_state = JSON.parse(calls[0].state.text);
+  assert.equal(first_state.group.instruction, "交付可靠的软件变更");
+  assert.equal(first_state.pending_messages.length, 1);
+  const second_state = JSON.parse(calls[1].state.text);
+  assert.deepEqual(second_state.pending_messages.map((message) => message.sender_id), ["architect", "reviewer"]);
+  assert.doesNotMatch(RecordingSession.created[0].query, /Assignment:/);
   await city.close();
 });
 
-test("AI Dispatch 返回空阶段计划时直接结束当前调度", async () => {
-  RecordingSession.created = [];
-  const dispatch_model = create_dispatch_model({
-    modelId: "empty-dispatch-model",
-    doGenerate: async () => ({
-      content: [create_dispatch_tool_call(create_dispatch_input([], "stop", "用户意图已经满足"))],
-      finishReason: { unified: "stop", raw: "stop" },
-      usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2 },
-      warnings: [],
-    }),
-  });
-  const city = new City();
-  const architect = new Agent({ id: "architect", session_class: RecordingSession });
-  const reviewer = new Agent({ id: "reviewer", session_class: RecordingSession });
-  city.agents.add(architect);
-  city.agents.add(reviewer);
-  const group = new Group({ id: "empty-dispatch", model: dispatch_model, members: [architect, reviewer] });
-  city.groups.add(group);
-  const empty_session = await group.sessions.create();
-  await empty_session.prompt({ query: "请讨论这个问题" });
-  await wait_for_group_idle(empty_session);
-  assert.deepEqual(RecordingSession.created.map((entry) => entry.agent_id), []);
-  assert.deepEqual((await empty_session.messages()).map((message) => message.text), ["请讨论这个问题"]);
-  await city.close();
-});
-
-test("自定义 Dispatch 不允许用空阶段计划继续传播", async () => {
+test("Empty member selection ends without any Agent reply", async () => {
   RecordingSession.created = [];
   const city = new City();
-  const agent = new Agent({ id: "invalid-continuation-agent", session_class: RecordingSession });
+  const agent = new Agent({ id: "empty-agent", session_class: RecordingSession });
   city.agents.add(agent);
-  const group = new Group({
-    id: "invalid-continuation-group",
-    members: [agent],
-    dispatch_strategy: {
-      decide_dispatch: () => ({
-        reason: "等待未知后续结果",
-        stages: [],
-        terminal: false,
-      }),
-    },
-  });
+  const group = new Group({ id: "empty-group", members: [agent], model: {
+    decision: async (input) => ({ answers: input.questions.map(({ id }) => ({ question_id: id, value: false })) }),
+  } });
   city.groups.add(group);
-  const group_session = await group.sessions.create();
-  await group_session.prompt({ query: "请回答" });
-  await wait_for_group_idle(group_session);
-
+  const session = await group.sessions.create();
+  await session.prompt({ query: "已经完成" });
+  await wait_for_group_idle(session);
   assert.deepEqual(RecordingSession.created, []);
-  assert.match((await group_session.messages()).at(-1).text, /cannot continue without any stage/);
+  assert.equal((await session.messages()).length, 1);
   await city.close();
+});
+
+test("Custom dispatch rejects unknown and duplicate members", async () => {
+  for (const member_ids of [["unknown"], ["known", "known"]]) {
+    RecordingSession.created = [];
+    const city = new City();
+    const agent = new Agent({ id: "known", session_class: RecordingSession });
+    city.agents.add(agent);
+    const group = new Group({ id: "invalid-group", members: [agent], dispatch_strategy: {
+      decide_dispatch: () => ({ member_ids }),
+    } });
+    city.groups.add(group);
+    const session = await group.sessions.create();
+    await session.prompt({ query: "请回答" });
+    await wait_for_group_idle(session);
+    assert.deepEqual(RecordingSession.created, []);
+    assert.match((await session.messages()).at(-1).text, /unknown or duplicate member/);
+    await city.close();
+  }
 });
 
 test("Group 没有 model 且未注入策略时记录调度失败", async () => {
@@ -255,141 +177,29 @@ test("Group 没有 model 且未注入策略时记录调度失败", async () => {
 
   assert.deepEqual((await group_session.messages()).map((message) => message.text), [
     "请回答",
-    "Group requires a configured model for dispatch",
+    "Group requires a configured decision model for dispatch",
   ]);
   await city.close();
 });
 
-test("AI Dispatch 失败时不切换到隐式规则策略", async () => {
-  const dispatch_model = create_dispatch_model({
-    modelId: "failing-dispatch-model",
-    doGenerate: async () => ({
-      content: [{ type: "error", error: "dispatch unavailable" }],
-    }),
-  });
-  const city = new City();
-  const agent = new Agent({ id: "failing-dispatch-agent", session_class: RecordingSession });
-  city.agents.add(agent);
-  const group = new Group({ id: "failing-dispatch-group", model: dispatch_model, members: [agent] });
-  city.groups.add(group);
-  const group_session = await group.sessions.create();
-
-  await group_session.prompt({ query: "请回答" });
-  await wait_for_group_idle(group_session);
-
-  assert.deepEqual(RecordingSession.created.map((entry) => entry.agent_id), []);
-  assert.match((await group_session.messages()).at(-1).text, /^Group dispatch model failed:/);
-  await city.close();
-});
-
-test("AI Dispatch 未调用 dispatch_group 时记录协议错误", async () => {
-  const dispatch_model = create_dispatch_model({
-    modelId: "text-only-dispatch-model",
-    doGenerate: async () => ({
-      content: [{ type: "text", text: "我建议让 reviewer 回复。" }],
-      finishReason: { unified: "stop", raw: "stop" },
-      usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2 },
-      warnings: [],
-    }),
-  });
-  const city = new City();
-  const agent = new Agent({ id: "text-only-agent", session_class: RecordingSession });
-  city.agents.add(agent);
-  const group = new Group({ id: "text-only-group", model: dispatch_model, members: [agent] });
-  city.groups.add(group);
-  const group_session = await group.sessions.create();
-
-  await group_session.prompt({ query: "请回答" });
-  await wait_for_group_idle(group_session);
-
-  assert.deepEqual(RecordingSession.created.map((entry) => entry.agent_id), []);
-  assert.match((await group_session.messages()).at(-1).text, /did not call dispatch_group/);
-  await city.close();
-});
-
-test("AI Dispatch 在同一调度 Turn 内纠正未调用工具的响应", async () => {
-  RecordingSession.created = [];
-  let dispatch_calls = 0;
-  const dispatch_model = create_dispatch_model({
-    modelId: "recovering-dispatch-model",
-    doGenerate: async (call) => {
-      dispatch_calls += 1;
-      if (dispatch_calls === 1) {
-        return {
-          content: [{ type: "text", text: "我建议让 responder 回复。" }],
-          finishReason: { unified: "stop", raw: "stop" },
-          usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2 },
-          warnings: [],
-        };
-      }
-      assert.equal(call.messages.some((message) => (
-        message.role === "user" && message.content.some((part) => (
-          part.type === "text" && part.text.includes("上一响应不符合调度协议")
-        ))
-      )), true);
-      return {
-        content: [create_dispatch_tool_call(create_dispatch_input([[
-          { member_id: "responder", instruction: "直接回答用户问题。" },
-        ]]))],
-        finishReason: { unified: "tool-calls", raw: "tool_calls" },
-        usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2 },
-        warnings: [],
-      };
-    },
-  });
-  const city = new City();
-  const agent = new Agent({ id: "responder", session_class: RecordingSession });
-  city.agents.add(agent);
-  const group = new Group({ id: "recovering-dispatch-group", model: dispatch_model, members: [agent] });
-  city.groups.add(group);
-  const group_session = await group.sessions.create();
-
-  await group_session.prompt({ query: "请回答" });
-  await wait_for_group_idle(group_session);
-
-  assert.equal(dispatch_calls, 2);
-  assert.deepEqual(RecordingSession.created.map((entry) => entry.agent_id), ["responder"]);
-  assert.equal((await group_session.messages()).some((message) => message.sender_type === "system"), false);
-  await city.close();
-});
-
-test("AI Dispatch 拒绝未知成员并允许跨阶段重复投递", async () => {
-  const inputs = [
-    { input: create_dispatch_input([[{ member_id: "unknown", instruction: "回答。" }]]), expected_agent_ids: [] },
-    { input: create_dispatch_input([
-      [{ member_id: "known", instruction: "先分析。" }],
-      [{ member_id: "known", instruction: "再收口。" }],
-    ]), expected_agent_ids: ["known", "known"] },
+test("Decision failures and incomplete answers stop dispatch without implicit fallback", async () => {
+  const models = [
+    { decision: async () => { throw new Error("decision unavailable"); } },
+    { decision: async () => ({ answers: [] }) },
+    { decision: async () => ({ answers: [{ question_id: "known", value: "true" }] }) },
   ];
-  for (const [index, { input, expected_agent_ids }] of inputs.entries()) {
+  for (const model of models) {
     RecordingSession.created = [];
-    let dispatch_calls = 0;
-    const dispatch_model = create_dispatch_model({
-      modelId: `invalid-dispatch-model-${index}`,
-      doGenerate: async () => ({
-        content: [create_dispatch_tool_call(expected_agent_ids.length > 0 && dispatch_calls++ > 0
-          ? create_dispatch_input()
-          : input)],
-        finishReason: { unified: "tool-calls", raw: "tool_calls" },
-        usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2 },
-        warnings: [],
-      }),
-    });
     const city = new City();
     const agent = new Agent({ id: "known", session_class: RecordingSession });
     city.agents.add(agent);
-    const group = new Group({ id: `invalid-dispatch-group-${index}`, model: dispatch_model, members: [agent] });
+    const group = new Group({ id: "failure-group", model, members: [agent] });
     city.groups.add(group);
-    const group_session = await group.sessions.create();
-
-    await group_session.prompt({ query: "请回答" });
-    await wait_for_group_idle(group_session);
-
-    if (expected_agent_ids.length === 0) {
-      assert.match((await group_session.messages()).at(-1).text, /Group dispatch model failed:/);
-    } else {
-      assert.deepEqual(RecordingSession.created.map((entry) => entry.agent_id), expected_agent_ids);
-    }
+    const session = await group.sessions.create();
+    await session.prompt({ query: "请回答" });
+    await wait_for_group_idle(session);
+    assert.deepEqual(RecordingSession.created, []);
+    assert.equal((await session.messages()).at(-1).sender_type, "system");
     await city.close();
   }
 });
@@ -441,11 +251,10 @@ test("GroupSession 基于首条用户消息生成并持久化 canonical title", 
     },
   });
   const city = new City({ storage: new LocalStorageProvider(root_path) });
-  const agent = new Agent({ id: "title-agent", session_class: RecordingSession });
+  const agent = new Agent({ id: "title-agent", model: title_model, session_class: RecordingSession });
   city.agents.add(agent);
   const group = new Group({
     id: "title-group",
-    model: title_model,
     members: [agent],
     dispatch_strategy: test_dispatch_strategy,
   });
@@ -498,9 +307,9 @@ test("GroupSession 标题生成失败后可重试且不会覆盖手动标题", a
     },
   });
   const city = new City();
-  const agent = new Agent({ id: "retry-title-agent", session_class: RecordingSession });
+  const agent = new Agent({ id: "retry-title-agent", model: title_model, session_class: RecordingSession });
   city.agents.add(agent);
-  const group = new Group({ id: "retry-title-group", model: title_model, members: [agent], dispatch_strategy: test_dispatch_strategy });
+  const group = new Group({ id: "retry-title-group", members: [agent], dispatch_strategy: test_dispatch_strategy });
   city.groups.add(group);
   const group_session = await group.sessions.create();
   await group_session.prompt({ query: "首次标题请求" });
@@ -692,10 +501,7 @@ test("GroupSession 持久化自己的调度 Turn", async () => {
     .map((line) => JSON.parse(line));
   const user_records = records.filter((record) => record.trigger === "user");
   assert.deepEqual(user_records.map((record) => record.status), ["queued", "running", "completed"]);
-  assert.deepEqual(user_records.at(-1).decision.stages[0].assignments, [{
-    member_id: "dispatch-member",
-    instruction: "测试策略：直接完成当前任务，只代表自己发言。",
-  }]);
+  assert.deepEqual(user_records.at(-1).decision.member_ids, ["dispatch-member"]);
   assert.equal(
     (await session.messages()).find((message) => message.sender_type === "agent").dispatch_id,
     user_records.at(-1).dispatch_id,
@@ -759,7 +565,7 @@ test("GroupSession stop 会中断当前调度且不记录失败消息", async ()
     .map((line) => JSON.parse(line));
   const latest_records = new Map(records.map((record) => [record.dispatch_id, record]));
   assert.equal(latest_records.size, 2);
-  assert.deepEqual([...latest_records.values()].map((record) => record.status), ["stopped", "stopped"]);
+  assert.deepEqual([...latest_records.values()].map((record) => record.status), ["superseded", "stopped"]);
   await city.close();
   await fs.rm(root_path, { recursive: true, force: true });
 });
@@ -844,12 +650,11 @@ test("GroupSession 持久化调度检查点并在收口后清理", async () => {
   assert.equal(typeof resolve_finished, "function");
   const meta_path = path.join(root_path, "groups", "checkpoint-group", "sessions", encodeURIComponent(session.id), "meta.json");
   const pending_meta = JSON.parse(await fs.readFile(meta_path, "utf8"));
-  assert.equal(pending_meta.pending_turns.length, 1);
+  assert.equal(pending_meta.pending_message_ids.length, 1);
   resolve_finished({ turn_id: "finished", text: "done", success: true });
   await wait_for_group_idle(session);
   const completed_meta = JSON.parse(await fs.readFile(meta_path, "utf8"));
-  assert.deepEqual(completed_meta.pending_turns, []);
-  assert.deepEqual(completed_meta.auto_frontier_message_ids, []);
+  assert.deepEqual(completed_meta.pending_message_ids, []);
   await city.close();
   await fs.rm(root_path, { recursive: true, force: true });
 });
@@ -869,12 +674,7 @@ test("GroupSession 列表首次读取时将 v1 metadata 原子迁移为 v2", asy
     updated_at: 2,
     message_count: 1,
     preview_text: "legacy message",
-    pending_turns: [{
-      turn_id: "legacy-turn",
-      root_message_id: "legacy-message",
-      context_message_ids: [],
-    }],
-    auto_frontier_message_ids: ["legacy-reply"],
+    pending_message_ids: ["legacy-message", "legacy-message", "", 42],
   }, null, 2)}\n`);
 
   const city = new City({ storage: new LocalStorageProvider(root_path) });
@@ -893,13 +693,7 @@ test("GroupSession 列表首次读取时将 v1 metadata 原子迁移为 v2", asy
   }]);
   const migrated_metadata = JSON.parse(await fs.readFile(meta_path, "utf8"));
   assert.equal(migrated_metadata.v, 2);
-  assert.deepEqual(migrated_metadata.pending_turns, [{
-    turn_id: "legacy-turn",
-    root_message_id: "legacy-message",
-    context_message_ids: [],
-    dispatch_stage: "auto",
-  }]);
-  assert.deepEqual(migrated_metadata.auto_frontier_message_ids, ["legacy-reply"]);
+  assert.deepEqual(migrated_metadata.pending_message_ids, ["legacy-message"]);
   await city.close();
   await fs.rm(root_path, { recursive: true, force: true });
 });
@@ -930,7 +724,7 @@ test("GroupSession 恢复时修复尾部损坏的消息记录", async () => {
   await fs.rm(root_path, { recursive: true, force: true });
 });
 
-test("GroupSession prompt 立即返回并由 AgentSession 自己排队", async () => {
+test("GroupSession prompt 立即返回并合并未执行的用户输入",  async () => {
   const calls = [];
   class OrderedSession extends Session {
     async prompt(input) {
@@ -953,14 +747,14 @@ test("GroupSession prompt 立即返回并由 AgentSession 自己排队", async (
   const second = await session.prompt({ query: "second" });
   assert.notEqual(first.turn_id, second.turn_id);
   await wait_for_group_idle(session);
-  assert.equal(calls.length, 2);
-  assert.equal(calls.some((query) => query.includes("Current message:\nuser: first")), true);
-  assert.equal(calls.some((query) => query.includes("Current message:\nuser: second")), true);
+  assert.equal(calls.length, 1);
+  assert.match(calls[0], /User: first/);
+  assert.match(calls[0], /Current message:\nuser: second/);
   assert.deepEqual((await session.messages()).filter((message) => message.sender_type === "user").map((message) => message.text), ["first", "second"]);
   await city.close();
 });
 
-test("Dispatch 阶段按顺序传递上一个成员的回复", async () => {
+test("下一轮成员收到上一轮成员的完整回复",  async () => {
   RecordingSession.created = [];
   const city = new City();
   const architect = new Agent({ id: "architect", session_class: RecordingSession });
@@ -971,12 +765,9 @@ test("Dispatch 阶段按顺序传递上一个成员的回复", async () => {
     id: "dependency-group",
     members: [architect, reviewer],
     dispatch_strategy: {
-      decide_dispatch: ({ trigger }) => trigger === "user"
-        ? create_test_decision([
-          [{ member_id: "architect", instruction: "先分析。" }],
-          [{ member_id: "reviewer", instruction: "基于前一个成员的回复审查。" }],
-        ])
-        : create_test_decision(),
+      decide_dispatch: ({ trigger, pending_messages }) => trigger === "user"
+        ? create_test_decision(["architect"])
+        : create_test_decision(pending_messages[0]?.sender_id === "architect" ? ["reviewer"] : []),
     },
   });
   city.groups.add(group);
@@ -990,24 +781,18 @@ test("Dispatch 阶段按顺序传递上一个成员的回复", async () => {
   await city.close();
 });
 
-test("Dispatch 允许同一成员在不同阶段重复参与", async () => {
+test("Dispatch 允许同一成员在不同轮次重复参与",  async () => {
   RecordingSession.created = [];
   const city = new City();
   const members = ["a", "d", "e", "f"].map((id) => new Agent({ id, session_class: RecordingSession }));
   for (const member of members) city.agents.add(member);
+  let round_index = 0;
+  const sequence = ["a", "d", "a", "e", "f"];
   const group = new Group({
     id: "repeated-member-group",
     members,
     dispatch_strategy: {
-      decide_dispatch: ({ trigger }) => trigger === "user"
-        ? create_test_decision([
-          [{ member_id: "a", instruction: "第一阶段。" }],
-          [{ member_id: "d", instruction: "第二阶段。" }],
-          [{ member_id: "a", instruction: "第三阶段。" }],
-          [{ member_id: "e", instruction: "第四阶段。" }],
-          [{ member_id: "f", instruction: "第五阶段。" }],
-        ])
-        : create_test_decision(),
+      decide_dispatch: () => create_test_decision(round_index < sequence.length ? [sequence[round_index++]] : []),
     },
   });
   city.groups.add(group);
@@ -1051,9 +836,7 @@ test("唯一 auto dispatch 等待并合并并发输入批次", async () => {
           auto_batches.push(pending_messages.map((message) => message.text));
           return create_test_decision();
         }
-        return create_test_decision([[
-          { member_id: "batch-agent", instruction: "回复当前消息。" },
-        ]], false);
+        return create_test_decision(["batch-agent"]);
       },
     },
   });
@@ -1064,8 +847,8 @@ test("唯一 auto dispatch 等待并合并并发输入批次", async () => {
     group_session.prompt({ query: "second" }),
   ]);
   await wait_for_group_idle(group_session, 1500);
-  assert.equal(calls.length, 2);
-  assert.deepEqual(auto_batches, [["reply:first", "reply:second"]]);
+  assert.equal(calls.length, 1);
+  assert.deepEqual(auto_batches, [["reply:first"]]);
   await city.close();
 });
 
@@ -1090,12 +873,7 @@ test("成员返回空内容时记录失败且不继续投递下游节点", async
     id: "dependency-empty-group",
     members: [architect, reviewer],
     dispatch_strategy: {
-      decide_dispatch: ({ trigger }) => trigger === "user"
-        ? create_test_decision([
-          [{ member_id: "architect", instruction: "先分析。" }],
-          [{ member_id: "reviewer", instruction: "仅基于分析回复。" }],
-        ])
-        : create_test_decision(),
+      decide_dispatch: ({ trigger }) => create_test_decision(trigger === "user" ? ["architect"] : ["reviewer"]),
     },
   });
   city.groups.add(group);
@@ -1120,13 +898,7 @@ test("auto dispatch 检测重复路由并停止传播", async () => {
     id: "loop-group",
     members: [agent],
     dispatch_strategy: {
-      decide_dispatch: ({ trigger }) => trigger === "auto"
-        ? create_test_decision([[
-          { member_id: "loop-agent", instruction: "继续回复。" },
-        ]], false)
-        : create_test_decision([[
-          { member_id: "loop-agent", instruction: "回复一次。" },
-        ]], false),
+      decide_dispatch: () => create_test_decision(["loop-agent"]),
     },
   });
   city.groups.add(group);
@@ -1136,7 +908,7 @@ test("auto dispatch 检测重复路由并停止传播", async () => {
   await wait_for_group_idle(session);
   const messages = await session.messages();
   auto_calls = messages.filter((message) => message.sender_type === "agent").length;
-  assert.equal(auto_calls, 3);
+  assert.equal(auto_calls, 2);
   assert.match(messages.at(-1).text, /repeated path/);
   assert.equal(original_messages.length, 0);
   await city.close();

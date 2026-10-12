@@ -30,14 +30,16 @@ export type {
 } from "./types/tools/session/SessionTools.js";
 export { Group } from "./group/Group.js";
 export type {
-  DispatchAssignment,
+  GroupDecisionModel,
+  GroupDecisionInput,
+  GroupDecisionResult,
+  DispatchInput,
   DispatchDecision,
   DispatchGroupProfile,
   DispatchMemberProfile,
-  DispatchStage,
   DispatchTrigger,
   DispatchStrategy,
-  AiDispatchStrategyOptions,
+  DecisionDispatchStrategyOptions,
   GroupContract,
   GroupMessage,
   GroupOptions,
@@ -67,7 +69,7 @@ export type {
   GroupSessionSummary,
   GroupSessionsContract,
 } from "./group/index.js";
-export { AiDispatchStrategy } from "./group/index.js";
+export { DecisionDispatchStrategy } from "./group/index.js";
 export type { SessionStore } from "./types/store/SessionStore.js";
 export type {
   SessionDerivedStore,

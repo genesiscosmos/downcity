@@ -182,23 +182,3 @@ export interface GroupSessionRuntimeContext {
 
 /** 当前群聊上下文中由 Agent 持有的成员 Session。 */
 export type GroupMemberSession = AgentSession;
-
-/** GroupSession 内部维护的一次用户请求运行记录。 */
-export interface GroupTurnRuntime {
-  /** 用户请求对应的 GroupTurn 标识。 */
-  readonly turn_id: string;
-  /** 用户根消息标识。 */
-  readonly root_message_id: string;
-  /** 用户消息写入时冻结的上下文消息标识。 */
-  readonly context_message_ids: readonly string[];
-  /** 当前 Turn 位于初始用户调度还是自动传播阶段。 */
-  dispatch_stage: "user" | "auto";
-  /** 当前 GroupTurn 的异步 user dispatch。 */
-  user_dispatch?: Promise<void>;
-  /** 当前 GroupTurn 是否等待 GroupSession 的 auto dispatch。 */
-  auto_pending: boolean;
-  /** 当前 GroupTurn 是否已经停止或失败。 */
-  stopped: boolean;
-  /** 当前 GroupTurn 是否由持久化检查点恢复，只等待统一 auto dispatch 收口。 */
-  readonly recovered?: boolean;
-}

@@ -1,7 +1,7 @@
 /**
  * GroupSession 内部调度协议。
  *
- * 调度不是独立 Session，只是 GroupSession 根据共享消息和成员画像计算下一步阶段计划的
+ * 调度不是独立 Session，只是 GroupSession 根据共享消息和成员画像选择本轮成员的
  * 内部运行过程。本模块描述该过程的输入、结果与持久化记录。
  */
 
@@ -20,7 +20,8 @@ export type GroupDispatchTurnStatus =
   | "running"
   | "completed"
   | "failed"
-  | "stopped";
+  | "stopped"
+  | "superseded";
 
 /** GroupSession 中一次调度 Turn 的完整持久化快照。 */
 export interface GroupDispatchTurnRecord {
@@ -36,7 +37,7 @@ export interface GroupDispatchTurnRecord {
   readonly status: GroupDispatchTurnStatus;
   /** 调度成功后已经校验并持久化的成员投递决定。 */
   readonly decision?: DispatchDecision;
-  /** 调度失败或停止时用于诊断的稳定错误文本。 */
+  /** 调度失败、停止或被新输入替代时用于诊断的稳定错误文本。 */
   readonly error?: string;
   /** 当前调度 Turn 首次入队的 Unix 毫秒时间戳。 */
   readonly created_at: number;

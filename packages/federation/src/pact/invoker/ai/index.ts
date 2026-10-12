@@ -119,8 +119,12 @@ export class AIInvoker {
   }
 
   /** 结构化决策 */
-  decision(input: UserDecisionInput): Promise<UserDecisionResult> {
-    return this.post<UserDecisionResult>("/decision", input);
+  decision(input: UserDecisionInput, signal?: AbortSignal): Promise<UserDecisionResult> {
+    return this.req<UserDecisionResult>(`${PREFIX}/decision`, {
+      method: "POST",
+      body: JSON.stringify(this.input(input)),
+      signal,
+    });
   }
 
   /** 获取当前用户可用的 CityModel 目录。 */
