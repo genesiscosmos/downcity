@@ -44,7 +44,7 @@ import {
 import type { AgentSessionSystemBlock } from "@/types/agent/SessionTypes.js";
 import { resolve_system_timezone } from "@/session/storage/Metadata.js";
 import { SessionWork } from "@/agent/SessionWork.js";
-import { is_agent_session_origin, SESSION_ORIGIN_TYPE_WORK } from "@downcity/type";
+import { is_agent_session_origin, SESSION_ORIGIN_TYPE_CHANNEL, SESSION_ORIGIN_TYPE_WORK } from "@downcity/type";
 import { create_session_tools } from "@/tools/session/SessionTools.js";
 import type { AgentSessionInput } from "@/types/agent/AgentSessionInput.js";
 import type { AgentSession } from "@/types/agent/SessionActor.js";
@@ -148,23 +148,25 @@ export class Agent {
         // 用默认值顶替会变成一次静默换目录。
         const workspace = input?.workspace
           ?? (input?.creating ? this.workspace : undefined);
-        const is_agent_session = is_agent_session_origin(input?.origin);
+        // 主对话和外部聊天都可以协调项目工作，使用相同的会话管理能力。
+        const has_session_tools = is_agent_session_origin(input?.origin)
+          || input?.origin?.type === SESSION_ORIGIN_TYPE_CHANNEL;
         if (!workspace) return {
           workspace_path: ".",
           logger: this.logger,
-          get_tools: () => this.resolve_tools(undefined, is_agent_session),
+          get_tools: () => this.resolve_tools(undefined, has_session_tools),
           get_workspace: () => undefined,
           get_hooks: () => this.resolve_hooks(),
           store: storage.sessions,
         };
         // 静态 Workspace Tool 与 Agent Tool 的命名冲突属于 Session 创建不变量，
         // 在装配时立即失败；执行时仍通过 getter 读取最新宿主扩展。
-        this.resolve_tools(workspace, is_agent_session);
+        this.resolve_tools(workspace, has_session_tools);
         return {
           workspace_path: workspace.path,
           workspace_id: workspace.id,
           logger: this.logger,
-          get_tools: () => this.resolve_tools(workspace, is_agent_session),
+          get_tools: () => this.resolve_tools(workspace, has_session_tools),
           get_workspace: () => workspace,
           get_hooks: () => this.resolve_hooks(),
           store: storage.sessions,
@@ -361,12 +363,12 @@ export class Agent {
    * - 容器 Power 工具从环境句柄实时读取，不缓存；容器增删 Power 后下一次求值即生效。
    * - 静态 Workspace Tool 与 Agent Tool 的命名冲突属于 Session 创建不变量，装配时立即失败。
    */
-  private resolve_tools(workspace?: WorkspaceRuntime, is_agent_session = false): Record<string, Tool> {
+  private resolve_tools(workspace?: WorkspaceRuntime, has_session_tools = false): Record<string, Tool> {
     const tools: Record<string, Tool> = {};
     if (workspace) register_tools(tools, workspace.tools, "WorkspaceTools");
     register_tools(tools, this.host?.power_tools ?? {}, "Power");
     register_tools(tools, this.custom_tools, "AgentOptions.tools");
-    if (is_agent_session) register_tools(tools, this.resolve_session_tools(), "AgentSessionTools");
+    if (has_session_tools) register_tools(tools, this.resolve_session_tools(), "AgentSessionTools");
     return tools;
   }
 
