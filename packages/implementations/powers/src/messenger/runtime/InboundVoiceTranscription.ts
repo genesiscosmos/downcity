@@ -50,11 +50,12 @@ function normalize_optional_string(value: unknown): string | undefined {
 }
 
 /** 生成入站附件的展示路径：Workspace 内路径转为相对路径。 */
-function to_display_src(root_path: string, attachment: MessengerPowerAttachment): string {
+function to_display_src(root_path: string | undefined, attachment: MessengerPowerAttachment): string {
   const raw = normalize_optional_string(attachment.path)
     ?? attachment.fileName
     ?? attachment.attachmentId
     ?? attachment.kind;
+  if (!root_path) return raw;
   const normalized_root = path.resolve(root_path);
   const normalized_raw = path.isAbsolute(raw) ? path.resolve(raw) : raw;
   if (
@@ -105,7 +106,7 @@ export async function transcribe_inbound_voice(input: {
       })).data);
       const text = normalize_optional_string(result?.text);
       if (!text) continue;
-      const src = to_display_src(input.context.workspace.path, attachment);
+      const src = to_display_src(input.context.workspace?.path, attachment);
       voice_blocks.push(`<voice src="${escape_xml_attr(src)}">${escape_xml_text(text)}</voice>`);
     } catch {
       // 关键点（中文）：自动转写失败不阻塞 messenger 主消息链路。

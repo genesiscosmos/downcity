@@ -63,9 +63,9 @@ export function create_skill_root_context(input: {
    */
   agent_id: string;
   /**
-   * 当前 Workspace 根目录绝对路径。
+   * 当前 Workspace 根目录绝对路径；无项目会话时省略。
    */
-  workspace_path: string;
+  workspace_path?: string;
   /**
    * 用户目录绝对路径；省略时读取当前进程用户目录。
    */
@@ -74,7 +74,7 @@ export function create_skill_root_context(input: {
   return {
     agent_skill_dir: input.agent_skill_dir,
     agent_id: String(input.agent_id || "").trim(),
-    workspace_path: path.resolve(input.workspace_path),
+    ...(input.workspace_path ? { workspace_path: path.resolve(input.workspace_path) } : {}),
     home_path: String(input.home_path || "").trim() || os.homedir(),
   };
 }

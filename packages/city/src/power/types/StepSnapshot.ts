@@ -28,8 +28,8 @@ export class StepSnapshot {
   /** 当前 Turn 标识。 */
   readonly turn_id?: string;
 
-  /** 当前 Workspace 根目录。 */
-  readonly project_root: string;
+  /** 当前 Workspace 根目录；无项目会话时为空。 */
+  readonly project_root?: string;
 
   /** 当前 Step 提交的 Workspace 环境快照。 */
   readonly workspace_env: Readonly<Record<string, string>>;
@@ -44,14 +44,14 @@ export class StepSnapshot {
     readonly session_origin?: StepSnapshotOrigin;
     /** 当前 Turn 标识。 */
     readonly turn_id?: string;
-    /** 当前 Workspace 根目录。 */
-    readonly project_root: string;
+    /** 当前 Workspace 根目录；无项目会话时为空。 */
+    readonly project_root?: string;
     /** 当前 Step 提交的 Workspace 环境快照。 */
     readonly workspace_env: Readonly<Record<string, string>>;
     /** 当前 Step 提交的 Agent 指令快照。 */
     readonly agent_systems: readonly string[];
   }) {
-    this.project_root = input.project_root;
+    if (input.project_root) this.project_root = input.project_root;
     this.workspace_env = Object.freeze({ ...input.workspace_env });
     this.agent_systems = Object.freeze([...input.agent_systems]);
     if (input.session_id) this.session_id = input.session_id;

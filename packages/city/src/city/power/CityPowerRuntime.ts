@@ -370,7 +370,9 @@ export class CityPowerRuntime implements PowerRuntimeHost {
     const agent_id = String(site.agent_id || "").trim();
     const agent = this.options.runtime_access.get_agent(agent_id);
     if (!agent) throw new Error(`Agent not found in City: ${agent_id}`);
-    const workspace = this.require_call_workspace(agent_id, site);
+    const workspace = site.workspace
+      ? this.options.runtime_access.require_workspace(agent_id, site.workspace.id)
+      : undefined;
     const power_storage = this.options.storage.open_scope([
       "agents",
       agent_id,
@@ -389,13 +391,11 @@ export class CityPowerRuntime implements PowerRuntimeHost {
       agent_id,
       agent_name: agent.name,
       agent_description: agent.description,
-      workspace_id: workspace.id,
-      workspace_path: workspace.path,
-      workspace,
+      ...(workspace ? { workspace } : {}),
       data_path: power_storage.root_path,
       data_root_path: this.options.storage.root_path,
       data_files: power_storage.files,
-      ...(workspace.shell ? { shell: workspace.shell } : {}),
+      ...(workspace?.shell ? { shell: workspace.shell } : {}),
       sessions: create_power_session_collection({
         get_sessions: () => agent.sessions,
         workspace,
@@ -410,7 +410,7 @@ export class CityPowerRuntime implements PowerRuntimeHost {
       ...(this.options.host
         ? { notifications: this.options.host.notifications(power_id, agent_id) }
         : {}),
-      get_workspace_env: () => workspace.get_env(),
+      get_workspace_env: () => workspace?.get_env() ?? {},
       get_instructions: () => agent.get_instructions(),
     });
   }
@@ -423,7 +423,7 @@ export class CityPowerRuntime implements PowerRuntimeHost {
    */
   private resolve_session_handle(
     agent: Agent,
-    workspace: WorkspaceRuntime,
+    workspace: WorkspaceRuntime | undefined,
     site: PowerCallSite,
   ): PowerContext["session"] {
     const session_id = String(site.session_id || "").trim();
@@ -435,7 +435,7 @@ export class CityPowerRuntime implements PowerRuntimeHost {
         runtime as unknown as PowerSessionHandle,
         session_id,
         origin,
-        workspace.id,
+        workspace?.id,
       );
     } catch {
       return undefined;
@@ -445,7 +445,7 @@ export class CityPowerRuntime implements PowerRuntimeHost {
   /** 由来源身份组装本步冻结的事实。 */
   private resolve_snapshot(
     site: PowerCallSite,
-    workspace: WorkspaceRuntime,
+    workspace: WorkspaceRuntime | undefined,
     agent: Agent,
   ): StepSnapshot {
     const session_id = String(site.session_id || "").trim();
@@ -454,8 +454,8 @@ export class CityPowerRuntime implements PowerRuntimeHost {
       ...(session_id ? { session_id } : {}),
       ...(site.session_origin ? { session_origin: site.session_origin } : {}),
       ...(turn_id ? { turn_id } : {}),
-      project_root: workspace.path,
-      workspace_env: site.workspace_env ?? workspace.get_env(),
+      ...(workspace ? { project_root: workspace.path } : {}),
+      workspace_env: site.workspace_env ?? workspace?.get_env() ?? {},
       agent_systems: site.agent_instructions ?? agent.get_instructions(),
     });
   }
@@ -523,18 +523,6 @@ export class CityPowerRuntime implements PowerRuntimeHost {
     site: PowerCallSite,
   ): Promise<void> {
     await this.registry.effect(this, site, point_name, value);
-  }
-
-  /** 解析一次调用所属的 Workspace；缺少绑定时报出装配错误。 */
-  private require_call_workspace(
-    agent_id: string,
-    site: PowerCallSite,
-  ): WorkspaceRuntime {
-    const workspace = site.workspace;
-    if (!workspace) {
-      throw new Error(`Power call requires a Workspace: ${agent_id}`);
-    }
-    return this.options.runtime_access.require_workspace(agent_id, workspace.id);
   }
 
   /** 返回一个 Agent/Workspace 的直接 Power 执行面。 */
@@ -758,10 +746,9 @@ export class CityPowerRuntime implements PowerRuntimeHost {
           });
         },
         append_agent_session_message: async (input) => {
-          const workspace = await this.options.runtime_access.enter_workspace(
-            input.agent_id,
-            input.workspace_id,
-          );
+          const workspace = input.workspace_id
+            ? await this.options.runtime_access.enter_workspace(input.agent_id, input.workspace_id)
+            : undefined;
           const agent = this.options.runtime_access.get_agent(input.agent_id);
           if (!agent) throw new Error(`Agent not found in City: ${input.agent_id}`);
           await agent.sessions.get(input.session_id, input.origin_type, { workspace });

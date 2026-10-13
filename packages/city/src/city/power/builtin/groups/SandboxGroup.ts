@@ -108,6 +108,7 @@ class ExplainPathAction extends CityAction<z.infer<typeof explain_path_input>> {
     args: z.infer<typeof explain_path_input>,
     context: CityPowerContext,
   ): Promise<CityToolPathExplanation> {
+    if (!context.workspace_path) throw new Error("Path access checks require a Workspace");
     const mounts = context.sandbox?.mounts ?? [];
     const resolved = translate_sandbox_path({
       target_path: args.path,

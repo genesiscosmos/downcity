@@ -69,6 +69,7 @@ export class TaskPower extends Power {
           deliver: async ({ delivery_session, text }) => {
             await this.require_lifecycle_context().system.append_agent_session_message({
               ...delivery_session,
+              workspace_id: delivery_session.workspace_id ?? undefined,
               text,
             });
           },

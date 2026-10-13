@@ -22,7 +22,7 @@ export function resolve_memory_access(
 ): MemoryAccessContext {
   const agent_id = String(context.agent.id || "").trim();
   if (!agent_id) throw new Error("Memory access requires agent_id");
-  const workspace_id = String(context.workspace.id || "").trim();
+  const workspace_id = String(context.workspace?.id || "").trim();
   const session_id = String(input.session_id || "").trim();
   return {
     agent_id,

@@ -80,7 +80,7 @@ async function local_image_to_data_url(input: {
 
 /** 归一化单个图片内容片段。 */
 async function normalize_image_content_part(
-  workspace_path: string,
+  workspace_path: string | null,
   part: ImageContent,
 ): Promise<ImageResolvedContent> {
   if (part.type === "text") return part;
@@ -98,6 +98,7 @@ async function normalize_image_content_part(
       ...(part.media_type ? { media_type: part.media_type } : {}),
     };
   }
+  if (!workspace_path) throw new Error("Local image input requires a Workspace");
   const local_image = await local_image_to_data_url({
     root_path: workspace_path,
     image_url: url,
@@ -143,8 +144,8 @@ function copy_resolved_input(input: ImageCreateInput): ImageResolvedCreateInput 
  * - 本地图片在这一步读取为 data URL，服务侧不需要访问 Workspace。
  */
 export async function normalize_image_create_input(input: {
-  /** 当前 Workspace 的绝对根目录。 */
-  workspace_path: string;
+  /** 当前 Workspace 的绝对根目录；无项目会话时为 null，仍可使用文本和在线图片。 */
+  workspace_path: string | null;
   /** 模型提交的公开输入。 */
   payload: ImageCreateInput;
 }): Promise<ImageResolvedCreateInput> {

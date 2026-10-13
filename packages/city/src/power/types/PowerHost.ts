@@ -135,8 +135,8 @@ export interface PowerHostSystem {
   append_agent_session_message(input: {
     /** 持有目标 Session 的 Agent 稳定 ID。 */
     readonly agent_id: string;
-    /** 目标 Session 创建时绑定的 Workspace 稳定 ID。 */
-    readonly workspace_id: string;
+    /** 本次显式注入的 Workspace ID；省略时沿用 Session 当前上下文。 */
+    readonly workspace_id?: string;
     /** 目标 Session 的稳定 ID。 */
     readonly session_id: string;
     /** 目标 Session 的来源分区。 */

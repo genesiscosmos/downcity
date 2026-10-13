@@ -4,7 +4,8 @@ Provides long-term memory through one `MemoryPower`.
 
 - Agent Memory is private to one Agent and lives in its own store.
 - City Memory is shared across every Agent in the same City.
-- Workspace is not a memory scope; the current `workspace_id` is stored as record metadata.
+- Workspace is not a memory scope; the current `workspace_id` is stored as record metadata when available.
+- Agent memory, recall, and turn capture also work in conversations without a Workspace, including Feishu chats.
 - Core Memory is added as named system context; dynamic recall is added only to the current user-message copy.
 
 City supplies the shared Memory root. Agent private roots are derived from the platform root, and storage, recall, capture, and access isolation all remain inside `MemoryPower`.

@@ -175,7 +175,7 @@ function build_city_context(
   const agents = options.access.list_agents();
   const workspaces = options.access.list_workspaces();
   const agent = agents.find((item) => item.id === power_context.agent.id);
-  const workspace = workspaces.find((item) => item.id === power_context.workspace.id);
+  const workspace = workspaces.find((item) => item.id === power_context.workspace?.id);
   const abort_signal = power_context.abort_signal;
   return {
     action_id: input.action_id,
@@ -183,13 +183,13 @@ function build_city_context(
     agent_name: power_context.agent.name,
     session_id: power_context.session?.id ?? null,
     turn_id: power_context.turn?.id ?? null,
-    workspace_id: power_context.workspace.id,
-    workspace_name: workspace?.name || power_context.workspace.id,
-    workspace_path: power_context.workspace.path,
+    workspace_id: power_context.workspace?.id ?? null,
+    workspace_name: workspace?.name || power_context.workspace?.id || null,
+    workspace_path: power_context.workspace?.path ?? null,
     model_id: agent?.model?.id ?? null,
     timezone: resolve_runtime_timezone(),
     now: new Date(),
-    sandbox: power_context.workspace.shell?.describe_sandbox() ?? null,
+    sandbox: power_context.workspace?.shell?.describe_sandbox() ?? null,
     agents,
     workspaces,
     files: options.files_for(power_context.agent.id, input.group_id),

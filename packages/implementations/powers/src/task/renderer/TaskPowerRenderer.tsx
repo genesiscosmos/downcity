@@ -446,7 +446,7 @@ function task_action_input(task: TaskMainviewItem) { return { task_title: task.t
 /** 读取 Agent 的用户可见名称，失配时保留稳定 ID。 */
 function agent_name(snapshot: TaskMainviewSnapshot, agent_id: string): string { return snapshot.agents.find((agent) => agent.agent_id === agent_id)?.name ?? `${agent_id}（不可用）`; }
 /** 读取 Workspace 的用户可见名称，失配时保留稳定 ID。 */
-function workspace_name(snapshot: TaskMainviewSnapshot, workspace_id: string): string { return snapshot.workspaces.find((workspace) => workspace.workspace_id === workspace_id)?.name ?? `${workspace_id}（不可用）`; }
+function workspace_name(snapshot: TaskMainviewSnapshot, workspace_id: string | null): string { return workspace_id ? snapshot.workspaces.find((workspace) => workspace.workspace_id === workspace_id)?.name ?? `${workspace_id}（不可用）` : "未绑定 Workspace"; }
 /** 判断 Task 当前绑定的执行目标是否都仍由 City 提供。 */
 function execution_target_available(snapshot: TaskMainviewSnapshot, task: TaskMainviewItem): boolean {
   return snapshot.agents.some((agent) => agent.agent_id === task.agent_id)

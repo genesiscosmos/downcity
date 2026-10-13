@@ -185,9 +185,9 @@ export class WebPower extends Power {
     if (!factory) return undefined;
     const provider_promise = Promise.resolve(factory({
       agent_id: context.agent.id,
-      workspace_id: context.workspace.id,
+      ...(context.workspace ? { workspace_id: context.workspace.id } : {}),
       data_path: context.storage.path,
-      env: context.workspace.env,
+      env: context.workspace?.env ?? {},
       config,
     }));
     this.browser_providers.set(scope_key, provider_promise);
@@ -226,8 +226,8 @@ export class WebPower extends Power {
     if (this.search_provider) return this.search_provider;
     const selected = config.search_provider ?? "auto";
     if (selected === "disabled") return undefined;
-    const tavily_api_key = read_secret(config.tavily_api_key, context.workspace.env.TAVILY_API_KEY);
-    const exa_api_key = read_secret(config.exa_api_key, context.workspace.env.EXA_API_KEY);
+    const tavily_api_key = read_secret(config.tavily_api_key, context.workspace?.env.TAVILY_API_KEY);
+    const exa_api_key = read_secret(config.exa_api_key, context.workspace?.env.EXA_API_KEY);
     const timeout_ms = config.timeout_ms;
     if ((selected === "auto" || selected === "tavily") && tavily_api_key) {
       return new TavilySearchProvider({ api_key: tavily_api_key, timeout_ms });
@@ -254,7 +254,7 @@ export class WebPower extends Power {
     }
     const api_key = read_secret(
       config.firecrawl_api_key,
-      context.workspace.env.FIRECRAWL_API_KEY,
+      context.workspace?.env.FIRECRAWL_API_KEY,
     );
     return api_key
       ? new FirecrawlDocumentProvider({ api_key, timeout_ms: config.timeout_ms })
@@ -596,7 +596,7 @@ export class WebPower extends Power {
 
 /** 返回浏览器资源的 Agent 配置隔离键。 */
 function web_provider_key(context: import("@downcity/city/power").PowerContext): string {
-  return JSON.stringify([context.agent.id, context.workspace.id]);
+  return JSON.stringify([context.agent.id, context.workspace?.id ?? null]);
 }
 
 /** 校验 WebPower 当前公开支持的内建浏览器类型。 */
@@ -646,7 +646,7 @@ function create_local_browser_provider(
 ): BrowserProvider {
   const config = scope.config;
   return new LocalBrowserProvider({
-    profile_path: `${scope.data_path}/browser/${Buffer.from(scope.workspace_id).toString("base64url")}`,
+    profile_path: `${scope.data_path}/browser/${scope.workspace_id ? Buffer.from(scope.workspace_id).toString("base64url") : "agent"}`,
     ...(config.browser_executable_path
       ? { executable_path: config.browser_executable_path }
       : {}),

@@ -117,8 +117,10 @@ export async function runTaskNow(params: {
   if (task.frontmatter.agent_id !== context.agent.id) {
     throw new Error(`Task Agent mismatch: expected ${task.frontmatter.agent_id}, got ${context.agent.id}`);
   }
-  if (task.frontmatter.workspace_id !== context.workspace.id) {
-    throw new Error(`Task Workspace mismatch: expected ${task.frontmatter.workspace_id}, got ${context.workspace.id}`);
+  const workspace = context.workspace;
+  if (!workspace) throw new Error("Task execution requires a Workspace");
+  if (task.frontmatter.workspace_id !== workspace.id) {
+    throw new Error(`Task Workspace mismatch: expected ${task.frontmatter.workspace_id}, got ${workspace.id}`);
   }
   const runDirAbs = getTaskRunDir(root, task.taskId, timestamp);
   const { runDirRel } = await ensureRunDir({

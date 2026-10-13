@@ -22,8 +22,8 @@ import type {
 export function create_power_session_collection(input: {
   /** 延迟读取当前 Agent 的 Session 集合。 */
   readonly get_sessions: () => AgentSessionCollection;
-  /** 当前调用所属的 Workspace。 */
-  readonly workspace: WorkspaceRuntime;
+  /** 当前调用所属的 Workspace；无项目会话时为空。 */
+  readonly workspace?: WorkspaceRuntime;
 }): PowerSessionCollection {
   const read_sessions = (): AgentSessionCollection => input.get_sessions();
 

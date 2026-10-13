@@ -216,8 +216,8 @@ export class PowerContext {
   /** 当前 Agent 的受限句柄；`instructions` 是 Agent 身份，不是某一步的快照。 */
   readonly agent: PowerAgentHandle;
 
-  /** 当前 Workspace 的受限句柄。 */
-  readonly workspace: PowerWorkspaceHandle;
+  /** 当前 Workspace 的受限句柄；无项目会话时为空。 */
+  readonly workspace?: PowerWorkspaceHandle;
 
   /** 当前调用所属 Session 句柄；非 Session 调用时为空。 */
   readonly session?: PowerSessionHandle;
@@ -257,8 +257,8 @@ export class PowerContext {
     readonly city: PowerCityHandle;
     /** 当前 Agent 的受限句柄。 */
     readonly agent: PowerAgentHandle;
-    /** 当前 Workspace 的受限句柄。 */
-    readonly workspace: PowerWorkspaceHandle;
+    /** 当前 Workspace 的受限句柄；无项目会话时为空。 */
+    readonly workspace?: PowerWorkspaceHandle;
     /** 当前调用所属 Session 句柄。 */
     readonly session?: PowerSessionHandle;
     /** 当前调用所属 Turn 句柄。 */
@@ -280,7 +280,7 @@ export class PowerContext {
   }) {
     this.city = input.city;
     this.agent = input.agent;
-    this.workspace = input.workspace;
+    if (input.workspace) this.workspace = input.workspace;
     this.snapshot = input.snapshot;
     this.data_root_path = input.data_root_path;
     this.call = input.call;

@@ -188,18 +188,20 @@ export async function executeTaskCreateAction(params: {
   reloadSchedulerAfterMutation: TaskSchedulerReloadPort;
 }) {
   const payload = params.payload;
+  // 是否要求执行 Workspace 由任务定义按 kind 校验，个人待办可以不绑定项目。
+  const workspace_id = payload.workspace_id || params.context.workspace?.id || "";
   const result = await createTaskDefinition({
     definitions: params.definitions,
     agent_id: params.context.agent.id,
     request: {
       ...payload,
-      workspace_id: payload.workspace_id || params.context.workspace.id,
+      workspace_id,
     },
     ...(params.context.session
       ? {
           delivery_session: {
             agent_id: params.context.agent.id,
-            workspace_id: params.context.workspace.id,
+            workspace_id: params.context.workspace?.id ?? null,
             session_id: params.context.session.id,
             origin_type: params.context.session.origin.type,
           },

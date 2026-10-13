@@ -119,16 +119,20 @@ function infer_audio_media_type(file_path: string, fallback?: string): string {
 
 /** 把本地音频读取为语音服务可直接接收的 data URL。 */
 export async function local_audio_to_data_url(input: {
-  /** 当前 Workspace 的绝对根目录。 */
-  workspace_path: string;
+  /** 当前 Workspace 的绝对根目录；无项目会话时为 null，仅支持绝对音频路径。 */
+  workspace_path: string | null;
   /** 音频绝对路径或相对 Workspace 的路径。 */
   audio_path: string;
   /** 调用方显式提供的 MIME 类型。 */
   media_type?: string;
 }): Promise<{ data_url: string; media_type: string; filename: string }> {
-  const file_path = path.isAbsolute(input.audio_path)
-    ? path.resolve(input.audio_path)
-    : path.resolve(input.workspace_path, input.audio_path);
+  let file_path: string;
+  if (path.isAbsolute(input.audio_path)) {
+    file_path = path.resolve(input.audio_path);
+  } else {
+    if (!input.workspace_path) throw new Error("Relative audio paths require a Workspace");
+    file_path = path.resolve(input.workspace_path, input.audio_path);
+  }
   const media_type = infer_audio_media_type(file_path, input.media_type);
   const bytes = await fs.readFile(file_path);
   return {
@@ -140,8 +144,8 @@ export async function local_audio_to_data_url(input: {
 
 /** 把公开 ASR 输入解析为可直接发给语音服务的输入。 */
 export async function resolve_asr_input(input: {
-  /** 当前 Workspace 的绝对根目录。 */
-  workspace_path: string;
+  /** 当前 Workspace 的绝对根目录；无项目会话时为 null，仍可使用在线音频和绝对路径。 */
+  workspace_path: string | null;
   /** 归一化后的公开输入。 */
   payload: SoundAsrInput;
 }): Promise<SoundAsrInput> {

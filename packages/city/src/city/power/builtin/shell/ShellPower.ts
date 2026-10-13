@@ -161,7 +161,7 @@ function require_shell_tool(
   context: PowerContext,
   tool_name: string,
 ): AgentTool<never, PowerJsonObject> | null {
-  const shell = context.workspace.shell;
+  const shell = context.workspace?.shell;
   if (!shell) return null;
   const tool = shell.tools?.[tool_name];
   return tool ? (tool as AgentTool<never, PowerJsonObject>) : null;

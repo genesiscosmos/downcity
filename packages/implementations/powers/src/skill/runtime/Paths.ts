@@ -33,9 +33,9 @@ export interface SkillRootContext {
    */
   agent_id: string;
   /**
-   * 当前 Workspace 根目录绝对路径。
+   * 当前 Workspace 根目录绝对路径；无项目会话时省略。
    */
-  workspace_path: string;
+  workspace_path?: string;
   /**
    * 用户目录绝对路径。
    *
@@ -76,6 +76,7 @@ export function resolve_skill_root(
   }
 
   if (source === "project") {
+    if (!context.workspace_path) return null;
     const resolved = path.resolve(context.workspace_path, PROJECT_SKILLS_RELATIVE);
     return {
       source,

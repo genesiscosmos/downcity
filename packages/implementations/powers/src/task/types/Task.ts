@@ -19,8 +19,8 @@ export interface TaskDeliverySession {
   /** 持有目标 Session 的 Agent 稳定标识。 */
   readonly agent_id: string;
 
-  /** 目标 Session 创建时绑定的 Workspace 稳定标识。 */
-  readonly workspace_id: string;
+  /** 目标 Session 创建时绑定的 Workspace 稳定标识；无项目会话时为 null。 */
+  readonly workspace_id: string | null;
 
   /** 目标 Agent Session 的稳定标识。 */
   readonly session_id: string;

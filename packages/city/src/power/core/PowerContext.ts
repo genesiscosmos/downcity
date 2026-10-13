@@ -36,12 +36,8 @@ export interface CreatePowerContextInput {
   readonly agent_name?: string;
   /** 当前 Agent 能力描述。 */
   readonly agent_description?: string;
-  /** 当前 Workspace 稳定标识。 */
-  readonly workspace_id: string;
-  /** 当前 Workspace 绝对根目录。 */
-  readonly workspace_path: string;
-  /** 当前 Workspace 运行时引用。 */
-  readonly workspace: WorkspaceRuntime;
+  /** 当前 Workspace 运行时引用；无项目会话时为空。 */
+  readonly workspace?: WorkspaceRuntime;
   /** 当前 Power 私有数据根路径。 */
   readonly data_path: string;
   /** 当前 Power 私有数据文件端口。 */
@@ -90,14 +86,16 @@ export function create_power_context(input: CreatePowerContextInput): PowerConte
       },
       sessions: input.sessions,
     },
-    workspace: {
-      id: input.workspace_id,
-      path: input.workspace_path,
-      ...(input.shell ? { shell: input.shell } : {}),
-      get env() {
-        return input.get_workspace_env();
+    ...(input.workspace ? {
+      workspace: {
+        id: input.workspace.id,
+        path: input.workspace.path,
+        ...(input.shell ? { shell: input.shell } : {}),
+        get env() {
+          return input.get_workspace_env();
+        },
       },
-    },
+    } : {}),
     ...(input.session ? { session: input.session } : {}),
     ...(input.turn ? { turn: input.turn } : {}),
     snapshot: input.snapshot,

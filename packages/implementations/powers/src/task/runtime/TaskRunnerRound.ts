@@ -250,14 +250,16 @@ export async function runScriptTask(params: {
     DC_SESSION_ID: params.session_id,
   };
   stripTaskSecretEnv(childEnv);
-  const shell = params.context.workspace.shell;
+  const workspace = params.context.workspace;
+  if (!workspace) throw new Error("Script task execution requires a Workspace");
+  const shell = workspace.shell;
   if (!shell) {
     throw new Error("Script task execution requires Agent to be configured with a Shell.");
   }
   const execResult = await shell.run_sandbox_command({
     execution_id: `task-script:${params.session_id}`,
     cmd: body,
-    cwd: params.context.workspace.path,
+    cwd: workspace.path,
     shell_path: "/bin/sh",
     login: false,
     env: childEnv,

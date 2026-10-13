@@ -333,8 +333,8 @@ export interface BrowserProvider {
 export interface BrowserProviderScope {
   /** 当前 Agent 稳定标识。 */
   readonly agent_id: string;
-  /** 当前 Workspace 稳定标识。 */
-  readonly workspace_id: string;
+  /** 当前 Workspace 稳定标识；无项目会话时省略，浏览器归当前 Agent 所有。 */
+  readonly workspace_id?: string;
   /** 当前 Agent/Power 私有数据目录，用于持久化本地浏览器 profile。 */
   readonly data_path: string;
   /** 当前 Workspace 的环境变量快照，用于解析 Provider 凭据。 */

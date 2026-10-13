@@ -437,8 +437,10 @@ export async function runTaskDefinition(params: {
       if (task.frontmatter.agent_id !== params.context.agent.id) {
         throw new Error(`Task Agent mismatch: expected ${task.frontmatter.agent_id}, got ${params.context.agent.id}`);
       }
-      if (task.frontmatter.workspace_id !== params.context.workspace.id) {
-        throw new Error(`Task Workspace mismatch: expected ${task.frontmatter.workspace_id}, got ${params.context.workspace.id}`);
+      const workspace = params.context.workspace;
+      if (!workspace) throw new Error("Task execution requires a Workspace");
+      if (task.frontmatter.workspace_id !== workspace.id) {
+        throw new Error(`Task Workspace mismatch: expected ${task.frontmatter.workspace_id}, got ${workspace.id}`);
       }
       return params.executions.start(taskId, async () => {
         await runTaskNow({

@@ -43,12 +43,12 @@ export interface CityPowerContext {
   /** 当前 Turn 标识；无会话场景为 null。 */
   readonly turn_id: string | null;
 
-  /** 当前 Workspace 标识。 */
-  readonly workspace_id: string;
-  /** 当前 Workspace 用户可见名称。 */
-  readonly workspace_name: string;
-  /** 当前 Workspace 的宿主绝对路径；本地相对路径以此为根。 */
-  readonly workspace_path: string;
+  /** 当前 Workspace 标识；无项目会话时为 null。 */
+  readonly workspace_id: string | null;
+  /** 当前 Workspace 用户可见名称；无项目会话时为 null。 */
+  readonly workspace_name: string | null;
+  /** 当前 Workspace 的宿主绝对路径；无项目会话时为 null。 */
+  readonly workspace_path: string | null;
 
   /** 当前 Agent 默认模型标识；未配置为 null。 */
   readonly model_id: string | null;
