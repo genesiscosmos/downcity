@@ -283,6 +283,8 @@ export class RpcClient {
     origin_type: string;
     message_id?: string;
     include_message?: boolean;
+    /** 为 true 时原地截断源 Session，不创建分支。 */
+    replace?: boolean;
   }): Promise<AgentSessionInfo> {
     const data = await this.request<{ session: AgentSessionInfo }>({
       method: "sdk.sessions.fork",
@@ -291,6 +293,7 @@ export class RpcClient {
         origin_type: params.origin_type,
         ...(params.message_id ? { message_id: params.message_id } : {}),
         ...(params.include_message === false ? { include_message: false } : {}),
+        ...(params.replace === true ? { replace: true } : {}),
       },
     });
     return data.session;

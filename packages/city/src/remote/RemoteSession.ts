@@ -165,12 +165,14 @@ export class RemoteSession implements RemoteAgentSession {
     return await this.transport.respond(this.id, this.origin.type, input);
   }
 
-  /** 从当前远程 Session 创建分支。 */
+  /** 创建远程分支；原地替换时返回当前远程 Session 实例。 */
   async fork(input?: AgentSessionForkInput | string): Promise<RemoteAgentSession> {
-    return new RemoteSession(
-      this.transport,
-      await this.transport.fork(this.id, this.origin.type, input),
-    );
+    const info = await this.transport.fork(this.id, this.origin.type, input);
+    if (typeof input !== "string" && input?.replace === true) {
+      this.state = build_remote_state(info);
+      return this;
+    }
+    return new RemoteSession(this.transport, info);
   }
 
   private async ensure_event_pump(): Promise<void> {

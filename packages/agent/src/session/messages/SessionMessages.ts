@@ -581,6 +581,14 @@ export class SessionMessages {
     return await this.store.message_stats();
   }
 
+  /** 原地截断历史并同步订阅方，不追加 Action Message。 */
+  async truncate_messages(through_sequence: number): Promise<void> {
+    await this.ensure_initialized();
+    if (this.cache.held_message_id()) throw new Error("Cannot replace history while a message writer is active");
+    await this.store.truncate_messages(through_sequence);
+    this.cache.publish_history_truncation(through_sequence);
+  }
+
   /** 向当前 Session 导入 fork 来源 Message，并重新分配全部身份和顺序。 */
   async import_messages(messages: SessionMessage[]): Promise<void> {
     const turn_ids = new Map<string, string>();

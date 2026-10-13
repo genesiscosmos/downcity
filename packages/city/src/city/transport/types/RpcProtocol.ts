@@ -199,6 +199,8 @@ type RpcRequestPayload =
         message_id?: string;
         /** 是否包含源消息；默认包含。 */
         include_message?: boolean;
+        /** 是否原地截断历史并继续使用源 Session；默认 false。 */
+        replace?: boolean;
       };
     }
   | {

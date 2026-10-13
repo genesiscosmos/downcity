@@ -376,6 +376,13 @@ export interface AgentSessionForkInput {
    * 省略时默认为 `true`；编辑并重新发送历史消息时传入 `false`，避免新旧消息同时出现。
    */
   include_message?: boolean;
+  /**
+   * 是否直接在当前 Session 截断历史并返回当前实例。
+   *
+   * 默认 `false`，创建新分支；`true` 时保留当前身份与配置，不写操作记录。
+   * 未指定锚点时不改变历史；当前 Session 正在执行或有排队命令时拒绝替换。
+   */
+  replace?: boolean;
 }
 
 /**

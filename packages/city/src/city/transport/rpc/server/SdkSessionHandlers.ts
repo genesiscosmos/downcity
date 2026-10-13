@@ -124,10 +124,11 @@ export async function handle_sdk_session_rpc_request(params: {
     }
     case "sdk.sessions.fork": {
       const session = await get_session(request.params.session_id, request.params.origin_type);
-      const forked = await session.fork(request.params.message_id ? {
+      const forked = await session.fork({
         message_id: request.params.message_id,
         include_message: request.params.include_message,
-      } : undefined);
+        replace: request.params.replace,
+      });
       write_success(request.id, { session: await forked.get_info() });
       return true;
     }

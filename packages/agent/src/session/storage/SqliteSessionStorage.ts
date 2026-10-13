@@ -340,6 +340,31 @@ export class SqliteSessionStorage implements SessionStorage {
     return row?.message_count ?? 0;
   }
 
+  /** 原子截断历史；外键同步清理被移除 Message 的 Part 与 Composer checkpoint。 */
+  async truncate_messages(through_sequence: number): Promise<void> {
+    if (!Number.isInteger(through_sequence) || through_sequence < 0) {
+      throw new Error("through_sequence must be a non-negative integer");
+    }
+    await this.initialize();
+    this.run_transaction(() => {
+      const database = this.require_database();
+      database.prepare("DELETE FROM messages WHERE sequence > ?").run(through_sequence);
+      const latest_row = database.prepare(
+        "SELECT * FROM messages ORDER BY sequence DESC LIMIT 1",
+      ).get() as unknown as SessionMessageRow | undefined;
+      const latest_message = latest_row ? this.read_aggregates([latest_row])[0] : undefined;
+      const preview_text = latest_message
+        ? resolve_session_message_preview(latest_message).trim().slice(0, 180)
+        : null;
+      database.prepare(`
+        UPDATE session_state SET
+          message_count = (SELECT COUNT(*) FROM messages), preview_text = ?,
+          revision = revision + 1, updated_at = ?
+        WHERE singleton_id = 1
+      `).run(preview_text || null, Date.now());
+    });
+  }
+
   /** 清空 Message；外键负责同步删除 Part 与正确关联的派生数据。 */
   async clear_messages(): Promise<void> {
     await this.initialize();

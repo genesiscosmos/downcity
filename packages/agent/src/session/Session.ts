@@ -117,6 +117,8 @@ export class Session implements AgentSession {
   private readonly session_queue = new SessionQueue();
   private readonly session_loop: SessionLoop;
   private runtime_port: SessionPort | null = null;
+  /** 原地重写期间阻止新的 Prompt 进入执行队列。 */
+  private replacing_history = false;
 
   constructor(options: SessionOptions) {
     this.id = normalize_session_id(options.session_id);
@@ -418,6 +420,7 @@ export class Session implements AgentSession {
    */
   async prompt(input: AgentSessionPromptInput): Promise<AgentSessionTurnHandle> {
     await this.step_input.initialize();
+    if (this.replacing_history) throw new Error("Session history is being replaced");
     return await this.session_loop.prompt(input);
   }
 
@@ -541,12 +544,17 @@ export class Session implements AgentSession {
   }
 
   /**
-   * 从当前 session 创建一个分叉会话。
+   * 从当前 Session 创建分叉；replace 为 true 时原地截断并返回当前实例。
    *
+   * 原地替换只允许在空闲时执行，不创建 Session，也不追加 Action。
    * 复制历史与附件是分叉 Session 自身的建立过程，因此 fork 的 Action 只记录在新 Session
    * 时间线末尾，源 Session 不留下任何痕迹；失败时直接抛错，由调用方决定半成品 Session 的去留。
    */
   async fork(input?: AgentSessionForkInput | string): Promise<this> {
+    if (this.replacing_history) throw new Error("Session history is being replaced");
+    if (typeof input !== "string" && input?.replace === true) {
+      return await this.replace_history(input);
+    }
     const message_id = typeof input === "string"
       ? String(input || "").trim() || undefined
       : String(input?.message_id || "").trim() || undefined;
@@ -581,6 +589,35 @@ export class Session implements AgentSession {
     });
     this.register_forked_session(forked);
     return forked;
+  }
+
+  /** 保留当前 Session 身份、消息身份和配置，原子删除锚点之后的历史。 */
+  private async replace_history(input: AgentSessionForkInput): Promise<this> {
+    if (this.is_executing() || this.session_queue.has_command()) {
+      throw new Error("Cannot replace history while Session is executing or has queued commands");
+    }
+    this.replacing_history = true;
+    try {
+      const message_id = String(input.message_id || "").trim();
+      if (!message_id) return this;
+      const messages = await this.session_messages.list_history_messages();
+      const retained = resolve_session_fork_messages({
+        session_id: this.id,
+        messages,
+        message_id,
+        include_message: input.include_message !== false,
+      });
+      if (this.is_executing() || this.session_queue.has_command()) {
+        throw new Error("Cannot replace history while Session is executing or has queued commands");
+      }
+      if (retained.length === messages.length) return this;
+      this.dispose_title_generation();
+      await this.session_messages.truncate_messages(retained.at(-1)?.sequence ?? 0);
+      this.local_state.updated_at = Date.now();
+      return this;
+    } finally {
+      this.replacing_history = false;
+    }
   }
 
   /**

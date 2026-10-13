@@ -117,6 +117,8 @@ export interface SessionStorage {
   message_stats(): Promise<SessionMessageStorageStats>;
   /** 读取已持久化 Message 总数；只做计数，不读取内容。 */
   message_count(): Promise<number>;
+  /** 原子删除指定 sequence 之后的 Message 与关联派生数据，保留其余消息身份。 */
+  truncate_messages(through_sequence: number): Promise<void>;
   /** 清空 canonical Message 与依赖它们的派生数据。 */
   clear_messages(): Promise<void>;
   /** 返回指定 Composer 命名空间的派生存储视图。 */

@@ -154,11 +154,22 @@ export type SessionWorkspaceMutation = SessionMutationBase & {
   workspace_id?: string;
 };
 
+/** Session 历史被原地截断的同步事件；不表示用户可见操作记录。 */
+export type SessionHistoryMutation = SessionMutationBase & {
+  /** Mutation 层级固定为 session。 */
+  variant: "session";
+  /** 历史变化类型固定为 truncate。 */
+  type: "truncate";
+  /** 最后一条保留消息的 sequence；零表示历史已清空。 */
+  through_sequence: number;
+};
+
 /** Session 自身属性变化 Mutation。 */
 export type SessionStateMutation =
   | SessionTitleMutation
   | SessionConfigMutation
-  | SessionWorkspaceMutation;
+  | SessionWorkspaceMutation
+  | SessionHistoryMutation;
 
 /** 模型请求失败 Warning Mutation。 */
 export type SessionModelRequestWarningMutation = SessionMutationBase & {

@@ -293,13 +293,16 @@ export function register_sdk_session_routes(
       const body = (await c.req.json().catch(() => ({}))) as {
         message_id?: unknown;
         include_message?: unknown;
+        /** 是否原地替换源 Session 历史。 */
+        replace?: unknown;
       };
       const session = await get_session(session_id, c.req.query("origin_type"));
       const message_id = String(body.message_id || "").trim() || undefined;
-      const forked = await session.fork(message_id ? {
+      const forked = await session.fork({
         message_id,
         include_message: body.include_message !== false,
-      } : undefined);
+        replace: body.replace === true,
+      });
       return c.json({
         success: true,
         session: await forked.get_info(),

@@ -90,6 +90,18 @@ export class SessionMessageCache {
     }
   }
 
+  /** 发布已提交的历史截断边界，让订阅方移除过期消息。 */
+  publish_history_truncation(through_sequence: number): void {
+    this.publish({
+      mutation_id: generate_id(),
+      variant: "session",
+      type: "truncate",
+      session_id: this.session_id,
+      created_at: Date.now(),
+      through_sequence,
+    });
+  }
+
   /** 接受一条尚未持久化的实时 Mutation 及其对应的运行快照。 */
   project(mutation: SessionMutation, message: SessionMessage): void {
     this.remember(message);

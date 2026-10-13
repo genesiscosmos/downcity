@@ -129,6 +129,7 @@ export class RpcRemoteAgentTransport implements RemoteAgentTransport {
       origin_type,
       ...(message_id ? { message_id } : {}),
       ...(typeof input !== "string" && input?.include_message === false ? { include_message: false } : {}),
+      ...(typeof input !== "string" && input?.replace === true ? { replace: true } : {}),
     });
   }
 

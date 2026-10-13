@@ -262,6 +262,7 @@ export class HttpRemoteAgentTransport implements RemoteAgentTransport {
       body: JSON.stringify({
         ...(message_id ? { message_id: message_id } : {}),
         ...(message_id && !include_message ? { include_message: false } : {}),
+        ...(typeof input !== "string" && input?.replace === true ? { replace: true } : {}),
       }),
     });
     if (!payload.success || !payload.session?.session_id) {
