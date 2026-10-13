@@ -88,7 +88,7 @@ async function start_task_power(options = {}) {
     storage,
     new TaskExecutionCoordinator(),
   );
-  await createTaskDefinition({
+  const created = await createTaskDefinition({
     definitions: definitions_repository,
     agent_id: "task-agent",
     request: {
@@ -108,12 +108,12 @@ async function start_task_power(options = {}) {
       origin_type: "work",
     },
   });
-  const run_path = path.join(storage.path, "tasks", "daily-report", "20260901-080000-000");
+  const run_path = path.join(storage.path, "tasks", created.task_id, "20260901-080000-000");
   fs.mkdirSync(run_path, { recursive: true });
   fs.writeFileSync(path.join(run_path, "output.md"), "# Task Output\n日报正文\n");
   fs.writeFileSync(path.join(run_path, "run.json"), JSON.stringify({
     v: 1,
-    taskId: "daily-report",
+    taskId: created.task_id,
     timestamp: "20260901-080000-000",
     executionId: "daily-report:1",
     agent_id: "task-agent",

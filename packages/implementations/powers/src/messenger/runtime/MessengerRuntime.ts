@@ -110,6 +110,24 @@ export class MessengerRuntime {
   /** 恢复可靠任务并启动全部 enabled Account。 */
   async initialize(configured_accounts: MessengerAccountConfig[]): Promise<void> {
     this.store.recover_expired_leases();
+    // 关键点（中文）：旧 Work 历史仍归原 Agent 所有，外部聊天从新 Channel Session 继续。
+    // 每条路由独立提交，启动中断后仅重试尚未完成的升级。
+    for (const conversation of this.store.list_pending_channel_conversations()) {
+      const account = configured_accounts.find((item) => item.account_id === conversation.account_id);
+      const session = await this.context.system.create_agent_session({
+        agent_id: conversation.agent_id,
+        origin: {
+          type: "channel",
+          account_id: conversation.account_id,
+          ...(account ? { channel: account.provider } : {}),
+          chat_id: conversation.external_chat_id,
+          chat_type: conversation.chat_type,
+          ...(conversation.thread_id ? { thread_id: conversation.thread_id } : {}),
+          ...(conversation.title ? { chat_title: conversation.title } : {}),
+        },
+      });
+      this.store.complete_channel_session_upgrade(conversation.conversation_id, session.session_id);
+    }
     for (const account of configured_accounts) {
       await this.start_account(account);
     }
@@ -371,10 +389,9 @@ export class MessengerRuntime {
     await fs.ensureDir(storage_path);
     // 关键点（中文）：Account 只描述传输身份，缺少默认 Workspace 不应阻止 Bot 连接。
     // 附件根目录无法确定时退化为 Messenger 自有目录，既有配置行为保持不变。
-    const workspace_path = await this.resolve_account_workspace_path(account);
     const connector_context = this.create_connector_context(
       account,
-      workspace_path ?? storage_path,
+      storage_path,
       storage_path,
     );
     if (account.provider === "telegram") {
@@ -442,9 +459,8 @@ export class MessengerRuntime {
         if (!current) return;
         const session = await this.context.system.create_agent_session({
           agent_id: current.agent_id,
-          workspace_id: current.workspace_id,
           origin: {
-            type: "work",
+            type: "channel",
             account_id: account.account_id,
             channel: account.provider,
             chat_id: current.external_chat_id,
@@ -526,7 +542,6 @@ export class MessengerRuntime {
         thread_id,
         title: input.chatTitle,
         agent_id: existing.agent_id,
-        workspace_id: existing.workspace_id,
         session_id: existing.session_id,
         last_message_at: received_at,
       });
@@ -536,10 +551,9 @@ export class MessengerRuntime {
     const resolution = (async () => {
       const target = await this.resolve_account_target(account);
       const session = await this.context.system.create_agent_session({
-        agent_id: target.agent_id,
-        workspace_id: target.workspace_id,
+        agent_id: target,
         origin: {
-          type: "work",
+          type: "channel",
           account_id: account.account_id,
           channel: account.provider,
           chat_id: input.chatId,
@@ -554,8 +568,7 @@ export class MessengerRuntime {
         chat_type,
         thread_id,
         title: input.chatTitle,
-        agent_id: target.agent_id,
-        workspace_id: target.workspace_id,
+        agent_id: target,
         session_id: session.session_id,
         last_message_at: received_at,
       });
@@ -574,8 +587,7 @@ export class MessengerRuntime {
    * 解析一次出站投递允许的本地附件根目录。
    *
    * 关键点（中文）
-   * - 基准取自 Conversation 自身的 Workspace，而不是 Account 的默认值，
-   *   避免账号默认值变更后，老会话按错误目录解析附件路径。
+   * - 项目目录取自 Channel Session 的当前执行上下文，Conversation 不复制目录绑定。
    * - 同时允许 Channel 自有存储目录，使收到的附件可以原样回传。
    * - 顺序即优先级：首个根目录同时作为相对路径的解析基准。
    */
@@ -583,64 +595,34 @@ export class MessengerRuntime {
     conversation: MessengerConversationRecord,
   ): Promise<string[]> {
     const roots: string[] = [];
-    const workspaces = await this.context.system.list_workspaces();
-    const matched = workspaces.find(
-      (item) => item.workspace_id === conversation.workspace_id,
-    );
-    if (matched) roots.push(matched.workspace_path);
+    const workspace = await this.context.system.get_agent_session_workspace({
+      agent_id: conversation.agent_id,
+      session_id: conversation.session_id,
+      origin_type: "channel",
+    });
+    if (workspace) roots.push(workspace.workspace_path);
     roots.push(path.join(this.context.storage.path, "accounts", conversation.account_id));
     return roots;
-  }
-
-  /**
-   * 解析 Account 的附件根目录。
-   *
-   * 关键点（中文）
-   * - 优先使用 Account 显式配置的 Workspace，保证既有部署行为完全不变。
-   * - 未配置时退化为 City 中唯一 Workspace，让单 Workspace 部署无需额外配置。
-   * - 仍无法确定时返回 null，由调用方使用 Messenger 自有目录兜底，不阻止 Bot 连接。
-   */
-  private async resolve_account_workspace_path(
-    account: MessengerAccountConfig,
-  ): Promise<string | null> {
-    const workspace_id = normalize_text(account.workspace_id);
-    const workspaces = await this.context.system.list_workspaces();
-    if (workspace_id) {
-      const matched = workspaces.find((item) => item.workspace_id === workspace_id);
-      if (matched) return matched.workspace_path;
-      this.context.logger.warn("Messenger Account references an unknown Workspace; falling back", {
-        account_id: account.account_id,
-        workspace_id,
-      });
-    }
-    const only = workspaces.length === 1 ? workspaces[0] : undefined;
-    return only ? only.workspace_path : null;
   }
 
   /**
    * 解析一条 Account 在新 Conversation 上的实际执行目标。
    *
    * 说明（中文）
-   * - Account 不承载 Agent 身份；agent_id / workspace_id 只是可选的初始绑定。
+   * - Account 的 agent_id 仅作为新外部聊天的初始绑定，不绑定 Workspace。
    * - 缺失时按 City 现状兜底，且只在候选唯一时自动选用，避免静默路由到错误对象。
    * - 已有 Conversation 不会走到这里，它始终沿用自身记录的绑定。
    */
-  private async resolve_account_target(account: MessengerAccountConfig): Promise<{
-    agent_id: string;
-    workspace_id: string;
-  }> {
+  private async resolve_account_target(account: MessengerAccountConfig): Promise<string> {
     const agents = await this.context.system.list_agents();
-    const workspaces = await this.context.system.list_workspaces();
-    return {
-      agent_id: normalize_text(account.agent_id) || pick_unique_target(
-        agents.map((item) => item.agent_id),
-        `Messenger Account "${account.account_id}" has no agent_id`,
-      ),
-      workspace_id: normalize_text(account.workspace_id) || pick_unique_target(
-        workspaces.map((item) => item.workspace_id),
-        `Messenger Account "${account.account_id}" has no workspace_id`,
-      ),
-    };
+    const agent_id = normalize_text(account.agent_id) || pick_unique_target(
+      agents.map((item) => item.agent_id),
+      `Messenger Account "${account.account_id}" has no agent_id`,
+    );
+    if (!agents.some((agent) => agent.agent_id === agent_id)) {
+      throw new Error(`Messenger Account references an unknown Agent: ${agent_id}`);
+    }
+    return agent_id;
   }
 
   /** 启动可靠 Worker 与连接健康检查的周期触发器。 */
@@ -780,9 +762,8 @@ export class MessengerRuntime {
       });
       const turn = await this.context.system.prompt_agent_session({
         agent_id: conversation.agent_id,
-        workspace_id: conversation.workspace_id,
         session_id: conversation.session_id,
-        origin_type: "work",
+        origin_type: "channel",
         request_id: inbound.inbound_id,
         query,
       });

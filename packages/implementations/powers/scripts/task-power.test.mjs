@@ -23,7 +23,7 @@ import {
 import { TaskSchedulerCoordinator } from "../bin/task/Scheduler.js";
 import { TaskDefinitionRepository } from "../bin/task/runtime/TaskDefinitionRepository.js";
 import { TaskExecutionCoordinator } from "../bin/task/runtime/TaskExecutionCoordinator.js";
-import { inspect_task_definitions, listTasks, readTask } from "../bin/task/runtime/Store.js";
+import { inspect_task_definitions, listTasks, readTask, resolveTaskIdByTitle } from "../bin/task/runtime/Store.js";
 
 /** 把测试实例包装为 City 持有的统一 Power 注册。 */
 function create_task_registration(power) {
@@ -65,6 +65,11 @@ function create_lifecycle_context(storage, invocations) {
       write_clipboard_text: async () => {},
     },
   };
+}
+
+/** 标题只用于定位测试夹具；运行、调度和路径使用创建后的稳定 ID。 */
+async function task_id_for(storage, title) {
+  return await resolveTaskIdByTitle({ storage, title });
 }
 
 /** 等待异步条件成立，并在超时后给出稳定失败。 */
@@ -131,23 +136,18 @@ test("scheduler 从统一 Store 注册全部 Agent/Workspace 的 Task", async ()
       jobs_scheduled: 2,
       tasks_invalid: 0,
     });
-    assert.deepEqual([...definitions.keys()].sort(), [
-      "task:workspace-a-task",
-      "task:workspace-b-task",
-    ]);
-    assert.deepEqual(lifecycle_events, [
-      "register:task:workspace-a-task",
-      "register:task:workspace-b-task",
-      "start",
-    ]);
+    const id_a = await task_id_for(storage, "workspace-a-task");
+    const id_b = await task_id_for(storage, "workspace-b-task");
+    assert.deepEqual([...definitions.keys()].sort(), [`task:${id_a}`, `task:${id_b}`].sort());
+    assert.deepEqual(lifecycle_events.slice().sort(), [`register:task:${id_a}`, `register:task:${id_b}`, "start"].sort());
 
-    await definitions.get("task:workspace-b-task").execute();
+    await definitions.get(`task:${id_b}`).execute();
     assert.deepEqual(invocations, [{
       agent_id: "agent-b",
       workspace_id: "workspace-b",
       power_id: "task",
       action_id: "run",
-      input: { title: "workspace-b-task", scheduler_trigger: "cron" },
+      input: { title: id_b, scheduler_trigger: "cron" },
     }]);
     await scheduler.dispose();
   } finally {
@@ -195,7 +195,7 @@ test("scheduler dispose 会等待已进入的触发回调", async () => {
   });
   await scheduler.initialize();
 
-  const triggering = definitions.get("task:dispose-waits-trigger").execute();
+  const triggering = definitions.get(`task:${await task_id_for(storage, "dispose-waits-trigger")}`).execute();
   await invocation_started;
   let disposed = false;
   const disposing = scheduler.dispose().then(() => {
@@ -288,7 +288,7 @@ test("scheduler stop 失败时仍等待已进入的触发并聚合错误", async
     },
   );
   await scheduler.initialize();
-  const triggering = registered.get("task:dispose-error").execute();
+  const triggering = registered.get(`task:${await task_id_for(storage, "dispose-error")}`).execute();
   await invocation_started;
   let disposal_finished = false;
   const disposing = scheduler.dispose()
@@ -369,7 +369,7 @@ test("损坏 Task 会明确报告，但不会阻止其他 Task 恢复调度", as
     );
 
     const inspection = await inspect_task_definitions(storage);
-    assert.deepEqual(inspection.tasks.map((task) => task.taskId), ["healthy-definition"]);
+    assert.deepEqual(inspection.tasks.map((task) => task.title), ["healthy-definition"]);
     assert.equal(inspection.issues.length, 1);
     assert.equal(inspection.issues[0].task_id, "missing-definition");
 
@@ -390,14 +390,14 @@ test("损坏 Task 会明确报告，但不会阻止其他 Task 恢复调度", as
       jobs_scheduled: 1,
       tasks_invalid: 1,
     });
-    assert.deepEqual([...registered.keys()], ["task:healthy-definition"]);
+    assert.deepEqual([...registered.keys()], [`task:${await task_id_for(storage, "healthy-definition")}`]);
     await scheduler.dispose();
   } finally {
     await fs.rm(data_path, { recursive: true, force: true });
   }
 });
 
-test("并发创建相同标题时只有第一个定义可以提交", async () => {
+test("并发创建相同标题时保留两个独立任务身份", async () => {
   const storage = create_power_storage(new MemoryStorageProvider());
   const definitions_repository = new TaskDefinitionRepository(
     storage,
@@ -427,9 +427,11 @@ test("并发创建相同标题时只有第一个定义可以提交", async () =>
   ]);
 
   assert.equal(first.success, true);
-  assert.equal(second.success, false);
-  assert.match(second.error, /another Agent/u);
-  assert.equal((await readTask({ storage, taskId: "same-title" })).frontmatter.agent_id, "agent-a");
+  assert.equal(second.success, true);
+  assert.notEqual(first.task_id, second.task_id);
+  assert.equal((await readTask({ storage, taskId: first.task_id })).frontmatter.agent_id, "agent-a");
+  assert.equal((await readTask({ storage, taskId: second.task_id })).frontmatter.agent_id, "agent-b");
+  await assert.rejects(() => task_id_for(storage, "same-title"), /Duplicated task title/);
 });
 
 test("运行中的 Task 聚合目录不能被删除", async () => {
@@ -450,7 +452,7 @@ test("运行中的 Task 聚合目录不能被删除", async () => {
   const execution_released = new Promise((resolve) => {
     release_execution = resolve;
   });
-  assert.equal(executions.start("running-task", async () => await execution_released), true);
+  assert.equal(executions.start(await task_id_for(storage, "running-task"), async () => await execution_released), true);
 
   const blocked = await deleteTaskDefinition({
     definitions: definitions_repository,
@@ -515,9 +517,9 @@ test("one-shot 完成时保留触发期间提交的最新定义", async () => {
   );
   await scheduler.initialize();
   await new Promise((resolve) => setTimeout(resolve, 40));
-  await registered.get("task-time:one-shot-latest").execute();
+  await registered.get(`task-time:${await task_id_for(storage, "one-shot-latest")}`).execute();
 
-  const current = await readTask({ storage, taskId: "one-shot-latest" });
+  const current = await readTask({ storage, taskId: await task_id_for(storage, "one-shot-latest") });
   assert.equal(current.frontmatter.description, "after");
   assert.equal(current.body, "after body");
   assert.equal(current.frontmatter.when, "@manual");
@@ -581,7 +583,7 @@ test("TaskPower initialize 无需 Session 调用即可恢复已有 schedule", as
     assert.equal(history.success, true);
     assert.equal(history.runs?.[0]?.trigger, "cron");
     assert.equal(
-      await fs.stat(path.join(task_storage.path, "tasks", "restart-task", "task.md")).then(() => true),
+      await fs.stat(path.join(task_storage.path, "tasks", await task_id_for(task_storage, "restart-task"), "task.md")).then(() => true),
       true,
     );
     assert.equal(

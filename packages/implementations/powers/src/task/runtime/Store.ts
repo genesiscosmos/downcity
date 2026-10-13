@@ -87,6 +87,7 @@ export async function inspect_task_definitions(
       .catch(() => undefined);
     items.push({
       taskId: task_id,
+      workflow: parsed.task.frontmatter.workflow,
       title: parsed.task.frontmatter.title,
       description: parsed.task.frontmatter.description,
       ...(parsed.task.body ? { body: parsed.task.body } : {}),
@@ -120,8 +121,10 @@ export async function resolveTaskIdByTitle(params: {
 }): Promise<string> {
   const title = String(params.title || "").trim();
   if (!title) throw new Error("title is required");
-  const matched = (await inspect_task_definitions(params.storage)).tasks
-    .filter((item) => item.title === title);
+  const tasks = (await inspect_task_definitions(params.storage)).tasks;
+  const by_id = tasks.find((item) => item.taskId === title);
+  if (by_id) return by_id.taskId;
+  const matched = tasks.filter((item) => item.title === title);
   if (matched.length === 1) return matched[0].taskId;
   if (matched.length > 1) throw new Error(`Duplicated task title found: "${title}".`);
   return deriveTaskIdFromTitle(title);

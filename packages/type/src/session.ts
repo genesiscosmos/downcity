@@ -14,6 +14,7 @@ export {
   normalize_session_origin_type,
   restore_session_origin,
   SESSION_ORIGIN_TYPE_AGENT,
+  SESSION_ORIGIN_TYPE_CHANNEL,
   SESSION_ORIGIN_TYPE_WORK,
   type SessionOrigin,
 } from "./types/session/SessionOrigin.js";

@@ -46,7 +46,7 @@ import type { TaskDefinitionRepository } from "./TaskDefinitionRepository.js";
 import type { TaskCompletionDeliveryPort } from "@/task/types/TaskRunner.js";
 
 const TASK_STATUS_SCHEMA = z.enum(["enabled", "paused", "disabled"]);
-const TASK_KIND_SCHEMA = z.enum(["agent", "script"]);
+const TASK_KIND_SCHEMA = z.enum(["self", "agent", "script"]);
 
 const TASK_LIST_SCHEMA = z.object({
   status: TASK_STATUS_SCHEMA.optional(),
@@ -54,14 +54,13 @@ const TASK_LIST_SCHEMA = z.object({
 
 const TASK_CREATE_SCHEMA = z.object({
   title: z.string(),
-  when: z.string(),
-  description: z.string(),
+  when: z.string().default("@manual"),
+  description: z.string().default(""),
   workspace_id: z.string().optional(),
   kind: TASK_KIND_SCHEMA.optional(),
   review: z.boolean().optional(),
   status: TASK_STATUS_SCHEMA.optional(),
   body: z.string().optional(),
-  overwrite: z.boolean().optional(),
 });
 
 const TASK_UPDATE_SCHEMA = z.object({
@@ -82,6 +81,7 @@ const TASK_RUN_SCHEMA = z.object({
   title: z.string(),
   reason: z.string().optional(),
   scheduler_trigger: z.enum(["cron", "time"]).optional(),
+  occurrence_id: z.string().optional(),
 });
 
 const TASK_HISTORY_SCHEMA = z.object({
@@ -209,17 +209,16 @@ export function createTaskPowerActions(params: {
         zod: TASK_CREATE_SCHEMA,
         json_schema: {
           type: "object",
-          required: ["title", "when", "description"],
+          required: ["title"],
           properties: {
-            title: { type: "string", description: "Task name and unique semantic identifier." },
+            title: { type: "string", description: "Editable task title; duplicate titles create separate tasks." },
             when: { type: "string", description: "Trigger condition (@manual | cron | time:ISO8601)." },
             description: { type: "string", description: "Task description." },
             workspace_id: { type: "string", description: "Execution Workspace. Defaults to the current action Workspace." },
-            kind: { type: "string", enum: ["agent", "script"], description: "Execution kind." },
+            kind: { type: "string", enum: ["self", "agent", "script"], description: "self is a personal todo/reminder; agent and script execute in a Workspace." },
             review: { type: "boolean", description: "Whether to enable multi-turn review." },
             status: { type: "string", enum: ["enabled", "paused", "disabled"], description: "Task status." },
             body: { type: "string", description: "Task body." },
-            overwrite: { type: "boolean", description: "Whether to overwrite an existing task.md." },
           },
         },
       },
@@ -239,10 +238,10 @@ export function createTaskPowerActions(params: {
         description: "Create a task definition.",
         configure(command: Command) {
           command
-            .requiredOption("--title <title>", "Task name and unique semantic identifier.")
-            .requiredOption("--description <description>", "Task description.")
+            .requiredOption("--title <title>", "Editable task title.")
+            .option("--description <description>", "Task description.")
             .option("--when <when>", "Trigger condition (@manual | cron | time:ISO8601).", "@manual")
-            .option("--kind <kind>", "Execution kind (agent|script).", "agent")
+            .option("--kind <kind>", "Execution kind (self|agent|script).", "agent")
             .option("--review <review>", "Whether to enable multi-turn review (true|false).")
             .option("--workspace-id <workspace_id>", "Execution Workspace. Defaults to the current Workspace.")
             .option(
@@ -254,8 +253,7 @@ export function createTaskPowerActions(params: {
               "Enable immediately after creation (same as --status enabled).",
               false,
             )
-            .option("--body <body>", "Task body.")
-            .option("--overwrite", "Overwrite an existing task.md.", false);
+            .option("--body <body>", "Task body.");
         },
         map_input: mapTaskCreateCommandPayload,
       },
@@ -280,6 +278,7 @@ export function createTaskPowerActions(params: {
           properties: {
             title: { type: "string", description: "Task name." },
             reason: { type: "string", description: "Reason for manual run." },
+            occurrence_id: { type: "string", description: "Retry this recurring occurrence without creating another planned item." },
           },
         },
       },

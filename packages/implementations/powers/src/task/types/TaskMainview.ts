@@ -41,7 +41,7 @@ export interface TaskMainviewItem {
   readonly status: string;
 
   /** Task 执行类型。 */
-  readonly kind?: "agent" | "script";
+  readonly kind?: ShipTaskKind;
 
   /** Task 创建时自动绑定的结果交付 Session。 */
   readonly delivery_session?: TaskDeliverySession;

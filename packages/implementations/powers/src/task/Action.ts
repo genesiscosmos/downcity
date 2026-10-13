@@ -6,15 +6,12 @@
  * - CLI 与 Server 共用同一份参数归一化/校验逻辑
  */
 
+import { randomUUID } from "node:crypto";
 import type { ShipTaskStatus, TaskDeliverySession } from "./types/Task.js";
 import type { PowerContext } from "@downcity/city/power";
 import type { StepSnapshot } from "@downcity/city/power";
 import type { PowerJsonValue } from "@downcity/city/power";
 import type { PowerStorage } from "@downcity/city/power";
-import {
-  deriveTaskIdFromTitle,
-  normalizeTaskId,
-} from "./runtime/Paths.js";
 import {
   normalizeTaskKind,
   normalizeTaskWhen,
@@ -28,6 +25,8 @@ import {
   writeTask,
 } from "./runtime/Store.js";
 import { runTaskNow } from "./runtime/Runner.js";
+import { normalize_task_workflow, task_work_is_closed, task_is_recurring, task_occurrence_key } from "./runtime/TaskWorkflowModel.js";
+import { register_task_occurrence, settle_task_execution, save_task_workflow, normalize_task_workflow_state } from "./runtime/TaskWorkflowState.js";
 import { list_task_runs, read_task_run_detail } from "./runtime/TaskRunStore.js";
 import type {
   TaskCreateRequest,
@@ -113,13 +112,15 @@ export async function listTaskDefinitions(params: {
   const inspection = await inspect_task_definitions(params.storage);
   const agent_id = String(params.agent_id || "").trim();
   const filtered = inspection.tasks.filter((task) =>
-    (!agent_id || task.agent_id === agent_id)
+    (!agent_id || task.agent_id === agent_id || task.kind === "self")
     && (!normalizedStatus || String(task.status).toLowerCase() === normalizedStatus));
 
   return {
     success: true,
     issues: inspection.issues,
     tasks: filtered.map((task) => ({
+      task_id: task.taskId,
+      workflow: task.workflow,
       title: task.title,
       description: task.description,
       ...(typeof task.body === "string" && task.body.trim()
@@ -193,74 +194,38 @@ export async function createTaskDefinition(params: {
   const description = String(req.description || "").trim();
   const agent_id = String(params.agent_id || "").trim();
   const workspace_id = String(req.workspace_id || "").trim();
-  let taskIdFromName = "";
-  let taskId = "";
-  try {
-    taskIdFromName = deriveTaskIdFromTitle(title);
-    taskId = normalizeTaskId(taskIdFromName);
-  } catch (error) {
-    return {
-      success: false,
-      error: String(error),
-    };
-  }
+  const taskId = `task_${randomUUID()}`;
   const whenNormalized = normalizeTaskWhen(String(req.when || "@manual").trim() || "@manual");
   const kind = normalizeTaskKind(req.kind);
 
   if (!title) return { success: false, error: "Missing title" };
-  if (!description) return { success: false, error: "Missing description" };
-  if (!agent_id) return { success: false, error: "Missing agent_id" };
-  if (!workspace_id) return { success: false, error: "Missing workspace_id" };
+  if (kind !== "self" && !description) return { success: false, error: "Missing description" };
+  if (kind !== "self" && !agent_id) return { success: false, error: "Missing agent_id" };
+  if (kind !== "self" && !workspace_id) return { success: false, error: "Missing workspace_id" };
   if (!whenNormalized.ok) return { success: false, error: whenNormalized.error };
 
   const status = resolveTaskStatus(req.status, "enabled");
   const body =
     typeof req.body === "string" && req.body.trim()
       ? req.body.trim()
-      : kind === "script"
+      : kind === "script" || kind === "self"
         ? ""
         : buildDefaultTaskBody();
   try {
     return await params.definitions.mutate(async (storage) => {
-      // 关键点（中文）：title 去重判断与最终写入属于同一个定义事务。
-      const inspection = await inspect_task_definitions(storage);
-      const conflicting_issue = inspection.issues.find((issue) => issue.task_id === taskId);
-      if (conflicting_issue) {
-        return {
-          success: false,
-          error: `Task definition must be repaired or deleted before reuse: ${taskId}`,
-        };
-      }
-      const existing_tasks = inspection.tasks;
-      const duplicated = existing_tasks.find(
-        (item) => String(item.title || "").trim() === title,
-      );
-      if (duplicated && duplicated.agent_id !== agent_id) {
-        return {
-          success: false,
-          error: `Task title already belongs to another Agent: ${duplicated.agent_id}`,
-        };
-      }
-      if (duplicated && !req.overwrite) {
-        return {
-          success: true,
-          title: duplicated.title,
-          taskMdPath: duplicated.taskMdPath,
-          reusedExisting: true,
-          message: "Task title already exists; reused existing task.",
-        };
-      }
-      const target_task_id = duplicated ? duplicated.taskId : taskId;
+      // 标题是可编辑内容，重复标题不合并任务；稳定身份由创建时生成。
+      const target_task_id = taskId;
       const written = await writeTask({
         taskId: target_task_id,
         storage,
-        overwrite: Boolean(req.overwrite) || Boolean(duplicated),
+        overwrite: false,
         frontmatter: {
           title,
           description,
           when: whenNormalized.value,
-          agent_id,
-          workspace_id,
+          agent_id: kind === "self" ? "" : agent_id,
+          workspace_id: kind === "self" ? "" : workspace_id,
+          workflow: normalize_task_workflow({ organized: kind !== "self", ...(whenNormalized.value.startsWith("time:") ? { planned_at: whenNormalized.value.slice(5) } : {}), work_status: whenNormalized.value !== "@manual" && !whenNormalized.value.startsWith("time:") ? "in_progress" : "pending" }),
           ...(params.delivery_session
             ? { delivery_session: params.delivery_session }
             : {}),
@@ -272,6 +237,7 @@ export async function createTaskDefinition(params: {
       });
       return {
         success: true,
+        task_id: target_task_id,
         title,
         taskMdPath: written.taskMdPath,
       };
@@ -307,6 +273,7 @@ export async function updateTaskDefinition(params: {
       const current = await readTask({ storage, taskId: task_id });
       if (
         params.expected_agent_id
+        && current.frontmatter.kind !== "self"
         && current.frontmatter.agent_id !== params.expected_agent_id
       ) {
         throw new Error(`Task belongs to another Agent: ${current.frontmatter.agent_id}`);
@@ -317,19 +284,13 @@ export async function updateTaskDefinition(params: {
           ? req.titleNext.trim()
           : current.frontmatter.title;
       if (!nextTitle) return { success: false, error: "title cannot be empty" };
-      const nextTaskId = normalizeTaskId(deriveTaskIdFromTitle(nextTitle));
-      if (nextTaskId !== task_id) {
-        return {
-          success: false,
-          error: `title cannot change task identity. Expected "${task_id}", got "${nextTaskId}".`,
-        };
-      }
+      if (params.definitions.is_running(task_id)) throw new Error("运行期间不能修改任务定义");
 
       const description =
         typeof req.description === "string"
           ? req.description.trim()
           : current.frontmatter.description;
-      if (!description) return { success: false, error: "description cannot be empty" };
+      if (current.frontmatter.kind !== "self" && !description) return { success: false, error: "description cannot be empty" };
 
       const whenInput = req.clearWhen
         ? "@manual"
@@ -342,11 +303,11 @@ export async function updateTaskDefinition(params: {
       const workspace_id = typeof req.workspace_id === "string"
         ? req.workspace_id.trim()
         : current.frontmatter.workspace_id;
-      if (!workspace_id) return { success: false, error: "workspace_id cannot be empty" };
+      if (current.frontmatter.kind !== "self" && !workspace_id) return { success: false, error: "workspace_id cannot be empty" };
       const agent_id = typeof req.agent_id === "string"
         ? req.agent_id.trim()
         : current.frontmatter.agent_id;
-      if (!agent_id) return { success: false, error: "agent_id cannot be empty" };
+      if (current.frontmatter.kind !== "self" && !agent_id) return { success: false, error: "agent_id cannot be empty" };
       const kind = normalizeTaskKind(
         req.kind === undefined ? current.frontmatter.kind : req.kind,
       );
@@ -379,6 +340,7 @@ export async function updateTaskDefinition(params: {
         taskId: task_id,
         overwrite: true,
         frontmatter: {
+          ...current.frontmatter,
           title: nextTitle,
           description,
           when: whenNormalized.value,
@@ -396,6 +358,7 @@ export async function updateTaskDefinition(params: {
 
       return {
         success: true,
+        task_id,
         title: nextTitle,
         taskMdPath: written.taskMdPath,
       };
@@ -442,11 +405,44 @@ export async function runTaskDefinition(params: {
       if (task.frontmatter.workspace_id !== workspace.id) {
         throw new Error(`Task Workspace mismatch: expected ${task.frontmatter.workspace_id}, got ${workspace.id}`);
       }
+      if (task.frontmatter.kind === "self") throw new Error("个人待办不需要 Agent 执行");
+      if (task_work_is_closed(task)) throw new Error("请先重新打开已完成或已取消的任务");
+      if (params.definitions.is_running(taskId)) {
+        if (trigger.type === "cron") {
+          const state = normalize_task_workflow_state(task.frontmatter.workflow_state);
+          const at = new Date();
+          const occurrence_id = task_occurrence_key(task, at);
+          if (!state.occurrences.some((item) => item.occurrence_id === occurrence_id)) {
+            state.occurrences.push({ occurrence_id, planned_at: at.toISOString(), status: "skipped" });
+            task.frontmatter.workflow_state = state;
+            await save_task_workflow(params.definitions, task);
+          }
+        }
+        return false;
+      }
+      const workflow = normalize_task_workflow(task.frontmatter.workflow);
+      workflow.work_status = "in_progress";
+      workflow.organized = true;
+      workflow.active_execution_id = executionId;
+      task.frontmatter.workflow = workflow;
+      if (trigger.type !== "manual" && !register_task_occurrence(task, new Date(), executionId)) return false;
+      const state = normalize_task_workflow_state(task.frontmatter.workflow_state);
+      if (trigger.type === "manual" && task_is_recurring(task)) {
+        const occurrence = params.request.occurrence_id ? state.occurrences.find((item) => item.occurrence_id === params.request.occurrence_id) : undefined;
+        if (params.request.occurrence_id && (!occurrence || occurrence.status !== "pending")) throw new Error("只能重试尚未完成的周期发生项");
+        if (occurrence) { occurrence.status = "in_progress"; occurrence.execution_id = executionId; }
+        else state.occurrences.push({ occurrence_id: executionId, planned_at: new Date().toISOString(), status: "in_progress", execution_id: executionId });
+      }
+      // 用户明确重新执行时，前一次的失败或验收请求退出待处理，不覆盖其他周期事项。
+      state.inbox.filter((item) => !task_is_recurring(task) || item.occurrence_id === params.request.occurrence_id).forEach((item) => { item.resolved = true; });
+      task.frontmatter.workflow_state = state;
+      await save_task_workflow(params.definitions, task);
       return params.executions.start(taskId, async () => {
         await runTaskNow({
           context: params.context,
           storage,
           taskId,
+          task_snapshot: task,
           trigger,
           executionId,
           notifications: params.notifications,
@@ -458,7 +454,11 @@ export async function runTaskDefinition(params: {
             ? { agent_systems: [...params.execution_context.agent_systems] }
             : {}),
         })
-        .then((result) => {
+        .then(async (result) => {
+          await settle_task_execution({ definitions: params.definitions, task, execution_id: executionId,
+            success: result.status === "success" && result.resultStatus !== "invalid", timestamp: result.timestamp,
+            ...(result.resultErrors.length ? { error: result.resultErrors.join("; ") } : {}),
+          });
           params.context.logger.info(
             formatTaskLogMessage("Task run finished"),
             {
@@ -478,7 +478,8 @@ export async function runTaskDefinition(params: {
             },
           );
         })
-        .catch((error) => {
+        .catch(async (error) => {
+          await settle_task_execution({ definitions: params.definitions, task, execution_id: executionId, success: false, error: String(error) });
           params.context.logger.error(
             formatTaskLogMessage("Task run failed"),
             {
@@ -565,6 +566,7 @@ export async function setTaskStatus(params: {
 
       return {
         success: true,
+        task_id,
         title: task.frontmatter.title,
         status,
       };
@@ -604,6 +606,7 @@ export async function deleteTaskDefinition(params: {
       });
       return {
         success: true,
+        task_id,
         title,
         taskDirPath: deleted.taskDirPath,
       };

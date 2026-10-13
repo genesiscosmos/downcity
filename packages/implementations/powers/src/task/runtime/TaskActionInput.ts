@@ -61,7 +61,7 @@ function readTaskStatusOrThrow(value?: string): ShipTaskStatus | undefined {
 
 function readTaskKindOrThrow(value?: string): ShipTaskKind | undefined {
   if (!value) return undefined;
-  if (value === "agent" || value === "script") {
+  if (value === "self" || value === "agent" || value === "script") {
     return value;
   }
   throw new Error(`Invalid task kind: ${value}`);
@@ -80,9 +80,8 @@ function mapTaskCreateCommandInput(
   const title = String(getStringOpt(opts, "title") || "").trim();
   const description = String(getStringOpt(opts, "description") || "").trim();
   if (!title) throw new Error("Missing title");
-  if (!description) throw new Error("Missing description");
-
   const kind = readTaskKindOrThrow(getStringOpt(opts, "kind"));
+  if (kind !== "self" && !description) throw new Error("Missing description");
   const review = getBooleanLikeOpt(opts, "review");
   const status = readTaskStatusOrThrow(getStringOpt(opts, "status"));
   const activate = getBooleanOpt(opts, "activate") === true;
@@ -102,7 +101,6 @@ function mapTaskCreateCommandInput(
     ...(typeof getStringOpt(opts, "body") === "string"
       ? { body: getStringOpt(opts, "body") }
       : {}),
-    overwrite: getBooleanOpt(opts, "overwrite") === true,
   };
 }
 

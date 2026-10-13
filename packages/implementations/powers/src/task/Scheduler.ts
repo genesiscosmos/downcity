@@ -15,6 +15,8 @@ import {
 } from "./runtime/Model.js";
 import { TaskCronTriggerEngine } from "./runtime/CronTrigger.js";
 import { inspect_task_definitions, readTask } from "./runtime/Store.js";
+import { normalize_task_workflow, task_work_is_closed, task_occurrence_key } from "./runtime/TaskWorkflowModel.js";
+import { normalize_task_workflow_state, register_task_occurrence, save_task_workflow } from "./runtime/TaskWorkflowState.js";
 import type { TaskDefinitionRepository } from "./runtime/TaskDefinitionRepository.js";
 import type { ShipTaskDefinitionV1, ShipTaskRunTriggerV1 } from "./types/Task.js";
 import type {
@@ -84,6 +86,7 @@ export class TaskSchedulerCoordinator {
           taskId: item.taskId,
           storage: this.definitions.storage,
         });
+        if (await this.mark_missed_one_shot(task)) continue;
         result.jobs_scheduled += this.register(task);
       }
       result.tasks_found = inspection.tasks.length;
@@ -107,7 +110,7 @@ export class TaskSchedulerCoordinator {
           storage: this.definitions.storage,
         });
         task_found = true;
-        jobs_scheduled = this.register(task);
+        if (!await this.mark_missed_one_shot(task)) jobs_scheduled = this.register(task);
       } catch (error) {
         if (!is_missing_task_error(error)) throw error;
       }
@@ -144,13 +147,13 @@ export class TaskSchedulerCoordinator {
 
   /** 根据最新 Task 定义登记 cron 或 one-shot schedule。 */
   private register(task: ShipTaskDefinitionV1): number {
-    if (task.frontmatter.status !== "enabled") return 0;
+    if (task.frontmatter.status !== "enabled" || task_work_is_closed(task)) return 0;
     const cron_expression = resolveTaskWhenCronExpression(task.frontmatter.when);
     if (cron_expression && !isTaskWhenManual(task.frontmatter.when)) {
       this.engine.register({
         id: cron_job_id(task.taskId),
         expression: cron_expression,
-        timezone: this.timezone,
+        timezone: task.frontmatter.workflow?.timezone || this.timezone,
         execute: async () => await this.trigger(task.taskId, { type: "cron" }),
       });
       this.scheduled_task_ids.add(task.taskId);
@@ -186,8 +189,23 @@ export class TaskSchedulerCoordinator {
   private async execute(task_id: string, trigger: ShipTaskRunTriggerV1): Promise<void> {
     try {
       const task = await readTask({ taskId: task_id, storage: this.definitions.storage });
-      if (task.frontmatter.status !== "enabled") return;
+      if (task.frontmatter.status !== "enabled" || task_work_is_closed(task)) return;
       if (!trigger_matches(task, trigger)) return;
+      if (await this.mark_missed_one_shot(task)) {
+        if (!this.disposed) await this.reconcile(task_id);
+        return;
+      }
+      if (task.frontmatter.kind === "self") {
+        await this.definitions.mutate(async (storage) => {
+          const latest = await readTask({ storage, taskId: task_id });
+          if (latest.frontmatter.status !== "enabled" || task_work_is_closed(latest) || !trigger_matches(latest, trigger)) return;
+          if (!register_task_occurrence(latest, new Date())) return;
+          if (trigger.type === "time") latest.frontmatter.status = "paused";
+          await save_task_workflow(this.definitions, latest);
+        });
+        if (trigger.type === "time" && !this.disposed) await this.reconcile(task_id);
+        return;
+      }
 
       const raw_result = await this.context.system.invoke_agent_power({
         agent_id: task.frontmatter.agent_id,
@@ -195,7 +213,7 @@ export class TaskSchedulerCoordinator {
         power_id: "task",
         action_id: "run",
         input: {
-          title: task.frontmatter.title,
+          title: task.taskId,
           scheduler_trigger: trigger.type,
         },
       }) as ScheduledTaskActionResult;
@@ -219,12 +237,44 @@ export class TaskSchedulerCoordinator {
         if (committed && !this.disposed) await this.reconcile(task.taskId);
       }
     } catch (error) {
+      // 触发失败也必须进入待处理，不能只留日志；保存失败仍保持明确日志。
+      await this.definitions.mutate(async (storage) => {
+        const task = await readTask({ storage, taskId: task_id });
+        if (!trigger_matches(task, trigger) || task_work_is_closed(task)) return;
+        const state = normalize_task_workflow_state(task.frontmatter.workflow_state);
+        const at = new Date();
+        const occurrence_id = task_occurrence_key(task, at);
+        const item_id = `trigger_failure:${occurrence_id}`;
+        if (!state.occurrences.some((item) => item.occurrence_id === occurrence_id)) state.occurrences.push({ occurrence_id, planned_at: at.toISOString(), status: "pending" });
+        if (!state.inbox.some((item) => item.item_id === item_id)) state.inbox.push({ item_id, kind: "failure", message: `计划执行无法启动：${String(error)}`, created_at: at.toISOString(), resolved: false, occurrence_id });
+        task.frontmatter.workflow_state = state;
+        if (trigger.type === "time") task.frontmatter.status = "paused";
+        await save_task_workflow(this.definitions, task);
+      }).catch((state_error) => this.context.logger.warn("[TASK] Trigger failure state could not be saved", { task_id, error: String(state_error) }));
       this.context.logger.error(`${TASK_LOG_PREFIX} Scheduled task trigger failed`, {
         task_id,
         trigger: trigger.type,
         error: String(error),
       });
     }
+  }
+
+  /** 超过一分钟的单次触发不补跑，保留可处理的错过事项。 */
+  private async mark_missed_one_shot(task: ShipTaskDefinitionV1): Promise<boolean> {
+    const planned = resolveTaskWhenOneShotMs(task.frontmatter.when);
+    if (task.frontmatter.status !== "enabled" || planned === null || Date.now() - planned < 60_000) return false;
+    await this.definitions.mutate(async (storage) => {
+      const latest = await readTask({ storage, taskId: task.taskId });
+      if (latest.frontmatter.when !== task.frontmatter.when || latest.frontmatter.status !== "enabled") return;
+      const state = normalize_task_workflow_state(latest.frontmatter.workflow_state);
+      const item_id = `missed:${latest.frontmatter.when}`;
+      if (!state.inbox.some((item) => item.item_id === item_id)) state.inbox.push({ item_id, kind: "missed", message: "计划时间已错过，请立即处理或重新安排", created_at: new Date().toISOString(), resolved: false });
+      latest.frontmatter.workflow_state = state;
+      latest.frontmatter.workflow = normalize_task_workflow(latest.frontmatter.workflow);
+      latest.frontmatter.status = "paused";
+      await save_task_workflow(this.definitions, latest);
+    });
+    return true;
   }
 
   /** 从 engine 删除一个 Task 可能拥有的全部 job。 */

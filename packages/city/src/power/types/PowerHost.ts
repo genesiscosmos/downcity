@@ -107,12 +107,12 @@ export interface PowerHostSystem {
     /** 传递给 action 的可选 JSON 输入。 */
     readonly input?: PowerJsonValue;
   }): Promise<PowerJsonValue>;
-  /** 在指定 Agent 与 Workspace 下创建一个新的 Session。 */
+  /** 为指定 Agent 创建 Session；Workspace 可省略，此时不注入项目上下文。 */
   create_agent_session(input: {
     /** 持有新 Session 的 Agent 稳定 ID。 */
     readonly agent_id: string;
-    /** 新 Session 绑定的 Workspace 稳定 ID。 */
-    readonly workspace_id: string;
+    /** 新 Session 的初始 Workspace ID；省略时由 Agent 使用默认上下文。 */
+    readonly workspace_id?: string;
     /** 新 Session 的来源及其业务路由元数据。 */
     readonly origin: { readonly type: string; readonly [key: string]: PowerJsonValue };
   }): Promise<{ readonly session_id: string }>;
@@ -120,8 +120,8 @@ export interface PowerHostSystem {
   prompt_agent_session(input: {
     /** 持有目标 Session 的 Agent 稳定 ID。 */
     readonly agent_id: string;
-    /** 本次 Session 执行使用的 Workspace 稳定 ID。 */
-    readonly workspace_id: string;
+    /** 本次显式切换的 Workspace ID；省略时沿用 Session 当前上下文。 */
+    readonly workspace_id?: string;
     /** 目标 Session 的稳定 ID。 */
     readonly session_id: string;
     /** Session 的持久化来源分区。 */
@@ -144,6 +144,15 @@ export interface PowerHostSystem {
     /** 要追加的纯文本消息。 */
     readonly text: string;
   }): Promise<void>;
+  /** 读取 Session 当前执行目录，供附件路径解析等宿主行为使用。 */
+  get_agent_session_workspace(input: {
+    /** 持有 Session 的 Agent 稳定 ID。 */
+    readonly agent_id: string;
+    /** Session 的稳定 ID。 */
+    readonly session_id: string;
+    /** Session 的来源存储分区。 */
+    readonly origin_type: string;
+  }): Promise<PowerHostWorkspace | undefined>;
   /** 使用系统默认应用打开 HTTP 或 HTTPS 地址。 */
   open_external(input: {
     /** 要打开的绝对 URL。 */

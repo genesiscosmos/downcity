@@ -15,7 +15,7 @@ import type {
 
 type SqlRow = Record<string, unknown>;
 
-const MESSENGER_STORE_SCHEMA_VERSION = "1";
+const MESSENGER_STORE_SCHEMA_VERSION = "2";
 
 /** 返回 Messenger Power 生命周期数据库的绝对路径。 */
 export function get_messenger_store_path(storage_path: string): string {
@@ -72,6 +72,25 @@ export class MessengerStore {
           ORDER BY COALESCE(last_message_at, updated_at) DESC
         `).all() as SqlRow[];
     return rows.map(to_conversation);
+  }
+
+  /** 列出升级后尚未建立 Channel Session 的外部聊天；原 Work Session 保留。 */
+  list_pending_channel_conversations(): MessengerConversationRecord[] {
+    const rows = this.database.prepare(`
+      SELECT conversation.* FROM messenger_conversations AS conversation
+      JOIN messenger_meta AS meta
+        ON meta.key = 'channel_session:' || conversation.conversation_id
+    `).all() as SqlRow[];
+    return rows.map(to_conversation);
+  }
+
+  /** 原子切换升级后的 Session 路由并完成升级标记。 */
+  complete_channel_session_upgrade(conversation_id: string, session_id: string): void {
+    this.transaction(() => {
+      this.update_conversation({ conversation_id, session_id });
+      this.database.prepare("DELETE FROM messenger_meta WHERE key = ?")
+        .run(`channel_session:${conversation_id}`);
+    });
   }
 
   /** 列出当前 Agent 拥有的全部 Conversation。 */
@@ -137,8 +156,6 @@ export class MessengerStore {
     title?: string;
     /** 新映射默认使用的 Agent。 */
     agent_id: string;
-    /** 新映射默认使用的 Workspace。 */
-    workspace_id: string;
     /** 新映射使用的 Session ID。 */
     session_id: string;
     /** 最近一条消息的时间。 */
@@ -168,9 +185,9 @@ export class MessengerStore {
     this.database.prepare(`
       INSERT INTO messenger_conversations (
         conversation_id, account_id, external_chat_id, chat_type, thread_key,
-        title, agent_id, workspace_id, session_id, status,
+        title, agent_id, session_id, status,
         last_message_at, created_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', ?, ?, ?)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'active', ?, ?, ?)
     `).run(
       conversation_id,
       account_id,
@@ -179,7 +196,6 @@ export class MessengerStore {
       thread_id,
       normalize_text(input.title) || null,
       normalize_required(input.agent_id, "agent_id"),
-      normalize_required(input.workspace_id, "workspace_id"),
       normalize_required(input.session_id, "session_id"),
       input.last_message_at,
       current_time,
@@ -196,8 +212,6 @@ export class MessengerStore {
     conversation_id: string;
     /** 新 Agent ID。 */
     agent_id?: string;
-    /** 新 Workspace ID。 */
-    workspace_id?: string;
     /** 新 Session ID。 */
     session_id?: string;
     /** 新状态。 */
@@ -206,14 +220,13 @@ export class MessengerStore {
     const current = this.get_conversation(input.conversation_id);
     if (!current) throw new Error(`Messenger conversation not found: ${input.conversation_id}`);
     const agent_id = normalize_text(input.agent_id) || current.agent_id;
-    const workspace_id = normalize_text(input.workspace_id) || current.workspace_id;
     const session_id = normalize_text(input.session_id) || current.session_id;
     const status = input.status ?? current.status;
     this.database.prepare(`
       UPDATE messenger_conversations
-      SET agent_id = ?, workspace_id = ?, session_id = ?, status = ?, updated_at = ?
+      SET agent_id = ?, session_id = ?, status = ?, updated_at = ?
       WHERE conversation_id = ?
-    `).run(agent_id, workspace_id, session_id, status, Date.now(), current.conversation_id);
+    `).run(agent_id, session_id, status, Date.now(), current.conversation_id);
     return this.get_conversation(current.conversation_id) ?? current;
   }
 
@@ -595,7 +608,6 @@ function ensure_schema(database: DatabaseSync): void {
       thread_key TEXT NOT NULL DEFAULT '',
       title TEXT,
       agent_id TEXT NOT NULL,
-      workspace_id TEXT NOT NULL,
       session_id TEXT NOT NULL,
       status TEXT NOT NULL CHECK (status IN ('active', 'paused')),
       last_message_at INTEGER,
@@ -671,6 +683,23 @@ function ensure_schema(database: DatabaseSync): void {
     CREATE INDEX IF NOT EXISTS messenger_activity_account_idx
     ON messenger_activity(account_id, created_at DESC);
   `);
+  // 关键点（中文）：一次性演进旧路由结构；不删除历史会话或可靠收发记录。
+  const columns = database.prepare("PRAGMA table_info(messenger_conversations)").all() as SqlRow[];
+  if (columns.some((column) => column.name === "workspace_id")) {
+    database.exec("BEGIN IMMEDIATE;");
+    try {
+      database.prepare(`
+        INSERT INTO messenger_meta (key, value, updated_at)
+        SELECT 'channel_session:' || conversation_id, session_id, ?
+        FROM messenger_conversations
+      `).run(Date.now());
+      database.exec("ALTER TABLE messenger_conversations DROP COLUMN workspace_id;");
+      database.exec("COMMIT;");
+    } catch (error) {
+      database.exec("ROLLBACK;");
+      throw error;
+    }
+  }
   database.prepare(`
     INSERT INTO messenger_meta (key, value, updated_at)
     VALUES ('schema_version', ?, ?)
@@ -691,7 +720,6 @@ function to_conversation(row: SqlRow): MessengerConversationRecord {
     ...(thread_id ? { thread_id } : {}),
     ...(title ? { title } : {}),
     agent_id: normalize_required(row.agent_id, "agent_id"),
-    workspace_id: normalize_required(row.workspace_id, "workspace_id"),
     session_id: normalize_required(row.session_id, "session_id"),
     status: normalize_required(row.status, "status") as "active" | "paused",
     ...(last_message_at !== undefined ? { last_message_at } : {}),

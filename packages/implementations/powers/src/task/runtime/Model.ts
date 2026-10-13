@@ -3,7 +3,7 @@
  *
  * 关键点（中文）
  * - `task.md` 使用 YAML frontmatter + markdown 正文
- * - frontmatter 必须包含：title/when/description/agent_id/workspace_id/status
+ * - frontmatter 必须包含 title/when/status；个人待办不要求执行目标。
  * - `when` 统一承载触发语义：`@manual` / cron / `time:<ISO8601-with-timezone>`
  */
 
@@ -11,6 +11,8 @@ import yaml from "js-yaml";
 import path from "node:path";
 import cron from "node-cron";
 import { parseFrontMatter } from "./Frontmatter.js";
+import { normalize_task_workflow } from "./TaskWorkflowModel.js";
+import { normalize_task_workflow_state } from "./TaskWorkflowStateSchema.js";
 import type {
   ShipTaskDefinitionV1,
   ShipTaskFrontmatterV1,
@@ -26,9 +28,6 @@ import type { PowerJsonObject, PowerJsonValue } from "@downcity/city/power";
 const REQUIRED_FIELDS: Array<keyof ShipTaskFrontmatterV1> = [
   "title",
   "when",
-  "description",
-  "agent_id",
-  "workspace_id",
   "status",
 ];
 
@@ -215,6 +214,7 @@ export function normalizeTaskStatus(input: TaskRawValue): ShipTaskStatus | null 
  */
 export function normalizeTaskKind(input: TaskRawValue): ShipTaskKind {
   const s = typeof input === "string" ? input.trim().toLowerCase() : "";
+  if (s === "self") return "self";
   if (s === "script") return "script";
   return "agent";
 }
@@ -250,18 +250,6 @@ export function parseTaskMarkdown(params: {
 
   if (!meta || typeof meta !== "object") {
     return { ok: false, error: "Invalid frontmatter: must be a YAML object" };
-  }
-
-  // 兼容已有任务定义：若无 when，则按旧字段推导。
-  const rawWhen = String(meta.when ?? "").trim();
-  if (!rawWhen) {
-    const rawTime = String(meta.time ?? "").trim();
-    const rawCron = String(meta.cron ?? "").trim();
-    if (rawTime) {
-      meta.when = `time:${rawTime}`;
-    } else if (rawCron) {
-      meta.when = rawCron;
-    }
   }
 
   const missing: string[] = [];
@@ -300,9 +288,9 @@ export function parseTaskMarkdown(params: {
   const fm: ShipTaskFrontmatterV1 = {
     title: rawTitle,
     when: whenNormalized.value,
-    description: String(meta.description).trim(),
-    agent_id: String(meta.agent_id).trim(),
-    workspace_id: String(meta.workspace_id).trim(),
+    description: String(meta.description || "").trim(),
+    agent_id: String(meta.agent_id || "").trim(),
+    workspace_id: String(meta.workspace_id || "").trim(),
     ...(delivery_session.value
       ? { delivery_session: delivery_session.value }
       : {}),
@@ -310,6 +298,11 @@ export function parseTaskMarkdown(params: {
     ...(kind === "agent" && normalizeTaskReview(meta.review) === true ? { review: true } : {}),
     status,
   };
+  try {
+    fm.workflow = normalize_task_workflow(meta.workflow);
+    fm.workflow_state = normalize_task_workflow_state(meta.workflow_state);
+  }
+  catch (error) { return { ok: false, error: String(error) }; }
 
   const relTaskMdPath = path
     .relative(data_path, taskMdPath)
@@ -362,6 +355,8 @@ export function buildTaskMarkdown(params: {
     kind,
     ...(kind === "agent" ? { review: Boolean(frontmatter.review) } : {}),
     status: String(frontmatter.status || "").trim(),
+    workflow: { ...normalize_task_workflow(frontmatter.workflow), updated_at: new Date().toISOString() },
+    workflow_state: normalize_task_workflow_state(frontmatter.workflow_state),
   };
 
   const yamlText = yaml.dump(meta, {

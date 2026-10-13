@@ -35,8 +35,8 @@ export function create_builtin_power_registrations(input: {
     {
       readme: builtin_readme_path("task"),
       has_config: false,
-      has_sidebar: true,
-      has_mainview: true,
+      has_sidebar: false,
+      has_mainview: false,
       power: new TaskPower(),
     },
     {

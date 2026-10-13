@@ -187,7 +187,6 @@ export const MESSENGER_POWER_RENDERER = define_power_renderer({
 
     if (!snapshot) return <LoadingState label="正在读取 Messenger 工作区…" />;
     const agent_options = snapshot.agents.map((agent) => ({ value: agent.agent_id, label: agent.name }));
-    const workspace_options = snapshot.workspaces.map((workspace) => ({ value: workspace.workspace_id, label: workspace.name }));
     if (view === "create") {
       const save = async () => {
         const created = await mutate<MessengerAccountView>("accounts.create", draft, "Bot Account 已创建");
@@ -240,10 +239,9 @@ export const MESSENGER_POWER_RENDERER = define_power_renderer({
               {draft.provider === "feishu" && manual_credential_mode ? <Row label="扫码创建" description="返回扫码方式，由飞书自动颁发凭据。" trailing={<Button on_click={() => set_manual_credential_mode(false)}>返回扫码</Button>} /> : null}
             </Group>}
         </Section>
-        <Section title="Default routing" description="可选。只作为新 Conversation 的初始绑定，留空时由 City 默认兜底。">
+        <Section title="Default routing" description="为每个新外部聊天创建独立的 Channel Session。留空时仅在 City 中 Agent 唯一时自动选用。">
           <Group>
             <Row label="Agent" trailing={<Select value={draft.agent_id ?? ""} options={agent_options} on_value_change={(agent_id) => set_draft({ ...draft, agent_id })} />} />
-            <Row label="Workspace" trailing={<Select value={draft.workspace_id ?? ""} options={workspace_options} on_value_change={(workspace_id) => set_draft({ ...draft, workspace_id })} />} />
           </Group>
         </Section>
       </Page>;
@@ -289,7 +287,6 @@ export const MESSENGER_POWER_RENDERER = define_power_renderer({
         </Group></Section>
         <Section title="Default routing"><Group>
           <Row label="Agent" trailing={display_agent(snapshot, account.agent_id)} />
-          <Row label="Workspace" trailing={display_workspace(snapshot, account.workspace_id)} />
           <Row label="Conversations" trailing={String(detail.conversations.length)} />
         </Group></Section>
       </Stack> : null}
@@ -311,7 +308,6 @@ export const MESSENGER_POWER_RENDERER = define_power_renderer({
       </Stack> : null}
       {view === "routing" ? <Section title="Default routing" description="只影响之后首次建立的 Conversation；已有 Conversation 保持自己的路由。"><Group>
         <Row label="Agent" trailing={<Select value={edit_draft?.agent_id ?? account.agent_id ?? ""} options={agent_options} on_value_change={(agent_id) => set_edit_draft({ ...(edit_draft ?? account_view_to_draft(account)), agent_id })} />} />
-        <Row label="Workspace" trailing={<Select value={edit_draft?.workspace_id ?? account.workspace_id ?? ""} options={workspace_options} on_value_change={(workspace_id) => set_edit_draft({ ...(edit_draft ?? account_view_to_draft(account)), workspace_id })} />} />
         <Row label="Apply" trailing={<Button variant="primary" disabled={busy || !edit_draft} on_click={() => edit_draft && void mutate("accounts.update", edit_draft, "默认路由已更新")}>保存默认路由</Button>} />
       </Group></Section> : null}
       {view === "access" ? <Stack>
@@ -336,11 +332,10 @@ export const MESSENGER_POWER_RENDERER = define_power_renderer({
             : <EmptyState title="还没有外部身份" />}
         </Section>
       </Stack> : null}
-      {view === "conversations" ? <Section title="Conversations" description="每个外部会话拥有独立 Agent Session。">
+      {view === "conversations" ? <Section title="Conversations" description="每个外部聊天及话题拥有独立的 Channel Session，历史与 Agent 主对话分开。">
         {detail.conversations.length ? <Stack>{detail.conversations.map((conversation) => <Group key={conversation.conversation_id} label={conversation.title || conversation.external_chat_id}>
           <Row label="Type" trailing={conversation.chat_type} />
-          <Row label="Agent" trailing={<Select value={conversation.agent_id} options={agent_options} on_value_change={(agent_id) => void mutate("conversations.update_route", { conversation_id: conversation.conversation_id, agent_id, workspace_id: conversation.workspace_id }, "Conversation Agent 已更新")} />} />
-          <Row label="Workspace" trailing={<Select value={conversation.workspace_id} options={workspace_options} on_value_change={(workspace_id) => void mutate("conversations.update_route", { conversation_id: conversation.conversation_id, agent_id: conversation.agent_id, workspace_id }, "Conversation Workspace 已更新")} />} />
+          <Row label="Agent" trailing={<Select value={conversation.agent_id} options={agent_options} on_value_change={(agent_id) => void mutate("conversations.update_route", { conversation_id: conversation.conversation_id, agent_id }, "Conversation Agent 已更新")} />} />
           <Row label="Session" trailing={conversation.session_id} />
           <Row label="Status" trailing={<Switch checked={conversation.status === "active"} on_checked_change={(active) => void mutate("conversations.set_status", { conversation_id: conversation.conversation_id, status: active ? "active" : "paused" }, active ? "Conversation 已恢复" : "Conversation 已暂停")} aria_label="Conversation active" />} />
           <Row label="Session actions" trailing={<Button disabled={busy} on_click={() => void mutate("conversations.reset_session", { conversation_id: conversation.conversation_id }, "Conversation Session 已重置")}>新建 Session</Button>} />
@@ -368,7 +363,6 @@ function empty_draft(provider: MessengerProvider = "telegram"): MessengerAccount
     provider,
     enabled: true,
     agent_id: "",
-    workspace_id: "",
     ...(provider === "telegram" ? { bot_token: "" } : { app_id: "", app_secret: "" }),
     ...(provider === "feishu" ? { domain: "" } : {}),
   };
@@ -382,7 +376,6 @@ function account_view_to_draft(account: MessengerAccountView): MessengerAccountD
     provider: account.provider,
     enabled: account.enabled,
     agent_id: account.agent_id,
-    workspace_id: account.workspace_id,
     ...(account.provider === "telegram" ? { bot_token: "" } : {
       app_id: account.app_id ?? "",
       app_secret: "",
@@ -436,25 +429,9 @@ function status_tone(state: MessengerAccountView["connection_state"]): "success"
  */
 function display_agent(snapshot: MessengerDesktopSnapshot, agent_id: string | undefined): string {
   const value = String(agent_id ?? "").trim();
-  if (!value) return "未配置 · 使用 City 默认";
+  if (!value) return "未配置 · 仅唯一 Agent 时自动选用";
   const agent = snapshot.agents.find((item) => item.agent_id === value);
   return agent ? `${agent.name} · ${value}` : value;
-}
-
-/**
- * 显示 Workspace 名称并保留稳定 ID。
- *
- * 说明（中文）
- * - 未配置时返回显式文案，避免界面出现空白而让人误以为已绑定。
- */
-function display_workspace(
-  snapshot: MessengerDesktopSnapshot,
-  workspace_id: string | undefined,
-): string {
-  const value = String(workspace_id ?? "").trim();
-  if (!value) return "未配置 · 使用 City 默认";
-  const workspace = snapshot.workspaces.find((item) => item.workspace_id === value);
-  return workspace ? `${workspace.name} · ${value}` : value;
 }
 
 /** 读取 Power 路由字符串。 */

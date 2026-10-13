@@ -18,7 +18,7 @@ export function create_messenger_agent_actions(
       description: "Read the current external chat conversation context.",
       returns:
         "conversation_id, account_id, external_chat_id, chat_type, thread_id, title, "
-        + "agent_id, workspace_id, session_id, status, last_message_at",
+        + "agent_id, session_id, status, last_message_at",
       access: "read",
       input_schema: session_input,
       execute: async ({ context, input }) => {
@@ -56,7 +56,7 @@ export function create_messenger_agent_actions(
         if (!conversation || conversation.agent_id !== context.agent.id) {
           return { success: false, error: "Messenger conversation is not owned by the current Agent" };
         }
-        const session = await context.agent.sessions.get(session_id, "work");
+        const session = await context.agent.sessions.get(session_id, "channel");
         return { success: true, data: await session.messages() };
       },
     }),

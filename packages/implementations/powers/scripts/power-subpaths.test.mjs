@@ -82,7 +82,6 @@ test("Renderer 子路径统一导出 React Surface registry", async () => {
     "memory",
     "messenger",
     "skill",
-    "task",
     "web",
   ]);
   for (const renderer of Object.values(renderers.BUILTIN_POWER_RENDERERS)) {

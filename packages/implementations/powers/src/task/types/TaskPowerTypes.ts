@@ -8,6 +8,7 @@
 
 import type { PowerJsonObject, PowerStorage } from "@downcity/city/power";
 import type { ShipTaskStatus, TaskDeliverySession } from "@/task/types/Task.js";
+import type { TaskWorkflow } from "./TaskWorkflow.js";
 import type { TaskDefinitionRepository } from "@/task/runtime/TaskDefinitionRepository.js";
 
 /**
@@ -66,6 +67,8 @@ export type TaskSchedulerReloadResult = {
 
 /** Task Store 向调用面提供的完整列表项。 */
 export interface TaskListItem {
+  /** 工作状态与可选时间安排，从同一任务定义读取。 */
+  readonly workflow?: TaskWorkflow;
   /** Task 的稳定目录 ID。 */
   readonly taskId: string;
   /** Task 的用户可见唯一标题。 */
@@ -85,7 +88,7 @@ export interface TaskListItem {
   /** Task 完成结果的固定 Session 交付目标。 */
   readonly delivery_session?: TaskDeliverySession;
   /** Task 使用 Agent 还是脚本执行。 */
-  readonly kind?: "agent" | "script";
+  readonly kind?: "self" | "agent" | "script";
   /** Agent Task 是否启用多轮复核。 */
   readonly review?: boolean;
   /** task.md 相对 PowerStorage 根目录的路径。 */

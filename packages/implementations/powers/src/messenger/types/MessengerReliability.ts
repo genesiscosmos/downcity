@@ -21,9 +21,7 @@ export interface MessengerConversationRecord {
   title?: string;
   /** 当前负责执行的 Agent。 */
   agent_id: string;
-  /** 当前 Session 使用的 Workspace。 */
-  workspace_id: string;
-  /** 当前 Conversation 对应的 Agent Session。 */
+  /** 当前外部聊天独有的 Channel Session，归 agent_id 所指 Agent 所有。 */
   session_id: string;
   /** 当前 Conversation 状态。 */
   status: MessengerConversationStatus;

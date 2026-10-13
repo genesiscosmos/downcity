@@ -1,6 +1,6 @@
 /** Messenger Power Desktop Sidebar/Mainview 使用的序列化 View 类型。 */
 
-import type { PowerHostAgent, PowerHostWorkspace } from "@downcity/city/power";
+import type { PowerHostAgent } from "@downcity/city/power";
 import type { MessengerAccountView } from "./MessengerAccount.js";
 import type { MessengerActivityRecord, MessengerConversationRecord } from "./MessengerReliability.js";
 import type { MessengerAccessSnapshot } from "./MessengerAccess.js";
@@ -11,8 +11,6 @@ export interface MessengerDesktopSnapshot {
   accounts: MessengerAccountView[];
   /** 用户可以选择的 Agent。 */
   agents: PowerHostAgent[];
-  /** 用户可以选择的 Workspace。 */
-  workspaces: PowerHostWorkspace[];
 }
 
 /** 单个 Bot Account 详情快照。 */

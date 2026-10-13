@@ -36,7 +36,6 @@ import {
   setTaskStatus,
   updateTaskDefinition,
 } from "@/task/Action.js";
-import { deriveTaskIdFromTitle } from "@/task/runtime/Paths.js";
 import { readTask, resolveTaskIdByTitle } from "@/task/runtime/Store.js";
 import type { TaskExecutionCoordinator } from "@/task/runtime/TaskExecutionCoordinator.js";
 import type { TaskDefinitionRepository } from "@/task/runtime/TaskDefinitionRepository.js";
@@ -218,7 +217,7 @@ export async function executeTaskCreateAction(params: {
     context: params.context,
     action: "create",
     title: String(result.title || payload.title || "").trim() || "unknown",
-    task_id: deriveTaskIdFromTitle(String(result.title || payload.title || "").trim()),
+    task_id: result.task_id!,
   });
   return {
     success: true,
@@ -284,12 +283,12 @@ export async function executeTaskDeleteAction(params: {
       error: result.error || "task delete failed",
     };
   }
-  await dismiss_task_notification(params.notifications, params.payload.title);
+  await dismiss_task_notification(params.notifications, result.task_id!);
   const scheduler = await params.reloadSchedulerAfterMutation({
     context: params.context,
     action: "delete",
     title: String(result.title || payload.title || "").trim() || "unknown",
-    task_id: deriveTaskIdFromTitle(payload.title),
+    task_id: result.task_id!,
   });
   return {
     success: true,
@@ -304,7 +303,7 @@ export async function executeTaskDeleteAction(params: {
 async function dismiss_task_notification(notifications: PowerNotificationPublisher | undefined, title: string): Promise<void> {
   if (!notifications) return;
   try {
-    await notifications.dismiss({ topic_key: `task:${deriveTaskIdFromTitle(title)}` });
+    await notifications.dismiss({ topic_key: `task:${title}` });
   } catch {
     // 通知清理由宿主负责，失败不能改变已经完成的 Task 删除结果。
   }
@@ -335,7 +334,7 @@ export async function executeTaskUpdateAction(params: {
     context: params.context,
     action: "update",
     title: String(result.title || payload.title || "").trim() || "unknown",
-    task_id: deriveTaskIdFromTitle(payload.title),
+    task_id: result.task_id!,
   });
   return {
     success: true,
@@ -371,7 +370,7 @@ export async function executeTaskStatusAction(params: {
     context: params.context,
     action: "status",
     title: String(result.title || payload.title || "").trim() || "unknown",
-    task_id: deriveTaskIdFromTitle(payload.title),
+    task_id: result.task_id!,
   });
   return {
     success: true,

@@ -704,10 +704,9 @@ export class CityPowerRuntime implements PowerRuntimeHost {
           }) as unknown as PowerJsonValue;
         },
         create_agent_session: async (input) => {
-          const workspace = await this.options.runtime_access.enter_workspace(
-            input.agent_id,
-            input.workspace_id,
-          );
+          const workspace = input.workspace_id
+            ? await this.options.runtime_access.enter_workspace(input.agent_id, input.workspace_id)
+            : undefined;
           const agent = this.options.runtime_access.get_agent(input.agent_id);
           if (!agent) throw new Error(`Agent not found in City: ${input.agent_id}`);
           const session = await agent.sessions.create({
@@ -717,10 +716,9 @@ export class CityPowerRuntime implements PowerRuntimeHost {
           return { session_id: session.id };
         },
         prompt_agent_session: async (input) => {
-          const workspace = await this.options.runtime_access.enter_workspace(
-            input.agent_id,
-            input.workspace_id,
-          );
+          const workspace = input.workspace_id
+            ? await this.options.runtime_access.enter_workspace(input.agent_id, input.workspace_id)
+            : undefined;
           const agent = this.options.runtime_access.get_agent(input.agent_id);
           if (!agent) throw new Error(`Agent not found in City: ${input.agent_id}`);
           await agent.sessions.get(input.session_id, input.origin_type, { workspace });
@@ -756,6 +754,17 @@ export class CityPowerRuntime implements PowerRuntimeHost {
             input.session_id,
             input.origin_type,
           ).append_agent_message({ text: input.text });
+        },
+        get_agent_session_workspace: async (input) => {
+          const agent = this.options.runtime_access.get_agent(input.agent_id);
+          if (!agent) throw new Error(`Agent not found in City: ${input.agent_id}`);
+          const session = await agent.sessions.get(input.session_id, input.origin_type);
+          const workspace = session.get("workspace");
+          return workspace ? {
+            workspace_id: workspace.id,
+            name: workspace.name ?? workspace.id,
+            workspace_path: workspace.path,
+          } : undefined;
         },
         open_external: async ({ url }) => {
           if (!this.options.host?.open_external) throw new Error("City does not provide open_external");

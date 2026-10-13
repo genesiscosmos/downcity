@@ -94,7 +94,6 @@ export function to_messenger_account_view(
     provider: account.provider,
     enabled: account.enabled,
     ...(account.agent_id ? { agent_id: account.agent_id } : {}),
-    ...(account.workspace_id ? { workspace_id: account.workspace_id } : {}),
     credential_configured: account.provider === "telegram"
       ? Boolean(account.bot_token)
       : Boolean(account.app_id && account.app_secret),
@@ -119,7 +118,6 @@ function normalize_persisted_account(value: PowerJsonValue): MessengerAccountCon
     provider: read_provider(source.provider),
     enabled: source.enabled === true,
     agent_id: read_string(source, "agent_id"),
-    workspace_id: read_string(source, "workspace_id"),
     bot_token: read_string(source, "bot_token"),
     app_id: read_string(source, "app_id"),
     app_secret: read_string(source, "app_secret"),
@@ -136,7 +134,6 @@ function read_account_draft(value: PowerJsonValue | undefined): MessengerAccount
     provider: read_provider(source.provider),
     enabled: source.enabled === true,
     agent_id: read_string(source, "agent_id"),
-    workspace_id: read_string(source, "workspace_id"),
     ...(read_string(source, "bot_token") ? { bot_token: read_string(source, "bot_token") } : {}),
     ...(read_string(source, "app_id") ? { app_id: read_string(source, "app_id") } : {}),
     ...(read_string(source, "app_secret") ? { app_secret: read_string(source, "app_secret") } : {}),
@@ -151,7 +148,6 @@ function normalize_account_draft(draft: MessengerAccountDraft & { account_id?: s
     name: normalize_required(draft.name, "name"),
     enabled: draft.enabled === true,
     ...(normalize_text(draft.agent_id) ? { agent_id: normalize_text(draft.agent_id) } : {}),
-    ...(normalize_text(draft.workspace_id) ? { workspace_id: normalize_text(draft.workspace_id) } : {}),
   };
   if (draft.provider === "telegram") {
     return {

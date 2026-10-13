@@ -7,9 +7,10 @@
  */
 
 import type { PowerJsonValue } from "@downcity/city/power";
+import type { TaskWorkflow, TaskWorkflowState } from "./TaskWorkflow.js";
 
 export type ShipTaskStatus = "enabled" | "paused" | "disabled";
-export type ShipTaskKind = "agent" | "script";
+export type ShipTaskKind = "self" | "agent" | "script";
 
 /** Task 完成结果的固定 Session 交付目标。 */
 export interface TaskDeliverySession {
@@ -46,7 +47,11 @@ export type ShipTaskFrontmatterV1 = {
   kind?: ShipTaskKind;
   /** 是否启用 review 多轮复核（仅 `kind=agent` 生效；默认 false，false 时单轮执行） */
   review?: boolean;
-  /** 启停状态 */
+  /** 工作管理属性，与调度启停和执行结果独立。 */
+  workflow?: TaskWorkflow;
+  /** 发生项与收件箱历史，与定义在同一原子文件中提交。 */
+  workflow_state?: TaskWorkflowState;
+  /** 调度启停状态，不表示工作是否完成。 */
   status: ShipTaskStatus;
 };
 

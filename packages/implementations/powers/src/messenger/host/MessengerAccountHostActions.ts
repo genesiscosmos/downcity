@@ -187,8 +187,7 @@ export function register_messenger_account_host_actions(
       const current = resolve_runtime().store.get_conversation(conversation_id);
       if (!current) throw new Error(`Messenger conversation not found: ${conversation_id}`);
       const agent_id = read_required_string(source, "agent_id");
-      const workspace_id = read_required_string(source, "workspace_id");
-      const route_changed = agent_id !== current.agent_id || workspace_id !== current.workspace_id;
+      const route_changed = agent_id !== current.agent_id;
       const account = read_messenger_accounts_config(context.config.get()).accounts.find(
         (item) => item.account_id === current.account_id,
       );
@@ -196,14 +195,12 @@ export function register_messenger_account_host_actions(
       const next_session = route_changed
         ? await context.system.create_agent_session({
             agent_id,
-            workspace_id,
             origin: conversation_origin(account.provider, current),
           })
         : undefined;
       return as_json(resolve_runtime().store.update_conversation({
         conversation_id,
         agent_id,
-        workspace_id,
         ...(next_session ? { session_id: next_session.session_id } : {}),
       }));
     },
@@ -220,7 +217,6 @@ export function register_messenger_account_host_actions(
       if (!account) throw new Error(`Messenger Account not found: ${current.account_id}`);
       const session = await context.system.create_agent_session({
         agent_id: current.agent_id,
-        workspace_id: current.workspace_id,
         origin: conversation_origin(account.provider, current),
       });
       return as_json(resolve_runtime().store.update_conversation({
@@ -281,7 +277,6 @@ async function create_snapshot(
     accounts: config.accounts.map((account) =>
       to_messenger_account_view(account, runtime.get_account_state(account.account_id))),
     agents: await context.system.list_agents(),
-    workspaces: await context.system.list_workspaces(),
   };
 }
 
@@ -385,7 +380,7 @@ function conversation_origin(
   conversation: import("@/messenger/types/MessengerReliability.js").MessengerConversationRecord,
 ) {
   return {
-    type: "work",
+    type: "channel",
     account_id: conversation.account_id,
     channel: provider,
     chat_id: conversation.external_chat_id,

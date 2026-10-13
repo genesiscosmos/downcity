@@ -34,10 +34,11 @@ export async function publish_task_run_notification(params: {
   try {
     await params.notifications.publish({
       topic_key: `task:${params.task.taskId}`,
-      title: params.status === "success" ? `${title} 已完成` : `${title} 执行失败`,
+      title: params.status === "success" ? `${title} 执行结束` : `${title} 执行失败`,
       ...(params.status === "failure" && failure_body ? { body: failure_body } : {}),
       route: {
-        task_title: title,
+        task_id: params.task.taskId,
+        section: "todo",
         view: "run",
         run_timestamp: params.timestamp,
       },

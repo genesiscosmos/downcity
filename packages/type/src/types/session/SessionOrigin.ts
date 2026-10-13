@@ -2,7 +2,7 @@
  * Session 来源元数据。
  *
  * Session 始终归 Agent 所有。来源类型同时承担业务分类与物理存储分区职责。
- * 角色只有少数几个稳定值：Agent 自己的会话、工作会话、任务会话、群聊会话；
+ * 角色只有少数几个稳定值：Agent 主对话、外部聊天、工作会话、任务会话、群聊会话；
  * 其他调用方也可以声明自己的稳定类型。
  *
  * 关键点（中文）
@@ -15,6 +15,9 @@ import type { JsonValue } from "../json/Json.js";
 /** Agent 自己那条会话的来源类型。 */
 export const SESSION_ORIGIN_TYPE_AGENT = "agent";
 
+/** 每个外部聊天独有、归绑定 Agent 所有的会话来源类型。 */
+export const SESSION_ORIGIN_TYPE_CHANNEL = "channel";
+
 /** 工作会话的来源类型，也是未指定角色时的默认值。 */
 export const SESSION_ORIGIN_TYPE_WORK = "work";
 
@@ -23,7 +26,8 @@ export type SessionOrigin = {
   /**
    * 来源类型，同时作为 Session Store 的一级分区名。
    *
-   * 该值必须是非空字符串；`agent` 表示 Agent 自己的会话，`work` 表示普通工作会话，
+   * 该值必须是非空字符串；`agent` 表示 Agent 主对话，`channel` 表示外部聊天，
+   * `work` 表示普通工作会话，
    * 其他稳定值由创建方定义。
    */
   readonly type: string;

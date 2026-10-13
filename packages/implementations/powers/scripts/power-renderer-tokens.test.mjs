@@ -91,27 +91,6 @@ test("Power 侧栏的行只用注入的行组件", () => {
 });
 
 /**
- * 自动展开是**跟随选中**的一次性动作，不是持续成立的不变量。
- *
- * 踩过的坑（Task 侧栏）：自动展开的 effect 条件是 `!expanded.has(当前选中项)`，
- * 而依赖里带着 `expanded`。用户收起**当前选中**的 Task 时，effect 会看到“它没展开”
- * → 立刻又把它展开——表现为“这个 Task 折叠不了”，而且只在选中项上出现（其他能收）。
- *
- * 正确写法是用 ref 记住“已经自动展开过哪一个”，展开一次就不再干预。
- */
-test("自动展开不会把用户收起的选中项又弹开", () => {
-  const file = path.join(powers_root, "task/renderer/TaskPowerRenderer.tsx");
-  const source = strip_comments(fs.readFileSync(file, "utf8"));
-  // 自动展开处必须有“已经处理过这一个”的短路。
-  assert.match(source, /auto_expanded_ref/, "自动展开没有记住“已经展开过哪一个”：收起的选中项会被立刻重新展开");
-  assert.match(source, /if \(auto_expanded_ref\.current === task_title\) return;/, "自动展开缺少短路：它会在每次收起时重新触发");
-  // 关键：那个 toggle 必须**被 ref 短路包住**——短路在前，toggle 在后。
-  // （只查“有没有 toggle”不够：修好之后那一行仍然在，只是它已经走不到了。）
-  const guarded = /if \(auto_expanded_ref\.current === task_title\) return;\s*auto_expanded_ref\.current = task_title;\s*if \(!expanded_task_keys\.has\(task_title\)\) void toggle_task/.test(source);
-  assert.ok(guarded, "自动展开的 toggle 没有被 ref 短路包住：收起的选中项会被立刻重新展开");
-});
-
-/**
  * 侧栏里的“行外副文本”必须走宿主组件 `SidebarSubText`。
  *
  * 这条不是风格偏好：副文本的左缘要对齐到同级行的文字线，字号与颜色要取宿主令牌。

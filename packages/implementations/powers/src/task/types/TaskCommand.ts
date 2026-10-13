@@ -16,6 +16,7 @@ import type {
   TaskDeliverySession,
 } from "./Task.js";
 import type { TaskDefinitionIssue } from "./TaskPowerTypes.js";
+import type { TaskWorkflow } from "./TaskWorkflow.js";
 
 export type TaskCreateRequest = {
   /** 任务名称。 */
@@ -34,19 +35,17 @@ export type TaskCreateRequest = {
   status?: ShipTaskStatus;
   /** 任务正文。 */
   body?: string;
-  /** 是否覆盖已有定义。 */
-  overwrite?: boolean;
 };
 
 export type TaskCreateResponse = {
+  /** 稳定任务标识，后续操作优先使用此 ID。 */
+  task_id?: string;
   /** 调用是否成功 */
   success: boolean;
   /** 任务名称（新建成功或复用已有任务时返回） */
   title?: string;
   /** 任务定义文件相对路径 */
   taskMdPath?: string;
-  /** 是否复用了已有任务（true 表示未新建） */
-  reusedExisting?: boolean;
   /** 说明信息（例如“复用已有任务”） */
   message?: string;
   /** 错误信息 */
@@ -81,6 +80,8 @@ export type TaskUpdateRequest = {
 };
 
 export type TaskUpdateResponse = {
+  /** 修改后的稳定任务标识，重命名不改变它。 */
+  task_id?: string;
   success: boolean;
   title?: string;
   taskMdPath?: string;
@@ -88,6 +89,10 @@ export type TaskUpdateResponse = {
 };
 
 export type TaskListItemView = {
+  /** 工作状态、时间安排与整理属性；调度 status 不表达完成。 */
+  workflow?: TaskWorkflow;
+  /** 独立于标题的稳定任务标识。 */
+  task_id: string;
   /** 任务名称。 */
   title: string;
   /** 任务描述。 */
@@ -226,6 +231,8 @@ export type TaskRunRequest = {
   title: string;
   /** 手动执行原因；scheduler 触发时通常省略。 */
   reason?: string;
+  /** 重试指定周期发生项时提供，重试不产生新的计划事项。 */
+  occurrence_id?: string;
   /**
    * TaskPower scheduler 注入的内部触发来源。
    *
@@ -264,6 +271,8 @@ export type TaskSetStatusRequest = {
 };
 
 export type TaskSetStatusResponse = {
+  /** 状态操作关联的稳定任务标识。 */
+  task_id?: string;
   success: boolean;
   title?: string;
   status?: ShipTaskStatus;
@@ -275,6 +284,8 @@ export type TaskDeleteRequest = {
 };
 
 export type TaskDeleteResponse = {
+  /** 已删除任务的稳定标识，供清除调度与通知。 */
+  task_id?: string;
   success: boolean;
   title?: string;
   taskDirPath?: string;

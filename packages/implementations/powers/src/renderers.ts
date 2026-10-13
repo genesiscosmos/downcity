@@ -4,13 +4,11 @@ import type { PowerRendererDefinition } from "@downcity/city/power/react";
 import { MESSENGER_POWER_RENDERER } from "@/messenger/renderer/MessengerPowerRenderer.js";
 import { MEMORY_POWER_RENDERER } from "@/memory/renderer/MemoryPowerRenderer.js";
 import { SKILL_POWER_RENDERER } from "@/skill/renderer/SkillPowerRenderer.js";
-import { TASK_POWER_RENDERER } from "@/task/renderer/TaskPowerRenderer.js";
 import { WEB_POWER_RENDERER } from "@/web/renderer/WebPowerRenderer.js";
 
 /** 官方 Power ID 到 Renderer 定义的稳定映射。 */
 export const BUILTIN_POWER_RENDERERS: Readonly<Record<string, PowerRendererDefinition>> = {
   skill: SKILL_POWER_RENDERER,
-  task: TASK_POWER_RENDERER,
   messenger: MESSENGER_POWER_RENDERER,
   memory: MEMORY_POWER_RENDERER,
   web: WEB_POWER_RENDERER,

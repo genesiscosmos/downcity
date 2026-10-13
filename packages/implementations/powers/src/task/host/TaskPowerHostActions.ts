@@ -14,7 +14,6 @@ import {
   setTaskStatus,
   updateTaskDefinition,
 } from "@/task/Action.js";
-import { deriveTaskIdFromTitle } from "@/task/runtime/Paths.js";
 import {
   deleteTask,
   inspect_task_definitions,
@@ -142,7 +141,7 @@ async function create_task(
     },
   });
   if (!result.success) throw new Error(result.error || `创建 ${input.title} 失败`);
-  const scheduler = await runtime.reconcile(deriveTaskIdFromTitle(input.title));
+  const scheduler = await runtime.reconcile(result.task_id!);
   return { task_title: input.title, scheduler };
 }
 
@@ -170,7 +169,7 @@ async function update_task(
     },
   });
   if (!result.success) throw new Error(result.error || `更新 ${input.current_title} 失败`);
-  const scheduler = await runtime.reconcile(deriveTaskIdFromTitle(input.current_title));
+  const scheduler = await runtime.reconcile(result.task_id!);
   return { task_title: input.title, scheduler };
 }
 
@@ -193,7 +192,7 @@ async function set_task_status(
     request: { title: input.task_title, status: input.status },
   });
   if (!result.success) throw new Error(result.error || `修改 ${input.task_title} 状态失败`);
-  const scheduler = await runtime.reconcile(deriveTaskIdFromTitle(input.task_title));
+  const scheduler = await runtime.reconcile(result.task_id!);
   return { task_title: input.task_title, scheduler };
 }
 
@@ -232,8 +231,8 @@ async function delete_task(
     request: { title: input.task_title },
   });
   if (!result.success) throw new Error(result.error || `删除 ${input.task_title} 失败`);
-  const scheduler = await runtime.reconcile(deriveTaskIdFromTitle(input.task_title));
-  await dismiss_task_notification(context, input.task_title);
+  const scheduler = await runtime.reconcile(result.task_id!);
+  await dismiss_task_notification(context, result.task_id!);
   return { task_title: input.task_title, scheduler };
 }
 
@@ -261,7 +260,7 @@ async function dismiss_task_notification(
 ): Promise<void> {
   try {
     await context.notifications.dismiss({
-      topic_key: `task:${deriveTaskIdFromTitle(task_title)}`,
+      topic_key: `task:${task_title}`,
     });
   } catch (error) {
     context.logger.warn("[TASK] Task notification cleanup failed", {

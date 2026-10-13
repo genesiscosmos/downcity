@@ -16,6 +16,7 @@ import type {
 } from "@/task/types/TaskRunner.js";
 import type {
   ShipTaskKind,
+  ShipTaskDefinitionV1,
   ShipTaskRunExecutionStatusV1,
   ShipTaskRunResultStatusV1,
   ShipTaskRunStatusV1,
@@ -78,6 +79,8 @@ export async function runTaskNow(params: {
   /** TaskPower 生命周期级统一存储。 */
   storage: PowerStorage;
   taskId: string;
+  /** 受理时的任务定义快照，编辑不改变本次输入。 */
+  task_snapshot?: ShipTaskDefinitionV1;
   trigger: ShipTaskRunTriggerV1;
   executionId?: string;
   /** Task 完成后使用的可选宿主通知端口。 */
@@ -113,7 +116,7 @@ export async function runTaskNow(params: {
   const timestamp = formatTaskRunTimestamp(new Date(startedAt));
   const executionId = String(params.executionId || `${params.taskId}:${timestamp}`).trim();
 
-  const task = await readTask({ taskId: params.taskId, storage: params.storage });
+  const task = params.task_snapshot ?? await readTask({ taskId: params.taskId, storage: params.storage });
   if (task.frontmatter.agent_id !== context.agent.id) {
     throw new Error(`Task Agent mismatch: expected ${task.frontmatter.agent_id}, got ${context.agent.id}`);
   }
