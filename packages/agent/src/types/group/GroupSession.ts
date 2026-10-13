@@ -138,6 +138,8 @@ export interface GroupSession extends GroupSessionContract {}
 
 /** GroupSession 集合公开能力。 */
 export interface GroupSessions {
+  /** 打开 Group 固定自身会话；标识等于 group_id，不存在时创建。Workspace 由宿主提供。 */
+  self(input?: GroupSessionCreateInput): Promise<GroupSession>;
   /** 创建一个新的群聊上下文，标识由集合内部生成。 */
   create(input?: GroupSessionCreateInput): Promise<GroupSession>;
   /** 从 Storage 恢复当前 Group 的一个群聊上下文。 */

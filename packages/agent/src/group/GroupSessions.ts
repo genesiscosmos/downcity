@@ -21,9 +21,38 @@ import type {
 export class GroupSessions implements GroupSessionsContract {
   private readonly group: Group;
   private readonly sessions_by_id = new Map<string, GroupSession>();
+  /** 合并并发自身会话打开，防止重复初始化同一份存储。 */
+  private self_pending?: Promise<GroupSessionContract>;
 
   constructor(group: Group) {
     this.group = group;
+  }
+
+  /** 打开固定自身会话；并发请求共享初始化，且必须使用同一个 Workspace。 */
+  async self(input?: GroupSessionCreateInput): Promise<GroupSessionContract> {
+    if (!this.self_pending) {
+      this.self_pending = this.open_self(input);
+    }
+    const operation = this.self_pending;
+    try {
+      const session = await operation;
+      if (session.workspace_id !== input?.workspace?.id) {
+        throw new Error(`GroupSession "${this.group.id}" is bound to another Workspace`);
+      }
+      return session;
+    } finally {
+      if (this.self_pending === operation) this.self_pending = undefined;
+    }
+  }
+
+  /** 恢复或初始化 group_id 对应的唯一自身会话。 */
+  private async open_self(input?: GroupSessionCreateInput): Promise<GroupSessionContract> {
+    const existing = await this.get(this.group.id, input);
+    if (existing) return existing;
+    const session = this.create_runtime_session(this.group.id, input?.workspace);
+    await session.initialize(this.group.get_session_store().session(session.id));
+    this.sessions_by_id.set(session.id, session);
+    return session;
   }
 
   /** 创建一个新的群聊上下文，session_id 由内部生成。 */

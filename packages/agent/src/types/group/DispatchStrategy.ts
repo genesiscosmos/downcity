@@ -120,7 +120,9 @@ export class DecisionDispatchStrategy implements DispatchStrategy {
       questions: input.members.map((member) => ({
         id: member.agent_id,
         type: "boolean",
-        instructions: `本轮是否需要成员 ${member.name} (${member.agent_id}) 根据其能力对当前群聊作出实质回复或行动？能力：${member.description || "未提供"}。结合用户目标和已有回复判断；可同时选择多个成员。已完成目标、重复回答、礼貌附和或没有必要的新工作时选择 false；只有需要该成员推进目标时选择 true。`,
+        instructions: `本轮是否应该由成员 ${member.name} (${member.agent_id}) 回复当前群聊？成员能力：${member.description || "未提供"}。可同时选择多个成员。${input.trigger === "user"
+          ? "本轮由用户新消息触发。用户对该成员的直接提问、点名或 @、问候、确认在线、澄清和与成员能力相关的请求，都应选择 true，即使回复只是简短确认。仅当消息与该成员无关、已经被充分回答、明显重复，或用户明确不需要回复时选择 false。"
+          : "本轮由成员回复触发。只有新增回复需要该成员继续回答问题、补充必要信息或执行后续工作时选择 true。用户目标已经完成、已有回复充分、仅需礼貌附和或重复确认时选择 false，结束接力。"}`,
       })),
     }, input.abort_signal);
     input.abort_signal.throwIfAborted();
