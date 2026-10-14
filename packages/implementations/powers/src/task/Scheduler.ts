@@ -148,6 +148,7 @@ export class TaskSchedulerCoordinator {
   /** 根据最新 Task 定义登记 cron 或 one-shot schedule。 */
   private register(task: ShipTaskDefinitionV1): number {
     if (task.frontmatter.status !== "enabled" || task_work_is_closed(task)) return 0;
+    if (task.frontmatter.preparation && task.frontmatter.preparation.status !== "ready") return 0;
     const cron_expression = resolveTaskWhenCronExpression(task.frontmatter.when);
     if (cron_expression && !isTaskWhenManual(task.frontmatter.when)) {
       this.engine.register({
@@ -190,6 +191,7 @@ export class TaskSchedulerCoordinator {
     try {
       const task = await readTask({ taskId: task_id, storage: this.definitions.storage });
       if (task.frontmatter.status !== "enabled" || task_work_is_closed(task)) return;
+      if (task.frontmatter.preparation && task.frontmatter.preparation.status !== "ready") return;
       if (!trigger_matches(task, trigger)) return;
       if (await this.mark_missed_one_shot(task)) {
         if (!this.disposed) await this.reconcile(task_id);
@@ -199,6 +201,7 @@ export class TaskSchedulerCoordinator {
         await this.definitions.mutate(async (storage) => {
           const latest = await readTask({ storage, taskId: task_id });
           if (latest.frontmatter.status !== "enabled" || task_work_is_closed(latest) || !trigger_matches(latest, trigger)) return;
+          if (latest.frontmatter.preparation && latest.frontmatter.preparation.status !== "ready") return;
           if (!register_task_occurrence(latest, new Date())) return;
           if (trigger.type === "time") latest.frontmatter.status = "paused";
           await save_task_workflow(this.definitions, latest);
@@ -215,6 +218,7 @@ export class TaskSchedulerCoordinator {
         input: {
           title: task.taskId,
           scheduler_trigger: trigger.type,
+          expected_when: task.frontmatter.when,
         },
       }) as ScheduledTaskActionResult;
       if (!raw_result.success) {
@@ -240,7 +244,8 @@ export class TaskSchedulerCoordinator {
       // 触发失败也必须进入待处理，不能只留日志；保存失败仍保持明确日志。
       await this.definitions.mutate(async (storage) => {
         const task = await readTask({ storage, taskId: task_id });
-        if (!trigger_matches(task, trigger) || task_work_is_closed(task)) return;
+        if (task.frontmatter.status !== "enabled" || !trigger_matches(task, trigger) || task_work_is_closed(task)) return;
+        if (task.frontmatter.preparation && task.frontmatter.preparation.status !== "ready") return;
         const state = normalize_task_workflow_state(task.frontmatter.workflow_state);
         const at = new Date();
         const occurrence_id = task_occurrence_key(task, at);

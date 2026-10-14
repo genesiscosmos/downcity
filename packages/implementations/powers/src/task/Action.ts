@@ -397,6 +397,14 @@ export async function runTaskDefinition(params: {
     const executionId = `${taskId}:${Date.now()}`;
     const accepted = await params.definitions.mutate(async (storage) => {
       const task = await readTask({ taskId, storage });
+      // 调度读取与受理之间允许用户修改，旧回调必须在事务内退出。
+      if (trigger.type !== "manual" && (
+        task.frontmatter.status !== "enabled"
+        || task_work_is_closed(task)
+        || !params.request.expected_when
+        || task.frontmatter.when !== params.request.expected_when
+        || (trigger.type === "time" ? !task.frontmatter.when.startsWith("time:") : !task_is_recurring(task))
+      )) return false;
       if (task.frontmatter.agent_id !== params.context.agent.id) {
         throw new Error(`Task Agent mismatch: expected ${task.frontmatter.agent_id}, got ${params.context.agent.id}`);
       }
@@ -405,6 +413,7 @@ export async function runTaskDefinition(params: {
       if (task.frontmatter.workspace_id !== workspace.id) {
         throw new Error(`Task Workspace mismatch: expected ${task.frontmatter.workspace_id}, got ${workspace.id}`);
       }
+      if (task.frontmatter.preparation && task.frontmatter.preparation.status !== "ready") throw new Error("任务尚未准备完成，请先补充或编辑任务");
       if (task.frontmatter.kind === "self") throw new Error("个人待办不需要 Agent 执行");
       if (task_work_is_closed(task)) throw new Error("请先重新打开已完成或已取消的任务");
       if (params.definitions.is_running(taskId)) {
@@ -436,6 +445,10 @@ export async function runTaskDefinition(params: {
       // 用户明确重新执行时，前一次的失败或验收请求退出待处理，不覆盖其他周期事项。
       state.inbox.filter((item) => !task_is_recurring(task) || item.occurrence_id === params.request.occurrence_id).forEach((item) => { item.resolved = true; });
       task.frontmatter.workflow_state = state;
+      // 提前手动执行替代本次一次性安排，旧回调在受理检查中退出。
+      if (trigger.type === "manual" && task.frontmatter.when.startsWith("time:")) {
+        task.frontmatter.status = "paused";
+      }
       await save_task_workflow(params.definitions, task);
       return params.executions.start(taskId, async () => {
         await runTaskNow({

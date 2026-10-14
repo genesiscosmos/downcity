@@ -34,6 +34,10 @@
       "types": "./bin/task.d.ts",
       "import": "./bin/task.js"
     },
+    "./task/presentation": {
+      "types": "./bin/task-presentation.d.ts",
+      "import": "./bin/task-presentation.js"
+    },
     "./web": {
       "types": "./bin/web.d.ts",
       "import": "./bin/web.js"

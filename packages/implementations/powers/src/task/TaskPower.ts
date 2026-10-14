@@ -5,6 +5,10 @@
  * Agent 与 Workspace 只作为 Task 定义中的执行目标，在触发瞬间进入对应动态上下文。
  */
 
+import { randomUUID } from "node:crypto";
+import { capture_task } from "./application/TaskIntakeService.js";
+import { recover_task_executions } from "./application/TaskExecutionRecovery.js";
+import { TaskPreparationCoordinator } from "./application/TaskPreparationCoordinator.js";
 import { Power, create_action } from "@downcity/city/power";
 import { z } from "zod";
 import type { PowerJsonValue } from "@downcity/city/power";
@@ -63,6 +67,9 @@ export class TaskPower extends Power {
   /** Power initialize 后唯一的 scheduler。 */
   private scheduler?: TaskSchedulerCoordinator;
 
+  /** 生命周期级后台准备协调器，不启动实际执行。 */
+  private preparation?: TaskPreparationCoordinator;
+
   /** 宿主和 Agent 共用的统一工作动作，不维护第二份工作状态。 */
   private workspace_actions?: ReadonlyMap<
     string,
@@ -92,6 +99,53 @@ export class TaskPower extends Power {
         }),
         reloadSchedulerAfterMutation: async (params) =>
           await this.reload_scheduler_after_mutation(params),
+      }),
+      capture: create_action({
+        description: "Save the user's task text immediately and prepare it in the background. Preserve the user's wording; do not invent delegation or execution authorization. Reuse submission_id when retrying the same submission.",
+        returns: "task_id, submission_id; saved does not mean execution has started",
+        access: "write",
+        input_schema: {
+          zod: z.object({ text: z.string().trim().min(1).max(24000), submission_id: z.uuid().optional(), timezone: z.string().optional() }),
+          json_schema: {
+            type: "object", required: ["text"], properties: {
+              text: { type: "string", description: "The user's original task request, without invented execution instructions." },
+              submission_id: { type: "string", description: "UUID from a previous capture response when retrying that submission." },
+              timezone: { type: "string", description: "User's IANA timezone when known; otherwise the task runtime timezone is used." },
+            },
+          },
+        },
+        execute: async ({ context, input }) => {
+          const value = input as { /** User's original request. */ text: string; /** Optional retry identity. */ submission_id?: string; /** Optional user timezone. */ timezone?: string };
+          const submission_id = value.submission_id || randomUUID();
+          const delivery_session = context.session ? {
+            agent_id: context.agent.id, workspace_id: context.workspace?.id ?? null,
+            session_id: context.session.id, origin_type: context.session.origin.type,
+          } : undefined;
+          const result = await capture_task(this.require_definitions(), {
+            text: value.text, submission_id,
+            timezone: value.timezone || resolve_task_timezone(this.options.timezone),
+          }, delivery_session);
+          this.preparation?.enqueue(result.task_id);
+          return { success: true, data: { ...result, submission_id }, message: "Task saved; preparation continues in the background." };
+        },
+      }),
+      prepare: create_action({
+        description: "Add the user's clarification to an existing task or retry failed preparation. Preserve the user's wording. This pauses previous automatic arrangements until the new version is ready.",
+        returns: "task_id, scheduler",
+        access: "write",
+        input_schema: {
+          zod: z.object({ task_id: z.string().min(1), text: z.string().trim().min(1).max(24000).optional() }),
+          json_schema: { type: "object", required: ["task_id"], properties: {
+            task_id: { type: "string", description: "Stable task identity from capture or inbox." },
+            text: { type: "string", description: "User clarification; omit to retry preparation." },
+          } },
+        },
+        execute: async ({ context, input }) => {
+          const task_id = String((input as Record<string, PowerJsonValue>).task_id);
+          const task = await readTask({ storage: this.require_storage(), taskId: task_id });
+          if (task.frontmatter.kind !== "self" && task.frontmatter.agent_id !== context.agent.id) throw new Error("Task belongs to another Agent");
+          return { success: true, data: await this.invoke_workspace_action("workspace.prepare", input) };
+        },
       }),
       work: create_action({
         description:
@@ -178,7 +232,7 @@ export class TaskPower extends Power {
         description:
           "List unorganized tasks and unresolved task items. Reading does not complete or accept work.",
         returns:
-          "tasks(task_id, title, organized, items(item_id, kind, message, occurrence_id, run_timestamp))",
+          "tasks(task_id, title, organized, preparation(status, questions, error, schedule_error), items(item_id, kind, message, occurrence_id, run_timestamp))",
         access: "read",
         execute: async ({ context }) => {
           const snapshot = (await this.invoke_workspace_action(
@@ -194,9 +248,10 @@ export class TaskPower extends Power {
               task_id: task.task_id,
               title: task.definition.frontmatter.title,
               organized: task.workflow.organized,
+              ...(task.definition.frontmatter.preparation ? { preparation: task.definition.frontmatter.preparation } : {}),
               items: task.state.inbox.filter((item) => !item.resolved),
             }))
-            .filter((task) => !task.organized || task.items.length);
+            .filter((task) => !task.organized || task.items.length || task.preparation?.status === "needs_input" || task.preparation?.status === "failed" || task.preparation?.schedule_error);
           return {
             success: true,
             data: { tasks } as unknown as PowerJsonValue,
@@ -239,12 +294,16 @@ export class TaskPower extends Power {
       definitions,
       reconcile: async (task_id) => await this.reconcile(task_id),
     });
+    const preparation = new TaskPreparationCoordinator(context, definitions, this.options.analyze_task, async (task_id) => await this.reconcile(task_id));
+    this.preparation = preparation;
     this.workspace_actions = register_task_workspace_actions(context, {
       storage: context.storage,
       definitions,
       reconcile: async (task_id) => await this.reconcile(task_id),
-    });
+    }, (task_id) => preparation.enqueue(task_id));
+    await recover_task_executions(definitions);
     await scheduler.initialize();
+    await preparation.initialize();
   }
 
   /** 停止新增定时触发，并等待已经受理的 Task 执行收口。 */
@@ -252,6 +311,8 @@ export class TaskPower extends Power {
     const scheduler = this.scheduler;
     this.scheduler = undefined;
     const errors: unknown[] = [];
+    try { await this.preparation?.dispose(); } catch (error) { errors.push(error); }
+    this.preparation = undefined;
     try {
       if (scheduler) await scheduler.dispose();
     } catch (error) {

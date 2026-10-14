@@ -116,7 +116,12 @@ export async function runTaskNow(params: {
   const timestamp = formatTaskRunTimestamp(new Date(startedAt));
   const executionId = String(params.executionId || `${params.taskId}:${timestamp}`).trim();
 
-  const task = params.task_snapshot ?? await readTask({ taskId: params.taskId, storage: params.storage });
+  const definition = params.task_snapshot ?? await readTask({ taskId: params.taskId, storage: params.storage });
+  // 执行快照包含用户补充；脚本正文保持原有可执行内容。
+  const preparation = definition.frontmatter.preparation;
+  const task = definition.frontmatter.kind === "agent" && preparation
+    ? { ...definition, body: [definition.body, ...preparation.supplements, ...(preparation.analyzed_body ? [`整理说明：\n${preparation.analyzed_body}`] : [])].join("\n\n") }
+    : definition;
   if (task.frontmatter.agent_id !== context.agent.id) {
     throw new Error(`Task Agent mismatch: expected ${task.frontmatter.agent_id}, got ${context.agent.id}`);
   }

@@ -147,7 +147,7 @@ test("scheduler 从统一 Store 注册全部 Agent/Workspace 的 Task", async ()
       workspace_id: "workspace-b",
       power_id: "task",
       action_id: "run",
-      input: { title: id_b, scheduler_trigger: "cron" },
+      input: { title: id_b, scheduler_trigger: "cron", expected_when: "0 10 * * *" },
     }]);
     await scheduler.dispose();
   } finally {

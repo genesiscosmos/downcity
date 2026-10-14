@@ -5,6 +5,8 @@
  * 串行提交；真正执行继续委托 City 的 Agent/Workspace 动态范围。
  */
 import { randomUUID } from "node:crypto";
+import { capture_task } from "../application/TaskIntakeService.js";
+import type { TaskCaptureInput } from "../types/TaskIntake.js";
 import { z } from "zod";
 import type {
   PowerLifecycleContext,
@@ -74,6 +76,7 @@ const command_schema = identity_schema.extend({
 export function register_task_workspace_actions(
   context: PowerLifecycleContext,
   runtime: TaskPowerHostRuntime,
+  enqueue_preparation: (task_id: string) => void = () => undefined,
 ): ReadonlyMap<
   string,
   (input: PowerJsonValue | undefined) => Promise<PowerJsonValue>
@@ -95,6 +98,42 @@ export function register_task_workspace_actions(
     "workspace.snapshot",
     async () => await workspace_snapshot(context, runtime),
   );
+  action("workspace.capture", async (input) => {
+    const result = await capture_task(runtime.definitions, input as unknown as TaskCaptureInput);
+    enqueue_preparation(result.task_id);
+    return result;
+  });
+  action("workspace.reconcile", async (input) => {
+    const { task_id } = identity_schema.parse(input);
+    const task = await readTask({ storage: runtime.storage, taskId: task_id });
+    const revision = task.frontmatter.preparation?.revision;
+    if (task.frontmatter.preparation && task.frontmatter.preparation.status !== "ready") throw new Error("请先完成任务准备");
+    const scheduler = await runtime.reconcile(task_id);
+    await runtime.definitions.mutate(async (storage) => {
+      const current = await readTask({ storage, taskId: task_id });
+      const preparation = current.frontmatter.preparation;
+      if (!preparation || preparation.revision !== revision || preparation.status !== "ready") return;
+      current.frontmatter.preparation = { ...preparation, schedule_error: scheduler.reloaded ? undefined : scheduler.error || "自动安排同步失败" };
+      await writeTask({ storage, taskId: task_id, frontmatter: current.frontmatter, body: current.body, overwrite: true });
+    });
+    return { task_id, scheduler };
+  });
+  action("workspace.prepare", async (input) => {
+    const value = identity_schema.extend({ text: z.string().trim().min(1).max(24000).optional() }).parse(input);
+    await runtime.definitions.mutate(async (storage) => {
+      const task = await readTask({ storage, taskId: value.task_id });
+      if (runtime.definitions.is_running(value.task_id)) throw new Error("执行期间不能重新理解任务");
+      const preparation = task.frontmatter.preparation;
+      if (!preparation || ["completed", "cancelled"].includes(task.frontmatter.workflow?.work_status || "")) throw new Error("此任务不能重新准备");
+      // 重新理解使旧自动安排失效，人工确认新配置后才重新启用。
+      task.frontmatter.status = "paused";
+      task.frontmatter.preparation = { revision: preparation.revision + 1, status: "queued", supplements: [...preparation.supplements, ...(value.text ? [value.text] : [])], questions: [] };
+      await writeTask({ storage, taskId: value.task_id, frontmatter: task.frontmatter, body: task.body, overwrite: true });
+    });
+    const scheduler = await runtime.reconcile(value.task_id);
+    enqueue_preparation(value.task_id);
+    return { task_id: value.task_id, scheduler };
+  });
   action("workspace.save", async (input) => {
     const value = save_schema.parse(input);
     const normalized_when = normalizeTaskWhen(value.when);
@@ -140,6 +179,7 @@ export function register_task_workspace_actions(
         body: value.body,
         frontmatter: {
           ...previous?.frontmatter,
+          ...(previous?.frontmatter.preparation ? { preparation: { ...previous.frontmatter.preparation, revision: previous.frontmatter.preparation.revision + 1, status: "ready" as const, questions: [], error: undefined, processing_id: undefined } } : {}),
           title: value.title,
           description: value.body.slice(0, 160),
           kind: value.kind,
@@ -321,6 +361,7 @@ export function register_task_workspace_actions(
       .extend({ occurrence_id: z.string().optional() })
       .parse(input);
     const task = await readTask({ storage: runtime.storage, taskId: task_id });
+    if (task.frontmatter.preparation && task.frontmatter.preparation.status !== "ready") throw new Error("任务尚未准备完成，请先补充或编辑任务");
     if (task.frontmatter.kind === "self")
       throw new Error("个人待办无需 Agent 执行");
     return await context.system.invoke_agent_power({

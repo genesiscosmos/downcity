@@ -239,6 +239,8 @@ export type TaskRunRequest = {
    * 该字段不进入 Agent 可见 JSON Schema；普通调用省略时固定视为 manual。
    */
   scheduler_trigger?: "cron" | "time";
+  /** 调度器读取的触发规则，受理时与最新定义比较，拒绝过期回调。 */
+  expected_when?: string;
 };
 
 export type TaskRunResponse = {

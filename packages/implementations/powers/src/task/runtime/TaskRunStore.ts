@@ -39,6 +39,20 @@ export async function list_task_runs(params: {
   return runs.filter((run): run is TaskRunHistoryItemView => Boolean(run));
 }
 
+/** 只读取已提交的完成元数据；恢复流程不得以进度快照证明执行完成。 */
+export async function read_completed_task_run(params: {
+  /** 统一任务存储端口。 */
+  readonly storage: PowerStorage;
+  /** 执行所属任务的稳定身份。 */
+  readonly task_id: string;
+  /** 执行目录的 UTC 时间戳。 */
+  readonly timestamp: string;
+}): Promise<TaskRunHistoryItemView | undefined> {
+  const run_directory = getTaskRunDir(params.storage.path, params.task_id, params.timestamp);
+  const meta = await read_json_object(params.storage, path.join(run_directory, "run.json"));
+  return meta ? completed_summary(params.timestamp, meta) : undefined;
+}
+
 /** 读取一条 Task Run 的摘要与用户可见产物。 */
 export async function read_task_run_detail(params: {
   /** TaskPower 生命周期级统一存储。 */

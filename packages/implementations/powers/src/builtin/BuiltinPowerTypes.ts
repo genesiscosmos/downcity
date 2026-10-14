@@ -10,7 +10,7 @@ import type { CityPowerRegistration } from "@downcity/city/power";
 import { MessengerPower } from "@/messenger.js";
 import { MemoryPower } from "@/memory.js";
 import { SkillPower } from "@/skill.js";
-import { TaskPower } from "@/task.js";
+import { TaskPower, type TaskAnalyzer } from "@/task.js";
 import { WebPower } from "@/web.js";
 
 /** 官方 Power definition 与 @downcity/city/power 的统一注册协议一致。 */
@@ -23,6 +23,8 @@ export type BuiltinPowerRegistration = CityPowerRegistration;
 export function create_builtin_power_registrations(input: {
   /** 平台数据根目录；Agent 私有记忆位于其 `agents/<agent_id>/memory` 下。 */
   platform_root_path: string;
+  /** 宿主提供的可选任务分析端口。 */
+  analyze_task?: TaskAnalyzer;
 }): BuiltinPowerRegistration[] {
   return [
     {
@@ -37,7 +39,7 @@ export function create_builtin_power_registrations(input: {
       has_config: false,
       has_sidebar: false,
       has_mainview: false,
-      power: new TaskPower(),
+      power: new TaskPower({ analyze_task: input.analyze_task }),
     },
     {
       readme: builtin_readme_path("messenger"),

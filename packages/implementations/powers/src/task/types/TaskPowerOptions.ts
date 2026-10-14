@@ -1,3 +1,5 @@
+import type { TaskAnalyzer } from "./TaskPreparation.js";
+
 /**
  * TaskPowerOptions：TaskPower 构造参数。
  *
@@ -19,5 +21,7 @@ export interface TaskPowerOptions {
    * - `time:<ISO8601-with-timezone>` 一次性任务以 ISO 字符串自身的 offset 为准，这里的时区主要影响 cron 表达式。
    */
   timezone?: string;
+  /** 宿主注入的模型分析端口，不依赖 Desktop；缺失时任务仍可记录。 */
+  analyze_task?: TaskAnalyzer;
 
 }

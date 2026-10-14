@@ -107,7 +107,7 @@ export function task_occurrence_key(
   at: Date,
 ): string {
   if (!task_is_recurring(task))
-    return `once:${task.frontmatter.workflow?.planned_at || task.frontmatter.when}`;
+    return `once:${task.frontmatter.when}`;
   return new Intl.DateTimeFormat("sv-SE", {
     timeZone: normalize_task_workflow(task.frontmatter.workflow).timezone,
     year: "numeric",

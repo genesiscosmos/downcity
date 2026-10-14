@@ -6,6 +6,8 @@
  * - 每次执行产出 run 目录用于审计
  */
 
+import type { TaskPreparation } from "./TaskPreparation.js";
+import type { TaskIntake } from "./TaskIntake.js";
 import type { PowerJsonValue } from "@downcity/city/power";
 import type { TaskWorkflow, TaskWorkflowState } from "./TaskWorkflow.js";
 
@@ -47,6 +49,10 @@ export type ShipTaskFrontmatterV1 = {
   kind?: ShipTaskKind;
   /** 是否启用 review 多轮复核（仅 `kind=agent` 生效；默认 false，false 时单轮执行） */
   review?: boolean;
+  /** 即时录入的原文与提交身份，不由执行正文覆盖。 */
+  intake?: TaskIntake;
+  /** 异步准备进度，与工作和调度状态独立。 */
+  preparation?: TaskPreparation;
   /** 工作管理属性，与调度启停和执行结果独立。 */
   workflow?: TaskWorkflow;
   /** 发生项与收件箱历史，与定义在同一原子文件中提交。 */

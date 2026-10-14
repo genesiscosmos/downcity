@@ -8,6 +8,10 @@
  */
 
 import yaml from "js-yaml";
+import { task_preparation_schema } from "./TaskPreparationSchema.js";
+import { z } from "zod";
+
+const intake_schema = z.object({ submission_id: z.uuid(), text: z.string().min(1).max(24000), request_key: z.string() });
 import path from "node:path";
 import cron from "node-cron";
 import { parseFrontMatter } from "./Frontmatter.js";
@@ -299,6 +303,8 @@ export function parseTaskMarkdown(params: {
     status,
   };
   try {
+    if (meta.preparation !== undefined) fm.preparation = task_preparation_schema.parse(meta.preparation);
+    if (meta.intake !== undefined) fm.intake = intake_schema.parse(meta.intake);
     fm.workflow = normalize_task_workflow(meta.workflow);
     fm.workflow_state = normalize_task_workflow_state(meta.workflow_state);
   }
@@ -357,6 +363,8 @@ export function buildTaskMarkdown(params: {
     status: String(frontmatter.status || "").trim(),
     workflow: { ...normalize_task_workflow(frontmatter.workflow), updated_at: new Date().toISOString() },
     workflow_state: normalize_task_workflow_state(frontmatter.workflow_state),
+    ...(frontmatter.preparation ? { preparation: task_preparation_schema.parse(frontmatter.preparation) } : {}),
+    ...(frontmatter.intake ? { intake: intake_schema.parse(frontmatter.intake) } : {}),
   };
 
   const yamlText = yaml.dump(meta, {

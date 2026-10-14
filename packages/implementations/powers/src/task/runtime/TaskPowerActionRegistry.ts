@@ -81,6 +81,7 @@ const TASK_RUN_SCHEMA = z.object({
   title: z.string(),
   reason: z.string().optional(),
   scheduler_trigger: z.enum(["cron", "time"]).optional(),
+  expected_when: z.string().optional(),
   occurrence_id: z.string().optional(),
 });
 
