@@ -65,6 +65,8 @@ export interface MemorySessionState {
 
 /** 后台单条可写记忆。 */
 export interface MemoryFormationItem {
+  /** profile 追加持续 Agent 约定；knowledge 保存按需检索知识，省略默认 knowledge。 */
+  mode?: "profile" | "knowledge";
   /** 稳定写入键。 */
   write_key: string;
   /** 最终可信访问范围。 */

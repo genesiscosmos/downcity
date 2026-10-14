@@ -41,6 +41,9 @@ import {
 } from "@/memory/Action.js";
 import { build_memory_power_system_text } from "@/memory/runtime/SystemProvider.js";
 import { AutomaticMemory } from "@/memory/runtime/AutomaticMemory.js";
+import { AgentProfile } from "@/memory/runtime/AgentProfile.js";
+import { register_profile_host_actions } from "@/memory/host/AgentProfileHostActions.js";
+import { createHash } from "node:crypto";
 import type { AutomaticMemoryOptions } from "@/memory/types/AutomaticMemory.js";
 import { BuiltinMemoryProvider } from "@/memory/providers/BuiltinMemoryProvider.js";
 import {
@@ -184,6 +187,9 @@ export class MemoryPower extends Power {
   /** City 生命周期内唯一入口判定与后台实例。 */
   private automatic_runtime?: AutomaticMemory;
 
+  /** 每轮直接读取的 Agent Core 文档与每日优化器。 */
+  private profile_runtime?: AgentProfile;
+
   constructor(options: MemoryPowerOptions = {}) {
     super();
     this.automatic_options = options.automatic ?? {};
@@ -221,8 +227,15 @@ export class MemoryPower extends Power {
     pipeline: {
       [SESSION_HOOK_POINTS.turn_context]: [async ({ context, value }) => {
         const input = value as unknown as SessionTurnContextHookValue;
-        if (!this.automatic_runtime) return value;
-        return await this.automatic_runtime.prepare(context, input) as unknown as PowerJsonValue;
+        const core = await this.profile_runtime?.context_block(context.agent.id);
+        const prepared = core ? { ...input, blocks: [...input.blocks, core] } : input;
+        if (!this.automatic_runtime) return prepared as unknown as PowerJsonValue;
+        try {
+          return await this.automatic_runtime.prepare(context, prepared) as unknown as PowerJsonValue;
+        } catch (error) {
+          context.logger.warn("[memory] recall unavailable", { error: String(error) });
+          return prepared as unknown as PowerJsonValue;
+        }
       }],
     },
     effect: {
@@ -252,12 +265,16 @@ export class MemoryPower extends Power {
     await this.provider.initialize();
     register_memory_power_host_actions(context);
     const config = context.config.get();
+    this.profile_runtime = new AgentProfile(context, this.platform_root_path ?? context.data_root_path,
+      this.automatic_options.formation_model_id ?? (typeof config.formation_model_id === "string" ? config.formation_model_id : undefined));
+    this.profile_runtime.initialize();
+    register_profile_host_actions(context, this.profile_runtime);
     if (this.automatic_options.enabled ?? config.enabled === true) {
       this.automatic_runtime = new AutomaticMemory(context, this.provider, {
         ...this.automatic_options,
         decision_model_id: this.automatic_options.decision_model_id ?? (typeof config.decision_model_id === "string" ? config.decision_model_id : undefined),
         formation_model_id: this.automatic_options.formation_model_id ?? (typeof config.formation_model_id === "string" ? config.formation_model_id : undefined),
-      });
+      }, this.profile_runtime);
       await this.automatic_runtime.initialize();
     }
     context.power.action({
@@ -270,6 +287,8 @@ export class MemoryPower extends Power {
   async dispose(): Promise<void> {
     await this.automatic_runtime?.dispose();
     this.automatic_runtime = undefined;
+    await this.profile_runtime?.dispose();
+    this.profile_runtime = undefined;
     await this.provider_instance?.dispose();
     this.provider_instance = undefined;
   }
@@ -504,6 +523,7 @@ export class MemoryPower extends Power {
           topic: z.string().optional(),
           memory_type: memory_type_schema.optional(),
           source: z.string().optional(),
+          mode: z.enum(["profile", "knowledge"]).optional(),
         }),
         json_schema: {
           type: "object",
@@ -511,6 +531,7 @@ export class MemoryPower extends Power {
           required: ["content", "target"],
           properties: {
             content: { type: "string", description: "Content to remember." },
+            mode: { type: "string", enum: ["profile", "knowledge"], default: "knowledge", description: "profile: append an explicit Agent-wide agreement to PROFILE.md, loaded every turn; requires target agent. knowledge: store searchable long-term knowledge." },
             target: {
               type: "string",
               enum: ["current_workspace", "user", "agent"],
@@ -541,6 +562,7 @@ export class MemoryPower extends Power {
           command
             .requiredOption("--content <text>", "Content to remember.")
             .requiredOption("--target <target>", "current_workspace, user or agent.")
+            .option("--mode <mode>", "profile or knowledge.", "knowledge")
             .option("--topic <topic>", "Optional organization hint.")
             .option("--memory-type <type>", "Memory type.")
             .option("--source <source>", "Optional evidence label.");
@@ -549,6 +571,7 @@ export class MemoryPower extends Power {
           return {
             content: String(opts.content || ""),
             target: String(opts.target || ""),
+            mode: String(opts.mode || "knowledge"),
             ...(typeof opts.topic === "string" ? { topic: opts.topic } : {}),
             ...(typeof opts.memoryType === "string" ? { memory_type: opts.memoryType } : {}),
             ...(typeof opts.source === "string" ? { source: opts.source } : {}),
@@ -557,6 +580,19 @@ export class MemoryPower extends Power {
       },
       execute: async ({ context, input }) => {
         const body = read_body_object(input);
+        if ("core" in body) return { success: false, error: "remember uses mode: profile or knowledge; core is not supported" };
+        const mode_result = z.enum(["profile", "knowledge"]).safeParse(body.mode ?? "knowledge");
+        if (!mode_result.success) return { success: false, error: "Invalid remember mode: expected profile or knowledge" };
+        if (mode_result.data === "profile") {
+          if (read_memory_write_target(body) !== "agent") return { success: false, error: "Core Profile requires an explicit Agent-wide agreement; other scopes cannot fall back to it" };
+          if (!this.profile_runtime) return { success: false, error: "Agent Profile runtime is unavailable" };
+          try {
+            const content = read_string(body, "content").trim();
+            const source_key = createHash("sha256").update(JSON.stringify([context.agent.id, context.session?.id, context.turn?.id, content])).digest("hex");
+            await this.profile_runtime.append(context.agent.id, content, source_key);
+            return { success: true, data: { profile_id: `agent/${context.agent.id}/profile`, status: "saved", mode: "profile" } };
+          } catch (error) { return { success: false, error: String(error) }; }
+        }
         return await remember_memory_action(
           this.provider,
           await this.resolve_action_access(context),

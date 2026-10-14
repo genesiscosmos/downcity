@@ -8,6 +8,22 @@
 >
 > 本次实施以本文为准；`memory-plugin-design.md` 保留为历史设计参考，其中每轮回复后采集、全局用户信息混存等方案不作为本次实施要求。
 
+## Agent Profile 架构更新
+
+Core Memory 统一为 Agent 目录的 `PROFILE.md`，与 `SOUL.md` 并列，由 MemoryPower 管理。SOUL 仍由 Agent 配置仓储维护。Profile 不是新记忆类型，而是明确 Agent 级持续约定的使用方式。
+
+- 追加不设置篇幅硬上限，来源幂等、Agent 内串行、原子写入。
+- 每轮通过 turn_context 读取完整 Profile，进入低权限参考上下文，不进入冻结 system，不依赖 Jev 或关键词。
+- 每日本地日历检查一次，超过 2,000 Unicode 正文字符时才优化。目标为 2,000，但保留有效约定优先，允许仍然超出。
+- 模型提出 old_text/new_text 精确编辑，代码要求唯一匹配、不重叠、版本不变、来源保留，禁止模型全文替换，提交前备份。
+- `remember(target=agent, mode=profile)` 立即追加，返回 profile_id；后台形成的明确 Agent 约定也可追加。
+- Agent Profile 对该 Agent 的所有使用者生效，不能作为可信 User 身份缺失时的回退。User 级持续偏好的隔离入口尚未完成。
+- 宿主 profile_read/profile_edit/profile_status 提供读取、版本化编辑和状态，专属界面待接入。
+
+代码职责：MemoryPower 装配；AgentProfile 管文档；MessageMemoryGate 管 Jev 协议；AutomaticMemory 管 Session 增量和计划恢复；MemoryModel 提供共用模型调用；Provider/Adapter 管知识存储。旧的固定 wiki Core 注入构建函数已移除。
+
+本节覆盖下文中不自动加载 Core 的旧设计描述。其余按需召回和 30 分钟知识整理继续保留。
+
 ## 当前实现与验证范围
 
 已实现入口 save_scope / should_recall 判定、即时召回、保存标记、30 分钟后台扫描、完整 turn 增量边界、短记录形成、必要合并、持久写入计划、重试退避、User / Workspace 独立路由和来源删除屏蔽。自动流程默认关闭，需明确选择模型。

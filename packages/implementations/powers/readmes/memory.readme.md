@@ -11,7 +11,17 @@ Automatic memory is explicitly enabled through `MemoryPowerOptions.automatic` or
 
 Non-`none` results create durable source markers. Every 30 minutes, the City worker reads incremental completed Session turns, extracts short memories with a configured text model, validates sources and scope, and persists an idempotent write plan. It advances the cursor only after writes succeed. Agent replies do not trigger another model decision.
 
-Failures retain pending work with retry backoff. City must be running for background formation. Recalled content is historical reference and never becomes canonical user input or system instruction. Unconditional Core Memory injection and automatic per-reply capture are disabled.
+Failures retain pending work with retry backoff. City must be running for background formation. Recalled content is historical reference and never becomes canonical user input or system instruction. Legacy fixed-wiki Core injection and automatic per-reply capture are disabled. Core now comes from Agent PROFILE.md.
+
+## Agent Core Memory
+
+`agents/<agent_id>/PROFILE.md` is managed by MemoryPower alongside, but independently of, SOUL.md. It contains explicitly Agent-wide persistent agreements and is loaded into every turn's reference context without Jev or keyword search, including new Sessions. Current requests and system permissions take precedence.
+
+Use `remember` with `target: "agent"`, `mode: "profile"`, and `content` to append immediately. Omitting mode defaults to `knowledge`, which stores searchable records. Successful Profile writes return `profile_id`; this is not a wiki ID accepted by read/revise/forget. Host actions `memory.profile_read`, `memory.profile_edit`, and `memory.profile_status` provide document access, exact editing, and state. Editing requires the version returned by read.
+
+Appends have no size cap and are idempotent by source. A daily check calls the configured formation model only when the visible document exceeds 2,000 Unicode characters. The model proposes unique, non-overlapping exact replacements; code checks the document version, preserves source markers, backs up the original, and writes atomically. Optimization aims for 2,000 characters without deleting valid agreements; documents can remain longer. Daily checks run only while City is running.
+
+Agent Profile is shared by all users of that Agent. Private User preferences do not automatically fall back to Profile. Existing wiki preferences are not automatically migrated. Automatic formation can append clearly Agent-scoped Core agreements; User identity integration remains separate.
 
 ## Scopes
 
