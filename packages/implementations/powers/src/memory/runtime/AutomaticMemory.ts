@@ -14,7 +14,6 @@ import type { MemoryProvider } from "@/memory/types/Memory.js";
 import { FileMemoryStorageAdapter } from "@/memory/adapters/FileMemoryStorageAdapter.js";
 import { resolve_memory_access } from "./AccessResolver.js";
 import { resolve_writable_memory_address } from "./MemoryAddress.js";
-import { build_memory_recall_context_block } from "./SystemProvider.js";
 import { generate_memory_json as generate_json } from "./MemoryModel.js";
 import type { AgentProfile } from "./AgentProfile.js";
 import { MessageMemoryGate } from "./MessageMemoryGate.js";
@@ -137,7 +136,14 @@ export class AutomaticMemory {
   }
 
   /** 入口处理，判定已完成的消息直接复用，不重复付费。 */
-  async gate(context: PowerContext, input: SessionTurnContextHookValue): Promise<boolean> {
+  async gate(context: PowerContext, input: SessionTurnContextHookValue): Promise<{
+    /** Jev 判定是否完成。 */
+    status: "completed" | "unavailable";
+    /** 候选保存范围；Jev 不可用时省略。 */
+    save_scope?: "none" | "user" | "workspace" | "agent" | "mixed";
+    /** 是否建议 Agent 主动检索历史记忆。 */
+    should_recall?: boolean;
+  }> {
     const key = this.state_key(context.agent.id, input.session_id);
     return this.serial(key, async () => {
       const stored_state = await this.read_state(key);
@@ -150,10 +156,16 @@ export class AutomaticMemory {
         const first_sequence = Math.min(...history.filter((item) => input.user_messages.some((message) => message.message_id === item.message_id)).map((item) => item.sequence));
         state.cursor = Number.isFinite(first_sequence) ? first_sequence - 1 : 0;
       }
+      let decision_status: "completed" | "unavailable" = "completed";
+      let save_scope: "none" | "user" | "workspace" | "agent" | "mixed" = "none";
       let should_recall = false;
       for (const message of input.user_messages) {
         const existing = state.decisions.find((item) => item.message_id === message.message_id);
-        if (existing) { should_recall ||= existing.should_recall; continue; }
+        if (existing) {
+          if (existing.save_scope !== "none") save_scope = save_scope === "none" ? existing.save_scope : "mixed";
+          should_recall ||= existing.should_recall;
+          continue;
+        }
         if (!message.text.trim() || has_secret(message.text)) continue;
         const user_id = await this.options.resolve_user?.(context, message.message_id);
         const access = { ...resolve_memory_access(context, { session_id: input.session_id }), exclude_city: true, ...(user_id ? { user_id } : {}) };
@@ -165,33 +177,37 @@ export class AutomaticMemory {
           const decision = await this.message_gate.decide(retry, message.text, history);
           state.decisions.push(decision);
           state.gate_retries = state.gate_retries.filter((item) => item.message_id !== message.message_id);
+          if (decision.save_scope !== "none") save_scope = save_scope === "none" ? decision.save_scope : "mixed";
           should_recall ||= decision.should_recall;
         } catch (error) {
+          decision_status = "unavailable";
           state.error = String(error);
           this.host.logger.warn("[memory] message decision failed", { session_id: input.session_id, message_id: message.message_id, error: state.error });
         }
         await this.save_state(key, state);
       }
-      return should_recall;
+      return { status: decision_status, save_scope, should_recall };
     });
   }
 
-  /** 合并本轮判定后的授权召回，最多注入 2,000 字符且不重复引用。 */
+  /** 只附加 Jev 状态，不自动保存、不自动召回、不等待最终记忆结果。 */
   async prepare(context: PowerContext, input: SessionTurnContextHookValue): Promise<SessionTurnContextHookValue> {
-    if (!await this.gate(context, input)) return input;
-    const state = await this.read_state(this.state_key(context.agent.id, input.session_id));
-    const decisions = state?.decisions.filter((item) => item.turn_id === input.turn_id && item.should_recall) ?? [];
-    const blocks = [...input.blocks];
-    const seen = new Set<string>();
-    let remaining = 2_000;
-    for (const decision of decisions) {
-      const scope_key = JSON.stringify(decision.access);
-      if (seen.has(scope_key) || remaining <= 0) continue;
-      seen.add(scope_key);
-      const block = await build_memory_recall_context_block(this.provider, decision.access, input.user_messages.map((item) => item.text));
-      if (block) { blocks.push({ ...block, content: block.content.slice(0, remaining) }); remaining -= block.content.length; }
-    }
-    return { ...input, blocks };
+    const decision = await this.gate(context, input);
+    return {
+      ...input,
+      blocks: [...input.blocks, {
+        source_power: "memory",
+        name: "decision",
+        content: JSON.stringify({
+          status: decision.status,
+          ...(decision.status === "completed" ? {
+            save_scope: decision.save_scope ?? "none",
+            should_recall: decision.should_recall === true,
+          } : {}),
+        }),
+        trust_level: "reference",
+      }],
+    };
   }
 
   /** 完整 turn 仅记录稳定状态，不调用模型，不复制原始对话。 */
@@ -205,50 +221,15 @@ export class AutomaticMemory {
     });
   }
 
-  /** 无重入的周期扫描，错误隔离在单 Session。 */
+  /**
+   * 保留生命周期调度接口，但不消费入口判定。
+   *
+   * Jev 的 save_scope 和 should_recall 只是状态提示；保存与检索由 Agent 自己
+   * 通过 remember/search 决定，避免 MemoryPower 在 Agent 不知情时执行副作用。
+   */
   private schedule(): void {
     if (this.stopped || this.running) return;
-    this.running = this.scan().catch((error) => {
-      this.host.logger.error("[memory] scan failed", { error: String(error) });
-    }).finally(() => { this.running = undefined; });
-  }
-
-  /** 读取持久标记，重启后仍可继续。 */
-  private async scan(): Promise<void> {
-    for (const entry of await this.storage.list("runtime/sessions")) {
-      if (this.stopped) break;
-      const state = await this.serial(entry.key, () => this.read_state(entry.key));
-      await (async () => {
-        if (state?.next_retry_at && state.next_retry_at > Date.now()) return;
-        if (!state || (!state.decisions.some((item) => !item.processed && state.turns[item.turn_id]) && !state.gate_retries?.length)) return;
-        try {
-          if (state.gate_retries?.length) {
-            const reader = this.host.system.read_agent_session_messages;
-            if (!reader) throw new Error("Memory retry requires Session reader");
-            const history = await reader({ agent_id: state.agent_id, session_id: state.session_id, origin_type: state.origin_type }) as unknown as SessionMessage[];
-            for (const retry of [...state.gate_retries]) {
-              if (!state.turns[retry.turn_id]) continue;
-              const message = history.find((item) => item.message_id === retry.message_id);
-              if (!message) throw new Error("Memory retry source unavailable");
-              if (!state.decisions.some((item) => item.message_id === retry.message_id)) state.decisions.push(await this.message_gate.decide(retry, message_text(message), history));
-              state.gate_retries = state.gate_retries.filter((item) => item.message_id !== retry.message_id);
-              await this.commit_worker_state(entry.key, state);
-            }
-          }
-          if (state.decisions.some((item) => !item.processed && state.turns[item.turn_id])) await this.form_session(entry.key, state);
-          delete state.error;
-          delete state.next_retry_at;
-          state.failures = 0;
-          state.last_success_at = Date.now();
-        } catch (error) {
-          state.error = String(error);
-          state.failures = (state.failures ?? 0) + 1;
-          state.next_retry_at = Date.now() + Math.min(24 * 60 * 60_000, 30 * 60_000 * 2 ** Math.min(state.failures - 1, 6));
-          this.host.logger.warn("[memory] formation failed", { session_id: state.session_id, error: state.error });
-        }
-        await this.commit_worker_state(entry.key, state);
-      })();
-    }
+    this.running = Promise.resolve().finally(() => { this.running = undefined; });
   }
 
   /** 形成有界增量计划并幂等提交；单次模型结果支持空数组。 */

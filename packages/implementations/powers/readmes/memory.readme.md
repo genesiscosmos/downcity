@@ -9,9 +9,9 @@ Automatic memory is explicitly enabled through `MemoryPowerOptions.automatic` or
 - `save_scope`: choice of `none`, `user`, `workspace`, `agent`, or `mixed`.
 - `should_recall`: boolean controlling immediate recall.
 
-Non-`none` results create durable source markers. Every 30 minutes, the City worker reads incremental completed Session turns, extracts short memories with a configured text model, validates sources and scope, and persists an idempotent write plan. It advances the cursor only after writes succeed. Agent replies do not trigger another model decision.
+Non-`none` results are passed to the Agent as a decision status. MemoryPower does not automatically save or recall from that status, and does not wait for final memory results. The Agent decides whether to call `remember` or `search`.
 
-Failures retain pending work with retry backoff. City must be running for background formation. Recalled content is historical reference and never becomes canonical user input or system instruction. Legacy fixed-wiki Core injection and automatic per-reply capture are disabled. Core now comes from Agent PROFILE.md.
+The status is reference context only; it never becomes canonical user input or system instruction. Legacy fixed-wiki Core injection and automatic per-reply capture are disabled. Core now comes from Agent PROFILE.md.
 
 ## Agent Core Memory
 
@@ -21,7 +21,7 @@ Use `remember` with `target: "agent"`, `mode: "profile"`, and `content` to appen
 
 Appends have no size cap and are idempotent by source. A daily check calls the configured formation model only when the visible document exceeds 2,000 Unicode characters. The model proposes unique, non-overlapping exact replacements; code checks the document version, preserves source markers, backs up the original, and writes atomically. Optimization aims for 2,000 characters without deleting valid agreements; documents can remain longer. Daily checks run only while City is running.
 
-Agent Profile is shared by all users of that Agent. Private User preferences do not automatically fall back to Profile. Existing wiki preferences are not automatically migrated. Automatic formation can append clearly Agent-scoped Core agreements; User identity integration remains separate.
+Agent Profile is shared by all users of that Agent. Private User preferences do not automatically fall back to Profile. Existing wiki preferences are not automatically migrated. User identity integration remains separate.
 
 ## Scopes
 
