@@ -45,6 +45,8 @@ export interface BuiltinMemoryChunk {
 
 /** Builtin Memory Markdown 文档解析后的稳定元数据。 */
 export interface BuiltinMemoryMetadata {
+  /** 仅允许此 Agent 使用的用户偏好；省略为全授权 Agent。 */
+  applicable_agent_id?: string;
   /** 文档的人类可读标题；旧记录未声明标题时省略。 */
   title?: string;
 

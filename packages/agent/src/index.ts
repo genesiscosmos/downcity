@@ -37,6 +37,7 @@ export type {
   DispatchDecision,
   DispatchGroupProfile,
   DispatchMemberProfile,
+  DispatchMemberDecision,
   DispatchTrigger,
   DispatchStrategy,
   DecisionDispatchStrategyOptions,
@@ -279,6 +280,7 @@ export {
 export type { SessionToolCallSummary } from "./session/messages/SessionMessageText.js";
 export {
   build_chat_message_text,
+  extract_chat_message_file_tags,
   parse_chat_message_markup,
   render_chat_message_file_tag,
 } from "./model/messages/ChatMessageMarkup.js";

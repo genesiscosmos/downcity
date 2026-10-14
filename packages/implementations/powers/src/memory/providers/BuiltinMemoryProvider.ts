@@ -8,6 +8,7 @@
  */
 
 import { createHash, randomUUID } from "node:crypto";
+import type { MemoryFormationItem } from "@/memory/types/AutomaticMemory.js";
 import type {
   BuiltinMemoryProjectionDraft,
   BuiltinMemoryProviderOptions,
@@ -207,6 +208,7 @@ export class BuiltinMemoryProvider implements MemoryProvider {
     );
     const items = entries
       .map((entry) => storage_entry_to_record(entry, input.access))
+      .filter((memory) => !memory.metadata?.applicable_agent_id || memory.metadata.applicable_agent_id === input.access.agent_id)
       .flatMap((memory) => chunk_memory_record(memory))
       .map((chunk): MemoryRecallItem => {
         const score = score_memory_chunk(chunk.text, tokens);
@@ -243,6 +245,9 @@ export class BuiltinMemoryProvider implements MemoryProvider {
       key: memory_id_to_key(memory_id),
       content,
     }, input.access);
+    if (base.metadata?.applicable_agent_id && base.metadata.applicable_agent_id !== input.access.agent_id) {
+      throw new Error("Memory is not applicable to the current Agent");
+    }
     const from_line = input.from_line
       ? Math.max(1, Math.floor(input.from_line))
       : undefined;
@@ -280,6 +285,10 @@ export class BuiltinMemoryProvider implements MemoryProvider {
           : Promise.resolve([]),
       ]);
       return [...wiki_entries, ...evidence_entries]
+        .filter((entry) => {
+          const applicable = parse_metadata(entry.content, "fact").applicable_agent_id;
+          return !applicable || applicable === input.access.agent_id;
+        })
         .map((entry) => to_memory_list_item(storage_entry_to_record(entry, input.access), entry.key));
     }))).flat();
     const subject_counts = count_memory_subjects(collected);
@@ -493,6 +502,7 @@ export class BuiltinMemoryProvider implements MemoryProvider {
       content: `${strip_frontmatter(existing)}\n\n${addition}`,
       memory_type: metadata.memory_type,
       source_refs,
+      ...(metadata.applicable_agent_id ? { applicable_agent_id: metadata.applicable_agent_id } : {}),
       ...(metadata.workspace_id ? { workspace_id: metadata.workspace_id } : {}),
       tags: ["memory"],
       observed_at: metadata.observed_at,
@@ -511,7 +521,14 @@ export class BuiltinMemoryProvider implements MemoryProvider {
     const address = resolve_readable_memory_address(input.access, memory_id);
     this.assert_address_writable(input.access, address);
     const key = memory_id_to_key(memory_id);
-    const forgotten = await this.active_storage.has(key);
+    const existing = await this.active_storage.read(key);
+    const forgotten = existing !== null;
+    if (existing) {
+      const tombstone_id = createHash("sha256").update(memory_id).digest("hex");
+      await this.active_storage.write(`${address.prefix}/runtime/tombstones/${tombstone_id}.json`, JSON.stringify({
+        memory_id, source_ids: parse_metadata(existing, "fact").source_refs.map((ref) => ref.source_id),
+      }));
+    }
     await this.active_storage.delete(key);
     return { memory_id, forgotten };
   }
@@ -603,6 +620,33 @@ export class BuiltinMemoryProvider implements MemoryProvider {
     return { job_id, mode: "created", status: "pending" };
   }
 
+  /** 写入一条短记忆；稳定键保证后台重试不会重复追加。 */
+  async form_memory(input: MemoryFormationItem): Promise<string> {
+    this.assert_access(input.access);
+    const address = resolve_writable_memory_address(input.access, input.target);
+    const content = input.content.trim();
+    if (!content || content.length > 500) throw new Error("Invalid automatic memory content");
+    const memory_id = input.memory_id
+      ? normalize_memory_id(input.memory_id)
+      : create_subject_memory_id(address, `wiki/auto-${createHash("sha256").update(input.write_key).digest("hex")}`);
+    if (!memory_id.startsWith(`${address.prefix}/wiki/`)) throw new Error("Automatic memory target outside scope");
+    const key = memory_id_to_key(memory_id);
+    // 已显式删除的目标或同来源候选不允许旧后台计划恢复。
+    const tombstones = await this.active_storage.list(`${address.prefix}/runtime/tombstones`);
+    if (tombstones.some((entry) => {
+      const deleted: { /** 已删除的逻辑记忆 ID。 */ memory_id: string; /** 被屏蔽的原始来源 ID。 */ source_ids: string[] } = JSON.parse(entry.content);
+      return deleted.memory_id === memory_id || input.source_refs.some((ref) => deleted.source_ids.includes(ref.source_id));
+    })) return memory_id;
+    const existing = await this.active_storage.read(key);
+    const old_refs = existing ? parse_metadata(existing, input.memory_type).source_refs : [];
+    await this.active_storage.write(key, create_markdown_record({
+      title: content.slice(0, 60), content, memory_type: input.memory_type,
+      applicable_agent_id: input.applicable_agent_id,
+      source_refs: [...old_refs, ...input.source_refs.filter((ref) => !old_refs.some((old) => old.source_id === ref.source_id))],
+    }));
+    return memory_id;
+  }
+
   /** 释放底层 Adapter 并关闭当前绑定。 */
   async dispose(): Promise<void> {
     try {
@@ -633,7 +677,7 @@ export class BuiltinMemoryProvider implements MemoryProvider {
     access: MemoryAccessContext,
     address: MemorySubjectAddress,
   ): void {
-    const targets: MemoryWriteTarget[] = ["agent", "current_workspace"];
+    const targets: MemoryWriteTarget[] = ["agent", "user", "current_workspace"];
     const writable = targets.some((target) => {
       try {
         return resolve_writable_memory_address(access, target).prefix === address.prefix;

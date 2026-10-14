@@ -28,6 +28,7 @@ async function start_memory_power(options = {}) {
   const platform_root = fs.mkdtempSync(path.join(os.tmpdir(), "downcity-memory-host-"));
   const storage_root = path.join(platform_root, "powers", "memory");
   await new MemoryPower({ platform_root_path: platform_root }).initialize({
+    config: { get: () => ({}), set: async () => {}, path: "" },
     power: {
       id: "memory",
       action(action) { actions.set(action.id, action); },

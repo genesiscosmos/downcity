@@ -36,8 +36,7 @@ export function clamp_number(value: number, minimum: number, maximum: number): n
 
 /** 全部合法的 Subject 类别。 */
 const MEMORY_SUBJECT_KINDS: readonly MemorySubjectKind[] = [
-  "agent",
-  "city",
+  "agent", "user", "workspace", "city",
 ];
 
 /** 全部合法的记忆领域分类。 */
@@ -118,6 +117,8 @@ export function count_memory_subjects(
 ): Record<MemorySubjectKind, number> {
   const counts: Record<MemorySubjectKind, number> = {
     agent: 0,
+    user: 0,
+    workspace: 0,
     city: 0,
   };
   for (const item of items) counts[item.subject.kind] += 1;
@@ -252,6 +253,7 @@ export function parse_metadata(
     : fallback_type;
   const raw_observed_at = read_frontmatter_json(content, "observed_at");
   const raw_workspace_id = read_frontmatter_json(content, "workspace_id");
+  const applicable_agent_id = read_frontmatter_json(content, "applicable_agent_id");
   const raw_source_refs = read_frontmatter_json(content, "source_refs");
   const source_refs = Array.isArray(raw_source_refs)
     ? raw_source_refs.flatMap((value) => {
@@ -272,6 +274,7 @@ export function parse_metadata(
   return {
     ...(typeof title === "string" && title.trim() ? { title: title.trim() } : {}),
     memory_type,
+    ...(typeof applicable_agent_id === "string" && applicable_agent_id ? { applicable_agent_id } : {}),
     observed_at: typeof raw_observed_at === "string" && raw_observed_at.trim()
       ? raw_observed_at.trim()
       : new Date(0).toISOString(),
@@ -284,6 +287,8 @@ export function parse_metadata(
 
 /** 生成 Builtin Provider 使用的 Markdown 记录。 */
 export function create_markdown_record(input: {
+  /** 仅适用指定 Agent 的可选标识。 */
+  applicable_agent_id?: string;
   title: string;
   content: string;
   memory_type: MemoryType;
@@ -300,6 +305,7 @@ export function create_markdown_record(input: {
     `memory_type: ${JSON.stringify(input.memory_type)}`,
     `observed_at: ${JSON.stringify(input.observed_at || new Date().toISOString())}`,
     `workspace_id: ${JSON.stringify(input.workspace_id || "")}`,
+    `applicable_agent_id: ${JSON.stringify(input.applicable_agent_id || "")}`,
     `source_refs: ${JSON.stringify(input.source_refs || [])}`,
     `tags: ${JSON.stringify(tags)}`,
     "---",
@@ -327,7 +333,10 @@ export function storage_entry_to_record(
     observed_at: metadata.observed_at,
     source_refs: metadata.source_refs,
     citation: create_citation(memory_id),
-    ...(metadata.title ? { metadata: { title: metadata.title } } : {}),
+    metadata: {
+      ...(metadata.title ? { title: metadata.title } : {}),
+      ...(metadata.applicable_agent_id ? { applicable_agent_id: metadata.applicable_agent_id } : {}),
+    },
   };
 }
 

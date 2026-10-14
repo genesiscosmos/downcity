@@ -1,8 +1,10 @@
 /**
  * @downcity/agent/session — 浏览器安全的 canonical Session 数据协议入口。
  *
- * 该入口只导出纯类型、常量和 JSON 校验函数，不引入 Node Session runtime。
+ * 该入口只导出纯类型、常量、JSON 校验函数和消息标记解析器，不引入 Node Session runtime。
  */
+
+export { extract_chat_message_file_tags } from "@/model/messages/ChatMessageMarkup.js";
 
 export type {
   SessionTurnFileDiff,

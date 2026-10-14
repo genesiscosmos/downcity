@@ -24,7 +24,6 @@ import type {
   PowerLifecycleContext,
 } from "@downcity/city/power";
 import type {
-  SessionSystemContextHookValue,
   SessionTurnCommittedHookValue,
   SessionTurnContextHookValue,
 } from "@downcity/agent";
@@ -40,18 +39,16 @@ import {
   search_memory_action,
   status_memory_action,
 } from "@/memory/Action.js";
-import {
-  build_memory_core_system_content,
-  build_memory_power_system_text,
-  build_memory_recall_context_block,
-} from "@/memory/runtime/SystemProvider.js";
+import { build_memory_power_system_text } from "@/memory/runtime/SystemProvider.js";
+import { AutomaticMemory } from "@/memory/runtime/AutomaticMemory.js";
+import type { AutomaticMemoryOptions } from "@/memory/types/AutomaticMemory.js";
 import { BuiltinMemoryProvider } from "@/memory/providers/BuiltinMemoryProvider.js";
 import {
   FileMemoryStorageAdapter,
   get_default_file_memory_root_path,
 } from "@/memory/adapters/FileMemoryStorageAdapter.js";
 import { MemoryStorageRouter } from "@/memory/adapters/MemoryStorageRouter.js";
-import { select_memory_capture_messages } from "@/memory/runtime/CapturePolicy.js";
+
 import { resolve_memory_access } from "@/memory/runtime/AccessResolver.js";
 import { register_memory_power_host_actions } from "@/memory/host/MemoryPowerHostActions.js";
 import type {
@@ -74,13 +71,11 @@ const memory_type_schema = z.enum([
 ]);
 
 const memory_write_target_schema = z.enum([
-  "current_workspace",
-  "agent",
+  "current_workspace", "user", "agent",
 ]);
 
 const memory_subject_kind_schema = z.enum([
-  "agent",
-  "city",
+  "agent", "user", "workspace", "city",
 ]);
 
 /** 解析正整数 CLI 参数。 */
@@ -183,8 +178,15 @@ export class MemoryPower extends Power {
   /** 宿主显式提供的平台数据根目录；用于定位 Agent 私有记忆。 */
   private readonly platform_root_path?: string;
 
+  /** 显式启用的自动记忆参数。 */
+  private readonly automatic_options: AutomaticMemoryOptions;
+
+  /** City 生命周期内唯一入口判定与后台实例。 */
+  private automatic_runtime?: AutomaticMemory;
+
   constructor(options: MemoryPowerOptions = {}) {
     super();
+    this.automatic_options = options.automatic ?? {};
     const shared_root_path = options.shared_root_path?.trim();
     const platform_root_path = options.platform_root_path?.trim();
     if (shared_root_path && !path.isAbsolute(shared_root_path)) {
@@ -217,37 +219,10 @@ export class MemoryPower extends Power {
   /** 使用现有 Power HookRegistry 接入 Session 三个通用检查点。 */
   readonly hooks: PowerHooks = {
     pipeline: {
-      [SESSION_HOOK_POINTS.system_context]: [async ({ context, value, power }) => {
-        const input = value as unknown as SessionSystemContextHookValue;
-        const access = resolve_memory_access(context, { session_id: input.session_id });
-        const core_blocks = await build_memory_core_system_content(this.provider, access);
-        if (core_blocks.length === 0) return value;
-        return {
-          ...input,
-          blocks: [
-            ...(Array.isArray(input.blocks) ? input.blocks : []),
-            ...core_blocks.map((block) => ({
-              source: "power" as const,
-              name: `${power}/${block.name}`,
-              content: block.content,
-            })),
-          ],
-        } as unknown as PowerJsonValue;
-      }],
       [SESSION_HOOK_POINTS.turn_context]: [async ({ context, value }) => {
         const input = value as unknown as SessionTurnContextHookValue;
-        const access = resolve_memory_access(context, { session_id: input.session_id });
-        const block = await build_memory_recall_context_block(
-          this.provider,
-          access,
-          (Array.isArray(input.user_messages) ? input.user_messages : [])
-            .map((message) => message.text),
-        );
-        if (!block) return value;
-        return {
-          ...input,
-          blocks: [...(Array.isArray(input.blocks) ? input.blocks : []), block],
-        } as unknown as PowerJsonValue;
+        if (!this.automatic_runtime) return value;
+        return await this.automatic_runtime.prepare(context, input) as unknown as PowerJsonValue;
       }],
     },
     effect: {
@@ -260,27 +235,12 @@ export class MemoryPower extends Power {
     },
   };
 
-  /** 持久化通过预检的 Capture Job；后续 Formation 不在 Session effect 中执行。 */
+  /** 仅登记完成状态，形成记忆交给 30 分钟 worker。 */
   private async capture_committed_turn(
     context: PowerContext,
     input: SessionTurnCommittedHookValue,
   ): Promise<void> {
-    if (!this.provider.capabilities.capture_turn) return;
-    const messages = select_memory_capture_messages(input);
-    if (messages.length === 0) return;
-    const access = resolve_memory_access(context, { session_id: input.session_id });
-    const result = await this.provider.capture_turn({
-      access,
-      session_id: input.session_id,
-      turn_id: input.turn_id,
-      messages,
-    });
-    await context.logger.log("debug", "[memory] capture job persisted", {
-      session_id: input.session_id,
-      turn_id: input.turn_id,
-      job_id: result.job_id,
-      mode: result.mode,
-    });
+    await this.automatic_runtime?.committed(context, input);
   }
 
   /** 启动当前 City 唯一的 Memory Provider，并注册界面管理 actions。 */
@@ -291,12 +251,38 @@ export class MemoryPower extends Power {
     });
     await this.provider.initialize();
     register_memory_power_host_actions(context);
+    const config = context.config.get();
+    if (this.automatic_options.enabled ?? config.enabled === true) {
+      this.automatic_runtime = new AutomaticMemory(context, this.provider, {
+        ...this.automatic_options,
+        decision_model_id: this.automatic_options.decision_model_id ?? (typeof config.decision_model_id === "string" ? config.decision_model_id : undefined),
+        formation_model_id: this.automatic_options.formation_model_id ?? (typeof config.formation_model_id === "string" ? config.formation_model_id : undefined),
+      });
+      await this.automatic_runtime.initialize();
+    }
+    context.power.action({
+      id: "memory.automatic_status",
+      run: async () => this.automatic_runtime ? await this.automatic_runtime.status() : { enabled: false },
+    });
   }
 
   /** 释放当前 City 唯一的 Memory Provider。 */
   async dispose(): Promise<void> {
+    await this.automatic_runtime?.dispose();
+    this.automatic_runtime = undefined;
     await this.provider_instance?.dispose();
     this.provider_instance = undefined;
+  }
+
+  /** 显式 actions 与自动入口使用同一可信用户解析器。 */
+  private async resolve_action_access(context: PowerContext) {
+    const access = resolve_memory_access(context);
+    if (!this.automatic_options.resolve_user || !context.session) return access;
+    const messages = await context.session.messages();
+    const current = messages.filter((message) => message.role === "user" && (!context.turn || message.turn_id === context.turn.id)).at(-1);
+    if (!current || typeof current.message_id !== "string") return access;
+    const user_id = await this.automatic_options.resolve_user(context, current.message_id);
+    return { ...access, ...(user_id ? { user_id } : {}) };
   }
 
   /** Memory 对 Agent 暴露的稳定 Action 集合。 */
@@ -316,7 +302,7 @@ export class MemoryPower extends Power {
       },
       execute: async ({ context }) => await status_memory_action(
         this.provider,
-        resolve_memory_access(context),
+        await this.resolve_action_access(context),
       ),
     }),
 
@@ -366,7 +352,7 @@ export class MemoryPower extends Power {
         const body = read_body_object(input);
         return await search_memory_action(
           this.provider,
-          resolve_memory_access(context),
+          await this.resolve_action_access(context),
           {
           query: read_string(body, "query"),
           max_results: read_optional_number(body, "max_results"),
@@ -422,7 +408,7 @@ export class MemoryPower extends Power {
         const body = read_body_object(input);
         return await read_memory_action(
           this.provider,
-          resolve_memory_access(context),
+          await this.resolve_action_access(context),
           {
           memory_id: read_string(body, "memory_id"),
           from_line: read_optional_number(body, "from_line"),
@@ -450,7 +436,7 @@ export class MemoryPower extends Power {
           properties: {
             subject_kinds: {
               type: "array",
-              items: { type: "string", enum: ["agent", "city"] },
+              items: { type: "string", enum: ["agent", "user", "workspace", "city"] },
               description: "Restrict results to these memory subjects.",
             },
             memory_types: {
@@ -495,7 +481,7 @@ export class MemoryPower extends Power {
         const body = read_body_object(input);
         return await list_memory_action(
           this.provider,
-          resolve_memory_access(context),
+          await this.resolve_action_access(context),
           {
             subject_kinds: read_optional_subject_kind_list(body),
             memory_types: read_optional_memory_type_list(body),
@@ -527,9 +513,9 @@ export class MemoryPower extends Power {
             content: { type: "string", description: "Content to remember." },
             target: {
               type: "string",
-              enum: ["current_workspace", "agent"],
+              enum: ["current_workspace", "user", "agent"],
               description:
-                "Semantic write target resolved from trusted runtime identity. current_workspace stores into City shared memory with the current workspace_id as metadata.",
+                "Write scope resolved from trusted identity. current_workspace uses an isolated Workspace Store; user requires a trusted platform identity.",
             },
             topic: { type: "string", description: "Optional organization hint." },
             memory_type: {
@@ -554,7 +540,7 @@ export class MemoryPower extends Power {
         configure(command: Command) {
           command
             .requiredOption("--content <text>", "Content to remember.")
-            .requiredOption("--target <target>", "current_workspace or agent.")
+            .requiredOption("--target <target>", "current_workspace, user or agent.")
             .option("--topic <topic>", "Optional organization hint.")
             .option("--memory-type <type>", "Memory type.")
             .option("--source <source>", "Optional evidence label.");
@@ -573,7 +559,7 @@ export class MemoryPower extends Power {
         const body = read_body_object(input);
         return await remember_memory_action(
           this.provider,
-          resolve_memory_access(context),
+          await this.resolve_action_access(context),
           {
           content: read_string(body, "content"),
           target: read_memory_write_target(body),
@@ -624,7 +610,7 @@ export class MemoryPower extends Power {
         return await digest_memory_action(
           context,
           this.provider,
-          resolve_memory_access(context),
+          await this.resolve_action_access(context),
           {
           session_id: read_string(body, "session_id"),
           max_messages: read_optional_number(body, "max_messages"),
@@ -681,7 +667,7 @@ export class MemoryPower extends Power {
         const body = read_body_object(input);
         return await revise_memory_action(
           this.provider,
-          resolve_memory_access(context),
+          await this.resolve_action_access(context),
           {
           memory_id: read_string(body, "memory_id"),
           instruction: read_string(body, "instruction"),
@@ -721,7 +707,7 @@ export class MemoryPower extends Power {
         const body = read_body_object(input);
         return await forget_memory_action(
           this.provider,
-          resolve_memory_access(context),
+          await this.resolve_action_access(context),
           {
           memory_id: read_string(body, "memory_id"),
           },

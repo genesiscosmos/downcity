@@ -13,6 +13,7 @@ import type {
   SessionOptions,
 } from "@/types/session/SessionOptions.js";
 import type { SessionComposer } from "@/types/session/SessionComposer.js";
+import type { AgentSession } from "./SessionActor.js";
 
 /**
  * Agent 可使用的 Session 类。
@@ -106,6 +107,13 @@ export interface AgentOptions {
    * 未提供时不支持通过 session_start 派发项目工作，禁止继承主会话的私有目录。
    */
   resolve_work_workspace?: (workspace_id: string) => Promise<WorkspaceRuntime>;
+
+  /**
+   * 委派执行或结果回传前的宿主装配入口。
+   * Workspace 已恢复；宿主可恢复 Session 模型并建立消息订阅。
+   * 必须幂等且不得再次调用 resume_work 或派发模型输入。
+   */
+  prepare_work_session?: (session: AgentSession) => Promise<void>;
 
   /**
    * 当前 agent 使用的本地 Session 类。

@@ -285,7 +285,9 @@ export class GroupSession implements GroupSessionContract {
       const revision = this.input_revision;
       const context_messages = [...this.messages_by_id];
       const pending_messages = context_messages.filter((message) => this.pending_message_ids.has(message.id));
-      const message = pending_messages.at(-1);
+      // 用户在成员执行期间发来新消息时，优先把该请求作为本轮焦点。
+      const message = pending_messages.filter((item) => item.sender_type === "user").at(-1)
+        ?? pending_messages.at(-1);
       if (!message) {
         this.publish_status(undefined, "idle");
         return;
@@ -319,7 +321,7 @@ export class GroupSession implements GroupSessionContract {
         repeated_paths.add(dispatch_key);
         round_count += 1;
         // 从版本检查到启动本轮没有异步间隙；之后的新输入统一等待本轮结束。
-        const outputs = await this.run_dispatch_round(dispatch.decision, message, context_messages, turn_id, dispatch.dispatch_id);
+        const outputs = await this.run_dispatch_round(dispatch.decision, message, context_messages, pending_messages, turn_id, dispatch.dispatch_id);
         if (this.stop_requested || this.disposed) return;
         await this.complete_dispatch_batch(pending_messages, outputs);
       } catch (error) {
@@ -370,6 +372,7 @@ export class GroupSession implements GroupSessionContract {
     decision: DispatchDecision,
     message: GroupMessage,
     context_messages: readonly GroupMessage[],
+    pending_messages: readonly GroupMessage[],
     turn_id?: string,
     dispatch_id?: string,
   ): Promise<GroupMessage[]> {
@@ -380,7 +383,7 @@ export class GroupSession implements GroupSessionContract {
     });
     const prepared_results = await Promise.all(targets.map(async (agent) => {
       try {
-        return { agent, turn: await this.prepare_member_delivery(agent, message, context_messages) };
+        return { agent, turn: await this.prepare_member_delivery(agent, message, context_messages, pending_messages) };
       } catch (error) {
         await this.append_member_failure(agent, message, error);
         return null;
@@ -404,11 +407,12 @@ export class GroupSession implements GroupSessionContract {
     agent: Agent,
     message: GroupMessage,
     context_messages: readonly GroupMessage[],
+    pending_messages: readonly GroupMessage[],
   ): Promise<Awaited<ReturnType<AgentSession["prompt"]>>> {
     this.assert_available();
     const session = await this.ensure_member_session(agent);
     this.assert_available();
-    return await session.prompt({ query: this.build_member_context(agent, message, context_messages) });
+    return await session.prompt({ query: this.build_member_context(agent, message, context_messages, pending_messages) });
   }
 
   /** 等待成员 Turn 完成，并把有效回复写回 Group。 */
@@ -527,21 +531,40 @@ export class GroupSession implements GroupSessionContract {
   }
 
   /** 为所有本轮成员使用同一份对话快照，执行中收到的输入留给下一轮。 */
-  private build_member_context(agent: Agent, message: GroupMessage, context_messages: readonly GroupMessage[]): string {
-    const history = context_messages.filter((item) => item.id !== message.id)
-      .map((item) => `${item.sender_type === "user" ? "User" : item.sender_id}: ${item.text}`).join("\n");
+  private build_member_context(
+    agent: Agent,
+    message: GroupMessage,
+    context_messages: readonly GroupMessage[],
+    pending_messages: readonly GroupMessage[],
+  ): string {
+    const pending_ids = new Set(pending_messages.map((item) => item.id));
+    const latest_user_message = context_messages.filter((item) => item.sender_type === "user").at(-1);
+    const format_message = (item: GroupMessage): string => `${item.sender_type === "user" ? "User" : item.sender_type === "agent" ? item.sender_id : "System"}: ${item.text}`;
+    const history = context_messages.filter((item) => !pending_ids.has(item.id))
+      .map(format_message).join("\n");
     return [
       `Group: ${this.group_name}`,
       this.instruction ? `Group objective: ${this.instruction}` : "",
       `Your identity: ${agent.name} (${agent.id})`,
       `Your description: ${agent.description || "（未提供）"}`,
-      "Conversation:",
+      "Group members (only these Agents belong to this Group):",
+      ...this.members.map((member) => `- ${member.name} (${member.id}): ${member.description || "（未提供）"}`),
+      `Trigger: ${pending_messages.some((item) => item.sender_type === "user") ? "user" : "auto"}`,
+      "Latest user request:",
+      latest_user_message ? format_message(latest_user_message) : "（无）",
+      "New messages for this round:",
+      ...pending_messages.map(format_message),
+      "Earlier conversation:",
       history || "（无）",
       "Current message:",
-      `${message.sender_type === "agent" ? message.sender_id : "user"}: ${message.text}`,
+      format_message(message),
       "Response constraints:",
       `- 只代表成员 ${agent.id} 自己发言。`,
-      "- 根据用户目标、群聊上下文和自身能力完成本轮需要的工作；避免重复已有回复或礼貌附和。",
+      "- 最新用户请求优先于群聊长期目标；先直接回应当前问题，避免重复已有回复。",
+      "- 问候、确认在线或询问角色时简短回应；这些消息不授权检查目录、创建文档、写代码或启动开发。",
+      "- 自动轮次仅处理用户已授权任务中明确尚未完成的工作或其他成员的必要交接；自己的邀请、计划或向用户询问需求不构成继续工作的理由。缺少用户需求时等待用户。",
+      "- 群成员仅以以上名单为准；City 的全部 Agent 列表不是本群名单，不凭名单推断成员在线或执行状态。",
+      "- 不把历史系统错误解释为当前消息未送达的原因；没有当前证据时不推断故障已恢复。",
       "- 只陈述自己的成果，可以使用其他成员提供的事实继续推进用户目标。",
       "- 不创建队长、裁判、领导者或协调者角色。",
     ].filter(Boolean).join("\n");

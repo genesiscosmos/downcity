@@ -5,6 +5,7 @@
  */
 
 export { MemoryPower } from "./memory/MemoryPower.js";
+export type { AutomaticMemoryOptions, MemorySaveScope, MemoryUserResolver } from "./memory/types/AutomaticMemory.js";
 export { BuiltinMemoryProvider } from "./memory/providers/BuiltinMemoryProvider.js";
 export {
   FileMemoryStorageAdapter,

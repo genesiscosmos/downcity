@@ -3,7 +3,7 @@
  *
  * 关键点（中文）
  * - 逻辑地址只描述「谁的数据」，与物理根目录、物理文件名无关。
- * - 只有两个 Subject：当前 Agent 私有，与整个 City 共享。
+ * - Agent 私有，User 与 Workspace 按可信标识隔离，City 仅供显式旧记录访问。
  * - Agent 使用原始 agent_id 段，它本身已经是受限标识符，可直接作为物理目录名。
  * - 写入目标只能解析为当前 AccessContext 中已经存在的 Subject。
  */
@@ -36,15 +36,16 @@ export function resolve_readable_memory_addresses(
 ): MemorySubjectAddress[] {
   assert_access_agent(access);
   const addresses: MemorySubjectAddress[] = [create_agent_address(access.agent_id)];
-  if (access.city_memory_available) addresses.push(create_city_address());
+  if (access.user_id) addresses.push(create_shared_address("user", access.user_id));
+  if (access.workspace_id) addresses.push(create_shared_address("workspace", access.workspace_id));
+  if (access.city_memory_available && !access.exclude_city) addresses.push(create_city_address());
   return addresses;
 }
 
 /**
  * 把有限写入目标解析为真实 owner/subject 地址。
  *
- * 关键点（中文）：`current_workspace` 与 `city` 共用同一个共享 Subject；调用方需要
- * 自行把当前 `workspace_id` 写入记录 metadata，地址层不参与该语义。
+ * 共享范围由可信访问上下文解析，模型无法指定任意用户或项目。
  */
 export function resolve_writable_memory_address(
   access: MemoryAccessContext,
@@ -52,6 +53,10 @@ export function resolve_writable_memory_address(
 ): MemorySubjectAddress {
   assert_access_agent(access);
   if (target === "agent") return create_agent_address(access.agent_id);
+  if (target === "user") {
+    if (!access.user_id) throw new Error("Memory target user requires trusted identity");
+    return create_shared_address("user", access.user_id);
+  }
   if (target === "current_workspace") {
     if (!access.workspace_id) {
       throw new Error("Memory target current_workspace requires a Workspace");
@@ -59,7 +64,7 @@ export function resolve_writable_memory_address(
     if (!access.city_memory_available) {
       throw new Error("Memory target current_workspace requires City Memory");
     }
-    return create_city_address();
+    return create_shared_address("workspace", access.workspace_id);
   }
   throw new Error(`Unsupported Memory write target: ${String(target)}`);
 }
@@ -87,6 +92,16 @@ function create_agent_address(agent_id: string): MemorySubjectAddress {
     subject: { kind: "agent", agent_id: segment },
     prefix: `agent/${segment}`,
   };
+}
+
+/** 创建按可信标识隔离的共享空间，标识编码不包含路径分隔符。 */
+function create_shared_address(kind: "user" | "workspace", subject_id: string): MemorySubjectAddress {
+  const segment = Buffer.from(subject_id, "utf8").toString("hex");
+  if (!segment) throw new Error("Memory subject identity is required");
+  const subject: MemorySubject = kind === "user"
+    ? { kind, user_id: subject_id }
+    : { kind, workspace_id: subject_id };
+  return { owner: subject, subject, prefix: `${kind}/${segment}` };
 }
 
 /** 创建 City 共享地址。 */

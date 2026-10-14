@@ -79,7 +79,8 @@ export class MemoryStorageRouter implements MemoryStorageAdapter {
     const collected = (await Promise.all(route.list_namespaces.map(async (namespace) => {
       const entries = await route.storage.list(namespace);
       return entries.map((entry) => ({
-        key: `${route.outer_prefix}/${entry.key}`,
+        key: route.outer_prefix ? `${route.outer_prefix}/${entry.key}`
+          : entry.key.replace(/^users\//u, "user/").replace(/^workspaces\//u, "workspace/"),
         content: entry.content,
       }));
     }))).flat();
@@ -115,6 +116,20 @@ export class MemoryStorageRouter implements MemoryStorageAdapter {
           ? [...COMMON_NAMESPACES, AGENT_ONLY_NAMESPACE]
           : [relative[0] || ""],
         outer_prefix: `agent/${agent_id}`,
+      };
+    }
+    if (segments[0] === "user" || segments[0] === "workspace") {
+      const subject_id = normalize_segment(segments[1] || "");
+      const namespace = segments[0] === "user" ? "users" : "workspaces";
+      const relative = segments.slice(2);
+      const base = `${namespace}/${subject_id}`;
+      return {
+        storage: this.shared_storage,
+        inner_key: `${base}/${relative.join("/")}`,
+        list_namespaces: relative.length === 0
+          ? COMMON_NAMESPACES.map((item) => `${base}/${item}`)
+          : [`${base}/${relative[0]}`],
+        outer_prefix: "",
       };
     }
     if (segments[0] === "city") {

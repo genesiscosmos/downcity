@@ -5,6 +5,7 @@
  * `dispose` 使用同一个稳定上下文完成释放。这里不再声明第二套 main 生命周期。
  */
 
+import type { Embassy } from "@downcity/federation";
 import type {
   PowerLogger,
   PowerSessionMutation,
@@ -153,6 +154,15 @@ export interface PowerHostSystem {
     /** Session 的来源存储分区。 */
     readonly origin_type: string;
   }): Promise<PowerHostWorkspace | undefined>;
+  /** 读取既有 Session 的 canonical 消息，供后台增量处理；不发起 turn。 */
+  read_agent_session_messages?(input: {
+    /** Session 所属 Agent。 */
+    readonly agent_id: string;
+    /** Session 稳定标识。 */
+    readonly session_id: string;
+    /** Session 持久化来源分区。 */
+    readonly origin_type: string;
+  }): Promise<PowerJsonObject[]>;
   /** 使用系统默认应用打开 HTTP 或 HTTPS 地址。 */
   open_external(input: {
     /** 要打开的绝对 URL。 */
@@ -182,6 +192,8 @@ export interface PowerSelf {
 
 /** Power 加入 City 后在完整 City 生命周期内持有的稳定上下文。 */
 export interface PowerLifecycleContext {
+  /** 宿主提供的 Federation 访问入口，用于后台调用模型。 */
+  readonly embassy?: Embassy;
   /** 当前 Power 的自身能力。 */
   readonly power: PowerSelf;
   /** 当前 Power 在 City 中唯一的结构化配置存储。 */

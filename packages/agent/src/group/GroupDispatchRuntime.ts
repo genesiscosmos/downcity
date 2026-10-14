@@ -223,5 +223,21 @@ function normalize_dispatch_decision(
     }
     selected_ids.add(member_id);
   }
-  return { member_ids: [...selected_ids] };
+  if (decision.member_decisions !== undefined) {
+    if (!Array.isArray(decision.member_decisions)) throw new Error("Group dispatch requires a member decision array");
+    const audited_ids = new Set<string>();
+    for (const member_decision of decision.member_decisions) {
+      if (!valid_member_ids.has(member_decision.agent_id) || audited_ids.has(member_decision.agent_id)
+        || typeof member_decision.selected !== "boolean"
+        || member_decision.selected !== selected_ids.has(member_decision.agent_id)) {
+        throw new Error(`Group dispatch has inconsistent member decision: ${member_decision.agent_id}`);
+      }
+      audited_ids.add(member_decision.agent_id);
+    }
+    if (audited_ids.size !== valid_member_ids.size) throw new Error("Group dispatch omitted a member decision");
+  }
+  return {
+    member_ids: [...selected_ids],
+    ...(decision.member_decisions ? { member_decisions: decision.member_decisions } : {}),
+  };
 }

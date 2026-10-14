@@ -7,6 +7,7 @@
 
 import type { SessionStore } from "@/types/store/SessionStore.js";
 import type { FileSystem, StorageDatabaseLocation } from "@downcity/type";
+import type { SessionDelegationStore } from "./SessionDelegation.js";
 
 /** Agent 持有的 Session、日志与调度共享存储。 */
 export interface AgentStorage {
@@ -18,4 +19,6 @@ export interface AgentStorage {
   database_location: StorageDatabaseLocation;
   /** 当前 Agent 的 Session 集合存储。 */
   sessions: SessionStore;
+  /** 工作委派及结果投递状态，与 Session 共享 Agent 私有存储生命周期。 */
+  delegations: SessionDelegationStore;
 }

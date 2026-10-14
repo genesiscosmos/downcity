@@ -44,6 +44,8 @@ import {
 import type { AgentSessionSystemBlock } from "@/types/agent/SessionTypes.js";
 import { resolve_system_timezone } from "@/session/storage/Metadata.js";
 import { SessionWork } from "@/agent/SessionWork.js";
+import { SessionDelegations } from "@/agent/SessionDelegations.js";
+import { LocalSessionDelegationStore } from "@/agent/LocalSessionDelegationStore.js";
 import { is_agent_session_origin, SESSION_ORIGIN_TYPE_CHANNEL, SESSION_ORIGIN_TYPE_WORK } from "@downcity/type";
 import { create_session_tools } from "@/tools/session/SessionTools.js";
 import type { AgentSessionInput } from "@/types/agent/AgentSessionInput.js";
@@ -96,10 +98,14 @@ export class Agent {
   /**
    * Agent 会话可用的会话工具；延迟创建并复用。
    *
-   * 关键点（中文）：工具闭包住 AgentSessions，因此不需要从 ToolCallContext 回查主体；
-   * 它们只在 `origin.type === "agent"` 的会话上下文里注册。
+   * 关键点（中文）：工具只依赖 SessionWork 协议，不从 ToolCallContext 回查主体；
+   * 它们只在 Agent 主会话和 Channel 会话里注册。
    */
   private session_tools?: Record<string, Tool>;
+  /** 委派执行与结果回传运行时；独立于工具的生命周期。 */
+  private delegations?: SessionDelegations;
+  /** 宿主负责恢复模型与消息订阅的幂等装配入口。 */
+  private readonly prepare_work_session: AgentOptions["prepare_work_session"];
 
   /** Agent 释放状态。 */
   private dispose_promise?: Promise<void>;
@@ -126,6 +132,7 @@ export class Agent {
     this.model = options.model;
     this.workspace = options.workspace;
     this.resolve_work_workspace = options.resolve_work_workspace;
+    this.prepare_work_session = options.prepare_work_session;
     this.instruction = normalize_instruction_input(options.instruction);
     this.session_class = options.session_class;
     this.session_composer = options.session_composer;
@@ -233,9 +240,19 @@ export class Agent {
    * - 已解析的存储视图同时丢弃，避免解绑后继续写旧容器存储。
    */
   unbind(): void {
+    this.delegations?.suspend();
     this.host = undefined;
     this.storage_provider = new AgentMemoryStorageProvider();
     this.agent_storage = undefined;
+  }
+
+  /**
+   * 宿主完成 Workspace、Power 和消息订阅装配后恢复未完成委派。
+   * 只启动后台观察，不等待子任务结束；也可用于重试暂时失败的结果投递。
+   */
+  async resume_work(): Promise<void> {
+    if (this.dispose_promise) throw new Error("Agent is disposing");
+    await this.resolve_delegations().resume();
   }
 
   /** 停止绑定到指定 Workspace 的运行中 Session，并释放后台标题任务。 */
@@ -322,9 +339,11 @@ export class Agent {
       );
     }
     this.dispose_promise ??= (async () => {
+      this.delegations?.suspend();
       const results = await Promise.allSettled([
         this.session_manager.stop_executing_sessions(),
       ]);
+      await this.delegations?.settle();
       this.session_manager.dispose_title_generation();
       results.push(...await Promise.allSettled([
         this.agent_storage?.sessions.dispose() ?? Promise.resolve(),
@@ -346,6 +365,7 @@ export class Agent {
       root_path: scope.root_path,
       files: scope.files,
       database_location: scope.database_location,
+      delegations: new LocalSessionDelegationStore(scope.files),
       sessions: new LocalSessionStore({
         files: scope.files,
         storage_root_path: scope.root_path,
@@ -379,14 +399,52 @@ export class Agent {
       list_sessions: async (input) => await this.session_manager.list(input),
       get_session: async (session_id, origin_type) =>
         await this.session_manager.get(session_id, origin_type),
-      create_session: async (input) => await this.session_manager.create(input),
-      resolve_workspace: async (workspace_id) => {
-        if (!this.resolve_work_workspace) throw new Error("session_start requires a host project Workspace resolver");
-        return await this.resolve_work_workspace(workspace_id);
-      },
+      delegations: this.resolve_delegations(),
     });
     this.session_tools = create_session_tools(work);
     return this.session_tools;
+  }
+
+  /** 装配委派端口；工具和委派运行时都不需要回查 Agent 或容器。 */
+  private resolve_delegations(): SessionDelegations {
+    if (this.delegations) return this.delegations;
+    const storage = this.resolve_storage();
+    const resolve_workspace = async (workspace_id: string): Promise<WorkspaceRuntime> => {
+      if (!this.resolve_work_workspace) throw new Error("session_start requires a host project Workspace resolver");
+      return await this.resolve_work_workspace(workspace_id);
+    };
+    const prepare_session = async (session: AgentSession): Promise<void> => {
+      await this.prepare_work_session?.(session);
+    };
+    this.delegations = new SessionDelegations({
+      store: storage.delegations,
+      resolve_workspace,
+      ensure_work_session: async (session_id, workspace) =>
+        await this.session_manager.ensure_work_session(session_id, workspace),
+      prepare_session,
+      get_parent_session: async (caller) => {
+        // 恢复必须沿用父会话当前持久化目录，而不是派发时的旧目录。
+        if (!(await storage.sessions.has_session(caller.session_id, caller.origin.type))) {
+          throw new Error(`Delegation parent is unavailable or archived: ${caller.session_id}`);
+        }
+        const session_storage = await storage.sessions.open_session(caller.session_id, caller.origin.type);
+        const metadata = await session_storage.read_metadata();
+        const workspace_id = metadata.workspace_id;
+        const workspace = workspace_id
+          ? workspace_id === this.workspace?.id ? this.workspace : await resolve_workspace(workspace_id)
+          : undefined;
+        const session = await this.session_manager.get(caller.session_id, caller.origin.type, { workspace });
+        await prepare_session(session);
+        return session;
+      },
+      report_error: (delegation_id, error) => {
+        this.logger.error("Session delegation failed; retained for retry", {
+          delegation_id,
+          error: String(error),
+        });
+      },
+    });
+    return this.delegations;
   }
 
   /** 合并容器 Power hooks 与 Agent 自有 hooks。 */

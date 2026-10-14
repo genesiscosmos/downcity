@@ -14,12 +14,13 @@ const CHUNK_OVERLAP_CHARS = 240;
 
 /** 把查询文本拆成有界 token。 */
 export function tokenize_memory_query(raw: string): string[] {
-  return String(raw || "")
-    .toLowerCase()
-    .replace(/[^\p{L}\p{N}_-]+/gu, " ")
-    .split(/\s+/)
-    .map((item) => item.trim())
-    .filter(Boolean)
+  const normalized = String(raw || "").toLowerCase().slice(0, 8_000);
+  const segmenter = new Intl.Segmenter("zh", { granularity: "word" });
+  const ignored = new Set(["的", "了", "我", "你", "是", "这个", "那个", "一下", "以后", "一点", "继续"]);
+  return [...new Set([...segmenter.segment(normalized)]
+    .filter((item) => item.isWordLike)
+    .map((item) => item.segment.trim())
+    .filter((item) => item && !ignored.has(item)))]
     .slice(0, 16);
 }
 

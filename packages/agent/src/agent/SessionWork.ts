@@ -11,7 +11,8 @@
  * - 详情按最近消息分页读取，让对话能回答「它做了什么」，而不把整段历史塞进上下文。
  */
 
-import type { SessionInteractionResponse, WorkspaceRuntime } from "@downcity/type";
+import type { SessionInteractionResponse } from "@downcity/type";
+import type { SessionDelegationCaller, SessionDelegationInput, SessionDelegationPort, SessionDelegationReceipt } from "@/types/agent/SessionDelegation.js";
 import { is_agent_session_origin } from "@downcity/type";
 import type { SessionWorkContract } from "@/types/agent/SessionWork.js";
 import type {
@@ -51,10 +52,8 @@ export interface SessionWorkOptions {
   }>;
   /** 恢复单条会话的运行时实例。 */
   get_session: (session_id: string, origin_type: string) => Promise<AgentSession>;
-  /** 新建一条属于当前 Agent 的会话。 */
-  create_session: (input?: { workspace?: WorkspaceRuntime }) => Promise<AgentSession>;
-  /** 将模型显式指定的项目 ID 交给宿主解析；不继承主会话目录。 */
-  resolve_workspace: (workspace_id: string) => Promise<WorkspaceRuntime>;
+  /** 持久化派发与结果回传端口；SessionWork 不持有委派存储。 */
+  delegations: SessionDelegationPort;
 }
 
 /** Agent 会话的会话工作运行时。 */
@@ -66,25 +65,8 @@ export class SessionWork implements SessionWorkContract {
   }
 
   /** 开一条工作会话并立刻把任务交给它。 */
-  async spawn(input: {
-    /** 完整工作指令。 */
-    query: string;
-    /** 工作短标题。 */
-    title?: string;
-    /** 宿主登记的目标项目 Workspace ID。 */
-    workspace_id: string;
-  }): Promise<{ session_id: string }> {
-    const query = String(input.query || "").trim();
-    if (!query) throw new Error("session_start requires a non-empty query");
-    const workspace_id = String(input.workspace_id || "").trim();
-    if (!workspace_id) throw new Error("session_start requires a project workspace_id");
-    const workspace = await this.options.resolve_workspace(workspace_id);
-    const session = await this.options.create_session({ workspace });
-    const title = String(input.title || "").trim();
-    if (title) await session.rename(title);
-    // 不等待 Turn 结束：派活的意义就是 Agent 会话立刻能继续。
-    void session.prompt({ query }).catch(() => undefined);
-    return { session_id: session.id };
+  async spawn(input: SessionDelegationInput, caller: SessionDelegationCaller): Promise<SessionDelegationReceipt> {
+    return await this.options.delegations.spawn(input, caller);
   }
 
   /** 列出当前 Agent 除自己那条之外的全部会话。 */
@@ -174,6 +156,7 @@ export class SessionWork implements SessionWorkContract {
   async stop(input: { session_id: string }): Promise<void> {
     const item = await this.require_list_entry(input.session_id);
     const session = await this.options.get_session(item.session_id, item.origin.type);
+    await this.options.delegations.cancel(item.session_id);
     await session.stop();
   }
 

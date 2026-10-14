@@ -49,7 +49,9 @@ export interface AgentSessionPromptInput {
    *
    * 说明（中文）
    * - 相同 Session 内重复提交同一个 `request_id`，只会创建一条 canonical User Message。
-   * - 已完成的请求直接返回原 Turn 结果；进程重启后未完成的请求会复用原 Turn 恢复执行。
+   * - 已完成的请求直接返回实际绑定的 Turn 结果；进程重启后未完成的请求会复用原 Turn 恢复执行。
+   * - 输入并入运行中的 Turn 时仍保留稳定消息标识，不要求 Turn ID 等于请求推导标识。
+   * - 幂等输入在入库前被 stop 取消或持久化失败时 prompt 会 reject，调用方可用同一标识重试。
    * - 不同业务输入不得复用同一个值；不需要跨进程重试的交互式调用可以省略。
    */
   request_id?: string;

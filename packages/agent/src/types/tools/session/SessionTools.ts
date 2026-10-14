@@ -3,7 +3,7 @@
  *
  * 职责说明（中文）
  * - 这四个工具让 Agent 在自己的对话里安排、观察和收回其他会话。
- * - 它们只出现在 `origin.type === "agent"` 的会话上下文中，其他 Session 拿不到，因此不会递归派发。
+ * - 它们只出现在 Agent 主会话和 Channel 会话中，Work Session 不会递归派发。
  *
  * 关键点（中文）
  * - 工具不接触 Session 内部结构，只消费公开的摘要、消息投影和交互入口。
@@ -40,6 +40,8 @@ export interface SessionToolSummary {
 export interface SessionStartToolOutput {
   /** 新建会话的稳定标识。 */
   session_id: string;
+  /** 本次工作委派的稳定标识，用于结果回传关联与去重。 */
+  delegation_id: string;
   /** 本次任务已提交，返回时该会话可能仍在执行。 */
   status: "started";
 }

@@ -183,6 +183,12 @@ export class SessionMessages {
     return this.cache.get(message_id);
   }
 
+  /** 按稳定标识读取 canonical Message；终态和 User 历史由存储提供。 */
+  async read_message(message_id: string): Promise<SessionMessage | null> {
+    await this.ensure_initialized();
+    return this.get_message(message_id) ?? await this.store.read_message(message_id);
+  }
+
   /** 追加一条 canonical User Message。 */
   async append_user_message(
     input: AppendSessionUserMessageInput,

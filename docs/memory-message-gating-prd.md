@@ -1,12 +1,25 @@
 # 消息入口判定与 Session 增量记忆 PRD
 
-> 状态：待实现的目标设计。
+> 状态：核心入口与后台形成已实现，宿主身份映射和管理界面接入待完成。
 >
 > 本文定义本次已确认的 Memory 触发方案，涉及模型调用的参数、预算和阈值是建议初始值，需通过实际运行数据校准。
 >
 > 范围：MemoryPower、Session 通用入口检查点、City 生命周期、Federation 模型访问、长期记忆存储与管理。
 >
 > 本次实施以本文为准；`memory-plugin-design.md` 保留为历史设计参考，其中每轮回复后采集、全局用户信息混存等方案不作为本次实施要求。
+
+## 当前实现与验证范围
+
+已实现入口 save_scope / should_recall 判定、即时召回、保存标记、30 分钟后台扫描、完整 turn 增量边界、短记录形成、必要合并、持久写入计划、重试退避、User / Workspace 独立路由和来源删除屏蔽。自动流程默认关闭，需明确选择模型。
+
+已通过 City 类型检查、Powers 构建与 15 项现有回归测试，以及使用模拟模型的重放、mixed 拆分、中文召回、跨范围隔离、重启和入口失败标记验证。尚未调用真实 Jev 验证服务时延或分类准确率。
+
+以下仍未完成，不能据此宣称整个 PRD 已交付：
+
+- Desktop / Messenger 等实际入口的可信用户映射；目前通过 SDK resolve_user 注入，缺失时 User 范围不可用。
+- Desktop User / Workspace 分类导航与自动状态展示；已有 memory.automatic_status 宿主 action。
+- 判定调用的渠道级批量化、模型费用指标、启动模型探测和消息写入失败的全 Session 补偿扫描。
+- 多用户 Session 中未被判定消息的完整身份校验与 Agent 私有内容的用户级隔离，需要宿主消息身份协议补齐后启用相应共享场景。
 
 ## 1. 产品目标
 
@@ -29,7 +42,7 @@ Agent 不承担自动记忆调度，不需要在每轮回复后主动调用记�
 
 本期实现：
 
-- 消息进入后的 Jev 双布尔判定。
+- 消息进入后的 Jev 保存范围枚举与召回布尔判定。
 - 本轮即时召回与低信任参考上下文注入。
 - 保存标记、每 30 分钟 Session 增量整理、幂等恢复。
 - User、Workspace、Agent 三种记忆归属。
@@ -58,9 +71,9 @@ flowchart TD
     D -->|false| G[使用当前上下文]
     F --> H[Agent 处理与回复]
     G --> H
-    C --> I{should_save}
-    I -->|true| J[持久化保存标记]
-    I -->|false| K[记录判定完成]
+    C --> I{save_scope}
+    I -->|user / workspace / agent / mixed| J[持久化保存范围与候选标记]
+    I -->|none| K[记录判定完成]
     H --> L[Session 提交完整 turn]
     M[City 每 30 分钟触发] --> N[选择有未处理标记的 Session]
     J -.-> N
@@ -78,15 +91,17 @@ flowchart TD
 
 ## 4. 用户场景
 
-| 消息 | should_save | should_recall | 预期结果 |
+| 消息 | save_scope | should_recall | 预期结果 |
 | --- | --- | --- | --- |
-| 解释这个函数 | false | false | 使用当前输入处理 |
-| 以后回复我都用中文 | true | false | 后台形成 User preference |
-| 上次的发布方案是什么 | false | true | 查找当前项目的历史方案 |
-| 以后改用 pnpm，继续上次的发布流程 | true | true | 召回发布流程，后台保存已确认的项目决策 |
-| 我们要不要改用 pnpm | 视上下文 | 视上下文 | 可成为讨论候选，不能直接保存为 decision |
-| 对，就按这个方案执行 | true（近期上下文支持时） | 当前上下文缺失时 true | 保存标记关联确认消息及对应方案 |
-| 好的 | 通常 false | 通常 false | 不通过简单词表掩盖实际确认语义 |
+| 解释这个函数 | none | false | 使用当前输入处理 |
+| 以后回复我都用中文 | user | false | 后台形成 User preference |
+| 上次的发布方案是什么 | none | true | 查找当前项目的历史方案 |
+| 以后改用 pnpm，继续上次的发布流程 | workspace | true | 召回发布流程，后台保存已确认的项目决策 |
+| 以后回复简洁一点，这个项目统一用 pnpm | mixed | false | 后台拆分 User preference 与 Workspace decision |
+| 程序员，以后回答简洁一点 | user | false | 保存 User preference，适用范围限定当前 Agent |
+| 我们要不要改用 pnpm | 视上下文选 none 或 workspace | 视上下文 | 可成为讨论候选，不能直接保存为 decision |
+| 对，就按这个方案执行 | 根据前文确定归属 | 当前上下文缺失时 true | 保存标记关联确认消息及对应方案 |
+| 好的 | 通常 none | 通常 false | 不通过简单词表掩盖实际确认语义 |
 
 Jev 判定代表处理意图，不代表候选必然成为长期记忆。后台可以得到空结果。
 
@@ -121,16 +136,35 @@ UI、Messenger、API 等渠道使用同一条 Session 入口路径，不能分�
 
 ### 5.3 Jev 输出
 
-两个独立 boolean 问题：
+一次 decision 调用包含两个独立问题，保存采用 choice 枚举，召回采用 boolean：
 
-| question_id | 判断内容 |
+| question_id | 类型 | 判断内容 |
+| --- | --- | --- |
+| save_scope | choice | 是否存在值得后台检查保存的信息，以及候选归属；选项固定为 none、user、workspace、agent、mixed |
+| should_recall | boolean | 过去的信息是否可能影响本轮处理，且当前对话尚未充分提供 |
+
+| save_scope | 含义 |
 | --- | --- |
-| should_save | 消息及近期上下文是否出现明确长期信息、确认或纠正，值得在后台检查保存 |
-| should_recall | 过去的信息是否可能影响本轮处理，且当前对话尚未充分提供 |
+| none | 无需保存，不创建候选标记 |
+| user | 用户的明确长期偏好、目标或个人信息 |
+| workspace | 当前项目的事实、已确认决策、约定或流程 |
+| agent | 当前 Agent 专属经验或工作约定；不能仅因消息称呼某 Agent 就选择此项 |
+| mixed | 包含至少两种归属，后台按独立记忆拆分；不是归属不明或判断失败的兜底 |
+
+归一化后的协议示例：
+
+```json
+{
+  "save_scope": "user",
+  "should_recall": false
+}
+```
+
+不再返回或持久化 should_save；是否创建保存标记直接由 save_scope != none 决定。保存范围仅是候选提示，后台结合完整对话逐条确定实际归属。mixed 不能直接作为存储范围，也不能把整个消息复制进多个 Store。
 
 Jev 不生成记忆正文，不选择最终存储路径，不授予访问权限。模型返回的概率如协议提供，仅用于观察，初期不再引入额外概率阈值。
 
-必须校验两项答案存在、ID 唯一、类型为 boolean。缺答或类型错误视为判定失败，不能默认为 false。
+必须校验两项答案存在、ID 唯一；save_scope 必须为上述枚举之一，should_recall 必须为 boolean。缺答、未知枚举或类型错误视为判定失败，不能默认为 none 或 false。模型选中缺少可信身份的范围时记录目标不可用，代码不创建可写入该范围的授权，也不回退至其他 Store。
 
 建议初始超时 3 秒，实时链路不重试；时间预算按实际服务延迟调整。
 
@@ -177,7 +211,7 @@ Jev 不生成记忆正文，不选择最终存储路径，不授予访问权限�
 
 ## 7. 保存标记
 
-`should_save=true` 时立即写入标记，关联 session_id、turn_id、message_id 和可信访问上下文快照。
+`save_scope != none` 时立即写入标记，关联 session_id、turn_id、message_id、候选 save_scope 和可信访问上下文快照。单一范围作为后台提取提示；mixed 要求后台拆分。标记不得授予额外访问权限。
 
 标记以 Session 和 message_id 幂等标识；同一消息重放不产生第二份标记。Jev 判定记录同时持久化，便于恢复时复用结果。
 
@@ -313,8 +347,8 @@ source_refs 记录 session_id、message_id、可选 turn_id。读取原始来源
 
 | 对象 | 最小字段 |
 | --- | --- |
-| 消息判定 | session_id、message_id、turn_id、should_save、should_recall、model_id、policy_version、状态、时间、截断标记 |
-| 保存标记 | 判定记录引用、pending/processed、访问上下文引用 |
+| 消息判定 | session_id、message_id、turn_id、save_scope、should_recall、model_id、policy_version、状态、时间、截断标记 |
+| 保存标记 | 判定记录引用、候选 save_scope、pending/processed、访问上下文引用 |
 | Session 状态 | 稳定处理位置、最近成功时间、失败原因、下次重试时间 |
 | 写入计划 | batch_id、输入边界、操作列表、幂等键、执行进度 |
 
@@ -411,7 +445,7 @@ Jev 成本会随消息数量增长，但单次输入有上限。不能宣称总�
 记录以下指标：
 
 - Jev 调用量、时延、失败率、实际输入/输出用量（服务提供时）。
-- should_save / should_recall 命中比例。
+- save_scope 各枚举分布、非 none 保存比例和 should_recall 命中比例。
 - 检索命中、返回字符量。
 - 后台处理 Session 数、提取候选数、最终保存数、重复跳过数。
 - 待处理标记数量、最旧标记等待时间、重试次数。
@@ -428,7 +462,7 @@ Jev 成本会随消息数量增长，但单次输入有上限。不能宣称总�
 1. 用户消息在本轮首次模型处理前完成一次双判断，重放不会重复付费调用已完成判定。
 2. 保存与召回的四种组合都正确执行。
 3. should_recall=false 时不自动查询或注入记忆。
-4. should_save=true 时消息进入持久 pending 标记，Agent 回复后不再次调用 Jev。
+4. save_scope 非 none 时消息进入带候选范围的持久 pending 标记；none 不创建标记。mixed 正确拆分归属，未知枚举被拒绝；Agent 回复后不再次调用 Jev。
 5. 每 30 分钟仅整理有未处理标记的增量 Session；无新增工作不调用提取模型。
 6. 本轮未完成的内容不被当作已完成结果保存。
 7. 多轮提案、确认、纠正得到正确的最终记忆，不把提问保存为决策。

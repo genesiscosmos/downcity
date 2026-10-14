@@ -7,10 +7,11 @@
  * - 它描述的是「一件活的完整动作」，而不是对 Session 方法逐一转发。
  *
  * 关键点（中文）
- * - 这组能力只注入 `origin.type === "agent"` 的会话，因此活不会再派活。
+ * - 这组能力只注入 Agent 主会话和 Channel 会话，工作会话不会递归派发。
  */
 
 import type { SessionInteractionResponse } from "@downcity/type";
+import type { SessionDelegationCaller, SessionDelegationInput, SessionDelegationReceipt } from "./SessionDelegation.js";
 import type {
   SessionCheckDetailToolOutput,
   SessionToolSummary,
@@ -19,14 +20,7 @@ import type {
 /** Agent 会话可用的会话工作运行时。 */
 export interface SessionWorkContract {
   /** 开一条工作会话并立刻把任务交给它；返回时该会话可能仍在执行。 */
-  spawn(input: {
-    /** 交给新会话的完整任务文本。 */
-    query: string;
-    /** 可选短标题，用于清单展示。 */
-    title?: string;
-    /** 显式指定的项目 Workspace ID，由宿主解析为执行目录。 */
-    workspace_id: string;
-  }): Promise<{ session_id: string }>;
+  spawn(input: SessionDelegationInput, caller: SessionDelegationCaller): Promise<SessionDelegationReceipt>;
 
   /** 列出当前 Agent 的全部工作会话摘要，按最近更新倒序。 */
   list(input?: { limit?: number }): Promise<SessionToolSummary[]>;

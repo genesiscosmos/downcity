@@ -152,10 +152,11 @@ export class SessionLoop {
   ): Promise<AgentSessionTurnHandle> {
     const existing_handle = await this.resolve_idempotent_prompt(request_identity);
     if (existing_handle) return existing_handle;
-    const persisted_message = this.messages.get_message(request_identity.message_id);
-    return await this.enqueue_prompt(input, request_identity, persisted_message?.role === "user"
-      ? persisted_message
-      : undefined);
+    const persisted_message = await this.messages.read_message(request_identity.message_id);
+    // 稳定身份属于输入；检查点合并可能把它绑定到另一条实际 Turn。
+    return await this.enqueue_prompt(input, persisted_message?.role === "user"
+      ? { ...request_identity, turn_id: persisted_message.turn_id ?? request_identity.turn_id }
+      : request_identity, persisted_message?.role === "user" ? persisted_message : undefined);
   }
 
   /** 把一个已校验的 Prompt 加入 Session FIFO。 */
@@ -179,7 +180,10 @@ export class SessionLoop {
       },
       cancel: () => {
         this.pending_prompt_count = Math.max(0, this.pending_prompt_count - 1);
-        this.resolve_cancelled_prompt(deferred_handle);
+        // 幂等输入尚未写入 canonical history 时，取消代表提交失败。
+        // 明确拒绝使调用方保留待投递记录，避免把合成取消句柄当作接受回执。
+        if (request_identity) deferred_handle.reject(new Error(QUEUED_PROMPT_CANCELLED_MESSAGE));
+        else this.resolve_cancelled_prompt(deferred_handle);
       },
     });
     return await deferred_handle.promise;
@@ -400,13 +404,21 @@ export class SessionLoop {
   ): Promise<void> {
     const active_turn = this.require_active_turn();
     if (active_turn.prompt_started) {
-      const message = await this.persist_prompt_message(
-        input,
-        active_turn.turn_id,
-      );
-      active_turn.turn_context?.input.observe_user_message(message);
-      this.pending_prompt_count = Math.max(0, this.pending_prompt_count - 1);
-      deferred_handle.resolve(create_turn_handle(active_turn));
+      try {
+        const message = persisted_message || await this.persist_prompt_message(
+          input,
+          active_turn.turn_id,
+          message_id,
+        );
+        active_turn.turn_context?.input.observe_user_message(message);
+        this.pending_prompt_count = Math.max(0, this.pending_prompt_count - 1);
+        deferred_handle.resolve(create_turn_handle(active_turn));
+      } catch (error) {
+        if (!message_id) throw error;
+        // 幂等 steer 提交失败由调用方重试，不在队列中保留失效的接受 Promise。
+        this.pending_prompt_count = Math.max(0, this.pending_prompt_count - 1);
+        deferred_handle.reject(error);
+      }
       return;
     }
 
@@ -434,8 +446,12 @@ export class SessionLoop {
       if (this.active_turn === active_turn) this.active_turn = null;
       active_turn.deferred_finished.resolve(final_result);
     } catch (error) {
-      // 持久化失败时仍兑现句柄，让调用方可以观察到失败的 Turn，而不是永久等待。
-      if (!handle_resolved) deferred_handle.resolve(create_turn_handle(active_turn));
+      // 幂等输入尚未入库时拒绝提交，调用方可以保留原请求重试。
+      // 普通交互输入继续返回可观察的失败 Turn。
+      if (!handle_resolved) {
+        if (message_id) deferred_handle.reject(error);
+        else deferred_handle.resolve(create_turn_handle(active_turn));
+      }
       await this.fail_active_turn(active_turn, error);
     }
   }
@@ -667,17 +683,18 @@ export class SessionLoop {
   private async resolve_idempotent_prompt(
     identity: PromptRequestIdentity,
   ): Promise<AgentSessionTurnHandle | null> {
-    const existing_message = this.messages.get_message(identity.message_id);
+    const existing_message = await this.messages.read_message(identity.message_id);
     if (!existing_message) return null;
-    if (existing_message.role !== "user" || existing_message.turn_id !== identity.turn_id) {
+    if (existing_message.role !== "user" || !existing_message.turn_id) {
       throw new Error("Session prompt request identity conflicts with canonical history");
     }
-    if (this.active_turn?.turn_id === identity.turn_id) {
+    const actual_turn_id = existing_message.turn_id;
+    if (this.active_turn?.turn_id === actual_turn_id) {
       return create_turn_handle(this.active_turn);
     }
-    const agent_message = await this.messages.read_latest_agent_message(identity.turn_id);
+    const agent_message = await this.messages.read_latest_agent_message(actual_turn_id);
     if (!agent_message || agent_message.state === "streaming") return null;
-    return create_completed_turn_handle(to_persisted_turn_result(identity.turn_id, agent_message));
+    return create_completed_turn_handle(to_persisted_turn_result(actual_turn_id, agent_message));
   }
 
   /** 持久化 Executor Action，并同步刷新 Session metadata。 */
@@ -702,15 +719,15 @@ export class SessionLoop {
   }
 }
 
+/** 为输入接受和 Turn 完成创建独立的 Promise 控制器。 */
 function create_deferred<T>(): SessionDeferred<T> {
   let resolve!: (value: T) => void;
-  const promise = new Promise<T>((inner_resolve) => {
+  let reject!: (reason: unknown) => void;
+  const promise = new Promise<T>((inner_resolve, inner_reject) => {
     resolve = inner_resolve;
+    reject = inner_reject;
   });
-  return {
-    promise,
-    resolve,
-  };
+  return { promise, resolve, reject };
 }
 
 function create_active_session_turn_state(

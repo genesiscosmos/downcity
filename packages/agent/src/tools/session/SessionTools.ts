@@ -8,7 +8,8 @@
  * - 工具自带 description 与返回值说明，因此不需要向 instruction 注入额外文本。
  *
  * 关键点（中文）
- * - 这组工具只注册在 `origin.type === "agent"` 的会话上下文里；其他 Session 拿不到，所以不会递归派发。
+ * - 工具只注册在 Agent 主会话和 Channel 会话；Work Session 不会递归派发。
+ * - 派发身份来自工具上下文，结果由委派运行时幂等回传到实际发起会话。
  */
 
 import {
@@ -68,13 +69,20 @@ export type ChatSessionToolSet = ReturnType<typeof create_session_tools>;
 export function create_session_tools(work: SessionWorkContract) {
   const session_start = define_agent_tool<SessionStartInput, ActionResult<SessionStartToolOutput>>({
     description:
-      "Start a new session to carry out one piece of work, then return immediately. Use it when a request is larger than one reply: the user keeps talking with you while the work runs elsewhere. Write the query as a complete instruction, because the new session only sees that text. Specify the target project workspace_id; discover available projects with context.workspaces.list. Never use the main session's private Workspace for project work.",
+      "Start a new session to carry out one piece of work, then return immediately. Use it when a request is larger than one reply: the user keeps talking with you while the work runs elsewhere. Completion or failure is automatically returned to this conversation; do not poll for completion. Write the query as a complete instruction, because the new session only sees that text. Specify the target project workspace_id; discover available projects with context.workspaces.list. Never use the main session's private Workspace for project work.",
     input_schema: session_start_input,
-    execute: async (input): Promise<ActionResult<SessionStartToolOutput>> => {
-      // 目标项目必须显式给出，禁止把主会话的 main 目录当成工作目录。
-      const result = await work.spawn(input);
+    execute: async (input, context): Promise<ActionResult<SessionStartToolOutput>> => {
+      if (!context.turn_id || !context.tool_call_id) {
+        throw new Error("session_start requires an active Turn tool call");
+      }
+      const result = await work.spawn(input, {
+        session_id: context.session_id,
+        origin: context.session_origin,
+        turn_id: context.turn_id,
+        tool_call_id: context.tool_call_id,
+      });
       return {
-        output: { session_id: result.session_id, status: "started" },
+        output: { session_id: result.session_id, delegation_id: result.delegation_id, status: "started" },
         messages: [],
       };
     },

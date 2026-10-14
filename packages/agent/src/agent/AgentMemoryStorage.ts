@@ -27,6 +27,9 @@ class AgentMemoryFileSystem implements FileSystem {
   /** 当前作用域中已经创建的目录。 */
   private readonly directories = new Set<string>();
 
+  /** 每个规范化锁路径的事务尾部，保证异步读改写也串行执行。 */
+  private readonly lock_chains = new Map<string, Promise<void>>();
+
   constructor(root_path: string) {
     this.root_path = root_path;
     this.directories.add(root_path);
@@ -122,9 +125,18 @@ class AgentMemoryFileSystem implements FileSystem {
     await this.write_file_atomically(file_path, Buffer.concat([current, Buffer.from(content)]));
   }
 
-  /** 内存作用域在单线程事件循环中直接执行文件事务。 */
-  async with_file_lock<T>(_lock_path: string, action: () => Promise<T>): Promise<T> {
-    return await action();
+  /** 同一路径的异步文件事务串行执行；失败不阻塞后续事务。 */
+  async with_file_lock<T>(lock_path: string, action: () => Promise<T>): Promise<T> {
+    const key = this.normalize(lock_path);
+    const previous = this.lock_chains.get(key) ?? Promise.resolve();
+    const operation = previous.then(action);
+    const tail = operation.then(() => undefined, () => undefined);
+    this.lock_chains.set(key, tail);
+    try {
+      return await operation;
+    } finally {
+      if (this.lock_chains.get(key) === tail) this.lock_chains.delete(key);
+    }
   }
 
   /** Agent 私有存储不提供项目文件工具。 */

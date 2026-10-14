@@ -673,6 +673,7 @@ export class CityPowerRuntime implements PowerRuntimeHost {
       },
     };
     return Object.freeze({
+      ...(this.options.embassy ? { embassy: this.options.embassy } : {}),
       power: Object.freeze({
         id: power_id,
         action: (action: PowerHostAction) =>
@@ -754,6 +755,13 @@ export class CityPowerRuntime implements PowerRuntimeHost {
             input.session_id,
             input.origin_type,
           ).append_agent_message({ text: input.text });
+        },
+        read_agent_session_messages: async (input) => {
+          const agent = this.options.runtime_access.get_agent(input.agent_id);
+          if (!agent) throw new Error(`Agent not found in City: ${input.agent_id}`);
+          await agent.sessions.get(input.session_id, input.origin_type);
+          const messages = await agent.sessions.runtime(input.session_id, input.origin_type).messages();
+          return messages as unknown as import("@/power/index.js").PowerJsonObject[];
         },
         get_agent_session_workspace: async (input) => {
           const agent = this.options.runtime_access.get_agent(input.agent_id);

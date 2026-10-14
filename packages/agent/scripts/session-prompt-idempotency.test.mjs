@@ -58,9 +58,9 @@ function create_loop(request_id) {
     maintain_context: async () => {},
     state: { ensure_runnable: async () => {} },
     messages: {
-      get_message: (message_id) => message_id === user_message.message_id
+      read_message: async (message_id) => message_id === user_message.message_id
         ? user_message
-        : undefined,
+        : null,
       read_latest_agent_message: async (requested_turn_id) => requested_turn_id === turn_id
         ? agent_message
         : null,

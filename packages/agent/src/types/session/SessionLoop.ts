@@ -29,6 +29,8 @@ export interface SessionDeferred<T> {
   promise: Promise<T>;
   /** 兑现 Promise 的函数。 */
   resolve: (value: T) => void;
+  /** 拒绝尚未被 Session 接受的输入；Turn 完成结果仍通过 resolve 返回。 */
+  reject: (reason: unknown) => void;
 }
 
 /** 当前活跃 Turn 的内存状态。 */

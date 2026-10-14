@@ -284,14 +284,36 @@ export class AgentSessions implements AgentSessionsContract<AgentSession> {
   ): Promise<AgentSession> {
     const origin = normalize_session_origin(input?.origin);
     const session_id = await this.allocate_session_id(origin);
+    return await this.create_with_id(session_id, origin, input?.workspace);
+  }
+
+  /**
+   * 委派运行时专用的幂等工作会话入口。
+   * 标识由已持久化的委派记录预分配；普通 SDK create 仍由集合生成标识。
+   */
+  async ensure_work_session(session_id: string, workspace: WorkspaceRuntime): Promise<AgentSession> {
+    const origin = { type: SESSION_ORIGIN_TYPE_WORK };
+    const context = this.resolve_session_context({ origin, workspace });
+    if (await context.store.has_session(session_id, origin.type)) {
+      return await this.get(session_id, origin.type, { workspace });
+    }
+    return await this.create_with_id(session_id, origin, workspace);
+  }
+
+  /** 创建入口共享装配过程；固定标识只供已持久化委派使用。 */
+  private async create_with_id(
+    session_id: string,
+    origin: SessionOrigin,
+    workspace?: WorkspaceRuntime,
+  ): Promise<AgentSession> {
     const context = this.resolve_session_context({
       origin,
       creating: true,
-      ...(input?.workspace ? { workspace: input.workspace } : {}),
+      ...(workspace ? { workspace } : {}),
     });
     const session = this.get_or_create_session({
       session_id,
-      workspace: input?.workspace,
+      workspace,
       origin,
       storage: context.store.create_session(
         session_id,

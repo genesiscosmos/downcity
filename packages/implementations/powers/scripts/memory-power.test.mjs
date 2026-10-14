@@ -72,6 +72,7 @@ function create_power_context(agent_id = "memory_test_agent") {
 function create_start_context(storage_path) {
   return {
     storage: { path: storage_path, files: {} },
+    config: { path: "", get: () => ({}), set: async () => {} },
     power: { id: "memory", action() {}, config_action() {} },
     logger: { log: async () => {}, debug() {}, info() {}, warn() {}, error() {} },
     notifications: { publish: async () => {}, dismiss: async () => {} },
@@ -336,7 +337,7 @@ test("Builtin Provider 枚举记忆并区分证据与投影", async (context) =>
   await provider.dispose();
 });
 
-test("MemoryPower 通过现有 Session Hook points 分离 Usage、Core 与 Recall", async (context) => {
+test("MemoryPower 未启用自动流程时不召回、不采集，system 仅含使用说明", async (context) => {
   const platform_root = await fs.mkdtemp(path.join(os.tmpdir(), "downcity-memory-hooks-"));
   context.after(async () => await fs.rm(platform_root, { recursive: true, force: true }));
   const memory_root = path.join(platform_root, "powers", "memory");
@@ -359,15 +360,7 @@ test("MemoryPower 通过现有 Session Hook points 分离 Usage、Core 与 Recal
   assert.match(usage, /Memory actions usage|Preferred flow/);
   assert.doesNotMatch(usage, /prefers concise answers/);
 
-  const system_hook = power.hooks.pipeline[SESSION_HOOK_POINTS.system_context][0];
-  const system_value = await system_hook({
-    context: power_context,
-    power: "memory",
-    value: { session_id: "session-1", blocks: [] },
-  });
-  assert.equal(system_value.blocks.length, 1);
-  assert.equal(system_value.blocks[0].name, "memory/core/agent");
-  assert.match(system_value.blocks[0].content, /prefers concise answers/);
+  assert.equal(power.hooks.pipeline[SESSION_HOOK_POINTS.system_context], undefined);
 
   const turn_hook = power.hooks.pipeline[SESSION_HOOK_POINTS.turn_context][0];
   const turn_value = await turn_hook({
@@ -380,10 +373,8 @@ test("MemoryPower 通过现有 Session Hook points 分离 Usage、Core 与 Recal
       blocks: [],
     },
   });
-  assert.equal(turn_value.blocks.length, 1);
-  assert.equal(turn_value.blocks[0].name, "recall");
-  assert.equal(turn_value.blocks[0].trust_level, "reference");
-  assert.match(turn_value.blocks[0].content, /prefers concise answers/);
+  // 自动流程未启用，不无条件检索长期记忆。
+  assert.equal(turn_value.blocks.length, 0);
 
   const committed_hook = power.hooks.effect[SESSION_HOOK_POINTS.turn_committed][0];
   const canonical_messages = [{
@@ -464,22 +455,13 @@ test("MemoryPower 通过现有 Session Hook points 分离 Usage、Core 与 Recal
       })),
     },
   });
-  const agent_prefix = "agent/memory_test_agent";
   const capture_root = path.join(platform_root, "agents", "memory_test_agent", "memory", "capture-jobs");
-  const capture_jobs = await fs.readdir(capture_root);
-  assert.equal(capture_jobs.length, 1);
-  const capture_job = JSON.parse(await fs.readFile(
-    path.join(capture_root, capture_jobs[0]),
-    "utf8",
-  ));
-  assert.equal(capture_job.status, "pending");
-  assert.equal(capture_job.turn_id, "turn-1");
-  assert.equal(capture_job.messages[0].text, "以后回答请保持简洁。");
+  assert.equal(await fs.access(capture_root).then(() => true).catch(() => false), false);
 
   await power.dispose();
 });
 
-test("City 共享记忆在两个 Agent 间可见，Agent 私有记忆保持隔离", async (context) => {
+test("Workspace 记忆在项目内跨 Agent 可见，私有与跨项目记忆隔离", async (context) => {
   const temporary_root = await fs.mkdtemp(path.join(os.tmpdir(), "downcity-memory-city-"));
   context.after(async () => await fs.rm(temporary_root, { recursive: true, force: true }));
   const platform_root = path.join(temporary_root, "platform");
@@ -515,22 +497,23 @@ test("City 共享记忆在两个 Agent 间可见，Agent 私有记忆保持隔�
     action_name: "remember",
   });
   assert.equal(shared_memory.success, true);
-  // Workspace 不是 Subject，current_workspace 写入共享根并落为 city 记忆。
-  assert.match(shared_memory.data.memory_id, /^city\/wiki\/project-overview$/);
+  assert.match(shared_memory.data.memory_id, /^workspace\/[a-f0-9]+\/wiki\/project-overview$/);
 
-  const system_hook = power.hooks.pipeline[SESSION_HOOK_POINTS.system_context][0];
-  const second_value = await system_hook({
+  const shared_read = await power.actions.read.execute({
     context: second_context,
-    power: "memory",
-    value: { session_id: "session-b", blocks: [] },
+    input: { memory_id: shared_memory.data.memory_id },
+    power_name: "memory", action_name: "read",
   });
-  // 另一个 Agent 能看到共享记忆，但看不到 agent_a 的私有记忆。
-  const shared_core = second_value.blocks.find((block) => block.name === "memory/core/city");
-  assert.match(shared_core?.content || "", /always uses pnpm/);
-  assert.equal(
-    second_value.blocks.some((block) => block.content.includes("run typecheck first")),
-    false,
-  );
+  assert.equal(shared_read.success, true);
+  assert.match(shared_read.data.memory.content, /always uses pnpm/);
+  const other_workspace = create_power_context("agent_b");
+  other_workspace.workspace.id = "another-workspace";
+  const isolated = await power.actions.read.execute({
+    context: other_workspace,
+    input: { memory_id: shared_memory.data.memory_id },
+    power_name: "memory", action_name: "read",
+  });
+  assert.equal(isolated.success, false);
 
   const cross_agent_read = await power.actions.read.execute({
     context: second_context,
