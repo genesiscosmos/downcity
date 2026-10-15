@@ -208,8 +208,24 @@ export class SessionExecutor implements SessionExecutorPort {
       while (step_count < MAX_TOOL_LOOP_STEPS) {
         // 关键点（中文）：steer 与 command 在同一个 Session step 检查点执行。
         // 当前流与 tool callback 保持原执行视图，下一 step 再统一读取 effective 配置。
+        const input_started_at = Date.now();
+        await this.logger.log("info", "[agent] step.input_start", {
+          session_id,
+          turn_id: input.turn_context.session.turn_id,
+          step_index: step_count + 1,
+        });
         await input.turn_context.input.checkpoint();
         const step_input = await input.resolve_step_input();
+        await this.logger.log("info", "[agent] step.input_ready", {
+          session_id,
+          turn_id: input.turn_context.session.turn_id,
+          step_index: step_count + 1,
+          elapsed_ms: Date.now() - input_started_at,
+          model_id: step_input.model.id,
+          context_window: step_input.context_window ?? null,
+          message_count: step_input.messages.length,
+          tool_count: Object.keys(step_input.tools).length,
+        });
 
         last_observed_stream_error = undefined;
         const step = await this.execute_provider_step({
@@ -480,6 +496,7 @@ export class SessionExecutor implements SessionExecutorPort {
     step_assistant_parts: SessionAgentMessagePart[];
   }> {
     const turn_context = input.turn_context;
+    let attempt = 0;
     const result = await execute_model_request({
       request_kind: "turn",
       abort_signal: turn_context.lifecycle.abort_signal,
@@ -507,6 +524,8 @@ export class SessionExecutor implements SessionExecutorPort {
         }
       },
       execute_attempt: async () => {
+        attempt += 1;
+        const invocation_id = generate_id();
         await turn_context.output.assistant?.begin_step();
         try {
           return await run_model_step({
@@ -515,6 +534,17 @@ export class SessionExecutor implements SessionExecutorPort {
             messages: input.step_input.messages,
             tools: input.tools_override ?? input.step_input.tools,
             abort_signal: turn_context.lifecycle.abort_signal,
+            on_diagnostic: async (diagnostic) => {
+              await this.logger.log("info", `[agent] model_request.${diagnostic.phase}`, {
+                session_id: this.session_id,
+                turn_id: turn_context.session.turn_id,
+                invocation_id,
+                attempt,
+                model_id: input.step_input.model.id,
+                context_window: input.step_input.context_window ?? null,
+                ...diagnostic,
+              });
+            },
             ...(turn_context.output.assistant
               ? { assistant_output: turn_context.output.assistant }
               : {}),

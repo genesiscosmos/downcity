@@ -23,7 +23,7 @@ import type {
   SessionAgentMessagePart,
   SessionAgentToolPart,
 } from "@downcity/type";
-import { consume_model_stream } from "@/model/ModelStreamConsumer.js";
+import { consume_model_stream, type ModelStreamDiagnostic } from "@/model/ModelStreamConsumer.js";
 import { validate_tool_input } from "@/model/ToolInputValidation.js";
 
 /** 单个工具调用的执行事实。 */
@@ -76,6 +76,8 @@ export interface RunModelStepInput {
   abort_signal: AbortSignal;
   /** canonical Assistant 输出端口。 */
   assistant_output?: SessionAssistantOutput;
+  /** 可选模型流阶段诊断；只传递时序和事件类型，不包含请求正文。 */
+  on_diagnostic?: (diagnostic: ModelStreamDiagnostic) => void | Promise<void>;
 }
 
 /** 执行一个 Downcity 模型 Step 并收敛工具结果。 */
@@ -99,6 +101,7 @@ export async function run_model_step(input: RunModelStepInput): Promise<{
       await input.assistant_output?.write_model_event(event);
       collector.accept(event);
     },
+    input.on_diagnostic,
   );
   const collected = collector.finish();
   const tool_results = await execute_tools(
