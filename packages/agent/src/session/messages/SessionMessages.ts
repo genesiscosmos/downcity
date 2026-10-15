@@ -302,6 +302,7 @@ export class SessionMessages {
     const canonical = await this.append_user_message({
       turn_id: input.turn_id,
       parts: normalize_session_user_parts(ui_parts),
+      visibility: input.prompt.visibility,
       ...(input.message_id ? { message_id: input.message_id } : {}),
     });
     return canonical;

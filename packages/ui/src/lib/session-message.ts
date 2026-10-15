@@ -119,7 +119,6 @@ export function session_jsonl_to_chat_messages(jsonl: string): DowncityChatMessa
     if (!line.trim()) continue;
     try {
       const record = JSON.parse(line) as Record<string, unknown>;
-      if (record.visibility === "hidden") continue;
       const id = typeof record.message_id === "string" ? record.message_id : undefined;
       if (!id) continue;
       const previous = latest.get(id);
@@ -131,6 +130,7 @@ export function session_jsonl_to_chat_messages(jsonl: string): DowncityChatMessa
     } catch { /* 忽略损坏行，保持历史可展示 */ }
   }
   return [...latest.values()]
+    .filter((record) => record.visibility !== "internal")
     .sort((left, right) => Number(left.sequence ?? 0) - Number(right.sequence ?? 0))
     .map(session_message_to_chat_message);
 }

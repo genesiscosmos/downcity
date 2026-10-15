@@ -57,13 +57,21 @@ export interface AgentSessionPromptInput {
   request_id?: string;
 
   /**
+   * 消息的展示可见性，默认 `visible`。
+   *
+   * `internal` 用于委派结果等运行时输入：消息仍持久化、进入模型上下文并触发执行，
+   * 但不在普通会话历史和聊天界面展示。该字段不改变模型输入角色或指令优先级。
+   */
+  visibility?: "visible" | "internal";
+
+  /**
    * 当前这次要追加到 Session 的用户文本或 parts 数组。
    *
    * 说明（中文）
    * - 支持两种格式：
    *   1. `string`：纯文本用户输入，Session 会将其包装为用户消息。
    *   2. `AgentSessionPromptContent[]`：Downcity Session 内容，可直接携带 text、context、file 等内容。
-   * - 调用侧永远只传"新的用户输入"。
+   * - 调用侧只传本次新增输入；运行时输入应同时设置 `visibility: "internal"`。
    * - 它是否并入当前 turn，还是排到下一 turn，由 Session 内部决定。
    */
   query: string | AgentSessionPromptContent[];
