@@ -11,7 +11,7 @@ import yaml from "js-yaml";
 import { task_preparation_schema } from "./TaskPreparationSchema.js";
 import { z } from "zod";
 
-const intake_schema = z.object({ submission_id: z.uuid(), text: z.string().min(1).max(24000), request_key: z.string() });
+const intake_schema = z.object({ submission_id: z.uuid(), text: z.string().min(1).max(24000), request_key: z.string(), agent_id: z.string().min(1).optional() });
 import path from "node:path";
 import cron from "node-cron";
 import { parseFrontMatter } from "./Frontmatter.js";
@@ -303,6 +303,9 @@ export function parseTaskMarkdown(params: {
     status,
   };
   try {
+    if (meta.shell_type !== undefined) fm.shell_type = z.enum(["todo", "schedule"]).parse(meta.shell_type);
+    if (fm.shell_type === "todo" && fm.when !== "@manual" && !fm.when.startsWith("time:")) throw new Error("Todo supports only one-time work; use Schedule for Cron");
+    if (fm.shell_type === "schedule" && (fm.when === "@manual" || fm.when.startsWith("time:"))) throw new Error("Schedule requires a recurring Cron rule");
     if (meta.preparation !== undefined) fm.preparation = task_preparation_schema.parse(meta.preparation);
     if (meta.intake !== undefined) fm.intake = intake_schema.parse(meta.intake);
     fm.workflow = normalize_task_workflow(meta.workflow);
@@ -339,6 +342,8 @@ export function buildTaskMarkdown(params: {
     throw new Error(whenNormalized.error);
   }
 
+  if (frontmatter.shell_type === "todo" && whenNormalized.value !== "@manual" && !whenNormalized.value.startsWith("time:")) throw new Error("Todo supports only one-time work; use Schedule for Cron");
+  if (frontmatter.shell_type === "schedule" && (whenNormalized.value === "@manual" || whenNormalized.value.startsWith("time:"))) throw new Error("Schedule requires a recurring Cron rule");
   const kind = normalizeTaskKind(frontmatter.kind);
   const delivery_session = normalize_task_delivery_session(
     frontmatter.delivery_session,
@@ -361,6 +366,7 @@ export function buildTaskMarkdown(params: {
     kind,
     ...(kind === "agent" ? { review: Boolean(frontmatter.review) } : {}),
     status: String(frontmatter.status || "").trim(),
+    ...(frontmatter.shell_type ? { shell_type: z.enum(["todo", "schedule"]).parse(frontmatter.shell_type) } : {}),
     workflow: { ...normalize_task_workflow(frontmatter.workflow), updated_at: new Date().toISOString() },
     workflow_state: normalize_task_workflow_state(frontmatter.workflow_state),
     ...(frontmatter.preparation ? { preparation: task_preparation_schema.parse(frontmatter.preparation) } : {}),

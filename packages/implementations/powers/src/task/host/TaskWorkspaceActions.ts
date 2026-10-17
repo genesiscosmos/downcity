@@ -5,6 +5,7 @@
  * 串行提交；真正执行继续委托 City 的 Agent/Workspace 动态范围。
  */
 import { randomUUID } from "node:crypto";
+import { getTaskMdPath } from "../runtime/Paths.js";
 import { capture_task } from "../application/TaskIntakeService.js";
 import type { TaskCaptureInput } from "../types/TaskIntake.js";
 import { z } from "zod";
@@ -39,6 +40,8 @@ import {
 
 const identity_schema = z.object({ task_id: z.string().min(1) });
 const save_schema = z.object({
+  shell_type: z.enum(["todo", "schedule"]).optional(),
+  create_id: z.uuid().optional(),
   task_id: z.string().min(1).optional(),
   title: z.string().trim().min(1),
   body: z.string().default(""),
@@ -49,9 +52,12 @@ const save_schema = z.object({
   enabled: z.boolean().default(false),
   organized: z.boolean().default(false),
   planned_at: z.string().optional(),
+  planned_end_at: z.string().optional(),
   due_at: z.string().optional(),
   timezone: z.string().default("UTC"),
   require_acceptance: z.boolean().default(false),
+  expected_revision: z.number().int().positive().optional(),
+  start_now: z.boolean().optional(),
 });
 const command_schema = identity_schema.extend({
   command: z.enum([
@@ -70,6 +76,7 @@ const command_schema = identity_schema.extend({
   item_id: z.string().optional(),
   occurrence_id: z.string().optional(),
   planned_at: z.string().optional(),
+  feedback: z.string().trim().min(1).max(24000).optional(),
 });
 
 /** 注册统一工作区 actions，保持 Power 的单一存储所有权。 */
@@ -77,6 +84,7 @@ export function register_task_workspace_actions(
   context: PowerLifecycleContext,
   runtime: TaskPowerHostRuntime,
   enqueue_preparation: (task_id: string) => void = () => undefined,
+  generate_task?: (input: PowerJsonValue | undefined) => Promise<unknown>,
 ): ReadonlyMap<
   string,
   (input: PowerJsonValue | undefined) => Promise<PowerJsonValue>
@@ -98,10 +106,50 @@ export function register_task_workspace_actions(
     "workspace.snapshot",
     async () => await workspace_snapshot(context, runtime),
   );
+  if (generate_task) action("workspace.generate", generate_task);
   action("workspace.capture", async (input) => {
     const result = await capture_task(runtime.definitions, input as unknown as TaskCaptureInput);
     enqueue_preparation(result.task_id);
     return result;
+  });
+  action("workspace.confirm", async (input) => {
+    const value = identity_schema.extend({ revision: z.number().int().positive() }).parse(input);
+    let start_todo = false;
+    await runtime.definitions.mutate(async (storage) => {
+      const task = await readTask({ storage, taskId: value.task_id });
+      const preparation = task.frontmatter.preparation;
+      if (preparation?.revision !== value.revision) throw new Error("安排已更新，请确认最新方案");
+      if (preparation.status === "ready") return;
+      if (preparation.status !== "proposed" || ["completed", "cancelled"].includes(task.frontmatter.workflow?.work_status || "")) throw new Error("请等待安排生成完成");
+      if (task.frontmatter.kind === "agent") {
+        const [agents, workspaces] = await Promise.all([context.system.list_agents(), context.system.list_workspaces()]);
+        if (!agents.some((item) => item.agent_id === task.frontmatter.agent_id) || !workspaces.some((item) => item.workspace_id === task.frontmatter.workspace_id)) throw new Error("执行目标已不可用，请重新生成安排");
+      }
+      if (task.frontmatter.shell_type === "todo") {
+        if (task.frontmatter.when !== "@manual" && !task.frontmatter.when.startsWith("time:")) throw new Error("待办仅支持一次性工作，循环工作请使用安排");
+        start_todo = task.frontmatter.when === "@manual" && task.frontmatter.kind === "agent" && Boolean(preparation.start_now);
+      } else if (preparation.start_now) task.frontmatter.when = `time:${new Date(Date.now() + 1000).toISOString()}`;
+      if (task.frontmatter.shell_type === "schedule" && (task.frontmatter.when === "@manual" || task.frontmatter.when.startsWith("time:"))) throw new Error("安排必须设置循环 Cron 规则");
+      if (task.frontmatter.when.startsWith("time:") && Date.parse(task.frontmatter.when.slice(5)) <= Date.now()) throw new Error("安排时间已过，请调整时间后确认");
+      task.frontmatter.preparation = { ...preparation, status: "ready" };
+      task.frontmatter.status = task.frontmatter.when === "@manual" ? "paused" : "enabled";
+      await writeTask({ storage, taskId: value.task_id, frontmatter: task.frontmatter, body: task.body, overwrite: true });
+    });
+    const scheduler = await runtime.reconcile(value.task_id);
+    await runtime.definitions.mutate(async (storage) => {
+      const task = await readTask({ storage, taskId: value.task_id });
+      const preparation = task.frontmatter.preparation;
+      if (preparation?.revision !== value.revision || preparation.status !== "ready") return;
+      task.frontmatter.preparation = { ...preparation, schedule_error: scheduler.reloaded ? undefined : scheduler.error || "安排同步失败" };
+      await writeTask({ storage, taskId: value.task_id, frontmatter: task.frontmatter, body: task.body, overwrite: true });
+    });
+    if (start_todo) {
+      try {
+        const result = await actions.get("workspace.run")!({ task_id: value.task_id }) as { success?: boolean; error?: string; data?: { accepted?: boolean } };
+        if (result.success === false || result.data?.accepted === false) return { task_id: value.task_id, scheduler, start_error: result.error || "待办已保存，执行尚未受理，请从详情开始" };
+      } catch (error) { return { task_id: value.task_id, scheduler, start_error: String(error) }; }
+    }
+    return { task_id: value.task_id, scheduler };
   });
   action("workspace.reconcile", async (input) => {
     const { task_id } = identity_schema.parse(input);
@@ -119,7 +167,7 @@ export function register_task_workspace_actions(
     return { task_id, scheduler };
   });
   action("workspace.prepare", async (input) => {
-    const value = identity_schema.extend({ text: z.string().trim().min(1).max(24000).optional() }).parse(input);
+    const value = identity_schema.extend({ text: z.string().trim().min(1).max(24000).optional(), agent_id: z.string().min(1).optional() }).parse(input);
     await runtime.definitions.mutate(async (storage) => {
       const task = await readTask({ storage, taskId: value.task_id });
       if (runtime.definitions.is_running(value.task_id)) throw new Error("执行期间不能重新理解任务");
@@ -127,7 +175,8 @@ export function register_task_workspace_actions(
       if (!preparation || ["completed", "cancelled"].includes(task.frontmatter.workflow?.work_status || "")) throw new Error("此任务不能重新准备");
       // 重新理解使旧自动安排失效，人工确认新配置后才重新启用。
       task.frontmatter.status = "paused";
-      task.frontmatter.preparation = { revision: preparation.revision + 1, status: "queued", supplements: [...preparation.supplements, ...(value.text ? [value.text] : [])], questions: [] };
+      if (value.agent_id && task.frontmatter.intake) task.frontmatter.intake = { ...task.frontmatter.intake, agent_id: value.agent_id };
+      task.frontmatter.preparation = { ...preparation, revision: preparation.revision + 1, status: "queued", supplements: [...preparation.supplements, ...(value.text ? [value.text] : [])], questions: [], processing_id: undefined, error: undefined };
       await writeTask({ storage, taskId: value.task_id, frontmatter: task.frontmatter, body: task.body, overwrite: true });
     });
     const scheduler = await runtime.reconcile(value.task_id);
@@ -140,32 +189,57 @@ export function register_task_workspace_actions(
     if (!normalized_when.ok) throw new Error(normalized_when.error);
     const planned_at = normalize_task_instant(value.planned_at);
     const due_at = normalize_task_due(value.due_at);
-    if (
-      normalized_when.value.startsWith("time:") &&
-      Date.parse(normalized_when.value.slice(5)) <= Date.now()
-    )
-      throw new Error("计划时间已过，请选择未来时间或立即开始");
+    const planned_end_at = normalize_task_instant(value.planned_end_at);
+    if (planned_end_at && (!planned_at || Date.parse(planned_end_at) <= Date.parse(planned_at))) throw new Error("计划结束时间必须晚于计划开始时间");
     if (value.kind !== "self") {
       if (!value.agent_id || !value.workspace_id)
         throw new Error("请指定 Agent 和 Workspace");
       if (!value.body.trim()) throw new Error("请补充执行目标和说明");
       // 保存允许缺失的旧目标；实际启动时由 City 验证，用户仍可修复任务。
     }
-    const task_id = value.task_id || `task_${randomUUID()}`;
+    const task_id = value.task_id || `task_${value.create_id || randomUUID()}`;
     await runtime.definitions.mutate(async (storage) => {
+      if (value.create_id && !value.task_id && await storage.files.path_exists(getTaskMdPath(storage.path!, task_id))) {
+        const existing = await readTask({ storage, taskId: task_id });
+        const fm = existing.frontmatter;
+        if (fm.title !== value.title || existing.body !== value.body.trim() || fm.shell_type !== value.shell_type || fm.kind !== value.kind || fm.agent_id !== (value.kind === "self" ? "" : value.agent_id) || fm.workspace_id !== (value.kind === "self" ? "" : value.workspace_id) || fm.when !== normalized_when.value || fm.workflow?.timezone !== value.timezone || fm.workflow?.due_at !== due_at || fm.workflow?.planned_at !== planned_at || fm.workflow?.planned_end_at !== planned_end_at || fm.workflow?.require_acceptance !== value.require_acceptance || fm.status !== (value.enabled ? "enabled" : "paused")) throw new Error("该提交已保存为另一版内容，请打开原任务继续编辑");
+        return;
+      }
       const previous = value.task_id
         ? await readTask({ storage, taskId: task_id })
         : undefined;
       if (runtime.definitions.is_running(task_id))
         throw new Error("任务执行期间请先等待执行结束再编辑定义");
+      const preparation = previous?.frontmatter.preparation;
+      const shell_type = value.shell_type ?? previous?.frontmatter.shell_type;
+      if (shell_type === "todo" && normalized_when.value !== "@manual" && !normalized_when.value.startsWith("time:")) throw new Error("待办仅支持一次性工作，循环工作请使用安排");
+      if (shell_type === "schedule" && (normalized_when.value === "@manual" || normalized_when.value.startsWith("time:"))) throw new Error("安排必须设置循环 Cron 规则");
+      if (normalized_when.value.startsWith("time:") && Date.parse(normalized_when.value.slice(5)) <= Date.now() &&
+        (!previous || normalized_when.value !== previous.frontmatter.when || preparation?.status !== "ready"))
+        throw new Error("计划时间已过，请选择未来时间或立即开始");
+      if (value.expected_revision !== undefined && preparation?.revision !== value.expected_revision)
+        throw new Error("任务已更新，请重新打开最新内容后修改");
+      const execution_changed = Boolean(previous && (
+        value.body !== (preparation?.analyzed_body ?? previous.body) ||
+        value.kind !== previous.frontmatter.kind || value.agent_id !== previous.frontmatter.agent_id ||
+        value.workspace_id !== previous.frontmatter.workspace_id || normalized_when.value !== previous.frontmatter.when ||
+        value.timezone !== previous.frontmatter.workflow?.timezone ||
+        (value.start_now !== undefined && value.start_now !== Boolean(preparation?.start_now))
+      ));
+      const requires_confirmation = Boolean(preparation && (preparation.status !== "ready" || execution_changed));
       const workflow = normalize_task_workflow({
         ...previous?.frontmatter.workflow,
         organized: value.organized,
         planned_at,
+        planned_end_at,
         due_at,
         timezone: value.timezone,
         require_acceptance: value.require_acceptance,
       });
+      if (shell_type === "schedule" && previous && normalized_when.value !== previous.frontmatter.when && ["completed", "cancelled"].includes(workflow.work_status)) {
+        workflow.work_status = "pending";
+        delete workflow.completed_at;
+      }
       if (
         !previous &&
         normalized_when.value !== "@manual" &&
@@ -179,14 +253,22 @@ export function register_task_workspace_actions(
         body: value.body,
         frontmatter: {
           ...previous?.frontmatter,
-          ...(previous?.frontmatter.preparation ? { preparation: { ...previous.frontmatter.preparation, revision: previous.frontmatter.preparation.revision + 1, status: "ready" as const, questions: [], error: undefined, processing_id: undefined } } : {}),
+          ...(shell_type ? { shell_type } : {}),          ...(previous?.frontmatter.intake && (value.kind !== previous.frontmatter.kind || value.agent_id !== previous.frontmatter.agent_id) ? { intake: { ...previous.frontmatter.intake, agent_id: value.kind === "self" ? undefined : value.agent_id } } : {}),
+          ...(preparation ? { preparation: {
+            ...preparation,
+            revision: preparation.revision + 1,
+            status: requires_confirmation ? "proposed" as const : "ready" as const,
+            analyzed_body: value.body,
+            start_now: value.kind === "agent" && normalized_when.value === "@manual" && (value.start_now ?? preparation.start_now ?? false),
+            questions: [], error: undefined, schedule_error: undefined, processing_id: undefined,
+          } } : {}),
           title: value.title,
           description: value.body.slice(0, 160),
           kind: value.kind,
           agent_id: value.kind === "self" ? "" : value.agent_id,
           workspace_id: value.kind === "self" ? "" : value.workspace_id,
           when: normalized_when.value,
-          status: value.enabled ? "enabled" : "paused",
+          status: requires_confirmation ? "paused" : value.enabled ? "enabled" : "paused",
           workflow,
         },
       });
@@ -234,6 +316,7 @@ export function register_task_workspace_actions(
           break;
         case "complete":
         case "accept": {
+          if (task.frontmatter.shell_type === "schedule" && !item) throw new Error("请处理具体结果，或暂停定时安排");
           if (value.command === "accept" && item?.kind !== "review")
             throw new Error("请选择待验收结果");
           if (
@@ -273,7 +356,9 @@ export function register_task_workspace_actions(
           break;
         }
         case "revise":
+          if (running) throw new Error("任务仍在执行，请等待执行结束后修改结果");
           if (item?.kind !== "review") throw new Error("请选择待验收结果");
+          if (value.feedback) item.feedback = value.feedback;
           item.resolved = true;
           if (occurrence) occurrence.status = "pending";
           if (!task_is_recurring(task)) workflow.work_status = "in_progress";
@@ -303,6 +388,9 @@ export function register_task_workspace_actions(
           task.frontmatter.status = "paused";
           break;
         case "resume":
+          if (task.frontmatter.shell_type === "todo" && (task.frontmatter.when === "@manual" || Date.parse(task.frontmatter.when.slice(5)) <= Date.now())) throw new Error("请设置未来的一次执行时间，或使用开始执行");
+          if (task.frontmatter.shell_type === "schedule" && (task.frontmatter.when === "@manual" || (task.frontmatter.when.startsWith("time:") && Date.parse(task.frontmatter.when.slice(5)) <= Date.now()))) throw new Error("单次安排已过期或已触发，请重新设置未来时间");
+          if (task.frontmatter.preparation && task.frontmatter.preparation.status !== "ready") throw new Error("请先确认安排");
           if (["completed", "cancelled"].includes(workflow.work_status))
             throw new Error("请先重新打开任务");
           task.frontmatter.status = "enabled";

@@ -8,6 +8,7 @@
  * - 写入目标只能解析为当前 AccessContext 中已经存在的 Subject。
  */
 
+import { LOCAL_USER_ID } from "@downcity/city/local";
 import type {
   MemoryAccessContext,
   MemoryOwner,
@@ -36,7 +37,7 @@ export function resolve_readable_memory_addresses(
 ): MemorySubjectAddress[] {
   assert_access_agent(access);
   const addresses: MemorySubjectAddress[] = [create_agent_address(access.agent_id)];
-  if (access.user_id) addresses.push(create_shared_address("user", access.user_id));
+  addresses.push(create_shared_address("user", LOCAL_USER_ID));
   if (access.workspace_id) addresses.push(create_shared_address("workspace", access.workspace_id));
   if (access.city_memory_available && !access.exclude_city) addresses.push(create_city_address());
   return addresses;
@@ -54,8 +55,7 @@ export function resolve_writable_memory_address(
   assert_access_agent(access);
   if (target === "agent") return create_agent_address(access.agent_id);
   if (target === "user") {
-    if (!access.user_id) throw new Error("Memory target user requires trusted identity");
-    return create_shared_address("user", access.user_id);
+    return create_shared_address("user", LOCAL_USER_ID);
   }
   if (target === "current_workspace") {
     if (!access.workspace_id) {

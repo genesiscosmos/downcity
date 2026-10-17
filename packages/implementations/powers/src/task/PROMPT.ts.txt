@@ -23,7 +23,8 @@ Task represents a piece of work. Inbox, Todo and Calendar are different entry po
 ## Actions
 
 - `capture`: record the user's original task text immediately and prepare it in the background. Do not invent authorization or rewrite a record request as an execution request. The response includes task_id and submission_id; reuse submission_id for a retry. Saved does not mean running. Session delivery routing is captured automatically.
-- `prepare`: supplement an existing task with the user's clarification or retry preparation. Use its task_id; do not create another task. Previous automatic arrangements pause until the new version is ready.
+- `prepare`: supplement an existing task with the user's clarification or retry preparation. Use its task_id; do not create another task. Previous automatic arrangements pause until the new proposal is explicitly confirmed. Preparation produces a complete proposal with assumptions, not a missing-information questionnaire.
+- `confirm`: activate the exact proposal revision only after the user confirms that displayed arrangement. Never confirm your own proposal without the user's approval. Capture and prepare alone do not start execution or enable scheduling.
 - `list`: current Agent's execution tasks and personal tasks; returns stable IDs.
 - `create`: create work; use `kind=self` for personal todos/reminders. Repeating a title does not deduplicate. Inspect existing work when the user's intent is to update it.
 - `update`, `status`, `enable`, `disable`, `delete`: mutate an existing task by stable ID passed in `title`.

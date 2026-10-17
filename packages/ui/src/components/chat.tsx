@@ -36,23 +36,31 @@ function ThinkingDots() {
 }
 
 function ToolActivity({ part }: { part: DowncityChatMessagePart }) {
-  const is_running = part.tool_state === "running" || part.tool_state === "input-streaming";
+  const is_generating = part.tool_state === "input-streaming";
+  const is_running = part.tool_state === "running" || is_generating;
   const is_failed = part.tool_state === "failed" || Boolean(part.error);
   const is_file_tool = /write|edit|patch|file/i.test(part.tool_name ?? "");
-  const state_label = is_failed ? "失败" : is_running ? "执行中" : "已完成";
+  const is_write = part.tool_name === "write";
+  const state_label = is_failed ? "失败"
+    : is_generating ? (is_write ? "生成文件内容中" : "生成参数中")
+    : part.tool_state === "ready" ? "等待执行"
+    : part.tool_state === "running" ? (is_write ? "写入文件中" : "执行中")
+    : part.tool_state === "completed" ? "已完成" : "等待处理";
+  const input_text = part.input_text ?? (typeof part.input === "string" ? part.input : "");
   return (
     <details className={cn("dc-chat-activity-row", is_running && "is-running", is_failed && "is-failed")} open={part.tool_state === "input-streaming"}>
       <summary className="dc-chat-activity-summary">
         <span className="dc-chat-activity-main">
           {is_file_tool ? <TbFileIcon /> : <TbTerminal />}
           <span className="dc-chat-activity-state">{state_label}</span>
+          {is_generating ? <span className="dc-chat-activity-progress">已接收 {input_text.length.toLocaleString()} 字符</span> : null}
           <span className="dc-chat-activity-name">{part.tool_display_name ?? part.tool_name ?? "工具调用"}</span>
           <TbChevronRight className="dc-chat-activity-chevron" />
         </span>
       </summary>
       <div className="dc-chat-activity-terminal">
         {part.interaction_id ? <div className="dc-chat-tool-interaction"><strong>{part.title ?? (part.interaction_type === "approval" ? "需要批准" : "需要输入")}</strong><span>{part.description}</span></div> : null}
-        {part.input !== undefined ? <pre><span className="dc-chat-command-prompt">› input</span>{"\n"}{format_value(part.input)}{part.tool_state === "input-streaming" ? <span className="dc-chat-input-caret" /> : null}</pre> : null}
+        {part.input !== undefined || input_text ? <pre><span className="dc-chat-command-prompt">› input</span>{"\n"}{is_generating ? input_text : format_value(part.input)}{is_generating ? <span className="dc-chat-input-caret" /> : null}</pre> : null}
         {part.output !== undefined || part.error ? <pre><span className="dc-chat-command-prompt">› output</span>{"\n"}{part.error ?? format_value(part.output)}</pre> : null}
       </div>
     </details>

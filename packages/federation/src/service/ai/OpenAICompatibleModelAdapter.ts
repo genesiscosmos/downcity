@@ -356,7 +356,7 @@ class OpenAIStreamState {
     if (this.text_started) this.controller.enqueue({ type: "text_finish", content_id: "text_1" });
     for (const tool of this.tool_calls.values()) {
       if (!tool.started) throw new Error("OpenAI-compatible provider returned a tool call without a name");
-      const parsed_input = parse_tool_input(tool.input_text);
+      const parsed_input = parse_tool_input(tool.input_text, this.finish_reason);
       this.controller.enqueue({
         type: "tool_call_finish",
         content_id: tool.content_id,
@@ -458,7 +458,20 @@ function read_finish_reason(value: unknown): ModelFinishReason | undefined {
 }
 
 /** 解析完整工具输入 JSON。 */
-function parse_tool_input(value: string): { input: ModelJsonValue; error?: string } {
+function parse_tool_input(value: string, finish_reason?: ModelFinishReason): { input: ModelJsonValue; error?: string } {
+  // 参数只有在正常收口后才能执行，即使截断位置恰好形成合法 JSON 也不能提交。
+  if (finish_reason === "length") {
+    return {
+      input: {},
+      error: "模型达到输出上限，工具参数未完整生成，本次工具未执行。请缩小单次写入或编辑范围，按章节处理，并将大型 SVG 保存为独立文件；不要重复同一个超长调用。",
+    };
+  }
+  if (!finish_reason || finish_reason === "unknown") {
+    return {
+      input: {},
+      error: "模型响应缺少正常结束标记，无法确认工具参数完整，本次工具未执行。请缩小调用范围后重试；若再次中断，请停止重试并向用户说明。",
+    };
+  }
   if (!value.trim()) return { input: {} };
   try {
     return { input: JSON.parse(value) as ModelJsonValue };
@@ -466,7 +479,7 @@ function parse_tool_input(value: string): { input: ModelJsonValue; error?: strin
     const message = error instanceof Error ? error.message : String(error);
     return {
       input: {},
-      error: `Tool call arguments are invalid JSON: ${message}`,
+      error: `Tool call arguments are invalid JSON: ${message}. 本次工具未执行。请修正 JSON 参数；数组字段必须传数组，不能传序列化字符串。编辑失败时修正原调用，不要改为整篇重写。`,
     };
   }
 }

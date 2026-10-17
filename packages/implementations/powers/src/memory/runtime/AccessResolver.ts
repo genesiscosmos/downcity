@@ -3,7 +3,7 @@
  *
  * 关键点（中文）
  * - Agent 与 Workspace 身份来自 PowerContext，不从用户文本推断。
- * - 不解析任何用户身份；Memory 不再有 User 范围。
+ * - User 固定为平台数据根的本地使用者，不依赖登录或消息身份回调。
  * - 缺少 agent_id 时直接失败，不猜测或使用默认 Agent。
  */
 

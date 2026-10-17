@@ -376,85 +376,8 @@ test("MemoryPower 未启用自动流程时不召回、不采集，system 仅含�
   // 自动流程未启用，不无条件检索长期记忆。
   assert.equal(turn_value.blocks.length, 0);
 
-  const committed_hook = power.hooks.effect[SESSION_HOOK_POINTS.turn_committed][0];
-  const canonical_messages = [{
-    message_id: "user-capture-1",
-    session_id: "session-1",
-    turn_id: "turn-1",
-    sequence: 1,
-    revision: 1,
-    visibility: "visible",
-    created_at: 1,
-    updated_at: 1,
-    role: "user",
-    parts: [{
-      part_id: "text-capture-1",
-      sequence: 1,
-      type: "text",
-      text: "以后回答请保持简洁。",
-    }],
-  }];
-  await committed_hook({
-    context: power_context,
-    power: "memory",
-    value: {
-      session_id: "session-1",
-      turn_id: "turn-1",
-      status: "completed",
-      messages: canonical_messages,
-    },
-  });
-  await committed_hook({
-    context: power_context,
-    power: "memory",
-    value: {
-      session_id: "session-1",
-      turn_id: "turn-1",
-      status: "completed",
-      messages: canonical_messages,
-    },
-  });
-  await committed_hook({
-    context: power_context,
-    power: "memory",
-    value: {
-      session_id: "session-1",
-      turn_id: "turn-failed",
-      status: "failed",
-      messages: canonical_messages,
-    },
-  });
-  await committed_hook({
-    context: power_context,
-    power: "memory",
-    value: {
-      session_id: "session-1",
-      turn_id: "turn-greeting",
-      status: "completed",
-      messages: canonical_messages.map((message) => ({
-        ...message,
-        turn_id: "turn-greeting",
-        parts: message.parts.map((part) => ({ ...part, text: "继续" })),
-      })),
-    },
-  });
-  await committed_hook({
-    context: power_context,
-    power: "memory",
-    value: {
-      session_id: "session-1",
-      turn_id: "turn-sensitive",
-      status: "completed",
-      messages: canonical_messages.map((message) => ({
-        ...message,
-        turn_id: "turn-sensitive",
-        parts: message.parts.map((part) => ({
-          ...part,
-          text: "api_key: sk-sensitive-example-token",
-        })),
-      })),
-    },
-  });
+  // 没有消息入口判定和回复后采集，仅 turn_context 加载 Profile。
+  assert.equal(power.hooks.effect?.[SESSION_HOOK_POINTS.turn_committed], undefined);
   const capture_root = path.join(platform_root, "agents", "memory_test_agent", "memory", "capture-jobs");
   assert.equal(await fs.access(capture_root).then(() => true).catch(() => false), false);
 

@@ -697,8 +697,18 @@ export class CityPowerRuntime implements PowerRuntimeHost {
           workspace_path: workspace.path,
         })),
         invoke_agent_power: async (input) => {
-          await this.options.runtime_access.enter_workspace(input.agent_id, input.workspace_id);
-          return await this.scope(input.agent_id, input.workspace_id).run_action({
+          const agent = this.options.runtime_access.get_agent(input.agent_id);
+          if (!agent) throw new Error(`Agent not found in City: ${input.agent_id}`);
+          const workspace = input.workspace_id
+            ? await this.options.runtime_access.enter_workspace(input.agent_id, input.workspace_id)
+            : undefined;
+          const powers = this.registry.powers_for(this, {
+            agent_id: agent.id,
+            ...(workspace ? { workspace } : {}),
+            workspace_env: workspace?.get_env() ?? {},
+            agent_instructions: agent.get_instructions(),
+          });
+          return await powers.run_action({
             power: input.power_id,
             action: input.action_id,
             ...(input.input !== undefined ? { payload: input.input } : {}),

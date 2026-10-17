@@ -8,7 +8,6 @@
  */
 
 import { createHash, randomUUID } from "node:crypto";
-import type { MemoryFormationItem } from "@/memory/types/AutomaticMemory.js";
 import type {
   BuiltinMemoryProjectionDraft,
   BuiltinMemoryProviderOptions,
@@ -618,33 +617,6 @@ export class BuiltinMemoryProvider implements MemoryProvider {
       created_at: new Date().toISOString(),
     }, null, 2));
     return { job_id, mode: "created", status: "pending" };
-  }
-
-  /** 写入一条短记忆；稳定键保证后台重试不会重复追加。 */
-  async form_memory(input: MemoryFormationItem): Promise<string> {
-    this.assert_access(input.access);
-    const address = resolve_writable_memory_address(input.access, input.target);
-    const content = input.content.trim();
-    if (!content || content.length > 500) throw new Error("Invalid automatic memory content");
-    const memory_id = input.memory_id
-      ? normalize_memory_id(input.memory_id)
-      : create_subject_memory_id(address, `wiki/auto-${createHash("sha256").update(input.write_key).digest("hex")}`);
-    if (!memory_id.startsWith(`${address.prefix}/wiki/`)) throw new Error("Automatic memory target outside scope");
-    const key = memory_id_to_key(memory_id);
-    // 已显式删除的目标或同来源候选不允许旧后台计划恢复。
-    const tombstones = await this.active_storage.list(`${address.prefix}/runtime/tombstones`);
-    if (tombstones.some((entry) => {
-      const deleted: { /** 已删除的逻辑记忆 ID。 */ memory_id: string; /** 被屏蔽的原始来源 ID。 */ source_ids: string[] } = JSON.parse(entry.content);
-      return deleted.memory_id === memory_id || input.source_refs.some((ref) => deleted.source_ids.includes(ref.source_id));
-    })) return memory_id;
-    const existing = await this.active_storage.read(key);
-    const old_refs = existing ? parse_metadata(existing, input.memory_type).source_refs : [];
-    await this.active_storage.write(key, create_markdown_record({
-      title: content.slice(0, 60), content, memory_type: input.memory_type,
-      applicable_agent_id: input.applicable_agent_id,
-      source_refs: [...old_refs, ...input.source_refs.filter((ref) => !old_refs.some((old) => old.source_id === ref.source_id))],
-    }));
-    return memory_id;
   }
 
   /** 释放底层 Adapter 并关闭当前绑定。 */

@@ -1,182 +1,136 @@
 /**
- * Agent 会话的 Session 工具。
+ * Agent 会话的统一 session 工具。
  *
- * 职责说明（中文）
- * - 把「Agent 手上的会话」变成模型可调用的四个动作：开一条、看状态、代答、收回。
- * - 工具与 Agent 会话的工作运行时（{@link SessionWork}）解耦：运行时由 Agent 在装配时注入，
- *   工具只调用协议，不接触 AgentSessions 或 Session 内部结构。
- * - 工具自带 description 与返回值说明，因此不需要向 instruction 注入额外文本。
- *
- * 关键点（中文）
- * - 工具只注册在 Agent 主会话和 Channel 会话；Work Session 不会递归派发。
- * - 派发身份来自工具上下文，结果由委派运行时幂等回传到实际发起会话。
+ * 通过 action + args 分发 start/check/reply/stop；省略 action 返回动作索引与 Schema。
+ * 工具仅依赖 SessionWork 协议，由 Agent 注入主会话与 Channel 会话。
+ * Work Session 不注入此工具，防止递归派发；调用身份始终来自 ToolCallContext。
  */
 
-import {
-  define_agent_tool,
-  type ActionResult,
-  type JsonValue,
-  type ToolCallContext,
-} from "@downcity/type";
+import { z } from "zod";
+import { define_agent_tool, type ActionResult, type JsonValue, type ToolCallContext } from "@downcity/type";
 import type { SessionWorkContract } from "@/types/agent/SessionWork.js";
-import type {
-  SessionCheckToolOutput,
-  SessionReplyToolOutput,
-  SessionStartToolOutput,
-  SessionStopToolOutput,
-} from "@/types/tools/session/SessionTools.js";
 import {
   session_check_input,
   session_reply_input,
   session_start_input,
   session_stop_input,
+  session_tool_input,
 } from "@/tools/session/SessionToolSchemas.js";
 
-/** `session_start` 的输入。 */
-type SessionStartInput = {
-  /** 完整工作指令；新会话只接收这段文本。 */
-  query: string;
-  /** 工作短标题，用于列表展示。 */
-  title?: string;
-  /** 目标项目 Workspace ID，必须由宿主登记。 */
-  workspace_id: string;
+/** 动作说明和输入 Schema 同源，用于无 action 时的能力发现。 */
+const session_actions = {
+  start: {
+    description: "Start work in an explicitly selected project and return immediately. Write a complete query: the new session only sees that text. Discover projects with context.workspaces.list; never use the main session's private Workspace. Completion or failure automatically returns to the calling conversation; do not poll for completion.",
+    schema: session_start_input,
+  },
+  check: {
+    description: "List sessions or inspect one session's recent messages and pending interactions. Call before answering progress questions; never guess the state.",
+    schema: session_check_input,
+  },
+  reply: {
+    description: "Answer a pending interaction on another session. Call check first for interaction_id, then translate the user's own words into the response payload. Only answer interactions that are waiting.",
+    schema: session_reply_input,
+  },
+  stop: {
+    description: "Stop another session's work when the user asks. The session is recorded as stopped rather than failed.",
+    schema: session_stop_input,
+  },
 };
 
-/** `session_check` 的输入。 */
-type SessionCheckInput = { session_id?: string; limit?: number };
-
-/** `session_reply` 的输入。 */
-type SessionReplyInput = {
-  session_id: string;
-  interaction_id: string;
-  outcome: "resolved" | "denied";
-  payload?: Record<string, unknown>;
-  note?: string;
-};
-
-/** `session_stop` 的输入。 */
-type SessionStopInput = { session_id: string };
-
-/** 会话工具集；由 Agent 在 Agent 会话上下文中注入。 */
-export type ChatSessionToolSet = ReturnType<typeof create_session_tools>;
-
-/**
- * 创建 Agent 会话的四个会话工具。
- *
- * 关键点（中文）
- * - 每个工具都没有附加 messages：会话状态通过工具结果返回，不追加到对话 canonical 消息。
- */
+/** 创建单一模型入口；每次调用均校验 envelope 和对应动作参数。 */
 export function create_session_tools(work: SessionWorkContract) {
-  const session_start = define_agent_tool<SessionStartInput, ActionResult<SessionStartToolOutput>>({
-    description:
-      "Start a new session to carry out one piece of work, then return immediately. Use it when a request is larger than one reply: the user keeps talking with you while the work runs elsewhere. Completion or failure is automatically returned to this conversation; do not poll for completion. Write the query as a complete instruction, because the new session only sees that text. Specify the target project workspace_id; discover available projects with context.workspaces.list. Never use the main session's private Workspace for project work.",
-    input_schema: session_start_input,
-    execute: async (input, context): Promise<ActionResult<SessionStartToolOutput>> => {
-      if (!context.turn_id || !context.tool_call_id) {
-        throw new Error("session_start requires an active Turn tool call");
-      }
-      const result = await work.spawn(input, {
-        session_id: context.session_id,
-        origin: context.session_origin,
-        turn_id: context.turn_id,
-        tool_call_id: context.tool_call_id,
-      });
-      return {
-        output: { session_id: result.session_id, delegation_id: result.delegation_id, status: "started" },
-        messages: [],
-      };
-    },
-  });
-
-  const session_check = define_agent_tool<SessionCheckInput, ActionResult<SessionCheckToolOutput>>({
-    description:
-      "List the sessions you have started and what each one is doing, or pass session_id to read one session's recent messages and pending user interactions. Call this before answering questions about progress; never guess a session's state.",
-    input_schema: session_check_input,
-    execute: async (input): Promise<ActionResult<SessionCheckToolOutput>> => {
-      const session_id = String(input.session_id || "").trim();
-      if (!session_id) {
+  const session = define_agent_tool<z.infer<typeof session_tool_input>, ActionResult>({
+    description: "Manage this agent's sessions: start project work, check progress, reply to pending interactions, or stop work. Call with { action, args }; omit action to read all action descriptions and input schemas. Work results return automatically to this conversation.",
+    input_schema: session_tool_input,
+    execute: async (input, context): Promise<ActionResult> => {
+      const { action, args = {} } = session_tool_input.parse(input);
+      if (!action) {
         return {
-          output: { mode: "list", sessions: await work.list({ limit: input.limit }) },
+          output: {
+            actions: Object.entries(session_actions).map(([name, definition]) => ({
+              action: name,
+              description: definition.description,
+              input_schema: z.toJSONSchema(definition.schema),
+            })),
+          },
           messages: [],
         };
       }
-      return {
-        output: await work.read({ session_id, limit: input.limit }),
-        messages: [],
-      };
-    },
-  });
-
-  const session_reply = define_agent_tool<SessionReplyInput, ActionResult<SessionReplyToolOutput>>({
-    description:
-      "Answer a pending interaction on another session without the user leaving this conversation. Call session_check first to get the interaction_id, and translate the user's own words into the response payload. Use it only for interactions that are genuinely waiting.",
-    input_schema: session_reply_input,
-    execute: async (input): Promise<ActionResult<SessionReplyToolOutput>> => {
-      // 响应载荷必须是可以序列化的 JSON，这里逐项收紧类型后再交给 Interaction 协议。
-      const payload: Record<string, JsonValue> = {};
-      for (const [key, value] of Object.entries(input.payload ?? {})) {
-        payload[key] = value as JsonValue;
+      switch (action) {
+        case "start": {
+          const params = session_start_input.parse(args);
+          if (!context.turn_id || !context.tool_call_id) {
+            throw new Error("session.start requires an active Turn tool call");
+          }
+          const result = await work.spawn(params, {
+            session_id: context.session_id,
+            origin: context.session_origin,
+            turn_id: context.turn_id,
+            tool_call_id: context.tool_call_id,
+          });
+          return {
+            output: { session_id: result.session_id, delegation_id: result.delegation_id, status: "started" },
+            messages: [],
+          };
+        }
+        case "check": {
+          const params = session_check_input.parse(args);
+          return {
+            output: params.session_id
+              ? await work.read({ session_id: params.session_id, limit: params.limit })
+              : { mode: "list", sessions: await work.list({ limit: params.limit }) },
+            messages: [],
+          };
+        }
+        case "reply": {
+          const params = session_reply_input.parse(args);
+          // Interaction payload 必须可序列化，拒绝非 JSON 值后再交给运行时。
+          const payload = z.record(z.string(), z.json()).parse(params.payload ?? {});
+          if (params.note) payload.note = params.note;
+          await work.reply({
+            session_id: params.session_id,
+            interaction_id: params.interaction_id,
+            response: {
+              type: await resolve_interaction_type(work, params.session_id, params.interaction_id),
+              outcome: params.outcome,
+              payload: payload as Record<string, JsonValue>,
+            },
+          });
+          return {
+            output: { status: params.outcome, session_id: params.session_id, interaction_id: params.interaction_id },
+            messages: [],
+          };
+        }
+        case "stop": {
+          const params = session_stop_input.parse(args);
+          await work.stop({ session_id: params.session_id });
+          return { output: { session_id: params.session_id, status: "stopped" }, messages: [] };
+        }
       }
-      if (input.note) payload.note = input.note;
-      await work.reply({
-        session_id: input.session_id,
-        interaction_id: input.interaction_id,
-        response: {
-          type: await resolve_interaction_type(work, input.session_id, input.interaction_id),
-          outcome: input.outcome,
-          payload,
-        },
-      });
-      return {
-        output: {
-          status: input.outcome,
-          session_id: input.session_id,
-          interaction_id: input.interaction_id,
-        },
-        messages: [],
-      };
     },
   });
-
-  const session_stop = define_agent_tool<SessionStopInput, ActionResult<SessionStopToolOutput>>({
-    description:
-      "Stop the work running on another session, for example when the user changes their mind. The session is recorded as stopped rather than failed.",
-    input_schema: session_stop_input,
-    execute: async (input): Promise<ActionResult<SessionStopToolOutput>> => {
-      await work.stop({ session_id: input.session_id });
-      return {
-        output: { session_id: input.session_id, status: "stopped" },
-        messages: [],
-      };
-    },
-  });
-
-  return { session_start, session_check, session_reply, session_stop };
+  return { session };
 }
 
-/**
- * 读取待响应 Interaction 的业务类型。
- *
- * 关键点（中文）：响应必须与原请求 type 一致，这是 Interaction 协议的硬约束；
- * 由这里从权威状态读出，避免让模型重复转述而写错。
- */
+/** 从权威状态读取待响应 Interaction 的类型，保证响应与原请求匹配。 */
 async function resolve_interaction_type(
   work: SessionWorkContract,
   session_id: string,
   interaction_id: string,
 ): Promise<string> {
   const detail = await work.read({ session_id, limit: 1 });
-  const pending = detail.pending_interactions.find(
-    (interaction) => interaction.interaction_id === interaction_id,
-  );
+  const pending = detail.pending_interactions.find((interaction) => interaction.interaction_id === interaction_id);
   if (!pending) {
     throw new Error(`Interaction is not pending on session "${session_id}": ${interaction_id}`);
   }
   return pending.type;
 }
 
-/** 供 Agent 装配使用：把工具集暴露为普通 Tool 记录。 */
+/** 会话工具集；由 Agent 在主会话及 Channel 会话中注入。 */
+export type ChatSessionToolSet = ReturnType<typeof create_session_tools>;
+
+/** 供 Agent 装配使用的工具集合。 */
 export type ChatSessionTools = ReturnType<typeof create_session_tools>;
 
-/** 工具调用上下文类型再导出，便于宿主实现自定义会话工具时对齐。 */
+/** 工具调用上下文，供宿主对齐自定义会话工具。 */
 export type ChatSessionToolContext = ToolCallContext;

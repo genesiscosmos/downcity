@@ -5,6 +5,9 @@
  * 数据库、路径、配置 Repository、环境装配与 Power Loader 由同一入口提供。
  */
 
+export { UserRepository, LOCAL_USER_ID } from "./repositories/UserRepository.js";
+export type { LocalUser } from "./repositories/UserRepository.js";
+
 export { LocalDatabase } from "./database/LocalDatabase.js";
 export type {
   LocalDatabaseMutationResult,

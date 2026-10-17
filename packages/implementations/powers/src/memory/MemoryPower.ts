@@ -24,7 +24,6 @@ import type {
   PowerLifecycleContext,
 } from "@downcity/city/power";
 import type {
-  SessionTurnCommittedHookValue,
   SessionTurnContextHookValue,
 } from "@downcity/agent";
 import { SESSION_HOOK_POINTS } from "@downcity/type";
@@ -40,11 +39,11 @@ import {
   status_memory_action,
 } from "@/memory/Action.js";
 import { build_memory_power_system_text } from "@/memory/runtime/SystemProvider.js";
-import { AutomaticMemory } from "@/memory/runtime/AutomaticMemory.js";
-import { AgentProfile } from "@/memory/runtime/AgentProfile.js";
-import { register_profile_host_actions } from "@/memory/host/AgentProfileHostActions.js";
+import { MemoryProfile } from "@/memory/runtime/MemoryProfile.js";
+import { UserRepository, LOCAL_USER_ID } from "@downcity/city/local";
+import type { ProfileScope } from "@/memory/types/Profile.js";
+import { register_profile_host_actions } from "@/memory/host/ProfileHostActions.js";
 import { createHash } from "node:crypto";
-import type { AutomaticMemoryOptions } from "@/memory/types/AutomaticMemory.js";
 import { BuiltinMemoryProvider } from "@/memory/providers/BuiltinMemoryProvider.js";
 import {
   FileMemoryStorageAdapter,
@@ -181,18 +180,15 @@ export class MemoryPower extends Power {
   /** 宿主显式提供的平台数据根目录；用于定位 Agent 私有记忆。 */
   private readonly platform_root_path?: string;
 
-  /** 显式启用的自动记忆参数。 */
-  private readonly automatic_options: AutomaticMemoryOptions;
+  /** 宿主配置：Profile 每日优化模型，不依赖入口判定模型。 */
+  private readonly options: MemoryPowerOptions;
 
-  /** City 生命周期内唯一入口判定与后台实例。 */
-  private automatic_runtime?: AutomaticMemory;
-
-  /** 每轮直接读取的 Agent Core 文档与每日优化器。 */
-  private profile_runtime?: AgentProfile;
+  /** 每轮读取 User / Agent Core 文档，复用同一每日优化器。 */
+  private profile_runtime?: MemoryProfile;
 
   constructor(options: MemoryPowerOptions = {}) {
     super();
-    this.automatic_options = options.automatic ?? {};
+    this.options = options;
     const shared_root_path = options.shared_root_path?.trim();
     const platform_root_path = options.platform_root_path?.trim();
     if (shared_root_path && !path.isAbsolute(shared_root_path)) {
@@ -222,86 +218,59 @@ export class MemoryPower extends Power {
     return build_memory_power_system_text(this.provider);
   }
 
-  /** 使用现有 Power HookRegistry 接入 Session 三个通用检查点。 */
+  /** 每轮仅加载 Profile；保存与查询由聊天 Agent 主动调用工具。 */
   readonly hooks: PowerHooks = {
     pipeline: {
       [SESSION_HOOK_POINTS.turn_context]: [async ({ context, value }) => {
         const input = value as unknown as SessionTurnContextHookValue;
-        const core = await this.profile_runtime?.context_block(context.agent.id);
-        const prepared = core ? { ...input, blocks: [...input.blocks, core] } : input;
-        if (!this.automatic_runtime) return prepared as unknown as PowerJsonValue;
-        try {
-          return await this.automatic_runtime.prepare(context, prepared) as unknown as PowerJsonValue;
-        } catch (error) {
-          context.logger.warn("[memory] recall unavailable", { error: String(error) });
-          return prepared as unknown as PowerJsonValue;
+        const blocks = [...input.blocks];
+        const scopes: ProfileScope[] = [{ target: "user" }, { target: "agent", agent_id: context.agent.id }];
+        for (const scope of scopes) {
+          try {
+            const core = await this.profile_runtime?.context_block(scope);
+            if (core) blocks.push(core);
+          } catch (error) { context.logger.warn("[memory] Profile unavailable", { target: scope.target, error: String(error) }); }
         }
-      }],
-    },
-    effect: {
-      [SESSION_HOOK_POINTS.turn_committed]: [async ({ context, value }) => {
-        await this.capture_committed_turn(
-          context,
-          value as unknown as SessionTurnCommittedHookValue,
-        );
+        return { ...input, blocks } as unknown as PowerJsonValue;
       }],
     },
   };
 
-  /** 仅登记完成状态，形成记忆交给 30 分钟 worker。 */
-  private async capture_committed_turn(
-    context: PowerContext,
-    input: SessionTurnCommittedHookValue,
-  ): Promise<void> {
-    await this.automatic_runtime?.committed(context, input);
-  }
-
   /** 启动当前 City 唯一的 Memory Provider，并注册界面管理 actions。 */
   async initialize(context: PowerLifecycleContext): Promise<void> {
+    const platform_root = this.platform_root_path ?? context.data_root_path;
+    const users = new UserRepository(platform_root);
+    users.get();
     this.provider_instance ??= create_memory_provider({
       shared_root_path: context.storage.path,
-      ...(this.platform_root_path ? { platform_root_path: this.platform_root_path } : {}),
+      platform_root_path: platform_root,
     });
+    context.power.action({ id: "memory.user_read", run: async () => ({ ...users.get() }) });
+    context.power.action({ id: "memory.user_update", run: async (input) => {
+      const { display_name } = z.object({ display_name: z.string() }).parse(input);
+      return { ...users.update({ display_name }) };
+    } });
     await this.provider.initialize();
     register_memory_power_host_actions(context);
     const config = context.config.get();
-    this.profile_runtime = new AgentProfile(context, this.platform_root_path ?? context.data_root_path,
-      this.automatic_options.formation_model_id ?? (typeof config.formation_model_id === "string" ? config.formation_model_id : undefined));
+    this.profile_runtime = new MemoryProfile(context, platform_root,
+      this.options.profile_model_id ?? (typeof config.profile_model_id === "string" ? config.profile_model_id : undefined));
     this.profile_runtime.initialize();
     register_profile_host_actions(context, this.profile_runtime);
-    if (this.automatic_options.enabled ?? config.enabled === true) {
-      this.automatic_runtime = new AutomaticMemory(context, this.provider, {
-        ...this.automatic_options,
-        decision_model_id: this.automatic_options.decision_model_id ?? (typeof config.decision_model_id === "string" ? config.decision_model_id : undefined),
-        formation_model_id: this.automatic_options.formation_model_id ?? (typeof config.formation_model_id === "string" ? config.formation_model_id : undefined),
-      }, this.profile_runtime);
-      await this.automatic_runtime.initialize();
-    }
-    context.power.action({
-      id: "memory.automatic_status",
-      run: async () => this.automatic_runtime ? await this.automatic_runtime.status() : { enabled: false },
-    });
+
   }
 
   /** 释放当前 City 唯一的 Memory Provider。 */
   async dispose(): Promise<void> {
-    await this.automatic_runtime?.dispose();
-    this.automatic_runtime = undefined;
     await this.profile_runtime?.dispose();
     this.profile_runtime = undefined;
     await this.provider_instance?.dispose();
     this.provider_instance = undefined;
   }
 
-  /** 显式 actions 与自动入口使用同一可信用户解析器。 */
-  private async resolve_action_access(context: PowerContext) {
-    const access = resolve_memory_access(context);
-    if (!this.automatic_options.resolve_user || !context.session) return access;
-    const messages = await context.session.messages();
-    const current = messages.filter((message) => message.role === "user" && (!context.turn || message.turn_id === context.turn.id)).at(-1);
-    if (!current || typeof current.message_id !== "string") return access;
-    const user_id = await this.automatic_options.resolve_user(context, current.message_id);
-    return { ...access, ...(user_id ? { user_id } : {}) };
+  /** 访问当前本地使用者、Agent 与 Workspace，不依赖登录账户或消息身份回调。 */
+  private resolve_action_access(context: PowerContext) {
+    return resolve_memory_access(context);
   }
 
   /** Memory 对 Agent 暴露的稳定 Action 集合。 */
@@ -513,30 +482,30 @@ export class MemoryPower extends Power {
     }),
 
     remember: create_action({
-      description: "Store a durable fact, preference, decision, episode, procedure, or document.",
-      returns: "memory_id, type, scope, status",
+      description: "Save memory using target (owner) and mode (usage). Persistent behavior or 'from now on' preferences use mode profile; facts and historical knowledge use mode knowledge. Cross-Agent user preferences target user; Agent-only agreements target agent. Never change target after a failed write without user approval.",
+      returns: "target, mode(profile|knowledge), status(saved|created|updated), profile_id or memory_id, evidence_id?, activation(every_turn|on_recall), location(PROFILE.md|wiki)",
       access: "write",
       input_schema: {
         zod: z.object({
-          content: z.string(),
-          target: memory_write_target_schema,
+          content: z.string().trim().min(1),
+          target: memory_write_target_schema.describe("Required owner: user, agent or current_workspace. Use target, not scope."),
           topic: z.string().optional(),
           memory_type: memory_type_schema.optional(),
           source: z.string().optional(),
           mode: z.enum(["profile", "knowledge"]).optional(),
-        }),
+        }).strict(),
         json_schema: {
           type: "object",
           additionalProperties: false,
           required: ["content", "target"],
           properties: {
             content: { type: "string", description: "Content to remember." },
-            mode: { type: "string", enum: ["profile", "knowledge"], default: "knowledge", description: "profile: append an explicit Agent-wide agreement to PROFILE.md, loaded every turn; requires target agent. knowledge: store searchable long-term knowledge." },
+            mode: { type: "string", enum: ["profile", "knowledge"], default: "knowledge", description: "profile: append persistent agreements to User or Agent PROFILE.md, loaded every turn; supports target user or agent. knowledge: store searchable long-term knowledge." },
             target: {
               type: "string",
               enum: ["current_workspace", "user", "agent"],
               description:
-                "Write scope resolved from trusted identity. current_workspace uses an isolated Workspace Store; user requires a trusted platform identity.",
+                "user is the single local owner shared across Agents; agent is private to the current Agent; current_workspace uses an isolated Workspace Store.",
             },
             topic: { type: "string", description: "Optional organization hint." },
             memory_type: {
@@ -548,10 +517,17 @@ export class MemoryPower extends Power {
         },
       },
       examples: [{
-        title: "Remember a preference",
+        title: "Save a persistent user preference across Agents",
+        payload: { target: "user", mode: "profile", content: "Before each main answer, remind me to speak English and briefly correct my English expressions." },
+      }, {
+        title: "Save an Agent-specific persistent agreement",
+        payload: { target: "agent", mode: "profile", content: "Ask for approval before making changes across multiple modules." },
+      }, {
+        title: "Save searchable project knowledge",
         payload: {
           content: "This Workspace always uses pnpm.",
           target: "current_workspace",
+          mode: "knowledge",
           topic: "project-overview",
           memory_type: "decision",
         },
@@ -584,13 +560,16 @@ export class MemoryPower extends Power {
         const mode_result = z.enum(["profile", "knowledge"]).safeParse(body.mode ?? "knowledge");
         if (!mode_result.success) return { success: false, error: "Invalid remember mode: expected profile or knowledge" };
         if (mode_result.data === "profile") {
-          if (read_memory_write_target(body) !== "agent") return { success: false, error: "Core Profile requires an explicit Agent-wide agreement; other scopes cannot fall back to it" };
-          if (!this.profile_runtime) return { success: false, error: "Agent Profile runtime is unavailable" };
+          const target = read_memory_write_target(body);
+          if (target === "current_workspace") return { success: false, error: "Profile mode supports user or agent, not Workspace" };
+          const scope: ProfileScope = target === "user" ? { target } : { target: "agent", agent_id: context.agent.id };
+          if (!this.profile_runtime) return { success: false, error: "Memory Profile runtime is unavailable" };
           try {
             const content = read_string(body, "content").trim();
             const source_key = createHash("sha256").update(JSON.stringify([context.agent.id, context.session?.id, context.turn?.id, content])).digest("hex");
-            await this.profile_runtime.append(context.agent.id, content, source_key);
-            return { success: true, data: { profile_id: `agent/${context.agent.id}/profile`, status: "saved", mode: "profile" } };
+            await this.profile_runtime.append(scope, content, source_key);
+            const profile_id = target === "user" ? `user/${LOCAL_USER_ID}/profile` : `agent/${context.agent.id}/profile`;
+            return { success: true, data: { target, mode: "profile", status: "saved", profile_id, activation: "every_turn", location: "PROFILE.md" } };
           } catch (error) { return { success: false, error: String(error) }; }
         }
         return await remember_memory_action(
@@ -771,6 +750,7 @@ function create_memory_provider(input: {
     city_memory_available: true,
     storage: new MemoryStorageRouter({
       shared_storage: new FileMemoryStorageAdapter({ root_path: input.shared_root_path }),
+      user_storage: new FileMemoryStorageAdapter({ root_path: path.join(platform_root_path, "user", "memory") }),
       create_agent_storage: (agent_id) => new FileMemoryStorageAdapter({
         root_path: get_default_file_memory_root_path({
           platform_root_path,

@@ -97,6 +97,8 @@ export class DefaultSessionComposer implements SessionComposer {
       .join("\n");
     if (!conversation_text) return false;
 
+    // 确认有可推进内容后才通知 Session，确保运行中状态先于摘要模型请求发布。
+    await input.on_advance_start?.();
     const prompt = previous?.summary.trim()
       ? build_updated_session_summary_prompt({
           previous_summary: previous.summary,

@@ -2,7 +2,7 @@
  * Image capability 与 City 图片服务之间的任务协议归一化。
  *
  * 关键点（中文）
- * - 本模块校验任务、模型与 Session 消息的最小稳定结构。
+ * - 本模块校验任务、模型与 Federation AI Action 消息的最小稳定结构。
  * - 所有返回值保持为纯 JSON 数据。
  * - 本模块不调用图片服务，也不持有任务或连接。
  */
@@ -73,14 +73,14 @@ export function normalize_image_result_input(
   } as ImageResultInput;
 }
 
-/** 校验图片服务返回的 Session 消息。 */
+/** 校验图片服务返回的 Federation AI Action 消息。 */
 export function normalize_image_result(result: ImageResult): ImageResult {
   const record = to_record(result);
   if (!record || !Array.isArray(record.parts)) {
-    throw new TypeError("image provider must return a Downcity Session message");
+    throw new TypeError("image provider must return a Federation AI Action message");
   }
-  if (record.role !== "agent") {
-    throw new TypeError("image provider must return an Agent Session message");
+  if (record.role !== "assistant") {
+    throw new TypeError("image provider must return an assistant AI Action message");
   }
   for (const part of record.parts) {
     const part_record = to_record(part);

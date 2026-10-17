@@ -210,7 +210,7 @@ class ImageResultAction extends CityAction<z.infer<typeof image_result_input>> {
   readonly description =
     "Read an async image job. Reads once by default; pass until_done=true to wait for the terminal state.";
   readonly returns =
-    "job_id, status, files(local absolute paths), warning(files that stayed remote)";
+    "job_id, status, files(local absolute paths), warning(files that could not be localized)";
   readonly access = "write";
   readonly approval = true;
   readonly args_schema = image_result_input;
@@ -247,7 +247,7 @@ class ImageResultAction extends CityAction<z.infer<typeof image_result_input>> {
       ...(localized.errors.length > 0
         ? {
             warning:
-              `${localized.errors.length} image file(s) kept as remote URLs because local storage failed: `
+              `${localized.errors.length} image file(s) could not be stored locally: `
               + localized.errors.join("; "),
           }
         : {}),

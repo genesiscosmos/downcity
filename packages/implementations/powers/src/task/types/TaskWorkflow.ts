@@ -19,8 +19,10 @@ export type TaskWorkflow = {
   work_status: TaskWorkStatus;
   /** 是否已经整理；false 时显示在收件箱待整理区。 */
   organized: boolean;
-  /** 可选计划执行时刻，使用带时区的 ISO 日期时间。 */
+  /** 可选计划开始时刻，使用带时区的 ISO 日期时间。 */
   planned_at?: string;
+  /** 一次性工作的计划结束时刻，须晚于开始；不表示持续运行。 */
+  planned_end_at?: string;
   /** 可选截止日期；支持 YYYY-MM-DD 或带时区的 ISO 日期时间。 */
   due_at?: string;
   /** 周期调度的 IANA 时区，不随宿主系统时区改变。 */
@@ -65,6 +67,8 @@ export interface TaskInboxItem {
   occurrence_id?: string;
   /** 可选执行目录时间戳，供查看对应产物。 */
   run_timestamp?: string;
+  /** 用户对该交付结果提出的修订要求，保存后不自动执行。 */
+  feedback?: string;
 }
 
 /** 任务聚合中的发生历史与待处理事项，由定义事务串行写入。 */
@@ -118,6 +122,10 @@ export interface TaskWorkspaceSnapshot {
 
 /** 创建或替换任务编辑内容的输入；工作状态由单独命令管理。 */
 export interface TaskWorkspaceSaveInput {
+  /** 用户明确选择的外壳；历史任务可在编辑时归类。 */
+  shell_type?: "todo" | "schedule";
+  /** 直接创建的客户端UUID；网络重试复用，生成稳定身份。 */
+  create_id?: string;
   /** 修改时提供稳定 ID；创建时为空。 */
   task_id?: string;
   /** 用户可重命名、可重复的非空标题。 */
@@ -136,12 +144,18 @@ export interface TaskWorkspaceSaveInput {
   enabled: boolean;
   /** 是否已整理，快速收集时为 false。 */
   organized: boolean;
-  /** 可选计划时间，精确日期时间含时区。 */
+  /** 可选计划开始时间，精确日期时间含时区。 */
   planned_at?: string;
+  /** 可选计划结束时间，与开始时间共同表达一次性工作时间段。 */
+  planned_end_at?: string;
   /** 可选截止日期或精确时间。 */
   due_at?: string;
   /** 周期规则的 IANA 时区。 */
   timezone: string;
   /** 周期结果是否需要逐次验收。 */
   require_acceptance: boolean;
+  /** 用户正在编辑的准备版本；提供时拒绝覆盖已更新的方案。 */
+  expected_revision?: number;
+  /** 当前方案确认后是否立即执行；仅 Agent 手动规则允许为 true。 */
+  start_now?: boolean;
 }

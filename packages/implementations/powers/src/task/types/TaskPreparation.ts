@@ -5,7 +5,7 @@ export interface TaskPreparation {
   /** 输入版本，每次补充或人工编辑时递增。 */
   revision: number;
   /** 当前准备阶段；失败只由用户显式重试。 */
-  status: "queued" | "analyzing" | "delegating" | "needs_input" | "ready" | "failed";
+  status: "queued" | "analyzing" | "delegating" | "needs_input" | "proposed" | "ready" | "failed";
   /** 处理身份，用于拒绝过期模型响应。 */
   processing_id?: string;
   /** 用户补充的文本，按提交顺序保留。 */
@@ -18,8 +18,10 @@ export interface TaskPreparation {
   analyzed_body?: string;
   /** 自动安排尚未同步成功时的可见错误。 */
   schedule_error?: string;
-  /** 本版本自动安排采用的用户原文授权依据，便于追溯。 */
-  authorization_quote?: string;
+  /** 本版方案采用的默认值和假设，供确认前直接查看。 */
+  assumptions?: string[];
+  /** 确认后立即执行；确认前不创建触发时间。 */
+  start_now?: boolean;
 }
 
 export interface TaskAnalysis {
@@ -35,12 +37,14 @@ export interface TaskAnalysis {
   workspace_id: string;
   /** 明确自动安排的触发规则；未授权时必须为 @manual。 */
   when: string;
-  /** 用户明确要求自动提醒或执行的原文片段；无授权时为空。 */
-  authorization_quote?: string;
+  /** 生成方案采用的默认值和假设，不作为阻断问题。 */
+  assumptions?: string[];
   /** 用户明确要求现在启动 Agent；仅绑定执行者时为 false。 */
   start_now?: boolean;
   /** 可选计划时刻，不覆盖触发时间。 */
   planned_at?: string;
+  /** 一次性工作时间段的结束时刻，必须晚于 planned_at。 */
+  planned_end_at?: string;
   /** 可选截止日期。 */
   due_at?: string;
   /** 信息不足时的问题列表。 */
@@ -58,6 +62,10 @@ export interface TaskAnalysisInput {
   timezone: string;
   /** 日历预选或人工安排的计划时刻。 */
   planned_at?: string;
+  /** 用户明确选择的执行 Agent，模型只为其准备工作区与说明。 */
+  agent_id?: string;
+  /** 已有方案，用户调整时据此修改，保留未涉及的内容。 */
+  previous?: TaskAnalysis;
   /** 当前可见目标目录。 */
   catalog: Pick<TaskWorkspaceSnapshot, "agents" | "workspaces">;
 }

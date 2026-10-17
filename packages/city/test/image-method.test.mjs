@@ -99,7 +99,7 @@ async function create_fixture(options = {}) {
 function create_image_message(url = "https://storage.example.com/result.png") {
   return {
     id: "msg_image_test",
-    role: "agent",
+    role: "assistant",
     parts: [
       {
         type: "file",
@@ -278,7 +278,64 @@ test("image result 下载失败时保留远端地址并报告", async () => {
       args: { job_id: "img_remote" },
     });
     assert.deepEqual(result.data.files, ["http://127.0.0.1:1/result.png"]);
-    assert.match(result.data.warning, /kept as remote URLs/u);
+    assert.match(result.data.warning, /could not be stored locally/u);
+  } finally {
+    await fixture.close();
+  }
+});
+
+test("image result 把内联 data URL 落盘为本地路径", async () => {
+  const inline = `data:image/png;base64,${Buffer.from("image-bytes").toString("base64")}`;
+  const fixture = await create_fixture({
+    image_create: () => ({ job_id: "img_1", status: "queued" }),
+    image_result: () => ({
+      job_id: "img_inline",
+      status: "succeeded",
+      result: create_image_message(inline),
+    }),
+  });
+  try {
+    const result = await fixture.call({ action: "image.result",
+      args: { job_id: "img_inline" },
+    });
+    assert.equal(result.data.status, "succeeded");
+    assert.deepEqual(result.data.files, [
+      path.join(
+        fixture.root,
+        "agents",
+        "image_agent",
+        "powers",
+        "image",
+        "image",
+        "results",
+        "img_inline",
+        "image_01.png",
+      ),
+    ]);
+    assert.equal(await fs.readFile(result.data.files[0], "utf8"), "image-bytes");
+    assert.equal("warning" in result.data, false);
+  } finally {
+    await fixture.close();
+  }
+});
+
+test("image result 丢弃非法 data URL 且不回填原始载荷", async () => {
+  const fixture = await create_fixture({
+    image_create: () => ({ job_id: "img_1", status: "queued" }),
+    image_result: () => ({
+      job_id: "img_inline_bad",
+      status: "succeeded",
+      result: create_image_message("data:image/png,%00raw-bytes"),
+    }),
+  });
+  try {
+    const result = await fixture.call({ action: "image.result",
+      args: { job_id: "img_inline_bad" },
+    });
+    assert.equal(result.data.status, "succeeded");
+    assert.deepEqual(result.data.files, []);
+    assert.match(result.data.warning, /could not be stored locally/u);
+    assert.match(result.data.warning, /base64/u);
   } finally {
     await fixture.close();
   }

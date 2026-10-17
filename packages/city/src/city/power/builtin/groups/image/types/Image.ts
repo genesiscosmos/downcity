@@ -3,11 +3,11 @@
  *
  * 关键点（中文）
  * - 这里只定义图片能力对模型与 City 图片服务的最低层协议，不绑定任意上游 provider。
- * - 图片成功结果使用 Downcity Session 消息，保证结果可直接写入会话时间线。
+ * - 图片成功结果使用 Federation AI Action 消息协议，由动作本地化后返回文件路径。
  * - 字段保持 JSON 可序列化，便于通过工具输入与 ActionResult 传递。
  */
 
-import type { ActionResultMessage } from "@downcity/type";
+import type { AIActionMessage } from "@downcity/federation";
 import type { PowerJsonObject, PowerJsonValue } from "@/power/index.js";
 
 /** Image capability 使用的最小图片 AI 服务协议。 */
@@ -130,15 +130,15 @@ export interface ImageResolvedCreateInput {
   [key: string]: PowerJsonValue | ImageResolvedMessage[] | undefined;
 }
 
-/** 图片成功结果：可直接追加到 canonical Agent 回复的 Session 消息。 */
-export type ImageResult = Extract<ActionResultMessage, { role: "agent" }>;
+/** 图片成功结果：Federation 返回的非语言 AI Action 消息。 */
+export type ImageResult = AIActionMessage;
 
 /**
  * `result` 动作返回给模型的数据。
  *
  * 关键点（中文）
  * - 只给本地路径，不注入 Agent 消息；由模型在回复里引用。
- * - 未能本地化的图片保留远端 URL，并通过 `warning` 说明，不静默丢弃。
+ * - 未能本地化的图片不进入 `files`，通过 `warning` 说明，不静默丢弃。
  */
 export interface ImageResultOutput {
   /** 图片任务 ID。 */
@@ -147,7 +147,7 @@ export interface ImageResultOutput {
   readonly status: ImageJobStatus;
   /** 已保存到本地的图片绝对路径。 */
   readonly files: string[];
-  /** 部分图片未能本地化时的说明；全部成功时省略。 */
+  /** 部分图片未能本地化并因此未进入 `files` 时的说明；全部成功时省略。 */
   readonly warning?: string;
 }
 
@@ -162,15 +162,15 @@ export interface ImageResultStorageInput {
   };
   /** 当前图片任务 ID，用于划分稳定的本地结果目录。 */
   job_id: string;
-  /** City 或 provider 返回的原始 Session 消息。 */
+  /** Federation 返回的原始 AI Action 消息。 */
   result: ImageResult;
 }
 
 /** 图片结果本地化输出。 */
 export interface ImageResultStorageResult {
-  /** 已将可下载远程图片替换为本地路径的 Session 消息。 */
+  /** 已将可下载图片替换为本地路径的 AI Action 消息。 */
   result: ImageResult;
-  /** 未能完成本地化的图片错误；对应 File Part 会保留远程 URL。 */
+  /** 未能完成本地化的图片错误；远端下载失败时保留原 URL，内联载荷失败时清空 URL。 */
   errors: string[];
 }
 
@@ -193,7 +193,7 @@ export interface ImageJobResult {
   job_id: string;
   /** 当前任务状态。 */
   status: ImageJobStatus;
-  /** 成功时返回的 Session 消息。 */
+  /** 成功时返回的 Federation AI Action 消息。 */
   result?: ImageResult;
   /** 失败时返回的错误消息。 */
   error?: string;

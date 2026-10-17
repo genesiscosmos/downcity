@@ -33,6 +33,8 @@ export interface TaskDeliverySession {
 }
 
 export type ShipTaskFrontmatterV1 = {
+  /** 用户交互外壳类型；未标注的历史任务需由用户明确归类。 */
+  shell_type?: "todo" | "schedule";
   /** 任务名称（唯一语义标识；对外统一使用 title） */
   title: string;
   /** 触发条件：`@manual`、cron 表达式，或 `time:<ISO8601-with-timezone>` */

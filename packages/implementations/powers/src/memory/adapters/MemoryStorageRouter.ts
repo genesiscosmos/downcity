@@ -24,6 +24,9 @@ export interface MemoryStorageRouterOptions {
   /** 跨 Agent 共享的 City Memory Store。 */
   shared_storage: MemoryStorageAdapter;
 
+  /** 平台唯一使用者的独立 memory 目录。 */
+  user_storage: MemoryStorageAdapter;
+
   /** 按 agent_id 创建 Agent 私有 Store 的工厂。 */
   create_agent_storage: (agent_id: string) => MemoryStorageAdapter;
 }
@@ -36,6 +39,9 @@ export class MemoryStorageRouter implements MemoryStorageAdapter {
   /** 跨 Agent 共享 Store。 */
   private readonly shared_storage: MemoryStorageAdapter;
 
+  /** 本地 User Store，与 City 共享目录分离。 */
+  private readonly user_storage: MemoryStorageAdapter;
+
   /** Agent 私有 Store 工厂。 */
   private readonly create_agent_storage: (agent_id: string) => MemoryStorageAdapter;
 
@@ -47,12 +53,14 @@ export class MemoryStorageRouter implements MemoryStorageAdapter {
       throw new Error("MemoryStorageRouter requires create_agent_storage");
     }
     this.shared_storage = options.shared_storage;
+    this.user_storage = options.user_storage;
     this.create_agent_storage = options.create_agent_storage;
   }
 
   /** 初始化共享根；Agent 私有根在首次访问时按需创建。 */
   async initialize(): Promise<void> {
     await this.shared_storage.initialize();
+    await this.user_storage.initialize();
   }
 
   /** 判断一个完整逻辑 key 是否存在。 */
@@ -96,6 +104,7 @@ export class MemoryStorageRouter implements MemoryStorageAdapter {
   /** 释放共享根与全部已经创建的 Agent 私有根。 */
   async dispose(): Promise<void> {
     await this.shared_storage.dispose();
+    await this.user_storage.dispose();
     for (const storage of this.agent_storages.values()) {
       if (storage === this.shared_storage) continue;
       await storage.dispose();
@@ -118,9 +127,19 @@ export class MemoryStorageRouter implements MemoryStorageAdapter {
         outer_prefix: `agent/${agent_id}`,
       };
     }
-    if (segments[0] === "user" || segments[0] === "workspace") {
+    if (segments[0] === "user") {
       const subject_id = normalize_segment(segments[1] || "");
-      const namespace = segments[0] === "user" ? "users" : "workspaces";
+      const relative = segments.slice(2);
+      return {
+        storage: this.user_storage,
+        inner_key: relative.join("/"),
+        list_namespaces: relative.length === 0 ? [...COMMON_NAMESPACES] : [relative[0]!],
+        outer_prefix: `user/${subject_id}`,
+      };
+    }
+    if (segments[0] === "workspace") {
+      const subject_id = normalize_segment(segments[1] || "");
+      const namespace = "workspaces";
       const relative = segments.slice(2);
       const base = `${namespace}/${subject_id}`;
       return {

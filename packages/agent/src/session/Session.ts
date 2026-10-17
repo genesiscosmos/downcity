@@ -734,9 +734,9 @@ export class Session implements AgentSession {
   /**
    * 让 Composer 尝试推进派生上下文状态。
    *
-   * 上下文推进是用户可见的 Session 操作，因此结果记录为 Action：写入派生边界时记为
-   * completed，抛错时记为 failed。Composer 判定没有可推进区间时返回 false，此时不产生
-   * Action，避免空操作污染时间线。
+   * 上下文推进是用户可见的 Session 操作：Composer 确认有可推进内容时记为 running，
+   * 写入派生边界后记为 completed，抛错时记为 failed，整个生命周期复用同一个 Action。
+   * Composer 判定没有可推进区间时返回 false，此时不产生 Action，避免空操作污染时间线。
    */
   private async advance_context(
     trigger: SessionContextAdvanceTrigger,
@@ -750,6 +750,13 @@ export class Session implements AgentSession {
         history: await this.store.list_messages(),
         derived: this.store.derived_store(this.composer.name),
         trigger,
+        on_advance_start: () => this.record_compaction_action({
+          action_id,
+          turn_id,
+          status: "running",
+          title: "Compacting session context",
+          description: "Older stable parts are being folded into the context summary.",
+        }),
         on_model_request_failure: (notice) => {
           this.events.publish(create_session_model_request_warning({
             session_id: this.id,
@@ -780,14 +787,14 @@ export class Session implements AgentSession {
     }
   }
 
-  /** 记录一次上下文压缩结果；Action 观测失败不能改变压缩本身的执行结果。 */
+  /** 记录上下文压缩生命周期；Action 观测失败不能改变压缩本身的执行结果。 */
   private async record_compaction_action(input: {
     /** 本次压缩生命周期的稳定标识。 */
     action_id: string;
     /** 压缩所属 Turn；独立的 Session 压缩可以省略。 */
     turn_id?: string;
-    /** 压缩结果状态。 */
-    status: "completed" | "failed";
+    /** 压缩生命周期状态；开始与终态复用同一个 Action ID。 */
+    status: "running" | "completed" | "failed";
     /** Action 展示标题。 */
     title: string;
     /** Action 展示描述。 */

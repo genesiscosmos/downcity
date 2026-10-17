@@ -36,7 +36,7 @@ export interface SessionToolSummary {
   pending_interaction_count: number;
 }
 
-/** `session_start` 的输出。 */
+/** `session.start` 的输出。 */
 export interface SessionStartToolOutput {
   /** 新建会话的稳定标识。 */
   session_id: string;
@@ -46,7 +46,7 @@ export interface SessionStartToolOutput {
   status: "started";
 }
 
-/** `session_check` 清单模式的输出。 */
+/** `session.check` 清单模式的输出。 */
 export interface SessionCheckListToolOutput {
   /** 当前 Agent 除自己那条会话外的全部会话。 */
   mode: "list";
@@ -54,7 +54,7 @@ export interface SessionCheckListToolOutput {
   sessions: SessionToolSummary[];
 }
 
-/** `session_check` 详情模式的输出。 */
+/** `session.check` 详情模式的输出。 */
 export interface SessionCheckDetailToolOutput {
   /** 本次读取的是单条会话。 */
   mode: "detail";
@@ -69,7 +69,7 @@ export interface SessionCheckDetailToolOutput {
   }>;
   /** 当前等待用户响应的 Interaction；为空表示不需要用户介入。 */
   pending_interactions: Array<{
-    /** Interaction 稳定标识，可交给 `session_reply`。 */
+    /** Interaction 稳定标识，可交给 `session` 的 `reply` 动作。 */
     interaction_id: string;
     /** Interaction 业务类型，例如 question 或 approval。 */
     type: string;
@@ -82,12 +82,12 @@ export interface SessionCheckDetailToolOutput {
   failure?: string;
 }
 
-/** `session_check` 的输出。 */
+/** `session.check` 的输出。 */
 export type SessionCheckToolOutput =
   | SessionCheckListToolOutput
   | SessionCheckDetailToolOutput;
 
-/** `session_reply` 的输出。 */
+/** `session.reply` 的输出。 */
 export interface SessionReplyToolOutput {
   /** 响应已提交并被目标会话接受。 */
   status: "resolved" | "denied";
@@ -97,7 +97,7 @@ export interface SessionReplyToolOutput {
   interaction_id: string;
 }
 
-/** `session_stop` 的输出。 */
+/** `session.stop` 的输出。 */
 export interface SessionStopToolOutput {
   /** 目标会话标识。 */
   session_id: string;

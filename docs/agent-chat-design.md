@@ -345,39 +345,39 @@ injected.get("workspace");     // repo
 
 ### 5.5 模型侧安排活
 
-Agent 会话多四个工具，其他会话拿不到。用户不需要知道它们存在。
+Agent 主会话与 Channel 会话提供一个 `session` 工具，通过 `action` 选择动作，`args` 传入参数。Work 会话不注入该工具。
 
 ```ts
 // 模型在 Agent 会话里收到「CI 挂了三个测试，帮我修了」时：
-// session_start({ workspace_id: "project-id", query: "修 packages/agent 下挂掉的三个测试", title: "修 CI" })
+// session({ action: "start", args: { workspace_id: "project-id", query: "修 packages/agent 下挂掉的三个测试", title: "修 CI" } })
 // → { session_id: "session-..." }   对话立刻空闲
 
 // 用户问「那个测试修得怎么样了」：
-// session_check()                   → 全部会话与状态
-// session_check({ session_id })     → 某条的详细进展
+// session({ action: "check" })                          → 全部会话与状态
+// session({ action: "check", args: { session_id } })    → 某条的详细进展
 
 // 某条会话在等审批时：
-// session_reply({ session_id, interaction_id, outcome, payload })
+// session({ action: "reply", args: { session_id, interaction_id, outcome, payload } })
 ```
 
-`session_start` 必须传入项目 `workspace_id`，由宿主的 `AgentOptions.resolve_work_workspace` 解析并校验。禁止继承主会话的 main 目录；Desktop 仅接受用户项目 Repository 中的目标。
+`session` 的 `start` 动作必须传入项目 `workspace_id`，由宿主的 `AgentOptions.resolve_work_workspace` 解析并校验。禁止继承主会话的 main 目录；Desktop 仅接受用户项目 Repository 中的目标。
 
 ## 6. 模型侧能力
 
-Agent 自己的会话多一组工具，其他 Session 拿不到，因此「会话再派生会话」在结构上不会发生。
+主会话与 Channel 会话通过单一 `session` 工具协调工作。调用 `session({})` 返回动作说明与输入 Schema，指定 action 后严格校验对应的 args。
 
-| 工具 | 干什么 |
+| action | 干什么 |
 | --- | --- |
-| `session_start` | 开一条工作会话并交给它任务 |
-| `session_check` | 手上有哪些活、各自什么状态；带 `session_id` 读那一条的细节 |
-| `session_reply` | 答掉某条会话等着的审批或提问 |
-| `session_stop` | 收回某条会话 |
+| `start` | 开一条工作会话并交给它任务 |
+| `check` | 列出会话及状态；带 `session_id` 读取详细进展 |
+| `reply` | 答复某条会话等待的审批或提问 |
+| `stop` | 停止某条工作会话 |
 
-工具在 Agent 构造时闭包住 `AgentSessions`，不去 `ToolCallContext` 回查主体——`ToolCallContext` 明确不携带 Agent 或 Session 句柄，这个边界不破。每个工具自带 description，因此不注入 instruction 文本，也不做每轮清单注入。
+工具通过 Agent 注入的 `SessionWork` 协议调用运行时，不从 `ToolCallContext` 回查 Agent 或 Session。工具自带 description，动作索引按需返回，无需注入额外 instruction。
 
-判断依据是会话角色而非工具来源：只有 `origin.type === "agent"` 的会话拿到这组工具。
+注入依据是会话来源：Agent 主会话与 `origin.type === "channel"` 的会话获得该工具，Work 会话不能递归派发。
 
-`session_start` 不读取 `ToolCallContext.workspace`。其目标项目来自显式 `workspace_id`，宿主负责解析实例；Agent 不回查 City registry。
+`session` 的 `start` 动作不读取 `ToolCallContext.workspace`。其目标项目来自显式 `workspace_id`，宿主负责解析实例；Agent 不回查 City registry。
 
 ### 6.1 工具与 Power 怎么读会话状态
 
@@ -393,8 +393,8 @@ Agent 自己的会话多一组工具，其他 Session 拿不到，因此「会�
 | `get()` 未注入 Workspace | 该会话没有项目上下文；`get("workspace_id")` 仍可读，`get("workspace")` 为空 |
 | 持久化目录本次不提供 | 同上，不抛错 |
 | `set({ workspace })` 时有 Turn 在跑 | 生效于下一 Step 检查点；当前 Turn 沿用旧值，与 `set({ model })` 一致 |
-| `session_start` 后立即 `session_stop` | 排队输入被取消，状态记 `stopped`，与用户叫停可区分 |
-| `session_reply` 目标 Interaction 已失效 | 返回明确失败，由模型转述给用户，不静默丢弃 |
+| `session.start` 后立即 `session.stop` | 排队输入被取消，状态记 `stopped`，与用户叫停可区分 |
+| `session.reply` 目标 Interaction 已失效 | 返回明确失败，由模型转述给用户，不静默丢弃 |
 
 ## 8. 不变量
 

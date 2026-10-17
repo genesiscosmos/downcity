@@ -34,6 +34,7 @@ const state_schema = z.object({
       resolved: z.boolean(),
       occurrence_id: z.string().optional(),
       run_timestamp: z.string().optional(),
+      feedback: z.string().trim().min(1).max(24000).optional(),
     }),
   ),
 });

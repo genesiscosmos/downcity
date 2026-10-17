@@ -377,7 +377,7 @@ export class Agent {
   }
 
   /**
-   * 返回当前生效的工具集合：Workspace 工具 + 容器 Power 工具 + Agent 自有工具。
+   * 返回当前生效的工具集合：Workspace 工具 + 容器 Power 工具 + Agent 自有工具 + 按来源注入的 session 工具。
    *
    * 关键点（中文）
    * - 容器 Power 工具从环境句柄实时读取，不缓存；容器增删 Power 后下一次求值即生效。
@@ -410,7 +410,7 @@ export class Agent {
     if (this.delegations) return this.delegations;
     const storage = this.resolve_storage();
     const resolve_workspace = async (workspace_id: string): Promise<WorkspaceRuntime> => {
-      if (!this.resolve_work_workspace) throw new Error("session_start requires a host project Workspace resolver");
+      if (!this.resolve_work_workspace) throw new Error("session.start requires a host project Workspace resolver");
       return await this.resolve_work_workspace(workspace_id);
     };
     const prepare_session = async (session: AgentSession): Promise<void> => {

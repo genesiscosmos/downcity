@@ -75,9 +75,6 @@ export interface MemoryAccessContext {
   /** 当前调用绑定的 Workspace；只作为记录 metadata 与执行上下文，不参与 Subject 隔离。 */
   workspace_id?: string;
 
-  /** 宿主身份解析器提供的可信用户标识；不可从模型输出解析。 */
-  user_id?: string;
-
   /** 自动流程不读取旧的全局 City 范围。 */
   exclude_city?: boolean;
 

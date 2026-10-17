@@ -99,8 +99,8 @@ export interface PowerHostSystem {
   invoke_agent_power(input: {
     /** 目标 Agent 的稳定 ID。 */
     readonly agent_id: string;
-    /** 提供执行上下文的 Workspace ID。 */
-    readonly workspace_id: string;
+    /** 可选项目执行上下文；User / Agent 数据操作无需绑定项目。 */
+    readonly workspace_id?: string;
     /** 目标 Power ID。 */
     readonly power_id: string;
     /** 目标 action ID。 */

@@ -60,7 +60,7 @@ export function create_file_tools(runner: FileToolRunner): FileToolSet {
 
   const write = define_agent_tool<WriteFileToolInput, WorkspaceToolActionResult<WriteFileToolResult>>({
     description:
-      "Create a new UTF-8 text file or atomically replace an existing file when overwrite=true. Parent directories are created automatically. Use edit for partial changes.",
+      "Create a new UTF-8 text file or atomically replace an existing file when overwrite=true. Parent directories are created automatically. Emit file_path before content. Use edit for changes to existing files. Keep each call small enough to finish generating; organize long documents by section and save large SVG illustrations as separate files.",
     input_schema: write_file_tool_input_schema,
     execute: async (
       input: WriteFileToolInput,
@@ -80,7 +80,7 @@ export function create_file_tools(runner: FileToolRunner): FileToolSet {
 
   const edit = define_agent_tool<EditFileToolInput, WorkspaceToolActionResult<EditFileToolResult>>({
     description:
-      "Atomically edit one text file using exact replacements. Every edits[].old_text must match exactly once in the original file, and edit regions must not overlap. Combine separate changes to one file in a single call.",
+      "Atomically edit one text file using exact replacements. Every edits[].old_text must match exactly once in the original file, and edit regions must not overlap. Combine related changes to one file in a single call. Pass edits as a JSON array, never a JSON-encoded string. If validation fails, correct the original edit input instead of rewriting the entire file. Keep large changes scoped to sections.",
     input_schema: edit_file_tool_input_schema,
     execute: async (
       input: EditFileToolInput,

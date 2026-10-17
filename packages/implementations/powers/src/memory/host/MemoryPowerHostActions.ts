@@ -86,11 +86,11 @@ async function create_snapshot(
   const resolved_workspace = workspaces.find(
     (workspace) => workspace.workspace_id === scope.workspace_id,
   ) ?? workspaces[0];
-  const status = resolved_agent && resolved_workspace
-    ? await read_status(context, resolved_agent.agent_id, resolved_workspace.workspace_id)
+  const status = resolved_agent
+    ? await read_status(context, resolved_agent.agent_id, resolved_workspace?.workspace_id)
     : undefined;
-  const counts = resolved_workspace
-    ? await read_scope_counts(context, resolved_agent.agent_id, agents, resolved_workspace.workspace_id)
+  const counts = resolved_agent
+    ? await read_scope_counts(context, resolved_agent.agent_id, agents, resolved_workspace?.workspace_id)
     : undefined;
   return {
     agents: agents.map((agent) => ({
@@ -125,7 +125,7 @@ async function read_scope_counts(
   context: PowerLifecycleContext,
   executor_agent_id: string,
   agents: readonly { readonly agent_id: string }[],
-  workspace_id: string,
+  workspace_id: string | undefined,
 ): Promise<{
   /** City 共享记忆条目数量。 */
   city: number | undefined;
@@ -148,13 +148,13 @@ async function read_scope_counts(
 async function count_scope(
   context: PowerLifecycleContext,
   agent_id: string,
-  workspace_id: string,
+  workspace_id: string | undefined,
   subject_kind: MemoryMainviewScopeKind,
 ): Promise<number | undefined> {
   try {
     const result = await invoke_domain_action<MemoryListResult>(
       context,
-      { scope: subject_kind, agent_id, workspace_id },
+      { scope: subject_kind, agent_id, workspace_id: workspace_id ?? "" },
       "list",
       { subject_kinds: [subject_kind], limit: 1 },
     );
@@ -256,7 +256,7 @@ async function forget_memory(
 async function read_status(
   context: PowerLifecycleContext,
   agent_id: string,
-  workspace_id: string,
+  workspace_id: string | undefined,
 ): Promise<MemoryStatusResult | undefined> {
   const result = await context.system.invoke_agent_power({
     agent_id,
@@ -288,10 +288,15 @@ async function invoke_domain_action<TResult>(
   const workspaces = await context.system.list_workspaces();
   const workspace = workspaces.find((item) => item.workspace_id === scope.workspace_id)
     ?? workspaces[0];
-  if (!workspace) throw new Error("Memory requires at least one Workspace as execution context");
+  if (scope.workspace_id && !workspaces.some((item) => item.workspace_id === scope.workspace_id)) {
+    throw new Error("Selected Memory Workspace was not found");
+  }
+  if (action_id === "remember" && input.target === "current_workspace" && !workspace) {
+    throw new Error("Workspace memory requires a Workspace");
+  }
   const result = await context.system.invoke_agent_power({
     agent_id: agent.agent_id,
-    workspace_id: workspace.workspace_id,
+    ...(workspace ? { workspace_id: workspace.workspace_id } : {}),
     power_id: context.power.id,
     action_id,
     input,

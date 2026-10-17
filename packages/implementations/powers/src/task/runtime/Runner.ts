@@ -117,10 +117,15 @@ export async function runTaskNow(params: {
   const executionId = String(params.executionId || `${params.taskId}:${timestamp}`).trim();
 
   const definition = params.task_snapshot ?? await readTask({ taskId: params.taskId, storage: params.storage });
-  // 执行快照包含用户补充；脚本正文保持原有可执行内容。
+  // 已确认说明作为执行目标；修订反馈随执行快照保存，脚本正文不拼接说明。
   const preparation = definition.frontmatter.preparation;
-  const task = definition.frontmatter.kind === "agent" && preparation
-    ? { ...definition, body: [definition.body, ...preparation.supplements, ...(preparation.analyzed_body ? [`整理说明：\n${preparation.analyzed_body}`] : [])].join("\n\n") }
+  const recurring = definition.frontmatter.when !== "@manual" && !definition.frontmatter.when.startsWith("time:");
+  const occurrence_id = definition.frontmatter.workflow_state?.occurrences.find((item) => item.execution_id === executionId)?.occurrence_id;
+  const feedback = definition.frontmatter.workflow_state?.inbox
+    .filter((item) => item.kind === "review" && item.resolved && item.feedback && (!recurring || item.occurrence_id === occurrence_id))
+    .map((item) => `结果修改要求（${item.created_at}）：\n${item.feedback}`) ?? [];
+  const task = definition.frontmatter.kind === "agent"
+    ? { ...definition, body: [preparation?.analyzed_body ?? definition.body, ...feedback].join("\n\n") }
     : definition;
   if (task.frontmatter.agent_id !== context.agent.id) {
     throw new Error(`Task Agent mismatch: expected ${task.frontmatter.agent_id}, got ${context.agent.id}`);

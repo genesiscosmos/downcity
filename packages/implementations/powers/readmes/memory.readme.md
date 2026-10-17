@@ -1,59 +1,54 @@
 # Memory
 
-MemoryPower provides scoped long-term knowledge and explicit search, read, remember, revise, digest, and forget actions.
+MemoryPower owns User/Agent Core Memory and searchable knowledge. One platform data root has one local user (`local`), independent of Federation login accounts. City UserRepository owns user/user.json; MemoryPower owns the user's memories. No identity callback, Jev gate or periodic Session formation worker is required.
 
-## Automatic flow
+## Flow
 
-Automatic memory is explicitly enabled through `MemoryPowerOptions.automatic` or Power configuration. Before model processing, the host calls Jev with two questions:
+Each turn loads user/PROFILE.md, then agents/<agent_id>/PROFILE.md as reference context before the original user content. The Agent decides whether to call remember/search/read from the request and conversation. Current instructions and permissions take precedence. Injection never modifies canonical Session messages.
 
-- `save_scope`: choice of `none`, `user`, `workspace`, `agent`, or `mixed`.
-- `should_recall`: boolean controlling immediate recall.
+## remember
 
-Non-`none` results are passed to the Agent as a decision status. MemoryPower does not automatically save or recall from that status, and does not wait for final memory results. The Agent decides whether to call `remember` or `search`.
+- content: required non-empty text.
+- target: user, agent or current_workspace.
+- mode: profile or knowledge; default knowledge.
+- topic, memory_type, source: optional knowledge organization, type and evidence label.
 
-The status is reference context only; it never becomes canonical user input or system instruction. Legacy fixed-wiki Core injection and automatic per-reply capture are disabled. Core now comes from Agent PROFILE.md.
+Profile supports user and agent. User Profile applies across local Agents; Agent Profile applies only to that Agent. Workspace Profile is rejected. Appending is immediate and returns profile_id, not a wiki memory_id. Knowledge mode saves evidence and creates or appends a wiki topic, returning memory_id and evidence_id.
 
-## Agent Core Memory
+```json
+{"target":"user","mode":"profile","content":"Before the main answer, remind me to speak English and briefly correct my expressions."}
+```
 
-`agents/<agent_id>/PROFILE.md` is managed by MemoryPower alongside, but independently of, SOUL.md. It contains explicitly Agent-wide persistent agreements and is loaded into every turn's reference context without Jev or keyword search, including new Sessions. Current requests and system permissions take precedence.
+Use `target`, never `scope`, in remember payloads. Persistent behavior changes should explicitly choose mode profile; omitting mode still defaults to searchable knowledge. Only successful tool results establish that saving completed.
 
-Use `remember` with `target: "agent"`, `mode: "profile"`, and `content` to append immediately. Omitting mode defaults to `knowledge`, which stores searchable records. Successful Profile writes return `profile_id`; this is not a wiki ID accepted by read/revise/forget. Host actions `memory.profile_read`, `memory.profile_edit`, and `memory.profile_status` provide document access, exact editing, and state. Editing requires the version returned by read.
+Results consistently return target, mode, status, activation and location, plus profile_id or memory_id/evidence_id. Profile returns status=saved, activation=every_turn and location=PROFILE.md. Knowledge returns status=created/updated, activation=on_recall and location=wiki. Ordinary knowledge read/revise/forget do not accept profile_id. User/Agent knowledge management does not require a Workspace; project writes do.
 
-Appends have no size cap and are idempotent by source. A daily check calls the configured formation model only when the visible document exceeds 2,000 Unicode characters. The model proposes unique, non-overlapping exact replacements; code checks the document version, preserves source markers, backs up the original, and writes atomically. Optimization aims for 2,000 characters without deleting valid agreements; documents can remain longer. Daily checks run only while City is running.
+## Profile maintenance
 
-Agent Profile is shared by all users of that Agent. Private User preferences do not automatically fall back to Profile. Existing wiki preferences are not automatically migrated. User identity integration remains separate.
+Both scopes use the same service. Appends have no size cap and are idempotent by source. Each Profile is checked once per local calendar day; documents above 2,000 visible Unicode characters are optimized using profile_model_id. Exact-edit validation checks unique matches, non-overlap, an unchanged version and source-marker retention. The original is backed up. The target is not truncation; valid agreements take precedence.
 
-## Scopes
+Profile changes load on the next turn, including new Sessions. A read failure in one scope does not suppress the other. Without an optimization model, reads, appends and tools still work; optimization records an error and retains the file.
 
-- User records are shared by authorized Agents for the same trusted user. A host `resolve_user` callback is required; external chat IDs and model billing accounts are not user identity.
-- Workspace records are isolated by project and shared across Agents in that Workspace.
-- Agent records are private.
-- Legacy City records remain accessible through explicit actions and are excluded from automatic recall.
+Host actions: memory.user_read/user_update delegate base information to City. memory.profile_read/profile_edit/profile_delete/profile_status accept target=user or target=agent plus agent_id. Edit/delete require the read version. Dedicated Desktop management UI is pending.
 
-`mixed` means multiple candidate scopes and is split during formation. A user preference targeting one Agent remains User memory with an applicability restriction.
+## Storage and configuration
 
-## Configuration
+```text
+<platform-root>/user/user.json
+<platform-root>/user/PROFILE.md
+<platform-root>/user/memory/wiki/ and evidence/
+<platform-root>/agents/<agent_id>/PROFILE.md
+<platform-root>/agents/<agent_id>/memory/wiki/ and evidence/
+<shared-memory-root>/workspaces/<encoded-id>/wiki/ and evidence/
+```
+
+User knowledge is stored once and read by local Agents. Agent knowledge remains private; Workspace knowledge stays project-isolated. Memory IDs are logical references. Old per-user directories and Agent wiki preferences are not automatically migrated.
 
 ```ts
 const memory_power = new MemoryPower({
   platform_root_path: "/absolute/platform-root",
-  automatic: {
-    enabled: true,
-    decision_model_id: "jev-latest",
-    formation_model_id: "configured-text-model",
-    resolve_user: resolve_trusted_message_user,
-  },
+  profile_model_id: "configured-text-model",
 });
 ```
 
-The callback is application-provided. Without it, User reads and writes are unavailable. Automatic processing defaults to disabled. Power configuration supports `enabled`, `decision_model_id`, and `formation_model_id`, applied after restart. Jev can be discovered; a formation model must be selected explicitly.
-
-The host action `memory.automatic_status` exposes pending counts, model selection, errors, and retry timing without conversation text.
-
-## Storage
-
-Agent records use `agents/<agent_id>/memory/wiki`. User and Workspace records use `users/<encoded-id>/wiki` and `workspaces/<encoded-id>/wiki` under the shared Memory root. `runtime/sessions` holds source markers, cursors, and plans; original conversations stay in Session storage.
-
-Public `memory_id` values are logical references. Reuse returned IDs unchanged in read, revise, and forget actions. Explicit digest remains transcript archival and is separate from automatic short-record formation.
-
-The Desktop management view still has legacy City and Agent navigation; dedicated User and Workspace navigation is pending. New project records are accessible through domain actions.
+Power configuration accepts profile_model_id after restart. Previous resolve_user and automatic options are removed. Channel authorization remains the host's responsibility; this is a single-owner local system, not a multi-tenant memory service. Switching Federation accounts does not switch User memory.

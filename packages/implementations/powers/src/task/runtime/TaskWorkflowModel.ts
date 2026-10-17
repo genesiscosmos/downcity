@@ -67,6 +67,8 @@ export function normalize_task_workflow(input: unknown): TaskWorkflow {
     throw new Error("require_acceptance 必须是布尔值");
   const planned_at = normalize_task_instant(value.planned_at);
   const due_at = normalize_task_due(value.due_at);
+  const planned_end_at = normalize_task_instant(value.planned_end_at);
+  if (planned_end_at && (!planned_at || Date.parse(planned_end_at) <= Date.parse(planned_at))) throw new Error("计划结束时间必须晚于计划开始时间");
   const completed_at = normalize_task_instant(value.completed_at);
   const created_at =
     normalize_task_instant(value.created_at) || new Date().toISOString();
@@ -79,6 +81,7 @@ export function normalize_task_workflow(input: unknown): TaskWorkflow {
     timezone,
     require_acceptance: value.require_acceptance === true,
     ...(planned_at ? { planned_at } : {}),
+    ...(planned_end_at ? { planned_end_at } : {}),
     ...(due_at ? { due_at } : {}),
     ...(completed_at ? { completed_at } : {}),
     ...(value.active_execution_id

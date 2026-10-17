@@ -98,6 +98,8 @@ export interface SessionContextAdvanceInput {
   trigger: SessionContextAdvanceTrigger;
   /** 用于生成派生摘要的当前模型。 */
   model?: ModelClient;
+  /** 确认存在有效推进区间后、开始耗时工作前调用并等待；空操作不调用，由调用方负责隔离观测失败。 */
+  on_advance_start?: () => Promise<void>;
   /** 模型请求逐次失败的可选观测入口。 */
   on_model_request_failure?: ModelRequestFailureReporter;
 }

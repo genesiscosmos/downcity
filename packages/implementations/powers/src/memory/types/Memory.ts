@@ -8,7 +8,6 @@
  */
 
 import type { PowerJsonObject, PowerJsonValue } from "@downcity/city/power";
-import type { AutomaticMemoryOptions, MemoryFormationItem } from "./AutomaticMemory.js";
 import type {
   MemoryAccessContext,
   MemoryOwner,
@@ -492,17 +491,14 @@ export interface MemoryProvider {
   /** 幂等持久化一个通过预检、等待 Formation 的 canonical Turn。 */
   capture_turn(input: MemoryCaptureTurnInput): Promise<MemoryCaptureTurnResult>;
 
-  /** 幂等写入已验证的自动记忆；不复制完整 Session 证据。 */
-  form_memory?(input: MemoryFormationItem): Promise<string>;
-
   /** 释放 Provider 持有的存储、索引和后台任务。 */
   dispose(): Promise<void>;
 }
 
 /** MemoryPower 的显式构造参数。 */
 export interface MemoryPowerOptions {
-  /** 自动判定、后台形成与可信用户身份选项。 */
-  automatic?: AutomaticMemoryOptions;
+  /** 每日 Profile 优化使用的文本模型；不配置时仍可读取与追加 Profile。 */
+  profile_model_id?: string;
   /** 当前启用的 Memory Provider。 */
   provider?: "builtin";
   /** 当前启用的 Memory Storage。 */

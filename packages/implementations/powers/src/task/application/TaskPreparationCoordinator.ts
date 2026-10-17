@@ -1,8 +1,8 @@
 /** 持久化准备协调器：模型在事务外运行，提交时检查版本与处理身份。 */
 import { randomUUID } from "node:crypto";
-import { validate_task_delegation } from "./TaskDelegationService.js";
+import { resolve_task_delegation } from "./TaskDelegationService.js";
 import type { PowerLifecycleContext } from "@downcity/city/power";
-import type { TaskAnalyzer } from "../types/TaskPreparation.js";
+import type { TaskAnalyzer, TaskAnalysis } from "../types/TaskPreparation.js";
 import type { TaskDefinitionRepository } from "../runtime/TaskDefinitionRepository.js";
 import { inspect_task_definitions, readTask, writeTask } from "../runtime/Store.js";
 import { normalizeTaskWhen } from "../runtime/Model.js";
@@ -56,6 +56,16 @@ export class TaskPreparationCoordinator {
     this.pending.set(task_id, operation);
   }
 
+  /** 等待同一任务的准备请求收口，包括处理中收到的新版本；失败信息保留在任务中。 */
+  async generate(task_id: string): Promise<void> {
+    if (this.abort.signal.aborted) throw new Error("任务生成服务已关闭");
+    this.enqueue(task_id);
+    while (this.pending.has(task_id)) {
+      await this.pending.get(task_id);
+      if (this.abort.signal.aborted) throw new Error("任务生成已中断");
+    }
+  }
+
   /** 生命周期结束时取消模型调用并等待写回收口。 */
   async dispose(): Promise<void> {
     this.abort.abort();
@@ -77,15 +87,31 @@ export class TaskPreparationCoordinator {
     try {
       if (!this.analyze) throw new Error("尚未配置任务分析模型，可在详情中手动设置任务");
       const [agents, workspaces] = await Promise.all([this.context.system.list_agents(), this.context.system.list_workspaces()]);
-      const text = [task.body, ...task.frontmatter.preparation.supplements].join("\n\n补充：\n");
-      const analysis = task_analysis_schema.parse(await this.analyze({
+      const text = [task.frontmatter.intake?.text ?? task.body, ...task.frontmatter.preparation.supplements].join("\n\n补充：\n");
+      let analysis: TaskAnalysis = task_analysis_schema.parse(await this.analyze({
         text,
+        agent_id: task.frontmatter.intake?.agent_id,
+        ...(task.frontmatter.preparation.analyzed_body ? { previous: {
+          title: task.frontmatter.title, body: task.frontmatter.preparation.analyzed_body,
+          kind: task.frontmatter.kind === "agent" ? "agent" as const : "self" as const,
+          agent_id: task.frontmatter.agent_id, workspace_id: task.frontmatter.workspace_id,
+          when: task.frontmatter.when, start_now: task.frontmatter.preparation.start_now,
+          planned_at: task.frontmatter.workflow?.planned_at, planned_end_at: task.frontmatter.workflow?.planned_end_at, due_at: task.frontmatter.workflow?.due_at,
+          questions: [], assumptions: task.frontmatter.preparation.assumptions || [],
+        } } : {}),
         revision, received_at: task.frontmatter.workflow!.created_at,
         timezone: task.frontmatter.workflow!.timezone, planned_at: task.frontmatter.workflow?.planned_at,
         catalog: { agents: agents.map(({ agent_id, name }) => ({ agent_id, name })), workspaces: workspaces.map(({ workspace_id, name }) => ({ workspace_id, name })) },
       }, AbortSignal.any([this.abort.signal, AbortSignal.timeout(60000)])));
+      // 显式选择优先于模型建议，目标是否仍存在由委派服务校验。
+      if (task.frontmatter.intake?.agent_id) {
+        analysis.kind = "agent";
+        analysis.agent_id = task.frontmatter.intake.agent_id;
+      }
       const planned_at = normalize_task_instant(analysis.planned_at);
       const due_at = normalize_task_due(analysis.due_at);
+      const planned_end_at = normalize_task_instant(analysis.planned_end_at);
+      if (planned_end_at && (!planned_at || Date.parse(planned_end_at) <= Date.parse(planned_at))) throw new Error("计划结束时间必须晚于计划开始时间");
       if (analysis.kind === "agent") {
         await this.definitions.mutate(async (storage) => {
           const current = await readTask({ storage, taskId: task_id });
@@ -95,41 +121,27 @@ export class TaskPreparationCoordinator {
           await writeTask({ storage, taskId: task_id, frontmatter: current.frontmatter, body: current.body, overwrite: true });
         });
       }
-      const questions = validate_task_delegation(analysis, { agents, workspaces }, text);
-      // 即时启动也使用持久化的一次性安排；发生项负责跨回调去重。
-      const normalized_when = normalizeTaskWhen(analysis.start_now && !questions.length
-        ? `time:${new Date(Date.now() + 1000).toISOString()}`
-        : analysis.when);
-      const committed = await this.definitions.mutate(async (storage) => {
+      analysis = resolve_task_delegation(analysis, { agents, workspaces }, task.frontmatter.intake?.agent_id, task.frontmatter.delivery_session?.workspace_id || undefined);
+      const normalized_when = normalizeTaskWhen(analysis.when);
+      if (!normalized_when.ok) throw new Error("生成的时间规则无效，请调整安排后重新生成");
+      await this.definitions.mutate(async (storage) => {
         const current = await readTask({ storage, taskId: task_id });
         const preparation = current.frontmatter.preparation;
         if (task_work_is_closed(current) || preparation?.revision !== revision || preparation.processing_id !== processing_id || this.abort.signal.aborted) return;
         current.frontmatter.title = analysis.title;
         current.frontmatter.description = analysis.body.slice(0, 160);
-        if (!questions.length) {
-          current.frontmatter.kind = analysis.kind;
-          current.frontmatter.agent_id = analysis.kind === "agent" ? analysis.agent_id : "";
-          current.frontmatter.workspace_id = analysis.kind === "agent" ? analysis.workspace_id : "";
-          current.frontmatter.when = normalized_when.ok ? normalized_when.value : "@manual";
-          current.frontmatter.status = current.frontmatter.when === "@manual" ? "paused" : "enabled";
-        }
-        current.frontmatter.workflow = { ...current.frontmatter.workflow!, ...(planned_at ? { planned_at } : {}), ...(due_at ? { due_at } : {}) };
-        current.frontmatter.preparation = { ...preparation, status: questions.length ? "needs_input" : "ready", questions: [...new Set(questions)], analyzed_body: analysis.body, authorization_quote: !questions.length ? analysis.authorization_quote : undefined, schedule_error: undefined, processing_id: undefined };
+        current.frontmatter.kind = analysis.kind;
+        current.frontmatter.agent_id = analysis.kind === "agent" ? analysis.agent_id : "";
+        current.frontmatter.workspace_id = analysis.kind === "agent" ? analysis.workspace_id : "";
+        // 类型只取决于是否循环，时间点仍然属于一次性待办。
+        current.frontmatter.shell_type = normalized_when.value === "@manual" || normalized_when.value.startsWith("time:") ? "todo" : "schedule";
+        current.frontmatter.when = normalized_when.value;
+        current.frontmatter.status = "paused";
+        current.frontmatter.workflow = { ...current.frontmatter.workflow!, planned_at, planned_end_at, due_at };
+        current.frontmatter.preparation = { ...preparation, status: "proposed", questions: [], analyzed_body: analysis.body, assumptions: analysis.assumptions || [], start_now: current.frontmatter.shell_type === "todo" && analysis.kind === "agent" && analysis.when === "@manual" && analysis.start_now !== false, schedule_error: undefined, processing_id: undefined };
         await writeTask({ storage, taskId: task_id, frontmatter: current.frontmatter, body: current.body, overwrite: true });
         return true;
       });
-      if (committed && !questions.length && normalized_when.ok && normalized_when.value !== "@manual") {
-        const result = this.reconcile
-          ? await this.reconcile(task_id).catch((error): TaskSchedulerReloadResult => ({ reloaded: false, error: String(error) }))
-          : { reloaded: false, error: "尚未连接任务调度器" };
-        await this.definitions.mutate(async (storage) => {
-          const current = await readTask({ storage, taskId: task_id });
-          const preparation = current.frontmatter.preparation;
-          if (preparation?.revision !== revision || preparation.status !== "ready" || task_work_is_closed(current)) return;
-          current.frontmatter.preparation = { ...preparation, schedule_error: result.reloaded ? undefined : result.error || "自动安排同步失败" };
-          await writeTask({ storage, taskId: task_id, frontmatter: current.frontmatter, body: current.body, overwrite: true });
-        });
-      }
     } catch (error) {
       if (this.abort.signal.aborted) return;
       await this.definitions.mutate(async (storage) => {

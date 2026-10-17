@@ -6,6 +6,7 @@
 
 export type { TaskAnalyzer, TaskAnalysis, TaskAnalysisInput, TaskPreparation } from "./task/types/TaskPreparation.js";
 export type { TaskCaptureInput, TaskIntake } from "./task/types/TaskIntake.js";
+export type { TaskGenerateInput, TaskGenerateResult } from "./task/types/TaskGenerate.js";
 export { TaskPower } from "./task/TaskPower.js";
 export type { TaskPowerOptions } from "./task/types/TaskPowerOptions.js";
 export type { TaskServiceContract, TaskWorkInput, TaskMutationResult } from "./task/types/TaskService.js";

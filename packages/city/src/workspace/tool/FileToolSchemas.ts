@@ -37,7 +37,7 @@ export const write_file_tool_input_schema = z.object({
     .string()
     .min(1)
     .describe("Project-relative or absolute file path. A sandbox-internal path such as /workspace/a.ts is mapped back to the project root. Paths outside the project root are rejected."),
-  content: z.string().describe("Complete UTF-8 text content to write."),
+  content: z.string().describe("Complete UTF-8 text content to write. Emit file_path first. Keep calls bounded; prefer section edits for existing documents and separate files for large SVG illustrations."),
   overwrite: z
     .boolean()
     .optional()
@@ -68,7 +68,7 @@ export const edit_file_tool_input_schema = z.object({
     .array(file_edit_operation_schema)
     .min(1)
     .max(10)
-    .describe("One to ten non-overlapping exact replacements applied atomically."),
+    .describe("One to ten non-overlapping exact replacements applied atomically. Must be a JSON array of objects, not a JSON-encoded string. Correct validation errors in this input instead of switching to a full-file rewrite."),
   expected_sha256: z
     .string()
     .regex(/^[a-fA-F0-9]{64}$/)

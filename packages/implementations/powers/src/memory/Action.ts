@@ -95,10 +95,19 @@ export async function remember_memory_action(
   access: MemoryAccessContext,
   input: Omit<MemoryRememberInput, "access">,
 ): Promise<PowerActionResult<PowerJsonValue>> {
-  return await run_provider_action(async () => await provider.remember({
-    ...input,
-    access,
-  }) as unknown as PowerJsonValue);
+  return await run_provider_action(async () => {
+    const result = await provider.remember({ ...input, access });
+    return {
+      target: input.target,
+      mode: "knowledge",
+      status: result.mode,
+      memory_id: result.memory_id,
+      ...(result.evidence_id ? { evidence_id: result.evidence_id } : {}),
+      ...(result.summary ? { summary: result.summary } : {}),
+      activation: "on_recall",
+      location: "wiki",
+    };
+  });
 }
 
 /** digest action：Session 消息读取属于 Power 编排，长期记忆语义属于 Provider。 */
