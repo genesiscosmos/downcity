@@ -14,6 +14,9 @@ export type SessionSystemBlockSource =
 
 /** Session system prompt 的单个命名组成块。 */
 export interface SessionSystemBlock {
+  /** 宿主 system 内容的位置；省略时按来源默认排序，快照冻结时一并固定。 */
+  readonly position?: "after_instruction" | "before_session";
+
   /** 当前 block 的来源层级。 */
   readonly source: SessionSystemBlockSource;
 

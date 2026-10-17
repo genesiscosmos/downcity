@@ -24,7 +24,7 @@ import type {
   PowerLifecycleContext,
 } from "@downcity/city/power";
 import type {
-  SessionTurnContextHookValue,
+  SessionSystemContextHookValue,
 } from "@downcity/agent";
 import { SESSION_HOOK_POINTS } from "@downcity/type";
 import { z } from "zod";
@@ -183,7 +183,7 @@ export class MemoryPower extends Power {
   /** 宿主配置：Profile 每日优化模型，不依赖入口判定模型。 */
   private readonly options: MemoryPowerOptions;
 
-  /** 每轮读取 User / Agent Core 文档，复用同一每日优化器。 */
+  /** User / Agent Profile 文档与每日优化器，内容由 Session system 快照固定。 */
   private profile_runtime?: MemoryProfile;
 
   constructor(options: MemoryPowerOptions = {}) {
@@ -218,17 +218,18 @@ export class MemoryPower extends Power {
     return build_memory_power_system_text(this.provider);
   }
 
-  /** 每轮仅加载 Profile；保存与查询由聊天 Agent 主动调用工具。 */
+  /** Profile 与 Instruction 一起构建并冻结，仅首次组装和 syncshot 读取。 */
   readonly hooks: PowerHooks = {
     pipeline: {
-      [SESSION_HOOK_POINTS.turn_context]: [async ({ context, value }) => {
-        const input = value as unknown as SessionTurnContextHookValue;
+      [SESSION_HOOK_POINTS.system_context]: [async ({ context, value }) => {
+        const input = value as unknown as SessionSystemContextHookValue;
         const blocks = [...input.blocks];
         const scopes: ProfileScope[] = [{ target: "user" }, { target: "agent", agent_id: context.agent.id }];
         for (const scope of scopes) {
           try {
             const core = await this.profile_runtime?.context_block(scope);
-            if (core) blocks.push(core);
+            if (core) blocks.push({ source: "power", name: `memory/${core.name}`, content: core.content,
+              position: scope.target === "agent" ? "after_instruction" : "before_session" });
           } catch (error) { context.logger.warn("[memory] Profile unavailable", { target: scope.target, error: String(error) }); }
         }
         return { ...input, blocks } as unknown as PowerJsonValue;
@@ -483,7 +484,7 @@ export class MemoryPower extends Power {
 
     remember: create_action({
       description: "Save memory using target (owner) and mode (usage). Persistent behavior or 'from now on' preferences use mode profile; facts and historical knowledge use mode knowledge. Cross-Agent user preferences target user; Agent-only agreements target agent. Never change target after a failed write without user approval.",
-      returns: "target, mode(profile|knowledge), status(saved|created|updated), profile_id or memory_id, evidence_id?, activation(every_turn|on_recall), location(PROFILE.md|wiki)",
+      returns: "target, mode(profile|knowledge), status(saved|created|updated), profile_id or memory_id, evidence_id?, activation(new_session_or_syncshot|on_recall), location(PROFILE.md|wiki)",
       access: "write",
       input_schema: {
         zod: z.object({
@@ -500,7 +501,7 @@ export class MemoryPower extends Power {
           required: ["content", "target"],
           properties: {
             content: { type: "string", description: "Content to remember." },
-            mode: { type: "string", enum: ["profile", "knowledge"], default: "knowledge", description: "profile: append persistent agreements to User or Agent PROFILE.md, loaded every turn; supports target user or agent. knowledge: store searchable long-term knowledge." },
+            mode: { type: "string", enum: ["profile", "knowledge"], default: "knowledge", description: "profile: append persistent agreements to User or Agent PROFILE.md, captured when a new Session builds its system or an existing Session runs syncshot; supports target user or agent. knowledge: store searchable long-term knowledge." },
             target: {
               type: "string",
               enum: ["current_workspace", "user", "agent"],
@@ -569,7 +570,7 @@ export class MemoryPower extends Power {
             const source_key = createHash("sha256").update(JSON.stringify([context.agent.id, context.session?.id, context.turn?.id, content])).digest("hex");
             await this.profile_runtime.append(scope, content, source_key);
             const profile_id = target === "user" ? `user/${LOCAL_USER_ID}/profile` : `agent/${context.agent.id}/profile`;
-            return { success: true, data: { target, mode: "profile", status: "saved", profile_id, activation: "every_turn", location: "PROFILE.md" } };
+            return { success: true, data: { target, mode: "profile", status: "saved", profile_id, activation: "new_session_or_syncshot", location: "PROFILE.md" } };
           } catch (error) { return { success: false, error: String(error) }; }
         }
         return await remember_memory_action(

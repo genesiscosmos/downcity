@@ -40,6 +40,7 @@ function normalize_system_blocks(
         source,
         name: String(block.name || source).trim() || source,
         content,
+        ...(block.position ? { position: block.position } : {}),
       } satisfies AgentSessionSystemBlock;
     })
     .filter((block): block is AgentSessionSystemBlock => Boolean(block));
@@ -56,7 +57,10 @@ export function normalize_power_system_blocks(
     const name = String(record.name || "").trim();
     const content = String(record.content || "").trim();
     if (!name || !content) return [];
-    return [{ source: "power" as const, name, content }];
+    const position = record.position;
+    return [{ source: "power" as const, name, content,
+      ...(position === "after_instruction" || position === "before_session" ? { position } : {}),
+    }];
   });
 }
 
@@ -152,9 +156,17 @@ export async function build_session_system_blocks(
   if (!timezone) {
     throw new Error("build_session_system_blocks requires a non-empty timezone");
   }
+  const instructions = normalize_system_blocks(input.get_instruction_system_blocks());
+  const powers = normalize_system_blocks(await input.get_power_system_blocks());
+  const after_instruction = powers.filter((block) => block.position === "after_instruction");
+  const other_powers = powers.filter((block) => !block.position);
+  const before_session = powers.filter((block) => block.position === "before_session");
+  const last_instruction = instructions.reduce((last, block, index) => block.source === "instruction" ? index : last, -1);
+  instructions.splice(last_instruction + 1, 0, ...after_instruction);
   return [
-    ...normalize_system_blocks(input.get_instruction_system_blocks()),
-    ...normalize_system_blocks(await input.get_power_system_blocks()),
+    ...instructions,
+    ...other_powers,
+    ...before_session,
     // session block 放在最后，尽量保留前缀 system blocks 的跨 session 缓存命中。
     create_session_system_block(
       create_session_info({

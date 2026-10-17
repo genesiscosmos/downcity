@@ -4,7 +4,7 @@ MemoryPower owns User/Agent Core Memory and searchable knowledge. One platform d
 
 ## Flow
 
-Each turn loads user/PROFILE.md, then agents/<agent_id>/PROFILE.md as reference context before the original user content. The Agent decides whether to call remember/search/read from the request and conversation. Current instructions and permissions take precedence. Injection never modifies canonical Session messages.
+Identity and Instruction share one Agent system message, immediately followed by a separate Agent Profile system message. User Profile is another independent system message before Session information. Profile text is not injected into user content. It is captured and frozen with Instruction; file changes affect new Sessions or existing Sessions after explicit syncshot. The Agent decides whether to call remember/search/read from the request and conversation. Current instructions and permissions take precedence. Injection never modifies canonical Session messages.
 
 ## remember
 
@@ -21,13 +21,13 @@ Profile supports user and agent. User Profile applies across local Agents; Agent
 
 Use `target`, never `scope`, in remember payloads. Persistent behavior changes should explicitly choose mode profile; omitting mode still defaults to searchable knowledge. Only successful tool results establish that saving completed.
 
-Results consistently return target, mode, status, activation and location, plus profile_id or memory_id/evidence_id. Profile returns status=saved, activation=every_turn and location=PROFILE.md. Knowledge returns status=created/updated, activation=on_recall and location=wiki. Ordinary knowledge read/revise/forget do not accept profile_id. User/Agent knowledge management does not require a Workspace; project writes do.
+Results consistently return target, mode, status, activation and location, plus profile_id or memory_id/evidence_id. Profile returns status=saved, activation=new_session_or_syncshot and location=PROFILE.md. Knowledge returns status=created/updated, activation=on_recall and location=wiki. Ordinary knowledge read/revise/forget do not accept profile_id. User/Agent knowledge management does not require a Workspace; project writes do.
 
 ## Profile maintenance
 
 Both scopes use the same service. Appends have no size cap and are idempotent by source. Each Profile is checked once per local calendar day; documents above 2,000 visible Unicode characters are optimized using profile_model_id. Exact-edit validation checks unique matches, non-overlap, an unchanged version and source-marker retention. The original is backed up. The target is not truncation; valid agreements take precedence.
 
-Profile changes load on the next turn, including new Sessions. A read failure in one scope does not suppress the other. Without an optimization model, reads, appends and tools still work; optimization records an error and retains the file.
+Profile changes do not alter existing Sessions automatically; use syncshot to refresh the full system. New Sessions capture the latest files. A read failure in one scope does not suppress the other. Without an optimization model, reads, appends and tools still work; optimization records an error and retains the file.
 
 Host actions: memory.user_read/user_update delegate base information to City. memory.profile_read/profile_edit/profile_delete/profile_status accept target=user or target=agent plus agent_id. Edit/delete require the read version. Dedicated Desktop management UI is pending.
 

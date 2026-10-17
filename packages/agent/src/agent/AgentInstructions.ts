@@ -3,7 +3,7 @@
  *
  * 关键点（中文）
  * - 这里只处理 Agent 身份、静态 instruction 与默认 core prompt。
- * - 顺序固定为 identity → instruction → core；core 不会被调用方 instruction 替代。
+ * - identity 与 instruction 合并为 Agent block，之后保留 SDK core；core 不被替代。
  * - identity 与 core 都由 SDK 注入，调用方 instruction 只决定中间一段。
  * - 不读取 Session、Power 或 runtime 状态，保持为纯函数。
  */
@@ -63,24 +63,18 @@ function create_identity_content(input: {
  * 构造进入 session system prompt 的 instruction block。
  *
  * 关键点（中文）
- * - 顺序为 identity → instruction → core。
- * - identity 复用 `instruction` 来源，但块名独立为 `identity`，便于消费端区分。
+ * - 身份和调用方 instruction 合并为一个 agent system block。
+ * - SDK core 独立保留；动态 Profile 由输入装配器在 Agent block 之后插入。
  */
 export function create_instruction_system_blocks(
   input: CreateInstructionSystemBlocksInput,
 ): AgentSessionSystemBlock[] {
-  const instruction_blocks = input.instruction.map((content, index) => ({
-    source: "instruction" as const,
-    name: input.instruction.length === 1 ? "agent" : `agent:${index + 1}`,
-    content,
-  }));
   return [
     {
       source: "instruction",
-      name: "identity",
-      content: create_identity_content(input),
+      name: "agent",
+      content: [create_identity_content(input), ...input.instruction].filter(Boolean).join("\n\n"),
     },
-    ...instruction_blocks,
     {
       source: "core",
       name: "default",

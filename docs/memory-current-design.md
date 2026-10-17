@@ -24,13 +24,13 @@ flowchart TD
     F[Federation 账户] -.服务登录，不改变 local User.-> U
 ```
 
-## 2. 每轮流程
+## 2. Session system 快照与消息处理
 
 ```mermaid
 flowchart TD
-    M[用户消息进入 Session] --> UP[读取 User PROFILE.md]
+    M[首次组装或显式 syncshot] --> UP[读取 User PROFILE.md]
     UP --> AP[读取当前 Agent PROFILE.md]
-    AP --> C[reference context + 用户原文]
+    AP --> C[完整 system 快照冻结 + 原始对话]
     C --> A[Agent 处理请求]
     A --> T{按需使用工具}
     T -->|持续约定| P[remember mode=profile]
@@ -64,7 +64,7 @@ Profile 和知识共用持久化原语，但互不依赖检索。Session 核心�
 
 | target | mode | 语义 |
 | --- | --- | --- |
-| user | profile | 用户通用偏好与持续约定，所有本地 Agent 每轮加载 |
+| user | profile | 用户通用偏好与持续约定，各 Agent 新 Session 或 syncshot 时读取 |
 | agent | profile | 仅当前 Agent 生效的专属约定 |
 | user | knowledge | 关于使用者的事实、目标、历史信息，跨 Agent 查询 |
 | agent | knowledge | 当前 Agent 私有经验和知识 |
@@ -89,7 +89,7 @@ current_workspace + profile 明确拒绝，不回退到其他范围。旧 City �
 {"target":"user","mode":"profile","content":"主回答前提醒我使用英语；我写英语时简要纠正表达。"}
 ```
 
-立即追加 user/PROFILE.md，无篇幅上限，无需模型或身份回调。成功返回 target=user、profile_id=user/local/profile、status=saved、mode=profile、activation=every_turn、location=PROFILE.md。
+立即追加 user/PROFILE.md，无篇幅上限，无需模型或身份回调。成功返回 target=user、profile_id=user/local/profile、status=saved、mode=profile、activation=new_session_or_syncshot、location=PROFILE.md。
 
 ### Agent Profile
 
@@ -111,21 +111,22 @@ User 知识逻辑前缀仍为 user/<hex-local-id>，物理上统一进入 user/m
 
 ## 6. 两级上下文
 
-每个 turn 的模型副本按顺序携带 User Profile、Agent Profile，再携带用户原始内容：
+Identity 与 Instruction 合并为一条 Agent system，Agent Profile 紧随其后；User Profile 保持独立，位于 Session 信息之前。不再将 Profile 注入 User 消息：
 
-```xml
-<extension-context extension="memory" name="core/user" trust="reference">
-User Core Memory contains persistent agreements. ...
-用户通用偏好与持续约定
-</extension-context>
-
-<extension-context extension="memory" name="core/agent" trust="reference">
-Agent Core Memory contains persistent agreements. ...
-当前 Agent 专属约定
-</extension-context>
+```text
+system: Agent Identity + Instruction（SOUL）
+system: Agent Profile
+system: SDK 规则
+system: Power 使用说明
+system: User Profile
+system: Session 信息
+历史 user / assistant / tool 消息
+user: 当前原始请求
 ```
 
-两者有来源标签，去掉来源幂等 HTML 注释，不写回 canonical 消息。每轮重新读取，不进入冻结 system；同 turn 复用，新增内容从下一 turn 生效。
+Profile 明确标注为历史偏好和持续约定，只影响适用行为，不是新请求，也不能充当“上文”等任务指代的对象。
+
+两者保留 User / Agent 标题，去掉来源幂等 HTML 注释，不写回 canonical 消息。Profile 与 Instruction 一起参与完整 system 的首次组装和冻结。文件更新、删除和每日优化均不改变已有 Session；新 Session 使用最新文件，已有 Session 执行 syncshot 后整体刷新。snapshot 持久化当前快照，恢复沿用现有 Instruction 快照机制。
 
 当前请求和系统权限优先。Agent Profile 是更具体范围；两者对同事项不同要求时，按其适用范围处理。代码不合并改写用户正文，也不假定靠位置就能保证模型正确处理冲突。
 

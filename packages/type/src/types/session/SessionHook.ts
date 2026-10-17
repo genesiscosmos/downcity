@@ -8,13 +8,13 @@
 import type { SessionMessage } from "./SessionMessage.js";
 import type { SessionSystemBlock } from "./SessionSystem.js";
 
-/** Hook 在当前 Turn 中返回的一条低权限动态参考内容。 */
+/** 宿主 Hook 在当前 Turn 提供的低权限 User 参考内容。 */
 export interface SessionHookContextBlock {
   /** 产生当前内容块的 Power 稳定名称。 */
   source_power: string;
   /** Power 内稳定且非空的内容块名称。 */
   name: string;
-  /** 需要追加到当前 User 模型消息副本的完整文本。 */
+  /** 注入 User 模型副本参考区的完整文本。 */
   content: string;
   /** 当前动态内容的信任等级；当前固定为历史参考数据。 */
   trust_level: "reference";

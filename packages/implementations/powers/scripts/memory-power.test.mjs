@@ -360,10 +360,10 @@ test("MemoryPower 未启用自动流程时不召回、不采集，system 仅含�
   assert.match(usage, /Memory actions usage|Preferred flow/);
   assert.doesNotMatch(usage, /prefers concise answers/);
 
-  assert.equal(power.hooks.pipeline[SESSION_HOOK_POINTS.system_context], undefined);
+  assert.equal(power.hooks.pipeline[SESSION_HOOK_POINTS.turn_context], undefined);
 
-  const turn_hook = power.hooks.pipeline[SESSION_HOOK_POINTS.turn_context][0];
-  const turn_value = await turn_hook({
+  const system_hook = power.hooks.pipeline[SESSION_HOOK_POINTS.system_context][0];
+  const turn_value = await system_hook({
     context: power_context,
     power: "memory",
     value: {
@@ -376,7 +376,7 @@ test("MemoryPower 未启用自动流程时不召回、不采集，system 仅含�
   // 自动流程未启用，不无条件检索长期记忆。
   assert.equal(turn_value.blocks.length, 0);
 
-  // 没有消息入口判定和回复后采集，仅 turn_context 加载 Profile。
+  // 没有消息入口判定和回复后采集，Profile 参与 system 快照。
   assert.equal(power.hooks.effect?.[SESSION_HOOK_POINTS.turn_committed], undefined);
   const capture_root = path.join(platform_root, "agents", "memory_test_agent", "memory", "capture-jobs");
   assert.equal(await fs.access(capture_root).then(() => true).catch(() => false), false);
