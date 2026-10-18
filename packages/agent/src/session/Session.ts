@@ -472,7 +472,7 @@ export class Session implements AgentSession {
     const active_turn_id = this.session_loop.current_turn_id();
     return {
       session_id: this.id,
-      state: active_turn_id || this.session_loop.is_executing() ? "running" : "idle",
+      state: active_turn_id || this.session_loop.is_active() || this.session_loop.is_executing() ? "running" : "idle",
       ...(active_turn_id ? { active_turn_id } : {}),
       security: {
         approval_mode: this.state.get_approval_mode(),

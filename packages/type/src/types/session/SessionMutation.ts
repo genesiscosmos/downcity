@@ -164,12 +164,23 @@ export type SessionHistoryMutation = SessionMutationBase & {
   through_sequence: number;
 };
 
+/** Session 队列生命周期；不依赖是否存在对话 Turn，也不持久化为聊天消息。 */
+export type SessionRuntimeMutation = SessionMutationBase & {
+  /** Mutation 层级固定为 session。 */
+  variant: "session";
+  /** 队列执行状态变化。 */
+  type: "runtime";
+  /** running 覆盖队列消费全过程；队列全部排空后才变为 idle。 */
+  state: "running" | "idle";
+};
+
 /** Session 自身属性变化 Mutation。 */
 export type SessionStateMutation =
   | SessionTitleMutation
   | SessionConfigMutation
   | SessionWorkspaceMutation
-  | SessionHistoryMutation;
+  | SessionHistoryMutation
+  | SessionRuntimeMutation;
 
 /** 模型请求失败 Warning Mutation。 */
 export type SessionModelRequestWarningMutation = SessionMutationBase & {

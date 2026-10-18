@@ -86,7 +86,8 @@ export class SessionLoop {
   private readonly interactions:
     SessionInteractionLifecycle & SessionInteractionPort;
   private readonly queue: SessionQueue;  private pending_prompt_count = 0;
-  private processing_promise: Promise<void> | null = null;
+  /** 队列消费的同步状态，在发布事件前设置，避免订阅回调重入启动第二个消费器。 */
+  private processing = false;
   private active_turn: ActiveSessionTurnState | null = null;
   /** 尚未完成 canonical 接收的幂等 Prompt，防止进程内并发重复入队。 */
   private readonly pending_request_handles = new Map<string, Promise<AgentSessionTurnHandle>>();
@@ -227,7 +228,7 @@ export class SessionLoop {
    * - Session 会用它阻止内部 direct execution 与 actor 模式并发混用。
    */
   is_active(): boolean {
-    return this.processing_promise !== null || this.has_pending_command();
+    return this.processing || this.has_pending_command();
   }
 
   /**
@@ -256,12 +257,28 @@ export class SessionLoop {
   }
 
   private ensure_processing(): void {
-    if (this.processing_promise) return;
-    this.processing_promise = this.process_loop().finally(() => {
-      this.processing_promise = null;
+    if (this.processing) return;
+    this.processing = true;
+    this.publish_runtime("running");
+    void this.process_loop().finally(() => {
+      this.processing = false;
       if (this.has_pending_command()) {
         this.ensure_processing();
+      } else {
+        this.publish_runtime("idle");
       }
+    });
+  }
+
+  /** 队列状态是 Session 忙碌的唯一来源；维护命令与 prompt 共用生命周期。 */
+  private publish_runtime(state: "running" | "idle"): void {
+    this.events.publish({
+      mutation_id: nanoid(),
+      variant: "session",
+      type: "runtime",
+      session_id: this.session_id,
+      state,
+      created_at: Date.now(),
     });
   }
 

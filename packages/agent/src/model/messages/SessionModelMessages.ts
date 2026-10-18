@@ -7,10 +7,10 @@
 
 import fs from "fs-extra";
 import path from "node:path";
+import { project_tool_result } from "./ToolResultProjection.js";
 import type {
   ModelContent,
   ModelFileContent,
-  ModelJsonValue,
   ModelMessage,
 } from "@downcity/type";
 import { render_session_user_context } from "@/session/messages/SessionUserContext.js";
@@ -81,7 +81,7 @@ async function convert_user_parts(
         break;
       case "file":
         content.push(summary
-          ? { type: "text", text: JSON.stringify({ attachment: part.url.startsWith("data:") ? "inline attachment" : part.url, filename: part.filename, media_type: part.media_type }) }
+          ? { type: "text", text: [`Attachment: ${part.filename || part.media_type}`, `Source: ${part.url.startsWith("data:") ? "inline attachment" : part.url}`, `Media type: ${part.media_type}`].join("\n") }
           : await convert_file_part(part, project_root));
         break;
       case "data":
@@ -164,7 +164,7 @@ function append_tool_content(
     outcome: part.state === "completed" ? "succeeded" : "failed",
     content: [{
       type: "json",
-      value: to_model_json_value(part.output ?? part.error ?? null),
+      value: project_tool_result(part.output ?? part.error ?? null),
     }],
   });
 }
@@ -212,12 +212,6 @@ function resolve_local_file_path(raw_path: string, project_root?: string): strin
     throw new Error(`Session file escapes project root: ${raw_path}`);
   }
   return file_path;
-}
-
-/** 将未知值限制为可传输 JSON。 */
-function to_model_json_value(value: unknown): ModelJsonValue {
-  if (value === undefined) return null;
-  return JSON.parse(JSON.stringify(value)) as ModelJsonValue;
 }
 
 /** 联合类型增加成员时，强制模型投影显式选择支持或忽略。 */

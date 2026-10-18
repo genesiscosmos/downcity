@@ -8,6 +8,7 @@ import { project_summary_part } from "@/model/messages/SessionModelMessages.js";
 import { build_text_model_messages, generate_model } from "@/model/ModelGenerate.js";
 import type { SessionContextAdvanceInput } from "@/types/session/SessionComposer.js";
 import type { ContextCompactionDiagnostic, ContextSummaryUnit } from "@/types/session/ContextCompaction.js";
+import { render_summary_text } from "./ContextSummaryText.js";
 import { collect_stable_parts } from "./AdaptiveContextParts.js";
 import { insert_checkpoint, read_latest_checkpoint } from "./AdaptiveContextCheckpoint.js";
 import { build_initial_session_summary_prompt, build_updated_session_summary_prompt, CONTEXT_SUMMARY_MAX_OUTPUT_TOKENS, CONTEXT_SUMMARY_SYSTEM_PROMPT } from "./ContextSummaryPrompts.js";
@@ -27,7 +28,7 @@ export async function compact_context(input: SessionContextAdvanceInput, compose
   const units: ContextSummaryUnit[] = [];
   for (const candidate of collect_stable_parts(input.history, checkpoint)) {
     const projected = await project_summary_part(candidate.message, candidate.part);
-    const text = projected.map(message => `${message.role}: ${JSON.stringify(message.content)}`).join("\n");
+    const text = render_summary_text(projected);
     if (text.trim()) units.push({ ...candidate, text });
   }
   if (units.length === 0) return false;

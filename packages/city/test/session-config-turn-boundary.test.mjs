@@ -627,7 +627,7 @@ test("running session model changes apply with steer at the next Session step", 
   }
 });
 
-test("running session approval mode changes stay queued until the next Session step", async () => {
+test("running session approval mode changes stay queued until the maintenance checkpoint", async () => {
   const agent_path = await fs.mkdtemp(
     path.join(os.tmpdir(), "downcity-session-approval-mode-boundary-"),
   );
@@ -698,19 +698,28 @@ test("running session approval mode changes stay queued until the next Session s
       },
     });
 
+    // Turn 完成只代表对话收口，排队维护操作也执行完才是 Session 空闲。
+    let queue_idle = create_deferred();
+    const unsubscribe_runtime = session.subscribe((mutation) => {
+      if (mutation.variant === "session" && mutation.type === "runtime" && mutation.state === "idle") queue_idle.resolve();
+    });
     release_first_provider_request.resolve();
     assert.equal((await first_turn.finished).success, true);
+    await queue_idle.promise;
     assert.deepEqual(await session.status(), {
       session_id: session.id,
       state: "idle",
       security: {
         approval_mode: "always-allow",
-        effective_approval_mode: "ask",
+        effective_approval_mode: "always-allow",
       },
     });
 
+    queue_idle = create_deferred();
     const second_turn = await session.prompt({ query: "second" });
     assert.equal((await second_turn.finished).success, true);
+    await queue_idle.promise;
+    unsubscribe_runtime();
     assert.deepEqual(await session.status(), {
       session_id: session.id,
       state: "idle",

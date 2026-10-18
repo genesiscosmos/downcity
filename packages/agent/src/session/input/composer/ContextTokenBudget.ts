@@ -16,7 +16,10 @@ export function estimate_context_tokens(text: string): number {
     if (point <= 0x7f) ascii_count++;
     else other_tokens += point > 0xffff ? 2 : 1;
   }
-  return Math.ceil(ascii_count / 3 + other_tokens);
+  // 连续高密度编码串不按自然语言估算；二进制投影未识别的长串也保留预算余量。
+  let encoded_extra = 0;
+  for (const match of text.matchAll(/[A-Za-z0-9+/_=\-]{256,}/g)) encoded_extra += match[0].length * 2 / 3;
+  return Math.ceil(ascii_count / 3 + other_tokens + encoded_extra);
 }
 
 /** 在完整单元边界选择最接近 65% 的前缀，保留区 10k 优先于压缩比例。 */
@@ -42,14 +45,14 @@ export function select_compaction_target(texts: readonly string[]): number {
 
 /** 按 token 预算查找文本片段终点，且不切断 UTF-16 代理对。 */
 export function context_fragment_end(text: string, offset: number, budget: number): number {
-  let end = offset;
-  let cost = 0;
-  while (end < text.length) {
-    const point = text.codePointAt(end)!;
-    const next_cost = point <= 0x7f ? 1 / 3 : point > 0xffff ? 2 : 1;
-    if (cost + next_cost > budget) break;
-    cost += next_cost;
-    end += point > 0xffff ? 2 : 1;
+  let low = offset;
+  let high = text.length;
+  while (low < high) {
+    const middle = Math.ceil((low + high) / 2);
+    if (estimate_context_tokens(text.slice(offset, middle)) <= budget) low = middle;
+    else high = middle - 1;
   }
-  return end;
+  const last = text.charCodeAt(low - 1);
+  if (low < text.length && last >= 0xd800 && last <= 0xdbff) low--;
+  return low;
 }
