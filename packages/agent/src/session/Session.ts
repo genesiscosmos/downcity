@@ -410,6 +410,28 @@ export class Session implements AgentSession {
     });
   }
 
+  /**
+   * 通过 Session 队列手动压缩稳定历史，返回是否生成了新的上下文摘要。
+   * 关键点（中文）：通过 Session 命令队列串行执行，与后续 prompt 共用执行边界；
+   * 运行中也可提交，由队列在维护检查点执行；失败由调用方接收，不留在维护队列中重试。
+   */
+  async compact(): Promise<boolean> {
+    await this.step_input.initialize();
+    if (this.replacing_history) throw new Error("Session history is being replaced");
+    return await new Promise<boolean>((resolve, reject) => {
+      this.session_loop.enqueue_command({
+        kind: "maintenance",
+        execute: async () => {
+          try {
+            resolve(await this.advance_context("manual"));
+          } catch (error) {
+            reject(error);
+          }
+        },
+      });
+    });
+  }
+
   /** 修改当前 Session 的用户可见标题。 */
   async rename(title: string): Promise<string> {
     return await this.state.set_title(title);
@@ -736,7 +758,7 @@ export class Session implements AgentSession {
    *
    * 上下文推进是用户可见的 Session 操作：Composer 确认有可推进内容时记为 running，
    * 写入派生边界后记为 completed，抛错时记为 failed，整个生命周期复用同一个 Action。
-   * Composer 判定没有可推进区间时返回 false，此时不产生 Action，避免空操作污染时间线。
+   * Composer 判定没有可推进区间时返回 false；手动请求记录反馈，自动推进不产生空 Action。
    */
   private async advance_context(
     trigger: SessionContextAdvanceTrigger,
@@ -757,6 +779,14 @@ export class Session implements AgentSession {
           title: "Compacting session context",
           description: "Older stable parts are being folded into the context summary.",
         }),
+        on_compaction_diagnostic: async (diagnostic) => {
+          await this.logger.log(diagnostic.phase === "failed" ? "warn" : "info", "[agent] context.compaction_batch", {
+            session_id: this.id,
+            action_id,
+            trigger,
+            ...diagnostic,
+          });
+        },
         on_model_request_failure: (notice) => {
           this.events.publish(create_session_model_request_warning({
             session_id: this.id,
@@ -772,6 +802,15 @@ export class Session implements AgentSession {
           status: "completed",
           title: "Session context compacted",
           description: "Older stable parts were folded into the context summary.",
+        });
+      }
+      if (!advanced && trigger === "manual") {
+        await this.record_compaction_action({
+          action_id,
+          turn_id,
+          status: "completed",
+          title: "No session context to compact",
+          description: "There are no older stable parts available for compaction.",
         });
       }
       return advanced;

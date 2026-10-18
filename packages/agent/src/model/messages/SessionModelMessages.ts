@@ -16,6 +16,7 @@ import type {
 import { render_session_user_context } from "@/session/messages/SessionUserContext.js";
 import type {
   SessionAgentMessage,
+  SessionAgentMessagePart,
   SessionAgentToolPart,
   SessionMessage,
   SessionUserFilePart,
@@ -39,6 +40,18 @@ export async function session_messages_to_model_messages(
   return output;
 }
 
+/** 摘要复用正常消息投影，省略 reasoning，附件仅保留引用与元信息。 */
+export async function project_summary_part(
+  message: SessionMessage,
+  part: SessionUserMessagePart | SessionAgentMessagePart,
+): Promise<ModelMessage[]> {
+  if (message.role === "user") {
+    const converted = await convert_user_parts([part as SessionUserMessagePart], undefined, true);
+    return converted ? [converted] : [];
+  }
+  return convert_assistant_message({ ...message, parts: [part as SessionAgentMessagePart] }, true);
+}
+
 /** 把单条 canonical User Message 转换为模型消息。 */
 async function convert_user_message(
   message: SessionUserMessage,
@@ -52,6 +65,7 @@ async function convert_user_message(
 async function convert_user_parts(
   parts: readonly SessionUserMessagePart[],
   project_root?: string,
+  summary = false,
 ): Promise<ModelMessage | null> {
   const content: ModelContent[] = [];
   for (const part of parts) {
@@ -66,7 +80,9 @@ async function convert_user_parts(
         });
         break;
       case "file":
-        content.push(await convert_file_part(part, project_root));
+        content.push(summary
+          ? { type: "text", text: JSON.stringify({ attachment: part.url.startsWith("data:") ? "inline attachment" : part.url, filename: part.filename, media_type: part.media_type }) }
+          : await convert_file_part(part, project_root));
         break;
       case "data":
         // Data Part 是持久化 UI 数据，不属于模型输入协议。
@@ -79,7 +95,7 @@ async function convert_user_parts(
 }
 
 /** 把单条 canonical Agent Message 转换为模型 assistant 与 tool 消息。 */
-function convert_assistant_message(message: SessionAgentMessage): ModelMessage[] {
+function convert_assistant_message(message: SessionAgentMessage, summary = false): ModelMessage[] {
   const output: ModelMessage[] = [];
   let current_step_id: string | null = null;
   const content: ModelContent[] = [];
@@ -99,7 +115,7 @@ function convert_assistant_message(message: SessionAgentMessage): ModelMessage[]
         if (part.text.trim()) content.push({ type: "text", text: part.text });
         break;
       case "reasoning":
-        if (part.text.trim()) {
+        if (!summary && part.text.trim()) {
           content.push({
             type: "reasoning",
             text: part.text,

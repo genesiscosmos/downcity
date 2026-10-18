@@ -140,6 +140,9 @@ export interface AgentSession extends AgentSessionActor {
   /** 使用 Agent 当前 instruction 与 Power 显式重新生成 Session system。 */
   syncshot(): Promise<void>;
 
+  /** 排队压缩 Session 的稳定历史；运行中也可提交，执行后返回是否产生新摘要，失败时拒绝。 */
+  compact(): Promise<boolean>;
+
   /** 创建分叉会话；replace 为 true 时原地截断历史并返回当前 Session。 */
   fork(input?: AgentSessionForkInput | string): Promise<AgentSession>;
 }

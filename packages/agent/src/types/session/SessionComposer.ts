@@ -15,6 +15,7 @@ import type { SessionSystemMessage } from "@downcity/type";
 import type { AgentSessionSystemBlock } from "@/types/agent/SessionTypes.js";
 import type { SessionHookContextBlock, SessionMessage } from "@downcity/type";
 import type { ModelRequestFailureReporter } from "@/types/model/ModelRequest.js";
+import type { ContextCompactionDiagnostic } from "./ContextCompaction.js";
 import type { SessionDerivedStore } from "@/types/store/SessionStorage.js";
 
 /** Composer 可读取的 Session 身份快照。 */
@@ -84,7 +85,9 @@ export type SessionContextAdvanceTrigger =
   /** Provider 明确拒绝超出上下文窗口的请求。 */
   | "provider_context_limit"
   /** Provider usage 已达到主动推进阈值。 */
-  | "usage_pressure";
+  | "usage_pressure"
+  /** 用户主动请求压缩当前 Session 的稳定历史。 */
+  | "manual";
 
 /** 上下文推进输入。 */
 export interface SessionContextAdvanceInput {
@@ -102,6 +105,8 @@ export interface SessionContextAdvanceInput {
   on_advance_start?: () => Promise<void>;
   /** 模型请求逐次失败的可选观测入口。 */
   on_model_request_failure?: ModelRequestFailureReporter;
+  /** 摘要批次元信息观测入口；回调失败不影响压缩结果。 */
+  on_compaction_diagnostic?: (diagnostic: ContextCompactionDiagnostic) => Promise<void>;
 }
 
 /** Composer 对本次模型上下文的只读诊断。 */

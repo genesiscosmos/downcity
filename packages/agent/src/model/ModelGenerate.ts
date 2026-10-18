@@ -39,6 +39,8 @@ export interface ModelGenerateOptions {
   signal?: AbortSignal;
   /** 可选逐次失败通知入口。 */
   on_failure?: ModelRequestFailureReporter;
+  /** 是否启用统一请求重试；摘要需要自行缩批时设为 false，避免原样重发超限输入。 */
+  retry?: boolean;
 }
 
 /** 执行一次不包含 Agent 工具循环的模型调用。 */
@@ -51,6 +53,7 @@ export async function generate_model(
     request_kind: options.request_kind,
     abort_signal: options.signal,
     on_failure: options.on_failure,
+    ...(options.retry === false ? { should_retry: () => false } : {}),
     execute_attempt: async () =>
       await generate_model_once(model, call, options.signal),
   });

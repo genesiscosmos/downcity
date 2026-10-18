@@ -10,7 +10,7 @@
  * - 自定义压缩算法可以继承本类并只覆盖 `advance_context()`。
  */
 
-import { build_text_model_messages, generate_model } from "@/model/ModelGenerate.js";
+import { compact_context } from "./ContextCompaction.js";
 import { session_messages_to_model_messages } from "@/model/messages/SessionModelMessages.js";
 import type {
   SessionComposer,
@@ -27,22 +27,11 @@ import {
 } from "@/session/input/composer/ComposerAssembly.js";
 import {
   initialize_checkpoint_schema,
-  insert_checkpoint,
   read_latest_checkpoint,
 } from "@/session/input/composer/AdaptiveContextCheckpoint.js";
 import {
-  candidate_to_summary_text,
-  collect_stable_parts,
-  compare_position,
-  select_compact_parts,
   slice_messages_after_checkpoint,
 } from "@/session/input/composer/AdaptiveContextParts.js";
-import {
-  build_initial_session_summary_prompt,
-  build_updated_session_summary_prompt,
-  CONTEXT_SUMMARY_MAX_OUTPUT_TOKENS,
-  CONTEXT_SUMMARY_SYSTEM_PROMPT,
-} from "@/session/input/composer/ContextSummaryPrompts.js";
 
 /** 基于 Part 级 checkpoint 的默认 Composer。 */
 export class DefaultSessionComposer implements SessionComposer {
@@ -82,53 +71,9 @@ export class DefaultSessionComposer implements SessionComposer {
     };
   }
 
-  /** 按体积选择较旧稳定 Part，合并进累计摘要并推进 checkpoint。 */
+  /** 按模型可见语义与输入预算分批生成累计摘要，逐批提交完整单元边界。 */
   async advance_context(input: SessionContextAdvanceInput): Promise<boolean> {
-    if (!input.model) return false;
-    const previous = await read_latest_checkpoint(input.derived, this.name);
-    const compact_parts = select_compact_parts(
-      collect_stable_parts(input.history, previous),
-    );
-    const boundary = compact_parts.at(-1);
-    if (!boundary) return false;
-    const conversation_text = compact_parts
-      .map(candidate_to_summary_text)
-      .filter(Boolean)
-      .join("\n");
-    if (!conversation_text) return false;
-
-    // 确认有可推进内容后才通知 Session，确保运行中状态先于摘要模型请求发布。
-    await input.on_advance_start?.();
-    const prompt = previous?.summary.trim()
-      ? build_updated_session_summary_prompt({
-          previous_summary: previous.summary,
-          conversation_text,
-        })
-      : build_initial_session_summary_prompt({ conversation_text });
-    const result = await generate_model(input.model, {
-      messages: build_text_model_messages(CONTEXT_SUMMARY_SYSTEM_PROMPT, prompt),
-      max_output_tokens: CONTEXT_SUMMARY_MAX_OUTPUT_TOKENS,
-    }, {
-      request_kind: "history_compaction",
-      on_failure: input.on_model_request_failure,
-    });
-    const summary = String(result.text || "").trim();
-    if (!summary) throw new Error("Context summary model returned an empty result");
-
-    try {
-      await insert_checkpoint(input.derived, this.name, {
-        through_message_id: boundary.message.message_id,
-        through_message_sequence: boundary.message.sequence,
-        through_part_sequence: boundary.part.sequence,
-        summary,
-      });
-      return true;
-    } catch (error) {
-      // 并发推进：只要有别人把边界推过本次位置，本次推进就已经生效。
-      const latest = await read_latest_checkpoint(input.derived, this.name);
-      if (latest && compare_position(latest, boundary) >= 0) return true;
-      throw error;
-    }
+    return await compact_context(input, this.name);
   }
 }
 
