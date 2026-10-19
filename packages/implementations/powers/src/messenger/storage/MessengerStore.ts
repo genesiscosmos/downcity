@@ -4,6 +4,7 @@ import { DatabaseSync } from "node:sqlite";
 import path from "node:path";
 import fs from "fs-extra";
 import { generate_id } from "@downcity/agent";
+import { MessengerCompletionRoutes } from "./MessengerCompletionRoutes.js";
 import type {
   MessengerActivityRecord,
   MessengerActivityType,
@@ -24,6 +25,8 @@ export function get_messenger_store_path(storage_path: string): string {
 
 /** Messenger Power 可靠消息状态的 SQLite 实现。 */
 export class MessengerStore {
+  /** Turn 输出到入站请求的持久化关联，与 Inbox/Outbox 共用事务。 */
+  readonly completion_routes: MessengerCompletionRoutes;
   /** 当前 Store 持有的唯一数据库连接。 */
   private readonly database: DatabaseSync;
 
@@ -33,6 +36,7 @@ export class MessengerStore {
     fs.ensureDirSync(path.dirname(database_path), { mode: 0o700 });
     this.database = new DatabaseSync(database_path);
     ensure_schema(this.database);
+    this.completion_routes = new MessengerCompletionRoutes(this.database);
     try {
       fs.chmodSync(database_path, 0o600);
     } catch {
@@ -234,6 +238,7 @@ export class MessengerStore {
   delete_account_data(account_id: string): void {
     const normalized_account_id = normalize_required(account_id, "account_id");
     this.transaction(() => {
+      this.completion_routes.delete_account(normalized_account_id);
       this.database.prepare("DELETE FROM messenger_activity WHERE account_id = ?").run(normalized_account_id);
       this.database.prepare("DELETE FROM messenger_outbox WHERE account_id = ?").run(normalized_account_id);
       this.database.prepare("DELETE FROM messenger_inbox WHERE account_id = ?").run(normalized_account_id);

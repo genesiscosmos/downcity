@@ -118,6 +118,12 @@ async function notify_turn_committed(
       .filter((message) => message.turn_id === active_turn.turn_id)
       .map((message) => structuredClone(message));
     const value: SessionTurnCommittedHookValue = {
+      completion_id: `completion:${options.session_id}:${active_turn.turn_id}`,
+      result: {
+        text: active_turn.result?.text ?? "",
+        success: active_turn.result?.success === true,
+        ...(active_turn.result?.error ? { error: active_turn.result.error } : {}),
+      },
       session_id: options.session_id,
       turn_id: active_turn.turn_id,
       status,

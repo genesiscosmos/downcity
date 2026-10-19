@@ -7,6 +7,7 @@
  */
 
 export { City } from "./city/runtime/City.js";
+export type { CityCreateAgent, CityCreateAgentInput } from "./city/types/CityCreateAgent.js";
 export { Agent, Group } from "@downcity/agent";
 export { RemoteAgent } from "./remote/RemoteAgent.js";
 export type {

@@ -39,7 +39,7 @@ const CITY_POWER_ACTIONS = {
     "sound.models",
     "sound.tts",
   ],
-  agent: ["agent.get", "agent.list"],
+  agent: ["agent.create", "agent.list"],
 };
 
 /**
@@ -86,7 +86,8 @@ function create_test_shell(workspace_path) {
 
 /** 创建绑定测试 Shell 的临时 Workspace。 */
 async function create_test_workspace(root, workspace_id) {
-  const workspace_path = path.join(root, workspace_id);
+  // 与 Workspace 使用相同的真实宿主路径，避免 macOS /tmp 符号链接造成夹具漂移。
+  const workspace_path = path.join(await fs.realpath(root), workspace_id);
   await fs.mkdir(workspace_path, { recursive: true });
   return new Workspace({
     id: workspace_id,
@@ -101,6 +102,7 @@ function create_test_agent(agent_id) {
   return new Agent({
     id: agent_id,
     name: `${agent_id} name`,
+    description: `${agent_id} responsibilities`,
     model: { id: "test-model", stream: async () => { throw new Error("unused"); } },
   });
 }
@@ -311,7 +313,7 @@ test("context power usage.get 在 bureau 未暴露用户用量前明确失败", 
   }
 });
 
-test("agent power 只列出当前 City 的 Agent，并在找不到时明确失败", async () => {
+test("agent power 列出当前 City 的 Agent 及职责简介", async () => {
   const fixture = await create_city_tool_fixture();
   try {
     const list = await call_city_tool(fixture.tools.agent, { action: "agent.list" });
@@ -320,18 +322,7 @@ test("agent power 只列出当前 City 的 Agent，并在找不到时明确失�
     assert.equal(list.data.agents[0].agent_id, "test-agent");
     assert.equal(list.data.agents[0].is_current, true);
 
-    const current = await call_city_tool(fixture.tools.agent, {
-      action: "agent.get",
-      args: { agent_id: "test-agent" },
-    });
-    assert.equal(current.data.agent.is_current, true);
-
-    const missing = await call_city_tool(fixture.tools.agent, {
-      action: "agent.get",
-      args: { agent_id: "ghost-agent" },
-    });
-    assert.equal(missing.success, false);
-    assert.match(missing.error, /not visible in this City/u);
+    assert.equal(list.data.agents[0].description, "test-agent responsibilities");
   } finally {
     await fixture.close();
   }

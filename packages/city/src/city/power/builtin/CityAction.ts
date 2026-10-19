@@ -118,7 +118,7 @@ export abstract class CityAction<TArgs = Record<string, never>> implements AnyCi
       const decision = await approval.request({
         turn_id: context.turn_id || "",
         tool_call_id: context.tool_call_id,
-        tool_name: `city.${this.action}`,
+        tool_name: context.action_id,
         description: this.description,
         payload: { operation: "tool", validated_input: args as never },
       });

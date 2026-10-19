@@ -11,7 +11,7 @@
  */
 
 import type { SessionInteractionResponse } from "@downcity/type";
-import type { SessionDelegationCaller, SessionDelegationInput, SessionDelegationReceipt } from "./SessionDelegation.js";
+import type { SessionDelegationCaller, SessionDelegationInput, SessionDelegationMessage, SessionDelegationReceipt } from "./SessionDelegation.js";
 import type {
   SessionCheckDetailToolOutput,
   SessionToolSummary,
@@ -21,6 +21,9 @@ import type {
 export interface SessionWorkContract {
   /** 开一条工作会话并立刻把任务交给它；返回时该会话可能仍在执行。 */
   spawn(input: SessionDelegationInput, caller: SessionDelegationCaller): Promise<SessionDelegationReceipt>;
+
+  /** 向已有工作会话追加指令；执行结果自动回传给本次调用方。 */
+  send(input: SessionDelegationMessage, caller: SessionDelegationCaller): Promise<SessionDelegationReceipt>;
 
   /** 列出当前 Agent 的全部工作会话摘要，按最近更新倒序。 */
   list(input?: { limit?: number }): Promise<SessionToolSummary[]>;

@@ -1,6 +1,8 @@
 /** Messenger Power 的 City 级 Bot Account、Inbox、Outbox 与 Agent Turn 运行时。 */
 
 import path from "node:path";
+import type { SessionTurnCommittedHookValue } from "@downcity/type";
+import { commit_messenger_completion } from "./MessengerCompletion.js";
 import fs from "fs-extra";
 import { createHash } from "node:crypto";
 import type {
@@ -132,6 +134,13 @@ export class MessengerRuntime {
       await this.start_account(account);
     }
     this.start_workers();
+  }
+
+  /** 所有 Channel 轮次共用的回复出口，包括委派结果触发的后续执行。 */
+  commit_completion(agent_id: string, event: SessionTurnCommittedHookValue): void {
+    if (this.disposed) throw new Error("Messenger is shutting down; completion retained for retry");
+    commit_messenger_completion(this.store, agent_id, event);
+    void this.kick_outbox();
   }
 
   /** 返回指定 Account 当前运行状态。 */
@@ -765,7 +774,10 @@ export class MessengerRuntime {
         session_id: conversation.session_id,
         origin_type: "channel",
         request_id: inbound.inbound_id,
-        query,
+        query: [
+          { type: "context", tag: "messenger_request", context: JSON.stringify({ inbound_id: inbound.inbound_id }) },
+          ...query,
+        ],
       });
       this.active_turns.add(turn);
       this.store.append_activity({
@@ -774,23 +786,11 @@ export class MessengerRuntime {
         type: "turn_started",
         detail: { turn_id: turn.turn_id },
       });
-      const result = await turn.finished;
-      this.active_turns.delete(turn);
-      if (!result.success) throw new Error(result.error || result.text || "Agent Turn failed");
-      if (result.text.trim()) {
-        this.store.insert_outbound({
-          delivery_id: `delivery:inbound:${inbound.inbound_id}`,
-          account_id: conversation.account_id,
-          conversation_id: conversation.conversation_id,
-          operation: "text",
-          payload: {
-            text: result.text,
-            chat_id: inbound.message.external_chat_id,
-            chat_type: inbound.message.chat_type,
-            message_id: inbound.message.external_message_id,
-            ...(inbound.message.thread_id ? { thread_id: inbound.message.thread_id } : {}),
-          },
-        });
+      const result = await turn.finished.finally(() => { this.active_turns.delete(turn); });
+      // 最终回复统一由完成 Hook 入 Outbox。执行失败不重复提交同一幂等输入。
+      if (!result.success) {
+        this.store.fail_inbound(inbound.inbound_id, result.error || "Agent Turn failed");
+        return;
       }
       this.store.complete_inbound(inbound.inbound_id);
       this.store.append_activity({

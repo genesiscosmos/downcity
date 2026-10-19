@@ -5,9 +5,11 @@
  */
 import { createHash } from "node:crypto";
 import { generate_session_id } from "@/session/SessionIdentity.js";
+import { SESSION_ORIGIN_TYPE_WORK } from "@downcity/type";
 import type {
   SessionDelegationCaller,
   SessionDelegationInput,
+  SessionDelegationMessage,
   SessionDelegationOptions,
   SessionDelegationPort,
   SessionDelegationReceipt,
@@ -25,22 +27,43 @@ export class SessionDelegations implements SessionDelegationPort {
 
   /** 保存稳定身份，确保子会话准备完成后立即返回。 */
   async spawn(input: SessionDelegationInput, caller: SessionDelegationCaller): Promise<SessionDelegationReceipt> {
+    return await this.submit(input, caller);
+  }
+
+  /** 继续同一工作上下文；每次消息独立记录结果回传与幂等身份。 */
+  async send(input: SessionDelegationMessage, caller: SessionDelegationCaller): Promise<SessionDelegationReceipt> {
+    const session = await this.options.get_work_session(input.session_id);
+    if (session.origin.type !== SESSION_ORIGIN_TYPE_WORK || !session.workspace_id) {
+      throw new Error("session.send requires a project Work Session");
+    }
+    if (caller.agent_id === session.agent_id && caller.session_id === session.id) {
+      throw new Error("Cannot send work to the calling Session itself");
+    }
+    return await this.submit({ query: input.query, workspace_id: session.workspace_id }, caller, session.id);
+  }
+
+  /** 新建与继续工作共用一份持久化提交和恢复协议。 */
+  private async submit(
+    input: SessionDelegationInput,
+    caller: SessionDelegationCaller,
+    session_id = generate_session_id(),
+  ): Promise<SessionDelegationReceipt> {
     if (this.suspended) throw new Error("Session delegations are suspended");
     const query = input.query.trim();
     const workspace_id = input.workspace_id.trim();
-    if (!query || !workspace_id) throw new Error("session_start requires query and project workspace_id");
-    if (!caller.session_id || !caller.turn_id || !caller.tool_call_id) {
-      throw new Error("session_start requires a Session Turn tool call identity");
+    if (!query || !workspace_id) throw new Error("Session work requires query and project workspace_id");
+    if (!caller.agent_id || !caller.session_id || !caller.turn_id || !caller.tool_call_id) {
+      throw new Error("Session work requires an Agent and Session Turn tool call identity");
     }
     // 先校验项目，非法派发不能留下等待恢复的记录。
     await this.options.resolve_workspace(workspace_id);
     const delegation_id = createHash("sha256")
-      .update(JSON.stringify([caller.origin.type, caller.session_id, caller.turn_id, caller.tool_call_id]))
+      .update(JSON.stringify([caller.agent_id, caller.origin.type, caller.session_id, caller.turn_id, caller.tool_call_id]))
       .digest("hex");
     const record = await this.options.store.create({
       delegation_id,
       caller,
-      work_session_id: generate_session_id(),
+      work_session_id: session_id,
       workspace_id,
       query,
       ...(input.title?.trim() ? { title: input.title.trim() } : {}),
@@ -165,6 +188,8 @@ export class SessionDelegations implements SessionDelegationPort {
           tag: "delegation_result",
           context: JSON.stringify({
             delegation_id,
+            caller_turn_id: record.caller.turn_id,
+            agent_id: this.options.agent_id,
             session_id: record.work_session_id,
             turn_id: record.result.turn_id,
             state: record.execution_state,

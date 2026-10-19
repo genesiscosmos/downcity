@@ -20,7 +20,7 @@ City 自有的三个 power 就是这块空白的出口。它们不替代任何�
 
 ## 三个 power
 
-`context`、`agent` 只读；`ai` 会消耗额度或写文件，各自动作声明 `access` 与 `approval`。
+`context` 只读；`agent.create` 创建持久主体，`ai` 会消耗额度或写文件。各自动作声明 `access` 与 `approval`。
 
 只读事实与会写能力用同一套契约，这是这个设计的核心取舍：区分不在机制上，而在每个动作声明的 `access`。因此模型看同一份索引就能知道哪些调用有代价，而不需要学两套调用方式。
 
@@ -28,7 +28,7 @@ City 自有的三个 power 就是这块空白的出口。它们不替代任何�
 | --- | --- | --- |
 | `context` | 7 | `env.get`、`sandbox.get`、`sandbox.list_mounts`、`sandbox.explain_path`、`workspaces.list`、`workspaces.get`、`usage.get` |
 | `ai` | 6 | `image.models`、`image.create`、`image.result`、`sound.models`、`sound.asr`、`sound.tts` |
-| `agent` | 2 | `agent.list`、`agent.get` |
+| `agent` | 2 | `agent.list`、`agent.create` |
 
 **动作 id 是 `组名.动作名`，与所属 power 名无关。** `env.get` 属于 `context`，不是某个叫 `env` 的 power；`image.*` 与 `sound.*` 同属 `ai`。这样领域划分变化时，模型侧动作 id 保持稳定。
 
@@ -94,9 +94,11 @@ City 自己拥有的生成能力，来自 City 持有的 Embassy。
 
 ### `agent`
 
-`list` / `get`，返回 `agent_id`、`name`、`model_id`、`is_current`。返回 City 下全部 Agent，不做 Workspace 过滤——协作认知边界是 City，不是 Workspace。
+`agent.list` 返回 `agent_id`、`name`、`description`、`model_id`、`is_current`，包含 City 下全部 Agent，不做 Workspace 过滤。简介足以支持协作对象选择，不再提供独立 `get`。
 
-当前只提供列表与详情；委派、通知等写操作尚未进入本 power。
+`agent.create` 接收 `name`、`description`、`instruction`、`model_id`，经用户审批后调用宿主的 `runtime.create_agent`。宿主负责生成稳定 ID、持久化配置、装配模型、加入当前 City 以及失败回滚。Power 不直接操作本地产品数据库。
+
+跨 Agent 工作使用独立的 `session` Tool：`start` 选择 `agent_id` 与项目并返回轻量 Session 对象；`send` 在同一个工作会话中追加输入；`check`、`reply`、`stop` 同样接受目标 `agent_id`。省略时操作当前 Agent。工作会话和委派记录始终归目标 Agent，调用方身份同时保存 `agent_id` 与 `session_id`，结果回传到真实发起会话。`agent.send`、`ask`、`delegate` 不进入本 Power。
 
 ## 模块结构
 

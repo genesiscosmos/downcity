@@ -9,6 +9,7 @@
 
 // Agent 入口
 export { Agent } from "./agent/Agent.js";
+export type { AgentWorkHost } from "./types/agent/AgentWorkHost.js";
 export type { AgentSessionInput } from "./types/agent/AgentSessionInput.js";
 export type { SessionWorkContract } from "./types/agent/SessionWork.js";
 export type { SessionContextResolution } from "./types/agent/SessionContext.js";
@@ -23,6 +24,7 @@ export type {
   SessionCheckListToolOutput,
   SessionCheckToolOutput,
   SessionReplyToolOutput,
+  SessionSendToolOutput,
   SessionStartToolOutput,
   SessionStopToolOutput,
   SessionToolState,
@@ -118,6 +120,7 @@ export type {
   ListSessionMessagesInput,
   SessionAgentActionPart,
   SessionAgentDataPart,
+  SessionAgentPowerPart,
   SessionAgentFilePart,
   SessionAgentInteraction,
   SessionAgentMessage,

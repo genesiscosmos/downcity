@@ -1,7 +1,7 @@
 /**
  * Agent 会话的统一 session 工具。
  *
- * 通过 action + args 分发 start/check/reply/stop；省略 action 返回动作索引与 Schema。
+ * 通过 action + args 分发 start/send/check/reply/stop；省略 action 返回动作索引与 Schema。
  * 工具仅依赖 SessionWork 协议，由 Agent 注入主会话与 Channel 会话。
  * Work Session 不注入此工具，防止递归派发；调用身份始终来自 ToolCallContext。
  */
@@ -13,6 +13,7 @@ import {
   session_check_input,
   session_reply_input,
   session_start_input,
+  session_send_input,
   session_stop_input,
   session_tool_input,
 } from "@/tools/session/SessionToolSchemas.js";
@@ -20,8 +21,12 @@ import {
 /** 动作说明和输入 Schema 同源，用于无 action 时的能力发现。 */
 const session_actions = {
   start: {
-    description: "Start work in an explicitly selected project and return immediately. Write a complete query: the new session only sees that text. Discover projects with context.workspaces.list; never use the main session's private Workspace. Completion or failure automatically returns to the calling conversation; do not poll for completion.",
+    description: "Start work with the selected agent in an explicitly selected project and return a Session description immediately. Write a complete query: the new session only sees that text. Discover projects with context.workspaces.list; never use the main session's private Workspace. Completion or failure automatically returns to the calling conversation; do not poll for completion.",
     schema: session_start_input,
+  },
+  send: {
+    description: "Continue an existing Work Session with instructions, material, or feedback. Input joins its normal queue; results return automatically to this calling conversation.",
+    schema: session_send_input,
   },
   check: {
     description: "List sessions or inspect one session's recent messages and pending interactions. Call before answering progress questions; never guess the state.",
@@ -38,9 +43,12 @@ const session_actions = {
 };
 
 /** 创建单一模型入口；每次调用均校验 envelope 和对应动作参数。 */
-export function create_session_tools(work: SessionWorkContract) {
+export function create_session_tools(
+  work: SessionWorkContract,
+  resolve_work?: (agent_id: string) => SessionWorkContract,
+) {
   const session = define_agent_tool<z.infer<typeof session_tool_input>, ActionResult>({
-    description: "Manage this agent's sessions: start project work, check progress, reply to pending interactions, or stop work. Call with { action, args }; omit action to read all action descriptions and input schemas. Work results return automatically to this conversation.",
+    description: "Manage Work Sessions: choose an agent with agent_id, start project work, send follow-up instructions, check progress, reply to pending interactions, or stop work. Call with { action, args }; omit action to read all action descriptions and input schemas. Work results return automatically to this conversation.",
     input_schema: session_tool_input,
     execute: async (input, context): Promise<ActionResult> => {
       const { action, args = {} } = session_tool_input.parse(input);
@@ -56,42 +64,56 @@ export function create_session_tools(work: SessionWorkContract) {
           messages: [],
         };
       }
+      const select_work = (agent_id?: string): SessionWorkContract => {
+        if (!agent_id || agent_id === context.agent_id) return work;
+        if (!resolve_work) throw new Error("Cross-agent Session work requires a host agent resolver");
+        return resolve_work(agent_id);
+      };
       switch (action) {
-        case "start": {
-          const params = session_start_input.parse(args);
+        case "start":
+        case "send": {
+          const params = action === "start" ? session_start_input.parse(args) : session_send_input.parse(args);
+          const target_work = select_work(params.agent_id);
           if (!context.turn_id || !context.tool_call_id) {
-            throw new Error("session.start requires an active Turn tool call");
+            throw new Error(`session.${action} requires an active Turn tool call`);
           }
-          const result = await work.spawn(params, {
+          const caller = {
+            agent_id: context.agent_id,
             session_id: context.session_id,
             origin: context.session_origin,
             turn_id: context.turn_id,
             tool_call_id: context.tool_call_id,
-          });
+          };
+          const result = "session_id" in params
+            ? await target_work.send(params, caller)
+            : await target_work.spawn(params, caller);
+          const detail = await target_work.read({ session_id: result.session_id, limit: 1 });
           return {
-            output: { session_id: result.session_id, delegation_id: result.delegation_id, status: "started" },
+            output: { session: detail.session, delegation_id: result.delegation_id, status: action === "start" ? "started" : "submitted" },
             messages: [],
           };
         }
         case "check": {
           const params = session_check_input.parse(args);
+          const target_work = select_work(params.agent_id);
           return {
             output: params.session_id
-              ? await work.read({ session_id: params.session_id, limit: params.limit })
-              : { mode: "list", sessions: await work.list({ limit: params.limit }) },
+              ? await target_work.read({ session_id: params.session_id, limit: params.limit })
+              : { mode: "list", sessions: await target_work.list({ limit: params.limit }) },
             messages: [],
           };
         }
         case "reply": {
           const params = session_reply_input.parse(args);
+          const target_work = select_work(params.agent_id);
           // Interaction payload 必须可序列化，拒绝非 JSON 值后再交给运行时。
           const payload = z.record(z.string(), z.json()).parse(params.payload ?? {});
           if (params.note) payload.note = params.note;
-          await work.reply({
+          await target_work.reply({
             session_id: params.session_id,
             interaction_id: params.interaction_id,
             response: {
-              type: await resolve_interaction_type(work, params.session_id, params.interaction_id),
+              type: await resolve_interaction_type(target_work, params.session_id, params.interaction_id),
               outcome: params.outcome,
               payload: payload as Record<string, JsonValue>,
             },
@@ -103,7 +125,7 @@ export function create_session_tools(work: SessionWorkContract) {
         }
         case "stop": {
           const params = session_stop_input.parse(args);
-          await work.stop({ session_id: params.session_id });
+          await select_work(params.agent_id).stop({ session_id: params.session_id });
           return { output: { session_id: params.session_id, status: "stopped" }, messages: [] };
         }
       }

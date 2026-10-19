@@ -24,6 +24,7 @@ import {
   reload_cli_workspace_env,
   resolve_cli_agent_model,
 } from "@/city/runtime/AgentAssembly.js";
+import { create_cli_persistent_agent } from "@/city/runtime/CreateAgent.js";
 import { create_cli_local_data, type CliLocalData } from "@/city/runtime/LocalData.js";
 
 /** 已启动的 CLI City Runtime。 */
@@ -106,6 +107,7 @@ export class CliCityRuntime {
         }),
       },
       runtime: {
+        create_agent: async (input) => await create_cli_persistent_agent(input, data, city),
         resolve_workspace: async (_agent, workspace_id) => {
         const workspace_config = data.workspaces.get(workspace_id);
         if (!workspace_config) throw new Error(`Workspace not found: ${workspace_id}`);
@@ -174,6 +176,7 @@ export class CliCityRuntime {
         agents.push(agent);
         city.agents.add(agent);
       }
+      await Promise.all(agents.map(async (agent) => await agent.resume_work()));
     } catch (error) {
       await Promise.allSettled(agents.map(async (agent) => await city.agents.remove(agent.id)));
       data.database.close();

@@ -122,7 +122,7 @@ export class City implements CityRuntime {
     });
     this.powers = this.power_runtime.public_api;
     // 三个领域 power 与 shell 一样走同一条注册路径；特权依赖在这里注入。
-    for (const power of this.create_city_powers()) {
+    for (const power of this.create_city_powers(options.runtime?.create_agent)) {
       void this.powers.add(power).catch(() => undefined);
     }
     // Shell 属于 Workspace，但只在模型面以 power 形式暴露一次。
@@ -193,14 +193,14 @@ export class City implements CityRuntime {
    * 关键点（中文）：三个 power 共享同一份特权依赖；动作组私有文件按 Agent + 组名隔离，
    * 因此组在 power 之间搬迁不会改变落盘路径。
    */
-  private create_city_powers(): Power[] {
+  private create_city_powers(create_agent?: CityRuntimeOptions["create_agent"]): Power[] {
     const options = {
       access: this.runtime_access,
       files_for: (agent_id: string, group_id: string) =>
         this.storage.open_scope(["agents", agent_id, "powers", group_id]).files,
       ...(this.embassy ? { embassy: this.embassy } : {}),
     };
-    return [new ContextPower(options), new AiPower(options), new AgentPower(options)];
+    return [new ContextPower(options), new AiPower(options), new AgentPower(options, create_agent)];
   }
 
   /**
@@ -477,7 +477,10 @@ export class City implements CityRuntime {
     if (this.agents_by_id.has(agent.id)) {
       throw new Error(`Agent already exists in City: ${agent.id}`);
     }
-    agent.bind(this);
+    agent.bind(this, {
+      resolve_agent: (agent_id) => this.require_agent(agent_id),
+      resolve_workspace: async (workspace_id) => await this.enter_workspace(agent.id, workspace_id),
+    });
     try {
       this.agents_by_id.set(agent.id, agent);
     } catch (error) {

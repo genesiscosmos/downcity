@@ -2,7 +2,7 @@
  * Agent 会话的 Session 工具类型协议。
  *
  * 职责说明（中文）
- * - 这四个工具让 Agent 在自己的对话里安排、观察和收回其他会话。
+ * - session 工具让 Agent 安排、继续、观察和收回同一容器中目标 Agent 的工作会话。
  * - 它们只出现在 Agent 主会话和 Channel 会话中，Work Session 不会递归派发。
  *
  * 关键点（中文）
@@ -22,6 +22,10 @@ export type SessionToolState =
 
 /** 清单里的一条会话摘要。 */
 export interface SessionToolSummary {
+  /** 会话所属 Agent 标识；后续调用应携带同一 agent_id。 */
+  agent_id: string;
+  /** 会话当前绑定的项目 Workspace 标识。 */
+  workspace_id?: string;
   /** 会话稳定标识。 */
   session_id: string;
   /** 用户可见标题；未生成时省略。 */
@@ -38,12 +42,22 @@ export interface SessionToolSummary {
 
 /** `session.start` 的输出。 */
 export interface SessionStartToolOutput {
-  /** 新建会话的稳定标识。 */
-  session_id: string;
+  /** 新建工作会话的轻量描述，包含后续交互所需标识与当前状态。 */
+  session: SessionToolSummary;
   /** 本次工作委派的稳定标识，用于结果回传关联与去重。 */
   delegation_id: string;
   /** 本次任务已提交，返回时该会话可能仍在执行。 */
   status: "started";
+}
+
+/** `session.send` 的输出；每条追加消息拥有独立的结果回传关联。 */
+export interface SessionSendToolOutput {
+  /** 接收本次消息的工作会话及其当前状态。 */
+  session: SessionToolSummary;
+  /** 本次消息的工作关联标识，用于执行去重与结果回传。 */
+  delegation_id: string;
+  /** 输入已提交到目标工作会话，结果稍后自动回传。 */
+  status: "submitted";
 }
 
 /** `session.check` 清单模式的输出。 */

@@ -33,7 +33,9 @@ import { Logger } from "@/utils/logger/Logger.js";
 import { AgentSessions } from "@/agent/AgentSessions.js";
 import { AgentMemoryStorageProvider } from "@/agent/AgentMemoryStorage.js";
 import { LocalSessionStore } from "@/session/storage/LocalSessionStore.js";
-import { EMPTY_TOOL_HOOK_SET } from "@downcity/type";
+import { EMPTY_TOOL_HOOK_SET, SESSION_HOOK_POINTS } from "@downcity/type";
+import type { SessionTurnCommittedHookValue } from "@downcity/type";
+import { SessionCompletions } from "@/agent/SessionCompletions.js";
 import type { AgentStorage } from "@/types/agent/AgentStorage.js";
 import type { SessionSystemMessage } from "@downcity/type";
 import type { SessionComposer } from "@/types/session/SessionComposer.js";
@@ -48,6 +50,7 @@ import { SessionDelegations } from "@/agent/SessionDelegations.js";
 import { LocalSessionDelegationStore } from "@/agent/LocalSessionDelegationStore.js";
 import { is_agent_session_origin, SESSION_ORIGIN_TYPE_CHANNEL, SESSION_ORIGIN_TYPE_WORK } from "@downcity/type";
 import { create_session_tools } from "@/tools/session/SessionTools.js";
+import type { AgentWorkHost } from "@/types/agent/AgentWorkHost.js";
 import type { AgentSessionInput } from "@/types/agent/AgentSessionInput.js";
 import type { AgentSession } from "@/types/agent/SessionActor.js";
 
@@ -102,8 +105,14 @@ export class Agent {
    * 它们只在 Agent 主会话和 Channel 会话里注册。
    */
   private session_tools?: Record<string, Tool>;
+  /** 当前 Agent 的工作端口，跨主体调用仍由目标 Agent 持有自己的会话与记录。 */
+  private session_work?: SessionWork;
+  /** 容器绑定时注入的主体发现与项目解析能力。 */
+  private work_host?: AgentWorkHost;
   /** 委派执行与结果回传运行时；独立于工具的生命周期。 */
   private delegations?: SessionDelegations;
+  /** 持久化完成事件及其回调重试；生命周期跟随 Agent。 */
+  private completions?: SessionCompletions;
   /** 宿主负责恢复模型与消息订阅的幂等装配入口。 */
   private readonly prepare_work_session: AgentOptions["prepare_work_session"];
 
@@ -218,7 +227,7 @@ export class Agent {
    * - 主体只收下容器推送的存储能力，不持有容器引用。
    * - 存储一旦在独立模式下被使用就不能再切换，否则已有 Session 会写入两个事实源。
    */
-  bind(host: CityRuntime): void {
+  bind(host: CityRuntime, work_host?: AgentWorkHost): void {
     if (this.host) {
       if (this.host === host) return;
       throw new Error(`Agent "${this.id}" is already bound to another container`);
@@ -229,6 +238,7 @@ export class Agent {
       );
     }
     this.host = host;
+    this.work_host = work_host;
     this.storage_provider = host.storage;
   }
 
@@ -241,7 +251,10 @@ export class Agent {
    */
   unbind(): void {
     this.delegations?.suspend();
+    // 解绑前绑定旧存储，停止中的 Turn 仍需把完成事件写到原 Agent 私有目录。
+    this.resolve_completions().suspend();
     this.host = undefined;
+    this.work_host = undefined;
     this.storage_provider = new AgentMemoryStorageProvider();
     this.agent_storage = undefined;
   }
@@ -252,6 +265,7 @@ export class Agent {
    */
   async resume_work(): Promise<void> {
     if (this.dispose_promise) throw new Error("Agent is disposing");
+    await this.resolve_completions().resume();
     await this.resolve_delegations().resume();
   }
 
@@ -340,10 +354,12 @@ export class Agent {
     }
     this.dispose_promise ??= (async () => {
       this.delegations?.suspend();
+      if (this.agent_storage) this.resolve_completions().suspend();
       const results = await Promise.allSettled([
         this.session_manager.stop_executing_sessions(),
       ]);
       await this.delegations?.settle();
+      await this.completions?.settle();
       this.session_manager.dispose_title_generation();
       results.push(...await Promise.allSettled([
         this.agent_storage?.sessions.dispose() ?? Promise.resolve(),
@@ -395,48 +411,74 @@ export class Agent {
   /** 返回 Agent 会话的会话工具集合；首次调用时创建。 */
   private resolve_session_tools(): Record<string, Tool> {
     if (this.session_tools) return this.session_tools;
-    const work = new SessionWork({
-      list_sessions: async (input) => await this.session_manager.list(input),
-      get_session: async (session_id, origin_type) =>
-        await this.session_manager.get(session_id, origin_type),
-      delegations: this.resolve_delegations(),
-    });
-    this.session_tools = create_session_tools(work);
+    this.session_tools = create_session_tools(
+      this.resolve_session_work(),
+      (agent_id) => this.resolve_work_agent(agent_id).resolve_session_work(),
+    );
     return this.session_tools;
   }
 
-  /** 装配委派端口；工具和委派运行时都不需要回查 Agent 或容器。 */
+  /** 解析协作对象；独立运行时仍能管理自己的工作会话。 */
+  private resolve_work_agent(agent_id: string): Agent {
+    if (agent_id === this.id) return this;
+    if (!this.work_host) throw new Error("Cross-agent Session work requires a host agent resolver");
+    return this.work_host.resolve_agent(agent_id);
+  }
+
+  /** 目标 Agent 自己持有会话工作端口，不复制其它主体的存储或运行状态。 */
+  private resolve_session_work(): SessionWork {
+    this.session_work ??= new SessionWork({
+      agent_id: this.id,
+      list_sessions: async (input) => await this.session_manager.list(input),
+      get_session: async (session_id, origin_type) => await this.restore_work_session(session_id, origin_type),
+      delegations: this.resolve_delegations(),
+    });
+    return this.session_work;
+  }
+
+  /** 使用会话当前持久化目录恢复上下文，并完成宿主的模型与事件订阅装配。 */
+  private async restore_work_session(session_id: string, origin_type: string): Promise<AgentSession> {
+    const storage = this.resolve_storage();
+    if (!(await storage.sessions.has_session(session_id, origin_type))) {
+      throw new Error(`Session is unavailable or archived: ${session_id}`);
+    }
+    const session_storage = await storage.sessions.open_session(session_id, origin_type);
+    const metadata = await session_storage.read_metadata();
+    const workspace_id = metadata.workspace_id;
+    const workspace = workspace_id
+      ? workspace_id === this.workspace?.id ? this.workspace : await this.resolve_project_workspace(workspace_id)
+      : undefined;
+    const session = await this.session_manager.get(session_id, origin_type, { workspace });
+    await this.prepare_work_session?.(session);
+    return session;
+  }
+
+  /** 项目解析沿用宿主端口；容器提供默认实现供无定制宿主的 SDK 使用。 */
+  private async resolve_project_workspace(workspace_id: string): Promise<WorkspaceRuntime> {
+    const resolve_workspace = this.resolve_work_workspace ?? this.work_host?.resolve_workspace;
+    if (!resolve_workspace) throw new Error("session.start requires a host project Workspace resolver");
+    return await resolve_workspace(workspace_id);
+  }
+
+  /** 装配当前主体的委派端口，跨主体父会话通过宿主端口恢复。 */
   private resolve_delegations(): SessionDelegations {
     if (this.delegations) return this.delegations;
     const storage = this.resolve_storage();
-    const resolve_workspace = async (workspace_id: string): Promise<WorkspaceRuntime> => {
-      if (!this.resolve_work_workspace) throw new Error("session.start requires a host project Workspace resolver");
-      return await this.resolve_work_workspace(workspace_id);
-    };
+    const resolve_workspace = async (workspace_id: string): Promise<WorkspaceRuntime> =>
+      await this.resolve_project_workspace(workspace_id);
     const prepare_session = async (session: AgentSession): Promise<void> => {
       await this.prepare_work_session?.(session);
     };
     this.delegations = new SessionDelegations({
+      agent_id: this.id,
       store: storage.delegations,
       resolve_workspace,
       ensure_work_session: async (session_id, workspace) =>
         await this.session_manager.ensure_work_session(session_id, workspace),
       prepare_session,
-      get_parent_session: async (caller) => {
-        // 恢复必须沿用父会话当前持久化目录，而不是派发时的旧目录。
-        if (!(await storage.sessions.has_session(caller.session_id, caller.origin.type))) {
-          throw new Error(`Delegation parent is unavailable or archived: ${caller.session_id}`);
-        }
-        const session_storage = await storage.sessions.open_session(caller.session_id, caller.origin.type);
-        const metadata = await session_storage.read_metadata();
-        const workspace_id = metadata.workspace_id;
-        const workspace = workspace_id
-          ? workspace_id === this.workspace?.id ? this.workspace : await resolve_workspace(workspace_id)
-          : undefined;
-        const session = await this.session_manager.get(caller.session_id, caller.origin.type, { workspace });
-        await prepare_session(session);
-        return session;
-      },
+      get_work_session: async (session_id) => await this.restore_work_session(session_id, SESSION_ORIGIN_TYPE_WORK),
+      get_parent_session: async (caller) => await this.resolve_work_agent(caller.agent_id)
+        .restore_work_session(caller.session_id, caller.origin.type),
       report_error: (delegation_id, error) => {
         this.logger.error("Session delegation failed; retained for retry", {
           delegation_id,
@@ -447,12 +489,56 @@ export class Agent {
     return this.delegations;
   }
 
-  /** 合并容器 Power hooks 与 Agent 自有 hooks。 */
-  private resolve_hooks(): ToolHookSet {
+  /** 读取原始处理器；完成日志重放不能再次进入持久化包装器。 */
+  private resolve_raw_hooks(): ToolHookSet {
     const power_hooks = this.host?.power_hooks;
     if (!power_hooks) return this.custom_hooks;
     if (this.custom_hooks === EMPTY_TOOL_HOOK_SET) return power_hooks;
     return merge_tool_hook_sets(power_hooks, this.custom_hooks);
+  }
+
+  /** Agent 为完成 Hook 提供持久化与恢复；不将 callback 逻辑写进 Session 执行器。 */
+  private resolve_completions(): SessionCompletions {
+    this.completions ??= new SessionCompletions({
+      files: this.resolve_storage().files,
+      get_handlers: () => this.resolve_raw_hooks().effect[SESSION_HOOK_POINTS.turn_committed] ?? [],
+      restore_context: async (record) => {
+        const session = await this.restore_work_session(record.event.session_id, record.origin.type);
+        const workspace = record.workspace_id
+          ? record.workspace_id === this.workspace?.id ? this.workspace : await this.resolve_project_workspace(record.workspace_id)
+          : undefined;
+        return {
+          agent_id: this.id,
+          agent_name: this.name,
+          agent_description: this.description,
+          agent_instructions: [...this.get_instructions()],
+          session_id: session.id,
+          session_origin: record.origin,
+          turn_id: record.event.turn_id,
+          ...(workspace ? { workspace } : {}),
+          workspace_env: workspace?.get_env() ?? {},
+          // canonical 消息在事件值中提供；回调不重新装配历史模型消息。
+          messages: [],
+        };
+      },
+      report_error: (error) => this.logger.error("Session completion delivery failed; retained for retry", { error: String(error) }),
+    });
+    return this.completions;
+  }
+
+  /** 合并容器与 Agent hooks；完成事件先落盘，失败由独立队列重试。 */
+  private resolve_hooks(): ToolHookSet {
+    const hooks = this.resolve_raw_hooks();
+    if (!hooks.effect[SESSION_HOOK_POINTS.turn_committed]?.length) return hooks;
+    return {
+      ...hooks,
+      effect: {
+        ...hooks.effect,
+        [SESSION_HOOK_POINTS.turn_committed]: [async (value, context) => {
+          await this.resolve_completions().commit(value as unknown as SessionTurnCommittedHookValue, context);
+        }],
+      },
+    };
   }
 
 }

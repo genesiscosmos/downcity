@@ -4,6 +4,7 @@
  * City 维护 Agent 集合与 transport，并协调已加入 Agent 的运行时生命周期。
  */
 
+import type { CityCreateAgent } from "@/city/types/CityCreateAgent.js";
 import type { CityHttpRuntimeOptions } from "@/city/transport/types/CityHttpRuntime.js";
 import type { CityRpcRuntimeOptions } from "@/city/transport/types/CityRpcRuntime.js";
 import type { Agent } from "@downcity/agent";
@@ -42,6 +43,8 @@ export interface CityOptions {
 
 /** City 构造时可注入的 transport 扩展能力。 */
 export interface CityRuntimeOptions {
+  /** 创建持久 Agent 并注册到当前 City；宿主负责配置落盘、模型装配与失败回滚。 */
+  create_agent?: CityCreateAgent;
   /** 按需为 Agent 创建指定 Workspace；City 不读取任何持久化配置。 */
   resolve_workspace?: (
     agent: Agent,

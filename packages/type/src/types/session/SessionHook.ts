@@ -59,6 +59,17 @@ export type SessionCommittedTurnStatus = "completed" | "failed" | "stopped";
 
 /** `session.turn_committed` effect 的值。 */
 export interface SessionTurnCommittedHookValue {
+  /** 稳定完成事件标识；回调重试使用同一值，处理器须以它幂等消费。 */
+  completion_id: string;
+  /** 本轮最终结果；回调失败不会改变此执行结果。 */
+  result: {
+    /** 执行器收口后的最终文本。 */
+    text: string;
+    /** 本轮模型执行是否成功；停止时为 false。 */
+    success: boolean;
+    /** 失败或停止的说明；成功时省略。 */
+    error?: string;
+  };
   /** 当前 Session 的稳定标识。 */
   session_id: string;
   /** 当前 Turn 的稳定标识。 */

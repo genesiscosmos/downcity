@@ -8,6 +8,8 @@ import type { AgentSessionTurnResult } from "../sdk/AgentSessionTurn.js";
 
 /** 工具运行时提供的发起身份；不允许模型自行指定回传目标。 */
 export interface SessionDelegationCaller {
+  /** 发起工作的 Agent 标识；用于将结果回传给真实调用方。 */
+  agent_id: string;
   /** 发起工作的 Session 稳定标识。 */
   session_id: string;
   /** 发起会话的持久化来源分区。 */
@@ -56,12 +58,16 @@ export interface SessionDelegationStore {
 
 /** 委派运行时依赖；所有宿主资源都在执行前通过端口解析。 */
 export interface SessionDelegationOptions {
+  /** 拥有工作会话和委派记录的 Agent 标识。 */
+  agent_id: string;
   /** 当前 Agent 的委派存储。 */
   store: SessionDelegationStore;
   /** 按记录中的项目标识解析工作目录。 */
   resolve_workspace: (workspace_id: string) => Promise<WorkspaceRuntime>;
   /** 按预分配标识创建或恢复同一个子会话。 */
   ensure_work_session: (session_id: string, workspace: WorkspaceRuntime) => Promise<AgentSession>;
+  /** 恢复已有工作会话；只允许继续 Work 来源的会话。 */
+  get_work_session: (session_id: string) => Promise<AgentSession>;
   /** 恢复父会话并完成宿主 Workspace、模型及消息订阅装配。 */
   get_parent_session: (caller: SessionDelegationCaller) => Promise<AgentSession>;
   /** 为恢复的子会话完成宿主模型及消息订阅装配。 */
@@ -80,6 +86,14 @@ export interface SessionDelegationInput {
   title?: string;
 }
 
+/** 向已有工作会话追加的完整指令。 */
+export interface SessionDelegationMessage {
+  /** 接收消息的工作会话标识。 */
+  session_id: string;
+  /** 新增的要求、材料或反馈。 */
+  query: string;
+}
+
 /** 派发后立即返回的稳定关联标识。 */
 export interface SessionDelegationReceipt {
   /** 已创建的工作会话标识。 */
@@ -92,6 +106,8 @@ export interface SessionDelegationReceipt {
 export interface SessionDelegationPort {
   /** 保存委派，准备子会话，然后启动后台执行。 */
   spawn(input: SessionDelegationInput, caller: SessionDelegationCaller): Promise<SessionDelegationReceipt>;
+  /** 向已有工作会话追加输入，并沿用持久化结果回传机制。 */
+  send(input: SessionDelegationMessage, caller: SessionDelegationCaller): Promise<SessionDelegationReceipt>;
   /** 撤销目标子会话未投递的委派，必须先于 Session.stop 调用。 */
   cancel(session_id: string): Promise<void>;
 }

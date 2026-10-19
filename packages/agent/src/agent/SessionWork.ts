@@ -12,7 +12,7 @@
  */
 
 import type { SessionInteractionResponse } from "@downcity/type";
-import type { SessionDelegationCaller, SessionDelegationInput, SessionDelegationPort, SessionDelegationReceipt } from "@/types/agent/SessionDelegation.js";
+import type { SessionDelegationCaller, SessionDelegationInput, SessionDelegationMessage, SessionDelegationPort, SessionDelegationReceipt } from "@/types/agent/SessionDelegation.js";
 import { is_agent_session_origin } from "@downcity/type";
 import type { SessionWorkContract } from "@/types/agent/SessionWork.js";
 import type {
@@ -30,6 +30,8 @@ const DEFAULT_MESSAGE_LIMIT = 20;
 
 /** 清单中的一条会话列表项；由 AgentSessions 摘要投影而来。 */
 export interface SessionWorkListEntry {
+  /** 会话当前绑定的项目 Workspace 标识。 */
+  workspace_id?: string;
   /** 会话稳定标识。 */
   session_id: string;
   /** 用户可见标题；未生成时省略。 */
@@ -46,6 +48,8 @@ export interface SessionWorkListEntry {
 
 /** SessionWork 构造参数。 */
 export interface SessionWorkOptions {
+  /** 拥有这些会话的 Agent 稳定标识。 */
+  agent_id: string;
   /** 列出活动会话摘要，`limit` 由本模块归一化后传入。 */
   list_sessions: (input: { limit: number }) => Promise<{
     items: SessionWorkListEntry[];
@@ -69,6 +73,12 @@ export class SessionWork implements SessionWorkContract {
     return await this.options.delegations.spawn(input, caller);
   }
 
+  /** 继续已有的工作会话，复用持久化派发与结果回传。 */
+  async send(input: SessionDelegationMessage, caller: SessionDelegationCaller): Promise<SessionDelegationReceipt> {
+    await this.require_list_entry(input.session_id);
+    return await this.options.delegations.send(input, caller);
+  }
+
   /** 列出当前 Agent 除自己那条之外的全部会话。 */
   async list(input?: { limit?: number }): Promise<SessionToolSummary[]> {
     const page = await this.options.list_sessions({
@@ -80,6 +90,8 @@ export class SessionWork implements SessionWorkContract {
       const pending_interaction_count = await this.count_pending(item);
       summaries.push({
         session_id: item.session_id,
+        agent_id: this.options.agent_id,
+        ...(item.workspace_id ? { workspace_id: item.workspace_id } : {}),
         ...(item.title ? { title: item.title } : {}),
         state: resolve_session_state({
           executing: item.executing === true,
@@ -110,6 +122,8 @@ export class SessionWork implements SessionWorkContract {
       mode: "detail",
       session: {
         session_id: item.session_id,
+        agent_id: this.options.agent_id,
+        ...(item.workspace_id ? { workspace_id: item.workspace_id } : {}),
         ...(item.title ? { title: item.title } : {}),
         state: resolve_session_state({
           executing: status.state === "running",

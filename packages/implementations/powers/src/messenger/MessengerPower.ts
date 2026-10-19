@@ -1,8 +1,10 @@
 /** MessengerPower：Desktop Channel 工作区与可靠消息运行时的 City 级所有者。 */
 
 import { Power } from "@downcity/city/power";
+import { SESSION_HOOK_POINTS, type SessionTurnCommittedHookValue } from "@downcity/type";
 import type {
   PowerActions,
+  PowerHooks,
   PowerContext,
   StepSnapshot,
   PowerLifecycleContext,
@@ -27,6 +29,16 @@ export class MessengerPower extends Power {
 
   /** Agent Actions 将在可靠 Outbox 路由完成后只保留严格的会话内能力。 */
   readonly actions: PowerActions;
+
+  /** 完成事件统一负责自动回复，不依赖入站等待者是否仍在内存。 */
+  readonly hooks: PowerHooks = {
+    effect: {
+      [SESSION_HOOK_POINTS.turn_committed]: [async ({ context, value }) => {
+        if (context.session?.origin.type !== "channel") return;
+        this.require_runtime().commit_completion(context.agent.id, value as unknown as SessionTurnCommittedHookValue);
+      }],
+    },
+  };
 
   /** 当前 Power 唯一的长期 Messenger Runtime。 */
   private runtime?: MessengerRuntime;

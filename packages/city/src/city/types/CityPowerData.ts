@@ -109,8 +109,10 @@ export interface CityToolWorkspaceSummary {
   readonly is_current: boolean;
 }
 
-/** `agent.list` 与 `agent.get` 返回的单个 Agent 摘要。 */
+/** `agent.list` 与 `agent.create` 返回的单个 Agent 摘要。 */
 export interface CityToolAgentSummary {
+  /** Agent 对外职责简介，用于选择协作对象。 */
+  readonly description: string;
   /** Agent 标识。 */
   readonly agent_id: string;
   /** Agent 用户可见名称。 */
