@@ -1,0 +1,151 @@
+/* Presentation 的 OpenUI 主题桥接；宿主在 Tailwind base 与 utilities 之间加载。 */
+@import "@openuidev/react-ui/layered/styles/index.css";
+@import "./presentation-components.css";
+
+:root {
+  --openui-background: var(--background);
+  --openui-foreground: var(--background);
+  --openui-popover-background: var(--popover, var(--background));
+  --openui-text-neutral-primary: var(--foreground);
+  --openui-text-neutral-secondary: var(--muted-foreground);
+  --openui-text-neutral-tertiary: var(--muted-foreground);
+  --openui-text-neutral-link: var(--foreground);
+  --openui-text-accent-primary: var(--primary-foreground, var(--background));
+  --openui-interactive-accent-default: var(--primary);
+  --openui-interactive-accent-hover: var(--primary);
+  --openui-interactive-accent-pressed: var(--primary);
+  --openui-border-default: var(--border);
+  --openui-border-interactive: var(--border);
+  --openui-border-focus: var(--ring);
+  --openui-sunk: var(--muted, var(--background));
+  /* 弹层可能挂载到 body，基础令牌放在根节点以保持主题一致。 */
+  --openui-font-body: var(--font-sans);
+  --openui-font-heading: var(--font-sans);
+  --openui-font-label: var(--font-sans);
+  --openui-font-numbers: var(--font-sans);
+  --openui-font-code: var(--font-mono);
+  --openui-font-size-xs: var(--text-xs, 0.75rem);
+  --openui-font-size-sm: var(--text-sm, 0.8125rem);
+  --openui-font-size-md: var(--text-base, 0.875rem);
+  --openui-font-size-lg: var(--text-lg, 1rem);
+  --openui-font-size-xl: var(--text-xl, 1.25rem);
+  --openui-font-size-2xl: var(--text-2xl, 1.5rem);
+  /* 上游 font shorthand 写死了字体和 px，必须映射复合令牌才能实际生效。 */
+  --openui-text-body-xs: 400 var(--openui-font-size-xs)/1.5 var(--font-sans);
+  --openui-text-body-xs-heavy: 600 var(--openui-font-size-xs)/1.5 var(--font-sans);
+  --openui-text-body-sm: 400 var(--openui-font-size-sm)/1.5 var(--font-sans);
+  --openui-text-body-sm-heavy: 600 var(--openui-font-size-sm)/1.5 var(--font-sans);
+  --openui-text-body-default: 400 var(--openui-font-size-md)/1.6 var(--font-sans);
+  --openui-text-body-default-heavy: 600 var(--openui-font-size-md)/1.6 var(--font-sans);
+  --openui-text-body-lg: 400 var(--openui-font-size-lg)/1.5 var(--font-sans);
+  --openui-text-body-lg-heavy: 600 var(--openui-font-size-lg)/1.5 var(--font-sans);
+  --openui-text-heading-xs: 600 var(--openui-font-size-md)/1.4 var(--font-sans);
+  --openui-text-heading-sm: 600 var(--openui-font-size-lg)/1.4 var(--font-sans);
+  --openui-text-heading-md: 600 var(--openui-font-size-xl)/1.3 var(--font-sans);
+  --openui-text-heading-lg: 600 var(--openui-font-size-2xl)/1.3 var(--font-sans);
+  --openui-text-heading-xl: 600 var(--text-3xl, 1.875rem)/1.2 var(--font-sans);
+  --openui-text-label-xs: 400 var(--openui-font-size-xs)/1.4 var(--font-sans);
+  --openui-text-label-xs-heavy: 600 var(--openui-font-size-xs)/1.4 var(--font-sans);
+  --openui-text-label-sm: 400 var(--openui-font-size-sm)/1.4 var(--font-sans);
+  --openui-text-label-sm-heavy: 600 var(--openui-font-size-sm)/1.4 var(--font-sans);
+  --openui-text-label-default: 400 var(--openui-font-size-md)/1.4 var(--font-sans);
+  --openui-text-label-default-heavy: 600 var(--openui-font-size-md)/1.4 var(--font-sans);
+  --openui-text-label-lg: 400 var(--openui-font-size-lg)/1.4 var(--font-sans);
+  --openui-text-label-lg-heavy: 600 var(--openui-font-size-lg)/1.4 var(--font-sans);
+  --openui-text-numbers-xs: var(--openui-text-body-xs);
+  --openui-text-numbers-xs-heavy: var(--openui-text-body-xs-heavy);
+  --openui-text-numbers-sm: var(--openui-text-body-sm);
+  --openui-text-numbers-sm-heavy: var(--openui-text-body-sm-heavy);
+  --openui-text-numbers-default: var(--openui-text-body-default);
+  --openui-text-numbers-default-heavy: var(--openui-text-body-default-heavy);
+  --openui-text-numbers-lg: var(--openui-text-body-lg);
+  --openui-text-numbers-lg-heavy: var(--openui-text-body-lg-heavy);
+  --openui-text-numbers-heading-sm: var(--openui-text-heading-sm);
+  --openui-text-numbers-heading-md: var(--openui-text-heading-md);
+  --openui-text-numbers-heading-lg: var(--openui-text-heading-lg);
+  --openui-text-numbers-heading-xl: var(--openui-text-heading-xl);
+  --openui-text-code-sm: 400 var(--openui-font-size-xs)/1.5 var(--font-mono);
+  --openui-text-code-sm-heavy: 600 var(--openui-font-size-xs)/1.5 var(--font-mono);
+  --openui-text-code-default: 400 var(--openui-font-size-sm)/1.5 var(--font-mono);
+  --openui-text-code-default-heavy: 600 var(--openui-font-size-sm)/1.5 var(--font-mono);
+  --openui-font-weight-medium: 500;
+  --openui-font-weight-bold: 600;
+  --openui-font-variation-regular: normal;
+  --openui-font-variation-medium: normal;
+  --openui-radius-m: var(--radius-control, 0.5rem);
+  --openui-radius-l: var(--radius-control, 0.5rem);
+  --openui-radius-2xl: var(--radius-item, 0.5rem);
+  --openui-radius-3xl: var(--radius-surface, 0.75rem);
+  --openui-shadow-s: none;
+  --openui-shadow-m: none;
+  --openui-highlight-subtle: transparent;
+  --openui-highlight: var(--accent);
+  --openui-interactive-accent-disabled: var(--muted);
+  --openui-border-interactive-emphasis: var(--ring);
+  --openui-border-interactive-selected: var(--foreground);
+}
+
+.downcity-openui {
+  min-width: 0;
+  width: 100%;
+  box-sizing: border-box;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-surface, 0.75rem);
+  color: var(--foreground);
+  font-family: var(--font-sans);
+  color-scheme: inherit;
+}
+.downcity-openui :focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+.downcity-openui svg { max-width: 100%; }
+
+/* 仅调整 Presentation 内容，不改变 OpenUI 组件的交互和布局方向。 */
+.downcity-openui .openui-card {
+  gap: 1rem;
+  min-width: 0;
+  max-width: 100%;
+}
+.downcity-openui .openui-card-card,
+.downcity-openui .openui-card-clear {
+  padding: 0;
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+}
+.downcity-openui .openui-card-sunk {
+  padding: 1rem;
+  background: var(--surface-subtle, var(--muted));
+  border-color: var(--border);
+}
+.downcity-openui .openui-text-content {
+  gap: 0.75rem;
+}
+.downcity-openui .openui-button-base {
+  box-shadow: none;
+  transition-property: color, background-color, border-color;
+}
+.downcity-openui .openui-input {
+  background: var(--background);
+  border-color: var(--input, var(--border));
+}
+.downcity-openui .openui-table-container {
+  border-radius: var(--radius-item, 0.5rem);
+}
+.downcity-openui .openui-table-cell,
+.downcity-openui .openui-table-head {
+  padding: 0.5rem 0.75rem;
+}
+.downcity-openui .openui-table-head {
+  background: var(--surface-subtle, var(--muted));
+}
+.downcity-openui .openui-table-row:nth-child(even) {
+  background: transparent;
+}
+@media (prefers-reduced-motion: reduce) {
+  .downcity-openui .openui-line-chart-line--animated {
+    animation: none;
+    stroke-dashoffset: 0;
+  }
+}

@@ -151,7 +151,7 @@ function capability_status(
 
 /** 返回各能力区不可用时的默认说明。 */
 function unavailable_note(kind: "search" | "document" | "browser"): string {
-  if (kind === "search") return "配置 Tavily 或 Exa API Key 后启用搜索。";
+  if (kind === "search") return "配置 Tavily、Exa 或 DeepSeek API Key 后启用搜索。";
   if (kind === "document") return "网页读取当前已关闭。";
   return "浏览器 Provider 当前已关闭。";
 }

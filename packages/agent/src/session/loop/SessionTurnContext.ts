@@ -9,7 +9,7 @@
 
 import type { ToolEffect } from "@downcity/type";
 import type { SessionUserMessage } from "@downcity/type";
-import type { SessionAgentContent } from "@downcity/type";
+import type { SessionAssistantResultBatch } from "@/types/turn/SessionAssistantOutput.js";
 import type {
   SessionTurnContext,
   SessionTurnContextInit,
@@ -34,7 +34,7 @@ class DefaultSessionTurnContext implements SessionTurnContext {
   /** 并发或重复解析时复用的唯一 Promise。 */
   private power_context_blocks_promise?: Promise<readonly SessionHookContextBlock[]>;
   private observed_user_messages: SessionUserMessage[] = [];
-  private pending_assistant_parts: SessionAgentContent[] = [];
+  private pending_assistant_parts: SessionAssistantResultBatch[] = [];
   private turn_effects: ToolEffect[] = [];
 
   readonly lifecycle: SessionTurnContext["lifecycle"];
@@ -136,8 +136,8 @@ class DefaultSessionTurnContext implements SessionTurnContext {
 
     this.output = Object.freeze({
       ...(init.assistant_output ? { assistant: init.assistant_output } : {}),
-      enqueue_assistant_parts: (parts) => {
-        context.pending_assistant_parts.push(...parts);
+      enqueue_assistant_parts: (parts, publication) => {
+        if (parts.length) context.pending_assistant_parts.push({ parts: [...parts], ...publication });
       },
       take_assistant_parts: () => {
         const parts = context.pending_assistant_parts;

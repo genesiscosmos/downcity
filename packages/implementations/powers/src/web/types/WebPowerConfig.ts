@@ -24,6 +24,8 @@ export interface WebConfigView extends PowerJsonObject {
   tavily_api_key_configured: boolean;
   /** Exa Key 是否已保存。 */
   exa_api_key_configured: boolean;
+  /** DeepSeek Search / Fetch 共用 Key 是否已保存。 */
+  deepseek_api_key_configured: boolean;
   /** Firecrawl Key 是否已保存。 */
   firecrawl_api_key_configured: boolean;
   /** 外部 CDP 地址。 */
@@ -59,6 +61,10 @@ export interface WebConfigPatch {
   exa_api_key?: string;
   /** 是否删除 Exa Key。 */
   clear_exa_api_key?: boolean;
+  /** 新 DeepSeek Search / Fetch 共用 Key；空字符串表示保留已有 Key。 */
+  deepseek_api_key?: string;
+  /** 是否删除 DeepSeek Search / Fetch 共用 Key。 */
+  clear_deepseek_api_key?: boolean;
   /** 新 Firecrawl Key；空字符串表示保留已有 Key。 */
   firecrawl_api_key?: string;
   /** 是否删除 Firecrawl Key。 */
@@ -98,5 +104,6 @@ export interface WebConfigTestResult extends PowerJsonObject {
 export type WebCredentialTarget =
   | "tavily_api_key"
   | "exa_api_key"
+  | "deepseek_api_key"
   | "firecrawl_api_key"
   | "cdp_url";

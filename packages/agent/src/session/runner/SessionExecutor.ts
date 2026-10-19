@@ -561,23 +561,15 @@ export class SessionExecutor implements SessionExecutorPort {
     if (turn_context.output.assistant) {
       await turn_context.output.assistant.finish_step(step_assistant_parts);
     }
-    const action_assistant_parts = turn_context.output.take_assistant_parts();
-    if (action_assistant_parts.length > 0) {
-      const persisted_parts = turn_context.output.assistant
-        ? await turn_context.output.assistant.append_result_parts(
-            action_assistant_parts,
-          )
-        : action_assistant_parts.map((part, index) =>
-            create_session_agent_content_part(
-              part,
-              `${part.type}:${generate_id()}`,
-              index + 1,
-            )
-          );
-      step_assistant_parts = merge_assistant_parts(
-        step_assistant_parts,
-        persisted_parts,
-      );
+    for (const batch of turn_context.output.take_assistant_parts()) {
+      const persisted_parts = batch.published_parts ?? (turn_context.output.assistant
+        ? await turn_context.output.assistant.append_result_parts(batch.parts, batch.source_tool_call_id)
+        : batch.parts.map((part, index) => create_session_agent_content_part(
+            part, `${part.type}:${generate_id()}`, step_assistant_parts.length + index + 1,
+            batch.source_tool_call_id,
+          )));
+      // Tool 完成时已发布的内容只参与结果合并，不能在 Step 收口时重复写入。
+      step_assistant_parts = merge_assistant_parts(step_assistant_parts, persisted_parts);
     }
     return {
       step_result: result.step_result,

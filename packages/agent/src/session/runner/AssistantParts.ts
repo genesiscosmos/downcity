@@ -96,7 +96,7 @@ export function extract_assistant_text(
     if (text && chat_send.state === "completed") return text;
   }
   return parts
-    .flatMap((part) => part.type === "text" ? [part.text] : [])
+    .flatMap((part) => part.type === "text" ? [part.text] : part.type === "power" ? [part.fallback_text] : [])
     .join("\n")
     .trim();
 }

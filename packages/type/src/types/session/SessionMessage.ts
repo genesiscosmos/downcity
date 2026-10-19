@@ -10,6 +10,7 @@ import type {
   SessionContextContent,
   SessionDataContent,
   SessionFileContent,
+  SessionPowerContent,
   SessionTextContent,
 } from "./SessionContent.js";
 import type {
@@ -263,6 +264,18 @@ export interface SessionAgentErrorPart {
   recoverable: boolean;
 }
 
+/** 已持久化的 Power 回复内容，身份与顺序统一由 Session 分配。 */
+export interface SessionAgentPowerPart extends SessionPowerContent {
+  /** 由执行运行时绑定的来源 Tool Call；模型历史据此使用摘要替代大型调用参数。 */
+  source_tool_call_id?: string;
+  /** 当前 Message 内稳定的内容身份。 */
+  part_id: string;
+  /** Message 内不可变的线性顺序，从 1 开始。 */
+  sequence: number;
+  /** 产生内容的模型 Step；非模型追加可以省略。 */
+  step_id?: string;
+}
+
 /** Agent Message Part。 */
 export type SessionAgentMessagePart =
   | SessionAgentTextPart
@@ -270,6 +283,7 @@ export type SessionAgentMessagePart =
   | SessionAgentToolPart
   | SessionAgentFilePart
   | SessionAgentDataPart
+  | SessionAgentPowerPart
   | SessionAgentActionPart
   | SessionAgentErrorPart;
 

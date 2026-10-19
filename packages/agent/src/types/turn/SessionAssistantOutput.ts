@@ -12,6 +12,16 @@ import type {
   SessionToolInputReady,
 } from "@/types/session/SessionTool.js";
 
+/** Tool 结果产生的内容批次，收口时合并已发布事实而不重复追加。 */
+export interface SessionAssistantResultBatch {
+  /** 尚无 canonical 身份的输出内容。 */
+  parts: readonly SessionAgentContent[];
+  /** 当前执行绑定的来源 Tool Call。 */
+  source_tool_call_id?: string;
+  /** 已即时发布的 canonical Parts；缺省表示仍需在检查点写入。 */
+  published_parts?: readonly SessionAgentMessagePart[];
+}
+
 /** Executor 写入当前 Turn Assistant Message 的稳定能力。 */
 export interface SessionAssistantOutput {
   /** 开始一个模型 Step 的独立 Part 作用域。 */
@@ -29,7 +39,7 @@ export interface SessionAssistantOutput {
   /** User steer 插入前关闭当前连续 Assistant Message。 */
   close_current_message(): Promise<void>;
   /** 把 Action 产生的封闭内容追加到当前 Assistant Message。 */
-  append_result_parts(parts: readonly SessionAgentContent[]): Promise<SessionAgentMessagePart[]>;
+  append_result_parts(parts: readonly SessionAgentContent[], source_tool_call_id?: string): Promise<SessionAgentMessagePart[]>;
   /** 在 Turn 收口产物之前追加用户可见的 canonical Error Part。 */
   append_error(input: {
     /** 错误影响范围。 */

@@ -41,6 +41,10 @@ interface CapabilityDraft {
   exa_api_key: string;
   /** 是否清除 Exa Key。 */
   clear_exa_api_key: boolean;
+  /** 新 DeepSeek Search / Fetch 共用 Key；空值表示保留。 */
+  deepseek_api_key: string;
+  /** 是否清除 DeepSeek Search / Fetch 共用 Key。 */
+  clear_deepseek_api_key: boolean;
   /** 新 Firecrawl Key；空值表示保留。 */
   firecrawl_api_key: string;
   /** 是否清除 Firecrawl Key。 */
@@ -60,6 +64,8 @@ function draft_from(config: WebConfigView): CapabilityDraft {
     clear_tavily_api_key: false,
     exa_api_key: "",
     clear_exa_api_key: false,
+    deepseek_api_key: "",
+    clear_deepseek_api_key: false,
     firecrawl_api_key: "",
     clear_firecrawl_api_key: false,
     cdp_url: config.cdp_url,
@@ -71,10 +77,10 @@ function draft_from(config: WebConfigView): CapabilityDraft {
 /**
  * 判断某个密钥输入是否应该出现在当前能力下。
  *
- * 搜索的 `auto` 会在 Tavily 与 Exa 之间挑选，因此两个密钥都允许填写；
+ * 搜索的 `auto` 会按 Tavily、Exa、DeepSeek 选择，因此三个密钥都允许填写；
  * 明确选了其中一个时只显示那一个，避免用户去填一个不会被用到的凭据。
  */
-function show_search_key(selected: string, key: "tavily" | "exa"): boolean {
+function show_search_key(selected: string, key: "tavily" | "exa" | "deepseek"): boolean {
   if (selected === "disabled") return false;
   return selected === "auto" || selected === key;
 }
@@ -136,12 +142,16 @@ export function WebCapabilityView({ power, ui, capability }: WebCapabilityViewPr
         clear_tavily_api_key: current.clear_tavily_api_key,
         exa_api_key: current.exa_api_key,
         clear_exa_api_key: current.clear_exa_api_key,
+        deepseek_api_key: current.deepseek_api_key,
+        clear_deepseek_api_key: current.clear_deepseek_api_key,
       };
     }
     if (capability === "document") {
       return {
         firecrawl_api_key: current.firecrawl_api_key,
         clear_firecrawl_api_key: current.clear_firecrawl_api_key,
+        deepseek_api_key: current.deepseek_api_key,
+        clear_deepseek_api_key: current.clear_deepseek_api_key,
       };
     }
     return {
@@ -230,6 +240,9 @@ export function WebCapabilityView({ power, ui, capability }: WebCapabilityViewPr
   const show_tavily = capability === "search" && show_search_key(config.search_provider, "tavily");
   const show_exa = capability === "search" && show_search_key(config.search_provider, "exa");
   const show_firecrawl = capability === "document" && config.document_provider === "firecrawl";
+  const show_deepseek = capability === "search"
+    ? show_search_key(config.search_provider, "deepseek")
+    : capability === "document" && config.document_provider === "deepseek";
   const show_cdp = capability === "browser" && config.browser_provider === "cdp";
 
   return <Page>
@@ -275,6 +288,18 @@ export function WebCapabilityView({ power, ui, capability }: WebCapabilityViewPr
           clear={() => update("clear_exa_api_key", true)}
           restore={() => update("clear_exa_api_key", false)}
           target="exa_api_key"
+          on_open_console={(target) => void open_console(target)}
+          components={ui.components}
+        /> : null}
+        {show_deepseek ? <WebSecretRow
+          label="DeepSeek API Key（搜索与网页读取共用）"
+          configured={config.deepseek_api_key_configured}
+          value={draft.deepseek_api_key}
+          cleared={draft.clear_deepseek_api_key}
+          set_value={(value) => update("deepseek_api_key", value)}
+          clear={() => update("clear_deepseek_api_key", true)}
+          restore={() => update("clear_deepseek_api_key", false)}
+          target="deepseek_api_key"
           on_open_console={(target) => void open_console(target)}
           components={ui.components}
         /> : null}

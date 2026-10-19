@@ -8,6 +8,7 @@
 import fs from "fs-extra";
 import path from "node:path";
 import { project_tool_result } from "./ToolResultProjection.js";
+import { published_power_summaries, project_published_tool_input } from "./SessionPowerProjection.js";
 import type {
   ModelContent,
   ModelFileContent,
@@ -40,7 +41,10 @@ export async function session_messages_to_model_messages(
   return output;
 }
 
-/** 摘要复用正常消息投影，省略 reasoning，附件仅保留引用与元信息。 */
+/**
+ * 摘要复用正常消息投影，仅省略 reasoning，并把附件转换为引用而非加载二进制。
+ * 保留完整源 Message 供 Power 已发布内容裁剪使用，避免逐 Part 投影丢失关联。
+ */
 export async function project_summary_part(
   message: SessionMessage,
   part: SessionUserMessagePart | SessionAgentMessagePart,
@@ -49,7 +53,11 @@ export async function project_summary_part(
     const converted = await convert_user_parts([part as SessionUserMessagePart], undefined, true);
     return converted ? [converted] : [];
   }
-  return convert_assistant_message({ ...message, parts: [part as SessionAgentMessagePart] }, true);
+  return convert_assistant_message(
+    { ...message, parts: [part as SessionAgentMessagePart] },
+    true,
+    published_power_summaries(message),
+  );
 }
 
 /** 把单条 canonical User Message 转换为模型消息。 */
@@ -95,7 +103,11 @@ async function convert_user_parts(
 }
 
 /** 把单条 canonical Agent Message 转换为模型 assistant 与 tool 消息。 */
-function convert_assistant_message(message: SessionAgentMessage, summary = false): ModelMessage[] {
+function convert_assistant_message(
+  message: SessionAgentMessage,
+  summary = false,
+  published_summaries = published_power_summaries(message),
+): ModelMessage[] {
   const output: ModelMessage[] = [];
   let current_step_id: string | null = null;
   const content: ModelContent[] = [];
@@ -127,8 +139,11 @@ function convert_assistant_message(message: SessionAgentMessage, summary = false
         break;
       case "tool":
         if (part.input !== undefined) {
-          append_tool_content(part, content, tool_results);
+          append_tool_content(part, content, tool_results, published_summaries.get(part.tool_call_id));
         }
+        break;
+      case "power":
+        content.push({ type: "text", text: part.fallback_text });
         break;
       case "file":
       case "data":
@@ -149,12 +164,13 @@ function append_tool_content(
   part: SessionAgentToolPart,
   content: ModelContent[],
   tool_results: ModelContent[],
+  published_summary?: string,
 ): void {
   content.push({
     type: "tool_call",
     tool_call_id: part.tool_call_id,
     tool_name: part.tool_name,
-    input: part.input ?? null,
+    input: project_published_tool_input(part.input, published_summary),
   });
   if (part.state !== "completed" && part.state !== "failed") return;
   tool_results.push({

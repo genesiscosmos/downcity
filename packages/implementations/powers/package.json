@@ -1,11 +1,12 @@
 {
   "name": "@downcity/powers",
-  "version": "1.5.2",
+  "version": "1.5.3",
   "type": "module",
   "description": "Downcity 内建 power 集合包",
   "files": [
     "bin",
-    "readmes"
+    "readmes",
+    "styles"
   ],
   "main": "./bin/index.js",
   "types": "./bin/index.d.ts",
@@ -21,6 +22,11 @@
     "./memory": {
       "types": "./bin/memory.d.ts",
       "import": "./bin/memory.js"
+    },
+    "./presentation/styles.css": "./styles/presentation.css",
+    "./presentation": {
+      "types": "./bin/presentation.d.ts",
+      "import": "./bin/presentation.js"
     },
     "./renderers": {
       "types": "./bin/renderers.d.ts",
@@ -44,7 +50,7 @@
     }
   },
   "scripts": {
-    "build": "node ../../../scripts/clean-package.mjs && tsc && tsc-alias -f",
+    "build": "node scripts/generate-presentation-catalog.mjs && node ../../../scripts/clean-package.mjs && tsc && tsc-alias -f",
     "dev": "pnpm build && concurrently -k -n tsc,alias \"tsc --watch --preserveWatchOutput\" \"tsc-alias -f --watch\"",
     "typecheck": "tsc --noEmit",
     "test:messenger-access": "pnpm build && node --test scripts/messenger-access.test.mjs",
@@ -59,7 +65,7 @@
     "test:memory": "pnpm build && node --test scripts/memory-power.test.mjs scripts/memory-web-host-actions.test.mjs",
     "test:skill": "pnpm build && node --test scripts/skill-power.test.mjs",
     "test:task": "pnpm build && node --test scripts/task-power.test.mjs",
-    "test:web": "pnpm build && node --test scripts/web-power.test.mjs scripts/web-data-providers.test.mjs scripts/memory-web-host-actions.test.mjs && node --experimental-test-module-mocks --test scripts/playwright-browser-provider.test.mjs",
+    "test:web": "pnpm build && node --experimental-test-module-mocks --test scripts/web-power.test.mjs scripts/web-data-providers.test.mjs scripts/memory-web-host-actions.test.mjs scripts/playwright-browser-provider.test.mjs",
     "prepack": "npm run build && node ../../../scripts/rewrite-workspace-dependencies.mjs prepare ./package.json",
     "postpack": "node ../../../scripts/rewrite-workspace-dependencies.mjs restore ./package.json"
   },
@@ -68,6 +74,9 @@
     "@downcity/city": "workspace:^",
     "@downcity/type": "workspace:*",
     "@larksuiteoapi/node-sdk": "^1.73.3",
+    "@openuidev/lang-core": "1.0.1",
+    "@openuidev/react-lang": "1.0.1",
+    "@openuidev/react-ui": "0.18.1",
     "commander": "^15.0.0",
     "execa": "^9.6.1",
     "fs-extra": "^11.3.5",

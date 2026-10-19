@@ -18,6 +18,8 @@ export type { PowerRendererNotification } from "./types/PowerNotification.js";
 
 export type {
   PowerActionGateway,
+  PowerMessageComponent,
+  PowerMessageComponentProps,
   PowerConfigComponent,
   PowerConfigComponentProps,
   PowerConfigGateway,

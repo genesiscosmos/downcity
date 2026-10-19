@@ -18,6 +18,7 @@
     "resolveJsonModule": true,
     "declaration": true,
     "declarationMap": true,
+    "noEmitOnError": true,
     "sourceMap": true,
     "composite": true
   },

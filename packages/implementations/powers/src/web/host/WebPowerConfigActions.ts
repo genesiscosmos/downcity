@@ -87,6 +87,7 @@ export function register_web_power_config_actions(
 const CREDENTIAL_CONSOLE_URLS: Record<WebCredentialTarget, string> = {
   tavily_api_key: "https://app.tavily.com/home",
   exa_api_key: "https://dashboard.exa.ai/api-keys",
+  deepseek_api_key: "https://platform.deepseek.com/api_keys",
   firecrawl_api_key: "https://www.firecrawl.dev/app/api-keys",
   cdp_url: "https://playwright.dev/docs/browser-contexts",
 };
@@ -112,6 +113,7 @@ export function public_config(source: PowerJsonObject): WebConfigView {
     browser_provider: read_browser_provider(config.browser_provider),
     tavily_api_key_configured: Boolean(read_string(config.tavily_api_key)),
     exa_api_key_configured: Boolean(read_string(config.exa_api_key)),
+    deepseek_api_key_configured: Boolean(read_string(config.deepseek_api_key)),
     firecrawl_api_key_configured: Boolean(read_string(config.firecrawl_api_key)),
     cdp_url: read_string(config.cdp_url),
     browser_executable_path: read_string(config.browser_executable_path),
@@ -170,6 +172,7 @@ export function apply_config_patch(
   if (patch.default_url !== undefined) assign_optional(result, "default_url", patch.default_url);
   assign_secret(result, "tavily_api_key", patch.tavily_api_key, patch.clear_tavily_api_key, current);
   assign_secret(result, "exa_api_key", patch.exa_api_key, patch.clear_exa_api_key, current);
+  assign_secret(result, "deepseek_api_key", patch.deepseek_api_key, patch.clear_deepseek_api_key, current);
   assign_secret(result, "firecrawl_api_key", patch.firecrawl_api_key, patch.clear_firecrawl_api_key, current);
   return result;
 }
@@ -238,12 +241,12 @@ function read_test_capability(input: PowerJsonValue | undefined): WebConfigTestI
 
 /** 读取搜索 Provider 枚举。 */
 function read_search_provider(value: unknown): NonNullable<WebPowerConfig["search_provider"]> {
-  return value === "tavily" || value === "exa" || value === "disabled" ? value : "auto";
+  return value === "tavily" || value === "exa" || value === "deepseek" || value === "disabled" ? value : "auto";
 }
 
 /** 读取文档 Provider 枚举。 */
 function read_document_provider(value: unknown): NonNullable<WebPowerConfig["document_provider"]> {
-  return value === "firecrawl" || value === "disabled" ? value : "fetch";
+  return value === "firecrawl" || value === "deepseek" || value === "disabled" ? value : "fetch";
 }
 
 /** 读取浏览器 Provider 枚举。 */
@@ -276,7 +279,7 @@ function assign_optional<TKey extends "cdp_url" | "browser_executable_path" | "d
 /** 按新值、显式清除、保留旧值的顺序处理密钥。 */
 function assign_secret(
   target: WebPowerConfig,
-  key: "tavily_api_key" | "exa_api_key" | "firecrawl_api_key",
+  key: "tavily_api_key" | "exa_api_key" | "deepseek_api_key" | "firecrawl_api_key",
   value: unknown,
   clear: unknown,
   current: WebPowerConfig,

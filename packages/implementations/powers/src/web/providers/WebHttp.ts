@@ -2,7 +2,8 @@
  * Web Provider 共用的受限 HTTP 客户端。
  *
  * 关键点（中文）
- * - 仅允许公网 HTTP(S)，每次重定向都重新执行 SSRF 检查。
+ * - 网页仅允许公网 HTTP(S)，每次重定向都重新执行 SSRF 检查。
+ * - 官方 API endpoint 禁止重定向，避免认证请求头被转发到其它地址。
  * - 响应按字节上限流式读取，避免 Content-Length 缺失时无限占用内存。
  * - 错误不包含认证请求头或响应正文。
  */
@@ -27,8 +28,10 @@ export interface SafeFetchOptions {
   readonly timeout_ms?: number;
   /** 最大响应字节数。 */
   readonly max_response_bytes?: number;
-  /** 是否允许访问解析到私网地址的官方 API endpoint。 */
+  /** 官方 API endpoint：允许其 DNS 解析到私网，但禁止跟随任何重定向。 */
   readonly trusted_endpoint?: boolean;
+  /** 调用方的取消信号；重试时用于约束全部尝试与退避的总耗时。 */
+  readonly signal?: AbortSignal;
 }
 
 /** 完整读取后的安全响应。 */
@@ -41,6 +44,8 @@ export interface SafeFetchResult {
   readonly content_type: string;
   /** UTF-8 响应正文。 */
   readonly text: string;
+  /** 服务端 Retry-After 原始值；不存在时为空，由具体 Provider 决定是否重试。 */
+  readonly retry_after: string | null;
 }
 
 /** 请求公网 URL，并限制跳转、超时和响应大小。 */
@@ -57,18 +62,25 @@ export async function safe_fetch(
   );
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), timeout_ms);
+  const signal = options.signal
+    ? AbortSignal.any([controller.signal, options.signal])
+    : controller.signal;
   try {
+    signal.throwIfAborted();
     let url = new URL(input_url);
     for (let redirect_count = 0; redirect_count <= MAX_REDIRECTS; redirect_count += 1) {
-      await assert_safe_url(url, options.trusted_endpoint === true && redirect_count === 0);
+      await assert_safe_url(url, options.trusted_endpoint === true);
+      signal.throwIfAborted();
       const response = await outbound_http_fetch(url, {
         method: options.method ?? "GET",
         headers: options.headers,
         body: options.body,
         redirect: "manual",
-        signal: controller.signal,
+        signal,
       });
       if (is_redirect(response.status)) {
+        await response.body?.cancel();
+        if (options.trusted_endpoint) throw new Error("Web API endpoint redirects are not allowed");
         const location = response.headers.get("location");
         if (!location) throw new Error(`Web request redirect has no location: ${response.status}`);
         if (redirect_count === MAX_REDIRECTS) throw new Error("Web request exceeded redirect limit");
@@ -81,6 +93,7 @@ export async function safe_fetch(
         status: response.status,
         content_type: response.headers.get("content-type") ?? "",
         text,
+        retry_after: response.headers.get("retry-after"),
       };
     }
     throw new Error("Web request exceeded redirect limit");

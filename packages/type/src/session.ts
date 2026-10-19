@@ -19,6 +19,7 @@ export {
   type SessionOrigin,
 } from "./types/session/SessionOrigin.js";
 export type * from "./types/session/SessionContent.js";
+export { validate_session_power_content } from "./types/session/SessionPowerContent.js";
 export type * from "./types/session/SessionMessage.js";
 export {
   MESSENGER_ENVIRONMENT_CONTEXT_TAG,

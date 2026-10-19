@@ -415,7 +415,11 @@ export class StepInput {
           }
           for (const message of output.messages) {
             if (message.role === "agent") {
-              turn_context.output.enqueue_assistant_parts(message.parts);
+              if (context.abort_signal?.aborted) throw context.abort_signal.reason ?? new Error("Tool execution stopped");
+              const published_parts = turn_context.output.assistant
+                ? await turn_context.output.assistant.append_result_parts(message.parts, tool_call_id)
+                : undefined;
+              turn_context.output.enqueue_assistant_parts(message.parts, { source_tool_call_id: tool_call_id, published_parts });
               continue;
             }
             await turn_context.input.append_internal(message.parts);

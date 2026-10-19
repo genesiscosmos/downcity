@@ -25,7 +25,7 @@ export interface SessionToolCallSummary {
 /** 提取单条 canonical Message 的全部普通文本。 */
 export function extract_session_message_text(message: SessionMessage): string {
   return message.parts
-    .flatMap((part) => part.type === "text" ? [part.text] : [])
+    .flatMap((part) => part.type === "text" ? [part.text] : part.type === "power" ? [part.fallback_text] : [])
     .map((text) => text.trim())
     .filter(Boolean)
     .join("\n")

@@ -9,6 +9,8 @@ export { PlaywrightBrowserProvider } from "./web/providers/PlaywrightBrowserProv
 export { LocalBrowserProvider } from "./web/providers/LocalBrowserProvider.js";
 export { TavilySearchProvider } from "./web/providers/TavilySearchProvider.js";
 export { ExaSearchProvider } from "./web/providers/ExaSearchProvider.js";
+export { DeepSeekSearchProvider } from "./web/providers/DeepSeekSearchProvider.js";
+export { DeepSeekDocumentProvider } from "./web/providers/DeepSeekDocumentProvider.js";
 export { FetchDocumentProvider } from "./web/providers/FetchDocumentProvider.js";
 export { FirecrawlDocumentProvider } from "./web/providers/FirecrawlDocumentProvider.js";
 export { SemanticBrowserProviderAdapter } from "./web/providers/SemanticBrowserProviderAdapter.js";
@@ -58,6 +60,7 @@ export type {
 } from "./web/types/WebPowerConfig.js";
 export type { PlaywrightBrowserProviderOptions } from "./web/types/PlaywrightBrowserProvider.js";
 export type {
+  DeepSeekProviderOptions,
   ExaSearchProviderOptions,
   FetchDocumentProviderOptions,
   FirecrawlDocumentProviderOptions,

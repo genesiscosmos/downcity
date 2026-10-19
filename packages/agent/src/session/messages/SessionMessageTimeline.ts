@@ -118,6 +118,9 @@ export function to_session_message_timeline_events(
         }
         break;
       }
+      case "power":
+        events.push(create_timeline_event({ message, role: "agent", text: part.fallback_text, index: events.length }));
+        break;
       case "action":
         events.push({
           id: `${message.message_id}:${events.length}`,

@@ -10,7 +10,7 @@
 
 import type { PowerAction, PowerActionResult } from "@/power/index.js";
 import type { PowerCallSite, PowerRuntimeHost } from "@/power/index.js";
-import type { JsonValue } from "@downcity/type";
+import { validate_session_power_content, type JsonValue } from "@downcity/type";
 
 /** Action 超时写入 abort_signal.reason 的内部错误。 */
 class PowerActionTimeoutError extends Error {
@@ -167,6 +167,16 @@ export async function execute_power_action(
       return failure_result(
         error_message(abort_scope.signal.reason || "Power action cancelled"),
       );
+    }
+    for (const message of result.messages ?? []) {
+      if (message.role !== "agent") continue;
+      for (const part of message.parts) {
+        if (part.type !== "power") continue;
+        validate_session_power_content(part);
+        if (!result.success || part.power_id !== input.power_name) {
+          throw new Error("Power content must belong to the successful calling Power");
+        }
+      }
     }
     return result;
   } catch (error) {

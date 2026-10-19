@@ -12,6 +12,7 @@ import { MemoryPower } from "@/memory.js";
 import { SkillPower } from "@/skill.js";
 import { TaskPower, type TaskAnalyzer } from "@/task.js";
 import { WebPower } from "@/web.js";
+import { PresentationPower } from "@/presentation/Power.js";
 
 /** 官方 Power definition 与 @downcity/city/power 的统一注册协议一致。 */
 export type BuiltinPowerDefinition = CityPowerRegistration;
@@ -27,6 +28,13 @@ export function create_builtin_power_registrations(input: {
   analyze_task?: TaskAnalyzer;
 }): BuiltinPowerRegistration[] {
   return [
+    {
+      readme: builtin_readme_path("presentation"),
+      has_config: false,
+      has_sidebar: false,
+      has_mainview: false,
+      power: new PresentationPower(),
+    },
     {
       readme: builtin_readme_path("skill"),
       has_config: false,

@@ -6,7 +6,7 @@
  */
 
 /** 当前 Session SQLite schema 版本。 */
-export const SESSION_STORAGE_SCHEMA_VERSION = 3;
+export const SESSION_STORAGE_SCHEMA_VERSION = 4;
 
 /** 创建 Session canonical 表、索引与角色约束。 */
 export const SESSION_STORAGE_SCHEMA_SQL = `
@@ -61,7 +61,7 @@ CREATE TABLE IF NOT EXISTS message_parts (
   type TEXT NOT NULL CHECK (
     type IN (
       'text', 'context', 'reasoning', 'tool', 'interaction',
-      'file', 'data', 'action', 'error'
+      'file', 'data', 'power', 'action', 'error'
     )
   ),
   content TEXT NOT NULL CHECK (json_valid(content)),
@@ -103,7 +103,7 @@ WHEN NOT (
     (SELECT role FROM messages WHERE message_id = NEW.message_id) = 'agent'
     AND NEW.type IN (
       'text', 'reasoning', 'tool', 'interaction',
-      'file', 'data', 'action', 'error'
+      'file', 'data', 'power', 'action', 'error'
     )
   )
 )
@@ -122,7 +122,7 @@ WHEN NOT (
     (SELECT role FROM messages WHERE message_id = NEW.message_id) = 'agent'
     AND NEW.type IN (
       'text', 'reasoning', 'tool', 'interaction',
-      'file', 'data', 'action', 'error'
+      'file', 'data', 'power', 'action', 'error'
     )
   )
 )

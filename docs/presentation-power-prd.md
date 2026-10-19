@@ -1,6 +1,7 @@
 # Power 消息渲染与 Presentation PRD
 
-> 状态：架构已确认，待实施。
+> 状态：通用底座与首版已实施；Presentation 已确认切换 OpenUI。
+> 当前 Presentation 协议、组件库、渐进预览与验收以 [OpenUI 迁移合同](presentation-openui-migration.md) 为准。下文 json-render 相关内容保留为首版设计背景，不再作为当前实现要求。
 > 本文是通用 Power 消息渲染底座与 Presentation 首版的完整交付合同。
 > 本文取代《Power Agent Message 渲染插口 PRD》中以 diagram / SeeCode 为首个实施对象的安排。diagram 是后续复用方，本期不集成 SeeCode。
 > 本文描述目标行为，不代表相关能力已经实现。
@@ -282,7 +283,9 @@ Power 校验器和客户端使用同一契约。每个计算函数声明输入�
 
 Power Part 属于回答内容。Tool / Action 调用记录属于执行过程。
 
-即使之后出现 Tool，已发布 Power 内容仍应正文可见。保持 Power Part 与文字的 canonical 相对顺序，并明确处理现有文件改动卡片末尾规则和错误展示。继续使用现有单层投影，不复制平行消息模型。
+所有可见内容使用单一有序流，按 canonical sequence 渲染。文字、Power、附件、文件改动卡片和错误保持原位，不再按类型分成顶部过程区与底部正文区。相邻 Tool、Reasoning、Action 组成活动块，在所在位置展开或折叠；后续工具不改变已发布内容的位置。消息级过程折叠入口移除，活动组件负责自身交互。
+
+模型在讲解需要界面的位置调用 presentation.show，然后继续说明。前端不猜测自然语言段落中的插入位置；如果调用实际发生在最后，模块按事实顺序出现在最后。
 
 消息搜索、预览、复制、导出及模型历史上下文使用 fallback_text，不自动灌入 Spec。渠道无法执行 Renderer 时发送 fallback_text。非交互客户端至少能读取并回退，不能因新增 Part 崩溃。
 
@@ -330,7 +333,7 @@ Tool 回执与历史 Part 摘要各自承担当前执行与历史上下文职责
 
 接通当前参数提交、错误状态、文档和全部受影响检查。记录实际支持目录和限制。
 
-后续增量阶段再设计通用 Part 更新、生成终态、流式校验和用户状态冲突语义。不得直接把 UI patch 塞入通用模型协议，或绕开 Session 保存最终 Spec。
+后续渐进体验的设计合同见 [Presentation 渐进生成体验 PRD 与架构设计](presentation-progressive-rendering-prd.md)。先验证现有 Tool 输入流的纯展示预览，再确定解析格式、生成终态、局部校验、顺序与用户状态保护。不得直接把 UI patch 塞入通用模型协议，或绕开 Session 保存最终 Spec。
 
 ## 16. 验收标准
 

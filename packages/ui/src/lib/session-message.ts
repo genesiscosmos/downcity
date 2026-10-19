@@ -66,6 +66,7 @@ export function session_part_to_chat_part(raw_part: unknown, index = 0): Downcit
   const type = String(part.type ?? "");
   const id = typeof part.part_id === "string" ? part.part_id : `${type}-${index}`;
   if (type === "text" || type === "reasoning") return { id, type, text: typeof part.text === "string" ? part.text : "", state: typeof part.state === "string" ? part.state : undefined };
+  if (type === "power") return { id, type: "text", text: to_string(part.fallback_text) ?? "" };
   if (type === "step-start") return { id, type };
   if (type === "tool") return { id, type, tool_call_id: to_string(part.tool_call_id), tool_name: to_string(part.tool_name), tool_state: to_string(part.state), input_text: to_string(part.input_text), input: part.input, output: part.output, error: to_string(part.error) };
   if (type === "interaction") {

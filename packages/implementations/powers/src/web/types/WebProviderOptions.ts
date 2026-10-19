@@ -24,6 +24,12 @@ export interface ExaSearchProviderOptions extends WebHttpProviderOptions {
   readonly api_key: string;
 }
 
+/** DeepSeek 搜索与文档 Provider 共用的构造参数。 */
+export interface DeepSeekProviderOptions extends WebHttpProviderOptions {
+  /** DeepSeek API Key；用于 Search 与 Fetch 的 Bearer 鉴权，不进入 Action 返回值。 */
+  readonly api_key: string;
+}
+
 /** Firecrawl 文档 Provider 构造参数。 */
 export interface FirecrawlDocumentProviderOptions extends WebHttpProviderOptions {
   /** Firecrawl API Key。 */

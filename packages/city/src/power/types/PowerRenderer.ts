@@ -1,4 +1,6 @@
-/** Power Sidebar、Mainview、Config 与宿主 UI 注入协议。 */
+/** Power Sidebar、Mainview、Config、Message 与宿主 UI 注入协议。 */
+
+import type { SessionAgentPowerPart, SessionAgentToolPart, SessionPowerContent, JsonObject } from "@downcity/type";
 
 import type { ReactNode } from "react";
 import type { PowerJsonObject, PowerJsonValue } from "./Json.js";
@@ -674,6 +676,29 @@ export type PowerConfigComponent = (
   props: PowerConfigComponentProps,
 ) => ReactNode;
 
+/** 消息组件的受限宿主端口，不提供任意业务执行能力。 */
+export interface PowerMessageComponentProps {
+  /** 已持久化的 Power 内容，身份由 Session 分配。 */
+  readonly part: SessionAgentPowerPart;
+  /** 纯展示预览尚未由 Action 发布，不允许提交或保存为成功内容。 */
+  readonly preview?: boolean;
+  /** 当前内容所属 Session。 */
+  readonly session_id: string;
+  /** 当前内容所属 Message。 */
+  readonly message_id: string;
+  /** 解析展示资源地址；本地文件权限由宿主协议检查，不授予任意文件读取。 */
+  readonly resolve_resource?: (source: string) => string | null;
+  /** 读取当前 Part 的本地视图状态；不得视为业务事实。 */
+  readonly read_state: () => JsonObject | null;
+  /** 保存当前 Part 的本地视图状态。 */
+  readonly save_state: (state: JsonObject) => void;
+  /** 将用户明确提交的参数及问题发送给当前 Session。 */
+  readonly submit: (input: { /** 用户问题。 */ question: string; /** 用户可见的参数。 */ parameters: JsonObject }) => Promise<void>;
+}
+
+/** Power 消息组件，仅解释所属 Power 的内容。 */
+export type PowerMessageComponent = (props: PowerMessageComponentProps) => ReactNode;
+
 /** 单一 Renderer 入口声明的固定 UI 插槽。 */
 export interface PowerRendererDefinition {
   /** Power 工作区左侧的业务导航；必须与 Mainview 同时声明。 */
@@ -684,4 +709,10 @@ export interface PowerRendererDefinition {
 
   /** 设置中心内由宿主绑定当前 Power 的独立配置界面。 */
   readonly config?: PowerConfigComponent;
+
+  /** 回复正文中的结构化内容；允许只注册此插槽。 */
+  readonly message?: PowerMessageComponent;
+
+  /** 从当前 Power 的输入快照派生只读预览；无副作用，不持有 Session 或执行工具。 */
+  readonly preview?: (tool: SessionAgentToolPart) => SessionPowerContent | null;
 }

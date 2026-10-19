@@ -58,6 +58,7 @@ export function has_assistant_result_content(
     if (part.type === "file") {
       return Boolean(part.media_type.trim() && part.url.trim());
     }
+    if (part.type === "power") return Boolean(part.fallback_text.trim());
     return Boolean(part.data_type.trim());
   });
 }

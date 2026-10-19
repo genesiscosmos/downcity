@@ -350,16 +350,18 @@ export type BrowserProviderFactory = (
 
 /** WebPower 配置。 */
 export interface WebPowerConfig {
-  /** 搜索实现；auto 按 Tavily、Exa 的顺序选择首个已配置 Provider。 */
-  search_provider?: "auto" | "tavily" | "exa" | "disabled";
-  /** 网页正文实现；fetch 无需密钥，firecrawl 适合复杂页面。 */
-  document_provider?: "fetch" | "firecrawl" | "disabled";
+  /** 搜索实现；auto 按 Tavily、Exa、DeepSeek 的顺序选择首个已配置 Provider。 */
+  search_provider?: "auto" | "tavily" | "exa" | "deepseek" | "disabled";
+  /** 网页正文实现；fetch 无需密钥，firecrawl 与 deepseek 返回 Markdown 正文。 */
+  document_provider?: "fetch" | "firecrawl" | "deepseek" | "disabled";
   /** 浏览器运行方式；local 自动启动专用 Chromium，cdp 连接现有端点。 */
   browser_provider?: "local" | "cdp" | "disabled";
   /** Tavily API Key；只允许配置端写入，不应返回给 Renderer。 */
   tavily_api_key?: string;
   /** Exa API Key；只允许配置端写入，不应返回给 Renderer。 */
   exa_api_key?: string;
+  /** DeepSeek Search / Fetch 共用 API Key；只允许配置端写入，不应返回给 Renderer。 */
+  deepseek_api_key?: string;
   /** Firecrawl API Key；只允许配置端写入，不应返回给 Renderer。 */
   firecrawl_api_key?: string;
   /** 外部浏览器 CDP 地址，仅在 browser_provider=cdp 时使用。 */

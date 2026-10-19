@@ -50,6 +50,8 @@ export function create_session_part_mutation(input: {
       return { ...base, type: "file", part };
     case "data":
       return { ...base, type: "data", part };
+    case "power":
+      return { ...base, type: "power", part };
     case "action":
       return { ...base, type: "action", part };
     case "error":

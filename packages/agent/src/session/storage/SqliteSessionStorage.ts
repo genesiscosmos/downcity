@@ -6,6 +6,7 @@
  */
 
 import path from "node:path";
+import { migrate_session_storage } from "./SessionStorageMigration.js";
 import { DatabaseSync, type SQLInputValue } from "node:sqlite";
 import { normalize_session_id } from "@/session/SessionIdentity.js";
 import type {
@@ -428,7 +429,11 @@ export class SqliteSessionStorage implements SessionStorage {
       if (this.database_location.type === "file") {
         database.exec("PRAGMA journal_mode = WAL; PRAGMA synchronous = NORMAL;");
       }
-      const version = Number(database.prepare("PRAGMA user_version").get()?.user_version ?? 0);
+      let version = Number(database.prepare("PRAGMA user_version").get()?.user_version ?? 0);
+      if (version === 3) {
+        migrate_session_storage(database, version);
+        version = SESSION_STORAGE_SCHEMA_VERSION;
+      }
       if (version > SESSION_STORAGE_SCHEMA_VERSION) {
         throw new Error(`Unsupported Session schema version: ${String(version)}`);
       }

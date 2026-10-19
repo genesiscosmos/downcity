@@ -4,6 +4,7 @@
  * Message envelope 与 Part 分表保存；公开领域对象仍保持 Message 聚合拥有 parts[]。
  */
 
+import { validate_session_power_content } from "@downcity/type";
 import type {
   JsonObject,
   JsonValue,
@@ -247,6 +248,12 @@ function decode_session_part(
         data: read_json(content, "data", row),
         ...optional_string(content, "data_id", row),
       };
+    case "power": {
+      if (role !== "agent") throw invalid_part(row, "Power content requires agent role");
+      const part = { ...content, type: "power" };
+      validate_session_power_content(part);
+      return { ...part, ...identity, ...optional_string(content, "source_tool_call_id", row) };
+    }
     case "action":
       return {
         ...identity,

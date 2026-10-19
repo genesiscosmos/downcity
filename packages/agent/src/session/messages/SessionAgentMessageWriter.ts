@@ -171,7 +171,7 @@ export class SessionAgentMessageWriter {
   }
 
   /** 把 Action 产生的封闭内容追加到当前 Assistant Message。 */
-  async append_result_parts(parts: readonly SessionAgentContent[]): Promise<SessionAgentMessagePart[]> {
+  async append_result_parts(parts: readonly SessionAgentContent[], source_tool_call_id?: string): Promise<SessionAgentMessagePart[]> {
     return await this.enqueue_write(async () => {
       if (this.closed) throw new Error("Assistant Message writer is closed");
       const appended_parts: SessionAgentMessagePart[] = [];
@@ -181,6 +181,7 @@ export class SessionAgentMessageWriter {
           part,
           `${part.type}:${generate_id()}`,
           sequence,
+          source_tool_call_id,
         );
         appended_parts.push(canonical);
         sequence += 1;

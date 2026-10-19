@@ -16,6 +16,8 @@ export interface LocalPowerRendererDefinition {
   mainview: boolean;
   /** Renderer 是否提供独立的设置中心 Config。 */
   config: boolean;
+  /** Renderer 是否提供回复正文消息组件。 */
+  message?: boolean;
 }
 
 /** 内置与第三方 Power 共享的静态领域定义。 */

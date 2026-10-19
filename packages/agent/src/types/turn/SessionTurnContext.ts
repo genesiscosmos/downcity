@@ -13,7 +13,7 @@ import type {
   SessionUserMessage,
 } from "@downcity/type";
 import type { SessionAgentContent } from "@downcity/type";
-import type { SessionAssistantOutput } from "@/types/turn/SessionAssistantOutput.js";
+import type { SessionAssistantOutput, SessionAssistantResultBatch } from "@/types/turn/SessionAssistantOutput.js";
 import type {
   AgentSessionActionCallback,
   AgentSessionActionEvent,
@@ -153,10 +153,10 @@ export interface SessionTurnContext {
     readonly assistant?: SessionAssistantOutput;
 
     /** 把 Action 产生的 Assistant Parts 加入当前 Step 收口队列。 */
-    enqueue_assistant_parts(parts: readonly SessionAgentContent[]): void;
+    enqueue_assistant_parts(parts: readonly SessionAgentContent[], publication?: Omit<SessionAssistantResultBatch, "parts">): void;
 
     /** 消费当前 Step 中等待写入 canonical Assistant Message 的 Parts。 */
-    take_assistant_parts(): SessionAgentContent[];
+    take_assistant_parts(): SessionAssistantResultBatch[];
 
     /** 发布一条不进入 LLM 输入的 Session Action。 */
     publish_action(event: AgentSessionActionEvent): Promise<void>;

@@ -49,6 +49,20 @@ export interface SessionDataContent {
   data_id?: string;
 }
 
+/** Power 拥有的结构化回复内容；由宿主按 power_id 分发消息渲染器。 */
+export interface SessionPowerContent {
+  /** 内容判别字段，用户输入不接受此类型。 */
+  type: "power";
+  /** 内容所属 Power 的稳定标识。 */
+  power_id: string;
+  /** 所属 Power 数据协议的正整数版本。 */
+  schema_version: number;
+  /** 由所属 Power 校验的可序列化业务数据。 */
+  data: JsonValue;
+  /** 无渲染器、文本渠道及模型历史使用的非空摘要。 */
+  fallback_text: string;
+}
+
 /** 可以进入模型 User Message 的 Session 内容。 */
 export type SessionModelUserContent =
   | SessionTextContent
@@ -64,4 +78,5 @@ export type SessionUserContent =
 export type SessionAgentContent =
   | SessionTextContent
   | SessionFileContent
-  | SessionDataContent;
+  | SessionDataContent
+  | SessionPowerContent;

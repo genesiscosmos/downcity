@@ -206,5 +206,6 @@ function is_installed_renderer(
     || typeof renderer.config !== "boolean"
   ) return false;
   if (renderer.sidebar !== renderer.mainview) return false;
-  return renderer.sidebar || renderer.config;
+  if (renderer.message !== undefined && typeof renderer.message !== "boolean") return false;
+  return renderer.sidebar || renderer.config || renderer.message === true;
 }

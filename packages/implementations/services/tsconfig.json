@@ -12,6 +12,7 @@
     "forceConsistentCasingInFileNames": true,
     "declaration": true,
     "declarationMap": true,
+    "noEmitOnError": true,
     "sourceMap": true,
     "types": ["node"]
   },

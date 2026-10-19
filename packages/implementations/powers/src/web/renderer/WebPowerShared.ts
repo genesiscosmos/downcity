@@ -37,6 +37,7 @@ export interface WebProviderOption {
 export type WebConfigRequirement =
   | "tavily_api_key"
   | "exa_api_key"
+  | "deepseek_api_key"
   | "firecrawl_api_key"
   | "cdp_url";
 
@@ -44,6 +45,7 @@ export type WebConfigRequirement =
 function has_requirement(config: WebConfigView, requirement: WebConfigRequirement): boolean {
   if (requirement === "tavily_api_key") return config.tavily_api_key_configured;
   if (requirement === "exa_api_key") return config.exa_api_key_configured;
+  if (requirement === "deepseek_api_key") return config.deepseek_api_key_configured;
   if (requirement === "firecrawl_api_key") return config.firecrawl_api_key_configured;
   return config.cdp_url.trim().length > 0;
 }
@@ -51,7 +53,7 @@ function has_requirement(config: WebConfigView, requirement: WebConfigRequiremen
 /**
  * 判断一个 Provider 是否已具备运行条件。
  *
- * 搜索的 `auto` 例外：它在 Tavily 与 Exa 之间挑，因此两个里有一个就够了。
+ * 搜索的 `auto` 例外：按 Tavily、Exa、DeepSeek 的顺序选择，任意一个有 Key 即可。
  */
 export function is_provider_ready(
   config: WebConfigView,
@@ -59,7 +61,7 @@ export function is_provider_ready(
   provider_value: string,
 ): boolean {
   if (provider_value === "auto") {
-    return config.tavily_api_key_configured || config.exa_api_key_configured;
+    return config.tavily_api_key_configured || config.exa_api_key_configured || config.deepseek_api_key_configured;
   }
   const option = PROVIDER_OPTIONS[capability].find((item) => item.value === provider_value);
   if (!option) return false;
@@ -125,10 +127,12 @@ export const PROVIDER_OPTIONS: Record<
     { value: "auto", label: "Auto", requires: [] },
     { value: "tavily", label: "Tavily", requires: ["tavily_api_key"] },
     { value: "exa", label: "Exa", requires: ["exa_api_key"] },
+    { value: "deepseek", label: "DeepSeek", requires: ["deepseek_api_key"] },
   ],
   document: [
     { value: "fetch", label: "Fetch", requires: [] },
     { value: "firecrawl", label: "Firecrawl", requires: ["firecrawl_api_key"] },
+    { value: "deepseek", label: "DeepSeek", requires: ["deepseek_api_key"] },
   ],
   browser: [
     { value: "local", label: "Local Chrome", requires: [] },

@@ -37,6 +37,8 @@ import { PlaywrightBrowserProvider } from "@/web/providers/PlaywrightBrowserProv
 import { LocalBrowserProvider } from "@/web/providers/LocalBrowserProvider.js";
 import { TavilySearchProvider } from "@/web/providers/TavilySearchProvider.js";
 import { ExaSearchProvider } from "@/web/providers/ExaSearchProvider.js";
+import { DeepSeekSearchProvider } from "@/web/providers/DeepSeekSearchProvider.js";
+import { DeepSeekDocumentProvider } from "@/web/providers/DeepSeekDocumentProvider.js";
 import { FetchDocumentProvider } from "@/web/providers/FetchDocumentProvider.js";
 import { FirecrawlDocumentProvider } from "@/web/providers/FirecrawlDocumentProvider.js";
 import { register_web_power_config_actions } from "@/web/host/WebPowerConfigActions.js";
@@ -228,12 +230,16 @@ export class WebPower extends Power {
     if (selected === "disabled") return undefined;
     const tavily_api_key = read_secret(config.tavily_api_key, context.workspace?.env.TAVILY_API_KEY);
     const exa_api_key = read_secret(config.exa_api_key, context.workspace?.env.EXA_API_KEY);
+    const deepseek_api_key = read_secret(config.deepseek_api_key, context.workspace?.env.DEEPSEEK_API_KEY);
     const timeout_ms = config.timeout_ms;
     if ((selected === "auto" || selected === "tavily") && tavily_api_key) {
       return new TavilySearchProvider({ api_key: tavily_api_key, timeout_ms });
     }
     if ((selected === "auto" || selected === "exa") && exa_api_key) {
       return new ExaSearchProvider({ api_key: exa_api_key, timeout_ms });
+    }
+    if ((selected === "auto" || selected === "deepseek") && deepseek_api_key) {
+      return new DeepSeekSearchProvider({ api_key: deepseek_api_key, timeout_ms });
     }
     return undefined;
   }
@@ -251,6 +257,12 @@ export class WebPower extends Power {
         timeout_ms: config.timeout_ms,
         max_chars: config.max_observation_chars,
       });
+    }
+    if (selected === "deepseek") {
+      const api_key = read_secret(config.deepseek_api_key, context.workspace?.env.DEEPSEEK_API_KEY);
+      return api_key
+        ? new DeepSeekDocumentProvider({ api_key, timeout_ms: config.timeout_ms })
+        : undefined;
     }
     const api_key = read_secret(
       config.firecrawl_api_key,
@@ -601,10 +613,10 @@ function web_provider_key(context: import("@downcity/city/power").PowerContext):
 
 /** 校验 WebPower 当前公开支持的内建浏览器类型。 */
 function assert_supported_config(config: WebPowerConfig | undefined): void {
-  if (config?.search_provider && !["auto", "tavily", "exa", "disabled"].includes(config.search_provider)) {
+  if (config?.search_provider && !["auto", "tavily", "exa", "deepseek", "disabled"].includes(config.search_provider)) {
     throw new TypeError(`Unsupported Web search provider: ${config.search_provider}`);
   }
-  if (config?.document_provider && !["fetch", "firecrawl", "disabled"].includes(config.document_provider)) {
+  if (config?.document_provider && !["fetch", "firecrawl", "deepseek", "disabled"].includes(config.document_provider)) {
     throw new TypeError(`Unsupported Web document provider: ${config.document_provider}`);
   }
   if (config?.browser_provider && !["local", "cdp", "disabled"].includes(config.browser_provider)) {

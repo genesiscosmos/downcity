@@ -238,7 +238,7 @@ function normalize_power_renderer(
     throw new Error("Power renderer must be an object");
   }
   const raw = value as Record<string, unknown>;
-  assert_known_fields(raw, ["entry", "sidebar", "mainview", "config"], "Power renderer");
+  assert_known_fields(raw, ["entry", "sidebar", "mainview", "config", "message"], "Power renderer");
   const entry = normalize_power_entry(raw.entry, power_root, "renderer.entry", [".js", ".mjs"]);
   if (!entry) throw new Error("Power renderer.entry is required");
   for (const key of ["sidebar", "mainview", "config"] as const) {
@@ -250,8 +250,10 @@ function normalize_power_renderer(
   if (sidebar !== mainview) {
     throw new Error("Power renderer.sidebar and renderer.mainview must be declared together");
   }
-  if (!sidebar && !config) throw new Error("Power renderer must provide a workspace UI or config");
-  return { entry, sidebar, mainview, config };
+  if (raw.message !== undefined && typeof raw.message !== "boolean") throw new Error("Power renderer.message must be boolean");
+  const message = raw.message === true;
+  if (!sidebar && !config && !message) throw new Error("Power renderer must provide a workspace UI, config or message");
+  return { entry, sidebar, mainview, config, message };
 }
 
 /** 校验并规范化 Power 必需的 Markdown 用户文档路径。 */

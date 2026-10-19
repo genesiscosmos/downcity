@@ -1,0 +1,156 @@
+/* 已确认的正文视觉：单层容器、克制指标、轻量参数与低对比度图表。
+ * 只覆盖 Presentation 内的公开组件类名，不改变 React 状态或上游交互语义。
+ */
+.downcity-openui {
+  padding: 1.5rem 1.75rem;
+}
+.downcity-openui .openui-header {
+  margin-bottom: 0;
+  gap: 0.375rem;
+}
+.downcity-openui .openui-header-top-left {
+  font-weight: 600;
+  letter-spacing: -0.025em;
+}
+.downcity-openui .openui-header-bottom,
+.downcity-openui .openui-form-control > label,
+.downcity-openui .openui-slider-block__label {
+  font: var(--openui-text-label-xs);
+  color: var(--muted-foreground);
+}
+.downcity-openui .openui-metric-indicator__row {
+  align-items: baseline;
+  gap: 0.5rem;
+}
+.downcity-openui .openui-metric-indicator__main-value {
+  font: 500 var(--text-2xl, 1.5rem)/1.25 var(--font-sans);
+  letter-spacing: -0.035em;
+  font-variant-numeric: tabular-nums;
+}
+.downcity-openui .openui-metric-indicator__subtext,
+.downcity-openui .openui-metric-indicator__trend {
+  font: var(--openui-text-label-xs);
+}
+.downcity-openui .openui-metric-indicator__trend--success {
+  color: var(--muted-foreground);
+}
+.downcity-openui .openui-form-control {
+  gap: 0.5rem;
+}
+.downcity-openui .openui-input,
+.downcity-openui .openui-button-base {
+  border-radius: var(--radius-control, 0.375rem);
+  font: var(--openui-text-label-xs);
+}
+.downcity-openui .openui-input-medium {
+  min-height: 2rem;
+  padding: 0.375rem 0.625rem;
+}
+.downcity-openui .openui-button-base-medium {
+  min-height: 2rem;
+  padding: 0.375rem 0.75rem;
+}
+.downcity-openui .openui-button-base-tertiary {
+  color: var(--muted-foreground);
+}
+.downcity-openui .openui-button-base-tertiary:hover {
+  color: var(--foreground);
+}
+.downcity-openui .openui-slider-block__header {
+  margin-bottom: 0.75rem;
+}
+.downcity-openui .openui-slider-block__label {
+  padding-top: 0;
+}
+.downcity-openui .openui-slider-block__controls input {
+  height: 1.75rem;
+  background: transparent;
+  border-color: transparent;
+  font-variant-numeric: tabular-nums;
+}
+.downcity-openui .openui-slider-block__controls input:focus {
+  border-color: var(--input, var(--border));
+}
+.downcity-openui .openui-slider-track {
+  height: 0.1875rem;
+  background: var(--border);
+}
+.downcity-openui .openui-slider-range {
+  margin-inline: 0;
+  background: var(--muted-foreground);
+  border-radius: inherit;
+}
+.downcity-openui .openui-slider-thumb-handle {
+  width: 0.75rem;
+  height: 0.75rem;
+  border: 1.5px solid var(--foreground);
+  border-radius: 50%;
+  outline: none;
+  background: var(--background);
+  box-shadow: none;
+}
+.downcity-openui .openui-slider-thumb-handle-inner {
+  border-radius: inherit;
+  background: var(--background);
+}
+.downcity-openui .openui-slider-thumb-handle-inner-dot {
+  display: none;
+}
+.downcity-openui .openui-slider-labels {
+  font: var(--openui-text-label-xs);
+  margin-top: 0.5rem;
+}
+/* 保留系列颜色与图例对应关系，仅弱化辅助网格，避免损失多序列辨识度。 */
+.downcity-openui .openui-line-chart-grid line {
+  opacity: 0.5;
+  stroke-dasharray: none;
+}
+.downcity-openui .openui-chart-legend {
+  font: var(--openui-text-label-xs);
+}
+/* 生成期间禁用控件但保留文字选择；fieldset 不引入额外边框和尺寸。 */
+.downcity-openui .downcity-presentation-controls {
+  min-inline-size: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  user-select: text;
+}
+/* 扩展内容使用单层弱边界，产品卡片保持响应式布局，图片不撑破消息宽度。 */
+.downcity-openui .downcity-presentation-media { display: contents; }
+.downcity-openui .downcity-presentation-media-error {
+  font: var(--openui-text-label-xs);
+  color: var(--muted-foreground);
+  margin-block: 0.5rem;
+}
+.downcity-openui .openui-composite-card,
+.downcity-openui .openui-context-card:not(.openui-context-card--variant-image),
+.downcity-openui .openui-overview-card,
+.downcity-openui .openui-option-card {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-item, 0.5rem);
+  box-shadow: none;
+  background-color: transparent;
+}
+.downcity-openui .openui-option-card--selected {
+  border-color: var(--foreground);
+  background-color: var(--muted);
+}
+.downcity-openui .openui-composite-card__body { gap: 0.75rem; }
+.downcity-openui .openui-image,
+.downcity-openui .openui-image-block-image {
+  max-width: 100%;
+  max-height: 24rem;
+  object-fit: contain;
+  border-radius: var(--radius-item, 0.5rem);
+}
+.downcity-openui .openui-code-block-wrapper {
+  min-width: 0;
+  max-width: 100%;
+  overflow: auto;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-item, 0.5rem);
+}
+@media (max-width: 560px) {
+  .downcity-openui { padding: 1.25rem 1rem; }
+}

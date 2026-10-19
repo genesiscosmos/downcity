@@ -86,9 +86,9 @@ export class SessionAssistantOutputAdapter implements SessionAssistantOutput {
   }
 
   /** 追加 Action 产生的封闭 Assistant 内容。 */
-  async append_result_parts(parts: readonly SessionAgentContent[]): Promise<SessionAgentMessagePart[]> {
+  async append_result_parts(parts: readonly SessionAgentContent[], source_tool_call_id?: string): Promise<SessionAgentMessagePart[]> {
     if (parts.length === 0) return [];
-    return await (await this.ensure_writer()).append_result_parts(parts);
+    return await (await this.ensure_writer()).append_result_parts(parts, source_tool_call_id);
   }
 
   /** 在 Turn 收口产物之前追加用户可见的 canonical Error Part。 */
