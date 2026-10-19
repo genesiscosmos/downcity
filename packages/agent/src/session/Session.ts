@@ -106,6 +106,8 @@ export class Session implements AgentSession {
   private readonly local_state: SessionLocalState;
   private readonly get_agent_model: SessionOptions["get_agent_model"];
   private readonly get_hooks: SessionOptions["get_hooks"];
+  /** fork 保持同一 Agent 的可靠完成写前端口。 */
+  private readonly completions: SessionOptions["completions"];
   private readonly get_instruction_system_blocks:
     SessionOptions["get_instruction_system_blocks"];
   /** 当前 Session 的一次性初始化任务，避免缓存实例被重复恢复运行时状态。 */
@@ -119,9 +121,14 @@ export class Session implements AgentSession {
   private runtime_port: SessionPort | null = null;
   /** 原地重写期间阻止新的 Prompt 进入执行队列。 */
   private replacing_history = false;
+  /** 归档中的会话同步拒绝新输入，归档成功后旧句柄保持封闭。 */
+  private archive_state: "active" | "archiving" | "archived" = "active";
+  /** 集合拥有者提供的唯一归档入口，fork 继续沿用。 */
+  private readonly archive_session: SessionOptions["archive_session"];
 
   constructor(options: SessionOptions) {
     this.id = normalize_session_id(options.session_id);
+    this.archive_session = options.archive_session;
     this.agent_id = String(options.agent_id || "").trim();
     this.agent_name = String(options.agent_name || "").trim() || this.agent_id;
     this.agent_description = String(options.agent_description || "").trim();
@@ -135,6 +142,7 @@ export class Session implements AgentSession {
     this.logger = options.logger;
     this.get_agent_model = options.get_agent_model;
     this.get_hooks = options.get_hooks;
+    this.completions = options.completions;
     this.get_instruction_system_blocks = options.get_instruction_system_blocks;
     this.composer = options.composer ?? new DefaultSessionComposer();
     if (!this.id) {
@@ -149,6 +157,7 @@ export class Session implements AgentSession {
 
     this.events = new SessionEventHub();
     this.session_messages = new SessionMessages({
+      completions: options.completions,
       session_id: this.id,
       store: this.store,
       attachment_store: this.store.attachments,
@@ -199,6 +208,7 @@ export class Session implements AgentSession {
       },
     });
     this.session_loop = new SessionLoop({
+      completions: options.completions,
       session_id: this.id,
       session_origin: this.origin,
       get_workspace_path: () => this.get_workspace_path(),
@@ -441,9 +451,29 @@ export class Session implements AgentSession {
    * 追加一条新的 Session prompt。
    */
   async prompt(input: AgentSessionPromptInput): Promise<AgentSessionTurnHandle> {
+    if (this.archive_state !== "active") throw new Error(`Session is ${this.archive_state}: ${this.id}`);
     await this.step_input.initialize();
+    if (this.archive_state !== "active") throw new Error(`Session is ${this.archive_state}: ${this.id}`);
     if (this.replacing_history) throw new Error("Session history is being replaced");
     return await this.session_loop.prompt(input);
+  }
+
+  /** 归档委托给拥有者，不直接搬动 Session 数据。 */
+  async archive(): Promise<import("@/types/agent/SessionTypes.js").AgentArchiveSessionResult> {
+    if (!this.archive_session) throw new Error("Session archive requires an owning Agent collection");
+    return await this.archive_session(this.id);
+  }
+
+  /** 在任何存储 await 前同步关闭输入，拒绝正在运行或排队的工作。 */
+  begin_archive(): void {
+    if (this.archive_state !== "active") throw new Error(`Session is ${this.archive_state}: ${this.id}`);
+    if (this.session_loop.is_busy()) throw new Error(`Session "${this.id}" is currently executing or queued`);
+    this.archive_state = "archiving";
+  }
+
+  /** 失败可以重试；成功后旧引用不能重新执行已归档会话。 */
+  finish_archive(success: boolean): void {
+    this.archive_state = success ? "archived" : "active";
   }
 
   /**
@@ -715,6 +745,8 @@ export class Session implements AgentSession {
 
   private create_fork_session(session_id: string): this {
     return this.create_child_session({
+      completions: this.completions,
+      archive_session: this.archive_session,
       agent_id: this.agent_id,
       agent_name: this.agent_name,
       agent_description: this.agent_description,

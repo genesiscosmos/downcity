@@ -11,6 +11,8 @@
  * - 详情按最近消息分页读取，让对话能回答「它做了什么」，而不把整段历史塞进上下文。
  */
 
+import type { ListSessionMessagesInput, SessionMessagePage } from "@downcity/type";
+import type { AgentArchiveSessionResult } from "@/types/agent/SessionTypes.js";
 import type { SessionInteractionResponse } from "@downcity/type";
 import type { SessionDelegationCaller, SessionDelegationInput, SessionDelegationMessage, SessionDelegationPort, SessionDelegationReceipt } from "@/types/agent/SessionDelegation.js";
 import { is_agent_session_origin } from "@downcity/type";
@@ -144,6 +146,21 @@ export class SessionWork implements SessionWorkContract {
       })),
       ...(failure ? { failure } : {}),
     };
+  }
+
+  /** 直接读取持久化历史分页，compact 只改变模型副本，不改变此原文。 */
+  async messages(input: ListSessionMessagesInput & { /** 目标工作会话标识。 */ session_id: string }): Promise<SessionMessagePage> {
+    const item = await this.require_list_entry(input.session_id);
+    const session = await this.options.get_session(item.session_id, item.origin.type);
+    return await session.messages({ limit: input.limit, before_sequence: input.before_sequence });
+  }
+
+  /** 仅归档 Work 来源，避免模型移除主对话或外部 Channel 路由。 */
+  async archive(input: { /** 待归档的工作会话标识。 */ session_id: string }): Promise<AgentArchiveSessionResult> {
+    const item = await this.require_list_entry(input.session_id);
+    if (item.origin.type !== "work") throw new Error("session.archive only supports Work Sessions");
+    const session = await this.options.get_session(item.session_id, item.origin.type);
+    return await session.archive();
   }
 
   /** 代答某条会话正在等待的用户响应。 */

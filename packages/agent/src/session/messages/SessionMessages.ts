@@ -66,9 +66,12 @@ export class SessionMessages {
   private readonly agent_state: SessionAgentMessageState;
   /** 当前 Message 恢复事务；并发初始化共享同一个 Promise。 */
   private initialize_promise: Promise<void> | null = null;
+  /** 写前结果的只读恢复入口，不能从消息恢复流程启动模型。 */
+  private readonly completions: SessionMessagesOptions["completions"];
 
   constructor(options: SessionMessagesOptions) {
     this.session_id = String(options.session_id || "").trim();
+    this.completions = options.completions;
     this.store = options.store;
     this.attachment_store = options.attachment_store;
     if (!this.session_id) throw new Error("SessionMessages requires session_id");
@@ -109,6 +112,7 @@ export class SessionMessages {
     await this.store.initialize();
     const persisted_messages = await this.store.list_recoverable_agent_messages();
     for (const message of persisted_messages) {
+      const completion = message.turn_id ? await this.completions?.read(this.session_id, message.turn_id) : undefined;
       const updated_at = Date.now();
       const recovered: SessionAgentMessage = {
         ...message,
@@ -157,15 +161,15 @@ export class SessionMessages {
             return { ...part, state: "done" as const };
           }
           return part;
-        }), {
+        }), ...(!completion || (completion.result.error && !message.parts.some((part) => part.type === "error")) ? [{
           part_id: `error:${generate_id()}`,
           sequence: next_agent_part_sequence(message.parts),
-          type: "error",
-          scope: message.turn_id ? "turn" : "session",
-          code: "runtime_interrupted",
-          message: "Agent execution was interrupted before completion.",
+          type: "error" as const,
+          scope: message.turn_id ? "turn" as const : "session" as const,
+          code: completion ? "turn_execution_failed" : "runtime_interrupted",
+          message: completion?.result.error ?? "Agent execution was interrupted before completion.",
           recoverable: true,
-        }],
+        }] : [])],
       };
       const changed_parts = resolve_changed_agent_parts(message.parts, recovered.parts);
       await this.store.update_message({
@@ -301,7 +305,14 @@ export class SessionMessages {
         );
     const canonical = await this.append_user_message({
       turn_id: input.turn_id,
-      parts: normalize_session_user_parts(ui_parts),
+      parts: normalize_session_user_parts([
+        ...ui_parts,
+        ...(input.prompt.callback ? [{ type: "data" as const, data_type: "session_callback", data: {
+          name: input.prompt.callback.name,
+          data: input.prompt.callback.data ?? null,
+          request_id: input.prompt.request_id!,
+        } }] : []),
+      ]),
       visibility: input.prompt.visibility,
       ...(input.message_id ? { message_id: input.message_id } : {}),
     });

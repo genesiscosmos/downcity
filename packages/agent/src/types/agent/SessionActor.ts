@@ -118,6 +118,8 @@ export interface AgentSessionActor {
  * 本地 Agent 返回的公开 session 接口。
  */
 export interface AgentSession extends AgentSessionActor {
+  /** 通过拥有者归档当前会话；运行或排队中拒绝，成功后原句柄不可再提交输入。 */
+  archive(): Promise<AgentArchiveSessionResult>;
   /** 当前 session 所属 agent_id。 */
   readonly agent_id: string;
 

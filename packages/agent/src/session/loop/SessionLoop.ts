@@ -8,7 +8,9 @@
  */
 
 import { createHash } from "node:crypto";
+import { isDeepStrictEqual } from "node:util";
 import { nanoid } from "nanoid";
+import { z } from "zod";
 import type { SessionAgentMessage, SessionUserMessage } from "@downcity/type";
 import type { SessionActionEvent } from "@downcity/type";
 import type { AgentSessionPromptInput } from "@/types/sdk/AgentSessionPrompt.js";
@@ -61,6 +63,9 @@ import {
 } from "@/session/loop/SessionTurnFileDiff.js";
 import type { SessionTurnCompletionOptions } from "@/types/session/SessionTurnCompletion.js";
 
+import { SessionBusyError } from "@/session/SessionBusyError.js";
+import { CompletionPersistenceError, prepare_session_completion } from "./SessionCompletionJournal.js";
+
 const QUEUED_PROMPT_CANCELLED_MESSAGE =
   "Prompt cancelled because session was stopped";
 
@@ -69,6 +74,8 @@ const QUEUED_PROMPT_CANCELLED_MESSAGE =
  */
 export class SessionLoop {
   private readonly session_id: string;
+  /** 由 Agent 提供的写前日志，失败不能通过普通 Hook 吞掉。 */
+  private readonly completions: SessionLoopOptions["completions"];
   private readonly session_origin: SessionLoopOptions["session_origin"];
   /** 当前 Session 的目录解析器。 */
   private readonly get_workspace_path: SessionLoopOptions["get_workspace_path"];
@@ -88,12 +95,15 @@ export class SessionLoop {
   private readonly queue: SessionQueue;  private pending_prompt_count = 0;
   /** 队列消费的同步状态，在发布事件前设置，避免订阅回调重入启动第二个消费器。 */
   private processing = false;
+  /** 同步占用，必须先于任何 await 获取，避免两个调用同时通过空闲检查。 */
+  private exclusive_request: { request_id?: string; token: symbol } | null = null;
   private active_turn: ActiveSessionTurnState | null = null;
   /** 尚未完成 canonical 接收的幂等 Prompt，防止进程内并发重复入队。 */
   private readonly pending_request_handles = new Map<string, Promise<AgentSessionTurnHandle>>();
 
   constructor(options: SessionLoopOptions) {
     this.session_id = String(options.session_id || "").trim();
+    this.completions = options.completions;
     this.session_origin = options.session_origin;
     this.get_workspace_path = options.get_workspace_path;
     this.maintain_context = options.maintain_context;
@@ -118,6 +128,11 @@ export class SessionLoop {
       });
   }
 
+  /** 覆盖占用、等待执行和收口阶段，供归档边界同步校验。 */
+  is_busy(): boolean {
+    return this.exclusive_request !== null || this.active_turn !== null || this.pending_prompt_count > 0 || this.processing;
+  }
+
   /** 返回当前 Session 是否正在执行模型请求。 */
   is_executing(): boolean {
     return this.session_executor.is_executing();
@@ -127,6 +142,37 @@ export class SessionLoop {
    * 追加一条新的 prompt。
    */
   async prompt(input: AgentSessionPromptInput): Promise<AgentSessionTurnHandle> {
+    if (input.callback) {
+      if (!input.request_id?.trim()) throw new Error("Session callback requires request_id");
+      if (!this.completions) throw new Error("Session callbacks require an Agent completion runtime");
+      this.completions.validate_callback(input.callback.name);
+      // JSON 数据先校验再占用，不接受无法重启恢复的函数或循环引用。
+      const data = z.json().parse(input.callback.data ?? null);
+      input = { ...input, callback: { name: input.callback.name, data: structuredClone(data) } };
+    }
+    if (input.mode === "send") return await this.submit_prompt(input);
+    const request_id = input.request_id?.trim();
+    // 终态已保存时允许 callback 接续新工作，队列仍在上一轮释放后串行执行。
+    if (this.active_turn?.result) this.exclusive_request = null;
+    if (this.exclusive_request) {
+      if (!request_id || request_id !== this.exclusive_request.request_id) throw new SessionBusyError(this.session_id);
+      return await this.submit_prompt(input);
+    }
+    if ((this.active_turn && !this.active_turn.result) || this.pending_prompt_count > 0) throw new SessionBusyError(this.session_id);
+    const token = Symbol("session_execution");
+    this.exclusive_request = { request_id, token };
+    const release = () => {
+      if (this.exclusive_request?.token === token) this.exclusive_request = null;
+    };
+    try {
+      const handle = await this.submit_prompt(input);
+      void handle.finished.then(release, release);
+      return handle;
+    } catch (error) { release(); throw error; }
+  }
+
+  /** 已取得占用或显式 send 的请求沿用幂等接收和 Session 队列。 */
+  private async submit_prompt(input: AgentSessionPromptInput): Promise<AgentSessionTurnHandle> {
     if (is_agent_session_prompt_input_empty(input)) {
       throw new Error("session.prompt requires a non-empty query");
     }
@@ -151,6 +197,13 @@ export class SessionLoop {
     input: AgentSessionPromptInput,
     request_identity: PromptRequestIdentity,
   ): Promise<AgentSessionTurnHandle> {
+    if (input.callback) {
+      const existing = await this.messages.read_message(request_identity.message_id);
+      const binding = existing?.role === "user" ? existing.parts.find((part) => part.type === "data" && part.data_type === "session_callback") : undefined;
+      if (existing && (!binding || binding.type !== "data" || !isDeepStrictEqual(binding.data, {
+        name: input.callback.name, data: input.callback.data ?? null, request_id: input.request_id,
+      }))) throw new Error("request_id already belongs to a different callback configuration");
+    }
     const existing_handle = await this.resolve_idempotent_prompt(request_identity);
     if (existing_handle) return existing_handle;
     const persisted_message = await this.messages.read_message(request_identity.message_id);
@@ -484,11 +537,24 @@ export class SessionLoop {
     active_turn: ActiveSessionTurnState,
     error: unknown,
   ): Promise<void> {
-    const final_result = await fail_session_turn(
-      this.turn_completion_options(),
-      active_turn,
-      error,
-    );
+    if (error instanceof CompletionPersistenceError) {
+      if (this.active_turn === active_turn) this.active_turn = null;
+      active_turn.deferred_finished.reject(error);
+      await active_turn.turn_context?.lifecycle.dispose();
+      return;
+    }
+    let final_result: AgentSessionTurnResult;
+    try {
+      const prepared = await this.completions?.read(this.session_id, active_turn.turn_id);
+      final_result = prepared
+        ? await complete_session_turn(this.turn_completion_options(), active_turn, prepared.result)
+        : await fail_session_turn(this.turn_completion_options(), active_turn, error);
+    } catch (failure) {
+      if (this.active_turn === active_turn) this.active_turn = null;
+      active_turn.deferred_finished.reject(failure);
+      await active_turn.turn_context?.lifecycle.dispose();
+      return;
+    }
     if (this.active_turn === active_turn) this.active_turn = null;
     active_turn.deferred_finished.resolve(final_result);
   }
@@ -573,6 +639,13 @@ export class SessionLoop {
     });
 
     await this.drain_queued_maintenance_commands();
+
+    await prepare_session_completion(this.turn_completion_options(), input.active_turn, {
+      turn_id: input.active_turn.turn_id,
+      text: result.text,
+      success: result.success,
+      ...(result.error ? { error: result.error } : {}),
+    });
 
     await assistant_output.finish({
       status: turn_context.lifecycle.abort_signal.aborted
@@ -709,6 +782,8 @@ export class SessionLoop {
     if (this.active_turn?.turn_id === actual_turn_id) {
       return create_turn_handle(this.active_turn);
     }
+    const prepared = await this.completions?.read(this.session_id, actual_turn_id);
+    if (prepared) return create_completed_turn_handle({ turn_id: actual_turn_id, ...prepared.result });
     const agent_message = await this.messages.read_latest_agent_message(actual_turn_id);
     if (!agent_message || agent_message.state === "streaming") return null;
     return create_completed_turn_handle(to_persisted_turn_result(actual_turn_id, agent_message));
@@ -725,6 +800,7 @@ export class SessionLoop {
   /** 为 Turn 收口领域函数投影稳定依赖。 */
   private turn_completion_options(): SessionTurnCompletionOptions {
     return {
+      completions: this.completions,
       session_id: this.session_id,
       messages: this.messages,
       events: this.events,

@@ -9,6 +9,23 @@
  * - 工具不接触 Session 内部结构，只消费公开的摘要、消息投影和交互入口。
  */
 
+import type { SessionMessagePage } from "@downcity/type";
+import type { AgentArchiveSessionResult } from "@/types/agent/SessionTypes.js";
+
+/** 分页消息输出包含完整 canonical Parts，历史仅作为参考数据。 */
+export interface SessionMessagesToolOutput extends SessionMessagePage {
+  /** 数据来自未裁剪的 Session 原始历史。 */
+  source: "canonical_history";
+  /** 历史正文不应被当成本轮用户指令。 */
+  trust_level: "reference";
+}
+
+/** 归档结果沿用 SDK 的 Session 集合契约。 */
+export interface SessionArchiveToolOutput extends AgentArchiveSessionResult {
+  /** 会话已从活跃列表移出，历史保留。 */
+  status: "archived";
+}
+
 /**
  * 一条会话在清单中暴露的稳定状态。
  *

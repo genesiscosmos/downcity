@@ -13,13 +13,28 @@ export interface SessionCompletionRecord {
   /** 事件发生时的项目标识；回调恢复时使用该执行上下文。 */
   workspace_id?: string;
   /** 成功表示所有当时注册的处理器已接受；失败仍可重试。 */
-  state: "pending" | "delivered";
-  /** 已失败的投递次数，用于指数退避。 */
-  attempt_count: number;
-  /** 下一次允许尝试投递的绝对时间戳，单位毫秒。 */
-  retry_at: number;
-  /** 最近一次投递失败的说明。 */
-  error?: string;
+  state: "prepared" | "pending" | "delivered";
+  /** 事件提交时绑定的接收方及独立确认；缺席的处理器不会被默认为成功。 */
+  deliveries: Record<string, {
+    /** 当前接收方是否已经确认接受。 */
+    delivered: boolean;
+    /** 当前接收方已失败次数。 */
+    attempt_count: number;
+    /** 当前接收方下一次允许重试的时间戳。 */
+    retry_at: number;
+    /** 最近失败说明。 */
+    error?: string;
+  }>;
+}
+
+/** Session 在终态提交前借用的写前日志端口；写入异常必须向调用方传播。 */
+export interface SessionCompletionPort {
+  /** 提交请求前确认回调已注册，避免执行完成后才发现没有接收方。 */
+  validate_callback(name: string): void;
+  /** 模型执行结束、canonical 消息关闭前保存结果与接收方快照。 */
+  prepare(event: SessionTurnCommittedHookValue, context: ToolCallContext): Promise<void>;
+  /** 读取写前日志中的权威结果，用于幂等恢复，避免再次运行已完成模型。 */
+  read(session_id: string, turn_id: string): Promise<SessionTurnCommittedHookValue | undefined>;
 }
 
 /** Agent 完成投递运行时的窄依赖。 */
@@ -30,6 +45,8 @@ export interface SessionCompletionOptions {
   get_handlers: () => readonly EffectHook[];
   /** 根据持久化身份恢复回调上下文；不能再次发起模型输入。 */
   restore_context: (record: SessionCompletionRecord) => Promise<ToolCallContext>;
+  /** 每次回调最大执行时间，超时保留待投递状态；默认 30 秒。 */
+  timeout_ms?: number;
   /** 报告持久化或重试异常，不能吞掉后台错误。 */
   report_error: (error: unknown) => void;
 }

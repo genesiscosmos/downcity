@@ -8,6 +8,7 @@
  */
 
 import type { ModelClient, AgentTool as Tool, ToolHookSet, WorkspaceRuntime } from "@downcity/type";
+import type { SessionCompletionPort } from "@/types/agent/SessionCompletion.js";
 import type { AgentSession } from "@/types/agent/SessionActor.js";
 import type { SessionPort } from "@/types/session/SessionPort.js";
 import type { AgentSessionSystemBlock } from "@/types/agent/SessionTypes.js";
@@ -38,12 +39,21 @@ export interface AgentManagedSession extends AgentSession {
    */
   is_executing(): boolean;
 
+  /** 同步封闭新输入并校验无占用，归档期间不得再次 prompt。 */
+  begin_archive(): void;
+  /** 归档失败时恢复输入，成功时保持实例不可执行。 */
+  finish_archive(success: boolean): void;
+
 }
 
 /**
  * 本地 Session 构造参数。
  */
 export interface SessionOptions {
+  /** Agent 的完成事件写前日志；在 canonical Turn 终态之前必须提交成功。 */
+  completions?: SessionCompletionPort;
+  /** 由拥有者归档 Session，并负责集合索引和存储清理。 */
+  archive_session?: (session_id: string) => Promise<import("@/types/agent/SessionTypes.js").AgentArchiveSessionResult>;
   /**
    * 当前 agent 稳定标识。
    */

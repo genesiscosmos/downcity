@@ -22,6 +22,10 @@ export class SessionDelegations implements SessionDelegationPort {
   private readonly active = new Map<string, Promise<void>>();
   private readonly preparations = new Map<string, Promise<AgentSession>>();
   private suspended = false;
+  /** 待回传失败的重试扫描；跟随 Agent suspend 释放。 */
+  private retry_timer?: ReturnType<typeof setTimeout>;
+  /** 同一时刻最多一个恢复扫描。 */
+  private scanning?: Promise<void>;
 
   constructor(private readonly options: SessionDelegationOptions) {}
 
@@ -39,7 +43,7 @@ export class SessionDelegations implements SessionDelegationPort {
     if (caller.agent_id === session.agent_id && caller.session_id === session.id) {
       throw new Error("Cannot send work to the calling Session itself");
     }
-    return await this.submit({ query: input.query, workspace_id: session.workspace_id }, caller, session.id);
+    return await this.submit({ query: input.query, workspace_id: session.workspace_id }, caller, session.id, true);
   }
 
   /** 新建与继续工作共用一份持久化提交和恢复协议。 */
@@ -47,6 +51,7 @@ export class SessionDelegations implements SessionDelegationPort {
     input: SessionDelegationInput,
     caller: SessionDelegationCaller,
     session_id = generate_session_id(),
+    followup = false,
   ): Promise<SessionDelegationReceipt> {
     if (this.suspended) throw new Error("Session delegations are suspended");
     const query = input.query.trim();
@@ -64,11 +69,14 @@ export class SessionDelegations implements SessionDelegationPort {
       delegation_id,
       caller,
       work_session_id: session_id,
+      followup,
       workspace_id,
       query,
       ...(input.title?.trim() ? { title: input.title.trim() } : {}),
       execution_state: "pending",
       delivery_state: "pending",
+      attempt_count: 0,
+      retry_at: 0,
     });
     if (record.delivery_state === "pending") {
       const session = record.result ? undefined : await this.prepare_work(record);
@@ -80,17 +88,19 @@ export class SessionDelegations implements SessionDelegationPort {
   /** 宿主完成 Power、Workspace 与订阅装配后显式调用；不等待工作执行结束。 */
   async resume(): Promise<void> {
     this.suspended = false;
-    for (const record of await this.options.store.pending()) this.launch(record.delegation_id);
+    await this.scan();
   }
 
   /** 在停止或解绑 Agent 之前关闭后台启动及结果回传。 */
   suspend(): void {
     this.suspended = true;
+    if (this.retry_timer) clearTimeout(this.retry_timer);
+    this.retry_timer = undefined;
   }
 
   /** 等待当前后台操作释放；宿主必须先 suspend 并停止 Session。 */
   async settle(): Promise<void> {
-    await Promise.allSettled([...this.active.values(), ...this.preparations.values()]);
+    await Promise.allSettled([...this.active.values(), ...this.preparations.values(), ...(this.scanning ? [this.scanning] : [])]);
   }
 
   /** 明确撤销未投递的工作；取消状态先落库，再由 SessionWork 停止执行。 */
@@ -109,9 +119,44 @@ export class SessionDelegations implements SessionDelegationPort {
   private launch(delegation_id: string, prepared_session?: AgentSession): void {
     if (this.suspended || this.active.has(delegation_id)) return;
     const operation = this.run(delegation_id, prepared_session)
+      .catch(async (error: unknown) => {
+        try {
+          await this.options.store.update(delegation_id, (latest) => {
+            const attempt_count = latest.attempt_count + 1;
+            return { ...latest, attempt_count, retry_at: Date.now() + Math.min(60_000, 1_000 * 2 ** Math.min(attempt_count - 1, 6)), error: String(error) };
+          });
+        } finally { this.options.report_error(delegation_id, error); }
+      })
       .catch((error: unknown) => this.options.report_error(delegation_id, error))
-      .finally(() => { this.active.delete(delegation_id); });
+      .finally(() => { this.active.delete(delegation_id); this.schedule_retry(); });
     this.active.set(delegation_id, operation);
+  }
+
+  /** 仅启动到期的 pending 记录，已保存的模型结果不会重新运行。 */
+  private async scan(): Promise<void> {
+    if (this.suspended) return;
+    if (this.scanning) return await this.scanning;
+    this.scanning = (async () => {
+      const records = await this.options.store.pending();
+      for (const record of records) {
+        if (!this.suspended && record.retry_at <= Date.now()) this.launch(record.delegation_id);
+      }
+      if (records.length) this.schedule_retry();
+    })();
+    try { await this.scanning; } finally { this.scanning = undefined; }
+  }
+
+  /** 定时器只维持重试，不阻止进程退出；挂起期间不再启动回传。 */
+  private schedule_retry(): void {
+    if (this.suspended || this.retry_timer) return;
+    this.retry_timer = setTimeout(() => {
+      this.retry_timer = undefined;
+      void this.scan().catch((error: unknown) => {
+        this.options.report_error("retry_scan", error);
+        this.schedule_retry();
+      });
+    }, 1_000);
+    this.retry_timer.unref?.();
   }
 
   /** 同一委派的会话初始化只执行一次；失败允许下一次恢复重试。 */
@@ -143,6 +188,7 @@ export class SessionDelegations implements SessionDelegationPort {
     try {
       const handle = await session.prompt({
         request_id: `delegation_work:${record.delegation_id}`,
+        mode: record.followup ? "send" : "exclusive",
         query: record.query,
       });
       const latest = await this.options.store.update(record.delegation_id, (current) => ({
@@ -181,6 +227,7 @@ export class SessionDelegations implements SessionDelegationPort {
     if (!record?.result || record.delivery_state !== "pending" || this.suspended) return;
     await parent.prompt({
       request_id: `delegation_result:${delegation_id}`,
+      mode: "send",
       visibility: "internal",
       query: [
         {

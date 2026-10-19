@@ -28,6 +28,8 @@ export interface SessionDelegationRecord {
   caller: SessionDelegationCaller;
   /** 预先分配的子会话标识，创建中断后仍复用同一会话。 */
   work_session_id: string;
+  /** true 表示显式 session.send 补充已有工作，允许进入当前轮次。 */
+  followup: boolean;
   /** 子会话的项目 Workspace 标识，恢复时交由宿主解析。 */
   workspace_id: string;
   /** 子会话唯一收到的完整执行指令。 */
@@ -40,6 +42,12 @@ export interface SessionDelegationRecord {
   execution_state: "pending" | "running" | "succeeded" | "failed" | "stopped";
   /** 回传状态；取消的委派不会自动唤醒父会话。 */
   delivery_state: "pending" | "delivered" | "cancelled";
+  /** 连续失败次数；成功回传后不再重试。 */
+  attempt_count: number;
+  /** 下一次可重试的绝对时间戳，单位毫秒。 */
+  retry_at: number;
+  /** 最近一次执行或回传故障的说明。 */
+  error?: string;
   /** 子执行结束后的权威结果快照。 */
   result?: AgentSessionTurnResult;
 }

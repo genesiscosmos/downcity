@@ -9,6 +9,7 @@
 
 import { allocate_session_id, normalize_session_id } from "@/session/SessionIdentity.js";
 import type { ModelClient, AgentTool as Tool } from "@downcity/type";
+import type { SessionCompletionPort } from "@/types/agent/SessionCompletion.js";
 import type { Logger } from "@/utils/logger/Logger.js";
 import type {
   AgentCreateSessionInput,
@@ -64,6 +65,8 @@ type AgentSessionsOptions = {
    * 固定在集合实例上，而应在创建或恢复单个 Session 时按会话身份解析。
    */
   resolve_session_context: (input?: SessionContextResolution) => {
+    /** Agent 拥有的可靠完成事件写前端口。 */
+    completions?: SessionCompletionPort;
     workspace_path: string;
     workspace_id?: string;
     logger: Logger;
@@ -460,14 +463,17 @@ export class AgentSessions implements AgentSessionsContract<AgentSession> {
     const cache_key = this.session_cache_key(session_id, origin_type);
 
     const cached = this.sessions_by_id.get(cache_key);
-    if (cached?.is_executing()) {
-      throw new Error(`Session "${session_id}" is currently executing`);
+    cached?.begin_archive();
+    try {
+      const result = await this.resolve_session_context().store.archive_session(session_id, origin_type);
+      cached?.finish_archive(true);
+      cached?.dispose_title_generation?.();
+      this.sessions_by_id.delete(cache_key);
+      return result;
+    } catch (error) {
+      cached?.finish_archive(false);
+      throw error;
     }
-
-    const result = await this.resolve_session_context().store.archive_session(session_id, origin_type);
-    cached?.dispose_title_generation?.();
-    this.sessions_by_id.delete(cache_key);
-    return result;
   }
 
   /**
@@ -538,6 +544,8 @@ export class AgentSessions implements AgentSessionsContract<AgentSession> {
       get_workspace: () => context.get_workspace(),
       get_agent_model: () => this.get_agent_model(),
       get_hooks: () => context.get_hooks(),
+      completions: context.completions,
+      archive_session: async (session_id) => await this.archive({ id: session_id, origin_type: resolved_origin.type }),
       composer: this.session_composer,
     });
     this.sessions_by_id.set(cache_key, created);

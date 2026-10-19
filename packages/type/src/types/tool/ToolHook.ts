@@ -26,10 +26,13 @@ export type GuardHook<TValue = JsonValue> = (
 ) => Promise<void>;
 
 /** 副作用处理器：不返回值，失败不影响主链路。 */
-export type EffectHook<TValue = JsonValue> = (
+export type EffectHook<TValue = JsonValue> = ((
   value: TValue,
   context: ToolCallContext,
-) => Promise<void>;
+) => Promise<void>) & {
+  /** 完成回调的稳定业务标识；session.turn_committed 必填，重启与重排后保持不变。 */
+  readonly handler_id?: string;
+};
 
 /** 按检查点名索引的扩展处理器集合。 */
 export interface ToolHookSet {

@@ -33,10 +33,10 @@ export class MessengerPower extends Power {
   /** 完成事件统一负责自动回复，不依赖入站等待者是否仍在内存。 */
   readonly hooks: PowerHooks = {
     effect: {
-      [SESSION_HOOK_POINTS.turn_committed]: [async ({ context, value }) => {
+      [SESSION_HOOK_POINTS.turn_committed]: [Object.assign(async ({ context, value }: Parameters<NonNullable<PowerHooks["effect"]>[string][number]>[0]) => {
         if (context.session?.origin.type !== "channel") return;
         this.require_runtime().commit_completion(context.agent.id, value as unknown as SessionTurnCommittedHookValue);
-      }],
+      }, { handler_id: "channel_reply" })],
     },
   };
 

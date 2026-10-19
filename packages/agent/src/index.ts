@@ -9,6 +9,8 @@
 
 // Agent 入口
 export { Agent } from "./agent/Agent.js";
+export { SessionBusyError } from "./session/SessionBusyError.js";
+export type { SessionCallback, SessionCallbackInput, SessionCallbackHandler, SessionCallbacks } from "./types/agent/SessionCallback.js";
 export type { AgentWorkHost } from "./types/agent/AgentWorkHost.js";
 export type { AgentSessionInput } from "./types/agent/AgentSessionInput.js";
 export type { SessionWorkContract } from "./types/agent/SessionWork.js";
@@ -20,6 +22,8 @@ export type {
   RemoteSessionStateValues,
 } from "./types/agent/SessionState.js";
 export type {
+  SessionMessagesToolOutput,
+  SessionArchiveToolOutput,
   SessionCheckDetailToolOutput,
   SessionCheckListToolOutput,
   SessionCheckToolOutput,

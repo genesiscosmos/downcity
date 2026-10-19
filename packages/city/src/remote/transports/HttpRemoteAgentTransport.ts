@@ -123,9 +123,7 @@ export class HttpRemoteAgentTransport implements RemoteAgentTransport {
       headers: this.headers({
         "Content-Type": "application/json",
       }),
-      body: JSON.stringify({
-        query: input.query,
-      }),
+      body: JSON.stringify(input),
     });
     const id = String(payload.turn?.id || "").trim();
     if (!payload.success || !id) {

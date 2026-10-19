@@ -6,6 +6,7 @@
  * - RemoteAgent 与 Session 数据结构拆到独立类型文件。
  */
 
+import type { SessionCallbacks } from "./SessionCallback.js";
 import type { ModelClient, AgentTool as Tool, ToolHookSet, WorkspaceRuntime } from "@downcity/type";
 
 import type {
@@ -30,6 +31,8 @@ export type AgentSessionConstructor = new (
  * 本地 Agent 构造参数。
  */
 export interface AgentOptions {
+  /** 请求级完成回调注册表；名称与函数在启动时注册，prompt 仅保存名称和参数。 */
+  callbacks?: SessionCallbacks;
   /**
    * 当前 agent 的稳定标识。
    *

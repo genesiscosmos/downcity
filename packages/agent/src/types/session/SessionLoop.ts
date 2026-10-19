@@ -4,6 +4,7 @@
  * 这些类型描述 Turn 编排所依赖的领域对象，不实现任何调度行为。
  */
 
+import type { SessionCompletionPort } from "@/types/agent/SessionCompletion.js";
 import type { ToolCallContext, ToolHookSet } from "@downcity/type";
 import type { SessionEventHub } from "@/session/messages/SessionEventHub.js";
 import type { SessionMessages } from "@/session/messages/SessionMessages.js";
@@ -49,6 +50,8 @@ export interface ActiveSessionTurnState {
 
 /** SessionLoop 构造参数。 */
 export interface SessionLoopOptions {
+  /** Turn 终态前的可靠写前日志；省略时只提供普通 Session Hook。 */
+  completions?: SessionCompletionPort;
   /** 当前 Session 的稳定标识。 */
   session_id: string;
   /** 当前 Session 的完整来源元数据。 */

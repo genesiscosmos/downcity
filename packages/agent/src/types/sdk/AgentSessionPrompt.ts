@@ -6,6 +6,7 @@
  * - 首条输入、运行中补充输入、排队到下一轮的输入，调用侧都使用同一结构。
  */
 
+import type { SessionCallback } from "@/types/agent/SessionCallback.js";
 import type { SessionUserContent } from "@downcity/type";
 
 /**
@@ -44,6 +45,10 @@ export type AgentSessionPromptContent = SessionUserContent;
  * - 远程 Session 中，Data URL 在服务端落盘；调用方本地路径必须对服务端可访问。
  */
 export interface AgentSessionPromptInput {
+  /** 本次执行完成后的持久化回调；需要非空 request_id，默认独占 Session。 */
+  callback?: SessionCallback;
+  /** exclusive 空闲才接收，忙碌抛 SessionBusyError；send 显式补充当前工作。默认 exclusive。 */
+  mode?: "exclusive" | "send";
   /**
    * 调用方为同一业务输入提供的稳定幂等标识。
    *

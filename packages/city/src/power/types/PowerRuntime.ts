@@ -166,11 +166,14 @@ export type PowerGuardHook<TValue extends PowerJsonValue = PowerJsonValue> = (in
 }) => void | Promise<void>;
 
 /** PowerDefinition effect 处理器。 */
-export type PowerEffectHook<TValue extends PowerJsonValue = PowerJsonValue> = (input: {
+export type PowerEffectHook<TValue extends PowerJsonValue = PowerJsonValue> = ((input: {
   /** 动态 PowerDefinition 上下文。 */ readonly context: PowerContext;
   /** 当前事件值。 */ readonly value: TValue;
   /** 当前 PowerDefinition ID。 */ readonly power: string;
-}) => void | Promise<void>;
+}) => void | Promise<void>) & {
+  /** Power 内稳定的回调名；完成 Hook 必填，不能使用数组位置代替身份。 */
+  readonly handler_id?: string;
+};
 
 /** PowerDefinition resolve 处理器。 */
 export type PowerResolveHook<TInput extends PowerJsonValue = PowerJsonValue, TResult extends PowerJsonValue = PowerJsonValue> = (input: {

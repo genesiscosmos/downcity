@@ -4,6 +4,7 @@
  * 这些类型只描述 canonical Message 领域入口的参数，不包含持久化行为。
  */
 
+import type { SessionCompletionPort } from "@/types/agent/SessionCompletion.js";
 import type { JsonObject } from "@downcity/type";
 import type { SessionStorage } from "@/types/store/SessionStorage.js";
 import type { SessionAttachmentStore } from "@/types/store/SessionAttachmentStore.js";
@@ -17,6 +18,8 @@ import type { SessionMutation } from "@downcity/type";
 
 /** SessionMessages 构造参数。 */
 export interface SessionMessagesOptions {
+  /** 恢复时读取写前日志，区分执行已结束与真正中断。 */
+  completions?: SessionCompletionPort;
   /** 当前 Session 标识。 */
   session_id: string;
   /** Message 快照持久化 Store。 */

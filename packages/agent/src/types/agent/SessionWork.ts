@@ -10,6 +10,8 @@
  * - 这组能力只注入 Agent 主会话和 Channel 会话，工作会话不会递归派发。
  */
 
+import type { ListSessionMessagesInput, SessionMessagePage } from "@downcity/type";
+import type { AgentArchiveSessionResult } from "./SessionTypes.js";
 import type { SessionInteractionResponse } from "@downcity/type";
 import type { SessionDelegationCaller, SessionDelegationInput, SessionDelegationMessage, SessionDelegationReceipt } from "./SessionDelegation.js";
 import type {
@@ -35,6 +37,18 @@ export interface SessionWorkContract {
     /** 返回的最近消息条数上限。 */
     limit?: number;
   }): Promise<SessionCheckDetailToolOutput>;
+
+  /** 读取完整 canonical 历史，不受 Composer compact 检查点截断。 */
+  messages(input: ListSessionMessagesInput & {
+    /** 目标会话稳定标识。 */
+    session_id: string;
+  }): Promise<SessionMessagePage>;
+
+  /** 归档空闲会话，由 Session 集合拥有者管理存储与索引。 */
+  archive(input: {
+    /** 目标会话稳定标识。 */
+    session_id: string;
+  }): Promise<AgentArchiveSessionResult>;
 
   /** 代答某条会话正在等待的用户响应。 */
   reply(input: {

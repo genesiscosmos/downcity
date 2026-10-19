@@ -5,6 +5,7 @@
  * Executor，避免 Turn 结果提交反向理解调度过程。
  */
 
+import type { SessionCompletionPort } from "@/types/agent/SessionCompletion.js";
 import type { SessionEventHub } from "@/session/messages/SessionEventHub.js";
 import type { SessionMessages } from "@/session/messages/SessionMessages.js";
 import type { Logger } from "@/utils/logger/Logger.js";
@@ -12,6 +13,8 @@ import type { ToolCallContext, ToolHookSet } from "@downcity/type";
 
 /** Turn 收口函数的稳定依赖。 */
 export interface SessionTurnCompletionOptions {
+  /** 必须先于 canonical 终态成功提交的写前日志端口。 */
+  completions?: SessionCompletionPort;
   /** 当前 Session 的稳定标识。 */
   session_id: string;
   /** 当前 Session 的 canonical Message 入口。 */

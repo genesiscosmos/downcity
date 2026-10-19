@@ -13,6 +13,7 @@ import type { ActiveSessionTurnState } from "@/types/session/SessionLoop.js";
 import type { SessionTurnCompletionOptions } from "@/types/session/SessionTurnCompletion.js";
 import type { SessionTurnCommittedHookValue } from "@downcity/type";
 import { SESSION_HOOK_POINTS } from "@downcity/type";
+import { prepare_session_completion } from "./SessionCompletionJournal.js";
 import { run_effect_point } from "@/session/input/SessionHookRunner.js";
 
 /**
@@ -29,14 +30,18 @@ export async function complete_session_turn(
   active_turn: ActiveSessionTurnState,
   result: SessionTurnExecutionResult,
 ): Promise<AgentSessionTurnResult> {
-  const stopped = active_turn.turn_context?.lifecycle.abort_signal.aborted === true;
+  // 写前提交是本轮结果的确认边界，之后到达的 stop 或清理故障不能改写它。
+  const prepared = await options.completions?.read(options.session_id, active_turn.turn_id);
+  const outcome = prepared?.result ?? result;
+  const stopped = prepared ? prepared.status === "stopped"
+    : active_turn.turn_context?.lifecycle.abort_signal.aborted === true;
   const final_result: AgentSessionTurnResult = {
     turn_id: active_turn.turn_id,
-    text: result.text,
-    success: stopped ? false : result.success,
+    text: outcome.text,
+    success: stopped ? false : outcome.success,
     ...(stopped
       ? { error: options.stopped_message }
-      : result.error ? { error: result.error } : {}),
+      : outcome.error ? { error: outcome.error } : {}),
   };
   active_turn.result = final_result;
   options.events.publish({
@@ -76,6 +81,7 @@ export async function fail_session_turn(
     success: false,
     error: message,
   };
+  await prepare_session_completion(options, active_turn, final_result);
   active_turn.result = final_result;
   if (message !== options.stopped_message) {
     try {

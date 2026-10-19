@@ -153,14 +153,18 @@ export abstract class Power implements PowerDefinition {
     }
 
     for (const [point_name, handlers] of Object.entries(this.hooks?.effect ?? {})) {
-      const compiled = handlers.map((handler): EffectHook =>
-        async (value, call_context: ToolCallContext) => {
+      const compiled = handlers.map((handler): EffectHook => {
+        if (point_name === SESSION_HOOK_POINTS.turn_committed && !handler.handler_id?.trim()) {
+          throw new Error(`Power ${power_name} completion handlers require a stable handler_id`);
+        }
+        return Object.assign(async (value: JsonValue, call_context: ToolCallContext) => {
           await handler({
             context: host.context_for(power_name, call_context),
             value,
             power: power_name,
           });
-        });
+        }, { handler_id: `power:${power_name}:${handler.handler_id ?? point_name}` });
+      });
       effect[point_name] = [...(effect[point_name] ?? []), ...compiled];
     }
 

@@ -35,6 +35,7 @@ import { AgentMemoryStorageProvider } from "@/agent/AgentMemoryStorage.js";
 import { LocalSessionStore } from "@/session/storage/LocalSessionStore.js";
 import { EMPTY_TOOL_HOOK_SET, SESSION_HOOK_POINTS } from "@downcity/type";
 import type { SessionTurnCommittedHookValue } from "@downcity/type";
+import { compile_session_callbacks } from "@/agent/SessionCallbacks.js";
 import { SessionCompletions } from "@/agent/SessionCompletions.js";
 import type { AgentStorage } from "@/types/agent/AgentStorage.js";
 import type { SessionSystemMessage } from "@downcity/type";
@@ -148,7 +149,23 @@ export class Agent {
     this.custom_tools = options.tools && typeof options.tools === "object"
       ? { ...options.tools }
       : {};
-    this.custom_hooks = options.hooks ?? EMPTY_TOOL_HOOK_SET;
+    const base_hooks = options.hooks ?? EMPTY_TOOL_HOOK_SET;
+    this.custom_hooks = {
+      ...base_hooks,
+      effect: {
+        ...base_hooks.effect,
+        [SESSION_HOOK_POINTS.turn_committed]: [
+          ...(base_hooks.effect[SESSION_HOOK_POINTS.turn_committed] ?? []),
+          ...compile_session_callbacks(options.callbacks ?? {}),
+        ],
+      },
+    };
+    const completion_ids = new Set<string>();
+    for (const handler of this.custom_hooks.effect[SESSION_HOOK_POINTS.turn_committed] ?? []) {
+      const id = handler.handler_id?.trim();
+      if (!id || completion_ids.has(id)) throw new Error("Agent completion callbacks require unique, stable handler_id values");
+      completion_ids.add(id);
+    }
     this.session_manager = new AgentSessions({
       agent_id: this.id,
       agent_name: this.name,
@@ -169,6 +186,7 @@ export class Agent {
           || input?.origin?.type === SESSION_ORIGIN_TYPE_CHANNEL;
         if (!workspace) return {
           workspace_path: ".",
+          completions: this.resolve_completions(),
           logger: this.logger,
           get_tools: () => this.resolve_tools(undefined, has_session_tools),
           get_workspace: () => undefined,
@@ -180,6 +198,7 @@ export class Agent {
         this.resolve_tools(workspace, has_session_tools);
         return {
           workspace_path: workspace.path,
+          completions: this.resolve_completions(),
           workspace_id: workspace.id,
           logger: this.logger,
           get_tools: () => this.resolve_tools(workspace, has_session_tools),
@@ -504,6 +523,11 @@ export class Agent {
       get_handlers: () => this.resolve_raw_hooks().effect[SESSION_HOOK_POINTS.turn_committed] ?? [],
       restore_context: async (record) => {
         const session = await this.restore_work_session(record.event.session_id, record.origin.type);
+        if (record.state === "prepared") {
+          const session_store = await this.resolve_storage().sessions.open_session(session.id, record.origin.type);
+          record.event.messages = (await session_store.list_messages())
+            .filter((message) => message.turn_id === record.event.turn_id);
+        }
         const workspace = record.workspace_id
           ? record.workspace_id === this.workspace?.id ? this.workspace : await this.resolve_project_workspace(record.workspace_id)
           : undefined;
