@@ -71,7 +71,7 @@ export class DefaultSessionComposer implements SessionComposer {
     };
   }
 
-  /** 按模型可见语义与输入预算分批生成累计摘要，逐批提交完整单元边界。 */
+  /** 按模型可见语义选择历史，一次生成摘要并提交完整单元边界。 */
   async advance_context(input: SessionContextAdvanceInput): Promise<boolean> {
     return await compact_context(input, this.name);
   }

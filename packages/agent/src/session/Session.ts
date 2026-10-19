@@ -780,7 +780,7 @@ export class Session implements AgentSession {
           description: "Older stable parts are being folded into the context summary.",
         }),
         on_compaction_diagnostic: async (diagnostic) => {
-          await this.logger.log(diagnostic.phase === "failed" ? "warn" : "info", "[agent] context.compaction_batch", {
+          await this.logger.log(diagnostic.phase === "failed" ? "warn" : "info", "[agent] context.compaction_request", {
             session_id: this.id,
             action_id,
             trigger,

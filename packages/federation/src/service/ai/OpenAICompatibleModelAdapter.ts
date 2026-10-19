@@ -5,6 +5,7 @@
  * 并把上游 SSE 规范化为 ModelStreamEvent。路由、fallback、计费和工具执行不属于本模块。
  */
 
+import { create_upstream_model_error } from "./UpstreamModelError.js";
 import type {
   ModelContent,
   ModelFileContent,
@@ -60,7 +61,7 @@ export async function stream_openai_compatible_model(
     body: JSON.stringify(build_request(input)),
     signal: input.abort_signal,
   });
-  if (!response.ok) throw await create_upstream_error(response);
+  if (!response.ok) throw await create_upstream_model_error(response, options.api_key);
   if (!response.body) throw new Error("OpenAI-compatible provider returned an empty response body");
 
   const request_id = response.headers.get("x-request-id") ?? `req_${crypto.randomUUID()}`;
@@ -482,21 +483,6 @@ function parse_tool_input(value: string, finish_reason?: ModelFinishReason): { i
       error: `Tool call arguments are invalid JSON: ${message}. 本次工具未执行。请修正 JSON 参数；数组字段必须传数组，不能传序列化字符串。编辑失败时修正原调用，不要改为整篇重写。`,
     };
   }
-}
-
-/** 创建不泄漏上游正文的边界错误。 */
-async function create_upstream_error(response: Response): Promise<Error> {
-  let message = response.statusText || `HTTP ${response.status}`;
-  try {
-    const body = as_record(await response.json());
-    const error = as_record(body.error);
-    message = read_string(error.message) || read_string(body.message) || message;
-  } catch {
-    // 上游非 JSON 错误响应只使用状态信息，避免回传未知正文。
-  }
-  const error = new Error(message) as Error & { statusCode?: number };
-  error.statusCode = response.status;
-  return error;
 }
 
 /** 判断异常是否来自取消。 */

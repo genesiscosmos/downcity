@@ -1,26 +1,24 @@
 /**
- * 有输入预算的累计摘要执行器。
- * 复用模型语义投影，固定本次目标后串行分批；每个完整单元成功才推进 checkpoint。
- * 超大单元在内存中分片累计，全部完成前不提交边界，失败可从上次持久化边界重做。
+ * 单次 Session 摘要执行器。
+ * 一次选择稳定历史并生成摘要，成功后一次提交 checkpoint；失败不改变原边界。
+ * 已知模型窗口不足时只缩小本次选择范围，不分批重写累计摘要。
  */
 import { ModelStreamFailure } from "@/model/ModelStreamFailure.js";
 import { project_summary_part } from "@/model/messages/SessionModelMessages.js";
-import { build_text_model_messages, generate_model } from "@/model/ModelGenerate.js";
+import { generate_model } from "@/model/ModelGenerate.js";
 import type { SessionContextAdvanceInput } from "@/types/session/SessionComposer.js";
 import type { ContextCompactionDiagnostic, ContextSummaryUnit } from "@/types/session/ContextCompaction.js";
 import { render_summary_text } from "./ContextSummaryText.js";
 import { collect_stable_parts } from "./AdaptiveContextParts.js";
 import { insert_checkpoint, read_latest_checkpoint } from "./AdaptiveContextCheckpoint.js";
-import { build_initial_session_summary_prompt, build_updated_session_summary_prompt, CONTEXT_SUMMARY_MAX_OUTPUT_TOKENS, CONTEXT_SUMMARY_SYSTEM_PROMPT } from "./ContextSummaryPrompts.js";
+import { build_session_summary_messages, CONTEXT_SUMMARY_MAX_OUTPUT_TOKENS } from "./ContextSummaryPrompts.js";
 
-import { context_fragment_end, estimate_context_tokens, select_compaction_target } from "./ContextTokenBudget.js";
+import { estimate_context_tokens, select_compaction_target } from "./ContextTokenBudget.js";
 
-/** 摘要输入预算上限；包含旧摘要、本批历史和提示词。 */
-const DEFAULT_INPUT_BUDGET = 64_000;
-const MIN_INPUT_BUDGET = 1_024;
-const MAX_SHRINK_ATTEMPTS = 3;
+/** 单次输入在实际模型窗口之外预留的协议余量。 */
+const CONTEXT_SAFETY_TOKENS = 2_048;
 
-/** 目标压缩约 65%，至少保留 10k 原始历史，固定边界后按预算分批推进。 */
+/** 目标压缩约 65%，至少保留 10k 原始历史，一次生成并提交摘要。 */
 export async function compact_context(input: SessionContextAdvanceInput, composer_name: string): Promise<boolean> {
   const model = input.model;
   if (!model) return false;
@@ -32,99 +30,76 @@ export async function compact_context(input: SessionContextAdvanceInput, compose
     if (text.trim()) units.push({ ...candidate, text });
   }
   if (units.length === 0) return false;
-  const target_count = select_compaction_target(units.map(unit => unit.text));
+  let target_count = select_compaction_target(units.map(unit => unit.text));
   if (target_count === 0) return false;
-  await input.on_advance_start?.();
   const window = model.context_window;
-  let budget = Math.min(DEFAULT_INPUT_BUDGET, window && window > 0
-    ? window - CONTEXT_SUMMARY_MAX_OUTPUT_TOKENS - 2_048 : DEFAULT_INPUT_BUDGET);
-  if (budget < MIN_INPUT_BUDGET) throw new Error("Model context window is too small for context summarization");
-  let summary = checkpoint?.summary ?? "";
-  let index = 0;
-  let offset = 0;
-  let shrink_attempts = 0;
-  while (index < target_count) {
-    const prompt_overhead = estimate_context_tokens(build_prompt(summary, "")) + estimate_context_tokens(CONTEXT_SUMMARY_SYSTEM_PROMPT);
-    const available = budget - prompt_overhead - 256;
-    if (available < 256) throw new Error("Context summary leaves insufficient input budget for history");
-    const first = units[index]!;
-    let end_index = index;
-    let text = "";
-    let next_offset = 0;
-    if (offset > 0 || estimate_context_tokens(first.text) + 1 > available) {
-      next_offset = context_fragment_end(first.text, offset, available);
-      text = `History fragment (${offset === 0 ? "start" : "continued"}):\n${first.text.slice(offset, next_offset)}`;
-      if (next_offset === first.text.length) { end_index++; next_offset = 0; }
-    } else {
-      let batch_tokens = 0;
-      while (end_index < target_count) {
-        const next_text = units[end_index]!.text;
-        const next_tokens = estimate_context_tokens(next_text) + 1;
-        if (batch_tokens + next_tokens > available) break;
-        text += `${text ? "\n" : ""}${next_text}`;
-        batch_tokens += next_tokens;
-        end_index++;
-      }
+  const budget = window && window > 0
+    ? window - CONTEXT_SUMMARY_MAX_OUTPUT_TOKENS - CONTEXT_SAFETY_TOKENS : undefined;
+  const summary = checkpoint?.summary ?? "";
+  const overhead = build_session_summary_messages(summary, []).reduce((sum, message) =>
+    sum + message.content.reduce((total, part) => total + (part.type === "text" ? estimate_context_tokens(part.text) : 0), 0) + 16, 0);
+  if (budget !== undefined) {
+    let used = overhead;
+    let fitting_count = 0;
+    for (const unit of units.slice(0, target_count)) {
+      used += estimate_context_tokens(unit.text) + 16;
+      if (used > budget) break;
+      fitting_count++;
     }
-    const boundary = units[Math.max(index, end_index - 1)]!;
-    const prompt = build_prompt(summary, text);
+    target_count = fitting_count;
+    if (!target_count) throw new Error("Model context window cannot fit a complete history unit with the existing summary");
+  }
+  const boundary = units[target_count - 1]!;
+  const records = units.slice(0, target_count).map(unit => unit.text);
+  const messages = build_session_summary_messages(summary, records);
+  const texts = messages.flatMap(message => message.content.flatMap(part => part.type === "text" ? [part.text] : []));
+  const input_characters = texts.reduce((sum, text) => sum + text.length, 0);
+  const estimated_input_tokens = texts.reduce((sum, text) => sum + estimate_context_tokens(text), messages.length * 16);
+  await input.on_advance_start?.();
+  // 仅传输中断允许原请求重试一次；部分摘要未提交，也可以安全丢弃重做。
+  for (let attempt = 1; attempt <= 2; attempt++) {
     const diagnostic: ContextCompactionDiagnostic = {
       model_id: model.id,
       phase: "request",
-      input_characters: prompt.length + CONTEXT_SUMMARY_SYSTEM_PROMPT.length,
-      estimated_input_tokens: estimate_context_tokens(prompt) + estimate_context_tokens(CONTEXT_SUMMARY_SYSTEM_PROMPT),
-      input_budget: budget,
-      from_message_sequence: first.message.sequence,
+      input_characters,
+      estimated_input_tokens,
+      input_message_count: messages.length,
+      input_budget: budget ?? null,
+      attempt,
+      from_message_sequence: units[0]!.message.sequence,
       through_message_sequence: boundary.message.sequence,
       through_part_sequence: boundary.part.sequence,
-      partial_unit: offset > 0 || next_offset > 0,
+
     };
     await report(input, diagnostic);
     try {
       const result = await generate_model(model, {
-        messages: build_text_model_messages(CONTEXT_SUMMARY_SYSTEM_PROMPT, prompt),
+        messages,
         max_output_tokens: CONTEXT_SUMMARY_MAX_OUTPUT_TOKENS,
       }, { request_kind: "history_compaction", retry: false, on_failure: input.on_model_request_failure });
       const next_summary = result.text.trim();
-      if (!next_summary) throw new Error("Context summary model returned an empty result");
-      // 片段摘要只在内存累积；完整单元结束后才允许裁掉对应原始历史。
-      if (next_offset === 0) {
-        await insert_checkpoint(input.derived, composer_name, {
+      if (!next_summary) {
+        throw new Error(`Context summary model returned an empty result (finish_reason=${String(result.finish_reason)}, usage=${JSON.stringify(result.usage ?? null)})`);
+      }
+      // 生成完整摘要后一次提交；任何请求失败都保持旧 checkpoint。
+      await insert_checkpoint(input.derived, composer_name, {
           through_message_id: boundary.message.message_id,
           through_message_sequence: boundary.message.sequence,
           through_part_sequence: boundary.part.sequence,
           summary: next_summary,
-        });
-      }
-      summary = next_summary;
-      index = end_index;
-      offset = next_offset;
-      shrink_attempts = 0;
+      });
       await report(input, { ...diagnostic, phase: "completed" });
+      return true;
     } catch (error) {
       await report(input, {
         ...diagnostic, phase: "failed", error: String(error),
         ...(error instanceof ModelStreamFailure ? { error_code: error.code, provider_request_id: error.provider_request_id } : {}),
       });
-      // 仅明确的上下文超限允许缩批；普通 HTTP 400 等错误保留原始诊断并停止。
-      if (!is_input_limit(error) || shrink_attempts >= MAX_SHRINK_ATTEMPTS || budget <= MIN_INPUT_BUDGET) throw error;
-      budget = Math.max(MIN_INPUT_BUDGET, Math.floor(budget / 2));
-      shrink_attempts++;
+      if (attempt === 2 || !(error instanceof ModelStreamFailure) || error.code !== "transport_error"
+        || !error.retryable || /\b(?:400|401|403|404|422)\b/.test(error.message)) throw error;
     }
   }
-  return true;
-}
-
-/** 新摘要始终合并当前累计状态与本批内容。 */
-function build_prompt(summary: string, conversation_text: string): string {
-  return summary.trim()
-    ? build_updated_session_summary_prompt({ previous_summary: summary, conversation_text })
-    : build_initial_session_summary_prompt({ conversation_text });
-}
-
-/** 明确识别上下文输入超限；不将泛化 400 解释为 token 超限。 */
-function is_input_limit(error: unknown): boolean {
-  return /context_length|maximum context|context window|too many tokens|input.{0,30}too long/i.test(String(error));
+  throw new Error("Context summary request attempts exhausted");
 }
 
 /** 诊断不参与领域提交，观测失败不能改变压缩结果。 */

@@ -42,17 +42,3 @@ export function select_compaction_target(texts: readonly string[]): number {
   }
   return best_count;
 }
-
-/** 按 token 预算查找文本片段终点，且不切断 UTF-16 代理对。 */
-export function context_fragment_end(text: string, offset: number, budget: number): number {
-  let low = offset;
-  let high = text.length;
-  while (low < high) {
-    const middle = Math.ceil((low + high) / 2);
-    if (estimate_context_tokens(text.slice(offset, middle)) <= budget) low = middle;
-    else high = middle - 1;
-  }
-  const last = text.charCodeAt(low - 1);
-  if (low < text.length && last >= 0xd800 && last <= 0xdbff) low--;
-  return low;
-}
