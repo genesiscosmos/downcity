@@ -32,7 +32,7 @@ import type {
   SessionInteractionResult,
   SessionInteractionRequest,
 } from "@downcity/agent";
-import type { AgentSessionPromptInput } from "@downcity/agent";
+import type { RemotePromptInput, PromptPowerChannel, OpenPromptPowerChannel } from "@/types/remote/PromptPowerTransport.js";
 import type { AgentSessionStopResult } from "@downcity/agent";
 import type {
   ListSessionMessagesInput,
@@ -57,8 +57,10 @@ export type RemoteSessionTransport = {
   prompt(
     session_id: string,
     origin_type: string,
-    input: AgentSessionPromptInput,
+    input: RemotePromptInput,
   ): Promise<{ id: string }>;
+  /** 为本次 Prompt 建立独立执行通道。 */
+  open_power_channel(input: OpenPromptPowerChannel): Promise<PromptPowerChannel>;
   /** 停止当前 session turn，并取消未吸收队列。 */
   stop(session_id: string, origin_type: string): Promise<AgentSessionStopResult>;
   /** 订阅 session 事件。 */

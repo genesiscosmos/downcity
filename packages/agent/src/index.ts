@@ -7,6 +7,9 @@
  * - HTTP、RPC、Power、Workspace 与 Sandbox 实现不从根入口暴露。
  */
 
+export { describe_prompt_powers, snapshot_prompt_powers, execute_prompt_power } from "./session/input/PromptPowers.js";
+export type { PromptPower, PromptPowerAction, PromptPowerDescriptor, PromptPowerCallContext } from "@downcity/type";
+
 // Agent 入口
 export { Agent } from "./agent/Agent.js";
 export { SessionBusyError } from "./session/SessionBusyError.js";

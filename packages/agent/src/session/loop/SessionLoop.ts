@@ -19,6 +19,7 @@ import type {
   AgentSessionTurnHandle,
   AgentSessionTurnResult,
 } from "@/types/sdk/AgentSessionTurn.js";
+import { snapshot_prompt_powers, describe_prompt_powers, prompt_power_fingerprint, set_turn_prompt_powers, clear_turn_prompt_powers } from "@/session/input/PromptPowers.js";
 import { is_agent_session_prompt_input_empty } from "@/types/sdk/AgentSessionPrompt.js";
 import type { SessionStepExecutionInput, SessionTurnExecutionResult } from "@/types/session/SessionExecution.js";
 import {
@@ -99,6 +100,7 @@ export class SessionLoop {
   private exclusive_request: { request_id?: string; token: symbol } | null = null;
   private active_turn: ActiveSessionTurnState | null = null;
   /** 尚未完成 canonical 接收的幂等 Prompt，防止进程内并发重复入队。 */
+  private readonly pending_power_fingerprints = new Map<string, string | undefined>();
   private readonly pending_request_handles = new Map<string, Promise<AgentSessionTurnHandle>>();
 
   constructor(options: SessionLoopOptions) {
@@ -142,6 +144,10 @@ export class SessionLoop {
    * 追加一条新的 prompt。
    */
   async prompt(input: AgentSessionPromptInput): Promise<AgentSessionTurnHandle> {
+    if (input.powers?.length) {
+      if (input.mode === "send") throw new Error("Prompt Powers require exclusive mode");
+      input = { ...input, powers: snapshot_prompt_powers(input.powers) };
+    }
     if (input.callback) {
       if (!input.request_id?.trim()) throw new Error("Session callback requires request_id");
       if (!this.completions) throw new Error("Session callbacks require an Agent completion runtime");
@@ -180,7 +186,12 @@ export class SessionLoop {
     const request_identity = resolve_prompt_request_identity(this.session_id, input.request_id);
     if (!request_identity) return await this.enqueue_prompt(input);
     const pending_handle = this.pending_request_handles.get(request_identity.turn_id);
-    if (pending_handle) return await pending_handle;
+    const fingerprint = input.powers?.length ? prompt_power_fingerprint(input) : undefined;
+    if (pending_handle) {
+      if (this.pending_power_fingerprints.get(request_identity.turn_id) !== fingerprint) throw new Error("request_id already belongs to different Prompt Powers or query");
+      return await pending_handle;
+    }
+    this.pending_power_fingerprints.set(request_identity.turn_id, fingerprint);
     const operation = this.prompt_with_identity(input, request_identity);
     this.pending_request_handles.set(request_identity.turn_id, operation);
     try {
@@ -188,6 +199,7 @@ export class SessionLoop {
     } finally {
       if (this.pending_request_handles.get(request_identity.turn_id) === operation) {
         this.pending_request_handles.delete(request_identity.turn_id);
+        this.pending_power_fingerprints.delete(request_identity.turn_id);
       }
     }
   }
@@ -197,8 +209,18 @@ export class SessionLoop {
     input: AgentSessionPromptInput,
     request_identity: PromptRequestIdentity,
   ): Promise<AgentSessionTurnHandle> {
+    const previous = await this.messages.read_message(request_identity.message_id);
+    if (previous?.role === "user") {
+      const power_part = previous.parts.find((part) => part.type === "data" && part.data_type === "prompt_powers");
+      const previous_powers = power_part?.type === "data" ? power_part.data : [];
+      const fingerprint = previous.parts.find((part) => part.type === "data" && part.data_type === "prompt_power_fingerprint");
+      if (fingerprint?.type === "data" && fingerprint.data !== prompt_power_fingerprint(input)) throw new Error("request_id already belongs to a different Prompt query");
+      if (!isDeepStrictEqual(previous_powers, describe_prompt_powers(input.powers ?? []))) {
+        throw new Error("request_id already belongs to different Prompt Powers");
+      }
+    }
     if (input.callback) {
-      const existing = await this.messages.read_message(request_identity.message_id);
+      const existing = previous;
       const binding = existing?.role === "user" ? existing.parts.find((part) => part.type === "data" && part.data_type === "session_callback") : undefined;
       if (existing && (!binding || binding.type !== "data" || !isDeepStrictEqual(binding.data, {
         name: input.callback.name, data: input.callback.data ?? null, request_id: input.request_id,
@@ -207,8 +229,10 @@ export class SessionLoop {
     const existing_handle = await this.resolve_idempotent_prompt(request_identity);
     if (existing_handle) return existing_handle;
     const persisted_message = await this.messages.read_message(request_identity.message_id);
+    // 已丢失执行方的请求只能失败收口，不允许通过重试接管未知副作用。
+    const lost_powers = persisted_message?.role === "user" && persisted_message.parts.some((part) => part.type === "data" && part.data_type === "prompt_powers");
     // 稳定身份属于输入；检查点合并可能把它绑定到另一条实际 Turn。
-    return await this.enqueue_prompt(input, persisted_message?.role === "user"
+    return await this.enqueue_prompt(lost_powers ? { ...input, powers: undefined } : input, persisted_message?.role === "user"
       ? { ...request_identity, turn_id: persisted_message.turn_id ?? request_identity.turn_id }
       : request_identity, persisted_message?.role === "user" ? persisted_message : undefined);
   }
@@ -492,10 +516,16 @@ export class SessionLoop {
       return;
     }
 
+    if (active_turn.turn_context && input.powers?.length) {
+      set_turn_prompt_powers(active_turn.turn_context, input.powers);
+    }
     active_turn.prompt_started = true;
     this.pending_prompt_count = Math.max(0, this.pending_prompt_count - 1);
     let handle_resolved = false;
     try {
+      if (persisted_message?.parts.some((part) => part.type === "data" && part.data_type === "prompt_powers")) {
+        throw new Error("Caller Power execution was interrupted; automatic replay is unavailable");
+      }
       const message = persisted_message || await this.persist_prompt_message(
           input,
           active_turn.turn_id,
@@ -523,6 +553,8 @@ export class SessionLoop {
         else deferred_handle.resolve(create_turn_handle(active_turn));
       }
       await this.fail_active_turn(active_turn, error);
+    } finally {
+      if (active_turn.turn_context) clear_turn_prompt_powers(active_turn.turn_context);
     }
   }
 

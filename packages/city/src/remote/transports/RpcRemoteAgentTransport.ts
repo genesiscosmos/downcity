@@ -31,7 +31,7 @@ import type {
   RemoteAgentPowerActionResult,
 } from "@/types/remote/RemoteAgentPowerAction.js";
 import type { SessionMutation } from "@downcity/agent";
-import type { AgentSessionPromptInput } from "@downcity/agent";
+import type { RemotePromptInput, OpenPromptPowerChannel, PromptPowerChannel } from "@/types/remote/PromptPowerTransport.js";
 import type { AgentSessionStopResult } from "@downcity/agent";
 import { RpcClient, parse_rpc_url } from "@/remote/transports/RpcClient.js";
 import type {
@@ -65,13 +65,17 @@ export class RpcRemoteAgentTransport implements RemoteAgentTransport {
   async prompt(
     session_id: string,
     origin_type: string,
-    input: AgentSessionPromptInput,
+    input: RemotePromptInput,
   ): Promise<{ id: string }> {
     return await this.client.prompt_session({
       session_id,
       origin_type,
       input,
     });
+  }
+
+  async open_power_channel(input: OpenPromptPowerChannel): Promise<PromptPowerChannel> {
+    return await this.client.open_power_channel(input);
   }
 
   async stop(session_id: string, origin_type: string): Promise<AgentSessionStopResult> {

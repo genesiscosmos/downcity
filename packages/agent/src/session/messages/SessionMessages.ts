@@ -6,6 +6,7 @@
  * 从最新快照严格递增。
  */
 
+import { describe_prompt_powers, prompt_power_fingerprint } from "@/session/input/PromptPowers.js";
 import { generate_id } from "@/utils/Id.js";
 import { SessionAgentMessageWriter } from "@/session/messages/SessionAgentMessageWriter.js";
 import { SessionAgentMessageState } from "@/session/messages/SessionAgentMessageState.js";
@@ -307,6 +308,10 @@ export class SessionMessages {
       turn_id: input.turn_id,
       parts: normalize_session_user_parts([
         ...ui_parts,
+        ...(input.prompt.powers?.length ? [
+          { type: "data" as const, data_type: "prompt_powers", data: JSON.parse(JSON.stringify(describe_prompt_powers(input.prompt.powers))) },
+          { type: "data" as const, data_type: "prompt_power_fingerprint", data: prompt_power_fingerprint(input.prompt) },
+        ] : []),
         ...(input.prompt.callback ? [{ type: "data" as const, data_type: "session_callback", data: {
           name: input.prompt.callback.name,
           data: input.prompt.callback.data ?? null,

@@ -18,7 +18,8 @@ import type {
 } from "@downcity/agent";
 import type { AgentSessionCollection } from "@downcity/agent";
 import type { WorkspaceRuntime } from "@/workspace/index.js";
-import type { AgentSessionPromptInput } from "@downcity/agent";
+import type { RemotePromptInput } from "@/types/remote/PromptPowerTransport.js";
+import { register_prompt_power_routes } from "./PromptPowerRoutes.js";
 import type { RespondSessionInteractionInput } from "@downcity/agent";
 import type { AgentHttpRuntimeOptions } from "@/city/transport/types/AgentHttpRuntime.js";
 import { resolve_remote_session_set_input } from "@/city/transport/session/RemoteSessionConfig.js";
@@ -43,6 +44,7 @@ export function register_sdk_session_routes(
     get_origin_type(origin_type),
     workspace ? { workspace } : undefined,
   );
+  const prompt_with_powers = register_prompt_power_routes(app, get_session);
   app.get("/api/sdk/sessions", async (c) => {
     try {
       const input: AgentListSessionsInput = {
@@ -119,9 +121,9 @@ export function register_sdk_session_routes(
       if (!session_id) {
         return c.json({ success: false, error: "Missing session_id" }, 400);
       }
-      const body = (await c.req.json()) as AgentSessionPromptInput;
+      const body = (await c.req.json()) as RemotePromptInput;
       const session = await get_session(session_id, c.req.query("origin_type"));
-      const turn = await session.prompt(body);
+      const turn = await prompt_with_powers(c, body, (input) => session.prompt(input));
       return c.json({
         success: true,
         turn: {

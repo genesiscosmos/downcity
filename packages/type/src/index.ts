@@ -19,6 +19,8 @@ export type {
   ModelPricing,
 } from "./types/CityModel.js";
 
+export type { PromptPower, PromptPowerAction, PromptPowerDescriptor, PromptPowerActionDescriptor, PromptPowerActionExample, PromptPowerCallContext, PromptPowerCall, PromptPowerEvent, PromptPowerResult } from "./types/session/PromptPower.js";
+
 export type { AuthRoutePolicy } from "./types/auth/AuthRoute.js";
 
 export type { CityRuntime, PowerSurface } from "./types/city/CityRuntime.js";

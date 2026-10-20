@@ -7,6 +7,8 @@
  * - Power 控制协议与 RemoteAgent 传输都由 City 持有，Agent 不感知传输层。
  */
 
+import type { PromptPowerEvent, PromptPowerResult } from "@downcity/type";
+import type { RemotePromptInput } from "@/types/remote/PromptPowerTransport.js";
 import type {
   AgentCreateSessionInput,
   AgentListSessionsInput,
@@ -20,7 +22,6 @@ import type {
   AgentSessionSystemSnapshot,
   SessionMutation,
   RespondSessionInteractionInput,
-  AgentSessionPromptInput,
   AgentSessionStopResult,
   ListSessionMessagesInput,
   JsonObject,
@@ -35,6 +36,21 @@ import type {
  * - `internal.*` 面向 downcity 本机管理通道。
  */
 type RpcRequestPayload =
+  | {
+      /** 请求关联标识。 */ id: string;
+      /** 请求级执行通道建立。 */ method: "sdk.powers.open";
+      /** 执行所属会话。 */ params: { /** Session 标识。 */ session_id: string; /** 来源分区。 */ origin_type: string; /** 客户端预先登记的订阅标识。 */ subscription_id: string };
+    }
+  | {
+      /** 请求关联标识。 */ id: string;
+      /** 提交调用结果。 */ method: "sdk.powers.result";
+      /** 调用所属通道与结果。 */ params: { /** 通道标识。 */ channel_id: string; /** 返回结果。 */ result: PromptPowerResult };
+    }
+  | {
+      /** 请求关联标识。 */ id: string;
+      /** 关闭执行通道。 */ method: "sdk.powers.close";
+      /** 目标通道。 */ params: { /** 通道标识。 */ channel_id: string };
+    }
   | {
       /** 请求 id，用于匹配响应。 */
       id: string;
@@ -103,7 +119,7 @@ type RpcRequestPayload =
         /** Session 来源分区。 */
         origin_type: string;
         /** SDK prompt 输入。 */
-        input: AgentSessionPromptInput;
+        input: RemotePromptInput;
       };
     }
   | {
@@ -378,7 +394,17 @@ export interface RpcReadyFrame {
 /**
  * RPC 事件帧。
  */
-export interface RpcEventFrame {
+export type RpcEventFrame = RpcSessionEventFrame | RpcPowerEventFrame;
+
+/** 只发给提供方 socket 的执行控制帧。 */
+export interface RpcPowerEventFrame {
+  /** 独立于普通 Session 事件的帧类型。 */ type: "power-event";
+  /** 客户端订阅标识。 */ subscription_id: string;
+  /** 执行控制消息。 */ event: PromptPowerEvent;
+}
+
+/** 普通 Session 事件帧。 */
+export interface RpcSessionEventFrame {
   /** 帧类型。 */
   type: "event";
   /** 当前订阅 id。 */

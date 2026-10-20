@@ -455,6 +455,13 @@ export class Session implements AgentSession {
     await this.step_input.initialize();
     if (this.archive_state !== "active") throw new Error(`Session is ${this.archive_state}: ${this.id}`);
     if (this.replacing_history) throw new Error("Session history is being replaced");
+    if (input.powers?.length) {
+      if (input.mode === "send") throw new Error("Prompt Powers require exclusive mode");
+      const tools = this.get_tools();
+      for (const power of input.powers) {
+        if (Object.hasOwn(tools, power.name)) throw new Error(`Prompt Power name conflicts with existing tool: ${power.name}`);
+      }
+    }
     return await this.session_loop.prompt(input);
   }
 

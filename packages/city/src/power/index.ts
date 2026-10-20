@@ -7,6 +7,8 @@
 
 export { create_action } from "./runtime.js";
 export { Power } from "./Power.js";
+export { export_prompt_power } from "./PromptPower.js";
+export type { PromptPower, PromptPowerAction, PromptPowerCallContext } from "@downcity/type";
 
 export type {
   PowerJsonObject,

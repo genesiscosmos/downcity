@@ -36,6 +36,7 @@ import type {
   AgentSessionTurnHandle,
   AgentSessionTurnResult,
 } from "@downcity/agent";
+import { PromptPowerExecution } from "./PromptPowerExecution.js";
 import { SessionEventHub } from "@/remote/SessionEventHub.js";
 import type {
   RemoteSessionTransport,
@@ -107,9 +108,33 @@ export class RemoteSession implements RemoteAgentSession {
     if (is_agent_session_prompt_input_empty(input)) {
       throw new Error("remote session.prompt requires a non-empty query");
     }
-    await this.ensure_event_pump();
-    const turn = await this.transport.prompt(this.id, this.origin.type, input);
-    return create_turn_handle(this.ensure_turn_lifecycle(turn.id));
+    if (input.powers?.length && input.mode === "send") throw new Error("Prompt Powers require exclusive mode");
+    const execution = input.powers?.length ? new PromptPowerExecution(input.powers) : undefined;
+    try {
+      await this.ensure_event_pump();
+      const { powers: _powers, ...wire_input } = input;
+      let channel_id: string | undefined;
+      if (execution) {
+        const channel = await this.transport.open_power_channel({
+          session_id: this.id, origin_type: this.origin.type,
+          on_event: (event) => execution.on_event(event),
+          on_close: () => { void execution.close().catch(() => {}); },
+        });
+        execution.attach(channel);
+        channel_id = channel.id;
+      }
+      const turn = await this.transport.prompt(this.id, this.origin.type, {
+        ...wire_input,
+        ...(execution ? { powers: execution.descriptors, execution_channel_id: channel_id } : {}),
+      });
+      const handle = create_turn_handle(this.ensure_turn_lifecycle(turn.id));
+      if (execution) void handle.finished.then(() => execution.close(), () => execution.close()).catch(() => {});
+      return handle;
+    } catch (error) {
+      await execution?.close().catch(() => {});
+      await this.maybe_stop_event_pump();
+      throw error;
+    }
   }
 
   /** 停止当前远程 Session Turn。 */

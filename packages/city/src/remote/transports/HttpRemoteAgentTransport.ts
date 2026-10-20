@@ -32,7 +32,8 @@ import type {
   RemoteAgentPowerActionResult,
 } from "@/types/remote/RemoteAgentPowerAction.js";
 import type { SessionMutation } from "@downcity/agent";
-import type { AgentSessionPromptInput } from "@downcity/agent";
+import type { RemotePromptInput, OpenPromptPowerChannel, PromptPowerChannel } from "@/types/remote/PromptPowerTransport.js";
+import { open_http_power_channel } from "./HttpPromptPowerChannel.js";
 import type { AgentSessionStopResult } from "@downcity/agent";
 import type {
   RemoteAgentTransport,
@@ -110,7 +111,7 @@ export class HttpRemoteAgentTransport implements RemoteAgentTransport {
   async prompt(
     session_id: string,
     origin_type: string,
-    input: AgentSessionPromptInput,
+    input: RemotePromptInput,
   ): Promise<{ id: string }> {
     const payload = await read_http_json<{
       success?: boolean;
@@ -130,6 +131,10 @@ export class HttpRemoteAgentTransport implements RemoteAgentTransport {
       throw new Error(String(payload.error || "Remote session prompt failed"));
     }
     return { id };
+  }
+
+  async open_power_channel(input: OpenPromptPowerChannel): Promise<PromptPowerChannel> {
+    return await open_http_power_channel(this.session_url(input.session_id, input.origin_type, "/power-executions/events"), this.headers(), input);
   }
 
   async stop(session_id: string, origin_type: string): Promise<AgentSessionStopResult> {

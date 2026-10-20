@@ -6,6 +6,7 @@
  * - 这些方法是 RemoteAgent RPC transport 的稳定 SDK 面。
  */
 
+import { ServerPromptPowerChannel } from "@/city/transport/session/PromptPowerChannel.js";
 import type { RpcRequest } from "@/city/transport/types/RpcProtocol.js";
 import type {
   RpcSocketSubscription,
@@ -50,6 +51,30 @@ export async function handle_sdk_session_rpc_request(params: {
     await options.sessions.get(session_id, origin_type, session_context);
 
   switch (request.method) {
+    case "sdk.powers.open": {
+      const session = await get_session(request.params.session_id, request.params.origin_type);
+      const subscription_id = request.params.subscription_id;
+      if (subscriptions.has(subscription_id)) throw new Error("Subscription already exists");
+      const key = JSON.stringify([session.agent_id, session.id, session.origin.type]);
+      const channel = new ServerPromptPowerChannel(key, (event) => write_event({ type: "power-event", subscription_id, event }));
+      subscriptions.set(subscription_id, { session_id: session.id, power_channel: channel, unsubscribe: () => channel.close() });
+      channel.abort_controller.signal.addEventListener("abort", () => subscriptions.delete(subscription_id), { once: true });
+      write_success(request.id, { channel_id: channel.id });
+      return true;
+    }
+    case "sdk.powers.result": {
+      const channel = [...subscriptions.values()].find((item) => item.power_channel?.id === request.params.channel_id)?.power_channel;
+      if (!channel) throw new Error("Power channel unavailable on this connection");
+      channel.result(request.params.result);
+      write_success(request.id, {});
+      return true;
+    }
+    case "sdk.powers.close": {
+      const channel = [...subscriptions.values()].find((item) => item.power_channel?.id === request.params.channel_id)?.power_channel;
+      channel?.close();
+      write_success(request.id, {});
+      return true;
+    }
     case "sdk.sessions.list": {
       const workspace_id = resolve_list_workspace_id(request.params, options);
       const page = await options.sessions.list({
@@ -74,8 +99,18 @@ export async function handle_sdk_session_rpc_request(params: {
     }
     case "sdk.sessions.prompt": {
       const session = await get_session(request.params.session_id, request.params.origin_type);
-      const turn = await session.prompt(request.params.input);
-      write_success(request.id, { turn: { id: turn.id } });
+      const { powers, execution_channel_id, ...base } = request.params.input;
+      if (!powers?.length && execution_channel_id) throw new Error("Power channel requires Powers");
+      const channel = powers?.length
+        ? [...subscriptions.values()].find((item) => item.power_channel?.id === execution_channel_id)?.power_channel
+        : undefined;
+      if (powers?.length && !channel) throw new Error("Power execution channel unavailable on this connection");
+      try {
+        const runtime_powers = channel?.prepare(request.params.input, JSON.stringify([session.agent_id, session.id, session.origin.type]));
+        const turn = await session.prompt({ ...base, ...(runtime_powers ? { powers: runtime_powers } : {}) });
+        if (channel) void turn.finished.then(() => channel.close(), () => channel.close());
+        write_success(request.id, { turn: { id: turn.id } });
+      } catch (error) { channel?.close(); throw error; }
       return true;
     }
     case "sdk.sessions.stop": {

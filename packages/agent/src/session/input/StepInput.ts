@@ -17,6 +17,7 @@ import type {
   ToolCallContext,
   WorkspaceRuntime,
 } from "@downcity/type";
+import { compose_prompt_power_tools, prompt_power_context_blocks } from "./PromptPowers.js";
 import type { BoundAgentTool, ToolCallSite } from "@/types/tool/BoundAgentTool.js";
 import type {
   AgentSessionSystemBlock,
@@ -288,6 +289,13 @@ export class StepInput {
           }
         })
       : [];
+    const tools = { ...this.options.get_tools() };
+    if (turn_context) {
+      for (const [name, tool] of Object.entries(compose_prompt_power_tools(turn_context))) {
+        if (Object.hasOwn(tools, name)) throw new Error(`Prompt Power name conflicts with existing tool: ${name}`);
+        tools[name] = tool;
+      }
+    }
     return {
       session: this.identity(),
       state: {
@@ -297,11 +305,13 @@ export class StepInput {
         systems: Object.freeze(
           instruction_system_blocks.map((block) => block.content),
         ),
-        tools: Object.freeze({ ...this.options.get_tools() }),
+        tools: Object.freeze(tools),
         instruction_system_blocks,
         power_system_blocks: resolved_power_system_blocks,
-        power_context_blocks,
-      },
+        power_context_blocks: [
+          ...power_context_blocks,
+          ...(turn_context ? prompt_power_context_blocks(turn_context) : []),
+        ],      },
       history: await this.options.store.list_messages(),
       derived: this.derived_store(),
       turn: {

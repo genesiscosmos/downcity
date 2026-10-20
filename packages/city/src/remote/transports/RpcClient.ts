@@ -9,6 +9,8 @@
 
 import { SESSION_ORIGIN_TYPE_WORK } from "@downcity/type";
 import net from "node:net";
+import { randomUUID } from "node:crypto";
+import type { RemotePromptInput, OpenPromptPowerChannel, PromptPowerChannel } from "@/types/remote/PromptPowerTransport.js";
 import type {
   AgentCreateSessionInput,
   AgentListSessionsInput,
@@ -42,7 +44,7 @@ import type {
   SessionInteractionResult,
   SessionInteractionRequest,
 } from "@downcity/agent";
-import type { AgentSessionPromptInput } from "@downcity/agent";
+
 import type {
   RpcClientEndpoint,
   RpcClientFrame,
@@ -80,6 +82,7 @@ export class RpcClient {
   private buffered = "";
   private readonly pending_requests = new Map<string, PendingRequest>();
   private readonly subscriptions = new Map<string, RpcSubscription>();
+  private readonly power_subscriptions = new Map<string, OpenPromptPowerChannel>();
   private request_sequence = 0;
 
   constructor(endpoint: RpcClientEndpoint) {
@@ -175,7 +178,7 @@ export class RpcClient {
   async prompt_session(params: {
     session_id: string;
     origin_type: string;
-    input: AgentSessionPromptInput;
+    input: RemotePromptInput;
   }): Promise<{ id: string }> {
     const data = await this.request<{ turn: { id: string } }>({
       method: "sdk.sessions.prompt",
@@ -338,6 +341,31 @@ export class RpcClient {
         });
       },
     };
+  }
+
+  /** 建立只属于当前 socket 的请求级 Power 通道。 */
+  async open_power_channel(input: OpenPromptPowerChannel): Promise<PromptPowerChannel> {
+    const subscription_id = randomUUID();
+    this.power_subscriptions.set(subscription_id, input);
+    try {
+      const data = await this.request<{ channel_id: string }>({
+        method: "sdk.powers.open", params: { session_id: input.session_id, origin_type: input.origin_type, subscription_id },
+      });
+      let closed = false;
+      return {
+        id: data.channel_id,
+        result: async (result) => {
+          if (!closed) await this.request({ method: "sdk.powers.result", params: { channel_id: data.channel_id, result } });
+        },
+        close: async () => {
+          if (closed) return;
+          closed = true;
+          this.power_subscriptions.delete(subscription_id);
+          // 连接已丢失时不为清理重新建立 socket。
+          if (this.socket && !this.socket.destroyed) await this.request({ method: "sdk.powers.close", params: { channel_id: data.channel_id } });
+        },
+      };
+    } catch (error) { this.power_subscriptions.delete(subscription_id); throw error; }
   }
 
   /**
@@ -586,6 +614,10 @@ export class RpcClient {
       subscription?.on_event(payload.event);
       return;
     }
+    if ("type" in payload && payload.type === "power-event") {
+      this.power_subscriptions.get(payload.subscription_id)?.on_event(payload.event);
+      return;
+    }
     const pending = this.pending_requests.get(payload.id);
     if (!pending) return;
     this.pending_requests.delete(payload.id);
@@ -604,6 +636,9 @@ export class RpcClient {
   }
 
   private fail_all_subscriptions(message: string): void {
+    const power_subscriptions = [...this.power_subscriptions.values()];
+    this.power_subscriptions.clear();
+    for (const subscription of power_subscriptions) subscription.on_close(new Error(message));
     for (const subscription of this.subscriptions.values()) {
       subscription.on_close(new Error(message));
     }

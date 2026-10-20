@@ -30,6 +30,14 @@ export function create_node_http_server(params: {
 }): http.Server {
   const { app, host, port } = params;
   return http.createServer(async (req, res) => {
+    const controller = new AbortController();
+    let response_stream: Readable | undefined;
+    const disconnect = () => {
+      controller.abort(new Error("HTTP client disconnected"));
+      response_stream?.destroy();
+    };
+    res.once("close", disconnect);
+    req.once("aborted", disconnect);
     try {
       const url = new URL(req.url || "/", `http://${host}:${port}`);
       const method = req.method || "GET";
@@ -37,6 +45,7 @@ export function create_node_http_server(params: {
       const body_allowed = method !== "GET" && method !== "HEAD";
       const request = new Request(url.toString(), {
         method,
+        signal: controller.signal,
         headers: new Headers(req.headers as Record<string, string>),
         body: body_allowed && body_buffer.length > 0 ? body_buffer : undefined,
       });
@@ -53,11 +62,16 @@ export function create_node_http_server(params: {
       const body_stream = Readable.fromWeb(
         response.body as unknown as globalThis.ReadableStream<Uint8Array>,
       );
-      body_stream.pipe(res);
+      response_stream = body_stream;
+      if (controller.signal.aborted) body_stream.destroy();
+      else body_stream.pipe(res);
       await finished(body_stream).catch(() => undefined);
     } catch {
       res.statusCode = 500;
       res.end("Internal Server Error");
+    } finally {
+      res.off("close", disconnect);
+      req.off("aborted", disconnect);
     }
   });
 }

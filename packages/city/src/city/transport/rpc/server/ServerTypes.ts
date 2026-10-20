@@ -89,6 +89,8 @@ export interface RpcAgentContext {
  * 单个 socket 上的 session 订阅。
  */
 export interface RpcSocketSubscription {
+  /** 请求级 Power 通道，由当前 socket 拥有。 */
+  power_channel?: import("@/city/transport/session/PromptPowerChannel.js").ServerPromptPowerChannel;
   /** 被订阅的 session id。 */
   session_id: string;
   /** 取消订阅函数。 */
