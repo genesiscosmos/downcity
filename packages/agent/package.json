@@ -1,6 +1,6 @@
 {
   "name": "@downcity/agent",
-  "version": "1.5.7",
+  "version": "1.5.8",
   "type": "module",
   "description": "Downcity 单 Agent SDK 与执行运行时",
   "main": "./bin/index.js",
@@ -13,6 +13,10 @@
     "./agent": {
       "import": "./bin/agent/index.js",
       "types": "./bin/agent/index.d.ts"
+    },
+    "./browser": {
+      "import": "./bin/browser.js",
+      "types": "./bin/browser.d.ts"
     },
     "./tools": {
       "import": "./bin/tools/index.js",

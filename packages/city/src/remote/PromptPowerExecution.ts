@@ -2,7 +2,7 @@
  * SDK 请求级 Power 执行器：保存函数、按 call_id 去重、取消与提交结果。
  * 每次 Prompt 独立创建，Turn 终态后释放，不暴露绑定接口。
  */
-import { describe_prompt_powers, execute_prompt_power, snapshot_prompt_powers } from "@downcity/agent";
+import { describe_prompt_powers, execute_prompt_power, snapshot_prompt_powers } from "@downcity/agent/browser";
 import type { PromptPower, PromptPowerEvent, PromptPowerResult } from "@downcity/type";
 import type { PromptPowerChannel } from "@/types/remote/PromptPowerTransport.js";
 

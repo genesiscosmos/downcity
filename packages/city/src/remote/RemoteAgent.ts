@@ -1,150 +1,16 @@
 /**
- * RemoteAgent：统一远程 SDK 客户端。
- *
- * 关键点（中文）
- * - 对外只暴露一个 `url` 入口，不向用户暴露 transport 细节。
- * - 当前内部支持 `http/https` 与 `rpc` 两种访问方式。
- * - `RemoteAgent` 只负责远程访问，不重复实现第二套会话编排器。
+ * Node RemoteAgent 入口：按 URL 选择 HTTP 或 RPC。
+ * 会话门面与执行生命周期由跨平台 RemoteAgentCore 统一持有。
  */
-
-import { SESSION_ORIGIN_TYPE_WORK } from "@downcity/type";
-import type {
-  AgentArchiveSessionInput,
-  AgentArchiveSessionsInput,
-  AgentArchiveSessionResult,
-  AgentArchiveSessionsResult,
-  AgentCleanArchiveResult,
-  AgentCreateSessionInput,
-  AgentListSessionsInput,
-  AgentSessionSummaryPage,
-} from "@downcity/agent";
-import type { AgentSessions, RemoteAgentSession } from "@downcity/agent";
 import type { RemoteAgentOptions } from "@/types/remote/RemoteAgentOptions.js";
-import type {
-  RemoteAgentPowerActionInput,
-  RemoteAgentPowerActionResult,
-} from "@/types/remote/RemoteAgentPowerAction.js";
-import type { RemoteAgentTransport } from "@/remote/RemoteTransport.js";
-import { RemoteSession } from "@/remote/RemoteSession.js";
-import { create_remote_agent_transport } from "@/remote/TransportFactory.js";
+import { RemoteAgentCore } from "./RemoteAgentCore.js";
+import { create_remote_agent_transport } from "./TransportFactory.js";
 
-/**
- * RemoteAgent：远程 Agent 客户端。
- */
-export class RemoteAgent {
-  readonly sessions: AgentSessions<RemoteAgentSession>;
-
-  private readonly transport: RemoteAgentTransport;
-
+/** 支持 HTTP、HTTPS 和本机 RPC 的远程 SDK。 */
+export class RemoteAgent extends RemoteAgentCore {
   constructor(options: RemoteAgentOptions) {
     const url = String(options.url || "").trim();
-    if (!url) {
-      throw new Error("RemoteAgent requires a non-empty url");
-    }
-    this.transport = create_remote_agent_transport(url, options.token);
-    this.sessions = new RemoteAgentSessions(this.transport);
-  }
-
-  /**
-   * 执行远程 Agent runtime 内的 power action。
-   *
-   * 关键点（中文）
-   * - 这是 RemoteAgent 顶层能力，不绑定某个 session。
-   * - Shell approval 通过具体 RemoteSession 处理。
-   */
-  async run_power_action(
-    input: RemoteAgentPowerActionInput,
-  ): Promise<RemoteAgentPowerActionResult> {
-    const power = String(input.power || "").trim();
-    const action = String(input.action || "").trim();
-    if (!power) {
-      throw new Error("run_power_action requires a non-empty power");
-    }
-    if (!action) {
-      throw new Error("run_power_action requires a non-empty action");
-    }
-    return await this.transport.run_power_action({
-      power,
-      action,
-      ...(input.payload !== undefined ? { payload: input.payload } : {}),
-    });
-  }
-
-  /**
-   * 关闭远程 transport。
-   *
-   * 关键点（中文）
-   * - `rpc://` 会关闭底层长连接。
-   * - `http://` / `https://` 没有常驻连接，调用时是安全 no-op。
-   */
-  async close(): Promise<void> {
-    await this.transport.close?.();
-  }
-
-}
-
-/**
- * 远程 Agent session 集合入口。
- *
- * 关键点（中文）
- * - `RemoteAgentTransport` 只负责协议传输，不直接暴露为用户 SDK API。
- * - 这里把远程传输包装成和本地 `agent.sessions` 一致的方法命名。
- */
-class RemoteAgentSessions implements AgentSessions<RemoteAgentSession> {
-  private readonly transport: RemoteAgentTransport;
-  /** 当前客户端注册的新会话监听器；只响应经由本实例创建的会话。 */
-  private readonly creation_listeners = new Set<
-    (session: RemoteAgentSession) => void | Promise<void>
-  >();
-
-  constructor(transport: RemoteAgentTransport) {
-    this.transport = transport;
-  }
-
-  /** 新建一个远程 session。 */
-  async create(input?: AgentCreateSessionInput): Promise<RemoteAgentSession> {
-    const info = await this.transport.create_session(input);
-    const session = new RemoteSession(this.transport, info);
-    await this.notify_created(session);
-    return session;
-  }
-
-  /** 监听当前客户端新建的远程 session。 */
-  on_created(listener: (session: RemoteAgentSession) => void | Promise<void>): () => void {
-    this.creation_listeners.add(listener);
-    return () => { this.creation_listeners.delete(listener); };
-  }
-
-  /** 等待全部监听器完成；监听器失败不改变已完成的远程创建结果。 */
-  private async notify_created(session: RemoteAgentSession): Promise<void> {
-    await Promise.allSettled(
-      [...this.creation_listeners].map(async (listener) => await listener(session)),
-    );
-  }
-
-  /** 获取一个远程 session。 */
-  async get(session_id: string, origin_type = SESSION_ORIGIN_TYPE_WORK): Promise<RemoteAgentSession> {
-    const info = await this.transport.get_info(session_id, origin_type);
-    return new RemoteSession(this.transport, info);
-  }
-
-  /** 列出远程 session 摘要页。 */
-  async list(input?: AgentListSessionsInput): Promise<AgentSessionSummaryPage> {
-    return await this.transport.list_sessions(input);
-  }
-
-  /** 归档一个远程 session。 */
-  async archive(input: AgentArchiveSessionInput): Promise<AgentArchiveSessionResult> {
-    return await this.transport.archive_session(input);
-  }
-
-  /** 列出远程已归档 session。 */
-  async archived(input?: AgentArchiveSessionsInput): Promise<AgentArchiveSessionsResult> {
-    return await this.transport.archive_sessions(input);
-  }
-
-  /** 永久清空远程已归档 session。 */
-  async clean_archive(): Promise<AgentCleanArchiveResult> {
-    return await this.transport.clean_archive();
+    if (!url) throw new Error("RemoteAgent requires a non-empty url");
+    super(create_remote_agent_transport(url, options.token));
   }
 }

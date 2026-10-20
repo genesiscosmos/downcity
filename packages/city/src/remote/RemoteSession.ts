@@ -29,7 +29,7 @@ import type {
   ListSessionMessagesInput,
   SessionMessagePage,
 } from "@downcity/agent";
-import { is_agent_session_prompt_input_empty } from "@downcity/agent";
+import { is_agent_session_prompt_input_empty } from "@downcity/agent/browser";
 import type { AgentSessionPromptInput } from "@downcity/agent";
 import type { AgentSessionStopResult } from "@downcity/agent";
 import type {
