@@ -93,6 +93,7 @@ export function createExecuteRouter(
         session_ids_by_chat_key.set(chat_key, session_id);
       }
       const turn = await session.prompt({
+        actor: { kind: "runtime", namespace: "http_execute", object_id: chat_key },
         query: String(instructions),
       });
       const result = await turn.finished;

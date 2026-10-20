@@ -74,7 +74,7 @@ test("RemoteSession reconnects the event pump after transport close", async () =
     origin: { type: "task" },
   });
 
-  const first_turn = await session.prompt({ query: "first" });
+  const first_turn = await session.prompt({ actor: { kind: "user", user_id: "local" }, query: "first" });
   subscriptions[0].on_close(new Error("stream dropped"));
   assert.deepEqual(await first_turn.finished, {
     turn_id: "turn_1",
@@ -83,7 +83,7 @@ test("RemoteSession reconnects the event pump after transport close", async () =
     error: "stream dropped",
   });
 
-  const second_turn = await session.prompt({ query: "second" });
+  const second_turn = await session.prompt({ actor: { kind: "user", user_id: "local" }, query: "second" });
   assert.equal(subscriptions.length, 2);
   subscriptions[1].on_event({
     mutation_id: "turn-finish-2",

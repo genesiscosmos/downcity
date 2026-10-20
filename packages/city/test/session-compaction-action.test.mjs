@@ -89,7 +89,7 @@ async function run_pressure_turn(outcome) {
       workspace,
       session_id: `compaction_action_${outcome}`,
     });
-    const turn = await session.prompt({ query: "first" });
+    const turn = await session.prompt({ actor: { kind: "user", user_id: "local" }, query: "first" });
     const result = await turn.finished;
     return {
       result,

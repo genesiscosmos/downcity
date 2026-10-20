@@ -37,7 +37,7 @@ export interface SessionPort {
   prompt(input: AgentSessionPromptInput): Promise<AgentSessionTurnHandle>;
 
   /** 停止当前 turn，并取消尚未被吸收的排队 prompt。 */
-  stop(): Promise<AgentSessionStopResult>;
+  stop(expected_turn_id?: string): Promise<AgentSessionStopResult>;
 
   /** 订阅当前 Session 后续产生的 future 事件。 */
   subscribe(subscriber: SessionMutationSubscriber): SessionMutationUnsubscribe;

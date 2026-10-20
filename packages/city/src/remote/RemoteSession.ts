@@ -108,7 +108,6 @@ export class RemoteSession implements RemoteAgentSession {
     if (is_agent_session_prompt_input_empty(input)) {
       throw new Error("remote session.prompt requires a non-empty query");
     }
-    if (input.powers?.length && input.mode === "send") throw new Error("Prompt Powers require exclusive mode");
     const execution = input.powers?.length ? new PromptPowerExecution(input.powers) : undefined;
     try {
       await this.ensure_event_pump();
@@ -138,9 +137,9 @@ export class RemoteSession implements RemoteAgentSession {
   }
 
   /** 停止当前远程 Session Turn。 */
-  async stop(): Promise<AgentSessionStopResult> {
+  async stop(expected_turn_id?: string): Promise<AgentSessionStopResult> {
     await this.ensure_event_pump();
-    return await this.transport.stop(this.id, this.origin.type);
+    return await this.transport.stop(this.id, this.origin.type, expected_turn_id);
   }
 
   /** 订阅当前 Session 的全部未来 Mutation。 */

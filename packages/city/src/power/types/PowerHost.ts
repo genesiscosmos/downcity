@@ -119,6 +119,8 @@ export interface PowerHostSystem {
   }): Promise<{ readonly session_id: string }>;
   /** 在指定 Agent 与 Workspace 上恢复或创建 Session，并提交一次用户输入。 */
   prompt_agent_session(input: {
+    /** 可信宿主绑定的用户或执行对象，模型不能指定。 */
+    readonly actor: import("@downcity/type").SessionPromptActor;
     /** 持有目标 Session 的 Agent 稳定 ID。 */
     readonly agent_id: string;
     /** 本次显式切换的 Workspace ID；省略时沿用 Session 当前上下文。 */

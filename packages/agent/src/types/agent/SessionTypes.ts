@@ -165,6 +165,8 @@ export interface AgentSessionStatus {
   state: "idle" | "running";
   /** 当前正在执行的 Turn 标识；空闲时省略。 */
   active_turn_id?: string;
+  /** 当前 Turn 的普通输入占用对象，空闲时为 null。 */
+  occupied_by?: import("../sdk/SessionPromptActor.js").SessionPromptActor | null;
   /** 当前 Session 的安全状态。 */
   security: AgentSessionSecurityStatus;
 }

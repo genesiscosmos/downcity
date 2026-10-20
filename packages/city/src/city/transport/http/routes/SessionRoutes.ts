@@ -131,6 +131,11 @@ export function register_sdk_session_routes(
         },
       });
     } catch (error) {
+      if (error instanceof Error && "code" in error && error.code === "session_busy") {
+        const busy = error as import("@downcity/agent").SessionBusyError;
+        return c.json({ success: false, error: busy.message, code: busy.code, session_id: busy.session_id,
+          turn_id: busy.turn_id, occupied_by: busy.occupied_by }, 409);
+      }
       return c.json(
         {
           success: false,
@@ -148,7 +153,8 @@ export function register_sdk_session_routes(
         return c.json({ success: false, error: "Missing session_id" }, 400);
       }
       const session = await get_session(session_id, c.req.query("origin_type"));
-      const result = await session.stop();
+      const body = await c.req.json<{ expected_turn_id?: string }>().catch(() => ({} as { expected_turn_id?: string }));
+      const result = await session.stop(body.expected_turn_id);
       return c.json({
         success: true,
         result,

@@ -78,8 +78,8 @@ export class RpcRemoteAgentTransport implements RemoteAgentTransport {
     return await this.client.open_power_channel(input);
   }
 
-  async stop(session_id: string, origin_type: string): Promise<AgentSessionStopResult> {
-    return await this.client.stop_session(session_id, origin_type);
+  async stop(session_id: string, origin_type: string, expected_turn_id?: string): Promise<AgentSessionStopResult> {
+    return await this.client.stop_session(session_id, origin_type, expected_turn_id);
   }
 
   async subscribe(params: {

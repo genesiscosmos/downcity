@@ -149,7 +149,7 @@ async function run_approval_case(decision) {
       });
     });
 
-    const turn = await session.prompt({ query: "run custom approval tool" });
+    const turn = await session.prompt({ actor: { kind: "user", user_id: "local" }, query: "run custom approval tool" });
     const result = await turn.finished;
     unsubscribe();
 

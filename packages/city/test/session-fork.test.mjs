@@ -68,7 +68,7 @@ test("Fork Session 由 AgentSessions 接管并持续发布 Turn 终态", async (
   const unsubscribe = restored.subscribe((mutation) => {
     if (mutation.variant === "turn") turn_mutations.push(mutation);
   });
-  const turn = await restored.prompt({ query: "编辑后的消息" });
+  const turn = await restored.prompt({ actor: { kind: "user", user_id: "local" }, query: "编辑后的消息" });
   assert.equal((await turn.finished).success, true);
   unsubscribe();
 
@@ -84,6 +84,7 @@ test("Fork 将源 Session 持有的附件复制到自己的生命周期", async 
   const workspace_file = path.join(root_path, "workspace.txt");
   await fs.writeFile(workspace_file, "workspace");
   const turn = await session.prompt({
+    actor: { kind: "user", user_id: "local" },
     query: [{
       type: "file",
       media_type: "text/plain",

@@ -115,7 +115,7 @@ export async function handle_sdk_session_rpc_request(params: {
     }
     case "sdk.sessions.stop": {
       const session = await get_session(request.params.session_id, request.params.origin_type);
-      const result = await session.stop();
+      const result = await session.stop(request.params.expected_turn_id);
       write_success(request.id, { result });
       return true;
     }

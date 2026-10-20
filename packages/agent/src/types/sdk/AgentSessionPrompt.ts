@@ -6,6 +6,7 @@
  * - 首条输入、运行中补充输入、排队到下一轮的输入，调用侧都使用同一结构。
  */
 
+import type { SessionPromptActor } from "./SessionPromptActor.js";
 import type { SessionCallback } from "@/types/agent/SessionCallback.js";
 import type { SessionUserContent, PromptPower } from "@downcity/type";
 
@@ -14,7 +15,7 @@ import type { SessionUserContent, PromptPower } from "@downcity/type";
  *
  * 说明（中文）
  * - 这是 Downcity Session 输入边界，不依赖模型协议或第三方 SDK。
- * - 可直接用于 `session.prompt({ query: [...parts] })` 传入 text、context、file 等 parts。
+ * - 可直接用于 `session.prompt({ actor, query: [...parts] })` 传入 text、context、file 等 parts。
  */
 export type AgentSessionPromptContent = SessionUserContent;
 
@@ -24,6 +25,7 @@ export type AgentSessionPromptContent = SessionUserContent;
  * 输入示例（中文）：
  * ```ts
  * session.prompt({
+ *   actor: { kind: "user", user_id: "local" },
  *   query: [
  *     { type: "context", tag: "reference", context: "此前引用的消息" },
  *     { type: "text", text: "请分析这个附件" },
@@ -45,12 +47,12 @@ export type AgentSessionPromptContent = SessionUserContent;
  * - 远程 Session 中，Data URL 在服务端落盘；调用方本地路径必须对服务端可访问。
  */
 export interface AgentSessionPromptInput {
-  /** 只对本次 Turn 生效的调用方 Powers；非空时仅支持 exclusive 模式。 */
+  /** 只在创建本次 Turn 时装配的调用方 Powers；运行中追加输入不能替换。 */
   powers?: readonly PromptPower[];
-  /** 本次执行完成后的持久化回调；需要非空 request_id，默认独占 Session。 */
+  /** 由可信宿主绑定的调用对象；同一 Turn 只接收同一对象的普通输入。 */
+  actor: SessionPromptActor;
+  /** 本次输入所属 Turn 完成后的持久化回调；需要非空 request_id。 */
   callback?: SessionCallback;
-  /** exclusive 空闲才接收，忙碌抛 SessionBusyError；send 显式补充当前工作。默认 exclusive。 */
-  mode?: "exclusive" | "send";
   /**
    * 调用方为同一业务输入提供的稳定幂等标识。
    *

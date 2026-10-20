@@ -91,7 +91,7 @@ export interface AgentSessionActor {
   prompt(input: AgentSessionPromptInput): Promise<AgentSessionTurnHandle>;
 
   /** 停止当前 turn，并取消尚未被吸收的排队 prompt。 */
-  stop(): Promise<AgentSessionStopResult>;
+  stop(expected_turn_id?: string): Promise<AgentSessionStopResult>;
 
   /** 订阅当前 session 的未来事件。 */
   subscribe(
@@ -118,6 +118,8 @@ export interface AgentSessionActor {
  * 本地 Agent 返回的公开 session 接口。
  */
 export interface AgentSession extends AgentSessionActor {
+  /** 可信委派运行时向已登记的父 Turn 投递结果；迟到结果返回 false，不启动新 Turn。 */
+  accept_delegation_result(turn_id: string, request_id: string, query: AgentSessionPromptInput["query"]): Promise<boolean>;
   /** 通过拥有者归档当前会话；运行或排队中拒绝，成功后原句柄不可再提交输入。 */
   archive(): Promise<AgentArchiveSessionResult>;
   /** 当前 session 所属 agent_id。 */

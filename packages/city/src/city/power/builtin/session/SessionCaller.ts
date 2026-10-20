@@ -19,7 +19,7 @@ export function session_delegation_caller(context: PowerContext) {
   if (!context.session || !context.turn || !context.call.tool_call_id) {
     throw new Error("Session work requires an active Session Turn tool call");
   }
-  return { agent_id: context.agent.id, session_id: context.session.id,
+  return { agent_id: context.agent.id, session_id: context.session.id, workspace_id: context.workspace?.id,
     origin: context.session.origin as SessionOrigin,
     turn_id: context.turn.id, tool_call_id: context.call.tool_call_id };
 }

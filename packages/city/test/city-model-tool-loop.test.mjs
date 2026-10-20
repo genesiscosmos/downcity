@@ -78,7 +78,7 @@ test("Agent executes an AgentTool and sends tool_result into the next ModelCall"
 
   try {
     const session = await agent.sessions.create({ workspace });
-    const result = await (await session.prompt({ query: "use ping" })).finished;
+    const result = await (await session.prompt({ actor: { kind: "user", user_id: "local" }, query: "use ping" })).finished;
     assert.equal(result.success, true);
     assert.equal(result.text, "done");
     assert.equal(tool_executed, true);

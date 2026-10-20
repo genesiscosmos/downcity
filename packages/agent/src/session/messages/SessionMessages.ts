@@ -308,6 +308,7 @@ export class SessionMessages {
       turn_id: input.turn_id,
       parts: normalize_session_user_parts([
         ...ui_parts,
+        { type: "data" as const, data_type: "session_prompt_actor", data: { ...input.prompt.actor } },
         ...(input.prompt.powers?.length ? [
           { type: "data" as const, data_type: "prompt_powers", data: JSON.parse(JSON.stringify(describe_prompt_powers(input.prompt.powers))) },
           { type: "data" as const, data_type: "prompt_power_fingerprint", data: prompt_power_fingerprint(input.prompt) },

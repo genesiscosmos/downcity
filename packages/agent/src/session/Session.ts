@@ -456,13 +456,17 @@ export class Session implements AgentSession {
     if (this.archive_state !== "active") throw new Error(`Session is ${this.archive_state}: ${this.id}`);
     if (this.replacing_history) throw new Error("Session history is being replaced");
     if (input.powers?.length) {
-      if (input.mode === "send") throw new Error("Prompt Powers require exclusive mode");
       const tools = this.get_tools();
       for (const power of input.powers) {
         if (Object.hasOwn(tools, power.name)) throw new Error(`Prompt Power name conflicts with existing tool: ${power.name}`);
       }
     }
     return await this.session_loop.prompt(input);
+  }
+
+  /** 仅供持有委派记录的可信运行时回传结果，目标 Turn 结束后不再注入。 */
+  async accept_delegation_result(turn_id: string, request_id: string, query: AgentSessionPromptInput["query"]): Promise<boolean> {
+    return await this.session_loop.accept_delegation_result(turn_id, request_id, query);
   }
 
   /** 归档委托给拥有者，不直接搬动 Session 数据。 */
@@ -486,8 +490,8 @@ export class Session implements AgentSession {
   /**
    * 停止当前 turn，并取消尚未被吸收的排队 prompt。
    */
-  async stop(): Promise<AgentSessionStopResult> {
-    return await this.session_loop.stop();
+  async stop(expected_turn_id?: string): Promise<AgentSessionStopResult> {
+    return await this.session_loop.stop(expected_turn_id);
   }
 
   /**
@@ -506,10 +510,12 @@ export class Session implements AgentSession {
 
   /** 读取当前 Session 的运行与安全状态。 */
   async status(): Promise<AgentSessionStatus> {
+    await this.session_loop.initialize_occupation();
     const active_turn_id = this.session_loop.current_turn_id();
     return {
       session_id: this.id,
-      state: active_turn_id || this.session_loop.is_active() || this.session_loop.is_executing() ? "running" : "idle",
+      state: this.session_loop.is_busy() || this.session_loop.is_executing() ? "running" : "idle",
+      occupied_by: this.session_loop.occupied_by(),
       ...(active_turn_id ? { active_turn_id } : {}),
       security: {
         approval_mode: this.state.get_approval_mode(),
@@ -689,7 +695,7 @@ export class Session implements AgentSession {
       get_model: () => this.get_model(),
       messages: async () => await this.session_messages.list_history_messages(),
       prompt: async (input) => await this.prompt(input),
-      stop: async () => await this.stop(),
+      stop: async (expected_turn_id) => await this.stop(expected_turn_id),
       subscribe: (subscriber) => this.subscribe(subscriber),
       append_user_message: async (message_params) =>
         await this.append_external_user_message(message_params),

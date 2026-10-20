@@ -158,8 +158,8 @@ test("multiple session prompts use only their owning Agent power registry", asyn
     const session_a = await agent_a.sessions.create({ session_id: "session_a", workspace: workspace_a });
     const session_b = await agent_b.sessions.create({ session_id: "session_b", workspace: workspace_b });
     const [turn_a, turn_b] = await Promise.all([
-      session_a.prompt({ query: "Call your skill power" }),
-      session_b.prompt({ query: "Call your skill power" }),
+      session_a.prompt({ actor: { kind: "user", user_id: "local" }, query: "Call your skill power" }),
+      session_b.prompt({ actor: { kind: "user", user_id: "local" }, query: "Call your skill power" }),
     ]);
     const [result_a, result_b] = await Promise.all([turn_a.finished, turn_b.finished]);
 

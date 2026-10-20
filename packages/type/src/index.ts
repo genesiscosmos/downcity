@@ -4,6 +4,8 @@
  * 这里只导出跨 package 共享的稳定协议，具体运行时实现由各 SDK package 自己负责。
  */
 
+export type { SessionPromptActor } from "./types/session/SessionPromptActor.js";
+
 export {
   CITY_MODEL_KIND,
   isCityModel,

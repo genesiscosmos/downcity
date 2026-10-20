@@ -66,10 +66,13 @@ export async function start_rpc_server(
     };
 
     const write_error = (id: string, error: unknown): void => {
+      const busy = error instanceof Error && "code" in error && error.code === "session_busy"
+        ? error as import("@downcity/agent").SessionBusyError : undefined;
       write_frame({
         id,
         success: false,
         error: error instanceof Error ? error.message : String(error),
+        ...(busy ? { code: busy.code, session_id: busy.session_id, turn_id: busy.turn_id, occupied_by: busy.occupied_by } : {}),
       });
     };
 

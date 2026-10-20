@@ -39,6 +39,7 @@ export async function executeBySessionId(params: {
     workspace: params.agentState.workspace,
   });
   const turn = await session.prompt({
+    actor: { kind: "runtime", namespace: "control", object_id: session_id },
     query: executeInput,
   });
   const result = await turn.finished;

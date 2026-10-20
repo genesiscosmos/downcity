@@ -490,7 +490,7 @@ export async function runSdkPromptTurn(params: {
   });
 
   try {
-    const turn = await session.prompt({ query: message });
+    const turn = await session.prompt({ actor: { kind: "user", user_id: "local" }, query: message });
     target_turn_id = turn.id;
 
     for (const event of pending_events) {

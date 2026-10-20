@@ -93,7 +93,14 @@ export interface PowerSessionHandle {
   /** Session 绑定的 Workspace 标识。 */
   readonly workspace_id?: string;
   /** 向 Session 提交一条用户输入。 */
-  prompt(input: { /** 文本或结构化内容。 */ readonly query: string | PowerSessionPromptContent[] }): Promise<PowerSessionTurnHandle>;
+  prompt(input: {
+    /** 可信宿主绑定的普通输入来源。 */
+    readonly actor: import("@downcity/type").SessionPromptActor;
+    /** 本次输入的幂等标识。 */
+    readonly request_id?: string;
+    /** 文本或结构化内容。 */
+    readonly query: string | PowerSessionPromptContent[];
+  }): Promise<PowerSessionTurnHandle>;
   /** 停止当前 Turn。 */
   stop(): Promise<PowerJsonObject>;
   /** 订阅当前 Session 的后续变化。 */

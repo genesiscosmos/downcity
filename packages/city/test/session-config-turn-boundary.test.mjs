@@ -161,13 +161,13 @@ test("Agent instruction changes only affect newly created Sessions", async () =>
       workspace,
       session_id: "config_turn_boundary_session",
     });
-    const first_turn = await session.prompt({ query: "first" });
+    const first_turn = await session.prompt({ actor: { kind: "user", user_id: "local" }, query: "first" });
     await first_provider_request_started.promise;
 
     agent.set_instruction(["instruction:new"]);
     workspace.patch_env({ TURN_ENV: "new" });
     const unregister_promise = city.powers.remove("runtime-config");
-    const steer_turn_promise = session.prompt({ query: "steer" });
+    const steer_turn_promise = session.prompt({ actor: { kind: "user", user_id: "local" }, query: "steer" });
 
     assert.equal(power_stop_count, 0);
     assert.equal(provider_prompts.length, 1);
@@ -572,14 +572,14 @@ test("running session model changes apply with steer at the next Session step", 
     const unsubscribe = session.subscribe((mutation) => {
       mutations.push(mutation);
     });
-    const first_turn = await session.prompt({ query: "first" });
+    const first_turn = await session.prompt({ actor: { kind: "user", user_id: "local" }, query: "first" });
     await old_model_started.promise;
 
     await session.set({
       model: new_model,
       security: { approval_mode: "always-allow" },
     });
-    const steer_turn_promise = session.prompt({ query: "continue" });
+    const steer_turn_promise = session.prompt({ actor: { kind: "user", user_id: "local" }, query: "continue" });
     assert.deepEqual(model_calls, ["old-model"]);
 
     release_old_model.resolve();
@@ -672,11 +672,12 @@ test("running session approval mode changes stay queued until the maintenance ch
       workspace,
       session_id: "approval_mode_boundary_session",
     });
-    const first_turn = await session.prompt({ query: "first" });
+    const first_turn = await session.prompt({ actor: { kind: "user", user_id: "local" }, query: "first" });
     await first_provider_request_started.promise;
 
     await session.set({ security: { approval_mode: "always-allow" } });
     assert.deepEqual(await session.status(), {
+      occupied_by: { kind: "user", user_id: "local" },
       session_id: session.id,
       state: "running",
       active_turn_id: first_turn.id,
@@ -689,6 +690,7 @@ test("running session approval mode changes stay queued until the maintenance ch
     const cached_session = await agent.sessions.get(session.id, "work", { workspace });
     assert.equal(cached_session, session);
     assert.deepEqual(await cached_session.status(), {
+      occupied_by: { kind: "user", user_id: "local" },
       session_id: session.id,
       state: "running",
       active_turn_id: first_turn.id,
@@ -707,6 +709,7 @@ test("running session approval mode changes stay queued until the maintenance ch
     assert.equal((await first_turn.finished).success, true);
     await queue_idle.promise;
     assert.deepEqual(await session.status(), {
+      occupied_by: null,
       session_id: session.id,
       state: "idle",
       security: {
@@ -716,11 +719,12 @@ test("running session approval mode changes stay queued until the maintenance ch
     });
 
     queue_idle = create_deferred();
-    const second_turn = await session.prompt({ query: "second" });
+    const second_turn = await session.prompt({ actor: { kind: "user", user_id: "local" }, query: "second" });
     assert.equal((await second_turn.finished).success, true);
     await queue_idle.promise;
     unsubscribe_runtime();
     assert.deepEqual(await session.status(), {
+      occupied_by: null,
       session_id: session.id,
       state: "idle",
       security: {
@@ -778,7 +782,7 @@ test("session set options independently control Action persistence and Mutation 
       { model: first_model },
       { persist_action: false, publish_mutation: false },
     );
-    assert.equal((await (await session.prompt({ query: "first" })).finished).success, true);
+    assert.equal((await (await session.prompt({ actor: { kind: "user", user_id: "local" }, query: "first" })).finished).success, true);
     assert.equal(
       read_action_records((await session.messages()).items).some(
         (message) =>
@@ -793,7 +797,7 @@ test("session set options independently control Action persistence and Mutation 
       { model: second_model },
       { publish_mutation: false },
     );
-    assert.equal((await (await session.prompt({ query: "second" })).finished).success, true);
+    assert.equal((await (await session.prompt({ actor: { kind: "user", user_id: "local" }, query: "second" })).finished).success, true);
     assert.equal(
       read_action_records((await session.messages()).items).some(
         (message) =>
@@ -817,7 +821,7 @@ test("session set options independently control Action persistence and Mutation 
         message.title === "Session configuration updated",
     ).length;
     await session.set({ model: second_model });
-    assert.equal((await (await session.prompt({ query: "duplicate" })).finished).success, true);
+    assert.equal((await (await session.prompt({ actor: { kind: "user", user_id: "local" }, query: "duplicate" })).finished).success, true);
     assert.equal(
       read_action_records((await session.messages()).items).filter(
         (message) =>
@@ -873,7 +877,7 @@ test("restored Session rebinds the same model without emitting a configuration M
       model: create_model(),
       security: { approval_mode: "always-allow" },
     });
-    assert.equal((await (await session.prompt({ query: "persist" })).finished).success, true);
+    assert.equal((await (await session.prompt({ actor: { kind: "user", user_id: "local" }, query: "persist" })).finished).success, true);
   } finally {
     await city.agents.remove(first_agent.id);
   }
@@ -907,7 +911,7 @@ test("restored Session rebinds the same model without emitting a configuration M
       model: create_model(),
       security: { approval_mode: "always-allow" },
     });
-    assert.equal((await (await session.prompt({ query: "restore" })).finished).success, true);
+    assert.equal((await (await session.prompt({ actor: { kind: "user", user_id: "local" }, query: "restore" })).finished).success, true);
     assert.equal(
       read_action_records((await session.messages()).items).filter(
         (message) =>
@@ -964,7 +968,7 @@ test("config remains effective when its action message cannot be persisted", asy
       session_id: "config_action_observability_session",
     });
     await session.set({ model: old_model });
-    const initial_turn = await session.prompt({ query: "initialize model" });
+    const initial_turn = await session.prompt({ actor: { kind: "user", user_id: "local" }, query: "initialize model" });
     assert.equal((await initial_turn.finished).success, true);
     model_calls.splice(0, model_calls.length);
     const initial_action_count = read_action_records((await session.messages()).items).filter(
@@ -976,7 +980,7 @@ test("config remains effective when its action message cannot be persisted", asy
     };
 
     await session.set({ model: new_model });
-    const turn = await session.prompt({ query: "use configured model" });
+    const turn = await session.prompt({ actor: { kind: "user", user_id: "local" }, query: "use configured model" });
     assert.equal((await turn.finished).success, true);
     assert.deepEqual(model_calls, ["new"]);
 

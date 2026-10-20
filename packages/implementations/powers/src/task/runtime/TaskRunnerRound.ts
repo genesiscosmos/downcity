@@ -209,6 +209,7 @@ export async function runAgentRound(params: {
   actorName: string;
 }): Promise<{ outputText: string; delivered: boolean; rawResult: SessionTurnExecutionResult }> {
   const turn = await params.taskSessionRuntime.get_session(params.session_id).prompt({
+    actor: { kind: "runtime", namespace: "task", object_id: JSON.stringify([params.taskId, params.session_id]) },
     query: params.query,
   });
   const turn_result = await turn.finished;

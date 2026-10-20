@@ -167,7 +167,7 @@ test("host Shell 审批保留当前 Turn 并等待用户决定", async () => {
       });
     });
 
-    const turn = await session.prompt({ query: "run host command" });
+    const turn = await session.prompt({ actor: { kind: "user", user_id: "local" }, query: "run host command" });
     const result = await turn.finished;
     unsubscribe();
 

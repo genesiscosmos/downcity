@@ -770,6 +770,8 @@ export class MessengerRuntime {
         }),
       });
       const turn = await this.context.system.prompt_agent_session({
+        // 平台 sender 与账号共同标识输入对象，群路由不作为用户身份。
+        actor: { kind: "user", user_id: JSON.stringify([conversation.account_id, inbound.message.provider, inbound.message.sender_id]) },
         agent_id: conversation.agent_id,
         session_id: conversation.session_id,
         origin_type: "channel",

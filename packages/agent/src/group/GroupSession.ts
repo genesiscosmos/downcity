@@ -412,7 +412,7 @@ export class GroupSession implements GroupSessionContract {
     this.assert_available();
     const session = await this.ensure_member_session(agent);
     this.assert_available();
-    return await session.prompt({ query: this.build_member_context(agent, message, context_messages, pending_messages) });
+    return await session.prompt({ actor: { kind: "runtime", namespace: "group", object_id: JSON.stringify([this.group_id, this.id]) }, query: this.build_member_context(agent, message, context_messages, pending_messages) });
   }
 
   /** 等待成员 Turn 完成，并把有效回复写回 Group。 */

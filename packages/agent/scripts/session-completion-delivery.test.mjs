@@ -71,13 +71,15 @@ test("写前日志失败不得确认成功；恢复存储后原 request_id 可�
       return await write(file_path, ...args);
     };
     const session = await agent.session();
-    const turn = await session.prompt({ query: "review", request_id: "stable-request" });
+    const turn = await session.prompt({ actor: { kind: "user", user_id: "local" }, query: "review", request_id: "stable-request" });
     await assert.rejects(turn.finished, /could not be persisted/);
     assert.equal((await session.messages()).items.filter((message) => message.role === "agent").at(-1).state, "streaming");
     files.write_file_atomically = write;
-    const retried = await session.prompt({ query: "review", request_id: "stable-request" });
+    const retried = await session.prompt({ actor: { kind: "user", user_id: "local" }, query: "review", request_id: "stable-request" });
     assert.equal((await retried.finished).success, true);
     assert.equal((await within(received.promise)).turn_id, turn.id);
+    const next = await session.prompt({ actor: { kind: "runtime", namespace: "test", object_id: "next-owner" }, query: "new work" });
+    await next.finished;
   } finally { files.write_file_atomically = write; await agent.dispose(); }
 });
 
@@ -95,14 +97,14 @@ test("canonical 终态后的日志确认失败仍可补发，幂等输入不重�
       return await write(file_path, ...args);
     };
     const session = await agent.session();
-    const result = await (await session.prompt({ query: "review", request_id: "stable-request" })).finished;
+    const result = await (await session.prompt({ actor: { kind: "user", user_id: "local" }, query: "review", request_id: "stable-request" })).finished;
     assert.equal(result.success, true);
     const before_retry = model_calls;
     files.write_file_atomically = write;
     await agent.resume_work();
     const event = await within(received.promise);
     assert.equal(event.result.text, result.text);
-    const replay = await (await session.prompt({ query: "review", request_id: "stable-request" })).finished;
+    const replay = await (await session.prompt({ actor: { kind: "user", user_id: "local" }, query: "review", request_id: "stable-request" })).finished;
     assert.equal(replay.turn_id, result.turn_id);
     assert.equal(model_calls, before_retry);
   } finally { files.write_file_atomically = write; await agent.dispose(); }
@@ -121,7 +123,7 @@ test("写前提交后 canonical 收口中断，重建 Agent 后复用结果且�
     throw new Error("Simulated interruption after write-ahead commit");
   };
   const original = await first.session();
-  const initial = await original.prompt({ query: "review", request_id: "stable-request" });
+  const initial = await original.prompt({ actor: { kind: "user", user_id: "local" }, query: "review", request_id: "stable-request" });
   await assert.rejects(initial.finished, /could not be persisted/);
   await first_city.close();
   const before_recovery = model_calls;
@@ -137,7 +139,7 @@ test("写前提交后 canonical 收口中断，重建 Agent 后复用结果且�
     assert.equal(event.messages.filter((message) => message.role === "agent").at(-1).state, "done");
     assert.ok(event.messages.every((message) => message.parts.every((part) => part.type !== "error" || part.code !== "runtime_interrupted")));
     const restored = await second.session();
-    const result = await (await restored.prompt({ query: "review", request_id: "stable-request" })).finished;
+    const result = await (await restored.prompt({ actor: { kind: "user", user_id: "local" }, query: "review", request_id: "stable-request" })).finished;
     assert.equal(result.success, true);
     assert.equal(result.turn_id, initial.id);
     assert.equal(model_calls, before_recovery);
@@ -185,7 +187,7 @@ test("关闭会取消 callback，即使业务忽略信号也不阻塞 City.close
   })));
   try {
     const session = await agent.session();
-    await (await session.prompt({ query: "review" })).finished;
+    await (await session.prompt({ actor: { kind: "user", user_id: "local" }, query: "review" })).finished;
     await within(entered.promise);
     await within(city.close());
     assert.equal(signal.aborted, true);
@@ -213,7 +215,7 @@ test("callback 超时保留待投递状态且不会并发重入忽略取消的�
   } finally { queue.suspend(); blocked.resolve(); await queue.settle(); }
 });
 
-test("原 Session 临时恢复失败后自动回传，已完成的子任务不重跑", async () => {
+test("父 Turn 已结束时迟到结果只保存，临时恢复失败不会重跑子任务", async () => {
   let worker_calls = 0;
   const city = new City({ workspaces: [new Workspace({ id: "project", path: process.cwd() })] });
   const caller = city.agents.add(new Agent({ id: "caller", model: create_model() }));
@@ -235,9 +237,13 @@ test("原 Session 临时恢复失败后自动回传，已完成的子任务不�
     const receipt = await delegations.spawn({ workspace_id: "project", query: "review" }, { agent_id: caller.id, session_id: parent.id, origin: parent.origin, turn_id: "caller-turn", tool_call_id: "call" });
     await delegations.settle();
     const before_retry = worker_calls;
-    await within(delivered.promise);
+    await within((async () => {
+      while ((await delegations.options.store.get(receipt.delegation_id)).delivery_state === "pending") {
+        await new Promise((resolve) => setTimeout(resolve, 25));
+      }
+    })());
     assert.equal(attempts, 2);
     assert.equal(worker_calls, before_retry);
-    assert.equal((await delegations.options.store.get(receipt.delegation_id)).delivery_state, "delivered");
+    assert.equal((await delegations.options.store.get(receipt.delegation_id)).delivery_state, "saved");
   } finally { await city.close(); }
 });

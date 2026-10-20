@@ -175,7 +175,7 @@ test("显式注入的 ask_question 等待回答并继续同一个 Turn", async (
       });
     });
 
-    const turn = await session.prompt({ query: "帮我选择部署方案" });
+    const turn = await session.prompt({ actor: { kind: "user", user_id: "local" }, query: "帮我选择部署方案" });
     const result = await turn.finished;
     unsubscribe();
 
@@ -304,7 +304,7 @@ async function run_ask_question_turn({ label, question_input, answer_factory }) 
         });
     });
 
-    const turn = await session.prompt({ query: "帮我选择部署方案" });
+    const turn = await session.prompt({ actor: { kind: "user", user_id: "local" }, query: "帮我选择部署方案" });
     const result = await Promise.race([
       turn.finished,
       new Promise((resolve) => setTimeout(resolve, 8000)),

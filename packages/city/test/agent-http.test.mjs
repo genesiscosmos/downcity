@@ -232,7 +232,7 @@ test("AgentHTTP resolves RemoteAgent turns and exposes power actions", {
         });
       }
     });
-    const turn = await session.prompt({ query: "test" });
+    const turn = await session.prompt({ actor: { kind: "user", user_id: "local" }, query: "test" });
     const result = await turn.finished;
 
     assert.equal(result.success, true);

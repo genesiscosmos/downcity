@@ -183,8 +183,8 @@ test("并行 Session 的真实 Workspace write 只进入各自 Assistant Diff", 
   ]);
 
   await Promise.all([
-    session_a.prompt({ query: "write session-a" }).then((handle) => handle.finished),
-    session_b.prompt({ query: "write session-b" }).then((handle) => handle.finished),
+    session_a.prompt({ actor: { kind: "user", user_id: "local" }, query: "write session-a" }).then((handle) => handle.finished),
+    session_b.prompt({ actor: { kind: "user", user_id: "local" }, query: "write session-b" }).then((handle) => handle.finished),
   ]);
 
   const [messages_a, messages_b] = await Promise.all([

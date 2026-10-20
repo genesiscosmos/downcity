@@ -10,6 +10,8 @@ import type { AgentSessionTurnResult } from "../sdk/AgentSessionTurn.js";
 export interface SessionDelegationCaller {
   /** 发起工作的 Agent 标识；用于将结果回传给真实调用方。 */
   agent_id: string;
+  /** 来源 Session 的实际工作区，无工作区时省略。 */
+  workspace_id?: string;
   /** 发起工作的 Session 稳定标识。 */
   session_id: string;
   /** 发起会话的持久化来源分区。 */
@@ -42,8 +44,8 @@ export interface SessionDelegationRecord {
   work_turn_id?: string;
   /** 工作执行状态；停止在调用 stop 前持久化。 */
   execution_state: "pending" | "running" | "succeeded" | "failed" | "stopped";
-  /** 回传状态；取消的委派不会自动唤醒父会话。 */
-  delivery_state: "pending" | "delivered" | "cancelled";
+  /** 回传状态；saved 表示父 Turn 已结束，结果已保存且不注入后续 Turn。 */
+  delivery_state: "pending" | "delivered" | "cancelled" | "saved";
   /** 连续失败次数；成功回传后不再重试。 */
   attempt_count: number;
   /** 下一次可重试的绝对时间戳，单位毫秒。 */

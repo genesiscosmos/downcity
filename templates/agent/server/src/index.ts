@@ -121,7 +121,7 @@ app.post("/api/chat", async (context) => {
     return context.json<ChatErrorResponse>({ error: "消息不能为空" }, 400);
   }
 
-  const turn = await (await get_session()).prompt({ query: content });
+  const turn = await (await get_session()).prompt({ actor: { kind: "user", user_id: "local" }, query: content });
   const result = await turn.finished;
   if (!result.success) {
     return context.json<ChatErrorResponse>({

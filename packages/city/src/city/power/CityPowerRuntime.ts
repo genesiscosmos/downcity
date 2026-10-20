@@ -735,6 +735,7 @@ export class CityPowerRuntime implements PowerRuntimeHost {
           await agent.sessions.get(input.session_id, input.origin_type, { workspace });
           const session = agent.sessions.runtime(input.session_id, input.origin_type);
           const turn = await session.prompt({
+            actor: input.actor,
             query: input.query,
             ...(input.request_id ? { request_id: input.request_id } : {}),
           });

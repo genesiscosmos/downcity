@@ -194,10 +194,11 @@ export class RpcClient {
   /**
    * 停止远程 session 当前 turn。
    */
-  async stop_session(session_id: string, origin_type: string): Promise<AgentSessionStopResult> {
+  async stop_session(session_id: string, origin_type: string, expected_turn_id?: string): Promise<AgentSessionStopResult> {
     const data = await this.request<{ result: AgentSessionStopResult }>({
       method: "sdk.sessions.stop",
       params: {
+        expected_turn_id,
         session_id: session_id,
         origin_type,
       },
@@ -625,7 +626,9 @@ export class RpcClient {
       pending.resolve(payload.data);
       return;
     }
-    pending.reject(new Error(String(payload.error || "RPC request failed")));
+    pending.reject(Object.assign(new Error(String(payload.error || "RPC request failed")), {
+      code: payload.code, session_id: payload.session_id, turn_id: payload.turn_id, occupied_by: payload.occupied_by,
+    }));
   }
 
   private fail_all_pending(error: unknown): void {

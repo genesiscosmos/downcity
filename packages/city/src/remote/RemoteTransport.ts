@@ -62,7 +62,7 @@ export type RemoteSessionTransport = {
   /** 为本次 Prompt 建立独立执行通道。 */
   open_power_channel(input: OpenPromptPowerChannel): Promise<PromptPowerChannel>;
   /** 停止当前 session turn，并取消未吸收队列。 */
-  stop(session_id: string, origin_type: string): Promise<AgentSessionStopResult>;
+  stop(session_id: string, origin_type: string, expected_turn_id?: string): Promise<AgentSessionStopResult>;
   /** 订阅 session 事件。 */
   subscribe(params: {
     session_id: string;

@@ -137,13 +137,14 @@ export class HttpRemoteAgentTransport implements RemoteAgentTransport {
     return await open_http_power_channel(this.session_url(input.session_id, input.origin_type, "/power-executions/events"), this.headers(), input);
   }
 
-  async stop(session_id: string, origin_type: string): Promise<AgentSessionStopResult> {
+  async stop(session_id: string, origin_type: string, expected_turn_id?: string): Promise<AgentSessionStopResult> {
     const payload = await read_http_json<{
       success?: boolean;
       error?: string;
       result?: AgentSessionStopResult;
     }>(this.session_url(session_id, origin_type, "/stop"), {
       method: "POST",
+      body: JSON.stringify({ expected_turn_id }),
       headers: this.headers({
         "Content-Type": "application/json",
       }),
@@ -473,7 +474,12 @@ async function read_http_json<T>(input: string, init?: RequestInit): Promise<T> 
   const payload = (await response.json().catch(() => ({}))) as T;
   if (!response.ok) {
     const message = extract_error_message(payload);
-    throw new Error(message || `HTTP ${response.status}`);
+    const error = new Error(message || `HTTP ${response.status}`);
+    if (payload && typeof payload === "object" && "code" in payload && payload.code === "session_busy") {
+      const conflict = payload as { /** 目标 Session。 */ session_id?: string; /** 目标 Turn。 */ turn_id?: string; /** 占用对象。 */ occupied_by?: import("@downcity/type").SessionPromptActor };
+      Object.assign(error, { code: "session_busy", session_id: conflict.session_id, turn_id: conflict.turn_id, occupied_by: conflict.occupied_by });
+    }
+    throw error;
   }
   return payload;
 }

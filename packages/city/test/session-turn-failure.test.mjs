@@ -106,7 +106,7 @@ test("Power 调用环境保留完整 Session origin", async () => {
     },
   });
 
-  const handle = await turn.prompt({ query: "hello" });
+  const handle = await turn.prompt({ actor: { kind: "user", user_id: "local" }, query: "hello" });
   await handle.finished;
 
   assert.equal(execution_context.session_id, "session-turn-failure-test");
@@ -143,7 +143,7 @@ test("Provider 在输出前失败时只持久化包含 Error Part 的 Agent Mess
     error: "quota exceeded",
   }));
 
-  const handle = await turn.prompt({ query: "hello" });
+  const handle = await turn.prompt({ actor: { kind: "user", user_id: "local" }, query: "hello" });
   const result = await handle.finished;
   const page = await messages.list_messages();
 
@@ -169,7 +169,7 @@ test("SessionLoop 只在 canonical 用户消息写入后返回 prompt 句柄", a
     };
   });
 
-  const handle = await turn.prompt({ query: "已持久化的输入" });
+  const handle = await turn.prompt({ actor: { kind: "user", user_id: "local" }, query: "已持久化的输入" });
   const page = await messages.list_messages();
 
   assert.equal(handle.result, null);
@@ -186,7 +186,7 @@ test("SessionLoop 在 Turn 收口后释放其 SessionTurnContext", async () => {
     text: "done",
   }));
 
-  const handle = await turn.prompt({ query: "hello" });
+  const handle = await turn.prompt({ actor: { kind: "user", user_id: "local" }, query: "hello" });
   await handle.finished;
 
   // 关键点（中文）：收口后不再持有 Active Turn；这是旧版「释放 Hook 作用域」
@@ -216,7 +216,7 @@ test("SessionLoop 在 Turn 收口时触发 turn committed effect", async () => {
     },
   });
 
-  const handle = await turn.prompt({ query: "记录这轮" });
+  const handle = await turn.prompt({ actor: { kind: "user", user_id: "local" }, query: "记录这轮" });
   await handle.finished;
 
   assert.equal(effects.length, 1);
@@ -250,7 +250,7 @@ test("SessionLoop 只持久化当前 Turn 成功的结构化文件修改", async
     };
   });
 
-  const handle = await turn.prompt({ query: "修改文件" });
+  const handle = await turn.prompt({ actor: { kind: "user", user_id: "local" }, query: "修改文件" });
   await handle.finished;
   const page = await messages.list_messages();
   const assistant = page.items.find((message) => message.role === "agent");
@@ -276,7 +276,7 @@ test("Provider 在部分输出后失败时将 Error 追加到同一 Agent Messag
     };
   });
 
-  const handle = await turn.prompt({ query: "hello" });
+  const handle = await turn.prompt({ actor: { kind: "user", user_id: "local" }, query: "hello" });
   const result = await handle.finished;
   const page = await messages.list_messages();
 
@@ -313,7 +313,7 @@ test("Assistant 失败收口时不会遗留 input-streaming Tool Part", async ()
     };
   });
 
-  const handle = await turn.prompt({ query: "hello" });
+  const handle = await turn.prompt({ actor: { kind: "user", user_id: "local" }, query: "hello" });
   await handle.finished;
   const page = await messages.list_messages();
   const assistant = page.items.find((message) => message.role === "agent");
@@ -360,7 +360,7 @@ test("Turn 使用标准模型事件保持 Tool 与最终正文顺序", async () 
     };
   });
 
-  const handle = await turn.prompt({ query: "diagnose" });
+  const handle = await turn.prompt({ actor: { kind: "user", user_id: "local" }, query: "diagnose" });
   const result = await handle.finished;
   const page = await messages.list_messages();
   const assistant = page.items.find((message) => message.role === "agent");
@@ -411,7 +411,7 @@ test("普通 Tool Loop 的多个 Provider Step 始终写入同一个 Assistant M
     };
   });
 
-  const handle = await turn.prompt({ query: "检查项目" });
+  const handle = await turn.prompt({ actor: { kind: "user", user_id: "local" }, query: "检查项目" });
   await handle.finished;
   const page = await messages.list_messages();
   const assistant_messages = page.items.filter(
@@ -459,7 +459,7 @@ test("Turn 在 step 最终快照出现未流式写入的 Tool 时失败", async 
     }
   });
 
-  const handle = await turn.prompt({ query: "diagnose" });
+  const handle = await turn.prompt({ actor: { kind: "user", user_id: "local" }, query: "diagnose" });
   const result = await handle.finished;
   const page = await messages.list_messages();
   const assistant = page.items.find((message) => message.role === "agent");

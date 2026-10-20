@@ -193,7 +193,7 @@ export class SessionDelegations implements SessionDelegationPort {
     try {
       const handle = await session.prompt({
         request_id: `delegation_work:${record.delegation_id}`,
-        mode: record.followup ? "send" : "exclusive",
+        actor: { kind: "session", agent_id: record.caller.agent_id, workspace_id: record.caller.workspace_id ?? null, session_id: record.caller.session_id, origin_type: record.caller.origin.type },
         query: record.query,
       });
       const latest = await this.options.store.update(record.delegation_id, (current) => ({
@@ -202,7 +202,7 @@ export class SessionDelegations implements SessionDelegationPort {
         execution_state: current.execution_state === "stopped" ? "stopped" : "running",
       }));
       // 停止可能发生在 prompt 等待句柄期间，此时也必须停止已吸收的输入。
-      if (this.suspended || latest.delivery_state === "cancelled") await session.stop();
+      if (this.suspended || latest.delivery_state === "cancelled") await session.stop(handle.id);
       const result = await handle.finished;
       // 即使宿主正在关闭，也先保存已得到的终态；仅暂停回传。
       return await this.options.store.update(record.delegation_id, (current) => ({
@@ -230,11 +230,7 @@ export class SessionDelegations implements SessionDelegationPort {
     const parent = await this.options.get_parent_session(record.caller);
     record = await this.options.store.get(delegation_id);
     if (!record?.result || record.delivery_state !== "pending" || this.suspended) return;
-    await parent.prompt({
-      request_id: `delegation_result:${delegation_id}`,
-      mode: "send",
-      visibility: "internal",
-      query: [
+    const injected = await parent.accept_delegation_result(record.caller.turn_id, `delegation_result:${delegation_id}`, [
         {
           type: "context",
           tag: "delegation_result",
@@ -251,11 +247,10 @@ export class SessionDelegations implements SessionDelegationPort {
           }),
         },
         { type: "text", text: "Delegated work has finished. Review the result in the context of the user's current request and continue as appropriate. If other delegated work is still pending, you may wait for it." },
-      ],
-    });
+      ]);
     await this.options.store.update(delegation_id, (latest) => ({
       ...latest,
-      delivery_state: latest.delivery_state === "cancelled" ? "cancelled" : "delivered",
+      delivery_state: latest.delivery_state === "cancelled" ? "cancelled" : injected ? "delivered" : "saved",
     }));
   }
 }

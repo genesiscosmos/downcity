@@ -129,6 +129,8 @@ type RpcRequestPayload =
       method: "sdk.sessions.stop";
       /** 停止参数。 */
       params: {
+        /** 用户实际观察的 Turn；不匹配时拒绝停止后来的工作。 */
+        expected_turn_id?: string;
         /** 目标 session id。 */
         session_id: string;
         /** Session 来源分区。 */
@@ -374,6 +376,14 @@ export interface RpcErrorFrame {
   success: false;
   /** 错误信息。 */
   error: string;
+  /** 可机器识别的业务错误码。 */
+  code?: string;
+  /** 占用冲突时的目标 Session。 */
+  session_id?: string;
+  /** 占用冲突时的目标 Turn。 */
+  turn_id?: string;
+  /** 占用对象快照，仅通过可信 SDK 连接返回。 */
+  occupied_by?: import("@downcity/type").SessionPromptActor;
 }
 
 /**

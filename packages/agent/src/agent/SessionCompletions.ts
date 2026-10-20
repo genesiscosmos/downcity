@@ -36,7 +36,7 @@ export class SessionCompletions {
     if (!name.trim() || !this.handlers().has(`callback:${name}`)) throw new Error(`Unknown Session callback: ${name}`);
   }
 
-  /** canonical 终态之前写前提交；没有处理器时不创建无用日志。 */
+  /** canonical 终态前保存权威 Turn 结果；即使没有回调，也用于恢复占用与幂等结果。 */
   async prepare(event: SessionTurnCommittedHookValue, context: ToolCallContext): Promise<void> {
     const handlers = this.handlers();
     const recipient_ids = [...handlers.keys()].filter((id) => !id.startsWith("callback:"));
@@ -49,7 +49,6 @@ export class SessionCompletions {
         recipient_ids.push(`callback:${name}\u0000${message.message_id}`);
       }
     }
-    if (!recipient_ids.length) return;
     const file_path = this.record_path(event.completion_id);
     await this.options.files.ensure_directory("completions");
     await this.options.files.with_file_lock(`${file_path}.lock`, async () => {
@@ -116,7 +115,7 @@ export class SessionCompletions {
         ...existing,
         // 写前结果一旦提交就不受后续日志、压缩或资源释放失败影响。
         event: { ...structuredClone(event), result: existing.event.result, status: existing.event.status },
-        state: "pending",
+        state: Object.keys(existing.deliveries).length ? "pending" : "delivered",
       };
       await this.save(committed);
       return committed;

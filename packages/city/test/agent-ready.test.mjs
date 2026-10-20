@@ -156,6 +156,7 @@ test("pending Power 初始化不阻塞 session.prompt", async () => {
       workspace,
     });
     const turn = await session.prompt({
+      actor: { kind: "user", user_id: "local" },
       query: "hello",
     });
     const result = await turn.finished;
