@@ -56,6 +56,8 @@ type SdkEventsReadyFrame = {
 export class HttpRemoteAgentTransport implements RemoteAgentTransport {
   private readonly base_url: string;
   private readonly token: string;
+  private closed = false;
+  private readonly resources = new Set<() => Promise<void>>();
 
   constructor(url: string, token?: string) {
     this.base_url = url.replace(/\/+$/, "");
@@ -63,6 +65,7 @@ export class HttpRemoteAgentTransport implements RemoteAgentTransport {
   }
 
   private headers(input?: Record<string, string>): Headers {
+    if (this.closed) throw new Error("Remote City connection closed");
     const headers = new Headers(input);
     if (this.token) {
       headers.set("Authorization", `Bearer ${this.token}`);
@@ -134,7 +137,11 @@ export class HttpRemoteAgentTransport implements RemoteAgentTransport {
   }
 
   async open_power_channel(input: OpenPromptPowerChannel): Promise<PromptPowerChannel> {
-    return await open_http_power_channel(this.session_url(input.session_id, input.origin_type, "/power-executions/events"), this.headers(), input);
+    const channel = await open_http_power_channel(this.session_url(input.session_id, input.origin_type, "/power-executions/events"), this.headers(), input);
+    const close = async () => { this.resources.delete(close); await channel.close(); };
+    if (this.closed) { await channel.close(); throw new Error("Remote City connection closed"); }
+    this.resources.add(close);
+    return { id: channel.id, result: (result) => channel.result(result), close };
   }
 
   async stop(session_id: string, origin_type: string, expected_turn_id?: string): Promise<AgentSessionStopResult> {
@@ -197,11 +204,24 @@ export class HttpRemoteAgentTransport implements RemoteAgentTransport {
       }
     });
     await ready_promise;
-    return {
-      close: async () => {
-        abort_controller.abort();
-      },
+    const close = async () => {
+      this.resources.delete(close);
+      abort_controller.abort();
+      params.on_close(new Error("Remote City connection closed"));
     };
+    if (this.closed) { await close(); throw new Error("Remote City connection closed"); }
+    this.resources.add(close);
+    return { close: async () => { this.resources.delete(close); abort_controller.abort(); } };
+  }
+
+  /** 连接拥有者关闭时释放事件流与调用方执行通道。 */
+  async close(): Promise<void> {
+    if (this.closed) return;
+    this.closed = true;
+    const results = await Promise.allSettled([...this.resources].map((close) => close()));
+    this.resources.clear();
+    const errors = results.flatMap((result) => result.status === "rejected" ? [result.reason] : []);
+    if (errors.length) throw new AggregateError(errors, "Remote City connection close failed");
   }
 
   async messages(

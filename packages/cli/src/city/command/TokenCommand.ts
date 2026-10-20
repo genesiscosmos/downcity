@@ -1,130 +1,65 @@
-/**
- * `city agent token` 命令树。
- *
- * 关键点（中文）：Token 只属于一个 Agent，对该 Agent HTTP API 拥有完整访问能力。
- */
-
+/** City 级 Token 命令及交互式管理；列表不展示凭据，签发时只展示一次明文。 */
 import type { Command } from "commander";
-import { resolve_cli_agent_id } from "@/city/agent/AgentSelection.js";
-import { AuthService } from "@/city/runtime/auth/AuthService.js";
-import { printResult } from "@/city/utils/cli/CliOutput.js";
-import { emitCliBlock, emitCliList } from "@/shared/CliReporter.js";
-import { helpText, t } from "@/shared/CliLocale.js";
 import { with_cli_local_data } from "@/city/runtime/LocalData.js";
+import { collect_token_config, confirm_token_config, select_token, token_question } from "./TokenInteraction.js";
+import type { CityTokenCommandOptions } from "@/city/types/auth/CityTokenCommand.js";
+import type { CityTokenSummary, IssuedCityToken } from "@downcity/city/local";
 
-/** 在 `city agent` 下注册 Token 管理命令。 */
-export function registerAgentTokenCommand(agent_command: Command): void {
-  const token = agent_command
-    .command("token")
-    .description(t({
-      zh: "管理单 Agent Bearer Token",
-      en: "manage Bearer tokens for one Agent",
-    }))
-    .helpOption("--help", helpText());
+/** 人类和脚本共用的摘要输出；只有 create 路径允许携带一次性 token。 */
+function display(value: CityTokenSummary | IssuedCityToken | CityTokenSummary[] | { /** 删除记录 ID。 */ deleted: string }, json = false): void {
+  console.log(JSON.stringify(value, null, json ? 0 : 2));
+  if (!Array.isArray(value) && "token" in value && !json) console.log("Bearer Token 只显示这一次，请立即安全保存。");
+}
 
-  token
-    .command("list [agent_id]")
-    .option("--json", t({ zh: "以 JSON 输出", en: "output as JSON" }))
-    .helpOption("--help", helpText())
-    .action(async (agent_id: string | undefined, options: { json?: boolean }) => {
-      const resolved_agent_id = await resolve_cli_agent_id(agent_id);
-      const tokens = with_cli_local_data((data) =>
-        new AuthService({ agent_id: resolved_agent_id, repository: data.agent_tokens }).list_tokens()
-      );
-      if (options.json) {
-        printResult({
-          type: "block",
-          asJson: true,
-          success: true,
-          title: "agent tokens",
-          data: { agent_id: resolved_agent_id, tokens },
-        });
-        return;
-      }
-      emitCliList({
-        tone: "accent",
-        title: `Agent tokens · ${resolved_agent_id}`,
-        summary: `${tokens.length} token(s)`,
-        items: tokens.map((item) => ({
-          title: item.name,
-          facts: [
-            { label: "ID", value: item.token_id },
-            { label: "Expires", value: item.expires_at ?? "never" },
-          ],
-        })),
-      });
-    });
+async function create_token(options: CityTokenCommandOptions): Promise<void> {
+  const complete = Boolean(options.name && (options.allAgents || options.agents !== undefined) && (options.neverExpires || options.expiresAt !== undefined));
+  const config = await collect_token_config(options);
+  if (!complete) await confirm_token_config(config);
+  display(with_cli_local_data((data) => data.city_tokens.create(config)), options.json);
+}
 
-  token
-    .command("create [agent_id]")
-    .requiredOption("--name <name>", t({ zh: "Token 名称", en: "token name" }))
-    .option("--expires-at <iso>", t({ zh: "ISO 过期时间", en: "ISO expiration time" }))
-    .option("--json", t({ zh: "以 JSON 输出", en: "output as JSON" }))
-    .helpOption("--help", helpText())
-    .action(async (
-      agent_id: string | undefined,
-      options: { name: string; expires_at?: string; json?: boolean },
-    ) => {
-      const resolved_agent_id = await resolve_cli_agent_id(agent_id);
-      const issued = with_cli_local_data((data) =>
-        new AuthService({ agent_id: resolved_agent_id, repository: data.agent_tokens }).create_token({
-          name: options.name,
-          expires_at: options.expires_at,
-        })
-      );
-      if (options.json) {
-        printResult({
-          type: "block",
-          asJson: true,
-          success: true,
-          title: "agent token created",
-          data: { ...issued },
-        });
-        return;
-      }
-      emitCliBlock({
-        tone: "success",
-        title: "Agent token created",
-        summary: issued.name,
-        facts: [
-          { label: "Agent", value: issued.agent_id },
-          { label: "Token ID", value: issued.token_id },
-          { label: "Bearer Token", value: issued.token },
-        ],
-        note: "Bearer Token 只显示这一次，请立即安全保存。",
-      });
-    });
+async function update_token(id: string | undefined, options: CityTokenCommandOptions): Promise<void> {
+  const previous = await select_token(id);
+  const config = await collect_token_config(options, previous);
+  if (!id || (!options.name && options.agents === undefined && !options.allAgents && !options.expiresAt && !options.neverExpires)) await confirm_token_config(config);
+  display(with_cli_local_data((data) => data.city_tokens.update(previous.token_id, config)), options.json);
+}
 
-  token
-    .command("delete <token_id> [agent_id]")
-    .option("--json", t({ zh: "以 JSON 输出", en: "output as JSON" }))
-    .helpOption("--help", helpText())
-    .action(async (
-      token_id: string,
-      agent_id: string | undefined,
-      options: { json?: boolean },
-    ) => {
-      const resolved_agent_id = await resolve_cli_agent_id(agent_id);
-      with_cli_local_data((data) =>
-        new AuthService({ agent_id: resolved_agent_id, repository: data.agent_tokens }).delete_token(token_id)
-      );
-      if (options.json) {
-        printResult({
-          type: "block",
-          asJson: true,
-          success: true,
-          title: "agent token deleted",
-          data: { agent_id: resolved_agent_id, token_id },
-        });
-        return;
-      }
-      emitCliBlock({
-        tone: "success",
-        title: "Agent token deleted",
-        facts: [
-          { label: "Agent", value: resolved_agent_id },
-          { label: "Token ID", value: token_id },
-        ],
-      });
-    });
+async function delete_token(id?: string, json = false): Promise<void> {
+  const previous = await select_token(id);
+  if (!id && !await token_question({ type: "confirm", name: "value", message: `撤销 ${previous.name}？连接将失去授权。`, initial: false })) return;
+  with_cli_local_data((data) => data.city_tokens.remove(previous.token_id));
+  display({ deleted: previous.token_id }, json);
+}
+
+/** 根入口管理循环；所有取消都在写入之前结束。 */
+async function manage_tokens(): Promise<void> {
+  while (true) {
+    const action = await token_question({ type: "select", name: "value", message: "City Token 管理", choices: [
+      { title: "创建 Token", value: "create" }, { title: "查看 Token", value: "list" },
+      { title: "修改名称、授权范围和有效期", value: "update" }, { title: "撤销 Token", value: "delete" }, { title: "返回", value: "exit" },
+    ] });
+    if (action === "exit") return;
+    // 输出后退出全屏交互，避免下一次菜单清屏吞掉唯一一次明文或操作结果。
+    if (action === "create") { await create_token({}); return; }
+    if (action === "list") { display(with_cli_local_data((data) => data.city_tokens.list())); return; }
+    if (action === "update") { await update_token(undefined, {}); return; }
+    if (action === "delete") { await delete_token(); return; }
+  }
+}
+
+/** 注册在 city 根命令，不再挂在 Agent 下。 */
+export function register_city_token_command(program: Command): void {
+  const token = program.command("token").description("管理 City 访问凭据与 Agent 授权范围").action(manage_tokens);
+  const configure = (command: Command) => command
+    .option("--name <name>", "凭据名称")
+    .option("--agents <ids>", "逗号分隔的 Agent IDs")
+    .option("--all-agents", "允许全部现有和未来 Agents")
+    .option("--expires-at <iso>", "含时区的到期日期")
+    .option("--never-expires", "永不过期")
+    .option("--json", "JSON 输出");
+  configure(token.command("create").description("创建 City Token，缺少参数时交互补齐")).action(create_token);
+  token.command("list").option("--json", "JSON 输出").action((options: CityTokenCommandOptions) => display(with_cli_local_data((data) => data.city_tokens.list()), options.json));
+  configure(token.command("update [token_id]").description("修改授权或有效期")).action(update_token);
+  token.command("delete [token_id]").description("撤销 City Token").option("--json", "JSON 输出").action((id: string | undefined, options: CityTokenCommandOptions) => delete_token(id, options.json));
 }

@@ -6,6 +6,7 @@
  */
 
 import { Hono, type Context } from "hono";
+import { authorized_response } from "./AuthorizedResponse.js";
 import {
   AgentHTTP,
   create_agent_http_server_handle,
@@ -29,6 +30,7 @@ type CityHttpAccess = Pick<
 export class CityHTTP {
   private readonly runtime_access: CityHttpAccess;
   private readonly runtime_options: CityHttpRuntimeOptions;
+  private readonly routers_by_agent = new Map<string, { agent: import("@downcity/agent").Agent; router: Hono }>();
   private readonly routers_by_workspace = new Map<string, { workspace: WorkspaceRuntime; router: Hono }>();
   private readonly extension_disposers = new Map<string, () => void | Promise<void>>();
   /** 每个 Agent 路由装配与释放的独立串行链。 */
@@ -45,6 +47,18 @@ export class CityHTTP {
   router(): Hono {
     if (this.cached_router) return this.cached_router;
     const root = new Hono();
+    const describe_agent = (agent: import("@downcity/agent").Agent) => ({ id: agent.id, name: agent.name, description: agent.description });
+    root.get("/api/sdk/agents", async (context) => {
+      const agents = this.runtime_access.list_agents();
+      const visible = await Promise.all(agents.map(async (agent) => await this.authorize_agent(agent, context.req.raw) ? describe_agent(agent) : null));
+      return context.json({ success: true, agents: visible.filter((agent) => agent !== null) });
+    });
+    root.get("/api/sdk/agents/:agent_id", async (context) => {
+      const agent = this.runtime_access.get_agent(context.req.param("agent_id"));
+      if (!agent || !await this.authorize_agent(agent, context.req.raw)) return context.json({ success: false, error: "Agent unavailable" }, 404);
+      return context.json({ success: true, agent: describe_agent(agent) });
+    });
+    root.all("/agents/:agent_id/api/sdk/*", async (context) => await this.dispatch_agent(context));
     root.all("/agents/:agent_id/workspaces/:workspace_id", async (context) => await this.dispatch_workspace(context));
     root.all("/agents/:agent_id/workspaces/:workspace_id/*", async (context) => await this.dispatch_workspace(context));
     if (this.runtime_options.city_router) root.route("/", this.runtime_options.city_router);
@@ -81,6 +95,7 @@ export class CityHTTP {
     const server_results = server
       ? await Promise.allSettled([server.close()])
       : [];
+    this.routers_by_agent.clear();
     const route_keys = new Set([
       ...this.routers_by_workspace.keys(),
       ...this.extension_disposers.keys(),
@@ -98,6 +113,7 @@ export class CityHTTP {
   async detach_agent(agent_id_input: string): Promise<void> {
     const agent_id = String(agent_id_input || "").trim();
     if (!agent_id) return;
+    this.routers_by_agent.delete(agent_id);
     const route_keys = new Set([
       ...[...this.routers_by_workspace.keys()].filter((key) => key.startsWith(`${agent_id}/`)),
       ...[...this.extension_disposers.keys()].filter((key) => key.startsWith(`${agent_id}/`)),
@@ -117,12 +133,38 @@ export class CityHTTP {
     });
   }
 
+  /** 每次请求校验授权，发现结果不作为后续访问的权限缓存。 */
+  private async authorize_agent(agent: import("@downcity/agent").Agent, request: Request): Promise<boolean> {
+    if (!this.runtime_options.authorize_agent) {
+      // 已装配认证扩展的宿主必须显式提供发现授权，避免绕过既有 Gateway。
+      return !this.runtime_options.create_agent_extension;
+    }
+    return await this.runtime_options.authorize_agent({ agent, request });
+  }
+
+  /** 无 Workspace 的 Agent SDK 路由；不调用 enter_workspace。 */
+  private async dispatch_agent(context: Context): Promise<Response> {
+    const agent_id = context.req.param("agent_id") ?? "";
+    const agent = this.runtime_access.get_agent(agent_id);
+    if (!agent || !await this.authorize_agent(agent, context.req.raw)) return context.json({ success: false, error: "Agent unavailable" }, 404);
+    let cached = this.routers_by_agent.get(agent_id);
+    if (!cached || cached.agent !== agent) {
+      cached = { agent, router: new AgentHTTP(agent).router() };
+      this.routers_by_agent.set(agent_id, cached);
+    }
+    const url = new URL(context.req.url);
+    url.pathname = url.pathname.slice(`/agents/${encodeURIComponent(agent_id)}`.length);
+    const router = cached.router;
+    return await authorized_response(new Request(url, context.req.raw), () => this.authorize_agent(agent, context.req.raw), async (request) => await router.fetch(request));
+  }
+
   /** 按请求中的 Agent ID 动态选择子路由，保证运行中新增 Agent 立即可见。 */
   private async dispatch_workspace(context: Context): Promise<Response> {
     const agent_id = decodeURIComponent(String(context.req.param("agent_id") || "")).trim();
     const workspace_id = decodeURIComponent(String(context.req.param("workspace_id") || "")).trim();
     const agent = this.runtime_access.get_agent(agent_id);
     if (!agent) return context.json({ success: false, error: `Agent not found: ${agent_id}` }, 404);
+    if (this.runtime_options.authorize_agent && !await this.authorize_agent(agent, context.req.raw)) return context.json({ success: false, error: "Agent access denied" }, 403);
     const workspace = await this.runtime_access.enter_workspace(agent_id, workspace_id)
       .catch(() => null);
     if (!workspace) return context.json({
@@ -136,7 +178,8 @@ export class CityHTTP {
     const url = new URL(context.req.url);
     const prefix = `/agents/${encodeURIComponent(agent_id)}/workspaces/${encodeURIComponent(workspace_id)}`;
     url.pathname = url.pathname.slice(prefix.length) || "/";
-    return await router.fetch(new Request(url, context.req.raw));
+    if (!this.runtime_options.authorize_agent) return await router.fetch(new Request(url, context.req.raw));
+    return await authorized_response(new Request(url, context.req.raw), () => this.authorize_agent(agent, context.req.raw), async (request) => await router.fetch(request));
   }
 
   /** 串行解析或创建指定 Agent 的唯一 Router。 */

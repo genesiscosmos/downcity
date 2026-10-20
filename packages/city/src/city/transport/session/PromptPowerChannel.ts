@@ -54,8 +54,10 @@ export class ServerPromptPowerChannel {
     if (this.pending.size >= 32 || this.completed.size >= 4096) throw new Error("Power channel call limit exceeded");
     return await new Promise<ModelJsonValue>((resolve, reject) => {
       const abort = () => {
-        this.send({ type: "cancel", call_id: call.call_id });
-        this.pending.get(call.call_id)?.reject(new Error("Power execution cancelled"));
+        try {
+          if (!this.abort_controller.signal.aborted) this.send({ type: "cancel", call_id: call.call_id });
+        } catch { /* 断开后的取消帧无法发送，等待调用仍须收口。 */ }
+        finally { this.pending.get(call.call_id)?.reject(new Error("Power execution cancelled")); }
       };
       const finish = () => {
         signal.removeEventListener("abort", abort);

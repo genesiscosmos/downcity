@@ -97,7 +97,6 @@ export function save_agent_config(input: AgentConfig): AgentConfig {
 /** 删除 Agent 及其关联配置。 */
 export function remove_agent_config(agent_id: string): void {
   with_cli_local_data((data) => {
-    data.agent_tokens.remove_all(agent_id);
     data.agents.remove(agent_id);
   });
 }

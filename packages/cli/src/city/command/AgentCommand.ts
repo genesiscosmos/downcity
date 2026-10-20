@@ -19,7 +19,6 @@ import type { AgentChatCliOptions } from "@/city/agent/AgentChatTypes.js";
 import type { AgentModelCommandOptions } from "@/city/types/AgentModel.js";
 import { createVersionBanner, parseBoolean } from "@/shared/IndexSupport.js";
 import { helpText, t } from "@/shared/CliLocale.js";
-import { registerAgentTokenCommand } from "@/city/command/TokenCommand.js";
 
 /**
  * agent 命令注册参数。
@@ -145,5 +144,4 @@ export function registerAgentCommands(
       },
     ));
 
-  registerAgentTokenCommand(agent);
 }

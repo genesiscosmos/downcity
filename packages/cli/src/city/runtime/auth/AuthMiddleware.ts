@@ -7,7 +7,7 @@
  */
 
 import type { Context, MiddlewareHandler } from "hono";
-import type { AgentTokenPrincipal } from "@/city/types/auth/AgentToken.js";
+import type { CityTokenPrincipal } from "@/city/types/auth/CityTokenPrincipal.js";
 import { isAuthError } from "@/city/runtime/auth/AuthError.js";
 import type { AuthService } from "@/city/runtime/auth/AuthService.js";
 
@@ -23,7 +23,7 @@ export interface AuthMiddlewareVariables {
   /**
    * 当前请求的认证主体。
    */
-  authPrincipal: AgentTokenPrincipal;
+  authPrincipal: CityTokenPrincipal;
 }
 
 /**
@@ -56,6 +56,6 @@ export function createRequireAuthMiddleware(
  */
 export function getAuthPrincipal(
   context: Context<{ Variables: AuthMiddlewareVariables }>,
-): AgentTokenPrincipal {
+): CityTokenPrincipal {
   return context.get(AUTH_PRINCIPAL_CONTEXT_KEY);
 }

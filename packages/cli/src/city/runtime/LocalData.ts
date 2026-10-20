@@ -17,8 +17,7 @@ import {
   LocalSettingRepository,
   WorkspaceRepository,
 } from "@downcity/city/local";
-import { AgentTokenRepository } from "@/city/runtime/auth/AgentTokenRepository.js";
-import { ensure_cli_local_schema } from "@/city/runtime/LocalCliSchema.js";
+import { CityTokenRepository } from "@downcity/city/local";
 
 /** CLI 进程使用的一组本地数据依赖。 */
 export interface CliLocalData {
@@ -34,8 +33,8 @@ export interface CliLocalData {
   powers: PowerRepository;
   /** 平台明文设置仓储。 */
   settings: LocalSettingRepository;
-  /** CLI Agent HTTP Bearer Token 仓储。 */
-  agent_tokens: AgentTokenRepository;
+  /** City HTTP 凭据及 Agent 授权范围。 */
+  city_tokens: CityTokenRepository;
 }
 
 /** 显式创建 CLI 本地数据依赖。 */
@@ -43,13 +42,12 @@ export function create_cli_local_data(root_path_input?: string): CliLocalData {
   const root_path = resolve_local_root_path(root_path_input);
   const database = new LocalDatabase({ filename: get_local_database_path(root_path) });
   ensure_local_schema(database);
-  ensure_cli_local_schema(database);
   const settings = new LocalSettingRepository(database);
   const workspaces = new WorkspaceRepository(database);
   const agents = new AgentRepository(root_path);
   const powers = new PowerRepository(root_path);
-  const agent_tokens = new AgentTokenRepository(database);
-  return { root_path, database, agents, workspaces, powers, settings, agent_tokens };
+  const city_tokens = new CityTokenRepository(database);
+  return { root_path, database, agents, workspaces, powers, settings, city_tokens };
 }
 
 /** 在短连接本地数据依赖上执行同步操作。 */

@@ -9,7 +9,7 @@
 import type { Hono } from "hono";
 import type { JsonValue } from "@downcity/agent";
 import type { CliAgentContext } from "@/city/agent/CliAgentContext.js";
-import type { AgentTokenPrincipal } from "@/city/types/auth/AgentToken.js";
+import type { CityTokenPrincipal } from "@/city/types/auth/CityTokenPrincipal.js";
 import { MESSENGER_ACCESS_ACTIONS } from "@downcity/powers/messenger";
 import { buildControlRouteAliases } from "@/city/agent/control/CommonHelpers.js";
 import type {
@@ -25,7 +25,7 @@ const CONTROL_OPERATOR = "city-control";
 
 function resolve_control_operator(context: unknown): string {
   const reader = context as MessengerAccessControlContextReader;
-  const principal = reader.get?.(AUTH_PRINCIPAL_CONTEXT_KEY) as Partial<AgentTokenPrincipal> | undefined;
+  const principal = reader.get?.(AUTH_PRINCIPAL_CONTEXT_KEY) as Partial<CityTokenPrincipal> | undefined;
   const token_id = String(principal?.token_id || "").trim();
   return token_id ? `city-token:${token_id}` : CONTROL_OPERATOR;
 }

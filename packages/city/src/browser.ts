@@ -5,6 +5,8 @@
 import type { RemoteAgentOptions } from "./types/remote/RemoteAgentOptions.js";
 import { RemoteAgentCore } from "./remote/RemoteAgentCore.js";
 import { HttpRemoteAgentTransport } from "./remote/transports/HttpRemoteAgentTransport.js";
+export { RemoteCity, RemoteCityAgent } from "./remote/RemoteCity.js";
+export type { RemoteCityOptions, RemoteCityAgentInfo } from "./types/remote/RemoteCity.js";
 export type { PromptPower, PromptPowerAction, PromptPowerCallContext } from "@downcity/type";
 
 /** 浏览器远程客户端，方法与 Node RemoteAgent 相同，仅接受 HTTP/HTTPS。 */

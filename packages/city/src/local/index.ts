@@ -8,6 +8,9 @@
 export { UserRepository, LOCAL_USER_ID } from "./repositories/UserRepository.js";
 export type { LocalUser } from "./repositories/UserRepository.js";
 
+export { CityTokenRepository } from "./repositories/CityTokenRepository.js";
+export type { CityTokenScope, CityTokenSummary, CityTokenConfig, IssuedCityToken } from "./types/CityToken.js";
+
 export { LocalDatabase } from "./database/LocalDatabase.js";
 export type {
   LocalDatabaseMutationResult,

@@ -76,6 +76,7 @@ export class RemoteSession implements RemoteAgentSession {
   private event_pump_connect_promise: Promise<void> | null = null;
   private event_pump_running = false;
   private event_subscriber_count = 0;
+  private readonly close_listeners = new Set<(error: Error) => void>();
   private event_subscription: TransportSubscription | null = null;
 
   constructor(transport: RemoteSessionTransport, info: AgentSessionInfo) {
@@ -154,6 +155,15 @@ export class RemoteSession implements RemoteAgentSession {
       this.event_subscriber_count = Math.max(0, this.event_subscriber_count - 1);
       void this.maybe_stop_event_pump();
     };
+  }
+
+  /** 注册后等待 ready，避免历史快照与事件订阅之间的丢失窗口。 */
+  async watch(subscriber: SessionMutationSubscriber, on_close: (error: Error) => void): Promise<SessionMutationUnsubscribe> {
+    this.close_listeners.add(on_close);
+    const unsubscribe = this.subscribe(subscriber);
+    const close = () => { this.close_listeners.delete(on_close); unsubscribe(); };
+    try { await this.ensure_event_pump(); return close; }
+    catch (error) { close(); throw error; }
   }
 
   /** 读取远程 Message 快照。 */
@@ -243,6 +253,8 @@ export class RemoteSession implements RemoteAgentSession {
   }
 
   private handle_event_pump_closed(error?: unknown): void {
+    const failure = error instanceof Error ? error : new Error(String(error || "Remote session events connection closed"));
+    for (const listener of this.close_listeners) { try { listener(failure); } catch { /* 宿主通知不能阻断其他订阅收口。 */ } }
     this.event_subscription = null;
     this.event_pump_running = false;
     this.fail_pending_turns(

@@ -114,6 +114,14 @@ export class CliCityRuntime {
         return await create_cli_workspace(workspace_config, data.root_path);
       },
       http: {
+        authorize_agent: ({ agent, request }) => {
+          const auth = new AuthService({ agent_id: agent.id, repository: data.city_tokens });
+          try {
+            auth.authenticate_bearer_header(request.headers.get("authorization") ?? undefined);
+            return true;
+          } catch { return false; }
+          finally { auth.close(); }
+        },
         resolve_session_model: async ({ workspace, model_id }) =>
           await resolve_cli_agent_model(
             model_id,
@@ -122,7 +130,7 @@ export class CliCityRuntime {
         create_agent_extension: ({ agent, workspace, powers, sdk_router }) => {
           const auth_service = new AuthService({
             agent_id: agent.id,
-            repository: data.agent_tokens,
+            repository: data.city_tokens,
           });
           const data_path = city.storage.open_scope(["agents", agent.id]).root_path;
           return {

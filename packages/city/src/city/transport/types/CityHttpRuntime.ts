@@ -22,6 +22,11 @@ export interface CityAgentHttpExtension {
 
 /** City HTTP transport 所需的宿主能力。 */
 export interface CityHttpRuntimeOptions {
+  /** 为 Agent 发现及无 Workspace SDK 路由校验凭据；宿主提供时未授权 Agent 不可见。 */
+  authorize_agent?: (input: {
+    /** 待访问的 Agent。 */ readonly agent: Agent;
+    /** 原始请求，供宿主使用现有认证策略。 */ readonly request: Request;
+  }) => boolean | Promise<boolean>;
   /** 为指定 Agent 创建远程 Session 所需的模型解析器。 */
   resolve_session_model?: (input: {
     /** 当前请求已经解析出的 Agent 实例。 */

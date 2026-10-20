@@ -154,6 +154,8 @@ export function create_agent_http_server_handle(app: Hono): AgentHttpServerHandl
     stop: async (server) => {
       await new Promise<void>((resolve, reject) => {
         server.close((error) => error ? reject(error) : resolve());
+        // 事件流和执行通道没有自然结束点，服务禁用时主动断开并传播 AbortSignal。
+        server.closeAllConnections();
       });
     },
   });

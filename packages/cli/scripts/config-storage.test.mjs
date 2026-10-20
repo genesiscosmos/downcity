@@ -192,18 +192,18 @@ test("CLI City daemon 使用唯一的全局 runtime", async () => {
   }
 });
 
-test("Agent HTTP Bearer Token 按 Agent 隔离", async () => {
+test("City HTTP Bearer Token 按允许的 Agent 范围隔离", async () => {
   const platform_root = create_temp_root();
   process.env.DC_PLATFORM_ROOT = platform_root;
   try {
     const { create_cli_local_data } = await import("../bin/city/runtime/LocalData.js");
     const { AuthService } = await import("../bin/city/runtime/auth/AuthService.js");
     const data = create_cli_local_data();
-    const first = new AuthService({ agent_id: "agent_one", repository: data.agent_tokens });
-    const token = first.create_token({ name: "test" });
+    const first = new AuthService({ agent_id: "agent_one", repository: data.city_tokens });
+    const token = data.city_tokens.create({ name: "test", all_agents: false, agent_ids: ["agent_one"], expires_at: null });
     assert.equal(first.authenticate_bearer_header(`Bearer ${token.token}`).agent_id, "agent_one");
-    const second = new AuthService({ agent_id: "agent_two", repository: data.agent_tokens });
-    assert.throws(() => second.authenticate_bearer_header(`Bearer ${token.token}`), /Invalid bearer token/u);
+    const second = new AuthService({ agent_id: "agent_two", repository: data.city_tokens });
+    assert.throws(() => second.authenticate_bearer_header(`Bearer ${token.token}`), /Invalid City Token/u);
     data.database.close();
   } finally {
     delete process.env.DC_PLATFORM_ROOT;

@@ -12,6 +12,7 @@ import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { Command, Option } from "commander";
+import { register_city_token_command } from "@/city/command/TokenCommand.js";
 import { registerAgentCommands } from "@/city/command/AgentCommand.js";
 import { registerGatewayCommands } from "@/city/command/GatewayCommand.js";
 import { registerPowersCommand } from "@/city/command/PowerCommand.js";
@@ -97,6 +98,7 @@ export function registerCityCommands(program: Command): void {
     hiddenPortOption: Option,
   });
   registerPowersCommand(program);
+  register_city_token_command(program);
 
   program.showHelpAfterError();
   program.showSuggestionAfterError();

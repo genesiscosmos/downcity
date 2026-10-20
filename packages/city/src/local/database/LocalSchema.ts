@@ -9,6 +9,18 @@ import type { LocalDatabase } from "@/local/database/LocalDatabase.js";
 /** 初始化当前版本的本地产品表。 */
 export function ensure_local_schema(database: LocalDatabase): void {
   database.execute_script(`
+    CREATE TABLE IF NOT EXISTS city_tokens (
+      token_id TEXT PRIMARY KEY NOT NULL,
+      name TEXT NOT NULL,
+      all_agents INTEGER NOT NULL CHECK (all_agents IN (0, 1)),
+      agent_ids_json TEXT NOT NULL CHECK (json_valid(agent_ids_json)),
+      token_hash TEXT UNIQUE NOT NULL,
+      expires_at TEXT,
+      last_used_at TEXT,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+
     CREATE TABLE IF NOT EXISTS workspaces (
       workspace_id TEXT PRIMARY KEY NOT NULL,
       workspace_path TEXT UNIQUE NOT NULL,

@@ -265,6 +265,7 @@ function create_local_chat_sessions(
       prompt: async (input) => await session.prompt(input),
       stop: async () => await session.stop(),
       subscribe: (subscriber) => session.subscribe(subscriber),
+      watch: async (subscriber) => session.subscribe(subscriber),
       messages: async (input) => await session.messages(input),
       system: async () => await session.system(),
       interactions: async () => await session.interactions(),

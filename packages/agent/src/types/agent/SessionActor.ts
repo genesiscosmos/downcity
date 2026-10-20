@@ -155,6 +155,8 @@ export interface AgentSession extends AgentSessionActor {
  * 远程 Agent 返回的公开 session 接口。
  */
 export interface RemoteAgentSession extends AgentSessionActor {
+  /** 等待事件流握手后返回取消函数；断线通过 on_close 通知，适合订阅后读取历史。 */
+  watch(subscriber: SessionMutationSubscriber, on_close: (error: Error) => void): Promise<SessionMutationUnsubscribe>;
   /** 写入当前远程 Session 的可序列化动态配置。 */
   set(input: RemoteSessionSetInput, options?: AgentSessionSetOptions): Promise<void>;
 
