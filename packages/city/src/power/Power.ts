@@ -309,6 +309,7 @@ export abstract class Power implements PowerDefinition {
         access: action.access,
         returns: action.returns,
         has_input_schema: action.has_input_schema,
+        ...(action.input_schema ? { input_schema: action.input_schema } : {}),
       })),
     };
   }

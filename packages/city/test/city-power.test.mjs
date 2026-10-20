@@ -39,7 +39,7 @@ const CITY_POWER_ACTIONS = {
     "sound.models",
     "sound.tts",
   ],
-  agent: ["agent.create", "agent.list"],
+  agent: ["agent.create", "agent.delegate", "agent.list"],
 };
 
 /**

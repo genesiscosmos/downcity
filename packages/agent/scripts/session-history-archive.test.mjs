@@ -1,4 +1,4 @@
-/** 验证 compact 前原文分页与 SDK/Tool 归档，包括忙碌拒绝和旧句柄封闭。 */
+/** 验证 compact 前原文分页与 SDK/Session Power 归档，包括忙碌拒绝和旧句柄封闭。 */
 import assert from "node:assert/strict";
 import test from "node:test";
 import { Agent, City, Workspace } from "../../city/bin/index.js";
@@ -11,7 +11,8 @@ async function fixture(generate = async () => ({ text: "result" })) {
   const city = new City({ workspaces: [workspace] });
   const agent = city.agents.add(new Agent({ id: "owner", model }));
   const main = await agent.session();
-  const tool = agent.resolve_session_tools().session;
+  const tool = city.power_tools.session;
+  assert.ok(tool, "City registers Session Power");
   const context = { agent_id: agent.id, agent_name: agent.name, agent_description: "", agent_instructions: [], session_id: main.id, session_origin: main.origin, turn_id: "caller-turn", tool_call_id: "call" };
   return { city, agent, workspace, main, tool, context };
 }
@@ -29,7 +30,7 @@ test("messages 分页读取 compact 前原文，归档后列表保留历史而�
     let before_sequence;
     let pages = 0;
     while (true) {
-      const page = (await f.tool.execute({ action: "messages", args: { session_id: work.id, limit: 3, ...(before_sequence ? { before_sequence } : {}) } }, f.context)).output;
+      const page = (await f.tool.execute({ action: "messages", args: { session_id: work.id, limit: 3, ...(before_sequence ? { before_sequence } : {}) } }, f.context)).output.data;
       assert.equal(page.source, "canonical_history");
       assert.equal(page.trust_level, "reference");
       entries.push(...page.items);
@@ -46,7 +47,7 @@ test("messages 分页读取 compact 前原文，归档后列表保留历史而�
       assert.ok(found);
       assert.deepEqual(found.parts, message.parts);
     }
-    const archived = (await f.tool.execute({ action: "archive", args: { session_id: work.id } }, f.context)).output;
+    const archived = (await f.tool.execute({ action: "archive", args: { session_id: work.id } }, f.context)).output.data;
     assert.equal(archived.status, "archived");
     assert.ok(!(await f.agent.sessions.list()).items.some((item) => item.session_id === work.id));
     assert.ok((await f.agent.sessions.archived()).items.some((item) => item.session_id === work.id));
@@ -65,14 +66,18 @@ test("运行和占用中的工作不能归档，结束后 SDK session.archive �
     const turn = await work.prompt({ query: "work" });
     await started;
     await assert.rejects(work.archive(), /executing|queued/);
-    await assert.rejects(f.tool.execute({ action: "archive", args: { session_id: work.id } }, f.context), /executing|queued/);
+    const busy = await f.tool.execute({ action: "archive", args: { session_id: work.id } }, f.context);
+    assert.equal(busy.output.success, false);
+    assert.match(busy.output.error, /executing|queued/);
     release();
     await turn.finished;
     // finished 与队列消费者释放处于相邻 microtask，等待本轮事件循环收口。
     await new Promise((resolve) => setImmediate(resolve));
     await work.archive();
     await assert.rejects(work.prompt({ query: "must reject" }), /archived/);
-    await assert.rejects(f.tool.execute({ action: "archive", args: { session_id: f.main.id } }, f.context), /calling Session/);
+    const self = await f.tool.execute({ action: "archive", args: { session_id: f.main.id } }, f.context);
+    assert.equal(self.output.success, false);
+    assert.match(self.output.error, /calling Session/);
   } finally { release(); await f.city.close(); }
 });
 

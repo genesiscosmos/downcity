@@ -21,6 +21,7 @@ import type { CityRuntime, PowerSurface } from "@downcity/type";
 import type { AgentTool, ToolHookSet } from "@downcity/type";
 import { MemoryStorageProvider } from "@/workspace/index.js";
 import { CityHTTP } from "@/city/transport/http/CityHTTP.js";
+import { SessionPower } from "@/city/power/builtin/session/SessionPower.js";
 import { CityRPC } from "@/city/transport/rpc/CityRPC.js";
 import type {
   CityAgents,
@@ -121,7 +122,7 @@ export class City implements CityRuntime {
       ...(options.power_host ? { host: options.power_host } : {}),
     });
     this.powers = this.power_runtime.public_api;
-    // 三个领域 power 与 shell 一样走同一条注册路径；特权依赖在这里注入。
+    // City 领域 Power 与 Shell 走同一条注册路径；特权依赖在这里注入。
     for (const power of this.create_city_powers(options.runtime?.create_agent)) {
       void this.powers.add(power).catch(() => undefined);
     }
@@ -190,7 +191,7 @@ export class City implements CityRuntime {
   /**
    * 创建 City 自有的领域 power。
    *
-   * 关键点（中文）：三个 power 共享同一份特权依赖；动作组私有文件按 Agent + 组名隔离，
+   * 关键点（中文）：City 领域 Power 共享同一份特权依赖；动作组私有文件按 Agent + 组名隔离，
    * 因此组在 power 之间搬迁不会改变落盘路径。
    */
   private create_city_powers(create_agent?: CityRuntimeOptions["create_agent"]): Power[] {
@@ -200,7 +201,7 @@ export class City implements CityRuntime {
         this.storage.open_scope(["agents", agent_id, "powers", group_id]).files,
       ...(this.embassy ? { embassy: this.embassy } : {}),
     };
-    return [new ContextPower(options), new AiPower(options), new AgentPower(options, create_agent)];
+    return [new ContextPower(options), new AiPower(options), new AgentPower(options, create_agent), new SessionPower(options)];
   }
 
   /**

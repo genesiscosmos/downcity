@@ -519,7 +519,7 @@ test("City config actions use the Power-owned config store", async () => {
     { token: "secret" },
   );
   assert.deepEqual(
-    requests.filter((id) => !["context", "ai", "agent", "shell"].includes(id)),
+    requests.filter((id) => !["context", "ai", "agent", "session", "shell"].includes(id)),
     ["config-main"],
   );
   await city.close();

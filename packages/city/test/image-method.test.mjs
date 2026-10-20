@@ -117,7 +117,7 @@ test("ai power 同时暴露 image 与 sound 动作组，image 是其中一个组
     image_result: () => ({ job_id: "img_1", status: "queued" }),
   });
   try {
-    assert.deepEqual(Object.keys(fixture.tools).sort(), ["agent", "ai", "context", "shell"]);
+    assert.deepEqual(Object.keys(fixture.tools).sort(), ["agent", "ai", "context", "session", "shell"]);
     assert.equal("image_create" in fixture.tools, false);
     const index = await fixture.call({});
     assert.equal(index.success, true);

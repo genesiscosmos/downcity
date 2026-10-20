@@ -36,6 +36,8 @@ export interface SessionDelegationRecord {
   query: string;
   /** 子会话的用户可见标题。 */
   title?: string;
+  /** 显式选择的模型标识；重启恢复后仍按此模型准备会话。 */
+  model_id?: string;
   /** 子执行的实际 Turn 标识，提交成功后写入。 */
   work_turn_id?: string;
   /** 工作执行状态；停止在调用 stop 前持久化。 */
@@ -79,7 +81,9 @@ export interface SessionDelegationOptions {
   /** 恢复父会话并完成宿主 Workspace、模型及消息订阅装配。 */
   get_parent_session: (caller: SessionDelegationCaller) => Promise<AgentSession>;
   /** 为恢复的子会话完成宿主模型及消息订阅装配。 */
-  prepare_session: (session: AgentSession) => Promise<void>;
+  prepare_session: (session: AgentSession, model_id?: string) => Promise<void>;
+  /** 保存委派前验证目标模型；未提供此端口时拒绝显式选择模型。 */
+  validate_model?: (model_id: string, workspace: WorkspaceRuntime) => Promise<void>;
   /** 报告后台执行或投递失败；记录保留以便恢复重试。 */
   report_error: (delegation_id: string, error: unknown) => void;
 }
@@ -92,6 +96,8 @@ export interface SessionDelegationInput {
   workspace_id: string;
   /** 工作短标题。 */
   title?: string;
+  /** 新工作会话使用的已登记模型标识；省略时采用目标 Agent 默认模型。 */
+  model_id?: string;
 }
 
 /** 向已有工作会话追加的完整指令。 */

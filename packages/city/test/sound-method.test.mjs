@@ -96,7 +96,7 @@ async function create_fixture(options = {}) {
 test("ai power 同时承载 image 与 sound 两个动作组", async () => {
   const fixture = await create_fixture({ asr: () => ({ text: "hi" }), tts: () => ({}) });
   try {
-    assert.deepEqual(Object.keys(fixture.tools).sort(), ["agent", "ai", "context", "shell"]);
+    assert.deepEqual(Object.keys(fixture.tools).sort(), ["agent", "ai", "context", "session", "shell"]);
     const index = await fixture.call({});
     assert.equal(index.power, "ai");
     const action_ids = index.data.actions.map((item) => item.action);

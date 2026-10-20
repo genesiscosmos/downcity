@@ -104,19 +104,23 @@ export interface AgentOptions {
   workspace?: WorkspaceRuntime;
 
   /**
-   * 为 session_start 显式指定的项目 Workspace ID 提供运行时实例。
+   * 为 Session Power start 动作显式指定的项目 Workspace ID 提供运行时实例。
    *
    * 由宿主持有项目目录并校验目标；Agent 不查询 City registry。
-   * 未提供时不支持通过 session_start 派发项目工作，禁止继承主会话的私有目录。
+   * 未提供时不支持通过 session.start 派发项目工作，禁止继承主会话的私有目录。
    */
   resolve_work_workspace?: (workspace_id: string) => Promise<WorkspaceRuntime>;
 
   /**
    * 委派执行或结果回传前的宿主装配入口。
    * Workspace 已恢复；宿主可恢复 Session 模型并建立消息订阅。
+   * model_id 为派发记录中的显式模型选择；宿主应保存该选择供后续恢复使用。
    * 必须幂等且不得再次调用 resume_work 或派发模型输入。
    */
-  prepare_work_session?: (session: AgentSession) => Promise<void>;
+  prepare_work_session?: (session: AgentSession, model_id?: string) => Promise<void>;
+
+  /** 解析用户登记的工作会话模型；必须拒绝未知模型，并使用目标 Workspace 的环境。 */
+  resolve_work_model?: (model_id: string, workspace?: WorkspaceRuntime) => Promise<ModelClient>;
 
   /**
    * 当前 agent 使用的本地 Session 类。

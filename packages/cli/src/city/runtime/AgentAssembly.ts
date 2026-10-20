@@ -65,6 +65,8 @@ export async function create_cli_agent(input: {
     instruction: input.config.instruction,
     model,
     tools,
+    resolve_work_model: async (model_id, workspace) =>
+      await resolve_cli_agent_model(model_id, workspace?.get_env() ?? process_environment()),
   });
 }
 

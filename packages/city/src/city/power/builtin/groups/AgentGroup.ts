@@ -4,7 +4,8 @@
  * 关键点（中文）
  * - 返回当前 City 中全部 Agent，不做 Workspace 过滤：协作认知边界是 City，不是 Workspace。
  * - list 包含职责简介，协作对象选择不需要额外 get。
- * - create 通过宿主完成持久化和注册；工作会话交互属于 session 工具。
+ * - create 通过宿主完成持久化和注册；跨 Agent 任务由 Agent Power 的 delegate 动作处理。
+ * - Session Power 只管理调用方自己的会话，不能访问此处发现的其他 Agent 的会话。
  */
 
 import type { CityPowerContext } from "@/city/types/CityPowerContext.js";

@@ -47,10 +47,10 @@ import {
 import type { AgentSessionSystemBlock } from "@/types/agent/SessionTypes.js";
 import { resolve_system_timezone } from "@/session/storage/Metadata.js";
 import { SessionWork } from "@/agent/SessionWork.js";
+import type { SessionWorkContract } from "@/types/agent/SessionWork.js";
 import { SessionDelegations } from "@/agent/SessionDelegations.js";
 import { LocalSessionDelegationStore } from "@/agent/LocalSessionDelegationStore.js";
-import { is_agent_session_origin, SESSION_ORIGIN_TYPE_CHANNEL, SESSION_ORIGIN_TYPE_WORK } from "@downcity/type";
-import { create_session_tools } from "@/tools/session/SessionTools.js";
+import { SESSION_ORIGIN_TYPE_WORK } from "@downcity/type";
 import type { AgentWorkHost } from "@/types/agent/AgentWorkHost.js";
 import type { AgentSessionInput } from "@/types/agent/AgentSessionInput.js";
 import type { AgentSession } from "@/types/agent/SessionActor.js";
@@ -105,7 +105,6 @@ export class Agent {
    * 关键点（中文）：工具只依赖 SessionWork 协议，不从 ToolCallContext 回查主体；
    * 它们只在 Agent 主会话和 Channel 会话里注册。
    */
-  private session_tools?: Record<string, Tool>;
   /** 当前 Agent 的工作端口，跨主体调用仍由目标 Agent 持有自己的会话与记录。 */
   private session_work?: SessionWork;
   /** 容器绑定时注入的主体发现与项目解析能力。 */
@@ -116,6 +115,7 @@ export class Agent {
   private completions?: SessionCompletions;
   /** 宿主负责恢复模型与消息订阅的幂等装配入口。 */
   private readonly prepare_work_session: AgentOptions["prepare_work_session"];
+  private readonly resolve_work_model: AgentOptions["resolve_work_model"];
 
   /** Agent 释放状态。 */
   private dispose_promise?: Promise<void>;
@@ -143,6 +143,7 @@ export class Agent {
     this.workspace = options.workspace;
     this.resolve_work_workspace = options.resolve_work_workspace;
     this.prepare_work_session = options.prepare_work_session;
+    this.resolve_work_model = options.resolve_work_model;
     this.instruction = normalize_instruction_input(options.instruction);
     this.session_class = options.session_class;
     this.session_composer = options.session_composer;
@@ -181,27 +182,24 @@ export class Agent {
         // 用默认值顶替会变成一次静默换目录。
         const workspace = input?.workspace
           ?? (input?.creating ? this.workspace : undefined);
-        // 主对话和外部聊天都可以协调项目工作，使用相同的会话管理能力。
-        const has_session_tools = is_agent_session_origin(input?.origin)
-          || input?.origin?.type === SESSION_ORIGIN_TYPE_CHANNEL;
         if (!workspace) return {
           workspace_path: ".",
           completions: this.resolve_completions(),
           logger: this.logger,
-          get_tools: () => this.resolve_tools(undefined, has_session_tools),
+          get_tools: () => this.resolve_tools(),
           get_workspace: () => undefined,
           get_hooks: () => this.resolve_hooks(),
           store: storage.sessions,
         };
         // 静态 Workspace Tool 与 Agent Tool 的命名冲突属于 Session 创建不变量，
         // 在装配时立即失败；执行时仍通过 getter 读取最新宿主扩展。
-        this.resolve_tools(workspace, has_session_tools);
+        this.resolve_tools(workspace);
         return {
           workspace_path: workspace.path,
           completions: this.resolve_completions(),
           workspace_id: workspace.id,
           logger: this.logger,
-          get_tools: () => this.resolve_tools(workspace, has_session_tools),
+          get_tools: () => this.resolve_tools(workspace),
           get_workspace: () => workspace,
           get_hooks: () => this.resolve_hooks(),
           store: storage.sessions,
@@ -412,29 +410,23 @@ export class Agent {
   }
 
   /**
-   * 返回当前生效的工具集合：Workspace 工具 + 容器 Power 工具 + Agent 自有工具 + 按来源注入的 session 工具。
+   * 返回当前生效的工具集合：Workspace 工具 + 容器 Power 工具 + Agent 自有工具。
    *
    * 关键点（中文）
    * - 容器 Power 工具从环境句柄实时读取，不缓存；容器增删 Power 后下一次求值即生效。
    * - 静态 Workspace Tool 与 Agent Tool 的命名冲突属于 Session 创建不变量，装配时立即失败。
    */
-  private resolve_tools(workspace?: WorkspaceRuntime, has_session_tools = false): Record<string, Tool> {
+  private resolve_tools(workspace?: WorkspaceRuntime): Record<string, Tool> {
     const tools: Record<string, Tool> = {};
     if (workspace) register_tools(tools, workspace.tools, "WorkspaceTools");
     register_tools(tools, this.host?.power_tools ?? {}, "Power");
     register_tools(tools, this.custom_tools, "AgentOptions.tools");
-    if (has_session_tools) register_tools(tools, this.resolve_session_tools(), "AgentSessionTools");
     return tools;
   }
 
-  /** 返回 Agent 会话的会话工具集合；首次调用时创建。 */
-  private resolve_session_tools(): Record<string, Tool> {
-    if (this.session_tools) return this.session_tools;
-    this.session_tools = create_session_tools(
-      this.resolve_session_work(),
-      (agent_id) => this.resolve_work_agent(agent_id).resolve_session_work(),
-    );
-    return this.session_tools;
+  /** 向 City 的 Session Power 提供本 Agent 持有的会话工作服务。 */
+  get_session_work(): SessionWorkContract {
+    return this.resolve_session_work();
   }
 
   /** 解析协作对象；独立运行时仍能管理自己的工作会话。 */
@@ -485,8 +477,13 @@ export class Agent {
     const storage = this.resolve_storage();
     const resolve_workspace = async (workspace_id: string): Promise<WorkspaceRuntime> =>
       await this.resolve_project_workspace(workspace_id);
-    const prepare_session = async (session: AgentSession): Promise<void> => {
-      await this.prepare_work_session?.(session);
+    const prepare_session = async (session: AgentSession, model_id?: string): Promise<void> => {
+      await this.prepare_work_session?.(session, model_id);
+      if (model_id) {
+        if (!this.resolve_work_model) throw new Error("Session model selection is not configured by the host");
+        const workspace = session.workspace_id ? await this.resolve_project_workspace(session.workspace_id) : undefined;
+        await session.set({ model: await this.resolve_work_model(model_id, workspace) });
+      }
     };
     this.delegations = new SessionDelegations({
       agent_id: this.id,
@@ -495,6 +492,10 @@ export class Agent {
       ensure_work_session: async (session_id, workspace) =>
         await this.session_manager.ensure_work_session(session_id, workspace),
       prepare_session,
+      validate_model: async (model_id, workspace) => {
+        if (!this.resolve_work_model) throw new Error("Session model selection is not configured by the host");
+        await this.resolve_work_model(model_id, workspace);
+      },
       get_work_session: async (session_id) => await this.restore_work_session(session_id, SESSION_ORIGIN_TYPE_WORK),
       get_parent_session: async (caller) => await this.resolve_work_agent(caller.agent_id)
         .restore_work_session(caller.session_id, caller.origin.type),
