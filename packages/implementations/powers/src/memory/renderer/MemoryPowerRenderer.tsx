@@ -144,10 +144,10 @@ export const MEMORY_POWER_RENDERER = define_power_renderer({
       set_reading(true);
       void power.invoke<MemoryMainviewReadResult>("memory.read", { ...input, memory_id })
         .then((value) => { if (!disposed) set_detail(value); })
-        .catch((reason) => { if (!disposed) set_error(to_error_message(reason)); })
+        .catch((reason) => { if (!disposed) { set_detail(undefined); set_error(to_error_message(reason)); } })
         .finally(() => { if (!disposed) set_reading(false); });
       return () => { disposed = true; };
-    }, [agent_id, detail_revision, memory_id, power, scope, workspace_id]);
+    }, [agent_id, detail_revision, memory_id, power, scope, workspace_id, ui.revision]);
 
     const mutate = async (
       action_id: string,

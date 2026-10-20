@@ -1,4 +1,4 @@
-/** 所有入口共用的任务生成协议；生成保存方案，不授权实际执行。 */
+/** 自然语言任务生成协议；校验保存成功后直接应用用户要求的执行安排。 */
 import type { TaskWorkspaceItem } from "./TaskWorkflow.js";
 
 export interface TaskGenerateInput {
@@ -21,6 +21,8 @@ export interface TaskGenerateInput {
 }
 
 export interface TaskGenerateResult {
+  /** 任务已保存但立即执行未受理的原因，可从详情重试执行。 */
+  start_error?: string;
   /** 已保存的任务身份，生成失败也保留此身份供重试。 */
   task_id: string;
   /** 当前任务完整信息，包含方案版本、状态与生成错误。 */

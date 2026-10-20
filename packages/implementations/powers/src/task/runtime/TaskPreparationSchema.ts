@@ -1,4 +1,4 @@
-/** 准备事实与方案结果的统一校验；方案确认之前不能进入执行。 */
+/** 生成状态与模型结果的统一校验；生成成功后直接生效。 */
 import { z } from "zod";
 export const task_preparation_schema = z.object({
   revision: z.number().int().positive(),
@@ -9,8 +9,13 @@ export const task_preparation_schema = z.object({
   error: z.string().optional(),
   analyzed_body: z.string().max(60000).optional(),
   schedule_error: z.string().optional(),
+  start_error: z.string().optional(),
   assumptions: z.array(z.string()).optional(),
   start_now: z.boolean().optional(),
+}).transform((preparation) => {
+  // 已落盘的待确认方案保留身份与正文，转为可重试状态，避免旧状态使整条任务无法读取。
+  if (preparation.status === "proposed") return { ...preparation, status: "failed" as const, error: "任务流程已更新，请重新生成安排" };
+  return { ...preparation, status: preparation.status };
 });
 export const task_analysis_schema = z.object({
   title: z.string().trim().min(1).max(200),

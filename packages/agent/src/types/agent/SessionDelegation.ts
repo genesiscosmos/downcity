@@ -36,10 +36,10 @@ export interface SessionDelegationRecord {
   workspace_id: string;
   /** 子会话唯一收到的完整执行指令。 */
   query: string;
-  /** 子会话的用户可见标题。 */
-  title?: string;
   /** 显式选择的模型标识；重启恢复后仍按此模型准备会话。 */
   model_id?: string;
+  /** 子会话的用户可见标题。 */
+  title?: string;
   /** 子执行的实际 Turn 标识，提交成功后写入。 */
   work_turn_id?: string;
   /** 工作执行状态；停止在调用 stop 前持久化。 */
@@ -96,10 +96,10 @@ export interface SessionDelegationInput {
   query: string;
   /** 显式指定的已登记项目 Workspace 标识。 */
   workspace_id: string;
-  /** 工作短标题。 */
-  title?: string;
   /** 新工作会话使用的已登记模型标识；省略时采用目标 Agent 默认模型。 */
   model_id?: string;
+  /** 工作短标题。 */
+  title?: string;
 }
 
 /** 向已有工作会话追加的完整指令。 */

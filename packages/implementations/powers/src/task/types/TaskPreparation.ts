@@ -5,7 +5,7 @@ export interface TaskPreparation {
   /** 输入版本，每次补充或人工编辑时递增。 */
   revision: number;
   /** 当前准备阶段；失败只由用户显式重试。 */
-  status: "queued" | "analyzing" | "delegating" | "needs_input" | "proposed" | "ready" | "failed";
+  status: "queued" | "analyzing" | "delegating" | "needs_input" | "ready" | "failed";
   /** 处理身份，用于拒绝过期模型响应。 */
   processing_id?: string;
   /** 用户补充的文本，按提交顺序保留。 */
@@ -18,9 +18,11 @@ export interface TaskPreparation {
   analyzed_body?: string;
   /** 自动安排尚未同步成功时的可见错误。 */
   schedule_error?: string;
-  /** 本版方案采用的默认值和假设，供确认前直接查看。 */
+  /** 已保存但立即执行未受理的原因，用户可从详情重试执行。 */
+  start_error?: string;
+  /** 本版任务采用的默认值和假设。 */
   assumptions?: string[];
-  /** 确认后立即执行；确认前不创建触发时间。 */
+  /** 用户明确要求生成成功后立即执行。 */
   start_now?: boolean;
 }
 
@@ -56,7 +58,7 @@ export interface TaskAnalysisInput {
   text: string;
   /** 当前输入版本，便于追踪。 */
   revision: number;
-  /** 原始接收时刻，解析相对日期的基准。 */
+  /** 本次请求分析的当前时刻，解析相对日期的基准。 */
   received_at: string;
   /** 用户的 IANA 时区。 */
   timezone: string;

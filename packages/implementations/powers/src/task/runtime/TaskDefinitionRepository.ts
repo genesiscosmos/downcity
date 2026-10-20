@@ -19,6 +19,8 @@ export class TaskDefinitionRepository {
     readonly storage: PowerStorage,
     /** TaskPower 实例级运行状态事实源。 */
     private readonly executions: TaskExecutionCoordinator,
+    /** 完成定义事务后使宿主视图失效，覆盖后台准备与调度器的提交。 */
+    private readonly invalidate: () => void = () => {},
   ) {}
 
   /**
@@ -34,7 +36,9 @@ export class TaskDefinitionRepository {
       async () => await operation(this.storage),
     );
     this.mutation_chain = current.then(() => undefined, () => undefined);
-    return await current;
+    const result = await current;
+    this.invalidate();
+    return result;
   }
 
   /** 判断指定 Task 是否正在运行；删除事务用它保护聚合目录。 */

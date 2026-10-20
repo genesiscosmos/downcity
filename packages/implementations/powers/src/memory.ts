@@ -5,6 +5,7 @@
  */
 
 export { MemoryPower } from "./memory/MemoryPower.js";
+export type { MemoryChange, MemoryChangeHandler } from "./memory/types/MemoryChange.js";
 export { BuiltinMemoryProvider } from "./memory/providers/BuiltinMemoryProvider.js";
 export {
   FileMemoryStorageAdapter,

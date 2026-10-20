@@ -10,8 +10,9 @@ export function task_status_label(task: TaskWorkspaceItem): string {
   if (task.state.inbox.some((item) => !item.resolved && item.kind === "failure")) return "执行失败";
   const preparation = task.definition.frontmatter.preparation;
   if (preparation) {
-    const labels = { queued: "正在理解", analyzing: "正在理解", delegating: "正在委派", needs_input: "待调整", proposed: "待确认安排", failed: "理解失败", ready: "" };
+    const labels = { queued: "正在理解", analyzing: "正在理解", delegating: "正在委派", needs_input: "待调整", failed: "理解失败", ready: "" };
     if (labels[preparation.status]) return labels[preparation.status];
+    if (preparation.start_error) return "启动失败";
     if (preparation.schedule_error) return "安排尚未生效";
   }
   if (task.definition.frontmatter.status === "enabled" && task.definition.frontmatter.when !== "@manual") return "已安排";

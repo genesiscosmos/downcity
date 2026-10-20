@@ -15,6 +15,7 @@ export { Agent } from "./agent/Agent.js";
 export { SessionBusyError } from "./session/SessionBusyError.js";
 export type { SessionPromptActor } from "./types/sdk/SessionPromptActor.js";
 export { local_user_prompt_actor, session_prompt_actor_schema } from "./types/sdk/SessionPromptActor.js";
+export type { SessionRemovalEvent } from "./types/agent/SessionRemoval.js";
 export type { SessionCallback, SessionCallbackInput, SessionCallbackHandler, SessionCallbacks } from "./types/agent/SessionCallback.js";
 export type { AgentWorkHost } from "./types/agent/AgentWorkHost.js";
 export type { AgentSessionInput } from "./types/agent/AgentSessionInput.js";

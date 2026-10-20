@@ -13,6 +13,7 @@ import type { SessionHookContextBlock } from "@downcity/type";
 import { FileMemoryStorageAdapter } from "@/memory/adapters/FileMemoryStorageAdapter.js";
 import { generate_memory_json } from "./MemoryModel.js";
 import type { ProfileScope } from "@/memory/types/Profile.js";
+import { notify_memory_change, type MemoryChangeHandler } from "@/memory/types/MemoryChange.js";
 
 /** Profile 文档及来源追加的幂等状态。 */
 interface ProfileState {
@@ -68,7 +69,16 @@ export class MemoryProfile {
     private readonly host: PowerLifecycleContext,
     private readonly platform_root_path: string,
     private readonly model_id?: string,
+    /** 正文提交后的业务回调，覆盖手动编辑和每日优化。 */
+    private readonly on_changed?: MemoryChangeHandler,
   ) {}
+
+  /** 只报告 Profile 正文变更，不报告内部幂等账本和扫描状态更新。 */
+  private notify_changed(scope: ProfileScope, operation: "written" | "deleted" = "written"): void {
+    notify_memory_change(this.on_changed, { kind: "profile", operation, target: scope.target,
+      agent_id: scope.target === "agent" ? scope.agent_id : null },
+    () => this.host.logger.error("Memory change callback failed"));
+  }
 
   /** 将受限范围解析为稳定队列键，不接受调用方文件路径。 */
   private scope_key(scope: ProfileScope): string {
@@ -106,7 +116,10 @@ export class MemoryProfile {
       const current = await storage.read("PROFILE.md") ?? "# Core Memory\n";
       const marker = `<!-- memory-source:${write_key} -->`;
       if (state.write_keys.includes(write_key)) return;
-      if (!current.includes(marker)) await storage.write("PROFILE.md", `${current.trimEnd()}\n\n${marker}\n${text}\n`);
+      if (!current.includes(marker)) {
+        await storage.write("PROFILE.md", `${current.trimEnd()}\n\n${marker}\n${text}\n`);
+        this.notify_changed(scope);
+      }
       state.write_keys.push(write_key);
       await storage.write("memory/profile-state.json", JSON.stringify(state));
     });
@@ -126,7 +139,10 @@ export class MemoryProfile {
       if (document_hash(content) !== version) throw new Error("Profile version changed; read before editing");
       const updated = apply_profile_edits(content, edits);
       await storage.write("memory/profile-backup.md", content);
-      await storage.write("PROFILE.md", updated);
+      if (updated !== content) {
+        await storage.write("PROFILE.md", updated);
+        this.notify_changed(scope);
+      }
       return { version: document_hash(updated), status: "updated" };
     });
   }
@@ -139,6 +155,7 @@ export class MemoryProfile {
       if (document_hash(content) !== version) throw new Error("Profile version changed; read before deleting");
       if (content) await storage.write("memory/profile-backup.md", content);
       await storage.delete("PROFILE.md");
+      if (content) this.notify_changed(scope, "deleted");
       return { status: "deleted" };
     });
   }
@@ -200,6 +217,7 @@ export class MemoryProfile {
           if (optimized !== content) {
             await storage.write("memory/profile-backup.md", content);
             await storage.write("PROFILE.md", optimized);
+            this.notify_changed(scope);
           }
           const latest_raw = await storage.read("memory/profile-state.json");
           const latest_state: ProfileState = latest_raw ? JSON.parse(latest_raw) : state;

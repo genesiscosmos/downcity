@@ -497,6 +497,8 @@ export interface MemoryProvider {
 
 /** MemoryPower 的显式构造参数。 */
 export interface MemoryPowerOptions {
+  /** 记忆或 Profile 正文实际提交后的业务回调；不包含 Action 或 UI 概念。 */
+  readonly on_changed?: import("./MemoryChange.js").MemoryChangeHandler;
   /** 每日 Profile 优化使用的文本模型；不配置时仍可读取与追加 Profile。 */
   profile_model_id?: string;
   /** 当前启用的 Memory Provider。 */

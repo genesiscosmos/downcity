@@ -7,6 +7,7 @@
  */
 
 import { randomUUID } from "node:crypto";
+import { validate_task_schedule } from "./application/TaskScheduleValidation.js";
 import type { ShipTaskStatus, TaskDeliverySession } from "./types/Task.js";
 import type { PowerContext } from "@downcity/city/power";
 import type { StepSnapshot } from "@downcity/city/power";
@@ -203,6 +204,11 @@ export async function createTaskDefinition(params: {
   if (kind !== "self" && !agent_id) return { success: false, error: "Missing agent_id" };
   if (kind !== "self" && !workspace_id) return { success: false, error: "Missing workspace_id" };
   if (!whenNormalized.ok) return { success: false, error: whenNormalized.error };
+  try {
+    validate_task_schedule(whenNormalized.value);
+  } catch (error) {
+    return { success: false, error: error instanceof Error ? error.message : String(error) };
+  }
 
   const status = resolveTaskStatus(req.status, "enabled");
   const body =
@@ -222,7 +228,7 @@ export async function createTaskDefinition(params: {
         frontmatter: {
           title,
           description,
-          when: whenNormalized.value,
+          when: validate_task_schedule(whenNormalized.value),
           agent_id: kind === "self" ? "" : agent_id,
           workspace_id: kind === "self" ? "" : workspace_id,
           workflow: normalize_task_workflow({ organized: kind !== "self", ...(whenNormalized.value.startsWith("time:") ? { planned_at: whenNormalized.value.slice(5) } : {}), work_status: whenNormalized.value !== "@manual" && !whenNormalized.value.startsWith("time:") ? "in_progress" : "pending" }),

@@ -1,7 +1,7 @@
-/** 方案目标解析：缺省目标由来源和真实目录补齐，用户在确认时整体接受安排。 */
+/** 任务执行目标解析：根据来源和真实目录补齐缺省目标，保存前验证可用性。 */
 import type { TaskAnalysis, TaskAnalysisInput } from "../types/TaskPreparation.js";
 
-/** 生成可直接确认的目标建议；目录不存在时报告配置错误，不询问内部 ID。 */
+/** 解析可用执行目标；目录不存在时报告配置错误，不询问内部 ID。 */
 export function resolve_task_delegation(analysis: TaskAnalysis, catalog: TaskAnalysisInput["catalog"], preferred_agent_id?: string, preferred_workspace_id?: string): TaskAnalysis {
   const assumptions = [...(analysis.assumptions || [])];
   if (analysis.kind === "self") return { ...analysis, assumptions, questions: [] };

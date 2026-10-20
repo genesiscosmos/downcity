@@ -8,6 +8,7 @@ import type { WorkspaceRuntime } from "@downcity/type";
 import type { AgentSession } from "@/types/agent/SessionActor.js";
 import type { AgentCreateSessionInput } from "@/types/agent/SessionTypes.js";
 import type { SessionPort } from "@/types/session/SessionPort.js";
+import type { SessionRemovalEvent } from "@/types/agent/SessionRemoval.js";
 import type {
   AgentArchiveSessionInput,
   AgentArchiveSessionResult,
@@ -51,6 +52,9 @@ export interface AgentSessionCollection {
 
   /** 监听本地新会话初始化完成；监听器完成后创建才返回，取消函数释放订阅。 */
   on_created(listener: (session: AgentSession) => void | Promise<void>): () => void;
+
+  /** 监听成功归档或删除活动会话；监听器失败不回滚领域提交。 */
+  on_removed(listener: (event: SessionRemovalEvent) => void | Promise<void>): () => void;
 
   /** 在指定 Workspace 中恢复一个已经属于当前 Agent 的 Session。 */
   get(

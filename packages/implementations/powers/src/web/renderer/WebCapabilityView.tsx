@@ -110,13 +110,14 @@ export function WebCapabilityView({ power, ui, capability }: WebCapabilityViewPr
   const [error, set_error] = useState("");
   const [test_message, set_test_message] = useState<WebConfigTestResult>();
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (reset_draft = false) => {
     set_loading(true);
     set_error("");
     try {
       const next = await power.invoke<WebMainviewSnapshot>("web.snapshot");
       set_snapshot(next);
-      set_draft(draft_from(next.config));
+      // 后台会话变化只更新事实，保留用户正在编辑的配置。
+      set_draft((current) => reset_draft || !current ? draft_from(next.config) : current);
       set_sessions(capability === "browser"
         ? await power.invoke<WebMainviewSessionsResult>("web.sessions")
         : undefined);
@@ -167,6 +168,7 @@ export function WebCapabilityView({ power, ui, capability }: WebCapabilityViewPr
     set_test_message(undefined);
     try {
       await power.invoke("web.config.save", to_config_patch_json(build_patch()));
+      await load(true);
       ui.toast({ type: "success", message: "Web 配置已保存" });
       ui.invalidate();
       return true;

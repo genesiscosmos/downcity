@@ -8,6 +8,8 @@
  */
 
 import { createHash, randomUUID } from "node:crypto";
+import { get_logger } from "@downcity/agent";
+import { notify_memory_change } from "@/memory/types/MemoryChange.js";
 import type {
   BuiltinMemoryProjectionDraft,
   BuiltinMemoryProviderOptions,
@@ -102,6 +104,15 @@ export class BuiltinMemoryProvider implements MemoryProvider {
     capture_turn: true,
   });
 
+  /** 调用方注入的内容变更回调。 */
+  private readonly on_changed: BuiltinMemoryProviderOptions["on_changed"];
+
+  /** 一条知识记录提交后发布业务事实，监听失败不影响数据结果。 */
+  private notify_changed(memory_id: string, operation: "written" | "deleted" = "written"): void {
+    notify_memory_change(this.on_changed, { kind: "knowledge", operation, memory_id },
+      () => get_logger().error("Memory change callback failed"));
+  }
+
   /** 当前 Provider 已创建的唯一低层存储 Adapter。 */
   private storage?: MemoryStorageAdapter;
 
@@ -126,6 +137,7 @@ export class BuiltinMemoryProvider implements MemoryProvider {
     if (has_storage === has_factory) {
       throw new Error("BuiltinMemoryProvider requires exactly one storage or create_storage");
     }
+    this.on_changed = options.on_changed;
     this.storage = options.storage;
     this.create_storage = options.create_storage;
     this.digest_handler = options.digest;
@@ -506,6 +518,7 @@ export class BuiltinMemoryProvider implements MemoryProvider {
       tags: ["memory"],
       observed_at: metadata.observed_at,
     }));
+    this.notify_changed(memory_id);
     return {
       memory_id,
       ...(evidence_id ? { evidence_id } : {}),
@@ -529,6 +542,7 @@ export class BuiltinMemoryProvider implements MemoryProvider {
       }));
     }
     await this.active_storage.delete(key);
+    if (forgotten) this.notify_changed(memory_id, "deleted");
     return { memory_id, forgotten };
   }
 
@@ -696,6 +710,7 @@ export class BuiltinMemoryProvider implements MemoryProvider {
       ...(workspace_id ? { workspace_id } : {}),
       tags: ["memory", "evidence", address.subject.kind],
     }));
+    this.notify_changed(normalized_id);
   }
 
   /** 创建或替换一条长期记忆投影。 */
@@ -735,6 +750,7 @@ export class BuiltinMemoryProvider implements MemoryProvider {
       ...(workspace_id ? { workspace_id } : {}),
       tags: projection.tags || ["memory"],
     }));
+    this.notify_changed(memory_id);
     return memory_id;
   }
 
@@ -785,5 +801,6 @@ export class BuiltinMemoryProvider implements MemoryProvider {
         ? new Date().toISOString()
         : metadata.observed_at,
     }));
+    this.notify_changed(memory_id);
   }
 }

@@ -1,6 +1,5 @@
 /** TaskPower 提供给宿主应用的任务领域协议，与任何界面或 IPC 框架无关。 */
 import type { TaskGenerateInput, TaskGenerateResult } from "./TaskGenerate.js";
-import type { TaskCaptureInput } from "./TaskIntake.js";
 import type { TaskWorkspaceSaveInput, TaskWorkspaceSnapshot } from "./TaskWorkflow.js";
 import type { TaskRunDetailView, TaskRunHistoryItemView } from "./TaskCommand.js";
 import type { TaskSchedulerReloadResult } from "./TaskPowerTypes.js";
@@ -33,16 +32,10 @@ export interface TaskMutationResult {
 
 /** 宿主任务操作的输入和输出映射。 */
 export interface TaskServiceContract {
-  /** 统一生成或调整任务，等待方案完成并返回任务信息；不确认或执行。 */
+  /** 统一生成或调整任务，等待校验保存并直接应用执行安排。 */
   generate: { /** 原文、来源约束与已有任务身份。 */ input: TaskGenerateInput; /** 已保存任务与当前方案。 */ output: TaskGenerateResult };
-  /** 明确确认指定版本的方案，确认后才启用执行安排。 */
-  confirm: { /** 待确认方案身份。 */ input: { /** 稳定任务 ID。 */ task_id: string; /** 用户看到的方案版本。 */ revision: number }; /** 生效与调度同步结果。 */ output: TaskMutationResult };
   /** 重新同步已保存的自动安排，不重新分析或创建执行。 */
   reconcile: { /** 目标身份。 */ input: { /** 稳定任务 ID。 */ task_id: string }; /** 调度同步结果。 */ output: TaskMutationResult };
-  /** 补充上下文或重试后台准备，不启动实际执行。 */
-  prepare: { /** 任务身份及可选补充。 */ input: { /** 稳定任务 ID。 */ task_id: string; /** 本次用户补充，省略表示重试。 */ text?: string; /** 调整时显式选定的新执行者。 */ agent_id?: string }; /** 已排队的任务。 */ output: TaskMutationResult };
-  /** 即时记录原文，不等待模型或执行配置。 */
-  capture: { /** 原文与重试身份。 */ input: TaskCaptureInput; /** 已持久化任务。 */ output: TaskMutationResult };
   /** 查询统一任务、发生项、Inbox 和执行目标。 */
   snapshot: { /** 无查询参数。 */ input: undefined; /** 当前聚合快照。 */ output: TaskWorkspaceSnapshot };
   /** 创建或编辑工作定义。 */

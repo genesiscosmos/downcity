@@ -29,6 +29,7 @@ import type {
 } from "@/types/agent/SessionActor.js";
 import type { AgentManagedSession } from "@/types/session/SessionOptions.js";
 import { Session } from "@/session/Session.js";
+import type { SessionRemovalEvent } from "@/types/agent/SessionRemoval.js";
 import type { SessionPort } from "@/types/session/SessionPort.js";
 import type { SessionComposer } from "@/types/session/SessionComposer.js";
 import { create_instruction_system_blocks } from "@/agent/AgentInstructions.js";
@@ -114,6 +115,8 @@ export class AgentSessions implements AgentSessionsContract<AgentSession> {
   private readonly sessions_by_id = new Map<string, AgentManagedSession>();
   /** 新会话初始化后的宿主订阅；恢复已有会话时不触发。 */
   private readonly creation_listeners = new Set<(session: AgentSession) => void | Promise<void>>();
+  /** 会话成功离开活动集合后的宿主订阅。 */
+  private readonly removal_listeners = new Set<(event: SessionRemovalEvent) => void | Promise<void>>();
   /** Agent 会话创建链；并发调用共享同一创建过程，避免产生第二条。 */
   private agent_session_creation_chain: Promise<void> = Promise.resolve();
 
@@ -133,6 +136,23 @@ export class AgentSessions implements AgentSessionsContract<AgentSession> {
   on_created(listener: (session: AgentSession) => void | Promise<void>): () => void {
     this.creation_listeners.add(listener);
     return () => { this.creation_listeners.delete(listener); };
+  }
+
+  /** 监听成功归档或删除；取消函数释放宿主订阅。 */
+  on_removed(listener: (event: SessionRemovalEvent) => void | Promise<void>): () => void {
+    this.removal_listeners.add(listener);
+    return () => { this.removal_listeners.delete(listener); };
+  }
+
+  /** 数据提交后通知宿主；投影失败不改变已成功的领域操作。 */
+  private async notify_removed(event: SessionRemovalEvent): Promise<void> {
+    await Promise.all([...this.removal_listeners].map(async (listener) => {
+      try {
+        await listener(event);
+      } catch (error) {
+        this.logger.error("Session removal listener failed", { ...event, error: String(error) });
+      }
+    }));
   }
 
   /** 通知宿主；投影失败不能把已经持久化的会话创建判为失败。 */
@@ -410,6 +430,10 @@ export class AgentSessions implements AgentSessionsContract<AgentSession> {
       resolved_origin_type,
     );
     this.sessions_by_id.delete(cache_key);
+    if (existed) await this.notify_removed({
+      type: "deleted", session_id: resolved_session_id,
+      origin_type: resolved_origin_type, workspace_id: cached?.workspace_id,
+    });
     return existed;
   }
 
@@ -469,6 +493,9 @@ export class AgentSessions implements AgentSessionsContract<AgentSession> {
       cached?.finish_archive(true);
       cached?.dispose_title_generation?.();
       this.sessions_by_id.delete(cache_key);
+      await this.notify_removed({
+        type: "archived", session_id, origin_type, workspace_id: cached?.workspace_id,
+      });
       return result;
     } catch (error) {
       cached?.finish_archive(false);

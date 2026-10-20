@@ -156,6 +156,6 @@ export interface TaskWorkspaceSaveInput {
   require_acceptance: boolean;
   /** 用户正在编辑的准备版本；提供时拒绝覆盖已更新的方案。 */
   expected_revision?: number;
-  /** 当前方案确认后是否立即执行；仅 Agent 手动规则允许为 true。 */
+  /** 用户是否要求保存后立即执行；仅 Agent 手动规则允许为 true。 */
   start_now?: boolean;
 }

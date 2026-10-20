@@ -129,6 +129,8 @@ export type BuiltinMemoryStorageFactory = () => MemoryStorageAdapter | Promise<M
 
 /** BuiltinMemoryProvider constructor 参数。 */
 export interface BuiltinMemoryProviderOptions {
+  /** 知识内容实际持久化后调用；覆盖投影、证据、修订与删除。 */
+  readonly on_changed?: import("./MemoryChange.js").MemoryChangeHandler;
   /** 预先创建并由 Provider 独占使用的 Storage Adapter。 */
   storage?: MemoryStorageAdapter;
 

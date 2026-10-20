@@ -1,8 +1,10 @@
 /** 即时录入应用服务：原文与提交身份在统一任务事务内保存，不调用模型。 */
 import { z } from "zod";
-import { createHash } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import type { TaskDeliverySession } from "../types/Task.js";
 import type { TaskCaptureInput } from "../types/TaskIntake.js";
+import type { TaskGenerateInput } from "../types/TaskGenerate.js";
+import { task_work_is_closed } from "../runtime/TaskWorkflowModel.js";
 import type { TaskDefinitionRepository } from "../runtime/TaskDefinitionRepository.js";
 import { readTask, writeTask } from "../runtime/Store.js";
 import { normalize_task_workflow } from "../runtime/TaskWorkflowModel.js";
@@ -44,4 +46,25 @@ export async function capture_task(definitions: TaskDefinitionRepository, input:
     } });
   });
   return { task_id };
+}
+
+/** 为原任务提交新生成版本；结构化创建的任务同样保留身份和历史。 */
+export async function revise_task(definitions: TaskDefinitionRepository, task_id: string, input: TaskGenerateInput): Promise<void> {
+  await definitions.mutate(async (storage) => {
+    const task = await readTask({ storage, taskId: task_id });
+    if (definitions.is_running(task_id)) throw new Error("执行期间不能重新生成任务");
+    if (task_work_is_closed(task)) throw new Error("已完成或取消的任务请先重新打开");
+    if (task.frontmatter.kind === "script") throw new Error("脚本任务请直接编辑定义");
+    const preparation = task.frontmatter.preparation;
+    task.frontmatter.status = "paused";
+    task.frontmatter.intake ??= { submission_id: randomUUID(), text: [task.frontmatter.title, task.frontmatter.description, task.body].filter(Boolean).join("\n\n"), request_key: task_id };
+    if (input.agent_id) task.frontmatter.intake = { ...task.frontmatter.intake, agent_id: input.agent_id };
+    task.frontmatter.preparation = {
+      revision: (preparation?.revision ?? 0) + 1, status: "queued",
+      supplements: [...(preparation?.supplements ?? []), ...(input.text ? [input.text] : [])], questions: [],
+      analyzed_body: preparation?.analyzed_body ?? task.body,
+      assumptions: preparation?.assumptions,
+    };
+    await writeTask({ storage, taskId: task_id, frontmatter: task.frontmatter, body: task.body, overwrite: true });
+  });
 }

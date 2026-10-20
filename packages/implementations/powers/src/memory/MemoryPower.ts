@@ -199,6 +199,7 @@ export class MemoryPower extends Power {
     }
     if (shared_root_path) {
       this.provider_instance = create_memory_provider({
+        on_changed: options.on_changed,
         shared_root_path,
         ...(platform_root_path ? { platform_root_path } : {}),
       });
@@ -243,6 +244,7 @@ export class MemoryPower extends Power {
     const users = new UserRepository(platform_root);
     users.get();
     this.provider_instance ??= create_memory_provider({
+      on_changed: this.options.on_changed,
       shared_root_path: context.storage.path,
       platform_root_path: platform_root,
     });
@@ -255,7 +257,7 @@ export class MemoryPower extends Power {
     register_memory_power_host_actions(context);
     const config = context.config.get();
     this.profile_runtime = new MemoryProfile(context, platform_root,
-      this.options.profile_model_id ?? (typeof config.profile_model_id === "string" ? config.profile_model_id : undefined));
+      this.options.profile_model_id ?? (typeof config.profile_model_id === "string" ? config.profile_model_id : undefined), this.options.on_changed);
     this.profile_runtime.initialize();
     register_profile_host_actions(context, this.profile_runtime);
 
@@ -735,6 +737,8 @@ export class MemoryPower extends Power {
 
 /** 创建内建 Memory Provider，并把 Agent 私有根与共享根路由到不同物理目录。 */
 function create_memory_provider(input: {
+  /** 已持久化内容的业务变更回调，不依赖调用入口。 */
+  on_changed?: MemoryPowerOptions["on_changed"];
   /** City 为当前 MemoryPower 唯一实例分配的共享绝对目录。 */
   shared_root_path: string;
 
@@ -748,6 +752,7 @@ function create_memory_provider(input: {
     );
   }
   return new BuiltinMemoryProvider({
+    on_changed: input.on_changed,
     city_memory_available: true,
     storage: new MemoryStorageRouter({
       shared_storage: new FileMemoryStorageAdapter({ root_path: input.shared_root_path }),

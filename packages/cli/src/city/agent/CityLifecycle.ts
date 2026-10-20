@@ -34,7 +34,7 @@ export async function city_on(options: CityDaemonOptions): Promise<void> {
       type: "select",
       name: "replace",
       message: `City is hosted by ${existing_host.owner} (pid ${existing_host.pid}).`,
-      subtitle: existing_host.owner === "desktop" ? "For Chrome connections, enable Settings → City Remote in Desktop. Switching hosts closes Desktop and interrupts active work." : "Switching hosts interrupts active work.",
+      subtitle: existing_host.owner === "desktop" ? "For Chrome connections, enable Settings → General → City Remote in Desktop. Switching hosts closes Desktop and interrupts active work." : "Switching hosts interrupts active work.",
       choices: [
         { title: `Keep ${existing_host.owner} running`, value: false },
         { title: `Close ${existing_host.owner} and start CLI City`, value: true },

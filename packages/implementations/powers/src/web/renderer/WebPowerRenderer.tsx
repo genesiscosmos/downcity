@@ -161,6 +161,6 @@ export const WEB_POWER_RENDERER = define_power_renderer({
     const capability = read_capability(navigation.route.capability);
     return capability === "general"
       ? <WebGeneralView power={power} ui={ui} />
-      : <WebCapabilityView power={power} ui={ui} capability={capability} />;
+      : <WebCapabilityView key={capability} power={power} ui={ui} capability={capability} />;
   },
 });

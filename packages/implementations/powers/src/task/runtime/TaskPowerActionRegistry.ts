@@ -203,8 +203,8 @@ export function createTaskPowerActions(params: {
       }),
     }),
     create: create_action({
-      description: "Create a task definition.",
-      returns: "title, status, when, kind, definition_path",
+      description: "Validate and save structured task fields directly, without an internal model or another confirmation. Prefer this when fields are already known. Timed rules activate unless paused; manual work waits for run.",
+      returns: "task_id, title, scheduler",
       access: "write",
       input_schema: {
         zod: TASK_CREATE_SCHEMA,
@@ -213,7 +213,7 @@ export function createTaskPowerActions(params: {
           required: ["title"],
           properties: {
             title: { type: "string", description: "Editable task title; duplicate titles create separate tasks." },
-            when: { type: "string", description: "Trigger condition (@manual | cron | time:ISO8601)." },
+            when: { type: "string", description: "Trigger (@manual | cron | time:ISO8601-with-timezone); one-time triggers must be in the future." },
             description: { type: "string", description: "Task description." },
             workspace_id: { type: "string", description: "Execution Workspace. Defaults to the current action Workspace." },
             kind: { type: "string", enum: ["self", "agent", "script"], description: "self is a personal todo/reminder; agent and script execute in a Workspace." },

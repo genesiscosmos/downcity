@@ -5,7 +5,7 @@ import type { PowerLifecycleContext } from "@downcity/city/power";
 import type { TaskAnalyzer, TaskAnalysis } from "../types/TaskPreparation.js";
 import type { TaskDefinitionRepository } from "../runtime/TaskDefinitionRepository.js";
 import { inspect_task_definitions, readTask, writeTask } from "../runtime/Store.js";
-import { normalizeTaskWhen } from "../runtime/Model.js";
+import { validate_task_schedule } from "./TaskScheduleValidation.js";
 import type { TaskSchedulerReloadResult } from "../types/TaskPowerTypes.js";
 import { task_analysis_schema } from "../runtime/TaskPreparationSchema.js";
 import { normalize_task_due, normalize_task_instant, task_work_is_closed } from "../runtime/TaskWorkflowModel.js";
@@ -20,6 +20,8 @@ export class TaskPreparationCoordinator {
     private readonly analyze?: TaskAnalyzer,
     /** 定义提交后同步现有调度器，不在模型端口中启动执行。 */
     private readonly reconcile?: (task_id: string) => Promise<TaskSchedulerReloadResult>,
+    /** 仅在本次生成明确要求立即执行时受理，不在重启恢复时重放。 */
+    private readonly start?: (task_id: string) => Promise<string | undefined>,
   ) {}
 
   /** 恢复持久化的准备请求。 */
@@ -99,7 +101,7 @@ export class TaskPreparationCoordinator {
           planned_at: task.frontmatter.workflow?.planned_at, planned_end_at: task.frontmatter.workflow?.planned_end_at, due_at: task.frontmatter.workflow?.due_at,
           questions: [], assumptions: task.frontmatter.preparation.assumptions || [],
         } } : {}),
-        revision, received_at: task.frontmatter.workflow!.created_at,
+        revision, received_at: new Date().toISOString(),
         timezone: task.frontmatter.workflow!.timezone, planned_at: task.frontmatter.workflow?.planned_at,
         catalog: { agents: agents.map(({ agent_id, name }) => ({ agent_id, name })), workspaces: workspaces.map(({ workspace_id, name }) => ({ workspace_id, name })) },
       }, AbortSignal.any([this.abort.signal, AbortSignal.timeout(60000)])));
@@ -122,9 +124,9 @@ export class TaskPreparationCoordinator {
         });
       }
       analysis = resolve_task_delegation(analysis, { agents, workspaces }, task.frontmatter.intake?.agent_id, task.frontmatter.delivery_session?.workspace_id || undefined);
-      const normalized_when = normalizeTaskWhen(analysis.when);
-      if (!normalized_when.ok) throw new Error("生成的时间规则无效，请调整安排后重新生成");
-      await this.definitions.mutate(async (storage) => {
+      const when = validate_task_schedule(analysis.when);
+      const start_now = analysis.kind === "agent" && when === "@manual" && analysis.start_now === true;
+      const committed = await this.definitions.mutate(async (storage) => {
         const current = await readTask({ storage, taskId: task_id });
         const preparation = current.frontmatter.preparation;
         if (task_work_is_closed(current) || preparation?.revision !== revision || preparation.processing_id !== processing_id || this.abort.signal.aborted) return;
@@ -134,13 +136,25 @@ export class TaskPreparationCoordinator {
         current.frontmatter.agent_id = analysis.kind === "agent" ? analysis.agent_id : "";
         current.frontmatter.workspace_id = analysis.kind === "agent" ? analysis.workspace_id : "";
         // 类型只取决于是否循环，时间点仍然属于一次性待办。
-        current.frontmatter.shell_type = normalized_when.value === "@manual" || normalized_when.value.startsWith("time:") ? "todo" : "schedule";
-        current.frontmatter.when = normalized_when.value;
-        current.frontmatter.status = "paused";
+        current.frontmatter.shell_type = when === "@manual" || when.startsWith("time:") ? "todo" : "schedule";
+        current.frontmatter.when = validate_task_schedule(when);
+        current.frontmatter.status = when === "@manual" ? "paused" : "enabled";
         current.frontmatter.workflow = { ...current.frontmatter.workflow!, planned_at, planned_end_at, due_at };
-        current.frontmatter.preparation = { ...preparation, status: "proposed", questions: [], analyzed_body: analysis.body, assumptions: analysis.assumptions || [], start_now: current.frontmatter.shell_type === "todo" && analysis.kind === "agent" && analysis.when === "@manual" && analysis.start_now !== false, schedule_error: undefined, processing_id: undefined };
+        current.frontmatter.preparation = { ...preparation, status: "ready", questions: [], analyzed_body: analysis.body, assumptions: analysis.assumptions || [], start_now, start_error: undefined, schedule_error: undefined, processing_id: undefined };
         await writeTask({ storage, taskId: task_id, frontmatter: current.frontmatter, body: current.body, overwrite: true });
         return true;
+      });
+      if (!committed) return;
+      const scheduler = await this.reconcile?.(task_id).catch((error): TaskSchedulerReloadResult => ({ reloaded: false, error: String(error) }));
+      const start_error = start_now && this.start
+        ? await this.start(task_id).catch((error) => String(error))
+        : undefined;
+      await this.definitions.mutate(async (storage) => {
+        const current = await readTask({ storage, taskId: task_id });
+        const preparation = current.frontmatter.preparation;
+        if (preparation?.revision !== revision || preparation.status !== "ready") return;
+        current.frontmatter.preparation = { ...preparation, start_error, schedule_error: scheduler && !scheduler.reloaded ? scheduler.error || "自动安排同步失败" : undefined };
+        await writeTask({ storage, taskId: task_id, frontmatter: current.frontmatter, body: current.body, overwrite: true });
       });
     } catch (error) {
       if (this.abort.signal.aborted) return;

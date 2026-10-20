@@ -10,6 +10,11 @@ export class TaskExecutionCoordinator {
   /** 当前正在执行的 Task，值为不会向外抛出异常的收口 Promise。 */
   private readonly executions_by_task_id = new Map<string, Promise<void>>();
 
+  constructor(
+    /** 开始和收口后通知宿主刷新执行历史；回调由 Power 生命周期绑定。 */
+    private readonly invalidate: () => void = () => {},
+  ) {}
+
   /**
    * 尝试受理一次 Task 执行。
    *
@@ -27,9 +32,11 @@ export class TaskExecutionCoordinator {
       .finally(() => {
         if (this.executions_by_task_id.get(task_id) === execution) {
           this.executions_by_task_id.delete(task_id);
+          this.invalidate();
         }
       });
     this.executions_by_task_id.set(task_id, execution);
+    this.invalidate();
     return true;
   }
 

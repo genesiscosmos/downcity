@@ -8,7 +8,7 @@
 import { fileURLToPath } from "node:url";
 import type { CityPowerRegistration } from "@downcity/city/power";
 import { MessengerPower } from "@/messenger.js";
-import { MemoryPower } from "@/memory.js";
+import { MemoryPower, type MemoryChangeHandler } from "@/memory.js";
 import { SkillPower } from "@/skill.js";
 import { TaskPower, type TaskAnalyzer } from "@/task.js";
 import { WebPower } from "@/web.js";
@@ -26,6 +26,10 @@ export function create_builtin_power_registrations(input: {
   platform_root_path: string;
   /** 宿主提供的可选任务分析端口。 */
   analyze_task?: TaskAnalyzer;
+  /** Memory 内容实际提交后的业务回调，包含知识记录和 Profile。 */
+  on_memory_changed?: MemoryChangeHandler;
+  /** Task 定义或执行状态变化的应用回调，覆盖后台提交。 */
+  on_task_changed?: () => void | Promise<void>;
 }): BuiltinPowerRegistration[] {
   return [
     {
@@ -47,7 +51,7 @@ export function create_builtin_power_registrations(input: {
       has_config: false,
       has_sidebar: false,
       has_mainview: false,
-      power: new TaskPower({ analyze_task: input.analyze_task }),
+      power: new TaskPower({ analyze_task: input.analyze_task, on_changed: input.on_task_changed }),
     },
     {
       readme: builtin_readme_path("messenger"),
@@ -61,7 +65,7 @@ export function create_builtin_power_registrations(input: {
       has_config: false,
       has_sidebar: true,
       has_mainview: true,
-      power: new MemoryPower({ platform_root_path: input.platform_root_path }),
+      power: new MemoryPower({ platform_root_path: input.platform_root_path, on_changed: input.on_memory_changed }),
     },
     {
       readme: builtin_readme_path("web"),

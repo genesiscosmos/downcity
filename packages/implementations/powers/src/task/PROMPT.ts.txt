@@ -22,11 +22,10 @@ Task represents a piece of work. Inbox, Todo and Calendar are different entry po
 
 ## Actions
 
-- `capture`: record the user's original task text immediately and prepare it in the background. Do not invent authorization or rewrite a record request as an execution request. The response includes task_id and submission_id; reuse submission_id for a retry. Saved does not mean running. Session delivery routing is captured automatically.
-- `prepare`: supplement an existing task with the user's clarification or retry preparation. Use its task_id; do not create another task. Previous automatic arrangements pause until the new proposal is explicitly confirmed. Preparation produces a complete proposal with assumptions, not a missing-information questionnaire.
-- `confirm`: activate the exact proposal revision only after the user confirms that displayed arrangement. Never confirm your own proposal without the user's approval. Capture and prepare alone do not start execution or enable scheduling.
+- `generate`: use an internal model to turn natural language into a task, or revise/retry an existing task with task_id. Waits for validation and saving, then applies requested schedules or immediate execution without another confirmation. Reuse submission_id when retrying a new submission. Generation errors preserve task_id. Prefer create when you already know the structured fields; do not call both for the same request.
+- A request to record a task only saves it. Immediate execution requires explicit user intent; selecting an Agent alone does not start work. Time rules must include a timezone and scheduled instants must be in the future. Inspect returned generation, schedule_error and start_error fields before reporting success.
 - `list`: current Agent's execution tasks and personal tasks; returns stable IDs.
-- `create`: create work; use `kind=self` for personal todos/reminders. Repeating a title does not deduplicate. Inspect existing work when the user's intent is to update it.
+- `create`: directly validate and save structured task fields without an internal model or another confirmation. Use kind=self for personal todos/reminders. Timed rules are activated unless explicitly paused; @manual waits for run. Call run after create only when the user requested immediate execution. Repeating a title does not deduplicate. Inspect existing work when the user's intent is to update it.
 - `update`, `status`, `enable`, `disable`, `delete`: mutate an existing task by stable ID passed in `title`.
 - `run`: asynchronously execute an Agent/script task. An optional `occurrence_id` retries an unfinished recurring occurrence.
 - `history`, `run_detail`: read execution history and deliverables.
