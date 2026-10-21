@@ -59,11 +59,11 @@ export interface SessionOptions {
    */
   agent_id: string;
 
-  /** 当前 Agent 用户可见名称；进入工具与扩展的调用环境。 */
-  agent_name: string;
+  /** 当前 Agent 用户可见名称；实时读取，使重配后的身份立即进入工具与扩展调用环境。 */
+  get_agent_name: () => string;
 
-  /** 当前 Agent 一句话能力描述；进入工具与扩展的调用环境。 */
-  agent_description: string;
+  /** 当前 Agent 一句话能力描述；实时读取，与 system 身份保持一致。 */
+  get_agent_description: () => string;
 
   /**
    * 当前 Session 的初始目录。

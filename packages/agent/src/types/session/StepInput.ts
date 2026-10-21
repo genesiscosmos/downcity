@@ -21,10 +21,10 @@ import type { Logger } from "@/utils/logger/Logger.js";
 export interface StepInputOptions {
   /** 当前 Session 所属 Agent 的稳定标识。 */
   agent_id: string;
-  /** 当前 Agent 的用户可见名称。 */
-  agent_name: string;
-  /** 当前 Agent 的一句话能力描述。 */
-  agent_description: string;
+  /** 读取当前 Agent 的用户可见名称；实时读取，与 system 身份保持一致。 */
+  get_agent_name: () => string;
+  /** 读取当前 Agent 的一句话能力描述；实时读取。 */
+  get_agent_description: () => string;
   /** 当前 Session 的稳定标识。 */
   session_id: string;
   /** 当前 Session 的创建来源。 */

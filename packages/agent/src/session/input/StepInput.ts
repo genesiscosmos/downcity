@@ -448,8 +448,8 @@ export class StepInput {
     const workspace = this.resolve_active_workspace();
     return Object.freeze({
       agent_id: this.options.agent_id,
-      agent_name: this.options.agent_name,
-      agent_description: this.options.agent_description,
+      agent_name: this.options.get_agent_name(),
+      agent_description: this.options.get_agent_description(),
       agent_instructions: Object.freeze(
         this.effective_instruction_blocks.map((block) => block.content),
       ),
@@ -471,8 +471,8 @@ export class StepInput {
     const workspace = this.resolve_active_workspace();
     return Object.freeze({
       agent_id: this.options.agent_id,
-      agent_name: this.options.agent_name,
-      agent_description: this.options.agent_description,
+      agent_name: this.options.get_agent_name(),
+      agent_description: this.options.get_agent_description(),
       agent_instructions: Object.freeze([...(agent_systems ?? [])]),
       session_id: this.options.session_id,
       session_origin: this.options.session_origin,

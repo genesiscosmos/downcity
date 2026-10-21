@@ -170,8 +170,8 @@ export class Agent {
     }
     this.session_manager = new AgentSessions({
       agent_id: this.id,
-      // 关键点（中文）：身份用回调实时读取，`reconfigure` 后新建 Session 立即使用新名称与描述；
-      // 已创建的 Session 保留创建时的身份快照，由宿主的 system 快照决定何时同步。
+      // 关键点（中文）：身份用回调实时读取，使重配后的名称与描述立即进入 system、
+      // Power 上下文与工具调用环境，三处不再出现同一 Turn 内身份漂移。
       get_agent_name: () => this.agent_name,
       get_agent_description: () => this.agent_description,
       logger: this.logger,

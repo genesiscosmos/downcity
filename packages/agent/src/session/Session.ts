@@ -77,10 +77,15 @@ import type { SessionContextAdvanceTrigger } from "@/types/session/SessionCompos
 export class Session implements AgentSession {
   readonly id: string;
   readonly agent_id: string;
-  /** 当前 Agent 用户可见名称；进入工具与扩展的调用环境。 */
-  readonly agent_name: string;
-  /** 当前 Agent 一句话能力描述；进入工具与扩展的调用环境。 */
-  readonly agent_description: string;
+  /**
+   * 读取当前 Agent 用户可见名称。
+   *
+   * 关键点（中文）：走回调而不是创建时快照，使 `Agent.reconfigure` 后的身份立即
+   * 与 system prompt / Power 上下文一致，不再出现同一 Turn 内两个身份。
+   */
+  private readonly get_agent_name: SessionOptions["get_agent_name"];
+  /** 读取当前 Agent 一句话能力描述；与名称同一时机实时读取。 */
+  private readonly get_agent_description: SessionOptions["get_agent_description"];
   /**
    * 当前 Session 正在使用的 Workspace ID。
    *
@@ -130,8 +135,8 @@ export class Session implements AgentSession {
     this.id = normalize_session_id(options.session_id);
     this.archive_session = options.archive_session;
     this.agent_id = String(options.agent_id || "").trim();
-    this.agent_name = String(options.agent_name || "").trim() || this.agent_id;
-    this.agent_description = String(options.agent_description || "").trim();
+    this.get_agent_name = options.get_agent_name;
+    this.get_agent_description = options.get_agent_description;
     this.workspace_id = String(options.workspace?.id || "").trim() || undefined;
     this.origin = options.origin;
     this.store = options.store;
@@ -177,8 +182,8 @@ export class Session implements AgentSession {
     });
     this.step_input = new StepInput({
       agent_id: this.agent_id,
-      agent_name: this.agent_name,
-      agent_description: this.agent_description,
+      get_agent_name: this.get_agent_name,
+      get_agent_description: this.get_agent_description,
       session_id: this.id,
       session_origin: this.origin,
       get_workspace_path: () => this.get_workspace_path(),
@@ -732,8 +737,8 @@ export class Session implements AgentSession {
     const workspace = this.local_state.current_workspace;
     return Object.freeze({
       agent_id: this.agent_id,
-      agent_name: this.agent_name,
-      agent_description: this.agent_description,
+      agent_name: this.get_agent_name(),
+      agent_description: this.get_agent_description(),
       agent_instructions: Object.freeze(
         this.get_instruction_system_blocks().map((block) => block.content),
       ),
@@ -761,8 +766,8 @@ export class Session implements AgentSession {
       completions: this.completions,
       archive_session: this.archive_session,
       agent_id: this.agent_id,
-      agent_name: this.agent_name,
-      agent_description: this.agent_description,
+      get_agent_name: this.get_agent_name,
+      get_agent_description: this.get_agent_description,
       workspace_path: this.local_state.fallback_workspace_path,
       ...(this.local_state.current_workspace
         ? { workspace: this.local_state.current_workspace }

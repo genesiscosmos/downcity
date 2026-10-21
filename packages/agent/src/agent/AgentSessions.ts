@@ -554,8 +554,8 @@ export class AgentSessions implements AgentSessionsContract<AgentSession> {
     });
     const created = new this.session_class({
       agent_id: this.agent_id,
-      agent_name: this.get_agent_name(),
-      agent_description: this.get_agent_description(),
+      get_agent_name: this.get_agent_name,
+      get_agent_description: this.get_agent_description,
       workspace_path: context.workspace_path,
       ...(context.get_workspace() ? { workspace: context.get_workspace() } : {}),
       origin: resolved_origin,
