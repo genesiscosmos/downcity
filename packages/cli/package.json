@@ -15,7 +15,7 @@
     "package.json"
   ],
   "scripts": {
-    "build": "pnpm -C ../../packages/ui build && pnpm -C ../fedman build && node ../../scripts/clean-package.mjs && tsc && node scripts/rewrite-build-aliases.mjs && node scripts/verify-build-aliases.mjs && node scripts/copy-fedman-assets.mjs && node scripts/ensure-cli-executable.mjs",
+    "build": "pnpm -C ../../packages/ui build && node ../../scripts/clean-package.mjs && tsc && node scripts/rewrite-build-aliases.mjs && node scripts/verify-build-aliases.mjs && node scripts/copy-fedman-assets.mjs && node scripts/ensure-cli-executable.mjs",
     "dev": "tsc --watch",
     "start": "node bin/index.js",
     "typecheck": "tsc --noEmit",

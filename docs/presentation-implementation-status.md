@@ -33,7 +33,7 @@
 - 尚未进行完整 Desktop 明暗主题、窄屏、多模块和本地第三方 Power 安装后的 GUI 验收。首版组件存在中文固定文案，后续应按实际多语言要求完善。
 - 视图缓存为最多 100 个实例、整体 2 MiB 的本地淘汰缓存；消息删除后可能保留缓存直到淘汰，不保存业务事实。
 - 首版完整 Spec 校验后发布，不支持逐组件流式生成、任意业务动作、跨设备视图同步、diagram 或 MCP Apps。
-- 当前 CLI 完整构建脚本依赖不存在的 `public/packages/fedman` 路径，阻断 CLI 打包。未扩大修改该独立构建问题；CLI 类型检查通过。
+- CLI 构建曾依赖不存在的 `public/packages/fedman` 路径而阻断打包；已修复：Fedman 源码属于 `private/apps/fedman`，CLI 构建不再编译它，改为把已构建的 dist 复制进 `bin/federation/fedman/`（优先 `DOWNCITY_FEDMAN_DIST`，否则回退本地 `private/apps/fedman/dist`）。
 - 依赖最初在 Public 子 Workspace 安装后出现双依赖类型问题，已在根 Workspace 同步恢复；本地安装应遵循根 AGENTS 的单 Workspace 约定。
 - 使用 no-bump 验证；未提交、推送或发布。准备提交时应按实际公开能力影响范围运行版本脚本。
 
