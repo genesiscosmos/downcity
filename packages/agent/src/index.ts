@@ -214,6 +214,7 @@ export type {
   AgentOptions,
   AgentSessionConstructor,
 } from "./types/agent/AgentOptions.js";
+export type { AgentReconfigureInput } from "./types/agent/AgentReconfigureInput.js";
 export type {
   AgentCreateSessionOptions,
   AgentSessionCollection,

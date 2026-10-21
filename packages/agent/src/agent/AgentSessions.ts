@@ -50,14 +50,14 @@ type AgentSessionsOptions = {
   agent_id: string;
 
   /**
-   * 当前 agent 用户可见名称；为空时回退到 agent_id。
+   * 当前 agent 用户可见名称；实时读取，使 `reconfigure` 后的新建 Session 立即使用新身份。
    */
-  agent_name: string;
+  get_agent_name: () => string;
 
   /**
-   * 当前 agent 一句话能力描述；进入工具与扩展的调用环境。
+   * 当前 agent 一句话能力描述；实时读取，进入工具与扩展的调用环境。
    */
-  agent_description: string;
+  get_agent_description: () => string;
 
   /**
    * 按 Session 解析执行上下文。
@@ -104,8 +104,8 @@ type AgentSessionsOptions = {
  */
 export class AgentSessions implements AgentSessionsContract<AgentSession> {
   private readonly agent_id: string;
-  private readonly agent_name: string;
-  private readonly agent_description: string;
+  private readonly get_agent_name: AgentSessionsOptions["get_agent_name"];
+  private readonly get_agent_description: AgentSessionsOptions["get_agent_description"];
   private readonly resolve_session_context: AgentSessionsOptions["resolve_session_context"];
   private readonly logger: Logger;
   private readonly get_instruction: AgentSessionsOptions["get_instruction"];
@@ -122,8 +122,8 @@ export class AgentSessions implements AgentSessionsContract<AgentSession> {
 
   constructor(options: AgentSessionsOptions) {
     this.agent_id = options.agent_id;
-    this.agent_name = options.agent_name;
-    this.agent_description = options.agent_description;
+    this.get_agent_name = options.get_agent_name;
+    this.get_agent_description = options.get_agent_description;
     this.resolve_session_context = options.resolve_session_context;
     this.logger = options.logger;
     this.get_instruction = options.get_instruction;
@@ -554,8 +554,8 @@ export class AgentSessions implements AgentSessionsContract<AgentSession> {
     });
     const created = new this.session_class({
       agent_id: this.agent_id,
-      agent_name: this.agent_name,
-      agent_description: this.agent_description,
+      agent_name: this.get_agent_name(),
+      agent_description: this.get_agent_description(),
       workspace_path: context.workspace_path,
       ...(context.get_workspace() ? { workspace: context.get_workspace() } : {}),
       origin: resolved_origin,
@@ -638,7 +638,7 @@ export class AgentSessions implements AgentSessionsContract<AgentSession> {
   private load_instruction_system_blocks(): AgentSessionSystemBlock[] {
     return create_instruction_system_blocks({
       agent_id: this.agent_id,
-      agent_name: this.agent_name,
+      agent_name: this.get_agent_name(),
       instruction: this.get_instruction(),
     });
   }

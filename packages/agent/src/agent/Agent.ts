@@ -26,6 +26,7 @@ import type {
   AgentOptions,
   AgentSessionConstructor,
 } from "@/types/agent/AgentOptions.js";
+import type { AgentReconfigureInput } from "@/types/agent/AgentReconfigureInput.js";
 import type {
   AgentSessionCollection,
 } from "@/types/agent/AgentSessionCollection.js";
@@ -60,14 +61,14 @@ export class Agent {
   /** Agent 的全局稳定标识。 */
   readonly id: string;
 
-  /** Agent 的用户可见名称。 */
-  readonly name: string;
+  /** Agent 的用户可见名称；通过 `reconfigure` 原地更新。 */
+  private agent_name: string;
 
-  /** Agent 的一句话能力描述，供展示与 Group 调度使用。 */
-  readonly description: string;
+  /** Agent 的一句话能力描述，供展示与 Group 调度使用；通过 `reconfigure` 原地更新。 */
+  private agent_description: string;
 
-  /** Agent 默认模型；Session 可以显式覆盖。 */
-  readonly model?: ModelClient;
+  /** Agent 默认模型；Session 可以显式覆盖，也可通过 `reconfigure` 更换。 */
+  private agent_model?: ModelClient;
 
   /**
    * 新建 Session 时注入的默认目录。
@@ -137,9 +138,9 @@ export class Agent {
   constructor(options: AgentOptions) {
     this.id = String(options.id || "").trim();
     if (!this.id) throw new Error("Agent requires a non-empty id");
-    this.name = String(options.name || "").trim() || this.id;
-    this.description = String(options.description || "").trim();
-    this.model = options.model;
+    this.agent_name = String(options.name || "").trim() || this.id;
+    this.agent_description = String(options.description || "").trim();
+    this.agent_model = options.model;
     this.workspace = options.workspace;
     this.resolve_work_workspace = options.resolve_work_workspace;
     this.prepare_work_session = options.prepare_work_session;
@@ -169,8 +170,10 @@ export class Agent {
     }
     this.session_manager = new AgentSessions({
       agent_id: this.id,
-      agent_name: this.name,
-      agent_description: this.description,
+      // 关键点（中文）：身份用回调实时读取，`reconfigure` 后新建 Session 立即使用新名称与描述；
+      // 已创建的 Session 保留创建时的身份快照，由宿主的 system 快照决定何时同步。
+      get_agent_name: () => this.agent_name,
+      get_agent_description: () => this.agent_description,
       logger: this.logger,
       get_instruction: () => [...this.get_instructions()],
       get_agent_model: () => this.model,
@@ -209,10 +212,50 @@ export class Agent {
     this.sessions = this.session_manager;
   }
 
+  /** 返回 Agent 当前的用户可见名称。 */
+  get name(): string {
+    return this.agent_name;
+  }
+
+  /** 返回 Agent 当前的能力描述。 */
+  get description(): string {
+    return this.agent_description;
+  }
+
+  /** 返回 Agent 当前的默认模型。 */
+  get model(): ModelClient | undefined {
+    return this.agent_model;
+  }
+
   /** 更新 Agent 的静态基础指令。 */
   set_instruction(input: string | string[]): void {
     const next_instruction = normalize_instruction_input(input);
     this.instruction.splice(0, this.instruction.length, ...next_instruction);
+  }
+
+  /**
+   * 原地重配 Agent 的身份与默认能力。
+   *
+   * 关键点（中文）
+   * - 与「替换 Agent 实例」相对：实例、Session 订阅与运行态全部保留，因此执行中的 Turn 不会被中断。
+   * - 只影响后续读取：执行中的 Turn 继续使用它开始时快照的 system 与模型。
+   * - 已持久化的 Session system 快照不会自动刷新，需要由宿主按会话调用 `syncshot()`。
+   * - 省略的字段保持当前值；名称传入空值时回退到 `agent_id`，与构造语义一致。
+   */
+  reconfigure(input: AgentReconfigureInput): void {
+    if (this.dispose_promise) throw new Error("Agent is disposing");
+    if (input.name !== undefined) {
+      this.agent_name = String(input.name || "").trim() || this.id;
+    }
+    if (input.description !== undefined) {
+      this.agent_description = String(input.description || "").trim();
+    }
+    if (input.instruction !== undefined) {
+      this.set_instruction(input.instruction);
+    }
+    if (input.model !== undefined) {
+      this.agent_model = input.model;
+    }
   }
 
   /** 返回 Agent 指令快照。 */
