@@ -6,7 +6,10 @@
  */
 
 /** 当前 Session SQLite schema 版本。 */
-export const SESSION_STORAGE_SCHEMA_VERSION = 4;
+export const SESSION_STORAGE_SCHEMA_VERSION = 5;
+
+/** messages.meta 的列约束；只允许用户消息携带，且必须是 JSON 对象。 */
+export const SESSION_MESSAGE_META_CHECK_SQL = "meta IS NULL OR (json_valid(meta) AND json_type(meta) = 'object' AND role = 'user')";
 
 /** 创建 Session canonical 表、索引与角色约束。 */
 export const SESSION_STORAGE_SCHEMA_SQL = `
@@ -42,6 +45,7 @@ CREATE TABLE IF NOT EXISTS messages (
     state IS NULL OR state IN ('streaming', 'done')
   ),
   visibility TEXT NOT NULL CHECK (visibility IN ('visible', 'internal')),
+  meta TEXT CHECK (meta IS NULL OR (json_valid(meta) AND json_type(meta) = 'object' AND role = 'user')),
   origin_session_id TEXT,
   origin_message_id TEXT,
   origin_turn_id TEXT,

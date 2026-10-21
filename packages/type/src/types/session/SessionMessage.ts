@@ -18,6 +18,7 @@ import type {
   SessionInteractionResponse,
   SessionInteractionStatus,
 } from "./SessionInteraction.js";
+import type { SessionPromptActor } from "./SessionPromptActor.js";
 
 /** Message 默认展示范围。 */
 export type SessionMessageVisibility = "visible" | "internal";
@@ -105,12 +106,31 @@ export type SessionUserPartContent =
   | Omit<SessionUserFilePart, "part_id" | "sequence">
   | Omit<SessionUserDataPart, "part_id" | "sequence">;
 
+/**
+ * 本条用户消息携带的请求记账。
+ *
+ * 说明（中文）
+ * - 这里只描述「谁发起了这次输入」以及本次请求独有的绑定，不是用户撰写的内容，
+ *   因此不进入 `parts`、不参与模型上下文，也不在聊天界面上渲染。
+ * - 它是消息级只读数据：写入方是 SDK 输入接收链路，宿主与 UI 只读取。
+ */
+export interface SessionMessageMeta {
+  /** 本条输入的发起方；归一化后必然存在。 */
+  from: SessionPromptActor;
+  /** 本次请求装配的 Power 描述快照；未使用 `powers` 时省略。 */
+  powers?: JsonValue;
+  /** Turn 完成回调绑定；仅携带 `callback` 的请求写入。 */
+  callback?: JsonValue;
+}
+
 /** User 顶层 Message。 */
 export interface SessionUserMessage extends SessionMessageBase {
   /** Message 主体角色固定为 user。 */
   role: "user";
   /** 用户消息的结构化 parts。 */
   parts: SessionUserMessagePart[];
+  /** 本条输入的请求记账；由 SDK 写入，不参与展示与模型上下文。 */
+  meta?: SessionMessageMeta;
 }
 
 /** Agent 普通文本 Part。 */

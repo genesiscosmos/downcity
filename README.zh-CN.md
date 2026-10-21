@@ -162,7 +162,6 @@ await session.set({
 });
 
 const turn = await session.prompt({
-  actor: { kind: "user", user_id: "local" },
   query: "总结一下当前仓库结构",
 });
 const result = await turn.finished;
@@ -183,7 +182,6 @@ const agent = new RemoteAgent({
 
 const session = await agent.session();
 const turn = await session.prompt({
-  actor: { kind: "user", user_id: "local" },
   query: "检查最近一次任务执行状态",
 });
 const result = await turn.finished;

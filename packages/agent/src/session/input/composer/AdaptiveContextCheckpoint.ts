@@ -10,7 +10,7 @@ import type { ContextCheckpointRow } from "@/types/session/ContextCheckpoint.js"
 import type { SessionDerivedStore } from "@/types/store/SessionStorage.js";
 
 /** checkpoint schema 版本；版本或列结构变化时旧派生表会被重建。 */
-export const CHECKPOINT_SCHEMA_VERSION = 1;
+export const CHECKPOINT_SCHEMA_VERSION = 2;
 
 /** 返回指定 Composer 命名空间的 checkpoint 表名。 */
 export function checkpoint_table(composer_name: string): string {

@@ -8,9 +8,10 @@ import type { SessionCompletionPort } from "@/types/agent/SessionCompletion.js";
 import type { JsonObject } from "@downcity/type";
 import type { SessionStorage } from "@/types/store/SessionStorage.js";
 import type { SessionAttachmentStore } from "@/types/store/SessionAttachmentStore.js";
-import type { AgentSessionPromptInput } from "@/types/sdk/AgentSessionPrompt.js";
+import type { AgentSessionPromptInput, NormalizedAgentSessionPromptInput } from "@/types/sdk/AgentSessionPrompt.js";
 import type {
   SessionAgentContent,
+  SessionMessageMeta,
   SessionUserContent,
 } from "@downcity/type";
 import type { SessionUserPartContent } from "@downcity/type";
@@ -36,6 +37,8 @@ export interface AppendSessionUserMessageInput {
   turn_id: string;
   /** User 内容 Part；identity 与顺序由 SessionMessages 分配。 */
   parts: SessionUserPartContent[];
+  /** 消息级请求记账；由 SDK 写入，不参与展示与模型上下文。 */
+  meta?: SessionMessageMeta;
   /** 可选的稳定 Message 标识。 */
   message_id?: string;
   /** 当前 Message 的默认展示范围。 */
@@ -96,8 +99,8 @@ export interface AppendExternalSessionAgentMessageInput {
 export interface AppendSessionPromptMessageInput {
   /** 当前 Agent 项目的绝对根目录，用于解析本地附件。 */
   project_root: string;
-  /** 当前 Session Prompt 输入。 */
-  prompt: AgentSessionPromptInput;
+  /** 当前 Session Prompt 输入；调用对象已由接收边界归一化。 */
+  prompt: NormalizedAgentSessionPromptInput;
   /** 当前输入所属 Turn。 */
   turn_id: string;
   /** 幂等 Prompt 使用的稳定 User Message ID。 */

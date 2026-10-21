@@ -25,19 +25,14 @@ export type AgentSessionPromptContent = SessionUserContent;
  * 输入示例（中文）：
  * ```ts
  * session.prompt({
- *   actor: { kind: "user", user_id: "local" },
- *   query: [
- *     { type: "context", tag: "reference", context: "此前引用的消息" },
- *     { type: "text", text: "请分析这个附件" },
- *     {
- *       type: "file",
- *       media_type: "image/png",
- *       url: "data:image/png;base64,...",
- *       filename: "image.png",
- *     },
- *   ],
+ *   query: "请分析这个附件",
  * });
  * ```
+ *
+ * 调用对象（中文）：
+ * - `actor` 省略时按本地用户处理，适用于宿主直接转发的用户输入。
+ * - 自动执行入口（Group、Task、跨 Session 委派等）必须显式声明真实身份，
+ *   否则其输入会被当成用户输入并入用户的 Turn。
  *
  * 生命周期说明（中文）：
  * - `string` 会直接成为新的文本 User Message。
@@ -49,8 +44,12 @@ export type AgentSessionPromptContent = SessionUserContent;
 export interface AgentSessionPromptInput {
   /** 只在创建本次 Turn 时装配的调用方 Powers；运行中追加输入不能替换。 */
   powers?: readonly PromptPower[];
-  /** 由可信宿主绑定的调用对象；同一 Turn 只接收同一对象的普通输入。 */
-  actor: SessionPromptActor;
+  /**
+   * 由可信宿主绑定的调用对象；省略时为本地用户。
+   *
+   * 占用仲裁与幂等归属都按它判定，自动执行入口必须显式给出真实身份。
+   */
+  actor?: SessionPromptActor;
   /** 本次输入所属 Turn 完成后的持久化回调；需要非空 request_id。 */
   callback?: SessionCallback;
   /**
@@ -85,6 +84,10 @@ export interface AgentSessionPromptInput {
    */
   query: string | AgentSessionPromptContent[];
 }
+
+/** 已确定调用对象的 prompt 输入；Session 内部只处理这种形状。 */
+export type NormalizedAgentSessionPromptInput =
+  AgentSessionPromptInput & { actor: SessionPromptActor };
 
 /**
  * 判断 prompt 输入是否为空。

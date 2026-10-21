@@ -162,7 +162,6 @@ await session.set({
 });
 
 const turn = await session.prompt({
-  actor: { kind: "user", user_id: "local" },
   query: "Summarize the repository structure",
 });
 const result = await turn.finished;
@@ -183,7 +182,6 @@ const agent = new RemoteAgent({
 
 const session = await agent.session();
 const turn = await session.prompt({
-  actor: { kind: "user", user_id: "local" },
   query: "Check the latest task execution status",
 });
 const result = await turn.finished;

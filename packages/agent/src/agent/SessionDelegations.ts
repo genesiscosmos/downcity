@@ -5,6 +5,7 @@
  */
 import { createHash } from "node:crypto";
 import { generate_session_id } from "@/session/SessionIdentity.js";
+import { create_session_prompt_actor } from "@/types/sdk/SessionPromptActor.js";
 import { SESSION_ORIGIN_TYPE_WORK } from "@downcity/type";
 import type {
   SessionDelegationCaller,
@@ -193,7 +194,12 @@ export class SessionDelegations implements SessionDelegationPort {
     try {
       const handle = await session.prompt({
         request_id: `delegation_work:${record.delegation_id}`,
-        actor: { kind: "session", agent_id: record.caller.agent_id, workspace_id: record.caller.workspace_id ?? null, session_id: record.caller.session_id, origin_type: record.caller.origin.type },
+        actor: create_session_prompt_actor({
+          agent_id: record.caller.agent_id,
+          workspace_id: record.caller.workspace_id ?? null,
+          session_id: record.caller.session_id,
+          origin_type: record.caller.origin.type,
+        }),
         query: record.query,
       });
       const latest = await this.options.store.update(record.delegation_id, (current) => ({

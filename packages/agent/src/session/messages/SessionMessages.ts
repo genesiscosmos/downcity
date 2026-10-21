@@ -6,7 +6,6 @@
  * 从最新快照严格递增。
  */
 
-import { describe_prompt_powers, prompt_power_fingerprint } from "@/session/input/PromptPowers.js";
 import { generate_id } from "@/utils/Id.js";
 import { SessionAgentMessageWriter } from "@/session/messages/SessionAgentMessageWriter.js";
 import { SessionAgentMessageState } from "@/session/messages/SessionAgentMessageState.js";
@@ -14,8 +13,8 @@ import {
   has_assistant_result_content,
   normalize_session_user_parts,
 } from "@/session/messages/SessionUserMessage.js";
-import type { JsonObject } from "@downcity/type";
-import type {
+import { build_session_message_meta } from "@/session/messages/SessionMessageMeta.js";
+import type { JsonObject } from "@downcity/type";import type {
   ListSessionMessagesInput,
   SessionActionStatus,
   SessionAgentActionPart,
@@ -211,6 +210,7 @@ export class SessionMessages {
       created_at,
       updated_at: created_at,
       role: "user",
+      ...(input.meta ? { meta: structuredClone(input.meta) } : {}),
       // 调用方只提供内容；part_id 是全局主键，必须在这里统一分配。
       parts: input.parts.map((part, index) => ({
         ...structuredClone(part),
@@ -306,19 +306,8 @@ export class SessionMessages {
         );
     const canonical = await this.append_user_message({
       turn_id: input.turn_id,
-      parts: normalize_session_user_parts([
-        ...ui_parts,
-        { type: "data" as const, data_type: "session_prompt_actor", data: { ...input.prompt.actor } },
-        ...(input.prompt.powers?.length ? [
-          { type: "data" as const, data_type: "prompt_powers", data: JSON.parse(JSON.stringify(describe_prompt_powers(input.prompt.powers))) },
-          { type: "data" as const, data_type: "prompt_power_fingerprint", data: prompt_power_fingerprint(input.prompt) },
-        ] : []),
-        ...(input.prompt.callback ? [{ type: "data" as const, data_type: "session_callback", data: {
-          name: input.prompt.callback.name,
-          data: input.prompt.callback.data ?? null,
-          request_id: input.prompt.request_id!,
-        } }] : []),
-      ]),
+      parts: normalize_session_user_parts(ui_parts),
+      meta: build_session_message_meta(input.prompt),
       visibility: input.prompt.visibility,
       ...(input.message_id ? { message_id: input.message_id } : {}),
     });

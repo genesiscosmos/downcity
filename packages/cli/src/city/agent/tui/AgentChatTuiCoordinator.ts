@@ -606,7 +606,7 @@ export class AgentChatTuiCoordinator {
     this.message_list.scroll_to_bottom();
     this.request_render();
     try {
-      const turn = await session.prompt({ actor: { kind: "user", user_id: "local" }, query: message });
+      const turn = await session.prompt({ query: message });
       const result = await turn.finished;
       if (!(await this.security_controller.refresh())) this.set_session_executing(false);
       return result.success;

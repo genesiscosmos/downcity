@@ -5,6 +5,7 @@
  */
 
 import { validate_session_power_content } from "@downcity/type";
+import { session_prompt_actor_schema } from "@/types/sdk/SessionPromptActor.js";
 import type {
   JsonObject,
   JsonValue,
@@ -13,6 +14,7 @@ import type {
   SessionInteractionRequest,
   SessionInteractionResponse,
   SessionMessage,
+  SessionMessageMeta,
   SessionUserMessagePart,
 } from "@downcity/type";
 
@@ -32,6 +34,8 @@ export interface SessionMessageRow {
   state: "streaming" | "done" | null;
   /** 默认展示范围。 */
   visibility: "visible" | "internal";
+  /** 本条用户消息携带的请求记账 JSON；Agent 消息固定为空。 */
+  meta: string | null;
   /** Fork 来源 Session。 */
   origin_session_id: string | null;
   /** Fork 来源 Message。 */
@@ -74,6 +78,7 @@ export function encode_session_message_row(message: SessionMessage): SessionMess
     role: message.role,
     state: message.role === "agent" ? message.state : null,
     visibility: message.visibility,
+    meta: message.role === "user" && message.meta ? JSON.stringify(message.meta) : null,
     origin_session_id: message.origin?.session_id ?? null,
     origin_message_id: message.origin?.message_id ?? null,
     origin_turn_id: message.origin?.turn_id ?? null,
@@ -140,6 +145,7 @@ export function decode_session_message(
       ...base,
       role: "user",
       parts: user_parts,
+      ...(row.meta ? { meta: parse_message_meta(row) } : {}),
     };
   }
   const agent_parts = parts.filter(is_session_agent_part);
@@ -490,6 +496,36 @@ function decode_interaction_response(
 /** 构造带稳定 Part 身份的存储损坏错误。 */
 function invalid_part(row: SessionMessagePartRow, reason: string): Error {
   return new Error(`Invalid persisted Session Part ${row.part_id} (${row.type}): ${reason}`);
+}
+
+/**
+ * 校验并解码消息级请求记账。
+ *
+ * `from` 必须满足与输入边界同一份 actor schema，避免持久化层与接收层对身份的理解漂移。
+ */
+function parse_message_meta(row: SessionMessageRow): SessionMessageMeta {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(row.meta as string);
+  } catch {
+    throw invalid_meta(row, "meta must be valid JSON");
+  }
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+    throw invalid_meta(row, "meta must be a JSON object");
+  }
+  const meta = parsed as Record<string, unknown>;
+  const from = session_prompt_actor_schema.safeParse(meta.from);
+  if (!from.success) throw invalid_meta(row, "meta.from must be a valid Session prompt actor");
+  return {
+    from: from.data,
+    ...(meta.powers === undefined ? {} : { powers: meta.powers as JsonValue }),
+    ...(meta.callback === undefined ? {} : { callback: meta.callback as JsonValue }),
+  };
+}
+
+/** 构造带稳定 Message 身份的存储损坏错误。 */
+function invalid_meta(row: SessionMessageRow, reason: string): Error {
+  return new Error(`Invalid persisted Session Message meta ${row.message_id}: ${reason}`);
 }
 
 /** schema 联合类型增加成员时强制 codec 显式解码。 */

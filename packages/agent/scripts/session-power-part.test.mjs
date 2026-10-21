@@ -2,7 +2,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { DatabaseSync } from "node:sqlite";
-import { SESSION_STORAGE_SCHEMA_SQL } from "../bin/session/storage/SessionStorageSchema.js";
+import { SESSION_STORAGE_SCHEMA_SQL, SESSION_STORAGE_SCHEMA_VERSION } from "../bin/session/storage/SessionStorageSchema.js";
 import { migrate_session_storage } from "../bin/session/storage/SessionStorageMigration.js";
 import { create_session_agent_content_part } from "../bin/session/messages/SessionAgentContent.js";
 import { extract_session_message_text } from "../bin/session/messages/SessionMessageText.js";
@@ -16,7 +16,14 @@ const content = { type: "power", power_id: "presentation", schema_version: 1, da
 test("v3 原子升级保留消息身份并允许 Agent Power Part，User 仍受约束", () => {
   const database = new DatabaseSync(":memory:");
   try {
-    database.exec(SESSION_STORAGE_SCHEMA_SQL.replaceAll("'power', ", ""));
+    /*
+     * 从当前 schema 减法还原 v3：去掉 v4 加入的 power Part 类型，以及 v5 加入的 messages.meta 列。
+     * 夹具必须真的不含新版本结构，否则迁移会看到本该由自己新增的列。
+     */
+    const v3_schema_sql = SESSION_STORAGE_SCHEMA_SQL
+      .replaceAll("'power', ", "")
+      .replace(/^\s*meta TEXT CHECK \([^\n]*\),\n/m, "");
+    database.exec(v3_schema_sql);
     database.exec(`
       PRAGMA user_version = 3;
       INSERT INTO messages(message_id, sequence, role, state, visibility, created_at, updated_at)
@@ -24,7 +31,7 @@ test("v3 原子升级保留消息身份并允许 Agent Power Part，User 仍受�
       INSERT INTO message_parts VALUES ('text-1', 'user-1', 1, NULL, 'text', '{"text":"原消息"}', 1, 1);
     `);
     migrate_session_storage(database, 3);
-    assert.equal(database.prepare("PRAGMA user_version").get().user_version, 4);
+    assert.equal(database.prepare("PRAGMA user_version").get().user_version, SESSION_STORAGE_SCHEMA_VERSION);
     assert.equal(database.prepare("SELECT content FROM message_parts WHERE part_id = 'text-1'").get().content, '{"text":"原消息"}');
     const insert = database.prepare("INSERT INTO message_parts VALUES (?, ?, 1, NULL, 'power', ?, 2, 2)");
     insert.run("power-1", "agent-1", JSON.stringify(content));

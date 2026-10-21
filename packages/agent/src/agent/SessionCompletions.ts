@@ -8,6 +8,7 @@
  */
 import { createHash } from "node:crypto";
 import type { EffectHook, JsonValue, SessionTurnCommittedHookValue, ToolCallContext } from "@downcity/type";
+import { read_session_message_meta } from "@/session/messages/SessionMessageMeta.js";
 import type { SessionCompletionOptions, SessionCompletionRecord } from "@/types/agent/SessionCompletion.js";
 
 /** Agent 唯一的完成通知队列；生命周期跟随 Agent。 */
@@ -42,12 +43,10 @@ export class SessionCompletions {
     const recipient_ids = [...handlers.keys()].filter((id) => !id.startsWith("callback:"));
     for (const message of event.messages) {
       if (message.role !== "user") continue;
-      for (const part of message.parts) {
-        if (part.type !== "data" || part.data_type !== "session_callback") continue;
-        const name = (part.data as { /** 业务回调名称。 */ name: string }).name;
-        this.validate_callback(name);
-        recipient_ids.push(`callback:${name}\u0000${message.message_id}`);
-      }
+      const name = (read_session_message_meta(message)?.callback as { /** 业务回调名称。 */ name: string } | undefined)?.name;
+      if (!name) continue;
+      this.validate_callback(name);
+      recipient_ids.push(`callback:${name}\u0000${message.message_id}`);
     }
     const file_path = this.record_path(event.completion_id);
     await this.options.files.ensure_directory("completions");

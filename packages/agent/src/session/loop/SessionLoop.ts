@@ -12,15 +12,16 @@ import type { PromptRequestIdentity } from "@/types/session/SessionLoop.js";
 import { isDeepStrictEqual } from "node:util";
 import { nanoid } from "nanoid";
 import { z } from "zod";
-import type { SessionUserMessage } from "@downcity/type";
+import type { PromptPowerDescriptor, SessionUserMessage } from "@downcity/type";
 import type { SessionActionEvent } from "@downcity/type";
-import type { AgentSessionPromptInput } from "@/types/sdk/AgentSessionPrompt.js";
+import type { AgentSessionPromptInput, NormalizedAgentSessionPromptInput } from "@/types/sdk/AgentSessionPrompt.js";
 import type { AgentSessionStopResult } from "@/types/sdk/AgentSessionStop.js";
 import type {
   AgentSessionTurnHandle,
   AgentSessionTurnResult,
 } from "@/types/sdk/AgentSessionTurn.js";
-import { snapshot_prompt_powers, describe_prompt_powers, prompt_power_fingerprint, set_turn_prompt_powers, clear_turn_prompt_powers } from "@/session/input/PromptPowers.js";
+import { snapshot_prompt_powers, describe_prompt_powers, set_turn_prompt_powers, clear_turn_prompt_powers } from "@/session/input/PromptPowers.js";
+import { read_session_message_meta } from "@/session/messages/SessionMessageMeta.js";
 import { is_agent_session_prompt_input_empty } from "@/types/sdk/AgentSessionPrompt.js";
 import type { SessionStepExecutionInput, SessionTurnExecutionResult } from "@/types/session/SessionExecution.js";
 import {
@@ -66,7 +67,8 @@ import type { SessionTurnCompletionOptions } from "@/types/session/SessionTurnCo
 
 import { SessionOccupation } from "./SessionOccupation.js";
 import { SessionBusyError } from "@/session/SessionBusyError.js";
-import { session_prompt_actor_schema, same_session_prompt_actor } from "@/types/sdk/SessionPromptActor.js";
+import { local_user_prompt_actor, session_prompt_actor_schema, same_session_prompt_actor } from "@/types/sdk/SessionPromptActor.js";
+import type { SessionPromptActor } from "@/types/sdk/SessionPromptActor.js";
 import { CompletionPersistenceError, prepare_session_completion } from "./SessionCompletionJournal.js";
 
 const QUEUED_PROMPT_CANCELLED_MESSAGE =
@@ -107,7 +109,7 @@ export class SessionLoop {
   /** Turn 结果快照开始固定后关闭接收窗口。 */
   private closing = false;
   /** 首条接收期间同一幂等键的调用对象。 */
-  private readonly pending_actors = new Map<string, AgentSessionPromptInput["actor"]>();
+  private readonly pending_actors = new Map<string, SessionPromptActor>();
   /** canonical 恢复只初始化一次，所有输入共享同一恢复屏障。 */
   private occupation_initialized?: Promise<void>;
   /** 重启后尚未恢复执行的 Turn。 */
@@ -118,7 +120,7 @@ export class SessionLoop {
   private readonly failed_releases: Array<() => void> = [];
   private active_turn: ActiveSessionTurnState | null = null;
   /** 尚未完成 canonical 接收的幂等 Prompt，防止进程内并发重复入队。 */
-  private readonly pending_power_fingerprints = new Map<string, string | undefined>();
+  private readonly pending_power_descriptors = new Map<string, PromptPowerDescriptor[]>();
   private readonly pending_request_handles = new Map<string, Promise<AgentSessionTurnHandle>>();
 
   constructor(options: SessionLoopOptions) {
@@ -160,21 +162,33 @@ export class SessionLoop {
 
   /**
    * 追加一条新的 prompt。
+   *
+   * 未提供 `actor` 时按本地用户处理；之后所有占用仲裁、幂等归属与恢复都基于归一化结果。
    */
   async prompt(input: AgentSessionPromptInput): Promise<AgentSessionTurnHandle> {
-    input = { ...input, actor: session_prompt_actor_schema.parse(input.actor) };
-    if (is_agent_session_prompt_input_empty(input)) throw new Error("session.prompt requires a non-empty query");
-    if (input.powers?.length) {
-      input = { ...input, powers: snapshot_prompt_powers(input.powers) };
+    let normalized: NormalizedAgentSessionPromptInput = {
+      ...input,
+      actor: session_prompt_actor_schema.parse(input.actor ?? local_user_prompt_actor),
+    };
+    if (is_agent_session_prompt_input_empty(normalized)) throw new Error("session.prompt requires a non-empty query");
+    if (normalized.powers?.length) {
+      normalized = { ...normalized, powers: snapshot_prompt_powers(normalized.powers) };
     }
-    if (input.callback) {
-      if (!input.request_id?.trim()) throw new Error("Session callback requires request_id");
+    if (normalized.callback) {
+      if (!normalized.request_id?.trim()) throw new Error("Session callback requires request_id");
       if (!this.completions) throw new Error("Session callbacks require an Agent completion runtime");
-      this.completions.validate_callback(input.callback.name);
+      this.completions.validate_callback(normalized.callback.name);
       // JSON 数据先校验再占用，不接受无法重启恢复的函数或循环引用。
-      const data = z.json().parse(input.callback.data ?? null);
-      input = { ...input, callback: { name: input.callback.name, data: structuredClone(data) } };
+      const data = z.json().parse(normalized.callback.data ?? null);
+      normalized = { ...normalized, callback: { name: normalized.callback.name, data: structuredClone(data) } };
     }
+    return await this.submit_normalized_prompt(normalized);
+  }
+
+  /** 已确定调用对象的接收流程；所有内部路径共用这一份实现。 */
+  private async submit_normalized_prompt(
+    input: NormalizedAgentSessionPromptInput,
+  ): Promise<AgentSessionTurnHandle> {
     const stop_generation = this.stop_generation;
     await this.initialize_occupation();
     const identity = resolve_prompt_request_identity(this.session_id, input.request_id);
@@ -193,7 +207,7 @@ export class SessionLoop {
         throw new SessionBusyError(this.session_id, current, this.current_turn_id());
       }
       await this.active_turn.deferred_finished.promise;
-      return await this.prompt(input);
+      return await this.submit_normalized_prompt(input);
     }
     const pending_actor = identity ? this.pending_actors.get(identity.turn_id) : undefined;
     if (pending_actor && !same_session_prompt_actor(pending_actor, input.actor)) throw new Error("request_id belongs to a different Session prompt actor");
@@ -232,10 +246,10 @@ export class SessionLoop {
       if (completed) return;
       const output = await this.messages.read_latest_agent_message(latest.turn_id);
       if (!this.completions && output && output.state !== "streaming") return;
-      const part = latest.parts.find((item) => item.type === "data" && item.data_type === "session_prompt_actor");
+      const from = read_session_message_meta(latest)?.from;
       // 已结束的旧历史保持可读；新契约输入必须以权威 Turn 日志确认终态。
-      if (!part && output && output.state !== "streaming") return;
-      const actor = session_prompt_actor_schema.parse(part?.type === "data" ? part.data : undefined);
+      if (!from && output && output.state !== "streaming") return;
+      const actor = session_prompt_actor_schema.parse(from);
       this.recovered_turn_id = latest.turn_id;
       this.recovered_release = this.occupation.acquire(actor, this.session_id, latest.turn_id);
     })();
@@ -259,7 +273,7 @@ export class SessionLoop {
   }
 
   /** 已通过占用校验的请求沿用幂等接收和 Session 队列。 */
-  private async submit_prompt(input: AgentSessionPromptInput, stop_generation: number): Promise<AgentSessionTurnHandle> {
+  private async submit_prompt(input: NormalizedAgentSessionPromptInput, stop_generation: number): Promise<AgentSessionTurnHandle> {
     if (is_agent_session_prompt_input_empty(input)) {
       throw new Error("session.prompt requires a non-empty query");
     }
@@ -272,12 +286,12 @@ export class SessionLoop {
       return await this.enqueue_prompt(input);
     }
     const pending_handle = this.pending_request_handles.get(request_identity.turn_id);
-    const fingerprint = input.powers?.length ? prompt_power_fingerprint(input) : undefined;
+    const powers_descriptors = describe_prompt_powers(input.powers ?? []);
     if (pending_handle) {
-      if (this.pending_power_fingerprints.get(request_identity.turn_id) !== fingerprint) throw new Error("request_id already belongs to different Prompt Powers or query");
+      if (!isDeepStrictEqual(this.pending_power_descriptors.get(request_identity.turn_id), powers_descriptors)) throw new Error("request_id already belongs to different Prompt Powers or query");
       return await pending_handle;
     }
-    this.pending_power_fingerprints.set(request_identity.turn_id, fingerprint);
+    this.pending_power_descriptors.set(request_identity.turn_id, powers_descriptors);
     const operation = this.prompt_with_identity(input, request_identity, stop_generation);
     this.pending_request_handles.set(request_identity.turn_id, operation);
     try {
@@ -285,34 +299,31 @@ export class SessionLoop {
     } finally {
       if (this.pending_request_handles.get(request_identity.turn_id) === operation) {
         this.pending_request_handles.delete(request_identity.turn_id);
-        this.pending_power_fingerprints.delete(request_identity.turn_id);
+        this.pending_power_descriptors.delete(request_identity.turn_id);
       }
     }
   }
 
   /** 解析已有幂等结果，或把同一个稳定 Prompt 加入队列。 */
   private async prompt_with_identity(
-    input: AgentSessionPromptInput,
+    input: NormalizedAgentSessionPromptInput,
     request_identity: PromptRequestIdentity,
     stop_generation = this.stop_generation,
   ): Promise<AgentSessionTurnHandle> {
     const previous = await this.messages.read_message(request_identity.message_id);
     if (previous?.role === "user") {
       this.assert_prompt_actor(previous, input);
-      const power_part = previous.parts.find((part) => part.type === "data" && part.data_type === "prompt_powers");
-      const previous_powers = power_part?.type === "data" ? power_part.data : [];
-      const fingerprint = previous.parts.find((part) => part.type === "data" && part.data_type === "prompt_power_fingerprint");
-      if (fingerprint?.type === "data" && fingerprint.data !== prompt_power_fingerprint(input)) throw new Error("request_id already belongs to a different Prompt query");
-      if (!isDeepStrictEqual(previous_powers, describe_prompt_powers(input.powers ?? []))) {
-        throw new Error("request_id already belongs to different Prompt Powers");
+      const previous_meta = read_session_message_meta(previous);
+      if (!isDeepStrictEqual(previous_meta?.powers ?? [], describe_prompt_powers(input.powers ?? []))) {
+        throw new Error("request_id already belongs to different Prompt Powers or query");
       }
     }
     if (input.callback) {
       const existing = previous;
-      const binding = existing?.role === "user" ? existing.parts.find((part) => part.type === "data" && part.data_type === "session_callback") : undefined;
-      if (existing && (!binding || binding.type !== "data" || !isDeepStrictEqual(binding.data, {
+      const binding = read_session_message_meta(existing)?.callback;
+      if (existing && !isDeepStrictEqual(binding, {
         name: input.callback.name, data: input.callback.data ?? null, request_id: input.request_id,
-      }))) throw new Error("request_id already belongs to a different callback configuration");
+      })) throw new Error("request_id already belongs to a different callback configuration");
     }
     const existing_handle = await this.resolve_idempotent_prompt(request_identity);
     if (existing_handle) return existing_handle;
@@ -323,7 +334,7 @@ export class SessionLoop {
       if (stop_generation !== this.stop_generation) throw new Error(QUEUED_PROMPT_CANCELLED_MESSAGE);
     }
     // 已丢失执行方的请求只能失败收口，不允许通过重试接管未知副作用。
-    const lost_powers = persisted_message?.role === "user" && persisted_message.parts.some((part) => part.type === "data" && part.data_type === "prompt_powers");
+    const lost_powers = persisted_message?.role === "user" && read_session_message_meta(persisted_message)?.powers !== undefined;
     // 稳定身份属于输入；检查点合并可能把它绑定到另一条实际 Turn。
     return await this.enqueue_prompt(lost_powers ? { ...input, powers: undefined } : input, persisted_message?.role === "user"
       ? { ...request_identity, turn_id: persisted_message.turn_id ?? request_identity.turn_id }
@@ -332,7 +343,7 @@ export class SessionLoop {
 
   /** 把一个已校验的 Prompt 加入 Session FIFO。 */
   private async enqueue_prompt(
-    input: AgentSessionPromptInput,
+    input: NormalizedAgentSessionPromptInput,
     request_identity?: PromptRequestIdentity,
     persisted_message?: SessionUserMessage,
   ): Promise<AgentSessionTurnHandle> {
@@ -602,7 +613,7 @@ export class SessionLoop {
 
   /** 执行一个出队 Prompt；首条 Prompt 启动 Turn，后续 Prompt 作为 steer 合并。 */
   private async execute_prompt_command(
-    input: AgentSessionPromptInput,
+    input: NormalizedAgentSessionPromptInput,
     deferred_handle: SessionDeferred<AgentSessionTurnHandle>,
     message_id?: string,
     persisted_message?: SessionUserMessage,
@@ -633,7 +644,7 @@ export class SessionLoop {
     this.pending_prompt_count = Math.max(0, this.pending_prompt_count - 1);
     let handle_resolved = false;
     try {
-      if (persisted_message?.parts.some((part) => part.type === "data" && part.data_type === "prompt_powers")) {
+      if (read_session_message_meta(persisted_message)?.powers !== undefined) {
         throw new Error("Caller Power execution was interrupted; automatic replay is unavailable");
       }
       const message = persisted_message || await this.persist_prompt_message(
@@ -866,7 +877,7 @@ export class SessionLoop {
 
   /** 持久化本轮 User 输入，并同步刷新标题与 metadata。 */
   private async persist_prompt_message(
-    prompt: AgentSessionPromptInput,
+    prompt: NormalizedAgentSessionPromptInput,
     turn_id: string,
     message_id?: string,
   ): Promise<SessionUserMessage> {
@@ -881,9 +892,8 @@ export class SessionLoop {
   }
 
   /** 幂等键只能由最初接收该输入的对象复用。 */
-  private assert_prompt_actor(message: SessionUserMessage, input: AgentSessionPromptInput): void {
-    const part = message.parts.find((item) => item.type === "data" && item.data_type === "session_prompt_actor");
-    const actor = session_prompt_actor_schema.parse(part?.type === "data" ? part.data : undefined);
+  private assert_prompt_actor(message: SessionUserMessage, input: NormalizedAgentSessionPromptInput): void {
+    const actor = session_prompt_actor_schema.parse(read_session_message_meta(message)?.from);
     if (!same_session_prompt_actor(actor, input.actor)) throw new Error("request_id belongs to a different Session prompt actor");
   }
 

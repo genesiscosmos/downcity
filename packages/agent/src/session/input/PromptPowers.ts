@@ -2,7 +2,7 @@
  * 请求级 Power 的描述校验、Action 执行与 Turn 作用域。
  * 描述采用 JSON 快照；函数留在提供方，不进入 Session 的长期工具注册表。
  */
-import { randomUUID, createHash } from "node:crypto";
+import { randomUUID } from "node:crypto";
 import type { AgentSessionPromptInput } from "@/types/sdk/AgentSessionPrompt.js";
 import { z } from "zod";
 import type { AgentTool, ModelJsonValue, PromptPower, PromptPowerDescriptor, PromptPowerCallContext, SessionHookContextBlock } from "@downcity/type";
@@ -12,11 +12,6 @@ const scopes = new WeakMap<SessionTurnContext, readonly PromptPower[]>();
 const scope_cleanups = new WeakMap<SessionTurnContext, () => void>();
 import { describe_prompt_powers, execute_prompt_power } from "@/power/PromptPowerExecution.js";
 export { describe_prompt_powers, snapshot_prompt_powers, execute_prompt_power } from "@/power/PromptPowerExecution.js";
-
-/** 能力请求的稳定摘要，不保存执行函数或重复保存附件内容。 */
-export function prompt_power_fingerprint(input: AgentSessionPromptInput): string {
-  return createHash("sha256").update(JSON.stringify({ query: input.query, powers: describe_prompt_powers(input.powers ?? []) })).digest("hex");
-}
 
 /** 只在首条 Prompt 接收时设置本轮作用域。 */
 export function set_turn_prompt_powers(context: SessionTurnContext, powers: readonly PromptPower[]): void {

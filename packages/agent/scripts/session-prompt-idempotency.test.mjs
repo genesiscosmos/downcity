@@ -28,7 +28,8 @@ function create_loop(request_id, unfinished = false) {
     created_at: 1,
     updated_at: 1,
     role: "user",
-    parts: [{ part_id: "user-part", sequence: 1, type: "text", text: "hello" }, { part_id: "actor", sequence: 2, type: "data", data_type: "session_prompt_actor", data: actor }],
+    parts: [{ part_id: "user-part", sequence: 1, type: "text", text: "hello" }],
+    meta: { from: actor },
   };
   const agent_message = {
     message_id: "agent-result",

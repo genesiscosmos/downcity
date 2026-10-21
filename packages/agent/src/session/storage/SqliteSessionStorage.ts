@@ -430,7 +430,7 @@ export class SqliteSessionStorage implements SessionStorage {
         database.exec("PRAGMA journal_mode = WAL; PRAGMA synchronous = NORMAL;");
       }
       let version = Number(database.prepare("PRAGMA user_version").get()?.user_version ?? 0);
-      if (version === 3) {
+      if (version === 3 || version === 4) {
         migrate_session_storage(database, version);
         version = SESSION_STORAGE_SCHEMA_VERSION;
       }
@@ -519,12 +519,12 @@ export class SqliteSessionStorage implements SessionStorage {
     this.require_database().prepare(`
       INSERT INTO messages (
         message_id, turn_id, sequence, revision, role, state,
-        visibility, origin_session_id, origin_message_id, origin_turn_id,
+        visibility, meta, origin_session_id, origin_message_id, origin_turn_id,
         created_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       row.message_id, row.turn_id, row.sequence, row.revision, row.role,
-      row.state, row.visibility, row.origin_session_id,
+      row.state, row.visibility, row.meta, row.origin_session_id,
       row.origin_message_id, row.origin_turn_id, row.created_at, row.updated_at,
     );
     for (const part of message.parts) this.insert_part_unsafe(message, part);
@@ -538,11 +538,11 @@ export class SqliteSessionStorage implements SessionStorage {
     const row = encode_session_message_row(message);
     const result = this.require_database().prepare(`
       UPDATE messages SET
-        turn_id = ?, revision = ?, state = ?, visibility = ?,
+        turn_id = ?, revision = ?, state = ?, visibility = ?, meta = ?,
         updated_at = ?
       WHERE message_id = ? AND revision = ? AND role = ? AND sequence = ?
     `).run(
-      row.turn_id, row.revision, row.state, row.visibility,
+      row.turn_id, row.revision, row.state, row.visibility, row.meta,
       row.updated_at, row.message_id, expected_revision, row.role, row.sequence,
     );
     if (result.changes !== 1) {
