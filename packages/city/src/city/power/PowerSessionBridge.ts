@@ -33,7 +33,8 @@ export function create_power_session_collection(input: {
     origin: PowerSessionOrigin,
     workspace_id: string | undefined,
   ): PowerSessionHandle => {
-    const runtime: SessionPort = read_sessions().runtime(session_id, origin.type);
+    // Session 分区由 category 决定，type 只是分区内的角色。
+    const runtime: SessionPort = read_sessions().runtime(session_id, origin.category);
     return Object.freeze({
       id: session_id,
       origin,
