@@ -5,13 +5,13 @@ Task represents a piece of work. Inbox, Todo and Calendar are different entry po
 ## Identity and storage
 
 - Each task has a stable `task_id`, independent of its editable title. Duplicate titles create separate tasks.
-- Definitions live in the TaskPower City store at `tasks/<task_id>/task.md`; runs live beside the definition.
+- Definitions live in the TaskPower City store at `tasks/<task_id>/task.toml`; runs live beside the definition.
 - `list` and `create` return task IDs. For existing actions whose selector is named `title`, pass the stable task ID. A unique title can also locate a task; ambiguous titles fail explicitly.
-- Work status (`pending`, `in_progress`, `review`, `completed`, `cancelled`), schedule status (`enabled`, `paused`, `disabled`) and Run status are different.
+- Work progress (`pending`, `in_progress`, `review`, `completed`, `cancelled`), schedule status (`enabled`, `paused`) and Run status are different.
 
 ## Kinds and timing
 
-- `kind=self`: personal todo or reminder. A title is sufficient; no execution Agent or Workspace is needed. Do not call `run` for personal todos.
+- `kind=user`: personal todo or reminder. A title is sufficient; no execution Agent or Workspace is needed. Do not call `run` for personal todos.
 - `kind=agent`: reusable execution instructions. Describe the goal, input, scope, constraints, completion criteria and exact final deliverable.
 - `kind=script`: a non-empty executable script body.
 - `when=@manual`: no automatic trigger.
@@ -25,7 +25,7 @@ Task represents a piece of work. Inbox, Todo and Calendar are different entry po
 - `generate`: use an internal model to turn natural language into a task, or revise/retry an existing task with task_id. Waits for validation and saving, then applies requested schedules or immediate execution without another confirmation. Reuse submission_id when retrying a new submission. Generation errors preserve task_id. Prefer create when you already know the structured fields; do not call both for the same request.
 - A request to record a task only saves it. Immediate execution requires explicit user intent; selecting an Agent alone does not start work. Time rules must include a timezone and scheduled instants must be in the future. Inspect returned generation, schedule_error and start_error fields before reporting success.
 - `list`: current Agent's execution tasks and personal tasks; returns stable IDs.
-- `create`: directly validate and save structured task fields without an internal model or another confirmation. Use kind=self for personal todos/reminders. Timed rules are activated unless explicitly paused; @manual waits for run. Call run after create only when the user requested immediate execution. Repeating a title does not deduplicate. Inspect existing work when the user's intent is to update it.
+- `create`: directly validate and save structured task fields without an internal model or another confirmation. Use kind=user for personal todos/reminders. Timed rules are activated unless explicitly paused; @manual waits for run. Call run after create only when the user requested immediate execution. Repeating a title does not deduplicate. Inspect existing work when the user's intent is to update it.
 - `update`, `status`, `enable`, `disable`, `delete`: mutate an existing task by stable ID passed in `title`.
 - `run`: asynchronously execute an Agent/script task. An optional `occurrence_id` retries an unfinished recurring occurrence.
 - `history`, `run_detail`: read execution history and deliverables.

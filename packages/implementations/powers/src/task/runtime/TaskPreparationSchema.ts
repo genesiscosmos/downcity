@@ -20,7 +20,7 @@ export const task_preparation_schema = z.object({
 export const task_analysis_schema = z.object({
   title: z.string().trim().min(1).max(200),
   body: z.string().max(60000),
-  kind: z.enum(["self", "agent"]),
+  kind: z.enum(["user", "agent"]),
   agent_id: z.string(),
   workspace_id: z.string(),
   when: z.string(),

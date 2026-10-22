@@ -1,76 +1,46 @@
 /**
- * Task definition parsing and validation.
+ * `task.toml` 与领域对象之间的唯一映射。
  *
- * 关键点（中文）
- * - `task.md` 使用 YAML frontmatter + markdown 正文
- * - frontmatter 必须包含 title/when/status；个人待办不要求执行目标。
- * - `when` 统一承载触发语义：`@manual` / cron / `time:<ISO8601-with-timezone>`
+ * ## 为什么文件 schema 只在这里
+ *
+ * 文件里的键名与领域属性**不是一回事**：`prompt` 对内部的 `body`，
+ * `schedule` 对内部的 `schedule`，`workflow.progress` 对内部的工作进度。
+ * 把这份映射集中在这里，是为了让「磁盘上的任务长什么样」只有一个答案，
+ * 而不是让每个消费方各自读字段拼出一个自己的版本。
+ *
+ * ## 分段写入
+ *
+ * TOML 要求根级标量必须出现在任何表之前，因此写入顺序固定为
+ * 标量 → 多行文本 → 单表 → 数组表（见 `build_task_document`）。
+ * 多行正文用字面量字符串（`'''`），反斜杠与引号无需转义。
+ *
+ * ## 解析只做两件事
+ *
+ * `parse_task_document` 只负责「文本 → 无类型结构」，本模块负责
+ * 「结构 → 领域对象」并给出可读的校验错误。两件事分开，失败原因才不会混在
+ * 「文件不是 TOML」和「字段值不合法」之间。
  */
 
-import yaml from "js-yaml";
-import { task_preparation_schema } from "./TaskPreparationSchema.js";
-import { z } from "zod";
-
-const intake_schema = z.object({ submission_id: z.uuid(), text: z.string().min(1).max(24000), request_key: z.string(), agent_id: z.string().min(1).optional() });
 import path from "node:path";
 import cron from "node-cron";
-import { parseFrontMatter } from "./Frontmatter.js";
-import { normalize_task_workflow } from "./TaskWorkflowModel.js";
-import { normalize_task_workflow_state } from "./TaskWorkflowStateSchema.js";
+import { z } from "zod";
+import { build_task_document, parse_task_document } from "./TaskDocument.js";
+import { task_preparation_schema } from "./TaskPreparationSchema.js";
+import { normalize_task_state } from "./TaskWorkflowModel.js";
 import type {
   ShipTaskDefinitionV1,
-  ShipTaskFrontmatterV1,
   ShipTaskKind,
   ShipTaskStatus,
   TaskDeliverySession,
 } from "@/task/types/Task.js";
-import type { PowerJsonObject, PowerJsonValue } from "@downcity/city/power";
 
-/**
- * 必填 frontmatter 字段清单。
- */
-const REQUIRED_FIELDS: Array<keyof ShipTaskFrontmatterV1> = [
-  "title",
-  "when",
-  "status",
-];
+/** 文件里必填的标量键；缺失即定义不可用。 */
+const REQUIRED_KEYS = ["title", "when"] as const;
 
-type TaskRawValue = PowerJsonValue | undefined;
+/** 解析入口能拿到的原始值；文件结构未经校验，一律按 unknown 处理。 */
+type RawValue = unknown;
 
-/** 校验并归一化 Task 的固定 Session 交付目标。 */
-function normalize_task_delivery_session(
-  input: TaskRawValue,
-): { ok: true; value?: TaskDeliverySession } | { ok: false; error: string } {
-  if (input === undefined || input === null) return { ok: true };
-  if (typeof input !== "object" || Array.isArray(input)) {
-    return { ok: false, error: "Invalid delivery_session: expected an object" };
-  }
-  const agent_id = String(input.agent_id || "").trim();
-  const workspace_id = String(input.workspace_id || "").trim();
-  const session_id = String(input.session_id || "").trim();
-  const category = String(input.category || "").trim();
-  if (!agent_id || !session_id || !category) {
-    return {
-      ok: false,
-      error: "Invalid delivery_session: agent_id, session_id and category are required",
-    };
-  }
-  return { ok: true, value: { agent_id, workspace_id: workspace_id || null, session_id, category } };
-}
-
-function normalizeTaskReview(input: TaskRawValue): boolean | null {
-  if (typeof input === "boolean") return input;
-  if (typeof input !== "string") return null;
-  const value = input.trim().toLowerCase();
-  if (!value) return null;
-  if (["true", "1", "yes", "on"].includes(value)) return true;
-  if (["false", "0", "no", "off"].includes(value)) return false;
-  return null;
-}
-
-/**
- * cron alias 映射表。
- */
+/** cron alias 映射表。 */
 const CRON_ALIAS_TO_EXPRESSION: Record<string, string> = {
   "@manual": "@manual",
   "@hourly": "0 * * * *",
@@ -85,6 +55,39 @@ const ISO_DATETIME_WITH_TZ_REGEXP =
   /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2}(?:\.\d{1,3})?)?(?:Z|[+-]\d{2}:\d{2})$/i;
 const ISO_DATETIME_WITHOUT_TZ_REGEXP =
   /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2}(?:\.\d{1,3})?)?$/i;
+
+/** 校验并归一化 Task 的固定 Session 交付目标。 */
+function normalize_task_delivery_session(
+  input: RawValue,
+): { ok: true; value?: TaskDeliverySession } | { ok: false; error: string } {
+  if (input === undefined || input === null) return { ok: true };
+  if (typeof input !== "object" || Array.isArray(input)) {
+    return { ok: false, error: "Invalid delivery_session: expected a table" };
+  }
+  const value = input as Record<string, unknown>;
+  const agent_id = String(value.agent_id ?? "").trim();
+  const workspace_id = String(value.workspace_id ?? "").trim();
+  const session_id = String(value.session_id ?? "").trim();
+  const category = String(value.category ?? "").trim();
+  if (!agent_id || !session_id || !category) {
+    return {
+      ok: false,
+      error: "Invalid delivery_session: agent_id, session_id and category are required",
+    };
+  }
+  return { ok: true, value: { agent_id, workspace_id: workspace_id || null, session_id, category } };
+}
+
+/** 解析布尔型字段，兼容字符串写法以容忍手写文件。 */
+function normalize_boolean(input: RawValue): boolean | undefined {
+  if (typeof input === "boolean") return input;
+  if (typeof input !== "string") return undefined;
+  const value = input.trim().toLowerCase();
+  if (!value) return undefined;
+  if (["true", "1", "yes", "on"].includes(value)) return true;
+  if (["false", "0", "no", "off"].includes(value)) return false;
+  return undefined;
+}
 
 function normalizeCronExpression(raw: string): string | null {
   const value = String(raw || "").trim();
@@ -130,7 +133,7 @@ function normalizeOneShotTime(raw: string): { ok: true; value: string } | { ok: 
  * - 兼容裸 ISO 时间输入，会归一化为 `time:<iso>`
  */
 export function normalizeTaskWhen(
-  input: TaskRawValue,
+  input: RawValue,
 ): { ok: true; value: string } | { ok: false; error: string } {
   const raw = String(input || "").trim();
   if (!raw) return { ok: false, error: "when cannot be empty" };
@@ -178,9 +181,7 @@ export function isTaskWhenOneShot(input: string): boolean {
   return when.startsWith("time:");
 }
 
-/**
- * when -> cron expression；非 cron 返回 null。
- */
+/** when -> cron expression；非 cron 返回 null。 */
 export function resolveTaskWhenCronExpression(input: string): string | null {
   const normalized = normalizeTaskWhen(input);
   if (!normalized.ok) return null;
@@ -189,9 +190,7 @@ export function resolveTaskWhenCronExpression(input: string): string | null {
   return normalizeCronExpression(normalized.value);
 }
 
-/**
- * when -> one-shot 毫秒时间戳；非 one-shot 返回 null。
- */
+/** when -> one-shot 毫秒时间戳；非 one-shot 返回 null。 */
 export function resolveTaskWhenOneShotMs(input: string): number | null {
   const normalized = normalizeTaskWhen(input);
   if (!normalized.ok) return null;
@@ -202,182 +201,171 @@ export function resolveTaskWhenOneShotMs(input: string): number | null {
   return ms;
 }
 
-/**
- * 归一化 task 状态。
- */
-export function normalizeTaskStatus(input: TaskRawValue): ShipTaskStatus | null {
-  const s = typeof input === "string" ? input.trim().toLowerCase() : "";
-  if (s === "enabled") return "enabled";
-  if (s === "paused") return "paused";
-  if (s === "disabled") return "disabled";
+/** 归一化调度启停状态；未知值明确失败，避免把拼错当成启用。 */
+export function normalizeTaskSchedule(input: RawValue): ShipTaskStatus | null {
+  const value = typeof input === "string" ? input.trim().toLowerCase() : "";
+  if (!value) return "enabled";
+  if (value === "enabled") return "enabled";
+  if (value === "paused") return "paused";
   return null;
 }
 
-/**
- * 归一化 task 执行类型。
- */
-export function normalizeTaskKind(input: TaskRawValue): ShipTaskKind {
-  const s = typeof input === "string" ? input.trim().toLowerCase() : "";
-  if (s === "self") return "self";
-  if (s === "script") return "script";
+/** 归一化执行类型；省略时按 Agent 执行处理。 */
+export function normalizeTaskKind(input: RawValue): ShipTaskKind {
+  const value = typeof input === "string" ? input.trim().toLowerCase() : "";
+  if (value === "user" || value === "script") return value;
   return "agent";
 }
 
-/**
- * 解析 task.md 为结构化定义。
- */
-export function parseTaskMarkdown(params: {
+/** 解析参数。 */
+export interface ParseTaskDefinitionParams {
+  /** Task 聚合目录使用的稳定 ID。 */
   taskId: string;
-  markdown: string;
-  taskMdPath: string;
+  /** `task.toml` 原文。 */
+  text: string;
+  /** `task.toml` 的绝对路径，用于计算相对路径。 */
+  task_file_path: string;
+  /** PowerStorage 根路径。 */
   data_path: string;
-}): { ok: true; task: ShipTaskDefinitionV1 } | { ok: false; error: string } {
-  const { taskId, markdown, taskMdPath, data_path } = params;
-  const text = String(markdown ?? "");
-  const { frontMatterYaml, body } = parseFrontMatter(text);
-
-  if (!frontMatterYaml || !frontMatterYaml.trim()) {
-    return { ok: false, error: "Missing YAML frontmatter (--- ... ---) in task.md" };
-  }
-
-  let meta: PowerJsonObject | null = null;
-  try {
-    const loaded = yaml.load(frontMatterYaml) as PowerJsonValue;
-    if (loaded && typeof loaded === "object" && !Array.isArray(loaded)) {
-      meta = loaded as PowerJsonObject;
-    } else {
-      meta = null;
-    }
-  } catch (e) {
-    return { ok: false, error: `Invalid YAML frontmatter: ${String(e)}` };
-  }
-
-  if (!meta || typeof meta !== "object") {
-    return { ok: false, error: "Invalid frontmatter: must be a YAML object" };
-  }
-
-  const missing: string[] = [];
-  const rawTitle = String(meta?.title ?? "").trim();
-  if (!rawTitle) missing.push("title");
-  for (const f of REQUIRED_FIELDS.filter((x) => x !== "title")) {
-    if (meta?.[f] === undefined || meta?.[f] === null || String(meta?.[f]).trim() === "") {
-      missing.push(String(f));
-    }
-  }
-  if (missing.length > 0) {
-    return { ok: false, error: `Missing required frontmatter fields: ${missing.join(", ")}` };
-  }
-
-  const status = normalizeTaskStatus(meta.status);
-  if (!status) {
-    return {
-      ok: false,
-      error: `Invalid status: "${String(meta.status)}" (expected: enabled|paused|disabled)`,
-    };
-  }
-
-  const whenNormalized = normalizeTaskWhen(meta.when);
-  if (!whenNormalized.ok) {
-    return { ok: false, error: whenNormalized.error };
-  }
-
-  const kind = normalizeTaskKind(meta.kind);
-  const delivery_session = normalize_task_delivery_session(meta.delivery_session);
-  if (!delivery_session.ok) return delivery_session;
-  const body_text = String(body ?? "").trim();
-  if (kind === "script" && !body_text) {
-    return { ok: false, error: "script task body cannot be empty" };
-  }
-
-  const fm: ShipTaskFrontmatterV1 = {
-    title: rawTitle,
-    when: whenNormalized.value,
-    description: String(meta.description || "").trim(),
-    agent_id: String(meta.agent_id || "").trim(),
-    workspace_id: String(meta.workspace_id || "").trim(),
-    ...(delivery_session.value
-      ? { delivery_session: delivery_session.value }
-      : {}),
-    kind,
-    ...(kind === "agent" && normalizeTaskReview(meta.review) === true ? { review: true } : {}),
-    status,
-  };
-  try {
-    if (meta.shell_type !== undefined) fm.shell_type = z.enum(["todo", "schedule"]).parse(meta.shell_type);
-    if (fm.shell_type === "todo" && fm.when !== "@manual" && !fm.when.startsWith("time:")) throw new Error("Todo supports only one-time work; use Schedule for Cron");
-    if (fm.shell_type === "schedule" && (fm.when === "@manual" || fm.when.startsWith("time:"))) throw new Error("Schedule requires a recurring Cron rule");
-    if (meta.preparation !== undefined) fm.preparation = task_preparation_schema.parse(meta.preparation);
-    if (meta.intake !== undefined) fm.intake = intake_schema.parse(meta.intake);
-    fm.workflow = normalize_task_workflow(meta.workflow);
-    fm.workflow_state = normalize_task_workflow_state(meta.workflow_state);
-  }
-  catch (error) { return { ok: false, error: String(error) }; }
-
-  const relTaskMdPath = path
-    .relative(data_path, taskMdPath)
-    .split(path.sep)
-    .join("/");
-
-  const task: ShipTaskDefinitionV1 = {
-    v: 1,
-    taskId,
-    frontmatter: fm,
-    body: String(body ?? "").trim(),
-    taskMdPath: relTaskMdPath,
-  };
-
-  return { ok: true, task };
 }
 
 /**
- * 生成 task.md 文本。
+ * 解析 `task.toml` 为结构化定义。
+ *
+ * 失败一律返回 `{ ok: false, error }`，不抛异常：损坏的定义必须能作为可观察的
+ * issue 展示，而不是让整个 Store 扫描中断。
  */
-export function buildTaskMarkdown(params: {
-  frontmatter: ShipTaskFrontmatterV1;
-  body: string;
-}): string {
-  const { frontmatter, body } = params;
-  const whenNormalized = normalizeTaskWhen(frontmatter.when);
-  if (!whenNormalized.ok) {
-    throw new Error(whenNormalized.error);
-  }
+export function parseTaskDefinition(
+  params: ParseTaskDefinitionParams,
+): { ok: true; task: ShipTaskDefinitionV1 } | { ok: false; error: string } {
+  const parsed = parse_task_document(params.text);
+  if (!parsed.ok) return { ok: false, error: parsed.error };
+  const document = parsed.document;
+  const scalars = document.scalars;
 
-  if (frontmatter.shell_type === "todo" && whenNormalized.value !== "@manual" && !whenNormalized.value.startsWith("time:")) throw new Error("Todo supports only one-time work; use Schedule for Cron");
-  if (frontmatter.shell_type === "schedule" && (whenNormalized.value === "@manual" || whenNormalized.value.startsWith("time:"))) throw new Error("Schedule requires a recurring Cron rule");
-  const kind = normalizeTaskKind(frontmatter.kind);
-  const delivery_session = normalize_task_delivery_session(
-    frontmatter.delivery_session,
-  );
-  if (!delivery_session.ok) throw new Error(delivery_session.error);
-  const body_text = String(body ?? "").trim();
-  if (kind === "script" && !body_text) {
-    throw new Error("script task body cannot be empty");
-  }
-
-  const meta = {
-    title: String(frontmatter.title || "").trim(),
-    when: whenNormalized.value,
-    description: String(frontmatter.description || "").trim(),
-    agent_id: String(frontmatter.agent_id || "").trim(),
-    workspace_id: String(frontmatter.workspace_id || "").trim(),
-    ...(delivery_session.value
-      ? { delivery_session: delivery_session.value }
-      : {}),
-    kind,
-    ...(kind === "agent" ? { review: Boolean(frontmatter.review) } : {}),
-    status: String(frontmatter.status || "").trim(),
-    ...(frontmatter.shell_type ? { shell_type: z.enum(["todo", "schedule"]).parse(frontmatter.shell_type) } : {}),
-    workflow: { ...normalize_task_workflow(frontmatter.workflow), updated_at: new Date().toISOString() },
-    workflow_state: normalize_task_workflow_state(frontmatter.workflow_state),
-    ...(frontmatter.preparation ? { preparation: task_preparation_schema.parse(frontmatter.preparation) } : {}),
-    ...(frontmatter.intake ? { intake: intake_schema.parse(frontmatter.intake) } : {}),
-  };
-
-  const yamlText = yaml.dump(meta, {
-    lineWidth: 120,
-    noRefs: true,
+  const missing = REQUIRED_KEYS.filter((key) => {
+    const value = scalars[key];
+    return value === undefined || value === null || String(value).trim() === "";
   });
+  if (missing.length > 0) {
+    return { ok: false, error: `Missing required fields: ${missing.join(", ")}` };
+  }
 
-  const bodyWithTrailingLf = body_text ? body_text + "\n" : "";
-  return `---\n${yamlText}---\n\n${bodyWithTrailingLf}`;
+  const when = normalizeTaskWhen(scalars.when);
+  if (!when.ok) return { ok: false, error: when.error };
+
+  const schedule = normalizeTaskSchedule(scalars.schedule);
+  if (!schedule) {
+    return {
+      ok: false,
+      error: `Invalid schedule: "${String(scalars.schedule)}" (expected: enabled|paused)`,
+    };
+  }
+
+  const kind = normalizeTaskKind(scalars.kind);
+  const delivery_session = normalize_task_delivery_session(document.tables.delivery_session);
+  if (!delivery_session.ok) return { ok: false, error: delivery_session.error };
+
+  const body = document.multiline.prompt ?? "";
+  if (kind === "script" && !body.trim()) {
+    return { ok: false, error: "script task prompt cannot be empty" };
+  }
+
+  let preparation: ShipTaskDefinitionV1["preparing"];
+  try {
+    if (document.tables.preparing !== undefined) {
+      preparation = task_preparation_schema.parse(document.tables.preparing);
+    }
+  } catch (error) {
+    return { ok: false, error: `Invalid preparing: ${String(error)}` };
+  }
+
+  let workflow;
+  try {
+    workflow = normalize_task_state({
+      ...(document.tables.workflow ?? {}),
+      occurrences: document.arrays.occurrences ?? [],
+      inbox: document.arrays.inbox ?? [],
+    });
+  } catch (error) {
+    return { ok: false, error: `Invalid workflow: ${String(error)}` };
+  }
+
+  const task_path = path
+    .relative(params.data_path, params.task_file_path)
+    .split(path.sep)
+    .join("/");
+
+  return {
+    ok: true,
+    task: {
+      taskId: params.taskId,
+      title: String(scalars.title ?? "").trim(),
+      when: when.value,
+      kind,
+      agent_id: String(scalars.agent_id ?? "").trim(),
+      workspace_id: String(scalars.workspace_id ?? "").trim(),
+      ...(delivery_session.value ? { delivery_session: delivery_session.value } : {}),
+      ...(kind === "agent" && normalize_boolean(scalars.review) === true ? { review: true } : {}),
+      ...(document.multiline.source ? { source: document.multiline.source } : {}),
+      ...(scalars.submission_id ? { submission_id: String(scalars.submission_id).trim() } : {}),
+      ...(scalars.source_agent_id ? { source_agent_id: String(scalars.source_agent_id).trim() } : {}),
+      ...(preparation ? { preparing: preparation } : {}),
+      body,
+      workflow,
+      schedule,
+      taskPath: task_path,
+    },
+  };
+}
+
+/**
+ * 生成 `task.toml` 原文。
+ *
+ * 写入时统一刷新 `workflow.updated_at`：它是「最近一次修改」的唯一定义处，
+ * 让每个调用方都可能忘记维护它才是真正的坑。
+ */
+export function buildTaskToml(task: ShipTaskDefinitionV1): string {
+  const when = normalizeTaskWhen(task.when);
+  if (!when.ok) throw new Error(when.error);
+  const schedule = normalizeTaskSchedule(task.schedule);
+  if (!schedule) throw new Error(`Invalid schedule: ${task.schedule}`);
+  const kind = normalizeTaskKind(task.kind);
+  const delivery_session = normalize_task_delivery_session(task.delivery_session);
+  if (!delivery_session.ok) throw new Error(delivery_session.error);
+
+  const body = String(task.body ?? "").trim();
+  if (kind === "script" && !body) throw new Error("script task prompt cannot be empty");
+
+  const workflow = normalize_task_state(task.workflow);
+  const { occurrences, inbox, ...workflow_fields } = workflow;
+
+  return build_task_document({
+    scalars: {
+      title: String(task.title || "").trim(),
+      when: when.value,
+      kind,
+      schedule,
+      agent_id: String(task.agent_id || "").trim() || undefined,
+      workspace_id: String(task.workspace_id || "").trim() || undefined,
+      review: kind === "agent" ? Boolean(task.review) : undefined,
+      submission_id: task.submission_id?.trim() || undefined,
+      source_agent_id: task.source_agent_id?.trim() || undefined,
+    },
+    multiline: [
+      { key: "prompt", value: body },
+      { key: "source", value: String(task.source ?? "").trim() },
+    ],
+    tables: [
+      ...(delivery_session.value
+        ? [{ key: "delivery_session", value: { ...delivery_session.value, workspace_id: delivery_session.value.workspace_id ?? "" } }]
+        : []),
+      ...(task.preparing ? [{ key: "preparing", value: task_preparation_schema.parse(task.preparing) }] : []),
+      { key: "workflow", value: { ...workflow_fields, updated_at: new Date().toISOString() } },
+    ],
+    arrays: [
+      { key: "occurrences", value: occurrences as unknown as Array<Record<string, unknown>> },
+      { key: "inbox", value: inbox as unknown as Array<Record<string, unknown>> },
+    ],
+  });
 }

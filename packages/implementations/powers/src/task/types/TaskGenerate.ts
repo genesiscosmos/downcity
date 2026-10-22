@@ -14,8 +14,6 @@ export interface TaskGenerateInput {
   timezone?: string;
   /** 日历带入的计划时刻，不代表执行授权。 */
   planned_at?: string;
-  /** 明确的外壳约束，省略时由生成结果建议。 */
-  shell_type?: "todo" | "schedule";
   /** 当前入口是否已整理，缺省为 true。 */
   organized?: boolean;
 }

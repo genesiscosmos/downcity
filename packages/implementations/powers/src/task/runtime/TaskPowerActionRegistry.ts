@@ -45,8 +45,8 @@ import type { TaskExecutionCoordinator } from "./TaskExecutionCoordinator.js";
 import type { TaskDefinitionRepository } from "./TaskDefinitionRepository.js";
 import type { TaskCompletionDeliveryPort } from "@/task/types/TaskRunner.js";
 
-const TASK_STATUS_SCHEMA = z.enum(["enabled", "paused", "disabled"]);
-const TASK_KIND_SCHEMA = z.enum(["self", "agent", "script"]);
+const TASK_STATUS_SCHEMA = z.enum(["enabled", "paused"]);
+const TASK_KIND_SCHEMA = z.enum(["user", "agent", "script"]);
 
 const TASK_LIST_SCHEMA = z.object({
   status: TASK_STATUS_SCHEMA.optional(),
@@ -55,11 +55,10 @@ const TASK_LIST_SCHEMA = z.object({
 const TASK_CREATE_SCHEMA = z.object({
   title: z.string(),
   when: z.string().default("@manual"),
-  description: z.string().default(""),
   workspace_id: z.string().optional(),
   kind: TASK_KIND_SCHEMA.optional(),
   review: z.boolean().optional(),
-  status: TASK_STATUS_SCHEMA.optional(),
+  schedule: TASK_STATUS_SCHEMA.optional(),
   body: z.string().optional(),
 });
 
@@ -68,11 +67,10 @@ const TASK_UPDATE_SCHEMA = z.object({
   titleNext: z.string().optional(),
   when: z.string().optional(),
   clearWhen: z.boolean().optional(),
-  description: z.string().optional(),
   workspace_id: z.string().optional(),
   kind: TASK_KIND_SCHEMA.optional(),
   review: z.boolean().optional(),
-  status: TASK_STATUS_SCHEMA.optional(),
+  schedule: TASK_STATUS_SCHEMA.optional(),
   body: z.string().optional(),
   clearBody: z.boolean().optional(),
 });
@@ -122,7 +120,7 @@ export function createTaskPowerActions(params: {
   return {
     list: create_action({
       description: "List task definitions, optionally filtered by status.",
-      returns: "tasks(title, description, when, kind, status, agent_id, workspace_id)",
+      returns: "tasks(task_id, title, body, when, kind, schedule, agent_id, workspace_id, workflow)",
       access: "read",
       input_schema: {
         zod: TASK_LIST_SCHEMA,
@@ -131,8 +129,8 @@ export function createTaskPowerActions(params: {
           properties: {
             status: {
               type: "string",
-              enum: ["enabled", "paused", "disabled"],
-              description: "Filter by task status.",
+              enum: ["enabled", "paused"],
+              description: "Filter by schedule status.",
             },
           },
         },
@@ -146,7 +144,7 @@ export function createTaskPowerActions(params: {
         configure(command: Command) {
           command.option(
             "--status <status>",
-            "Filter by status (enabled|paused|disabled).",
+            "Filter by schedule status (enabled|paused).",
           );
         },
         map_input: mapTaskListCommandPayload,
@@ -214,12 +212,11 @@ export function createTaskPowerActions(params: {
           properties: {
             title: { type: "string", description: "Editable task title; duplicate titles create separate tasks." },
             when: { type: "string", description: "Trigger (@manual | cron | time:ISO8601-with-timezone); one-time triggers must be in the future." },
-            description: { type: "string", description: "Task description." },
             workspace_id: { type: "string", description: "Execution Workspace. Defaults to the current action Workspace." },
-            kind: { type: "string", enum: ["self", "agent", "script"], description: "self is a personal todo/reminder; agent and script execute in a Workspace." },
+            kind: { type: "string", enum: ["user", "agent", "script"], description: "user is a personal todo/reminder; agent and script execute in a Workspace." },
             review: { type: "boolean", description: "Whether to enable multi-turn review." },
-            status: { type: "string", enum: ["enabled", "paused", "disabled"], description: "Task status." },
-            body: { type: "string", description: "Task body." },
+            schedule: { type: "string", enum: ["enabled", "paused"], description: "Schedule status; paused keeps the rule but stops automatic triggers." },
+            body: { type: "string", description: "Execution instructions; required for agent and script." },
           },
         },
       },
@@ -229,9 +226,9 @@ export function createTaskPowerActions(params: {
           payload: {
             title: "daily-report",
             when: "@manual",
-            description: "Generate a daily report",
+            body: "Generate a daily report",
             workspace_id: "workspace-1",
-            status: "enabled",
+            schedule: "enabled",
           },
         },
       ],
@@ -240,18 +237,17 @@ export function createTaskPowerActions(params: {
         configure(command: Command) {
           command
             .requiredOption("--title <title>", "Editable task title.")
-            .option("--description <description>", "Task description.")
             .option("--when <when>", "Trigger condition (@manual | cron | time:ISO8601).", "@manual")
-            .option("--kind <kind>", "Execution kind (self|agent|script).", "agent")
+            .option("--kind <kind>", "Execution kind (user|agent|script).", "agent")
             .option("--review <review>", "Whether to enable multi-turn review (true|false).")
             .option("--workspace-id <workspace_id>", "Execution Workspace. Defaults to the current Workspace.")
             .option(
-              "--status <status>",
-              "Status (enabled|paused|disabled, default enabled).",
+              "--schedule <schedule>",
+              "Schedule status (enabled|paused, default enabled).",
             )
             .option(
               "--activate",
-              "Enable immediately after creation (same as --status enabled).",
+              "Enable immediately after creation (same as --schedule enabled).",
               false,
             )
             .option("--body <body>", "Task body.");
@@ -339,7 +335,7 @@ export function createTaskPowerActions(params: {
     }),
     update: create_action({
       description: "Update a task definition.",
-      returns: "title, status, when, kind, definition_path",
+      returns: "title, schedule, when, kind, definition_path",
       access: "write",
       input_schema: {
         zod: TASK_UPDATE_SCHEMA,
@@ -351,12 +347,11 @@ export function createTaskPowerActions(params: {
             titleNext: { type: "string", description: "New task name." },
             when: { type: "string", description: "New trigger condition." },
             clearWhen: { type: "boolean", description: "Whether to clear the trigger condition." },
-            description: { type: "string", description: "New description." },
             workspace_id: { type: "string", description: "New execution Workspace." },
-            kind: { type: "string", enum: ["agent", "script"] },
+            kind: { type: "string", enum: ["user", "agent", "script"] },
             review: { type: "boolean" },
-            status: { type: "string", enum: ["enabled", "paused", "disabled"] },
-            body: { type: "string", description: "New body." },
+            schedule: { type: "string", enum: ["enabled", "paused"] },
+            body: { type: "string", description: "New execution instructions." },
             clearBody: { type: "boolean", description: "Whether to clear the body." },
           },
         },
@@ -373,16 +368,15 @@ export function createTaskPowerActions(params: {
           command
             .argument("<title>")
             .option("--title <title>", "Task name while preserving the same semantics.")
-            .option("--description <description>", "Task description.")
             .option("--when <when>", "Trigger condition (@manual | cron | time:ISO8601).")
-            .option("--kind <kind>", "Execution kind (agent|script).")
+            .option("--kind <kind>", "Execution kind (user|agent|script).")
             .option("--review <review>", "Whether to enable multi-turn review (true|false).")
             .option("--clear-when", "Clear when and fall back to @manual.", false)
             .option("--workspace-id <workspace_id>", "Execution Workspace.")
-            .option("--status <status>", "Status (enabled|paused|disabled).")
+            .option("--schedule <schedule>", "Schedule status (enabled|paused).")
             .option(
               "--activate",
-              "Enable immediately after update (same as --status enabled).",
+              "Enable immediately after update (same as --schedule enabled).",
               false,
             )
             .option("--body <body>", "Set task body.")
@@ -400,8 +394,8 @@ export function createTaskPowerActions(params: {
       },
     }),
     status: create_action({
-      description: "Set task status (enabled|paused|disabled).",
-      returns: "title, status",
+      description: "Set schedule status (enabled|paused).",
+      returns: "title, schedule",
       access: "write",
       input_schema: {
         zod: TASK_STATUS_REQ_SCHEMA,
@@ -410,7 +404,7 @@ export function createTaskPowerActions(params: {
           required: ["title", "status"],
           properties: {
             title: { type: "string", description: "Task name." },
-            status: { type: "string", enum: ["enabled", "paused", "disabled"] },
+            status: { type: "string", enum: ["enabled", "paused"] },
           },
         },
       },
@@ -418,7 +412,7 @@ export function createTaskPowerActions(params: {
         { title: "Pause task", payload: { title: "daily-report", status: "paused" } },
       ],
       command: {
-        description: "Set task status (enabled|paused|disabled).",
+        description: "Set schedule status (enabled|paused).",
         configure(command: Command) {
           command.argument("<title>").argument("<status>");
         },

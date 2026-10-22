@@ -30,7 +30,6 @@ function create_task_registration(power) {
   return {
     id: "task",
     title: "Task",
-    description: "Task test power",
     readme: import.meta.filename,
     has_config: false,
     has_sidebar: false,
@@ -107,10 +106,9 @@ test("scheduler 从统一 Store 注册全部 Agent/Workspace 的 Task", async ()
       agent_id: "agent-a",
       request: {
         title: "workspace-a-task",
-        description: "A",
         workspace_id: "workspace-a",
         when: "0 9 * * *",
-        status: "enabled",
+        schedule: "enabled",
       },
     });
     await createTaskDefinition({
@@ -118,10 +116,9 @@ test("scheduler 从统一 Store 注册全部 Agent/Workspace 的 Task", async ()
       agent_id: "agent-b",
       request: {
         title: "workspace-b-task",
-        description: "B",
         workspace_id: "workspace-b",
         when: "0 10 * * *",
-        status: "enabled",
+        schedule: "enabled",
       },
     });
 
@@ -181,10 +178,9 @@ test("scheduler dispose 会等待已进入的触发回调", async () => {
     agent_id: "agent-a",
     request: {
       title: "dispose-waits-trigger",
-      description: "验证 scheduler 触发回调的关闭边界",
       workspace_id: "workspace-a",
       when: "0 9 * * *",
-      status: "enabled",
+      schedule: "enabled",
     },
   });
   const scheduler = new TaskSchedulerCoordinator(context, "Asia/Shanghai", definitions_repository, {
@@ -269,10 +265,9 @@ test("scheduler stop 失败时仍等待已进入的触发并聚合错误", async
     agent_id: "agent-a",
     request: {
       title: "dispose-error",
-      description: "验证失败释放",
       workspace_id: "workspace-a",
       when: "0 9 * * *",
-      status: "enabled",
+      schedule: "enabled",
     },
   });
   const registered = new Map();
@@ -349,10 +344,9 @@ test("损坏 Task 会明确报告，但不会阻止其他 Task 恢复调度", as
       agent_id: "agent-a",
       request: {
         title: "healthy-definition",
-        description: "验证有效定义仍会恢复",
         workspace_id: "workspace-a",
         when: "0 9 * * *",
-        status: "enabled",
+        schedule: "enabled",
       },
     });
     const missing_directory = path.join(storage.path, "tasks", "missing-definition");
@@ -362,7 +356,7 @@ test("损坏 Task 会明确报告，但不会阻止其他 Task 恢复调度", as
       /Task definition cannot be read: missing-definition/u,
     );
 
-    await fs.writeFile(path.join(missing_directory, "task.md"), "not valid task markdown");
+    await fs.writeFile(path.join(missing_directory, "task.toml"), "not valid task markdown");
     await assert.rejects(
       () => listTasks(storage),
       /Task definition is invalid: missing-definition/u,
@@ -409,7 +403,6 @@ test("并发创建相同标题时保留两个独立任务身份", async () => {
       agent_id: "agent-a",
       request: {
         title: "same-title",
-        description: "first",
         workspace_id: "workspace-a",
         when: "@manual",
       },
@@ -419,7 +412,6 @@ test("并发创建相同标题时保留两个独立任务身份", async () => {
       agent_id: "agent-b",
       request: {
         title: "same-title",
-        description: "second",
         workspace_id: "workspace-b",
         when: "@manual",
       },
@@ -429,8 +421,8 @@ test("并发创建相同标题时保留两个独立任务身份", async () => {
   assert.equal(first.success, true);
   assert.equal(second.success, true);
   assert.notEqual(first.task_id, second.task_id);
-  assert.equal((await readTask({ storage, taskId: first.task_id })).frontmatter.agent_id, "agent-a");
-  assert.equal((await readTask({ storage, taskId: second.task_id })).frontmatter.agent_id, "agent-b");
+  assert.equal((await readTask({ storage, taskId: first.task_id })).agent_id, "agent-a");
+  assert.equal((await readTask({ storage, taskId: second.task_id })).agent_id, "agent-b");
   await assert.rejects(() => task_id_for(storage, "same-title"), /Duplicated task title/);
 });
 
@@ -443,7 +435,6 @@ test("运行中的 Task 聚合目录不能被删除", async () => {
     agent_id: "agent-a",
     request: {
       title: "running-task",
-      description: "running",
       workspace_id: "workspace-a",
       when: "@manual",
     },
@@ -483,11 +474,10 @@ test("one-shot 完成时保留触发期间提交的最新定义", async () => {
     agent_id: "agent-a",
     request: {
       title: "one-shot-latest",
-      description: "before",
       body: "before body",
       workspace_id: "workspace-a",
       when,
-      status: "enabled",
+      schedule: "enabled",
     },
   });
   const registered = new Map();
@@ -497,7 +487,6 @@ test("one-shot 完成时保留触发期间提交的最新定义", async () => {
       definitions: definitions_repository,
       request: {
         title: "one-shot-latest",
-        description: "after",
         body: "after body",
       },
     });
@@ -520,10 +509,9 @@ test("one-shot 完成时保留触发期间提交的最新定义", async () => {
   await registered.get(`task-time:${await task_id_for(storage, "one-shot-latest")}`).execute();
 
   const current = await readTask({ storage, taskId: await task_id_for(storage, "one-shot-latest") });
-  assert.equal(current.frontmatter.description, "after");
   assert.equal(current.body, "after body");
-  assert.equal(current.frontmatter.when, "@manual");
-  assert.equal(current.frontmatter.status, "paused");
+  assert.equal(current.when, "@manual");
+  assert.equal(current.schedule, "paused");
   await scheduler.dispose();
 });
 
@@ -552,11 +540,10 @@ test("TaskPower initialize 无需 Session 调用即可恢复已有 schedule", as
     agent_id: agent.id,
     request: {
       title: "restart-task",
-      description: "验证 Power 初始化恢复 schedule",
       workspace_id: workspace.id,
       when: "* * * * * *",
       kind: "agent",
-      status: "enabled",
+      schedule: "enabled",
       body: "直接输出 RECOVERED_TASK_RESULT。",
     },
   });
@@ -583,7 +570,7 @@ test("TaskPower initialize 无需 Session 调用即可恢复已有 schedule", as
     assert.equal(history.success, true);
     assert.equal(history.runs?.[0]?.trigger, "cron");
     assert.equal(
-      await fs.stat(path.join(task_storage.path, "tasks", await task_id_for(task_storage, "restart-task"), "task.md")).then(() => true),
+      await fs.stat(path.join(task_storage.path, "tasks", await task_id_for(task_storage, "restart-task"), "task.toml")).then(() => true),
       true,
     );
     assert.equal(
@@ -618,7 +605,6 @@ test("统一 Store 仍按 Task 的 agent_id 向 Agent 投影", async () => {
       action: "create",
       payload: {
         title: "agent-a-task",
-        description: "只属于 Agent A 的执行定义",
         when: "@manual",
       },
     });
@@ -655,7 +641,6 @@ test("Task 定义通过 Storage 文件端口支持 City 默认内存存储", asy
       action: "create",
       payload: {
         title: "memory-task",
-        description: "验证内存 Storage",
         when: "@manual",
       },
     });
@@ -705,7 +690,6 @@ test("Task 重新绑定执行 Agent 后仍向原始 Agent Session 交付结果",
       agent_id: agent_a.id,
       request: {
         title: "cross-agent-delivery",
-        description: "由另一个 Agent 执行并交付到原始 Session",
         workspace_id: workspace.id,
         when: "@manual",
         body: "直接输出 CROSS_AGENT_RESULT。",
@@ -723,11 +707,10 @@ test("Task 重新绑定执行 Agent 后仍向原始 Agent Session 交付结果",
       workspace_id: workspace.id,
       current_title: "cross-agent-delivery",
       title: "cross-agent-delivery",
-      description: "由另一个 Agent 执行并交付到原始 Session",
       when: "@manual",
       kind: "agent",
       review: false,
-      status: "enabled",
+      schedule: "enabled",
       body: "直接输出 CROSS_AGENT_RESULT。",
     });
     const scope = city.powers.scope({ agent_id: agent_b.id, workspace_id: workspace.id });
@@ -805,7 +788,6 @@ test("City close 会停止 Task Session 并等待后台执行收口", async () =
       action: "create",
       payload: {
         title: "close-running-task",
-        description: "验证 City 关闭时的后台 Task 收口",
         when: "@manual",
         body: "等待关闭。",
       },

@@ -135,7 +135,7 @@ export async function executeTaskListAction(params: {
       storage: params.storage,
       agent_id: params.context.agent.id,
       ...(params.payload.status ? { status: params.payload.status } : {}),
-    }),
+    }) as unknown as PowerJsonValue,
   };
 }
 
@@ -385,7 +385,7 @@ export async function executeTaskStatusAction(params: {
 async function assert_task_agent(storage: PowerStorage, title: string, agent_id: string): Promise<void> {
   const task_id = await resolveTaskIdByTitle({ storage, title });
   const task = await readTask({ storage, taskId: task_id });
-  if (task.frontmatter.agent_id !== agent_id) {
-    throw new Error(`Task belongs to another Agent: ${task.frontmatter.agent_id}`);
+  if (task.agent_id !== agent_id) {
+    throw new Error(`Task belongs to another Agent: ${task.agent_id}`);
   }
 }

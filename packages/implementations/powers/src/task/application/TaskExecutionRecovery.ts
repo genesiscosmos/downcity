@@ -1,9 +1,8 @@
 /** City 启动时恢复中断执行：保留历史、暂停安排，由用户明确决定重试。 */
 import type { TaskDefinitionRepository } from "../runtime/TaskDefinitionRepository.js";
 import { inspect_task_definitions, readTask, writeTask } from "../runtime/Store.js";
-import { normalize_task_workflow, task_is_recurring } from "../runtime/TaskWorkflowModel.js";
+import { normalize_task_state, task_is_recurring } from "../runtime/TaskWorkflowModel.js";
 import { list_task_runs, read_completed_task_run } from "../runtime/TaskRunStore.js";
-import { normalize_task_workflow_state } from "../runtime/TaskWorkflowStateSchema.js";
 
 /** 只在执行协调器尚未受理新工作时调用，不自动重放外部副作用。 */
 export async function recover_task_executions(definitions: TaskDefinitionRepository): Promise<void> {
@@ -11,18 +10,18 @@ export async function recover_task_executions(definitions: TaskDefinitionReposit
   for (const entry of inspection.tasks) {
     await definitions.mutate(async (storage) => {
       const task = await readTask({ storage, taskId: entry.taskId });
-      const workflow = normalize_task_workflow(task.frontmatter.workflow);
+      const workflow = normalize_task_state(task.workflow);
       const execution_id = workflow.active_execution_id;
       if (!execution_id || definitions.is_running(entry.taskId)) return;
       // 用户确认的终态优先于残留执行记录，恢复不得重新打开工作。
-      if (["completed", "cancelled"].includes(workflow.work_status)) {
+      if (["completed", "cancelled"].includes(workflow.progress)) {
         delete workflow.active_execution_id;
-        task.frontmatter.status = "paused";
-        task.frontmatter.workflow = workflow;
-        await writeTask({ storage, taskId: entry.taskId, frontmatter: task.frontmatter, body: task.body, overwrite: true });
+        task.schedule = "paused";
+        task.workflow = workflow;
+        await writeTask({ storage, taskId: entry.taskId, task: task, overwrite: true });
         return;
       }
-      const state = normalize_task_workflow_state(task.frontmatter.workflow_state);
+      const state = normalize_task_state(task.workflow);
       const occurrence = state.occurrences.find((item) => item.execution_id === execution_id);
       const runs = await list_task_runs({ storage, task_id: entry.taskId });
       const summary = runs.find((item) => item.execution_id === execution_id);
@@ -40,7 +39,7 @@ export async function recover_task_executions(definitions: TaskDefinitionReposit
           occurrence.run_timestamp = run.timestamp;
           if (success && !review) occurrence.completed_at = new Date(run.ended_at!).toISOString();
         }
-        if (!recurring) workflow.work_status = review ? "review" : "in_progress";
+        if (!recurring) workflow.progress = review ? "review" : "in_progress";
         if (!success || review) {
           const item_id = `${review ? "review" : "failure"}:${execution_id}`;
           if (!state.inbox.some((item) => item.item_id === item_id)) state.inbox.push({
@@ -53,10 +52,10 @@ export async function recover_task_executions(definitions: TaskDefinitionReposit
         }
         delete workflow.active_execution_id;
         // 周期工作保留其后续安排；一次性工作已受理后不再重新启动。
-        if (!recurring) task.frontmatter.status = "paused";
-        task.frontmatter.workflow = workflow;
-        task.frontmatter.workflow_state = state;
-        await writeTask({ storage, taskId: entry.taskId, frontmatter: task.frontmatter, body: task.body, overwrite: true });
+        if (!recurring) task.schedule = "paused";
+        task.workflow = workflow;
+        task.workflow = state;
+        await writeTask({ storage, taskId: entry.taskId, task: task, overwrite: true });
         return;
       }
       if (occurrence && occurrence.status === "in_progress") occurrence.status = "pending";
@@ -69,10 +68,10 @@ export async function recover_task_executions(definitions: TaskDefinitionReposit
         ...(occurrence?.run_timestamp ? { run_timestamp: occurrence.run_timestamp } : {}),
       });
       delete workflow.active_execution_id;
-      task.frontmatter.status = "paused";
-      task.frontmatter.workflow = workflow;
-      task.frontmatter.workflow_state = state;
-      await writeTask({ storage, taskId: entry.taskId, frontmatter: task.frontmatter, body: task.body, overwrite: true });
+      task.schedule = "paused";
+      task.workflow = workflow;
+      task.workflow = state;
+      await writeTask({ storage, taskId: entry.taskId, task: task, overwrite: true });
     });
   }
 }

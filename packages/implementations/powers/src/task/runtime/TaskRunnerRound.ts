@@ -158,7 +158,6 @@ export function buildExecutorRoundQuery(params: {
  */
 export function buildUserSimulatorQuery(params: {
   taskTitle: string;
-  taskDescription: string;
   taskBody: string;
   round: number;
   maxRounds: number;
@@ -182,7 +181,6 @@ export function buildUserSimulatorQuery(params: {
     "4) 如果系统规则校验有失败项（见下方），必须判定为不满意。",
     "",
     `任务标题: ${params.taskTitle}`,
-    `任务描述: ${params.taskDescription}`,
     `当前轮次: ${params.round}/${params.maxRounds}`,
     "",
     "任务正文：",

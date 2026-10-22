@@ -51,17 +51,17 @@ function getBooleanLikeOpt(
   return parseBooleanLike(opts[key]);
 }
 
-function readTaskStatusOrThrow(value?: string): ShipTaskStatus | undefined {
+function readTaskScheduleOrThrow(value?: string): ShipTaskStatus | undefined {
   if (!value) return undefined;
-  if (value === "enabled" || value === "paused" || value === "disabled") {
+  if (value === "enabled" || value === "paused") {
     return value;
   }
-  throw new Error(`Invalid task status: ${value}`);
+  throw new Error(`Invalid task schedule: ${value} (expected: enabled|paused)`);
 }
 
 function readTaskKindOrThrow(value?: string): ShipTaskKind | undefined {
   if (!value) return undefined;
-  if (value === "self" || value === "agent" || value === "script") {
+  if (value === "user" || value === "agent" || value === "script") {
     return value;
   }
   throw new Error(`Invalid task kind: ${value}`);
@@ -70,7 +70,7 @@ function readTaskKindOrThrow(value?: string): ShipTaskKind | undefined {
 function mapTaskListCommandInput(
   opts: Record<string, PowerJsonValue>,
 ): TaskListActionPayload {
-  const status = readTaskStatusOrThrow(getStringOpt(opts, "status"));
+  const status = readTaskScheduleOrThrow(getStringOpt(opts, "status"));
   return status ? { status } : {};
 }
 
@@ -78,29 +78,26 @@ function mapTaskCreateCommandInput(
   opts: Record<string, PowerJsonValue>,
 ): TaskCreateRequest {
   const title = String(getStringOpt(opts, "title") || "").trim();
-  const description = String(getStringOpt(opts, "description") || "").trim();
   if (!title) throw new Error("Missing title");
   const kind = readTaskKindOrThrow(getStringOpt(opts, "kind"));
-  if (kind !== "self" && !description) throw new Error("Missing description");
+  const body = getStringOpt(opts, "body");
+  if (kind !== "user" && !body) throw new Error("Missing body");
   const review = getBooleanLikeOpt(opts, "review");
-  const status = readTaskStatusOrThrow(getStringOpt(opts, "status"));
+  const schedule = readTaskScheduleOrThrow(getStringOpt(opts, "schedule"));
   const activate = getBooleanOpt(opts, "activate") === true;
-  if (activate && status && status !== "enabled") {
-    throw new Error("`--activate` conflicts with `--status` unless status=enabled");
+  if (activate && schedule && schedule !== "enabled") {
+    throw new Error("`--activate` conflicts with `--schedule` unless schedule=enabled");
   }
-  const resolvedStatus = activate ? "enabled" : status;
+  const resolvedSchedule = activate ? "enabled" : schedule;
 
   return {
     title,
     when: String(getStringOpt(opts, "when") || "@manual").trim() || "@manual",
-    description,
     ...(getStringOpt(opts, "workspace_id") ? { workspace_id: getStringOpt(opts, "workspace_id") } : {}),
     ...(kind ? { kind } : {}),
     ...(typeof review === "boolean" ? { review } : {}),
-    ...(resolvedStatus ? { status: resolvedStatus } : {}),
-    ...(typeof getStringOpt(opts, "body") === "string"
-      ? { body: getStringOpt(opts, "body") }
-      : {}),
+    ...(resolvedSchedule ? { schedule: resolvedSchedule } : {}),
+    ...(typeof body === "string" ? { body } : {}),
   };
 }
 
@@ -111,7 +108,7 @@ function mapTaskUpdateCommandInput(params: {
   const opts = params.opts;
   const kind = readTaskKindOrThrow(getStringOpt(opts, "kind"));
   const review = getBooleanLikeOpt(opts, "review");
-  const status = readTaskStatusOrThrow(getStringOpt(opts, "status"));
+  const schedule = readTaskScheduleOrThrow(getStringOpt(opts, "schedule"));
   const activate = getBooleanOpt(opts, "activate") === true;
 
   // 关键点（中文）：set 与 clear 选项互斥，提前在命令入口做校验。
@@ -128,23 +125,22 @@ function mapTaskUpdateCommandInput(params: {
   ) {
     conflicts.push("`--when` conflicts with `--clear-when`");
   }
-  if (activate && status && status !== "enabled") {
-    conflicts.push("`--activate` conflicts with `--status` unless status=enabled");
+  if (activate && schedule && schedule !== "enabled") {
+    conflicts.push("`--activate` conflicts with `--schedule` unless schedule=enabled");
   }
   if (conflicts.length > 0) {
     throw new Error(conflicts.join("; "));
   }
-  const resolvedStatus = activate ? "enabled" : status;
+  const resolvedSchedule = activate ? "enabled" : schedule;
 
   const hasUpdate =
     typeof getStringOpt(opts, "title") === "string" ||
     typeof getStringOpt(opts, "when") === "string" ||
-    typeof getStringOpt(opts, "description") === "string" ||
     typeof getStringOpt(opts, "workspace_id") === "string" ||
     typeof kind === "string" ||
     typeof review === "boolean" ||
     getBooleanOpt(opts, "clearWhen") === true ||
-    typeof resolvedStatus === "string" ||
+    typeof resolvedSchedule === "string" ||
     typeof getStringOpt(opts, "body") === "string" ||
     getBooleanOpt(opts, "clearBody") === true;
 
@@ -160,16 +156,13 @@ function mapTaskUpdateCommandInput(params: {
     ...(typeof getStringOpt(opts, "when") === "string"
       ? { when: getStringOpt(opts, "when") }
       : {}),
-    ...(typeof getStringOpt(opts, "description") === "string"
-      ? { description: getStringOpt(opts, "description") }
-      : {}),
     ...(typeof getStringOpt(opts, "workspace_id") === "string"
       ? { workspace_id: getStringOpt(opts, "workspace_id") }
       : {}),
     ...(typeof kind === "string" ? { kind } : {}),
     ...(typeof review === "boolean" ? { review } : {}),
     ...(getBooleanOpt(opts, "clearWhen") ? { clearWhen: true } : {}),
-    ...(typeof resolvedStatus === "string" ? { status: resolvedStatus } : {}),
+    ...(typeof resolvedSchedule === "string" ? { schedule: resolvedSchedule } : {}),
     ...(typeof getStringOpt(opts, "body") === "string"
       ? { body: getStringOpt(opts, "body") }
       : {}),
@@ -238,7 +231,7 @@ export function mapTaskStatusCommandPayload(
   input: PowerActionCommandInput,
 ): TaskSetStatusRequest {
   const title = String(input.args[0] || "").trim();
-  const status = readTaskStatusOrThrow(String(input.args[1] || "").trim());
+  const status = readTaskScheduleOrThrow(String(input.args[1] || "").trim());
   if (!title) throw new Error("Missing title");
   if (!status) throw new Error("Missing or invalid status");
   return mapTaskSetStatusCommandInput({ title, status });
@@ -262,6 +255,6 @@ export function mapTaskDisableCommandPayload(
   if (!title) throw new Error("Missing title");
   return mapTaskSetStatusCommandInput({
     title,
-    status: "disabled",
+    status: "paused",
   });
 }

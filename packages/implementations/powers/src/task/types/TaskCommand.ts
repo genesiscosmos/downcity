@@ -16,23 +16,21 @@ import type {
   TaskDeliverySession,
 } from "./Task.js";
 import type { TaskDefinitionIssue } from "./TaskPowerTypes.js";
-import type { TaskWorkflow } from "./TaskWorkflow.js";
+import type { TaskState } from "./TaskWorkflow.js";
 
 export type TaskCreateRequest = {
   /** 任务名称。 */
   title: string;
   /** 触发条件。 */
   when: string;
-  /** 任务描述。 */
-  description: string;
   /** 任务唯一绑定的执行 Workspace。 */
   workspace_id?: string;
   /** 任务执行类型。 */
   kind?: ShipTaskKind;
   /** 是否启用 review 多轮复核。 */
   review?: boolean;
-  /** 任务状态。 */
-  status?: ShipTaskStatus;
+  /** 调度启停状态。 */
+  schedule?: ShipTaskStatus;
   /** 任务正文。 */
   body?: string;
 };
@@ -45,7 +43,7 @@ export type TaskCreateResponse = {
   /** 任务名称（新建成功或复用已有任务时返回） */
   title?: string;
   /** 任务定义文件相对路径 */
-  taskMdPath?: string;
+  taskPath?: string;
   /** 说明信息（例如“复用已有任务”） */
   message?: string;
   /** 错误信息 */
@@ -61,8 +59,6 @@ export type TaskUpdateRequest = {
   when?: string;
   /** 是否清空触发条件并回退到 `@manual`。 */
   clearWhen?: boolean;
-  /** 新任务描述。 */
-  description?: string;
   /** 新的执行 Agent；宿主管理界面可用它重新绑定执行目标。 */
   agent_id?: string;
   /** 新的执行 Workspace。 */
@@ -71,8 +67,8 @@ export type TaskUpdateRequest = {
   kind?: ShipTaskKind;
   /** 是否启用 review 多轮复核。 */
   review?: boolean;
-  /** 新任务状态。 */
-  status?: ShipTaskStatus;
+  /** 新调度启停状态。 */
+  schedule?: ShipTaskStatus;
   /** 新任务正文。 */
   body?: string;
   /** 是否清空正文。 */
@@ -84,25 +80,23 @@ export type TaskUpdateResponse = {
   task_id?: string;
   success: boolean;
   title?: string;
-  taskMdPath?: string;
+  taskPath?: string;
   error?: string;
 };
 
 export type TaskListItemView = {
-  /** 工作状态、时间安排与整理属性；调度 status 不表达完成。 */
-  workflow?: TaskWorkflow;
+  /** 工作进度、时间安排、发生历史与收件箱；调度 schedule 不表达完成。 */
+  workflow: TaskState;
   /** 独立于标题的稳定任务标识。 */
   task_id: string;
   /** 任务名称。 */
   title: string;
-  /** 任务描述。 */
-  description: string;
   /** 任务正文。 */
   body?: string;
   /** 触发条件。 */
   when: string;
-  /** 任务状态。 */
-  status: string;
+  /** 调度启停状态。 */
+  schedule: ShipTaskStatus;
   /** 当前是否正在执行。 */
   running?: boolean;
   /** 任务唯一绑定的执行 Agent。 */
@@ -116,9 +110,9 @@ export type TaskListItemView = {
   /** 是否启用 review 多轮复核。 */
   review?: boolean;
   /** 任务定义文件相对路径。 */
-  taskMdPath: string;
+  taskPath: string;
   /** 最近一次运行时间戳。 */
-  lastRunTimestamp?: string;
+  last_run_at?: string;
 };
 
 export type TaskListResponse = {

@@ -118,22 +118,22 @@ export async function runTaskNow(params: {
 
   const definition = params.task_snapshot ?? await readTask({ taskId: params.taskId, storage: params.storage });
   // 已确认说明作为执行目标；修订反馈随执行快照保存，脚本正文不拼接说明。
-  const preparation = definition.frontmatter.preparation;
-  const recurring = definition.frontmatter.when !== "@manual" && !definition.frontmatter.when.startsWith("time:");
-  const occurrence_id = definition.frontmatter.workflow_state?.occurrences.find((item) => item.execution_id === executionId)?.occurrence_id;
-  const feedback = definition.frontmatter.workflow_state?.inbox
+  const preparation = definition.preparing;
+  const recurring = definition.when !== "@manual" && !definition.when.startsWith("time:");
+  const occurrence_id = definition.workflow?.occurrences.find((item) => item.execution_id === executionId)?.occurrence_id;
+  const feedback = definition.workflow?.inbox
     .filter((item) => item.kind === "review" && item.resolved && item.feedback && (!recurring || item.occurrence_id === occurrence_id))
     .map((item) => `结果修改要求（${item.created_at}）：\n${item.feedback}`) ?? [];
-  const task = definition.frontmatter.kind === "agent"
+  const task = definition.kind === "agent"
     ? { ...definition, body: [preparation?.analyzed_body ?? definition.body, ...feedback].join("\n\n") }
     : definition;
-  if (task.frontmatter.agent_id !== context.agent.id) {
-    throw new Error(`Task Agent mismatch: expected ${task.frontmatter.agent_id}, got ${context.agent.id}`);
+  if (task.agent_id !== context.agent.id) {
+    throw new Error(`Task Agent mismatch: expected ${task.agent_id}, got ${context.agent.id}`);
   }
   const workspace = context.workspace;
   if (!workspace) throw new Error("Task execution requires a Workspace");
-  if (task.frontmatter.workspace_id !== workspace.id) {
-    throw new Error(`Task Workspace mismatch: expected ${task.frontmatter.workspace_id}, got ${workspace.id}`);
+  if (task.workspace_id !== workspace.id) {
+    throw new Error(`Task Workspace mismatch: expected ${task.workspace_id}, got ${workspace.id}`);
   }
   const runDirAbs = getTaskRunDir(root, task.taskId, timestamp);
   const { runDirRel } = await ensureRunDir({
@@ -143,8 +143,8 @@ export async function runTaskNow(params: {
   });
   const filePaths = createTaskRunFilePaths(runDirAbs);
 
-  const taskKind: ShipTaskKind = task.frontmatter.kind || "agent";
-  const reviewEnabled = taskKind === "agent" && task.frontmatter.review === true;
+  const taskKind: ShipTaskKind = task.kind || "agent";
+  const reviewEnabled = taskKind === "agent" && task.review === true;
   const maxDialogueRounds =
     taskKind === "agent"
       ? reviewEnabled
@@ -220,7 +220,7 @@ export async function runTaskNow(params: {
       userSimulatorSessionId,
       task_id: task.taskId,
       execution_id: executionId,
-      delivery_session: task.frontmatter.delivery_session,
+      delivery_session: task.delivery_session,
     });
     let lastRoundRuleErrors: string[] = [];
     let lastRoundDecision: UserSimulatorDecision | null = null;
@@ -308,8 +308,7 @@ export async function runTaskNow(params: {
         });
         try {
           userSimulatorQuery = buildUserSimulatorQuery({
-            taskTitle: task.frontmatter.title,
-            taskDescription: task.frontmatter.description,
+            taskTitle: task.title,
             taskBody: task.body,
             round,
             maxRounds: maxDialogueRounds,

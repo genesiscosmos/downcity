@@ -1,22 +1,21 @@
 /**
- * 发生项与收件箱状态的校验、触发和执行收口。
+ * 发生项与收件箱状态的登记、结算与收口。
  *
- * 状态嵌入 task.md，通过同一 TaskDefinitionRepository 事务原子提交，避免定义、
- * 收件箱和周期历史出现多个事实源。执行令牌保护迟到结果，Run 文件继续独立保存。
+ * 状态嵌在 `task.toml` 的 `[workflow]`、`[[occurrences]]`、`[[inbox]]` 里，通过同一个
+ * `TaskDefinitionRepository` 事务原子提交，避免定义、收件箱与周期历史出现多个事实源。
+ * 执行令牌保护迟到结果，Run 文件继续独立保存。
  */
+
 import type { ShipTaskDefinitionV1 } from "../types/Task.js";
 import type { TaskDefinitionRepository } from "./TaskDefinitionRepository.js";
 import {
-  normalize_task_workflow,
+  normalize_task_state,
   task_is_recurring,
   task_occurrence_key,
 } from "./TaskWorkflowModel.js";
 import { readTask, writeTask } from "./Store.js";
 
-import { normalize_task_workflow_state } from "./TaskWorkflowStateSchema.js";
-export { normalize_task_workflow_state } from "./TaskWorkflowStateSchema.js";
-
-/** 在已持有定义事务的情况下保存聚合，防止跨文件部分提交。 */
+/** 在已持有定义事务的情况下保存定义，防止跨文件部分提交。 */
 export async function save_task_workflow(
   definitions: TaskDefinitionRepository,
   task: ShipTaskDefinitionV1,
@@ -25,8 +24,7 @@ export async function save_task_workflow(
     storage: definitions.storage,
     taskId: task.taskId,
     overwrite: true,
-    frontmatter: task.frontmatter,
-    body: task.body,
+    task,
   });
 }
 
@@ -36,7 +34,7 @@ export function register_task_occurrence(
   at: Date,
   execution_id?: string,
 ): boolean {
-  const state = normalize_task_workflow_state(task.frontmatter.workflow_state);
+  const state = normalize_task_state(task.workflow);
   const occurrence_id = task_occurrence_key(task, at);
   if (state.occurrences.some((item) => item.occurrence_id === occurrence_id))
     return false;
@@ -55,7 +53,7 @@ export function register_task_occurrence(
       resolved: false,
       occurrence_id,
     });
-  task.frontmatter.workflow_state = state;
+  task.workflow = state;
   return true;
 }
 
@@ -79,17 +77,12 @@ export async function settle_task_execution(params: {
       storage: params.definitions.storage,
       taskId: params.task.taskId,
     });
-    const workflow = normalize_task_workflow(current.frontmatter.workflow);
-    if (workflow.active_execution_id !== params.execution_id) return;
+    const state = normalize_task_state(current.workflow);
+    if (state.active_execution_id !== params.execution_id) return;
     const recurring = task_is_recurring(params.task);
     const review =
       params.success &&
-      (!recurring ||
-        normalize_task_workflow(params.task.frontmatter.workflow)
-          .require_acceptance);
-    const state = normalize_task_workflow_state(
-      current.frontmatter.workflow_state,
-    );
+      (!recurring || normalize_task_state(params.task.workflow).require_acceptance);
     const occurrence = state.occurrences.find(
       (item) => item.execution_id === params.execution_id,
     );
@@ -104,8 +97,8 @@ export async function settle_task_execution(params: {
         occurrence.completed_at = new Date().toISOString();
     }
     if (!recurring)
-      workflow.work_status = params.success ? "review" : "in_progress";
-    delete workflow.active_execution_id;
+      state.progress = params.success ? "review" : "in_progress";
+    delete state.active_execution_id;
     if (!params.success || review)
       state.inbox.push({
         item_id: `${params.success ? "review" : "failure"}:${params.execution_id}`,
@@ -118,8 +111,7 @@ export async function settle_task_execution(params: {
         ...(occurrence ? { occurrence_id: occurrence.occurrence_id } : {}),
         ...(params.timestamp ? { run_timestamp: params.timestamp } : {}),
       });
-    current.frontmatter.workflow = workflow;
-    current.frontmatter.workflow_state = state;
+    current.workflow = state;
     await save_task_workflow(params.definitions, current);
   });
 }

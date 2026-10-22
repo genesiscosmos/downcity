@@ -1,27 +1,25 @@
 /**
  * TaskPower 生命周期级统一存储。
  *
- * Task 定义和运行记录共享 `tasks/<task_id>/` 聚合目录。所有读写都通过 City
- * 提供的 PowerStorage 文件端口完成，因此本地与内存 Storage 保持同一语义。
+ * Task 定义与工作状态共享 `tasks/<task_id>/task.toml`，每次执行的产物放在同级
+ * `runs` 时间戳目录里。所有读写都通过 City 提供的 PowerStorage 文件端口完成，
+ * 因此本地与内存 Storage 保持同一语义。
  */
 
 import path from "node:path";
 import type { PowerStorage } from "@downcity/city/power";
-import type {
-  ShipTaskDefinitionV1,
-  ShipTaskFrontmatterV1,
-} from "@/task/types/Task.js";
+import type { ShipTaskDefinitionV1 } from "@/task/types/Task.js";
 import type {
   TaskDefinitionIssue,
   TaskListItem,
   TaskStoreInspection,
 } from "@/task/types/TaskPowerTypes.js";
-import { parseTaskMarkdown, buildTaskMarkdown } from "./Model.js";
+import { buildTaskToml, parseTaskDefinition } from "./Model.js";
 import {
   deriveTaskIdFromTitle,
   isValidTaskId,
   getTaskDir,
-  getTaskMdPath,
+  getTaskPath,
   getTaskRootDir,
   getTaskRunDir,
   is_task_run_timestamp,
@@ -37,6 +35,20 @@ export async function listTasks(storage: PowerStorage): Promise<TaskListItem[]> 
   return inspection.tasks;
 }
 
+/** 读取 Task 聚合目录下最近一次执行的时间戳目录名。 */
+async function read_last_run_at(
+  storage: PowerStorage,
+  task_dir: string,
+): Promise<string | undefined> {
+  return await storage.files.read_directory(task_dir)
+    .then((children) => children
+      .filter((child) => child.is_directory && is_task_run_timestamp(child.name))
+      .map((child) => child.name)
+      .sort()
+      .at(-1))
+    .catch(() => undefined);
+}
+
 /** 扫描全部 Task 聚合目录，同时保留有效定义和可观察的定义错误。 */
 export async function inspect_task_definitions(
   storage: PowerStorage,
@@ -50,60 +62,37 @@ export async function inspect_task_definitions(
   for (const entry of entries) {
     const task_id = String(entry.name || "").trim();
     if (!entry.is_directory || !task_id || task_id.startsWith(".") || !isValidTaskId(task_id)) continue;
-    const task_md_path = getTaskMdPath(root, task_id);
-    let markdown = "";
+    const task_file_path = getTaskPath(root, task_id);
+    let text = "";
     try {
-      markdown = (await storage.files.read_file(task_md_path)).toString("utf-8");
+      text = (await storage.files.read_file(task_file_path)).toString("utf-8");
     } catch (error) {
       issues.push({
         task_id,
-        task_md_path: relative_storage_path(root, task_md_path),
+        task_path: relative_storage_path(root, task_file_path),
         error: `Task definition cannot be read: ${task_id}: ${to_error_message(error)}`,
       });
       continue;
     }
-    const parsed = parseTaskMarkdown({
+    const parsed = parseTaskDefinition({
       taskId: task_id,
-      markdown,
-      taskMdPath: task_md_path,
+      text,
+      task_file_path,
       data_path: root,
     });
     if (!parsed.ok) {
       issues.push({
         task_id,
-        task_md_path: relative_storage_path(root, task_md_path),
+        task_path: relative_storage_path(root, task_file_path),
         error: `Task definition is invalid: ${task_id}: ${parsed.error}`,
       });
       continue;
     }
 
-    const task_directory = getTaskDir(root, task_id);
-    const last_run_timestamp = await storage.files.read_directory(task_directory)
-      .then((children) => children
-        .filter((child) => child.is_directory && is_task_run_timestamp(child.name))
-        .map((child) => child.name)
-        .sort()
-        .at(-1))
-      .catch(() => undefined);
+    const last_run_at = await read_last_run_at(storage, getTaskDir(root, task_id));
     items.push({
-      taskId: task_id,
-      workflow: parsed.task.frontmatter.workflow,
-      title: parsed.task.frontmatter.title,
-      description: parsed.task.frontmatter.description,
-      ...(parsed.task.body ? { body: parsed.task.body } : {}),
-      when: parsed.task.frontmatter.when,
-      status: parsed.task.frontmatter.status,
-      agent_id: parsed.task.frontmatter.agent_id,
-      workspace_id: parsed.task.frontmatter.workspace_id,
-      ...(parsed.task.frontmatter.delivery_session
-        ? { delivery_session: parsed.task.frontmatter.delivery_session }
-        : {}),
-      kind: parsed.task.frontmatter.kind || "agent",
-      ...(parsed.task.frontmatter.kind === "agent"
-        ? { review: Boolean(parsed.task.frontmatter.review) }
-        : {}),
-      taskMdPath: parsed.task.taskMdPath,
-      ...(last_run_timestamp ? { lastRunTimestamp: last_run_timestamp } : {}),
+      ...parsed.task,
+      ...(last_run_at ? { last_run_at } : {}),
     });
   }
   return {
@@ -116,7 +105,7 @@ export async function inspect_task_definitions(
 export async function resolveTaskIdByTitle(params: {
   /** TaskPower 生命周期级统一存储。 */
   readonly storage: PowerStorage;
-  /** Task 的用户可见唯一标题。 */
+  /** Task 的用户可见标题。 */
   readonly title: string;
 }): Promise<string> {
   const title = String(params.title || "").trim();
@@ -139,12 +128,12 @@ export async function readTask(params: {
 }): Promise<ShipTaskDefinitionV1> {
   const root = require_storage_root(params.storage);
   const task_id = normalizeTaskId(params.taskId);
-  const task_md_path = getTaskMdPath(root, task_id);
-  const markdown = (await params.storage.files.read_file(task_md_path)).toString("utf-8");
-  const parsed = parseTaskMarkdown({
+  const task_file_path = getTaskPath(root, task_id);
+  const text = (await params.storage.files.read_file(task_file_path)).toString("utf-8");
+  const parsed = parseTaskDefinition({
     taskId: task_id,
-    markdown,
-    taskMdPath: task_md_path,
+    text,
+    task_file_path,
     data_path: root,
   });
   if (!parsed.ok) throw new Error(parsed.error);
@@ -171,34 +160,32 @@ export async function deleteTask(params: {
   };
 }
 
-/** 原子创建或覆盖一个 Task 定义。 */
+/** 原子创建或覆盖一个 Task 定义（含工作状态）。 */
 export async function writeTask(params: {
   /** Task 的稳定目录 ID。 */
   readonly taskId: string;
-  /** 要持久化的完整 Task 元数据。 */
-  readonly frontmatter: ShipTaskFrontmatterV1;
-  /** 要持久化的完整 Task 正文。 */
-  readonly body: string;
+  /** 要持久化的完整定义与工作状态。 */
+  readonly task: ShipTaskDefinitionV1;
   /** TaskPower 生命周期级统一存储。 */
   readonly storage: PowerStorage;
   /** 是否允许覆盖已经存在的定义。 */
   readonly overwrite?: boolean;
-}): Promise<{ taskId: string; taskMdPath: string }> {
+}): Promise<{ taskId: string; taskPath: string }> {
   const root = require_storage_root(params.storage);
   const task_id = normalizeTaskId(params.taskId);
   const task_directory = getTaskDir(root, task_id);
-  const task_md_path = getTaskMdPath(root, task_id);
+  const task_file_path = getTaskPath(root, task_id);
   await params.storage.files.ensure_directory(task_directory);
-  if (await params.storage.files.path_exists(task_md_path) && !params.overwrite) {
-    throw new Error(`task.md already exists: ${relative_storage_path(root, task_md_path)}`);
+  if (await params.storage.files.path_exists(task_file_path) && !params.overwrite) {
+    throw new Error(`task.toml already exists: ${relative_storage_path(root, task_file_path)}`);
   }
   await params.storage.files.write_file_atomically(
-    task_md_path,
-    buildTaskMarkdown({ frontmatter: params.frontmatter, body: params.body }),
+    task_file_path,
+    buildTaskToml({ ...params.task, taskId: task_id, taskPath: relative_storage_path(root, task_file_path) }),
   );
   return {
     taskId: task_id,
-    taskMdPath: relative_storage_path(root, task_md_path),
+    taskPath: relative_storage_path(root, task_file_path),
   };
 }
 

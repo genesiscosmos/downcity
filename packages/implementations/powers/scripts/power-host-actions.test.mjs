@@ -93,10 +93,9 @@ async function start_task_power(options = {}) {
     agent_id: "task-agent",
     request: {
       title: "daily-report",
-      description: "生成日报",
       body: "汇总今天的进展",
       when: "@manual",
-      status: "enabled",
+      schedule: "enabled",
       kind: "agent",
       review: false,
       workspace_id: "workspace-b",
@@ -315,11 +314,11 @@ test("Task Power 返回统一 Task 列表和可选执行目标", async () => {
   try {
     const snapshot = await actions.get("tasks.snapshot").run();
     assert.deepEqual(snapshot.tasks, [{
+      task_id: snapshot.tasks[0].task_id,
       title: "daily-report",
-      description: "生成日报",
       body: "汇总今天的进展",
       when: "@manual",
-      status: "enabled",
+      schedule: "enabled",
       kind: "agent",
       review: false,
       agent_id: "task-agent",
@@ -358,11 +357,10 @@ test("Task Power 使用 Task 自身 Workspace 完成管理操作", async () => {
     agent_id: "task-agent",
     workspace_id: "workspace-b",
     title: "weekly-review",
-    description: "生成周报",
     when: "@manual",
     kind: "agent",
     review: true,
-    status: "paused",
+    schedule: "paused",
     body: "汇总本周进展",
   });
   await actions.get("tasks.update").run({
@@ -370,11 +368,10 @@ test("Task Power 使用 Task 自身 Workspace 完成管理操作", async () => {
     workspace_id: "workspace-a",
     current_title: "weekly-review",
     title: "weekly-review",
-    description: "更新周报",
     when: "0 18 * * 5",
     kind: "agent",
     review: false,
-    status: "enabled",
+    schedule: "enabled",
     body: "输出更新后的周报",
   });
   await actions.get("tasks.status").run({ task_title: "weekly-review", status: "paused" });
@@ -429,7 +426,7 @@ test("Task Power 暴露并允许删除损坏定义", async () => {
   const invalid_task_path = path.join(storage.path, "tasks", "broken-task");
   try {
     fs.mkdirSync(invalid_task_path, { recursive: true });
-    fs.writeFileSync(path.join(invalid_task_path, "task.md"), "invalid task definition");
+    fs.writeFileSync(path.join(invalid_task_path, "task.toml"), "invalid task definition");
 
     const snapshot = await actions.get("tasks.snapshot").run();
     assert.equal(snapshot.tasks.some((task) => task.title === "daily-report"), true);
@@ -457,11 +454,10 @@ test("Task Host mutation 明确返回定义已提交但 scheduler 同步失败",
       agent_id: "task-agent",
       workspace_id: "workspace-a",
       title: "scheduler-failed-task",
-      description: "验证 scheduler 同步失败反馈",
       when: "@manual",
       kind: "agent",
       review: false,
-      status: "enabled",
+      schedule: "enabled",
       body: "输出结果",
     });
     assert.equal(result.task_title, "scheduler-failed-task");

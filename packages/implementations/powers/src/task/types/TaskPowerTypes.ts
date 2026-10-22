@@ -2,13 +2,12 @@
  * Task power runtime 类型定义。
  *
  * 关键点（中文）
- * - 这里集中声明 task power runtime 在类化拆分后共享的 action payload 与调度结果类型。
+ * - 这里声明 task power runtime 在类化拆分后共享的 action payload 与调度结果类型。
  * - 跨模块复用的 task power runtime 类型统一收敛在 `powers/task/types/`。
  */
 
 import type { PowerJsonObject, PowerStorage } from "@downcity/city/power";
-import type { ShipTaskStatus, TaskDeliverySession } from "@/task/types/Task.js";
-import type { TaskWorkflow } from "./TaskWorkflow.js";
+import type { ShipTaskDefinitionV1, ShipTaskStatus } from "@/task/types/Task.js";
 import type { TaskDefinitionRepository } from "@/task/runtime/TaskDefinitionRepository.js";
 
 /**
@@ -16,7 +15,7 @@ import type { TaskDefinitionRepository } from "@/task/runtime/TaskDefinitionRepo
  */
 export type TaskListActionPayload = {
   /**
-   * 按任务状态过滤；省略时返回全部状态。
+   * 按调度启停状态过滤；省略时返回全部状态。
    */
   status?: ShipTaskStatus;
 };
@@ -65,44 +64,18 @@ export type TaskSchedulerReloadResult = {
   error?: string;
 };
 
-/** Task Store 向调用面提供的完整列表项。 */
-export interface TaskListItem {
-  /** 工作状态与可选时间安排，从同一任务定义读取。 */
-  readonly workflow?: TaskWorkflow;
-  /** Task 的稳定目录 ID。 */
-  readonly taskId: string;
-  /** Task 的用户可见唯一标题。 */
-  readonly title: string;
-  /** Task 的用途说明。 */
-  readonly description: string;
-  /** Task 的完整执行正文。 */
-  readonly body?: string;
-  /** Task 的触发定义。 */
-  readonly when: string;
-  /** Task 当前启停状态。 */
-  readonly status: string;
-  /** Task 唯一绑定的执行 Agent。 */
-  readonly agent_id: string;
-  /** Task 唯一绑定的执行 Workspace。 */
-  readonly workspace_id: string;
-  /** Task 完成结果的固定 Session 交付目标。 */
-  readonly delivery_session?: TaskDeliverySession;
-  /** Task 使用 Agent 还是脚本执行。 */
-  readonly kind?: "self" | "agent" | "script";
-  /** Agent Task 是否启用多轮复核。 */
-  readonly review?: boolean;
-  /** task.md 相对 PowerStorage 根目录的路径。 */
-  readonly taskMdPath: string;
-  /** 最近一次 run 使用的时间戳目录名。 */
-  readonly lastRunTimestamp?: string;
+/** Task Store 向调用面提供的一条任务：定义本身加上它最近一次执行的时间戳。 */
+export interface TaskListItem extends ShipTaskDefinitionV1 {
+  /** 最近一次 run 使用的时间戳目录名；从未执行时为空。 */
+  readonly last_run_at?: string;
 }
 
 /** Task Store 中一条无法读取或解析的 canonical 定义。 */
 export interface TaskDefinitionIssue extends PowerJsonObject {
   /** Task 聚合目录使用的稳定 ID。 */
   readonly task_id: string;
-  /** task.md 相对 PowerStorage 根目录的路径。 */
-  readonly task_md_path: string;
+  /** 定义文件相对 PowerStorage 根目录的路径。 */
+  readonly task_path: string;
   /** 定义无法使用的明确原因。 */
   readonly error: string;
 }

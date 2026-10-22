@@ -3,7 +3,7 @@
  *
  * 约定（中文）
  * - task root: `<TaskPower lifecycle storage>/tasks/`
- * - definition: `<TaskPower lifecycle storage>/tasks/<taskId>/task.md`
+ * - definition: `<TaskPower lifecycle storage>/tasks/<taskId>/task.toml`
  * - run dir: `<TaskPower lifecycle storage>/tasks/<taskId>/<timestamp>/`
  *
  * 同时定义 task run 的逻辑标识格式，用于把调试消息映射到 run 目录：
@@ -67,8 +67,9 @@ export function getTaskDir(data_path: string, taskId: string): string {
   return path.join(getTaskRootDir(data_path), normalizeTaskId(taskId));
 }
 
-export function getTaskMdPath(data_path: string, taskId: string): string {
-  return path.join(getTaskDir(data_path, taskId), "task.md");
+/** 任务定义文件路径：定义与工作状态同在一个 TOML 文件里。 */
+export function getTaskPath(data_path: string, taskId: string): string {
+  return path.join(getTaskDir(data_path, taskId), "task.toml");
 }
 
 export function formatTaskRunTimestamp(date: Date = new Date()): string {

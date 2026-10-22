@@ -32,7 +32,7 @@ export interface TaskAnalysis {
   /** 整理后的执行说明。 */
   body: string;
   /** 用户要求的执行方式，不生成脚本。 */
-  kind: "self" | "agent";
+  kind: "user" | "agent";
   /** 真实 Agent 候选身份，个人任务为空。 */
   agent_id: string;
   /** 真实 Workspace 候选身份，个人任务为空。 */

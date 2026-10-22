@@ -29,7 +29,7 @@ export async function publish_task_run_notification(params: {
   readonly result_errors: readonly string[];
 }): Promise<void> {
   if (!params.notifications || params.status === "skipped") return;
-  const title = params.task.frontmatter.title;
+  const title = params.task.title;
   const failure_body = summarize_failure(params.error_text, params.result_errors);
   try {
     await params.notifications.publish({

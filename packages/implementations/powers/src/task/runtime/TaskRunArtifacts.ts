@@ -223,17 +223,17 @@ export async function writeTaskRunInputArtifact(
       ``,
       `- taskId: \`${params.task.taskId}\``,
       `- executionId: \`${params.executionId}\``,
-      `- title: ${params.task.frontmatter.title}`,
-      `- when: \`${params.task.frontmatter.when}\``,
-      `- status: \`${params.task.frontmatter.status}\``,
-      `- agent_id: \`${params.task.frontmatter.agent_id}\``,
-      `- workspace_id: \`${params.task.frontmatter.workspace_id}\``,
-      ...(params.task.frontmatter.delivery_session
+      `- title: ${params.task.title}`,
+      `- when: \`${params.task.when}\``,
+      `- schedule: \`${params.task.schedule}\``,
+      `- agent_id: \`${params.task.agent_id}\``,
+      `- workspace_id: \`${params.task.workspace_id}\``,
+      ...(params.task.delivery_session
         ? [
-            `- delivery_session_id: \`${params.task.frontmatter.delivery_session.session_id}\``,
-            `- delivery_agent_id: \`${params.task.frontmatter.delivery_session.agent_id}\``,
-            `- delivery_workspace_id: \`${params.task.frontmatter.delivery_session.workspace_id}\``,
-            `- delivery_category: \`${params.task.frontmatter.delivery_session.category}\``,
+            `- delivery_session_id: \`${params.task.delivery_session.session_id}\``,
+            `- delivery_agent_id: \`${params.task.delivery_session.agent_id}\``,
+            `- delivery_workspace_id: \`${params.task.delivery_session.workspace_id}\``,
+            `- delivery_category: \`${params.task.delivery_session.category}\``,
           ]
         : []),
       `- kind: \`${params.taskKind}\``,
@@ -359,7 +359,7 @@ function buildResultLines(params: WriteTaskRunArtifactsParams): string[] {
   lines.push("");
   lines.push(`- taskId: \`${params.task.taskId}\``);
   lines.push(`- executionId: \`${params.executionId}\``);
-  lines.push(`- title: ${params.task.frontmatter.title}`);
+  lines.push(`- title: ${params.task.title}`);
   lines.push(`- trigger: \`${params.trigger.type}\``);
   lines.push(`- status: **${params.status.toUpperCase()}**`);
   lines.push(`- executionStatus: \`${params.executionStatus}\``);
@@ -465,10 +465,10 @@ export async function writeTaskRunArtifacts(
     taskId: params.task.taskId,
     timestamp: params.timestamp,
     executionId: params.executionId,
-    agent_id: params.task.frontmatter.agent_id,
-    workspace_id: params.task.frontmatter.workspace_id,
-    ...(params.task.frontmatter.delivery_session
-      ? { delivery_session: params.task.frontmatter.delivery_session }
+    agent_id: params.task.agent_id,
+    workspace_id: params.task.workspace_id,
+    ...(params.task.delivery_session
+      ? { delivery_session: params.task.delivery_session }
       : {}),
     trigger: params.trigger,
     status: params.status,

@@ -1,4 +1,9 @@
-/** Task Power Mainview 与宿主 action 之间的 JSON 协议。 */
+/**
+ * Task Power 宿主管理 IPC 协议。
+ *
+ * 这里只描述「宿主界面需要的形状」，不复制领域事实：任务定义的所有字段来自
+ * `TaskDefinitionV1`，本层的字段只是它的投影。
+ */
 
 import type { TaskRunDetailView, TaskRunHistoryItemView } from "./TaskCommand.js";
 import type { ShipTaskKind, ShipTaskStatus, TaskDeliverySession } from "./Task.js";
@@ -25,11 +30,11 @@ export interface TaskMainviewWorkspace {
 
 /** Task 工作区展示的一条任务定义。 */
 export interface TaskMainviewItem {
-  /** Task 的稳定标题。 */
-  readonly title: string;
+  /** Task 的稳定标识。 */
+  readonly task_id: string;
 
-  /** Task 的用途说明。 */
-  readonly description: string;
+  /** Task 的用户可见标题。 */
+  readonly title: string;
 
   /** Task 的完整执行正文。 */
   readonly body?: string;
@@ -37,8 +42,8 @@ export interface TaskMainviewItem {
   /** Task 的触发条件。 */
   readonly when: string;
 
-  /** Task 当前状态。 */
-  readonly status: string;
+  /** Task 的调度启停状态；不表示工作是否完成。 */
+  readonly schedule: string;
 
   /** Task 执行类型。 */
   readonly kind?: ShipTaskKind;
@@ -91,7 +96,7 @@ export interface TaskMainviewInvalidDeleteResult {
 
 /** Task Mainview 读取执行记录列表的输入。 */
 export interface TaskMainviewHistoryInput {
-  /** 目标 Task 的唯一标题。 */
+  /** 目标 Task 的稳定 ID。 */
   readonly task_title: string;
 }
 
@@ -121,41 +126,39 @@ export interface TaskMainviewCreateInput {
   readonly workspace_id: string;
   /** Task 的唯一标题。 */
   readonly title: string;
-  /** Task 的用途说明。 */
-  readonly description: string;
   /** Task 的触发条件。 */
   readonly when: string;
   /** Task 的执行类型。 */
   readonly kind: ShipTaskKind;
   /** 是否启用多轮复核。 */
   readonly review: boolean;
-  /** Task 的初始状态。 */
-  readonly status: ShipTaskStatus;
+  /** Task 的调度启停状态。 */
+  readonly schedule: ShipTaskStatus;
   /** Task 的完整执行正文。 */
   readonly body: string;
 }
 
 /** Task Mainview 更新 Task 的输入。 */
 export interface TaskMainviewUpdateInput extends TaskMainviewCreateInput {
-  /** 修改前的 Task 唯一标题。 */
+  /** 修改前的 Task 稳定 ID。 */
   readonly current_title: string;
 }
 
 /** Task Mainview 对已有 Task 执行单一操作的输入。 */
 export interface TaskMainviewActionInput {
-  /** 目标 Task 的唯一标题。 */
+  /** 目标 Task 的稳定 ID。 */
   readonly task_title: string;
 }
 
 /** Task Mainview 修改启停状态的输入。 */
 export interface TaskMainviewStatusInput extends TaskMainviewActionInput {
-  /** 要写入的 Task 状态。 */
+  /** 要写入的调度启停状态。 */
   readonly status: ShipTaskStatus;
 }
 
 /** Task Mainview mutation 的稳定结果。 */
 export interface TaskMainviewMutationResult {
-  /** 操作完成后的 Task 标题。 */
+  /** 操作完成后的 Task 稳定 ID。 */
   readonly task_title: string;
 
   /** 定义变更后的 scheduler 同步结果；立即运行不返回该字段。 */
@@ -170,16 +173,14 @@ export interface TaskMainviewEditorDraft {
   readonly workspace_id: string;
   /** Task 的唯一标题。 */
   readonly title: string;
-  /** Task 的用途说明。 */
-  readonly description: string;
   /** Task 的触发条件。 */
   readonly when: string;
   /** Task 的执行类型。 */
   readonly kind: ShipTaskKind;
   /** 是否启用 Agent 多轮复核。 */
   readonly review: boolean;
-  /** Task 当前启停状态。 */
-  readonly status: ShipTaskStatus;
+  /** Task 当前调度启停状态。 */
+  readonly schedule: ShipTaskStatus;
   /** Task 的完整执行正文。 */
   readonly body: string;
 }

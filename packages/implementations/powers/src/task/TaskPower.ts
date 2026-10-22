@@ -8,10 +8,9 @@
 import { randomUUID } from "node:crypto";
 import type { TaskGenerateInput, TaskGenerateResult } from "./types/TaskGenerate.js";
 import type { TaskDeliverySession } from "./types/Task.js";
-import { normalize_task_workflow } from "./runtime/TaskWorkflowModel.js";
-import { normalize_task_workflow_state } from "./runtime/TaskWorkflowStateSchema.js";
+import { normalize_task_state } from "./runtime/TaskWorkflowModel.js";
 
-const generate_schema = z.object({ text: z.string().trim().min(1).max(24000).optional(), task_id: z.string().min(1).optional(), submission_id: z.uuid().optional(), agent_id: z.string().min(1).optional(), timezone: z.string().optional(), planned_at: z.string().optional(), shell_type: z.enum(["todo", "schedule"]).optional(), organized: z.boolean().optional() }).refine((value) => Boolean(value.task_id || value.text), "请提供任务描述或已有任务身份");
+const generate_schema = z.object({ text: z.string().trim().min(1).max(24000).optional(), task_id: z.string().min(1).optional(), submission_id: z.uuid().optional(), agent_id: z.string().min(1).optional(), timezone: z.string().optional(), planned_at: z.string().optional(), organized: z.boolean().optional() }).refine((value) => Boolean(value.task_id || value.text), "请提供任务描述或已有任务身份");
 import { capture_task, revise_task } from "./application/TaskIntakeService.js";
 import { recover_task_executions } from "./application/TaskExecutionRecovery.js";
 import { TaskPreparationCoordinator } from "./application/TaskPreparationCoordinator.js";
@@ -119,18 +118,17 @@ export class TaskPower extends Power {
             agent_id: { type: "string", description: "Executor explicitly selected by the user, not the receiving agent." },
             timezone: { type: "string", description: "User IANA timezone." },
             planned_at: { type: "string", description: "Optional planned instant from user context." },
-            shell_type: { type: "string", enum: ["todo", "schedule"] },
           } },
         },
         execute: async ({ context, input }) => {
           const value = generate_schema.parse(input);
           if (value.task_id) {
             const task = await readTask({ storage: this.require_storage(), taskId: value.task_id });
-            if (task.frontmatter.kind !== "self" && task.frontmatter.agent_id !== context.agent.id && task.frontmatter.delivery_session?.agent_id !== context.agent.id) throw new Error("Task belongs to another Agent");
+            if (task.kind !== "user" && task.agent_id !== context.agent.id && task.delivery_session?.agent_id !== context.agent.id) throw new Error("Task belongs to another Agent");
           }
           const delivery_session = context.session ? { agent_id: context.agent.id, workspace_id: context.workspace?.id ?? null, session_id: context.session.id, category: context.session.origin.category } : undefined;
           const result = await this.generate_task(value, delivery_session);
-          const error = result.task.definition.frontmatter.preparation?.error;
+          const error = result.task.definition.preparing?.error;
           return { success: !error, data: result as unknown as PowerJsonValue, ...(error ? { error } : {}) };
         },
       }),
@@ -202,8 +200,8 @@ export class TaskPower extends Power {
             taskId: task_id,
           });
           if (
-            task.frontmatter.kind !== "self" &&
-            task.frontmatter.agent_id !== context.agent.id
+            task.kind !== "user" &&
+            task.agent_id !== context.agent.id
           )
             throw new Error("Task belongs to another Agent");
           return {
@@ -228,15 +226,15 @@ export class TaskPower extends Power {
           const tasks = snapshot.tasks
             .filter(
               (task) =>
-                task.definition.frontmatter.kind === "self" ||
-                task.definition.frontmatter.agent_id === context.agent.id,
+                task.definition.kind === "user" ||
+                task.definition.agent_id === context.agent.id,
             )
             .map((task) => ({
-              task_id: task.task_id,
-              title: task.definition.frontmatter.title,
-              organized: task.workflow.organized,
-              ...(task.definition.frontmatter.preparation ? { preparation: task.definition.frontmatter.preparation } : {}),
-              items: task.state.inbox.filter((item) => !item.resolved),
+              task_id: task.definition.taskId,
+              title: task.definition.title,
+              organized: task.definition.workflow.organized,
+              ...(task.definition.preparing ? { preparation: task.definition.preparing } : {}),
+              items: task.definition.workflow.inbox.filter((item) => !item.resolved),
             }))
             .filter((task) => !task.organized || task.items.length || task.preparation?.status === "needs_input" || task.preparation?.status === "failed" || task.preparation?.schedule_error || task.preparation?.start_error);
           return {
@@ -387,20 +385,21 @@ export class TaskPower extends Power {
     let task_id = input.task_id;
     if (task_id) {
       const current = await readTask({ storage: this.require_storage(), taskId: task_id });
-      if (input.text || input.agent_id || !current.frontmatter.preparation || current.frontmatter.preparation.status === "failed") {
+      if (input.text || input.agent_id || !current.preparing || current.preparing.status === "failed") {
         await revise_task(this.require_definitions(), task_id, input);
         await this.reconcile(task_id);
       }
     } else {
       const result = await capture_task(this.require_definitions(), {
         text: input.text!, submission_id: input.submission_id || randomUUID(), timezone: input.timezone || resolve_task_timezone(this.options.timezone),
-        organized: input.organized ?? true, ...(input.agent_id ? { agent_id: input.agent_id } : {}), ...(input.planned_at ? { planned_at: input.planned_at } : {}), ...(input.shell_type ? { shell_type: input.shell_type } : {}),
+        organized: input.organized ?? true, ...(input.agent_id ? { agent_id: input.agent_id } : {}), ...(input.planned_at ? { planned_at: input.planned_at } : {}),
       }, delivery_session);
       task_id = result.task_id;
     }
     await preparation.generate(task_id);
     const definition = await readTask({ storage: this.require_storage(), taskId: task_id });
-    return { task_id, start_error: definition.frontmatter.preparation?.start_error, task: { task_id, definition, workflow: normalize_task_workflow(definition.frontmatter.workflow), state: normalize_task_workflow_state(definition.frontmatter.workflow_state), running: this.executions.is_running(task_id) } };
+    const workflow = normalize_task_state(definition.workflow);
+    return { task_id, start_error: definition.preparing?.start_error, task: { definition: { ...definition, workflow }, running: this.executions.is_running(task_id) } };
   }
 
   /** 调用与宿主共用的工作动作，生命周期结束后不可继续使用。 */

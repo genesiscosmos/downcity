@@ -36,7 +36,7 @@ export async function dispatchTaskRunCompletionToSession(params: {
   errorText: string;
   resultErrors: string[];
 }): Promise<void> {
-  const delivery_session = params.task.frontmatter.delivery_session;
+  const delivery_session = params.task.delivery_session;
   if (!delivery_session) return;
 
   const text = resolve_task_final_text({

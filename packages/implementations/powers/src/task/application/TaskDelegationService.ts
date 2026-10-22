@@ -4,7 +4,7 @@ import type { TaskAnalysis, TaskAnalysisInput } from "../types/TaskPreparation.j
 /** 解析可用执行目标；目录不存在时报告配置错误，不询问内部 ID。 */
 export function resolve_task_delegation(analysis: TaskAnalysis, catalog: TaskAnalysisInput["catalog"], preferred_agent_id?: string, preferred_workspace_id?: string): TaskAnalysis {
   const assumptions = [...(analysis.assumptions || [])];
-  if (analysis.kind === "self") return { ...analysis, assumptions, questions: [] };
+  if (analysis.kind === "user") return { ...analysis, assumptions, questions: [] };
   const agent_id = preferred_agent_id || (catalog.agents.some((item) => item.agent_id === analysis.agent_id) ? analysis.agent_id : catalog.agents[0]?.agent_id);
   const workspace_id = preferred_workspace_id || (catalog.workspaces.some((item) => item.workspace_id === analysis.workspace_id) ? analysis.workspace_id : catalog.workspaces[0]?.workspace_id);
   const agent = catalog.agents.find((item) => item.agent_id === agent_id);

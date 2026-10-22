@@ -65,17 +65,17 @@ async function create_snapshot(
   ]);
   return {
     tasks: inspection.tasks.map((task) => ({
+      task_id: task.taskId,
       title: task.title,
-      description: task.description,
       ...(task.body ? { body: task.body } : {}),
       when: task.when,
-      status: task.status,
-      kind: task.kind || "agent",
+      schedule: task.schedule,
+      kind: task.kind,
       review: Boolean(task.review),
       agent_id: task.agent_id,
       workspace_id: task.workspace_id,
       ...(task.delivery_session ? { delivery_session: task.delivery_session } : {}),
-      ...(task.lastRunTimestamp ? { last_run_at: task.lastRunTimestamp } : {}),
+      ...(task.last_run_at ? { last_run_at: task.last_run_at } : {}),
     })),
     agents: agents.map((agent) => ({
       agent_id: agent.agent_id,
@@ -131,12 +131,11 @@ async function create_task(
     agent_id: input.agent_id,
     request: {
       title: input.title,
-      description: input.description,
       workspace_id: input.workspace_id,
       when: input.when,
       kind: input.kind,
       review: input.review,
-      status: input.status,
+      schedule: input.schedule,
       body: input.body,
     },
   });
@@ -158,13 +157,12 @@ async function update_task(
     request: {
       title: input.current_title,
       titleNext: input.title,
-      description: input.description,
       agent_id: input.agent_id,
       workspace_id: input.workspace_id,
       when: input.when,
       kind: input.kind,
       review: input.review,
-      status: input.status,
+      schedule: input.schedule,
       body: input.body,
     },
   });
@@ -183,8 +181,8 @@ async function set_task_status(
   if (input.status === "enabled") {
     await assert_execution_target(
       context,
-      task.frontmatter.agent_id,
-      task.frontmatter.workspace_id,
+      task.agent_id,
+      task.workspace_id,
     );
   }
   const result = await setTaskStatus({
@@ -205,13 +203,13 @@ async function run_task(
   const task = await read_existing_task(runtime.storage, input.task_title);
   await assert_execution_target(
     context,
-    task.frontmatter.agent_id,
-    task.frontmatter.workspace_id,
+    task.agent_id,
+    task.workspace_id,
   );
   const result = await invoke_task_action(
     context,
-    task.frontmatter.agent_id,
-    task.frontmatter.workspace_id,
+    task.agent_id,
+    task.workspace_id,
     "run",
     { title: input.task_title },
   );
@@ -348,11 +346,10 @@ function read_create_input(input: PowerJsonValue | undefined): TaskMainviewCreat
     agent_id: read_required_string(value.agent_id, "agent_id"),
     workspace_id: read_required_string(value.workspace_id, "workspace_id"),
     title: read_required_string(value.title, "title"),
-    description: read_required_string(value.description, "description"),
     when: read_required_string(value.when, "when"),
-    kind: value.kind === "script" ? "script" : "agent",
+    kind: value.kind === "user" || value.kind === "script" ? value.kind : "agent",
     review: value.review === true,
-    status: read_status(value.status),
+    schedule: read_status(value.schedule),
     body: typeof value.body === "string" ? value.body : "",
   };
 }
@@ -370,9 +367,9 @@ function read_status_input(input: PowerJsonValue | undefined): TaskMainviewStatu
 }
 
 /** 读取合法 Task 状态。 */
-function read_status(value: PowerJsonValue | undefined): "enabled" | "paused" | "disabled" {
-  if (value === "enabled" || value === "paused" || value === "disabled") return value;
-  throw new Error("status must be enabled, paused, or disabled");
+function read_status(value: PowerJsonValue | undefined): "enabled" | "paused" {
+  if (value === "enabled" || value === "paused") return value;
+  throw new Error("schedule must be enabled or paused");
 }
 
 /** 将 Power JSON 输入收窄为 object。 */

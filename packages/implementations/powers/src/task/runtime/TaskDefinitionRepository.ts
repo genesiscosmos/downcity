@@ -2,7 +2,7 @@
  * Task 定义仓储的实例级事务入口。
  *
  * TaskPower 的 Agent action、宿主 action 与 Scheduler 共享同一个实例。所有会改变
- * `task.md` 或删除 Task 聚合目录的操作都在这里串行提交，避免 read-check-write 彼此覆盖。
+ * `task.toml` 或删除 Task 聚合目录的操作都在这里串行提交，避免 read-check-write 彼此覆盖。
  */
 
 import type { PowerStorage } from "@downcity/city/power";
@@ -64,8 +64,8 @@ export class TaskDefinitionRepository {
         storage,
       });
       if (
-        current.frontmatter.status !== "enabled"
-        || current.frontmatter.when !== params.expected_when
+        current.schedule !== "enabled"
+        || current.when !== params.expected_when
       ) {
         return false;
       }
@@ -73,12 +73,7 @@ export class TaskDefinitionRepository {
         taskId: current.taskId,
         storage,
         overwrite: true,
-        frontmatter: {
-          ...current.frontmatter,
-          when: "@manual",
-          status: "paused",
-        },
-        body: current.body,
+        task: { ...current, when: "@manual", schedule: "paused" },
       });
       return true;
     });
