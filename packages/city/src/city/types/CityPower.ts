@@ -29,8 +29,26 @@ export type CityPowerCollection =
 export interface CityPowers {
   /**
    * 向 City 添加唯一 Power 实例或带 UI 元数据的注册项，并等待初始化完成。
+   *
+   * 关键点（中文）
+   * - ID 已存在且传入的不是同一实例时拒绝：替换定义请用 `refresh`。
+   * - 本方法会执行 `initialize`，因此适合首次登记或持有长期资源的 Power。
    */
   add(input: CityPowerInput): Promise<void>;
+
+  /**
+   * 原地替换同 ID Power 的定义，并重新发布工具面。
+   *
+   * 关键点（中文）
+   * - ID 不存在时等价于 `add`（仍会执行 `initialize`）。
+   * - ID 已存在时只替换定义：不重新执行 `initialize`，不释放旧实例，
+   *   也不重建日志器、配置与存储作用域。
+   * - 因为不释放旧实例，只适用于不持有长期资源的 Power（如把外部工具清单
+   *   投影为动作的连接器）。持有子进程、连接、计时器的 Power 必须走
+   *   `remove` → `add`，由生命周期链完成 `dispose` 与调用收口。
+   * - 用途是工具面原地变更：避免先删后建造成的工具空洞与并发调用失败。
+   */
+  refresh(input: CityPowerInput): Promise<void>;
 
   /** 从 City 移除 Power，并等待正在执行的 Hook/Action 收口。 */
   remove(power_id: string): Promise<boolean>;

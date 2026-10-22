@@ -236,19 +236,29 @@ export class SessionLoop {
   /** 对外提供只读占用快照，运行态判断以同一事实源为准。 */
   occupied_by(): AgentSessionPromptInput["actor"] | null { return this.occupation.occupied_by; }
 
-  /** 从未终止的 canonical Turn 恢复占用，缺失身份时明确阻止新工作。 */
+  /**
+   * 从未终止的 canonical Turn 恢复占用；不可恢复的历史保持可读。
+   *
+   * 关键点（中文）
+   * - 只恢复本 Session 自己产生、且尚未收口的执行。fork 导入的历史带有 `origin`：
+   *   它的 Turn 在源 Session 已经终结，本 Session 从未执行过它；而完成日志按本 Session 的
+   *   turn_id 存取，对它永远查不到记录，因此不能据此判定「还在跑」。
+   * - 缺少 `meta.from` 的输入（旧契约、`external:` 追加）没有可信发起方，构造不出占用者。
+   *   它必须保持可读：`status()` 会 await 本方法，用解析异常阻断等于把读路径一起停掉。
+   */
   async initialize_occupation(): Promise<void> {
     this.occupation_initialized ??= (async () => {
       const history = await this.messages.list_history_messages();
       const latest = [...history].reverse().find((message) => message.role === "user" && message.turn_id);
       if (!latest?.turn_id) return;
+      // 两条判据都是纯内存事实，先于任何 IO 排除不可能恢复的情况。
+      if (latest.origin) return;
+      const from = read_session_message_meta(latest)?.from;
+      if (!from) return;
       const completed = await this.completions?.read(this.session_id, latest.turn_id);
       if (completed) return;
       const output = await this.messages.read_latest_agent_message(latest.turn_id);
       if (!this.completions && output && output.state !== "streaming") return;
-      const from = read_session_message_meta(latest)?.from;
-      // 已结束的旧历史保持可读；新契约输入必须以权威 Turn 日志确认终态。
-      if (!from && output && output.state !== "streaming") return;
       const actor = session_prompt_actor_schema.parse(from);
       this.recovered_turn_id = latest.turn_id;
       this.recovered_release = this.occupation.acquire(actor, this.session_id, latest.turn_id);

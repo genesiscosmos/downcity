@@ -369,6 +369,7 @@ export class PowerRegistry {
       name: action_name,
       description: String(action.description || "").trim(),
       access: action.access === "write" ? "write" : "read",
+      approval: action.approval === true,
       returns: String(action.returns || "").trim(),
       has_input_schema: Boolean(action.input_schema),
       ...(action.input_schema?.json_schema

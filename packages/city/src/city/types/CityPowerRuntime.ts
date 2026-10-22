@@ -41,10 +41,19 @@ export interface CityPowerRuntimeOptions {
 export interface CityPowerRecord {
   /** Power 稳定 ID。 */
   readonly power_id: string;
-  /** Power 注册元数据。 */
-  readonly registration: CityPowerRegistration;
-  /** City 持有的唯一 Power 实例。 */
-  readonly power: PowerDefinition;
+  /**
+   * Power 注册元数据。
+   *
+   * 关键点（中文）：`refresh` 会原地替换它，因此不是 readonly。
+   */
+  registration: CityPowerRegistration;
+  /**
+   * City 持有的唯一 Power 实例。
+   *
+   * 关键点（中文）：`refresh` 只替换定义本身，不重建日志器、上下文与存储作用域，
+   * 也不重新执行 `initialize`；持有长期资源的 Power 应走 remove + add。
+   */
+  power: PowerDefinition;
   /** Power 私有日志器。 */
   readonly logger: Logger;
   /** Power 初始化与释放共享的 City 级稳定上下文。 */

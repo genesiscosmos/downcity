@@ -79,6 +79,25 @@ test("Fork Session 由 AgentSessions 接管并持续发布 Turn 终态", async (
   );
 });
 
+test("Fork 复制已终结的 Turn 后不残留占用，读路径始终可用", async (t) => {
+  const { session } = await create_session(t);
+  // 只有真实 Turn 产生的 user message 才带发起方。fork 会为它重新分配 turn_id，
+  // 而完成日志属于源 Session，因此不能凭「查不到终态」判定本会话还有未完成的执行。
+  const turn = await session.prompt({ actor: { kind: "user", user_id: "local" }, query: "第一轮" });
+  await turn.finished;
+  const anchor = (await session.messages()).items.find((message) => message.role === "user");
+  assert.ok(anchor);
+
+  const forked = await session.fork({ message_id: anchor.message_id });
+  const forked_status = await forked.status();
+  assert.equal(forked_status.state, "idle");
+  assert.equal(forked_status.occupied_by, null);
+
+  // 公开 API 追加的消息没有发起方；读路径必须保持可用，不能用解析异常把它停掉。
+  await session.append_user_message({ text: "外部追加" });
+  assert.equal((await session.status()).state, "idle");
+});
+
 test("Fork 将源 Session 持有的附件复制到自己的生命周期", async (t) => {
   const { root_path, agent, workspace, session } = await create_session(t);
   const workspace_file = path.join(root_path, "workspace.txt");

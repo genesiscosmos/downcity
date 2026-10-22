@@ -676,6 +676,32 @@ export type PowerConfigComponent = (
   props: PowerConfigComponentProps,
 ) => ReactNode;
 
+/**
+ * 消息组件请求宿主渲染一段 Markdown 的输入。
+ *
+ * 结构化内容里常夹着正文段落、表格与图表，而「Markdown 方言」属于宿主：表格交给哪个
+ * 解析器、围栏图表怎么渲染、本地图片如何解析、是否清洗 HTML，都只有宿主知道。
+ * Power 因此不自己实现排版，只声明这段文字的相对重要性，由宿主给出实际样式。
+ *
+ * 四个字段都是必填：Power 侧总能给出确定取值，留下可选字段只会让双方对缺省含义各说各话。
+ */
+export interface PowerMarkdownRenderRequest {
+  /** 需要由宿主安全渲染的 Markdown 原文。 */
+  readonly text: string;
+
+  /** 语义字号档位；small 用于紧凑说明，body 为正文，large 用于强调段落。 */
+  readonly size: "small" | "body" | "large";
+
+  /** 是否使用强调字重；对应正文里需要被一眼看到的标签或结论语。 */
+  readonly heavy: boolean;
+
+  /** 容器表面：clear 不画外壳，card 描边，sunk 为下沉表面。 */
+  readonly variant: "clear" | "card" | "sunk";
+
+  /** 内容仍在逐块生成；宿主据此允许未闭合语法并抑制中途的失败态。 */
+  readonly streaming: boolean;
+}
+
 /** 消息组件的受限宿主端口，不提供任意业务执行能力。 */
 export interface PowerMessageComponentProps {
   /** 已持久化的 Power 内容，身份由 Session 分配。 */
@@ -688,6 +714,13 @@ export interface PowerMessageComponentProps {
   readonly message_id: string;
   /** 解析展示资源地址；本地文件权限由宿主协议检查，不授予任意文件读取。 */
   readonly resolve_resource?: (source: string) => string | null;
+  /**
+   * 渲染一段 Markdown 正文；提供后 Power 的结构化内容与宿主正文使用同一种方言。
+   *
+   * 不提供时 Power 退回自己注册的上游 Markdown 组件，能力较弱（表格与围栏图表缺失），
+   * 但足以让 Renderer 在没有宿主的场景（测试、独立预览）继续工作。
+   */
+  readonly render_markdown?: (request: PowerMarkdownRenderRequest) => ReactNode;
   /** 读取当前 Part 的本地视图状态；不得视为业务事实。 */
   readonly read_state: () => JsonObject | null;
   /** 保存当前 Part 的本地视图状态。 */

@@ -2,8 +2,9 @@
  * Power Action 统一执行流水线。
  *
  * 关键点（中文）
- * - Registry 负责解析 Action，本模块统一处理 payload、调用身份、取消、超时与错误结果。
+ * - Registry 负责解析 Action，本模块统一处理 payload、调用身份、审批、取消、超时与错误结果。
  * - 超时采用协作式取消：运行时触发 abort_signal，Action 必须把信号传给网络、轮询和长任务。
+ * - 声明 `approval` 的动作在参数校验之后、执行之前统一请求审批，动作实现不自己读取审批模式。
  * - 环境组装交给 `PowerContextProvider`：本模块只负责「造出 call，然后请容器补齐环境」。
  * - Action 普通失败只返回业务结果，不修改 Power 生命周期状态。
  */
@@ -11,6 +12,7 @@
 import type { PowerAction, PowerActionResult } from "@/power/index.js";
 import type { PowerCallSite, PowerRuntimeHost } from "@/power/index.js";
 import { validate_session_power_content, type JsonValue } from "@downcity/type";
+import { request_power_action_approval } from "./PowerActionApproval.js";
 
 /** Action 超时写入 abort_signal.reason 的内部错误。 */
 class PowerActionTimeoutError extends Error {
@@ -137,6 +139,18 @@ export async function execute_power_action(
     return failure_result(
       `${input.power_name}.${input.action_name}: ${error_message(error)}`,
     );
+  }
+
+  // 审批在参数校验之后：用户看到的是已经通过 schema 的真实输入，而不是原始入参。
+  if (input.action.approval) {
+    const denied = await request_power_action_approval({
+      power_name: input.power_name,
+      action_name: input.action_name,
+      description: input.action.description,
+      payload: parsed_payload.input,
+      site: input.site,
+    });
+    if (denied) return denied;
   }
 
   const abort_scope = create_abort_scope({

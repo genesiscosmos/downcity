@@ -47,6 +47,10 @@
     "./web": {
       "types": "./bin/web.d.ts",
       "import": "./bin/web.js"
+    },
+    "./mcp": {
+      "types": "./bin/mcp.d.ts",
+      "import": "./bin/mcp.js"
     }
   },
   "scripts": {
@@ -62,6 +66,7 @@
     "test:messenger-inbound-voice": "pnpm build && node --test scripts/messenger-inbound-voice.test.mjs",
     "test:exports": "pnpm build && node --test scripts/power-subpaths.test.mjs",
     "test:renderer": "node --test scripts/power-renderer-tokens.test.mjs",
+    "test:presentation": "pnpm build && node --test scripts/presentation-components.test.mjs scripts/presentation-markdown.test.mjs",
     "test:memory": "pnpm build && node --test scripts/memory-power.test.mjs scripts/memory-web-host-actions.test.mjs",
     "test:skill": "pnpm build && node --test scripts/skill-power.test.mjs",
     "test:task": "pnpm build && node --test scripts/task-power.test.mjs",

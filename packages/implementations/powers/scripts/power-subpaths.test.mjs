@@ -79,15 +79,19 @@ test("Renderer 子路径统一导出 React Surface registry", async () => {
   const renderers = await import("@downcity/powers/renderers");
   assert.equal(typeof power_react.define_power_renderer, "function");
   assert.deepEqual(Object.keys(renderers.BUILTIN_POWER_RENDERERS).sort(), [
+    "mcp",
     "memory",
     "messenger",
+    "presentation",
     "skill",
     "web",
   ]);
   for (const renderer of Object.values(renderers.BUILTIN_POWER_RENDERERS)) {
     assert.equal(typeof renderer, "object");
     assert.equal(
-      (typeof renderer.sidebar === "function" && typeof renderer.mainview === "function") || typeof renderer.config === "function",
+      (typeof renderer.sidebar === "function" && typeof renderer.mainview === "function")
+        || typeof renderer.config === "function"
+        || typeof renderer.message === "function",
       true,
     );
   }

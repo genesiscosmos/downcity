@@ -83,6 +83,7 @@ export class CityPowerRuntime implements PowerRuntimeHost {
   constructor(private readonly options: CityPowerRuntimeOptions) {
     this.public_api = Object.freeze({
       add: (input) => this.add(input),
+      refresh: (input) => this.refresh(input),
       remove: async (power_id) => await this.remove(power_id),
       snapshots: () => this.all_power_snapshots(),
       get: (power_id) => this.require_power(power_id),
@@ -123,6 +124,44 @@ export class CityPowerRuntime implements PowerRuntimeHost {
     const power_id = normalize_id(registration.power.name, "power.name");
     const operation = this.enqueue_power_lifecycle(power_id, async () => {
       await this.add_power(power_id, registration);
+    });
+    this.track_lifecycle(operation);
+    return operation;
+  }
+
+  /**
+   * 原地替换同 ID Power 的定义，并重新发布工具面。
+   *
+   * 关键点（中文）
+   * - 与 `add` 共用同一条按 ID 串行的生命周期链，因此不会与正在进行的
+   *   add/remove 交叉。
+   * - 只替换 `registration` 与 `power` 两个字段：日志器、生命周期上下文、
+   *   宿主 action 表与存储作用域都归旧记录所有，保持不动。
+   * - 不调用 `dispose`，也不重新执行 `initialize`；调用方必须自己保证旧实例
+   *   没有需要释放的长期资源。
+   * - 替换后旧实例已开始的调用按各自实现自行收口，与新定义无关。
+   */
+  private refresh(input: CityPowerInput): Promise<void> {
+    this.assert_active();
+    const registration = normalize_registration(input);
+    const power_id = normalize_id(registration.power.name, "power.name");
+    const operation = this.enqueue_power_lifecycle(power_id, async () => {
+      const existing = this.powers_by_id.get(power_id);
+      // ID 不存在（或上次初始化失败）时降级为一次正常登记，语义与 add 一致。
+      if (!existing) {
+        this.failed_power_snapshots.delete(power_id);
+        await this.add_power(power_id, registration);
+        return;
+      }
+      await existing.ready;
+      this.assert_active();
+      existing.registration = registration;
+      existing.power = registration.power;
+      existing.updated_at = Date.now();
+      delete existing.last_error;
+      existing.state = "ready";
+      await this.registry.register(registration.power);
+      this.publish_surface_change();
     });
     this.track_lifecycle(operation);
     return operation;

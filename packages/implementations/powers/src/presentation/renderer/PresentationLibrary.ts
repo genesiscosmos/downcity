@@ -3,6 +3,7 @@ import { createLibrary } from "@openuidev/react-lang";
 import { openuiLibrary } from "@openuidev/react-ui/genui-lib";
 import { COMPOUND_VALUES, YEAR_LABELS } from "../Functions.js";
 import { adapt_presentation_media } from "./PresentationMedia.js";
+import { adapt_presentation_markdown } from "./PresentationMarkdown.js";
 
 /** 正文内容目录：配套 Item 同时注册，编辑表格、弹窗和远程执行仍不开放。 */
 const component_names = [
@@ -25,5 +26,5 @@ export const PRESENTATION_LIBRARY = createLibrary({
   id: "downcity.presentation.openui.v1",
   root: "Stack",
   functions: [COMPOUND_VALUES, YEAR_LABELS],
-  components: component_names.map((name) => adapt_presentation_media(openuiLibrary.components[name]!)),
+  components: component_names.map((name) => adapt_presentation_media(adapt_presentation_markdown(openuiLibrary.components[name]!))),
 });

@@ -5,6 +5,7 @@ import type { OpenUIError } from "@openuidev/lang-core";
 import type { PowerMessageComponentProps, PowerRendererDefinition } from "@downcity/city/power/react";
 import type { JsonObject } from "@downcity/type";
 import { PresentationResourceContext } from "./PresentationMedia.js";
+import { PresentationMarkdownContext } from "./PresentationMarkdown.js";
 import { PRESENTATION_LIBRARY } from "./PresentationLibrary.js";
 import { parse_presentation_content } from "../OpenUICatalog.js";
 import { preview_presentation_tool } from "./PresentationPreview.js";
@@ -62,7 +63,7 @@ function PresentationView(props: PresentationViewProps) {
     {streaming && <p className="text-xs text-muted-foreground" role="status">正在生成可视化…</p>}
     {/* disabled 只冻结表单操作；inert 会连正文选择与辅助技术访问一起禁用。 */}
     <fieldset disabled={streaming || pending} className="downcity-presentation-controls">
-      <PresentationResourceContext.Provider value={props.resolve_resource}><Renderer library={PRESENTATION_LIBRARY} response={content} isStreaming={streaming} initialState={initial_state} onStateUpdate={on_state_update} onAction={on_action} onError={on_error} /></PresentationResourceContext.Provider>
+      <PresentationResourceContext.Provider value={props.resolve_resource}><PresentationMarkdownContext.Provider value={props.render_markdown}><Renderer library={PRESENTATION_LIBRARY} response={content} isStreaming={streaming} initialState={initial_state} onStateUpdate={on_state_update} onAction={on_action} onError={on_error} /></PresentationMarkdownContext.Provider></PresentationResourceContext.Provider>
     </fieldset>
     {error && <p className="text-xs text-destructive" role="alert">{error}</p>}
   </section>;

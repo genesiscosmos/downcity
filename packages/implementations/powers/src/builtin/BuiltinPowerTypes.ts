@@ -13,6 +13,7 @@ import { SkillPower } from "@/skill.js";
 import { TaskPower, type TaskAnalyzer } from "@/task.js";
 import { WebPower } from "@/web.js";
 import { PresentationPower } from "@/presentation/Power.js";
+import { McpPower } from "@/mcp/Power.js";
 
 /** 官方 Power definition 与 @downcity/city/power 的统一注册协议一致。 */
 export type BuiltinPowerDefinition = CityPowerRegistration;
@@ -73,6 +74,13 @@ export function create_builtin_power_registrations(input: {
       has_sidebar: true,
       has_mainview: true,
       power: new WebPower(),
+    },
+    {
+      readme: builtin_readme_path("mcp"),
+      has_config: true,
+      has_sidebar: false,
+      has_mainview: false,
+      power: new McpPower(),
     },
   ];
 }

@@ -122,9 +122,19 @@ export interface PowerAction<TInput extends PowerJsonValue = PowerJsonValue, TRe
    *
    * 关键点（中文）
    * - `read` 只读事实；`write` 会消耗额度、写文件或改变外部状态。
-   * - 这是准确的元数据，供模型在调用前判断代价，**不**直接触发审批。
+   * - 这是准确的元数据，供模型在调用前判断代价，**不**直接触发审批；
+   *   是否停下来问由 `approval` 决定。
    */
   readonly access?: "read" | "write";
+  /**
+   * 是否在执行前请求用户审批。
+   *
+   * 关键点（中文）
+   * - 由统一执行流水线在参数校验之后、执行之前处理；动作实现不自己读取审批模式。
+   * - 审批归属到真实模型工具调用：无 Session 入口或缺失 `tool_call_id` 时明确失败，
+   *   不静默放行，也不生成无人响应的 pending Interaction。
+   */
+  readonly approval?: boolean;
   /** Action 输入 schema。 */
   readonly input_schema?: PowerActionInputSchema<TInput>;
   /** Action 示例。 */
@@ -296,6 +306,7 @@ export interface PowerActionReadView {
   /** Action ID。 */ readonly name: string;
   /** Action 描述。 */ readonly description: string;
   /** 读写性质；未声明时为 read。 */ readonly access: "read" | "write";
+  /** 是否在执行前请求用户审批；未声明时为 false。 */ readonly approval: boolean;
   /** 返回结构说明；未声明时为空串。 */ readonly returns: string;
   /** 是否有输入 schema。 */ readonly has_input_schema: boolean;
   /** JSON Schema。 */ readonly input_schema?: PowerJsonValue;
