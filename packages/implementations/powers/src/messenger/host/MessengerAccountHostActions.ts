@@ -13,6 +13,7 @@ import {
   to_messenger_account_view,
   update_messenger_account,
 } from "@/messenger/accounts/MessengerAccountConfig.js";
+import { SESSION_ORIGIN_CATEGORY_CHAT, SESSION_ORIGIN_TYPE_CHANNEL } from "@downcity/type";
 import type { MessengerRuntime } from "@/messenger/runtime/MessengerRuntime.js";
 import type {
   MessengerAccountDetailSnapshot,
@@ -380,7 +381,8 @@ function conversation_origin(
   conversation: import("@/messenger/types/MessengerReliability.js").MessengerConversationRecord,
 ) {
   return {
-    type: "channel",
+    category: SESSION_ORIGIN_CATEGORY_CHAT,
+    type: SESSION_ORIGIN_TYPE_CHANNEL,
     account_id: conversation.account_id,
     channel: provider,
     chat_id: conversation.external_chat_id,

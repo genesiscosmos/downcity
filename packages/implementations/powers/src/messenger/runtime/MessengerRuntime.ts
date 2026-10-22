@@ -1,7 +1,7 @@
 /** Messenger Power 的 City 级 Bot Account、Inbox、Outbox 与 Agent Turn 运行时。 */
 
 import path from "node:path";
-import type { SessionTurnCommittedHookValue } from "@downcity/type";
+import { SESSION_ORIGIN_CATEGORY_CHAT, SESSION_ORIGIN_TYPE_CHANNEL, type SessionTurnCommittedHookValue } from "@downcity/type";
 import { commit_messenger_completion } from "./MessengerCompletion.js";
 import fs from "fs-extra";
 import { createHash } from "node:crypto";
@@ -119,7 +119,8 @@ export class MessengerRuntime {
       const session = await this.context.system.create_agent_session({
         agent_id: conversation.agent_id,
         origin: {
-          type: "channel",
+          category: SESSION_ORIGIN_CATEGORY_CHAT,
+          type: SESSION_ORIGIN_TYPE_CHANNEL,
           account_id: conversation.account_id,
           ...(account ? { channel: account.provider } : {}),
           chat_id: conversation.external_chat_id,
@@ -469,7 +470,8 @@ export class MessengerRuntime {
         const session = await this.context.system.create_agent_session({
           agent_id: current.agent_id,
           origin: {
-            type: "channel",
+            category: SESSION_ORIGIN_CATEGORY_CHAT,
+            type: SESSION_ORIGIN_TYPE_CHANNEL,
             account_id: account.account_id,
             channel: account.provider,
             chat_id: current.external_chat_id,
@@ -562,7 +564,8 @@ export class MessengerRuntime {
       const session = await this.context.system.create_agent_session({
         agent_id: target,
         origin: {
-          type: "channel",
+          category: SESSION_ORIGIN_CATEGORY_CHAT,
+          type: SESSION_ORIGIN_TYPE_CHANNEL,
           account_id: account.account_id,
           channel: account.provider,
           chat_id: input.chatId,
@@ -607,7 +610,7 @@ export class MessengerRuntime {
     const workspace = await this.context.system.get_agent_session_workspace({
       agent_id: conversation.agent_id,
       session_id: conversation.session_id,
-      origin_type: "channel",
+      category: SESSION_ORIGIN_CATEGORY_CHAT,
     });
     if (workspace) roots.push(workspace.workspace_path);
     roots.push(path.join(this.context.storage.path, "accounts", conversation.account_id));
@@ -774,7 +777,7 @@ export class MessengerRuntime {
         actor: { kind: "user", user_id: JSON.stringify([conversation.account_id, inbound.message.provider, inbound.message.sender_id]) },
         agent_id: conversation.agent_id,
         session_id: conversation.session_id,
-        origin_type: "channel",
+        category: SESSION_ORIGIN_CATEGORY_CHAT,
         request_id: inbound.inbound_id,
         query: [
           { type: "context", tag: "messenger_request", context: JSON.stringify({ inbound_id: inbound.inbound_id }) },

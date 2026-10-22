@@ -69,7 +69,7 @@ export function normalize_session_metadata(
     session_id: session_id,
     agent_id: agent_id,
     ...(workspace_id ? { workspace_id: workspace_id } : {}),
-    origin: restore_session_origin(raw.origin ?? origin, origin.type),
+    origin: restore_session_origin(raw.origin ?? origin, origin.category),
     created_at:
       typeof raw.created_at === "number" && Number.isFinite(raw.created_at)
         ? raw.created_at

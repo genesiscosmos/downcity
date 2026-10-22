@@ -51,7 +51,7 @@ import { SessionWork } from "@/agent/SessionWork.js";
 import type { SessionWorkContract } from "@/types/agent/SessionWork.js";
 import { SessionDelegations } from "@/agent/SessionDelegations.js";
 import { LocalSessionDelegationStore } from "@/agent/LocalSessionDelegationStore.js";
-import { SESSION_ORIGIN_TYPE_WORK } from "@downcity/type";
+import { normalize_session_origin_category, SESSION_ORIGIN_CATEGORY_WORK, type SessionOrigin } from "@downcity/type";
 import type { AgentWorkHost } from "@/types/agent/AgentWorkHost.js";
 import type { AgentSessionInput } from "@/types/agent/AgentSessionInput.js";
 import type { AgentSession } from "@/types/agent/SessionActor.js";
@@ -341,12 +341,20 @@ export class Agent {
     input: {
       /** 目标 Session 稳定标识。 */
       session_id: string;
+      /** 目标 Session 所在分类；省略时按 `work` 查找。 */
+      category?: string;
     },
   ): Promise<SessionSystemMessage[]> {
     const session_id = String(input.session_id || "").trim();
     if (!session_id) {
       throw new Error("resolve_system_messages requires a non-empty session_id");
     }
+    // 真实来源以持久化 metadata 为准：system 组装与 Power 上下文必须看到同一个身份，
+    // 不能用调用参数顶替。
+    const category = normalize_session_origin_category(input.category ?? SESSION_ORIGIN_CATEGORY_WORK);
+    const storage = this.resolve_storage();
+    const session_storage = await storage.sessions.open_session(session_id, category);
+    const metadata = await session_storage.read_metadata();
     const instruction_system_blocks = create_instruction_system_blocks({
       agent_id: this.id,
       agent_name: this.name,
@@ -356,6 +364,7 @@ export class Agent {
     const context = this.create_session_call_context({
       session_id,
       workspace,
+      origin: metadata.origin,
       instruction_system_blocks,
     });
     const power_system_blocks = await resolve_session_power_system_blocks({
@@ -381,6 +390,8 @@ export class Agent {
     readonly session_id: string;
     /** 当前使用的 Workspace 实例。 */
     readonly workspace: WorkspaceRuntime;
+    /** 目标 Session 的真实来源，来自持久化 metadata。 */
+    readonly origin: SessionOrigin;
     /** 当前 Agent 指令快照。 */
     readonly instruction_system_blocks: readonly AgentSessionSystemBlock[];
   }): ToolCallContext {
@@ -392,7 +403,7 @@ export class Agent {
         input.instruction_system_blocks.map((block) => block.content),
       ),
       session_id: input.session_id,
-      session_origin: { type: SESSION_ORIGIN_TYPE_WORK },
+      session_origin: input.origin,
       workspace: input.workspace,
       messages: Object.freeze([]),
       workspace_env: Object.freeze({ ...input.workspace.get_env() }),
@@ -484,25 +495,25 @@ export class Agent {
     this.session_work ??= new SessionWork({
       agent_id: this.id,
       list_sessions: async (input) => await this.session_manager.list(input),
-      get_session: async (session_id, origin_type) => await this.restore_work_session(session_id, origin_type),
+      get_session: async (session_id, category) => await this.restore_work_session(session_id, category),
       delegations: this.resolve_delegations(),
     });
     return this.session_work;
   }
 
   /** 使用会话当前持久化目录恢复上下文，并完成宿主的模型与事件订阅装配。 */
-  private async restore_work_session(session_id: string, origin_type: string): Promise<AgentSession> {
+  private async restore_work_session(session_id: string, category: string): Promise<AgentSession> {
     const storage = this.resolve_storage();
-    if (!(await storage.sessions.has_session(session_id, origin_type))) {
+    if (!(await storage.sessions.has_session(session_id, category))) {
       throw new Error(`Session is unavailable or archived: ${session_id}`);
     }
-    const session_storage = await storage.sessions.open_session(session_id, origin_type);
+    const session_storage = await storage.sessions.open_session(session_id, category);
     const metadata = await session_storage.read_metadata();
     const workspace_id = metadata.workspace_id;
     const workspace = workspace_id
       ? workspace_id === this.workspace?.id ? this.workspace : await this.resolve_project_workspace(workspace_id)
       : undefined;
-    const session = await this.session_manager.get(session_id, origin_type, { workspace });
+    const session = await this.session_manager.get(session_id, category, { workspace });
     await this.prepare_work_session?.(session);
     return session;
   }
@@ -539,9 +550,9 @@ export class Agent {
         if (!this.resolve_work_model) throw new Error("Session model selection is not configured by the host");
         await this.resolve_work_model(model_id, workspace);
       },
-      get_work_session: async (session_id) => await this.restore_work_session(session_id, SESSION_ORIGIN_TYPE_WORK),
+      get_work_session: async (session_id) => await this.restore_work_session(session_id, SESSION_ORIGIN_CATEGORY_WORK),
       get_parent_session: async (caller) => await this.resolve_work_agent(caller.agent_id)
-        .restore_work_session(caller.session_id, caller.origin.type),
+        .restore_work_session(caller.session_id, caller.origin.category),
       report_error: (delegation_id, error) => {
         this.logger.error("Session delegation failed; retained for retry", {
           delegation_id,
@@ -566,9 +577,9 @@ export class Agent {
       files: this.resolve_storage().files,
       get_handlers: () => this.resolve_raw_hooks().effect[SESSION_HOOK_POINTS.turn_committed] ?? [],
       restore_context: async (record) => {
-        const session = await this.restore_work_session(record.event.session_id, record.origin.type);
+        const session = await this.restore_work_session(record.event.session_id, record.origin.category);
         if (record.state === "prepared") {
-          const session_store = await this.resolve_storage().sessions.open_session(session.id, record.origin.type);
+          const session_store = await this.resolve_storage().sessions.open_session(session.id, record.origin.category);
           record.event.messages = (await session_store.list_messages())
             .filter((message) => message.turn_id === record.event.turn_id);
         }

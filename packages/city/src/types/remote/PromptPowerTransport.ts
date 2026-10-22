@@ -33,7 +33,7 @@ export interface OpenPromptPowerChannel {
   /** 通道所属 Session。 */
   session_id: string;
   /** Session 来源分区。 */
-  origin_type: string;
+  category: string;
   /** 仅向提供方发送执行控制消息。 */
   on_event(event: PromptPowerEvent): void;
   /** 非主动断开时通知 SDK。 */

@@ -13,11 +13,11 @@ import type { RemotePromptInput } from "@/types/remote/PromptPowerTransport.js";
 export function register_prompt_power_routes(app: Hono, get_session: (id: string, origin?: string) => Promise<unknown>) {
   const channels = new Map<string, ServerPromptPowerChannel>();
   const owner_key = (c: Context) => createHash("sha256").update(c.req.header("authorization") ?? "").update("\0").update(c.req.header("cookie") ?? "").digest("hex");
-  const session_key = (c: Context) => JSON.stringify([owner_key(c), c.req.param("session_id"), c.req.query("origin_type") || "work"]);
+  const session_key = (c: Context) => JSON.stringify([owner_key(c), c.req.param("session_id"), c.req.query("category") || "work"]);
   const channel_key = (c: Context, id: string) => `${session_key(c)}:${id}`;
 
   app.get("/api/sdk/sessions/:session_id/power-executions/events", async (c) => {
-    await get_session(c.req.param("session_id"), c.req.query("origin_type"));
+    await get_session(c.req.param("session_id"), c.req.query("category"));
     const encoder = new TextEncoder();
     let channel: ServerPromptPowerChannel;
     let cleanup = () => {};

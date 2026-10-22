@@ -202,7 +202,7 @@ export async function executeTaskCreateAction(params: {
             agent_id: params.context.agent.id,
             workspace_id: params.context.workspace?.id ?? null,
             session_id: params.context.session.id,
-            origin_type: params.context.session.origin.type,
+            category: params.context.session.origin.category,
           },
         }
       : {}),

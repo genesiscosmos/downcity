@@ -29,7 +29,7 @@ export interface TaskDeliverySession {
   readonly session_id: string;
 
   /** 目标 Agent Session 的来源分区；允许任意非空字符串。 */
-  readonly origin_type: string;
+  readonly category: string;
 }
 
 export type ShipTaskFrontmatterV1 = {

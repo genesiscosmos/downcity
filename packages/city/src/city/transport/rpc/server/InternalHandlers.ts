@@ -7,7 +7,7 @@
  * - Session 与 Power 数据通过 Agent 能力操作，不读取领域内部路径。
  */
 
-import { SESSION_ORIGIN_TYPE_WORK } from "@downcity/type";
+import { SESSION_ORIGIN_CATEGORY_WORK } from "@downcity/type";
 import type { SessionSystemMessage } from "@downcity/type";
 import type { RpcRequest } from "@/city/transport/types/RpcProtocol.js";
 import type {
@@ -75,7 +75,7 @@ export async function handle_internal_rpc_request(params: {
       const context = requireAgent(options);
       const session_id = String(request.params.session_id || "").trim();
       if (!session_id) throw new Error("Missing session_id");
-      await context.sessions.get(session_id, SESSION_ORIGIN_TYPE_WORK, { workspace: context.workspace });
+      await context.sessions.get(session_id, SESSION_ORIGIN_CATEGORY_WORK, { workspace: context.workspace });
       await context.sessions.clear_messages(session_id);
       write_success(request.id, {
         session_id: session_id,

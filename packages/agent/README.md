@@ -34,11 +34,18 @@ CLI 与 Desktop 通过 `@downcity/city` 读取宿主配置并显式装配 `Agent
   - React UI 组件与展示层
 
 Session ID 由 `agent.sessions.create()` 内部生成；创建接口不接受调用方指定的
-`session_id`。Session 默认来源是 `{ type: "chat" }`，Group 使用 `group`，Task Plugin
-使用 `task`，其他创建方也可以在 `create({ origin })` 中声明任意非空的 `origin.type`
-及附加 JSON 元数据。恢复已有 Session 使用 `agent.sessions.get(session_id, origin_type = "chat")`；
-该调用只读取指定来源分区，不跨目录猜测。如果 Session 创建时绑定了 Workspace，恢复时还必须
-通过第三个参数传入同一个 Workspace，例如 `get(session_id, "task", { workspace })`。
+`session_id`。Session 来源分两层：`category` 只有 `chat` 与 `work` 两个值，同时承担
+存储分区与身份作用域；`type` 是具体角色。已知角色有 `agent`（Agent 主会话）、
+`channel`（外部聊天）、`group`（群聊）、`chrome`（浏览器扩展）、`work`（普通工作会话）、
+`task`（任务会话），它们各自归入哪个分类由 SDK 决定。创建接口默认来源是
+`{ category: "work", type: "work" }`；其他创建方可以在 `create({ origin })` 中声明自定义
+`origin.type`，此时必须显式给出 `category`，否则立即失败——分类不可推断的取值不允许静默落到默认分区。
+
+恢复已有 Session 使用 `agent.sessions.get(session_id, category = "work")`；该调用只读取指定分类
+的分区，不跨目录猜测。分类不足以区分同一分类下的角色（主会话与外部聊天同属 `chat`），
+需要按角色过滤时用 `agent.sessions.list({ category, origin_type })`。如果 Session 创建时绑定了
+Workspace，恢复时可以通过第三个参数传入同一个 Workspace，例如
+`get(session_id, "work", { workspace })`。
 
 Group 是和 Agent 并列的可联系主体。Agent 的 `name` 是可见名称，`description` 是供展示和 Group 选择成员使用的能力简介；两者不替代控制 Agent 行为的 `instruction`。Group 持有自己的模型，默认通过 AI 调度器结合 Group 目标、对话上下文和成员的 `id/name/description` 生成有限阶段计划。没有模型或模型调用失败时，GroupSession 会记录明确的调度失败，不会静默使用另一套规则。需要自定义行为时可显式提供 `dispatch_strategy`，异步策略应响应输入中的 `abort_signal`。
 
@@ -155,10 +162,10 @@ src/
 - `SessionMessages` 是 Message 唯一事实源，Executor 不持有 Store
 - `types / utils` 提供横向公共支撑
 
-持久化规则：加入 City 后，AgentSession 使用 `agents/<agent_id>/sessions/<origin_type>/<session_id>/`，
-归档后使用 `agents/<agent_id>/archived-sessions/<origin_type>/<session_id>/`；每个 Session 目录包含
-`session.db` 与 `attachments/`，`origin_type` 会被安全编码为单个目录段。普通聊天默认位于 `sessions/chat/`。
-GroupSession 使用 `groups/<group_id>/sessions/<group_session_id>/`；未加入 City 时两者均使用
+持久化规则：加入 City 后，AgentSession 使用 `agents/<agent_id>/sessions/<category>/<session_id>/`，
+归档后使用 `agents/<agent_id>/archived-sessions/<category>/<session_id>/`；每个 Session 目录包含
+`session.db` 与 `attachments/`。物理分区只有 `chat` 与 `work` 两个，角色记录在
+`session_state.origin` 里。GroupSession 使用 `groups/<group_id>/sessions/<group_session_id>/`；未加入 City 时两者均使用
 当前主体实例的内存 Storage。只有传入 Workspace 的 AgentSession 或 GroupSession 才会在
 `session_state` 写入 `workspace_id`。GroupSession 使用 `Group.model` 根据首条用户消息异步生成并持久化
 `title`，`preview_text` 仍只保存最后一条消息摘要；`rename(title)` 可提交手动标题。AgentSession 的

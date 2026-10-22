@@ -9,7 +9,7 @@
 
 import path from "node:path";
 import { normalize_session_id } from "@/session/SessionIdentity.js";
-import { normalize_session_origin_type } from "@downcity/type";
+import { normalize_session_origin_category } from "@downcity/type";
 
 /** 把标识转换为安全、可逆的单层目录名。 */
 function encode_path_segment(input: string): string {
@@ -33,44 +33,44 @@ function encode_path_segment(input: string): string {
 }
 
 /** 把来源类型转换为安全、确定的单层目录名。 */
-function encode_origin_type(origin_type: string): string {
-  return encode_path_segment(normalize_session_origin_type(origin_type));
+function encode_category(category: string): string {
+  return encode_path_segment(normalize_session_origin_category(category));
 }
 
 /** 返回全部活动 Session 来源分区的根目录。 */
-function get_agent_session_origins_path(storage_root_path: string): string {
+function get_agent_session_categories_path(storage_root_path: string): string {
   return path.join(path.resolve(storage_root_path), "sessions");
 }
 
 /** 返回全部归档 Session 来源分区的根目录。 */
-export function get_agent_archived_session_origins_path(storage_root_path: string): string {
+export function get_agent_archived_session_categories_path(storage_root_path: string): string {
   return path.join(path.resolve(storage_root_path), "archived-sessions");
 }
 
 /** 返回指定来源的活动 Session 集合目录。 */
 export function get_agent_sessions_path(
   storage_root_path: string,
-  origin_type: string,
+  category: string,
 ): string {
-  return path.join(get_agent_session_origins_path(storage_root_path), encode_origin_type(origin_type));
+  return path.join(get_agent_session_categories_path(storage_root_path), encode_category(category));
 }
 
 /** 返回指定来源的归档 Session 集合目录。 */
 export function get_agent_archived_sessions_path(
   storage_root_path: string,
-  origin_type: string,
+  category: string,
 ): string {
-  return path.join(get_agent_archived_session_origins_path(storage_root_path), encode_origin_type(origin_type));
+  return path.join(get_agent_archived_session_categories_path(storage_root_path), encode_category(category));
 }
 
 /** 返回单个活动 Session 目录。 */
 export function get_agent_session_path(
   storage_root_path: string,
-  origin_type: string,
+  category: string,
   session_id: string,
 ): string {
   return path.join(
-    get_agent_sessions_path(storage_root_path, origin_type),
+    get_agent_sessions_path(storage_root_path, category),
     encode_path_segment(normalize_session_id(session_id)),
   );
 }
@@ -78,11 +78,11 @@ export function get_agent_session_path(
 /** 返回单个活动 Session 的 SQLite 数据库路径。 */
 export function get_agent_session_database_path(
   storage_root_path: string,
-  origin_type: string,
+  category: string,
   session_id: string,
 ): string {
   return path.join(
-    get_agent_session_path(storage_root_path, origin_type, session_id),
+    get_agent_session_path(storage_root_path, category, session_id),
     "session.db",
   );
 }
@@ -90,11 +90,11 @@ export function get_agent_session_database_path(
 /** 返回单个归档 Session 目录。 */
 export function get_agent_archived_session_path(
   storage_root_path: string,
-  origin_type: string,
+  category: string,
   session_id: string,
 ): string {
   return path.join(
-    get_agent_archived_sessions_path(storage_root_path, origin_type),
+    get_agent_archived_sessions_path(storage_root_path, category),
     encode_path_segment(normalize_session_id(session_id)),
   );
 }
@@ -102,11 +102,11 @@ export function get_agent_archived_session_path(
 /** 返回单个归档 Session 的 SQLite 数据库路径。 */
 export function get_agent_archived_session_database_path(
   storage_root_path: string,
-  origin_type: string,
+  category: string,
   session_id: string,
 ): string {
   return path.join(
-    get_agent_archived_session_path(storage_root_path, origin_type, session_id),
+    get_agent_archived_session_path(storage_root_path, category, session_id),
     "session.db",
   );
 }
@@ -114,11 +114,11 @@ export function get_agent_archived_session_database_path(
 /** 返回单个 Session 的附件目录。 */
 export function get_agent_session_attachments_path(
   storage_root_path: string,
-  origin_type: string,
+  category: string,
   session_id: string,
 ): string {
   return path.join(
-    get_agent_session_path(storage_root_path, origin_type, session_id),
+    get_agent_session_path(storage_root_path, category, session_id),
     "attachments",
   );
 }

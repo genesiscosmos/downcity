@@ -714,7 +714,7 @@ test("Task 重新绑定执行 Agent 后仍向原始 Agent Session 交付结果",
         agent_id: agent_a.id,
         workspace_id: workspace.id,
         session_id: delivery_session.id,
-        origin_type: delivery_session.origin.type,
+        category: delivery_session.origin.category,
       },
     });
     await city.powers.add(create_task_registration(new TaskPower()));

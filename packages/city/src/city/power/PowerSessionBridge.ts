@@ -7,7 +7,7 @@
  * - Workspace 由 City 在调用点注入，Power 不自行解析。
  */
 
-import { SESSION_ORIGIN_TYPE_WORK } from "@downcity/type";
+import { SESSION_ORIGIN_CATEGORY_WORK, SESSION_ORIGIN_TYPE_WORK } from "@downcity/type";
 import type { AgentSession, AgentSessionCollection, SessionPort } from "@downcity/agent";
 import type { WorkspaceRuntime } from "@/workspace/index.js";
 import type {
@@ -51,12 +51,12 @@ export function create_power_session_collection(input: {
   /** 按来源 Session 复制模型选择；来源未配置模型时保持默认。 */
   const inherit_model = async (
     session: AgentSession,
-    source?: { readonly session_id: string; readonly origin_type?: string },
+    source?: { readonly session_id: string; readonly category?: string },
   ): Promise<void> => {
     if (!source) return;
     const source_session = await read_sessions().get(
       source.session_id,
-      source.origin_type,
+      source.category,
       { workspace: input.workspace },
     );
     const source_model = source_session.get("model");
@@ -76,17 +76,17 @@ export function create_power_session_collection(input: {
       await inherit_model(session, create_input?.inherit_model_from);
       return to_handle(session.id, session.origin, session.workspace_id);
     },
-    get: async (session_id, origin_type = SESSION_ORIGIN_TYPE_WORK) => {
-      const session = await read_sessions().get(session_id, origin_type, {
+    get: async (session_id, category = SESSION_ORIGIN_CATEGORY_WORK) => {
+      const session = await read_sessions().get(session_id, category, {
         workspace: input.workspace,
       });
       return to_handle(session.id, session.origin, session.workspace_id);
     },
-    runtime: (session_id, origin_type = SESSION_ORIGIN_TYPE_WORK) =>
-      to_handle(session_id, { type: origin_type }, undefined),
-    remove: async (session_id, origin_type) => {
-      await read_sessions().get(session_id, origin_type, { workspace: input.workspace });
-      return await read_sessions().remove(session_id, origin_type);
+    runtime: (session_id, category = SESSION_ORIGIN_CATEGORY_WORK) =>
+      to_handle(session_id, { category, type: SESSION_ORIGIN_TYPE_WORK }, undefined),
+    remove: async (session_id, category) => {
+      await read_sessions().get(session_id, category, { workspace: input.workspace });
+      return await read_sessions().remove(session_id, category);
     },
   });
 }

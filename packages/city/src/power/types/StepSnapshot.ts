@@ -11,7 +11,9 @@ import type { PowerJsonValue } from "./Json.js";
 
 /** 当前 Session 来源；与 SessionOrigin 同形。 */
 export interface StepSnapshotOrigin {
-  /** 来源类型，同时是持久化分区。 */
+  /** 顶层分类，同时也是持久化分区；取值只有 chat / work。 */
+  readonly category: "chat" | "work";
+  /** 具体角色。 */
   readonly type: string;
   /** 来源协议允许携带的其他 JSON 字段。 */
   readonly [key: string]: PowerJsonValue;

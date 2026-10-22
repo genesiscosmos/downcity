@@ -135,7 +135,7 @@ test("停止旧对象后用户可接管，迟到 callback 仍绑定旧 Turn stop
   const callback_gate = deferred();
   const received = deferred();
   let calls = 0;
-  const actor = { kind: "session", agent_id: "source", workspace_id: null, session_id: "A", origin_type: "agent" };
+  const actor = { kind: "session", agent_id: "source", workspace_id: null, session_id: "A", category: "chat" };
   const agent = new Agent({ id: "takeover", model: new MockModelClient({ id: "m", generate: async () => {
     if (++calls === 1) await model_gate.promise;
     return { text: "result" };

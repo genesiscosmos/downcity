@@ -54,7 +54,7 @@ let tool_call_context = {
   agent_description: "",
   agent_instructions: [],
   session_id: "",
-  session_origin: { type: "work" },
+  session_origin: { category: "work", type: "work" },
   turn_id: "turn-1",
 };
 

@@ -59,7 +59,7 @@ export interface AgentSessionCollection {
   /** 在指定 Workspace 中恢复一个已经属于当前 Agent 的 Session。 */
   get(
     session_id: string,
-    origin_type?: string,
+    category?: string,
     options?: AgentGetSessionOptions,
   ): Promise<AgentSession>;
 
@@ -76,16 +76,16 @@ export interface AgentSessionCollection {
   clean_archive(): Promise<AgentCleanArchiveResult>;
 
   /** 获取 Session runtime port。 */
-  runtime(session_id: string, origin_type?: string): SessionPort;
+  runtime(session_id: string, category?: string): SessionPort;
 
   /** 返回当前 Agent 正在执行的 Session 标识。 */
   list_executing_session_ids(): string[];
 
   /** 永久删除 Session。 */
-  remove(session_id: string, origin_type?: string): Promise<boolean>;
+  remove(session_id: string, category?: string): Promise<boolean>;
 
   /** 清空 Session 消息。 */
-  clear_messages(session_id: string, origin_type?: string): Promise<boolean>;
+  clear_messages(session_id: string, category?: string): Promise<boolean>;
 
   /**
    * 释放一个空闲 Session 的运行时实例。
@@ -94,5 +94,5 @@ export interface AgentSessionCollection {
    * 正在执行的 Session 不会被释放，返回是否真的释放。
    * 调用方必须先解除对该实例的订阅，否则重新 `get()` 得到的新实例不会再被订阅。
    */
-  release(session_id: string, origin_type?: string): boolean;
+  release(session_id: string, category?: string): boolean;
 }

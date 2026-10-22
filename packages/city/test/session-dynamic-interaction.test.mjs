@@ -41,7 +41,7 @@ test("动态 Extension Interaction 使用通用 type/payload 完成恢复", asyn
     files,
     session_id: "dynamic-interaction-test",
     agent_id: "test-agent",
-    origin: { type: "work" },
+    origin: { category: "work", type: "work" },
     database_path: path.join(root_path, "session.db"),
     database_location: { type: "file" },
     attachments: {},

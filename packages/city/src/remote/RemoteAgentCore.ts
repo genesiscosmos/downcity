@@ -2,7 +2,7 @@
  * RemoteAgent 的跨平台会话门面。
  * 只持有 Transport，Node 与浏览器入口各自选择协议，不将 Node 网络依赖带入浏览器。
  */
-import { SESSION_ORIGIN_TYPE_WORK } from "@downcity/type";
+import { SESSION_ORIGIN_CATEGORY_WORK } from "@downcity/type";
 import type { AgentArchiveSessionInput, AgentArchiveSessionsInput, AgentArchiveSessionResult, AgentArchiveSessionsResult, AgentCleanArchiveResult, AgentCreateSessionInput, AgentListSessionsInput, AgentSessionSummaryPage, AgentSessions, RemoteAgentSession } from "@downcity/agent";
 import type { RemoteAgentPowerActionInput, RemoteAgentPowerActionResult } from "@/types/remote/RemoteAgentPowerAction.js";
 import type { RemoteAgentTransport } from "./RemoteTransport.js";
@@ -47,8 +47,8 @@ class RemoteAgentSessions implements AgentSessions<RemoteAgentSession> {
     return () => { this.creation_listeners.delete(listener); };
   }
 
-  async get(session_id: string, origin_type = SESSION_ORIGIN_TYPE_WORK): Promise<RemoteAgentSession> {
-    return new RemoteSession(this.transport, await this.transport.get_info(session_id, origin_type));
+  async get(session_id: string, category = SESSION_ORIGIN_CATEGORY_WORK): Promise<RemoteAgentSession> {
+    return new RemoteSession(this.transport, await this.transport.get_info(session_id, category));
   }
 
   async list(input?: AgentListSessionsInput): Promise<AgentSessionSummaryPage> { return await this.transport.list_sessions(input); }

@@ -23,16 +23,16 @@ export interface SessionStore {
   create_session(session_id: string, origin: SessionOrigin, workspace_id?: string): SessionStorage;
 
   /** 打开一个已有 Session；完整来源必须从数据库状态恢复。 */
-  open_session(session_id: string, origin_type?: string): Promise<SessionStorage>;
+  open_session(session_id: string, category?: string): Promise<SessionStorage>;
 
   /** 判断活动 Session 是否存在。 */
-  has_session(session_id: string, origin_type?: string): Promise<boolean>;
+  has_session(session_id: string, category?: string): Promise<boolean>;
 
   /** 永久删除活动 Session 的全部领域数据。 */
-  remove_session(session_id: string, origin_type?: string): Promise<boolean>;
+  remove_session(session_id: string, category?: string): Promise<boolean>;
 
   /** 清空活动 Session 的 Message 数据。 */
-  clear_session_messages(session_id: string, origin_type?: string): Promise<boolean>;
+  clear_session_messages(session_id: string, category?: string): Promise<boolean>;
 
   /** 返回活动 Session 摘要页。 */
   list_sessions(
@@ -41,7 +41,7 @@ export interface SessionStore {
   ): Promise<AgentSessionSummaryPage>;
 
   /** 将活动 Session 原子迁入归档区。 */
-  archive_session(session_id: string, origin_type?: string): Promise<AgentArchiveSessionResult>;
+  archive_session(session_id: string, category?: string): Promise<AgentArchiveSessionResult>;
 
   /** 返回已归档 Session 摘要页。 */
   list_archived_sessions(

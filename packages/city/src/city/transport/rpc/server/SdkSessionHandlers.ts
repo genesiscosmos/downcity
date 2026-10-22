@@ -47,12 +47,12 @@ export async function handle_sdk_session_rpc_request(params: {
 }): Promise<boolean> {
   const { request, options, subscriptions, write_success, write_event } = params;
   const session_context = options.workspace ? { workspace: options.workspace } : undefined;
-  const get_session = async (session_id: string, origin_type?: string) =>
-    await options.sessions.get(session_id, origin_type, session_context);
+  const get_session = async (session_id: string, category?: string) =>
+    await options.sessions.get(session_id, category, session_context);
 
   switch (request.method) {
     case "sdk.powers.open": {
-      const session = await get_session(request.params.session_id, request.params.origin_type);
+      const session = await get_session(request.params.session_id, request.params.category);
       const subscription_id = request.params.subscription_id;
       if (subscriptions.has(subscription_id)) throw new Error("Subscription already exists");
       const key = JSON.stringify([session.agent_id, session.id, session.origin.type]);
@@ -93,12 +93,12 @@ export async function handle_sdk_session_rpc_request(params: {
       return true;
     }
     case "sdk.sessions.get": {
-      const session = await get_session(request.params.session_id, request.params.origin_type);
+      const session = await get_session(request.params.session_id, request.params.category);
       write_success(request.id, { session: await session.get_info() });
       return true;
     }
     case "sdk.sessions.prompt": {
-      const session = await get_session(request.params.session_id, request.params.origin_type);
+      const session = await get_session(request.params.session_id, request.params.category);
       const { powers, execution_channel_id, ...base } = request.params.input;
       if (!powers?.length && execution_channel_id) throw new Error("Power channel requires Powers");
       const channel = powers?.length
@@ -114,29 +114,29 @@ export async function handle_sdk_session_rpc_request(params: {
       return true;
     }
     case "sdk.sessions.stop": {
-      const session = await get_session(request.params.session_id, request.params.origin_type);
+      const session = await get_session(request.params.session_id, request.params.category);
       const result = await session.stop(request.params.expected_turn_id);
       write_success(request.id, { result });
       return true;
     }
     case "sdk.sessions.messages": {
-      const session = await get_session(request.params.session_id, request.params.origin_type);
+      const session = await get_session(request.params.session_id, request.params.category);
       const messages = await session.messages(request.params.input);
       write_success(request.id, { messages });
       return true;
     }
     case "sdk.sessions.interactions": {
-      const session = await get_session(request.params.session_id, request.params.origin_type);
+      const session = await get_session(request.params.session_id, request.params.category);
       write_success(request.id, { interactions: await session.interactions() });
       return true;
     }
     case "sdk.sessions.status": {
-      const session = await get_session(request.params.session_id, request.params.origin_type);
+      const session = await get_session(request.params.session_id, request.params.category);
       write_success(request.id, { status: await session.status() });
       return true;
     }
     case "sdk.sessions.set": {
-      const session = await get_session(request.params.session_id, request.params.origin_type);
+      const session = await get_session(request.params.session_id, request.params.category);
       const input = await resolve_remote_session_set_input({
         config: request.params.input,
         resolve_session_model: options.resolve_session_model,
@@ -146,19 +146,19 @@ export async function handle_sdk_session_rpc_request(params: {
       return true;
     }
     case "sdk.sessions.respond": {
-      const session = await get_session(request.params.session_id, request.params.origin_type);
+      const session = await get_session(request.params.session_id, request.params.category);
       write_success(request.id, {
         result: await session.respond(request.params.input),
       });
       return true;
     }
     case "sdk.sessions.system": {
-      const session = await get_session(request.params.session_id, request.params.origin_type);
+      const session = await get_session(request.params.session_id, request.params.category);
       write_success(request.id, { system: await session.system() });
       return true;
     }
     case "sdk.sessions.fork": {
-      const session = await get_session(request.params.session_id, request.params.origin_type);
+      const session = await get_session(request.params.session_id, request.params.category);
       const forked = await session.fork({
         message_id: request.params.message_id,
         include_message: request.params.include_message,
@@ -168,7 +168,7 @@ export async function handle_sdk_session_rpc_request(params: {
       return true;
     }
     case "sdk.sessions.subscribe": {
-      const session = await get_session(request.params.session_id, request.params.origin_type);
+      const session = await get_session(request.params.session_id, request.params.category);
       const subscription_id = [
         request.params.session_id,
         Date.now(),
@@ -198,10 +198,10 @@ export async function handle_sdk_session_rpc_request(params: {
       return true;
     }
     case "sdk.sessions.archive": {
-      await get_session(request.params.session_id, request.params.origin_type);
+      await get_session(request.params.session_id, request.params.category);
       const result = await options.sessions.archive({
         id: request.params.session_id,
-        origin_type: request.params.origin_type,
+        category: request.params.category,
       });
       write_success(request.id, { result });
       return true;

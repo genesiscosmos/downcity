@@ -23,7 +23,7 @@ async function create_storage(directory_path) {
     session_id: "session-1",
     agent_id: "agent-1",
     workspace_id: "workspace-1",
-    origin: { type: "work" },
+    origin: { category: "work", type: "work" },
     database_path: path.join(directory_path, "session.db"),
     database_location: { type: "file" },
     files: create_files(),

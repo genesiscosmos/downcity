@@ -105,7 +105,7 @@ async function start_task_power(options = {}) {
       agent_id: "task-agent",
       workspace_id: "workspace-b",
       session_id: "daily-report",
-      origin_type: "work",
+      category: "work",
     },
   });
   const run_path = path.join(storage.path, "tasks", created.task_id, "20260901-080000-000");
@@ -328,7 +328,7 @@ test("Task Power 返回统一 Task 列表和可选执行目标", async () => {
         agent_id: "task-agent",
         workspace_id: "workspace-b",
         session_id: "daily-report",
-        origin_type: "work",
+        category: "work",
       },
       last_run_at: "20260901-080000-000",
     }]);

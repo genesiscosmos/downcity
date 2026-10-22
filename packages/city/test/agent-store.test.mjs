@@ -59,7 +59,7 @@ test("Agent creates SessionStore on the Agent storage scope", async (t) => {
     session_id: "first",
     agent_id: "store-test",
     workspace_id: "test_workspace",
-    origin: { type: "work" },
+    origin: { category: "work", type: "work" },
     created_at: 1,
     updated_at: 1,
     title: "独立存储",
@@ -101,7 +101,7 @@ test("LocalSessionStore archives and cleans sessions", async (t) => {
     session_id: "archived",
     agent_id: "archive-test",
     workspace_id: "test_workspace",
-    origin: { type: "work" },
+    origin: { category: "work", type: "work" },
     updated_at: 1,
   });
 
@@ -124,7 +124,7 @@ test("LocalSessionStore 按 Workspace 隔离活动与归档 Session", async (t) 
       session_id,
       agent_id: "workspace-filter-test",
       workspace_id,
-      origin: { type: "work" },
+      origin: { category: "work", type: "work" },
       updated_at: 1,
     });
   }
@@ -168,7 +168,7 @@ test("Agent sessions runtime 只解析已加载的 Session", async () => {
   try {
     assert.throws(
       () => agent.sessions.runtime("missing-session"),
-      /call sessions\.get\(session_id, origin_type\) first/u,
+      /call sessions\.get\(session_id, category\) first/u,
     );
     const session = await agent.sessions.create();
     assert.equal(agent.sessions.runtime(session.id).session_id, session.id);
@@ -192,8 +192,9 @@ test("Agent Session 按开放 origin 类型确定性分区", async (t) => {
     agent_id: agent.id,
     database_location: scope.database_location,
   });
-  const chat_session = store.create_session("shared-session", { type: "work" }, workspace.id);
+  const chat_session = store.create_session("shared-session", { category: "chat", type: "agent" }, workspace.id);
   const task_origin = {
+    category: "work",
     type: "task",
     task_id: "daily-report",
     execution_id: "execution-1",
@@ -201,7 +202,7 @@ test("Agent Session 按开放 origin 类型确定性分区", async (t) => {
   const task_session = store.create_session("shared-session", task_origin, workspace.id);
   const automation_session = store.create_session(
     "automation-session",
-    { type: "automation/daily", schedule_id: "daily-report" },
+    { category: "work", type: "automation/daily", schedule_id: "daily-report" },
     workspace.id,
   );
 
@@ -209,9 +210,10 @@ test("Agent Session 按开放 origin 类型确定性分区", async (t) => {
   await task_session.write_metadata(await task_session.read_metadata());
   await automation_session.write_metadata(await automation_session.read_metadata());
 
-  assert.equal(await store.has_session("shared-session"), true);
-  assert.equal(await store.has_session("shared-session", "task"), true);
-  assert.equal(await store.has_session("automation-session", "automation/daily"), true);
+  // 分类承担物理分区：同一个 session_id 可以分别存在于 chat 与 work，两者互不覆盖。
+  assert.equal(await store.has_session("shared-session", "chat"), true);
+  assert.equal(await store.has_session("shared-session", "work"), true);
+  assert.equal(await store.has_session("automation-session", "work"), true);
   assert.deepEqual((await task_session.read_metadata()).origin, task_origin);
   await task_session.write_metadata({
     ...(await task_session.read_metadata()),
@@ -224,32 +226,35 @@ test("Agent Session 按开放 origin 类型确定性分区", async (t) => {
     agent_id: agent.id,
     database_location: scope.database_location,
   });
-  const restored_task_session = await restored_store.open_session("shared-session", "task");
+  const restored_task_session = await restored_store.open_session("shared-session", "work");
   const restored_metadata = await restored_task_session.read_metadata();
   assert.deepEqual(restored_task_session.origin, task_origin);
   await restored_task_session.write_metadata(restored_metadata);
   assert.deepEqual(
-    (await store.list_sessions(undefined, new Set())).items.map((item) => item.session_id),
-    ["shared-session"],
+    (await store.list_sessions(undefined, new Set())).items.map((item) => item.session_id).sort(),
+    ["automation-session", "shared-session"],
   );
+  // 分类内按角色过滤：只返回 role 为 task 的那一条。
   assert.deepEqual(
-    (await store.list_sessions({ origin_type: "task" }, new Set())).items.map((item) => item.session_id),
+    (await store.list_sessions({ category: "work", origin_type: "task" }, new Set())).items.map((item) => item.session_id),
     ["shared-session"],
   );
+  // 同一 session_id 在 chat 与 work 两个分类下各有一条，按分类分区存放。
   assert.equal(
-    await fs.access(path.join(scope.root_path, "sessions", "task", "shared-session", "session.db"))
+    await fs.access(path.join(scope.root_path, "sessions", "work", "shared-session", "session.db"))
       .then(() => true)
       .catch(() => false),
     true,
   );
   assert.equal(
-    await fs.access(path.join(
-      scope.root_path,
-      "sessions",
-      "automation%2Fdaily",
-      "automation-session",
-      "session.db",
-    ))
+    await fs.access(path.join(scope.root_path, "sessions", "chat", "shared-session", "session.db"))
+      .then(() => true)
+      .catch(() => false),
+    true,
+  );
+  // 自定义角色不需要单独目录，它就在分类目录下。
+  assert.equal(
+    await fs.access(path.join(scope.root_path, "sessions", "work", "automation-session", "session.db"))
       .then(() => true)
       .catch(() => false),
     true,

@@ -7,7 +7,7 @@
  * - 当前只承载 Session actor 所需方法。
  */
 
-import { SESSION_ORIGIN_TYPE_WORK } from "@downcity/type";
+import { SESSION_ORIGIN_CATEGORY_WORK } from "@downcity/type";
 import net from "node:net";
 import { randomUUID } from "node:crypto";
 import type { RemotePromptInput, OpenPromptPowerChannel, PromptPowerChannel } from "@/types/remote/PromptPowerTransport.js";
@@ -125,7 +125,7 @@ export class RpcClient {
       method: "sdk.sessions.archive",
       params: {
         session_id: input.id,
-        origin_type: input.origin_type || SESSION_ORIGIN_TYPE_WORK,
+        category: input.category || SESSION_ORIGIN_CATEGORY_WORK,
       },
     });
     return data.result;
@@ -161,12 +161,12 @@ export class RpcClient {
   /**
    * 获取远程 session 信息。
    */
-  async get_session(session_id: string, origin_type: string): Promise<AgentSessionInfo> {
+  async get_session(session_id: string, category: string): Promise<AgentSessionInfo> {
     const data = await this.request<{ session: AgentSessionInfo }>({
       method: "sdk.sessions.get",
       params: {
         session_id: session_id,
-        origin_type,
+        category,
       },
     });
     return data.session;
@@ -177,14 +177,14 @@ export class RpcClient {
    */
   async prompt_session(params: {
     session_id: string;
-    origin_type: string;
+    category: string;
     input: RemotePromptInput;
   }): Promise<{ id: string }> {
     const data = await this.request<{ turn: { id: string } }>({
       method: "sdk.sessions.prompt",
       params: {
         session_id: params.session_id,
-        origin_type: params.origin_type,
+        category: params.category,
         input: params.input,
       },
     });
@@ -194,13 +194,13 @@ export class RpcClient {
   /**
    * 停止远程 session 当前 turn。
    */
-  async stop_session(session_id: string, origin_type: string, expected_turn_id?: string): Promise<AgentSessionStopResult> {
+  async stop_session(session_id: string, category: string, expected_turn_id?: string): Promise<AgentSessionStopResult> {
     const data = await this.request<{ result: AgentSessionStopResult }>({
       method: "sdk.sessions.stop",
       params: {
         expected_turn_id,
         session_id: session_id,
-        origin_type,
+        category,
       },
     });
     return data.result;
@@ -211,14 +211,14 @@ export class RpcClient {
    */
   async get_session_messages(params: {
     session_id: string;
-    origin_type: string;
+    category: string;
     input?: ListSessionMessagesInput;
   }): Promise<SessionMessagePage> {
     const data = await this.request<{ messages: SessionMessagePage }>({
       method: "sdk.sessions.messages",
       params: {
         session_id: params.session_id,
-        origin_type: params.origin_type,
+        category: params.category,
         input: params.input,
       },
     });
@@ -228,53 +228,53 @@ export class RpcClient {
   /**
    * 读取 system snapshot。
    */
-  async get_session_system(session_id: string, origin_type: string): Promise<AgentSessionSystemSnapshot> {
+  async get_session_system(session_id: string, category: string): Promise<AgentSessionSystemSnapshot> {
     const data = await this.request<{ system: AgentSessionSystemSnapshot }>({
       method: "sdk.sessions.system",
       params: {
         session_id: session_id,
-        origin_type,
+        category,
       },
     });
     return data.system;
   }
 
-  async get_session_interactions(session_id: string, origin_type: string): Promise<SessionInteractionRequest[]> {
+  async get_session_interactions(session_id: string, category: string): Promise<SessionInteractionRequest[]> {
     const data = await this.request<{ interactions: SessionInteractionRequest[] }>({
       method: "sdk.sessions.interactions",
-      params: { session_id: session_id, origin_type },
+      params: { session_id: session_id, category },
     });
     return data.interactions;
   }
 
-  async get_session_status(session_id: string, origin_type: string): Promise<AgentSessionStatus> {
+  async get_session_status(session_id: string, category: string): Promise<AgentSessionStatus> {
     const data = await this.request<{ status: AgentSessionStatus }>({
       method: "sdk.sessions.status",
-      params: { session_id: session_id, origin_type },
+      params: { session_id: session_id, category },
     });
     return data.status;
   }
 
   async set_session(
     session_id: string,
-    origin_type: string,
+    category: string,
     input: RemoteSessionSetInput,
     options?: AgentSessionSetOptions,
   ): Promise<void> {
     await this.request<{ queued: true }>({
       method: "sdk.sessions.set",
-      params: { session_id: session_id, origin_type, input, ...(options ? { options } : {}) },
+      params: { session_id: session_id, category, input, ...(options ? { options } : {}) },
     });
   }
 
   async respond_session_interaction(
     session_id: string,
-    origin_type: string,
+    category: string,
     input: RespondSessionInteractionInput,
   ): Promise<SessionInteractionResult> {
     const data = await this.request<{ result: SessionInteractionResult }>({
       method: "sdk.sessions.respond",
-      params: { session_id: session_id, origin_type, input },
+      params: { session_id: session_id, category, input },
     });
     return data.result;
   }
@@ -284,7 +284,7 @@ export class RpcClient {
    */
   async fork_session(params: {
     session_id: string;
-    origin_type: string;
+    category: string;
     message_id?: string;
     include_message?: boolean;
     /** 为 true 时原地截断源 Session，不创建分支。 */
@@ -294,7 +294,7 @@ export class RpcClient {
       method: "sdk.sessions.fork",
       params: {
         session_id: params.session_id,
-        origin_type: params.origin_type,
+        category: params.category,
         ...(params.message_id ? { message_id: params.message_id } : {}),
         ...(params.include_message === false ? { include_message: false } : {}),
         ...(params.replace === true ? { replace: true } : {}),
@@ -308,7 +308,7 @@ export class RpcClient {
    */
   async subscribe_session(params: {
     session_id: string;
-    origin_type: string;
+    category: string;
     on_ready: () => void;
     on_event: (event: SessionMutation) => void;
     on_close: (error?: unknown) => void;
@@ -317,7 +317,7 @@ export class RpcClient {
       method: "sdk.sessions.subscribe",
       params: {
         session_id: params.session_id,
-        origin_type: params.origin_type,
+        category: params.category,
       },
     });
     const subscription_id = String(data.subscription_id || "").trim();
@@ -350,7 +350,7 @@ export class RpcClient {
     this.power_subscriptions.set(subscription_id, input);
     try {
       const data = await this.request<{ channel_id: string }>({
-        method: "sdk.powers.open", params: { session_id: input.session_id, origin_type: input.origin_type, subscription_id },
+        method: "sdk.powers.open", params: { session_id: input.session_id, category: input.category, subscription_id },
       });
       let closed = false;
       return {

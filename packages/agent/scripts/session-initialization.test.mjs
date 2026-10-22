@@ -17,7 +17,7 @@ function create_session(overrides = {}) {
   let initialize_promise;
   const store = {
     session_id: "initialization-session",
-    origin: { type: "work" },
+    origin: { category: "work", type: "work" },
     attachments: {},
     initialize: async () => {
       if (!initialize_promise) initialize_promise = (async () => {

@@ -139,21 +139,21 @@ test("环境正文包含路由事实，并按需携带 chat_title", () => {
 test("resolve_current_messenger_channel 只在 chat 来源上返回 channel", () => {
   const chat_origin = {
     session_id: "session-1",
-    session_origin: { type: "channel", channel: "telegram", chat_id: "chat-1" },
+    session_origin: { category: "chat", type: "channel", channel: "telegram", chat_id: "chat-1" },
   };
   assert.equal(resolve_current_messenger_channel(chat_origin), "telegram");
 
   assert.equal(
     resolve_current_messenger_channel({
       session_id: "session-1",
-      session_origin: { type: "desktop" },
+      session_origin: { category: "chat", type: "desktop" },
     }),
     null,
   );
   assert.equal(
     resolve_current_messenger_channel({
       session_id: "session-1",
-      session_origin: { type: "channel", channel: "unknown", chat_id: "chat-1" },
+      session_origin: { category: "chat", type: "channel", channel: "unknown", chat_id: "chat-1" },
     }),
     null,
   );

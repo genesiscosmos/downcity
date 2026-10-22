@@ -128,7 +128,7 @@ export class TaskPower extends Power {
             const task = await readTask({ storage: this.require_storage(), taskId: value.task_id });
             if (task.frontmatter.kind !== "self" && task.frontmatter.agent_id !== context.agent.id && task.frontmatter.delivery_session?.agent_id !== context.agent.id) throw new Error("Task belongs to another Agent");
           }
-          const delivery_session = context.session ? { agent_id: context.agent.id, workspace_id: context.workspace?.id ?? null, session_id: context.session.id, origin_type: context.session.origin.type } : undefined;
+          const delivery_session = context.session ? { agent_id: context.agent.id, workspace_id: context.workspace?.id ?? null, session_id: context.session.id, category: context.session.origin.category } : undefined;
           const result = await this.generate_task(value, delivery_session);
           const error = result.task.definition.frontmatter.preparation?.error;
           return { success: !error, data: result as unknown as PowerJsonValue, ...(error ? { error } : {}) };

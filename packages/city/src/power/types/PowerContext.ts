@@ -43,7 +43,9 @@ export interface PowerLogger {
 
 /** Power 可观察的 Session 来源。 */
 export interface PowerSessionOrigin {
-  /** 来源类型，同时也是 Session 的持久化分区。 */
+  /** 顶层分类，同时也是 Session 的持久化分区；取值只有 chat / work。 */
+  readonly category: string;
+  /** 具体角色，用于能力判定与语义表达。 */
   readonly type: string;
   /** 来源协议允许携带的其他 JSON 字段。 */
   readonly [key: string]: PowerJsonValue;
@@ -120,15 +122,15 @@ export interface PowerSessionCollection {
     /** 可选来源 Session；新 Session 会继承其模型选择。 */
     readonly inherit_model_from?: {
       /** 来源 Session 稳定标识。 */ readonly session_id: string;
-      /** 来源 Session 的持久化分区。 */ readonly origin_type?: string;
+      /** 来源 Session 的持久化分区。 */ readonly category?: string;
     };
   }): Promise<PowerSessionHandle>;
   /** 恢复属于当前 Agent 的 Session。 */
-  get(session_id: string, origin_type?: string): Promise<PowerSessionHandle>;
+  get(session_id: string, category?: string): Promise<PowerSessionHandle>;
   /** 读取单个 Session 的运行句柄。 */
-  runtime(session_id: string, origin_type?: string): PowerSessionHandle;
+  runtime(session_id: string, category?: string): PowerSessionHandle;
   /** 永久删除一个 Session。 */
-  remove(session_id: string, origin_type?: string): Promise<boolean>;
+  remove(session_id: string, category?: string): Promise<boolean>;
 }
 
 /** Power 可直接调用的 Agent 受限句柄。 */

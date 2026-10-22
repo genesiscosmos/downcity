@@ -9,6 +9,7 @@
  */
 
 import type { PowerContext, PowerSessionHandle, PowerStorage } from "@downcity/city/power";
+import { SESSION_ORIGIN_CATEGORY_WORK, SESSION_ORIGIN_TYPE_TASK } from "@downcity/type";
 import type { TaskSessionRuntimePort } from "@/task/types/TaskRunner.js";
 import type { TaskDeliverySession } from "@/task/types/Task.js";
 
@@ -36,12 +37,13 @@ export async function createTaskSessionRuntimePort(params: {
     && params.delivery_session.workspace_id === (context.workspace?.id ?? null)
     ? {
         session_id: params.delivery_session.session_id,
-        origin_type: params.delivery_session.origin_type,
+        category: params.delivery_session.category,
       }
     : undefined;
   const task_session = await context.agent.sessions.create({
     origin: {
-      type: "task",
+      category: SESSION_ORIGIN_CATEGORY_WORK,
+      type: SESSION_ORIGIN_TYPE_TASK,
       task_id: params.task_id,
       execution_id: params.execution_id,
       role: "executor",
@@ -50,7 +52,8 @@ export async function createTaskSessionRuntimePort(params: {
   });
   const user_simulator_session = await context.agent.sessions.create({
     origin: {
-      type: "task",
+      category: SESSION_ORIGIN_CATEGORY_WORK,
+      type: SESSION_ORIGIN_TYPE_TASK,
       task_id: params.task_id,
       execution_id: params.execution_id,
       role: "user_simulator",
@@ -58,8 +61,8 @@ export async function createTaskSessionRuntimePort(params: {
     ...(inherit_model_from ? { inherit_model_from } : {}),
   });
   const sessions_by_alias = new Map<string, PowerSessionHandle>([
-    [runSessionId, context.agent.sessions.runtime(task_session.id, "task")],
-    [userSimulatorSessionId, context.agent.sessions.runtime(user_simulator_session.id, "task")],
+    [runSessionId, context.agent.sessions.runtime(task_session.id, SESSION_ORIGIN_CATEGORY_WORK)],
+    [userSimulatorSessionId, context.agent.sessions.runtime(user_simulator_session.id, SESSION_ORIGIN_CATEGORY_WORK)],
   ]);
   return {
     get_session(session_id: string): PowerSessionHandle {

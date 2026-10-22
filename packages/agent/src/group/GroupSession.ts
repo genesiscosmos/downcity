@@ -20,6 +20,7 @@ import type {
 } from "@/types/group/GroupSession.js";
 import type { DispatchDecision, DispatchStrategy } from "@/types/group/DispatchStrategy.js";
 import type { ModelClient, WorkspaceRuntime, RespondSessionInteractionInput } from "@downcity/type";
+import { SESSION_ORIGIN_CATEGORY_CHAT, SESSION_ORIGIN_TYPE_GROUP } from "@downcity/type";
 import type { GroupSessionDataStore } from "@/types/group/GroupSessionStore.js";
 import {
   GroupDispatchRuntime,
@@ -131,7 +132,7 @@ export class GroupSession implements GroupSessionContract {
       const member = this.get_member(agent_id);
       if (!member) continue;
       try {
-        const session = await member.sessions.get(session_id, "group", {
+        const session = await member.sessions.get(session_id, SESSION_ORIGIN_CATEGORY_CHAT, {
           ...(this.workspace ? { workspace: this.workspace } : {}),
         });
         this.assert_member_session_origin(session);
@@ -497,7 +498,12 @@ export class GroupSession implements GroupSessionContract {
   private async create_member_session(agent: Agent): Promise<AgentSession> {
     const session = await agent.sessions.create({
       ...(this.workspace ? { workspace: this.workspace } : {}),
-      origin: { type: "group", group_id: this.group_id, group_session_id: this.id },
+      origin: {
+        category: SESSION_ORIGIN_CATEGORY_CHAT,
+        type: SESSION_ORIGIN_TYPE_GROUP,
+        group_id: this.group_id,
+        group_session_id: this.id,
+      },
     });
     this.member_sessions.set(agent.id, session);
     this.member_session_ids.set(agent.id, session.id);
@@ -509,7 +515,7 @@ export class GroupSession implements GroupSessionContract {
 
   /** 校验恢复的成员 Session 确实属于当前 GroupSession。 */
   private assert_member_session_origin(session: AgentSession): void {
-    if (session.origin.type !== "group" || session.origin.group_id !== this.group_id || session.origin.group_session_id !== this.id) {
+    if (session.origin.type !== SESSION_ORIGIN_TYPE_GROUP || session.origin.group_id !== this.group_id || session.origin.group_session_id !== this.id) {
       throw new Error(`Agent Session "${session.id}" does not belong to GroupSession "${this.id}"`);
     }
   }

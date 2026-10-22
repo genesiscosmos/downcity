@@ -116,7 +116,7 @@ export class RemoteSession implements RemoteAgentSession {
       let channel_id: string | undefined;
       if (execution) {
         const channel = await this.transport.open_power_channel({
-          session_id: this.id, origin_type: this.origin.type,
+          session_id: this.id, category: this.origin.type,
           on_event: (event) => execution.on_event(event),
           on_close: () => { void execution.close().catch(() => {}); },
         });
@@ -216,7 +216,7 @@ export class RemoteSession implements RemoteAgentSession {
       let resolved_ready = false;
       this.event_subscription = await this.transport.subscribe({
         session_id: this.id,
-        origin_type: this.origin.type,
+        category: this.origin.type,
         on_ready: () => {
           resolved_ready = true;
         },

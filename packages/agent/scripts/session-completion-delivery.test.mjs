@@ -148,7 +148,7 @@ test("写前提交后 canonical 收口中断，重建 Agent 后复用结果且�
 
 test("处理器移除和重排不丢回调，已确认处理器不随其它失败而重放", async () => {
   const files = new MemoryStorageProvider().open_scope(["completion-test"]).files;
-  const context = { agent_id: "a", agent_name: "a", agent_description: "", agent_instructions: [], session_id: "s", session_origin: { type: "channel" }, turn_id: "t", messages: [], workspace_env: {} };
+  const context = { agent_id: "a", agent_name: "a", agent_description: "", agent_instructions: [], session_id: "s", session_origin: { category: "chat", type: "channel" }, turn_id: "t", messages: [], workspace_env: {} };
   const event = { completion_id: "completion:s:t", session_id: "s", turn_id: "t", status: "completed", result: { text: "done", success: true }, messages: [] };
   let success_calls = 0;
   let failing_calls = 0;
@@ -199,7 +199,7 @@ test("callback 超时保留待投递状态且不会并发重入忽略取消的�
   const blocked = deferred();
   let calls = 0;
   let signal;
-  const context = { agent_id: "a", agent_name: "a", agent_description: "", agent_instructions: [], session_id: "s", session_origin: { type: "channel" }, turn_id: "t", messages: [], workspace_env: {} };
+  const context = { agent_id: "a", agent_name: "a", agent_description: "", agent_instructions: [], session_id: "s", session_origin: { category: "chat", type: "channel" }, turn_id: "t", messages: [], workspace_env: {} };
   const event = { completion_id: "completion:s:t", session_id: "s", turn_id: "t", status: "completed", result: { text: "done", success: true }, messages: [] };
   const queue = new SessionCompletions({ files, timeout_ms: 20, report_error: () => {}, restore_context: async () => context, get_handlers: () => [named_handler("blocked", async (_event, call_context) => {
     calls++; signal = call_context.abort_signal; await blocked.promise;

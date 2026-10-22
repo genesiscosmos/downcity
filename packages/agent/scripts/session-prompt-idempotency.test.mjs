@@ -48,7 +48,7 @@ function create_loop(request_id, unfinished = false) {
   const loop = new SessionLoop({
     session_id,
     ...(unfinished ? { completions: { read: async () => undefined } } : {}),
-    session_origin: { type: "work" },
+    session_origin: { category: "work", type: "work" },
     get_workspace_path: () => ("/tmp/downcity-idempotent-prompt"),
     executor: {
       execute: async () => {

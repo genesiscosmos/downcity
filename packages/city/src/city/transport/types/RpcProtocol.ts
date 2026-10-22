@@ -39,7 +39,7 @@ type RpcRequestPayload =
   | {
       /** 请求关联标识。 */ id: string;
       /** 请求级执行通道建立。 */ method: "sdk.powers.open";
-      /** 执行所属会话。 */ params: { /** Session 标识。 */ session_id: string; /** 来源分区。 */ origin_type: string; /** 客户端预先登记的订阅标识。 */ subscription_id: string };
+      /** 执行所属会话。 */ params: { /** Session 标识。 */ session_id: string; /** 来源分区。 */ category: string; /** 客户端预先登记的订阅标识。 */ subscription_id: string };
     }
   | {
       /** 请求关联标识。 */ id: string;
@@ -77,7 +77,7 @@ type RpcRequestPayload =
         /** 目标 session id。 */
         session_id: string;
         /** Session 来源分区。 */
-        origin_type: string;
+        category: string;
       };
     }
   | {
@@ -90,7 +90,7 @@ type RpcRequestPayload =
         /** 目标 session id。 */
         session_id: string;
         /** Session 来源分区。 */
-        origin_type: string;
+        category: string;
       };
     }
   | {
@@ -117,7 +117,7 @@ type RpcRequestPayload =
         /** 目标 session id。 */
         session_id: string;
         /** Session 来源分区。 */
-        origin_type: string;
+        category: string;
         /** SDK prompt 输入。 */
         input: RemotePromptInput;
       };
@@ -134,7 +134,7 @@ type RpcRequestPayload =
         /** 目标 session id。 */
         session_id: string;
         /** Session 来源分区。 */
-        origin_type: string;
+        category: string;
       };
     }
   | {
@@ -147,7 +147,7 @@ type RpcRequestPayload =
         /** 目标 session id。 */
         session_id: string;
         /** Session 来源分区。 */
-        origin_type: string;
+        category: string;
         /** messages 分页参数。 */
         input?: ListSessionMessagesInput;
       };
@@ -158,7 +158,7 @@ type RpcRequestPayload =
       /** 列出指定 Session 正在等待用户响应的 Interaction。 */
       method: "sdk.sessions.interactions";
       /** 目标 Session 参数。 */
-      params: { session_id: string; origin_type: string };
+      params: { session_id: string; category: string };
     }
   | {
       /** 请求 id，用于匹配响应。 */
@@ -166,7 +166,7 @@ type RpcRequestPayload =
       /** 读取指定 Session 的运行与安全状态。 */
       method: "sdk.sessions.status";
       /** 目标 Session 参数。 */
-      params: { session_id: string; origin_type: string };
+      params: { session_id: string; category: string };
     }
   | {
       /** 请求 id，用于匹配响应。 */
@@ -176,7 +176,7 @@ type RpcRequestPayload =
       /** Session 与动态配置参数。 */
       params: {
         session_id: string;
-        origin_type: string;
+        category: string;
         input: RemoteSessionSetInput;
         options?: AgentSessionSetOptions;
       };
@@ -187,7 +187,7 @@ type RpcRequestPayload =
       /** 提交指定 Session 的 Interaction 用户响应。 */
       method: "sdk.sessions.respond";
       /** Session 与 Interaction 响应参数。 */
-      params: { session_id: string; origin_type: string; input: RespondSessionInteractionInput };
+      params: { session_id: string; category: string; input: RespondSessionInteractionInput };
     }
   | {
       /** 请求 id，用于匹配响应。 */
@@ -199,7 +199,7 @@ type RpcRequestPayload =
         /** 目标 session id。 */
         session_id: string;
         /** Session 来源分区。 */
-        origin_type: string;
+        category: string;
       };
     }
   | {
@@ -212,7 +212,7 @@ type RpcRequestPayload =
         /** 源 session id。 */
         session_id: string;
         /** Session 来源分区。 */
-        origin_type: string;
+        category: string;
         /** 可选源消息 id。 */
         message_id?: string;
         /** 是否包含源消息；默认包含。 */
@@ -231,7 +231,7 @@ type RpcRequestPayload =
         /** 目标 session id。 */
         session_id: string;
         /** Session 来源分区。 */
-        origin_type: string;
+        category: string;
       };
     }
   | {

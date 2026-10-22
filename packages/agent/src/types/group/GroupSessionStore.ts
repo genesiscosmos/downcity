@@ -67,7 +67,7 @@ export interface GroupSessionStore {
    * 把一个活动 GroupSession 迁入归档区。
    *
    * 与 Agent Session 的归档同形（`LocalSessionStore.archive_session`），只有一处差别：
-   * **不接受 `origin_type`**——群聊的来源只有一种，多一个参数只会让人猜该传什么。
+   * **不接受 `category`**——群聊的来源只有一种，多一个参数只会让人猜该传什么。
    *
    * 不变量（两个方向都不允许静默成功）：
    *

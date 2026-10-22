@@ -128,7 +128,7 @@ export interface PowerHostSystem {
     /** 目标 Session 的稳定 ID。 */
     readonly session_id: string;
     /** Session 的持久化来源分区。 */
-    readonly origin_type: string;
+    readonly category: string;
     /** 同一 Session 内标识本次业务输入的稳定幂等键。 */
     readonly request_id?: string;
     /** 提交给 Session 的文本或结构化内容。 */
@@ -143,7 +143,7 @@ export interface PowerHostSystem {
     /** 目标 Session 的稳定 ID。 */
     readonly session_id: string;
     /** 目标 Session 的来源分区。 */
-    readonly origin_type: string;
+    readonly category: string;
     /** 要追加的纯文本消息。 */
     readonly text: string;
   }): Promise<void>;
@@ -154,7 +154,7 @@ export interface PowerHostSystem {
     /** Session 的稳定 ID。 */
     readonly session_id: string;
     /** Session 的来源存储分区。 */
-    readonly origin_type: string;
+    readonly category: string;
   }): Promise<PowerHostWorkspace | undefined>;
   /** 读取既有 Session 的 canonical 消息，供后台增量处理；不发起 turn。 */
   read_agent_session_messages?(input: {
@@ -163,7 +163,7 @@ export interface PowerHostSystem {
     /** Session 稳定标识。 */
     readonly session_id: string;
     /** Session 持久化来源分区。 */
-    readonly origin_type: string;
+    readonly category: string;
   }): Promise<PowerJsonObject[]>;
   /** 使用系统默认应用打开 HTTP 或 HTTPS 地址。 */
   open_external(input: {

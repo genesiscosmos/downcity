@@ -52,21 +52,21 @@ export type TransportSubscription = {
  */
 export type RemoteSessionTransport = {
   /** 读取 session 信息。 */
-  get_info(session_id: string, origin_type: string): Promise<AgentSessionInfo>;
+  get_info(session_id: string, category: string): Promise<AgentSessionInfo>;
   /** 发送 prompt。 */
   prompt(
     session_id: string,
-    origin_type: string,
+    category: string,
     input: RemotePromptInput,
   ): Promise<{ id: string }>;
   /** 为本次 Prompt 建立独立执行通道。 */
   open_power_channel(input: OpenPromptPowerChannel): Promise<PromptPowerChannel>;
   /** 停止当前 session turn，并取消未吸收队列。 */
-  stop(session_id: string, origin_type: string, expected_turn_id?: string): Promise<AgentSessionStopResult>;
+  stop(session_id: string, category: string, expected_turn_id?: string): Promise<AgentSessionStopResult>;
   /** 订阅 session 事件。 */
   subscribe(params: {
     session_id: string;
-    origin_type: string;
+    category: string;
     on_ready: () => void;
     on_event: (mutation: SessionMutation) => void;
     /** 底层事件连接结束后的通知；主动关闭不触发。 */
@@ -75,32 +75,32 @@ export type RemoteSessionTransport = {
   /** 读取 Session Message。 */
   messages(
     session_id: string,
-    origin_type: string,
+    category: string,
     input?: ListSessionMessagesInput,
   ): Promise<SessionMessagePage>;
   /** 读取 system snapshot。 */
-  system(session_id: string, origin_type: string): Promise<AgentSessionSystemSnapshot>;
+  system(session_id: string, category: string): Promise<AgentSessionSystemSnapshot>;
   /** 分叉 session。 */
   fork(
     session_id: string,
-    origin_type: string,
+    category: string,
     input?: AgentSessionForkInput | string,
   ): Promise<AgentSessionInfo>;
   /** 列出指定 Session 正在等待用户响应的 Interaction。 */
-  interactions(session_id: string, origin_type: string): Promise<SessionInteractionRequest[]>;
+  interactions(session_id: string, category: string): Promise<SessionInteractionRequest[]>;
   /** 读取指定 Session 的运行与安全状态。 */
-  status(session_id: string, origin_type: string): Promise<AgentSessionStatus>;
+  status(session_id: string, category: string): Promise<AgentSessionStatus>;
   /** 更新指定 Session 的可序列化动态配置。 */
   set(
     session_id: string,
-    origin_type: string,
+    category: string,
     input: RemoteSessionSetInput,
     options?: AgentSessionSetOptions,
   ): Promise<void>;
   /** 提交指定 Session 的 Interaction 用户响应。 */
   respond(
     session_id: string,
-    origin_type: string,
+    category: string,
     input: RespondSessionInteractionInput,
   ): Promise<SessionInteractionResult>;
 };

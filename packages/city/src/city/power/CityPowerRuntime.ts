@@ -13,7 +13,7 @@
 import type { Hono } from "hono";
 import type { Agent, Logger } from "@downcity/agent";
 import { get_logger } from "@downcity/agent";
-import { EMPTY_TOOL_HOOK_SET, normalize_session_origin, SESSION_ORIGIN_TYPE_WORK } from "@downcity/type";
+import { EMPTY_TOOL_HOOK_SET, normalize_session_origin, SESSION_ORIGIN_CATEGORY_WORK, SESSION_ORIGIN_TYPE_WORK } from "@downcity/type";
 import type { PowerSurface } from "@downcity/type";
 import type { WorkspaceRuntime } from "@/workspace/index.js";
 import type { AgentPowerRuntime } from "@/power/types/PowerExecutionRuntime.js";
@@ -428,9 +428,11 @@ export class CityPowerRuntime implements PowerRuntimeHost {
   ): PowerContext["session"] {
     const session_id = String(site.session_id || "").trim();
     if (!session_id) return undefined;
-    const origin = normalize_session_origin(site.session_origin ?? { type: SESSION_ORIGIN_TYPE_WORK });
+    const origin = normalize_session_origin(
+      site.session_origin ?? { category: SESSION_ORIGIN_CATEGORY_WORK, type: SESSION_ORIGIN_TYPE_WORK },
+    );
     try {
-      const runtime = agent.sessions.runtime(session_id, origin.type);
+      const runtime = agent.sessions.runtime(session_id, origin.category);
       return create_power_session_handle(
         runtime as unknown as PowerSessionHandle,
         session_id,
@@ -732,8 +734,8 @@ export class CityPowerRuntime implements PowerRuntimeHost {
             : undefined;
           const agent = this.options.runtime_access.get_agent(input.agent_id);
           if (!agent) throw new Error(`Agent not found in City: ${input.agent_id}`);
-          await agent.sessions.get(input.session_id, input.origin_type, { workspace });
-          const session = agent.sessions.runtime(input.session_id, input.origin_type);
+          await agent.sessions.get(input.session_id, input.category, { workspace });
+          const session = agent.sessions.runtime(input.session_id, input.category);
           const turn = await session.prompt({
             actor: input.actor,
             query: input.query,
@@ -761,23 +763,23 @@ export class CityPowerRuntime implements PowerRuntimeHost {
             : undefined;
           const agent = this.options.runtime_access.get_agent(input.agent_id);
           if (!agent) throw new Error(`Agent not found in City: ${input.agent_id}`);
-          await agent.sessions.get(input.session_id, input.origin_type, { workspace });
+          await agent.sessions.get(input.session_id, input.category, { workspace });
           await agent.sessions.runtime(
             input.session_id,
-            input.origin_type,
+            input.category,
           ).append_agent_message({ text: input.text });
         },
         read_agent_session_messages: async (input) => {
           const agent = this.options.runtime_access.get_agent(input.agent_id);
           if (!agent) throw new Error(`Agent not found in City: ${input.agent_id}`);
-          await agent.sessions.get(input.session_id, input.origin_type);
-          const messages = await agent.sessions.runtime(input.session_id, input.origin_type).messages();
+          await agent.sessions.get(input.session_id, input.category);
+          const messages = await agent.sessions.runtime(input.session_id, input.category).messages();
           return messages as unknown as import("@/power/index.js").PowerJsonObject[];
         },
         get_agent_session_workspace: async (input) => {
           const agent = this.options.runtime_access.get_agent(input.agent_id);
           if (!agent) throw new Error(`Agent not found in City: ${input.agent_id}`);
-          const session = await agent.sessions.get(input.session_id, input.origin_type);
+          const session = await agent.sessions.get(input.session_id, input.category);
           const workspace = session.get("workspace");
           return workspace ? {
             workspace_id: workspace.id,

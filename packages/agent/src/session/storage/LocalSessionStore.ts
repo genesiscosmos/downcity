@@ -23,7 +23,7 @@ import type { SessionStorage } from "@/types/store/SessionStorage.js";
 import { LocalSessionDataStore } from "@/session/storage/LocalSessionDataStore.js";
 import {
   get_agent_archived_session_database_path,
-  get_agent_archived_session_origins_path,
+  get_agent_archived_session_categories_path,
   get_agent_archived_session_path,
   get_agent_archived_sessions_path,
   get_agent_session_database_path,
@@ -38,7 +38,8 @@ import {
 import type { FileSystem } from "@downcity/type";
 import type { LocalSessionStoreOptions } from "@/types/store/LocalStore.js";
 import type { SessionOrigin } from "@downcity/type";
-import { normalize_session_origin, normalize_session_origin_type, SESSION_ORIGIN_TYPE_WORK } from "@downcity/type";
+import { migrate_session_origin_categories } from "@/session/storage/OriginCategoryMigration.js";
+import { normalize_session_origin, normalize_session_origin_category, SESSION_ORIGIN_CATEGORY_WORK } from "@downcity/type";
 
 /** 解码目录中经过 URL 编码的 Session 标识。 */
 function decode_session_id(input: string): string {
@@ -72,12 +73,34 @@ export class LocalSessionStore implements SessionStore {
   /** 内存模式中已归档但仍由 Store 持有的 Session。 */
   private readonly archived_sessions = new Map<string, LocalSessionDataStore>();
 
+  /**
+   * 来源分类迁移的唯一执行入口。
+   *
+   * 懒执行且在实例内只跑一次：所有异步读写路径先经过它，保证迁移完成后
+   * 才会按新分区读取历史会话。
+   */
+  private migration?: Promise<void>;
+
   constructor(options: LocalSessionStoreOptions) {
     this.files = options.files;
     this.agent_id = options.agent_id;
     this.workspace_id = options.workspace_id;
     this.storage_root_path = options.storage_root_path;
     this.database_location = options.database_location;
+  }
+
+  /** 保证历史数据已完成来源分类迁移；失败时释放缓存以便下次重试。 */
+  private async ensure_origin_categories_migrated(): Promise<void> {
+    if (this.database_location.type === "memory") return;
+    this.migration ??= migrate_session_origin_categories({
+      files: this.files,
+      storage_root_path: this.storage_root_path,
+    }).then(() => undefined).catch((error: unknown) => {
+      // 失败不留半成品状态：下次调用重新扫描，已迁移的会话靠自身幂等跳过。
+      this.migration = undefined;
+      throw error;
+    });
+    await this.migration;
   }
 
   /** 为新 Session 创建稳定持久化视图。 */
@@ -91,7 +114,7 @@ export class LocalSessionStore implements SessionStore {
       throw new Error("SessionStore.create_session requires a non-empty session_id");
     }
     const resolved_origin = normalize_session_origin(origin);
-    const cache_key = this.session_cache_key(resolved_session_id, resolved_origin.type);
+    const cache_key = this.session_cache_key(resolved_session_id, resolved_origin.category);
     const cached = this.sessions.get(cache_key);
     if (cached) {
       if (isDeepStrictEqual(cached.origin, resolved_origin)) return cached;
@@ -114,13 +137,14 @@ export class LocalSessionStore implements SessionStore {
   }
 
   /** 打开已有 Session，并以数据库中的完整 origin 作为唯一事实。 */
-  async open_session(session_id: string, origin_type = SESSION_ORIGIN_TYPE_WORK): Promise<SessionStorage> {
+  async open_session(session_id: string, category = SESSION_ORIGIN_CATEGORY_WORK): Promise<SessionStorage> {
+    await this.ensure_origin_categories_migrated();
     const resolved_session_id = normalize_session_id(session_id);
     if (!resolved_session_id) {
       throw new Error("SessionStore.open_session requires a non-empty session_id");
     }
-    const resolved_origin_type = normalize_session_origin_type(origin_type);
-    const cache_key = this.session_cache_key(resolved_session_id, resolved_origin_type);
+    const resolved_category = normalize_session_origin_category(category);
+    const cache_key = this.session_cache_key(resolved_session_id, resolved_category);
     const cached = this.sessions.get(cache_key);
     if (cached) return cached;
     if (this.database_location.type === "memory") {
@@ -128,13 +152,13 @@ export class LocalSessionStore implements SessionStore {
     }
     const database_path = get_agent_session_database_path(
       this.storage_root_path,
-      resolved_origin_type,
+      resolved_category,
       resolved_session_id,
     );
     if (!(await this.files.path_exists(database_path))) {
       throw new Error(`Session "${resolved_session_id}" not found`);
     }
-    const metadata = read_session_metadata_from_database(database_path, resolved_origin_type);
+    const metadata = read_session_metadata_from_database(database_path, resolved_category);
     if (!metadata || metadata.agent_id !== this.agent_id) {
       throw new Error(`Session "${resolved_session_id}" belongs to another Agent`);
     }
@@ -152,35 +176,37 @@ export class LocalSessionStore implements SessionStore {
   }
 
   /** 判断活动 Session 是否存在。 */
-  async has_session(session_id: string, origin_type = SESSION_ORIGIN_TYPE_WORK): Promise<boolean> {
-    const resolved_origin_type = normalize_session_origin_type(origin_type);
-    const cache_key = this.session_cache_key(session_id, resolved_origin_type);
+  async has_session(session_id: string, category = SESSION_ORIGIN_CATEGORY_WORK): Promise<boolean> {
+    await this.ensure_origin_categories_migrated();
+    const resolved_category = normalize_session_origin_category(category);
+    const cache_key = this.session_cache_key(session_id, resolved_category);
     if (this.database_location.type === "memory") return this.sessions.has(cache_key);
     const database_path = get_agent_session_database_path(
       this.storage_root_path,
-      resolved_origin_type,
+      resolved_category,
       session_id,
     );
     if (!(await this.files.path_exists(database_path))) return false;
-    await this.assert_session_owner(session_id, resolved_origin_type, false);
+    await this.assert_session_owner(session_id, resolved_category, false);
     return true;
   }
 
   /** 永久删除活动 Session。 */
-  async remove_session(session_id: string, origin_type = SESSION_ORIGIN_TYPE_WORK): Promise<boolean> {
-    const resolved_origin_type = normalize_session_origin_type(origin_type);
-    const session_path = this.session_path(session_id, resolved_origin_type);
-    const cache_key = this.session_cache_key(session_id, resolved_origin_type);
+  async remove_session(session_id: string, category = SESSION_ORIGIN_CATEGORY_WORK): Promise<boolean> {
+    await this.ensure_origin_categories_migrated();
+    const resolved_category = normalize_session_origin_category(category);
+    const session_path = this.session_path(session_id, resolved_category);
+    const cache_key = this.session_cache_key(session_id, resolved_category);
     const cached = this.sessions.get(cache_key);
     const existed = this.database_location.type === "memory"
       ? Boolean(cached)
       : await this.files.path_exists(get_agent_session_database_path(
           this.storage_root_path,
-          resolved_origin_type,
+          resolved_category,
           session_id,
         ));
     if (existed) {
-      await this.assert_session_owner(session_id, resolved_origin_type, false);
+      await this.assert_session_owner(session_id, resolved_category, false);
       await cached?.dispose();
       await this.files.remove_path(session_path);
     }
@@ -189,10 +215,11 @@ export class LocalSessionStore implements SessionStore {
   }
 
   /** 清空活动 Session Message 数据。 */
-  async clear_session_messages(session_id: string, origin_type = SESSION_ORIGIN_TYPE_WORK): Promise<boolean> {
-    const resolved_origin_type = normalize_session_origin_type(origin_type);
-    if (!(await this.has_session(session_id, resolved_origin_type))) return false;
-    const storage = await this.open_session(session_id, resolved_origin_type);
+  async clear_session_messages(session_id: string, category = SESSION_ORIGIN_CATEGORY_WORK): Promise<boolean> {
+    await this.ensure_origin_categories_migrated();
+    const resolved_category = normalize_session_origin_category(category);
+    if (!(await this.has_session(session_id, resolved_category))) return false;
+    const storage = await this.open_session(session_id, resolved_category);
     await storage.clear_messages();
     return true;
   }
@@ -202,6 +229,7 @@ export class LocalSessionStore implements SessionStore {
     input: AgentListSessionsInput | undefined,
     executing_session_ids: ReadonlySet<string>,
   ): Promise<AgentSessionSummaryPage> {
+    await this.ensure_origin_categories_migrated();
     if (this.database_location.type === "memory") {
       return await this.list_cached_sessions(input, executing_session_ids);
     }
@@ -216,9 +244,10 @@ export class LocalSessionStore implements SessionStore {
   }
 
   /** 将活动 Session 迁入归档区。 */
-  async archive_session(session_id: string, origin_type = SESSION_ORIGIN_TYPE_WORK): Promise<AgentArchiveSessionResult> {
-    const resolved_origin_type = normalize_session_origin_type(origin_type);
-    const cache_key = this.session_cache_key(session_id, resolved_origin_type);
+  async archive_session(session_id: string, category = SESSION_ORIGIN_CATEGORY_WORK): Promise<AgentArchiveSessionResult> {
+    await this.ensure_origin_categories_migrated();
+    const resolved_category = normalize_session_origin_category(category);
+    const cache_key = this.session_cache_key(session_id, resolved_category);
     if (this.database_location.type === "memory") {
       const storage = this.sessions.get(cache_key);
       if (!storage) throw new Error(`Session "${session_id}" not found`);
@@ -229,15 +258,15 @@ export class LocalSessionStore implements SessionStore {
       this.archived_sessions.set(cache_key, storage);
       return { session_id, archived_at: Date.now() };
     }
-    const source_path = this.session_path(session_id, resolved_origin_type);
+    const source_path = this.session_path(session_id, resolved_category);
     if (!(await this.files.path_exists(source_path))) {
       throw new Error(`Session "${session_id}" not found`);
     }
-    await this.assert_session_owner(session_id, resolved_origin_type, false);
+    await this.assert_session_owner(session_id, resolved_category, false);
     await this.sessions.get(cache_key)?.dispose();
     const target_path = get_agent_archived_session_path(
       this.storage_root_path,
-      resolved_origin_type,
+      resolved_category,
       session_id,
     );
     if (await this.files.path_exists(target_path)) {
@@ -245,7 +274,7 @@ export class LocalSessionStore implements SessionStore {
     }
     await this.files.ensure_directory(get_agent_archived_sessions_path(
       this.storage_root_path,
-      resolved_origin_type,
+      resolved_category,
     ));
     await this.files.move_path(source_path, target_path);
     this.sessions.delete(cache_key);
@@ -259,6 +288,7 @@ export class LocalSessionStore implements SessionStore {
   async list_archived_sessions(
     input?: AgentArchiveSessionsInput,
   ): Promise<AgentArchiveSessionsResult> {
+    await this.ensure_origin_categories_migrated();
     if (this.database_location.type === "memory") {
       return await this.list_cached_sessions(input, new Set(), this.archived_sessions);
     }
@@ -273,13 +303,14 @@ export class LocalSessionStore implements SessionStore {
 
   /** 永久删除全部归档 Session。 */
   async clean_archive(): Promise<AgentCleanArchiveResult> {
+    await this.ensure_origin_categories_migrated();
     if (this.database_location.type === "memory") {
       const archived = [...this.archived_sessions.values()];
       this.archived_sessions.clear();
       await Promise.all(archived.map(async (storage) => await storage.dispose()));
       return { removed_session_ids: archived.map((storage) => storage.session_id) };
     }
-    const archive_root_path = get_agent_archived_session_origins_path(this.storage_root_path);
+    const archive_root_path = get_agent_archived_session_categories_path(this.storage_root_path);
     if (!(await this.files.path_exists(archive_root_path))) {
       return { removed_session_ids: [] };
     }
@@ -287,18 +318,18 @@ export class LocalSessionStore implements SessionStore {
     const origin_entries = await this.files.read_directory(archive_root_path);
     for (const origin_entry of origin_entries) {
       if (!origin_entry.is_directory) continue;
-      const origin_type = decode_session_id(origin_entry.name);
-      if (!origin_type) continue;
-      const sessions_path = get_agent_archived_sessions_path(this.storage_root_path, origin_type);
+      const category = decode_session_id(origin_entry.name);
+      if (!category) continue;
+      const sessions_path = get_agent_archived_sessions_path(this.storage_root_path, category);
       const session_entries = await this.files.read_directory(sessions_path);
       for (const session_entry of session_entries) {
         if (!session_entry.is_directory) continue;
         const session_id = decode_session_id(session_entry.name);
         if (!session_id) continue;
-        if (!(await this.is_session_owner(session_id, origin_type, true))) continue;
+        if (!(await this.is_session_owner(session_id, category, true))) continue;
         await this.files.remove_path(get_agent_archived_session_path(
           this.storage_root_path,
-          origin_type,
+          category,
           session_id,
         ));
         removed_session_ids.push(session_id);
@@ -316,10 +347,10 @@ export class LocalSessionStore implements SessionStore {
   }
 
   /** 返回活动 Session 物理目录，仅供本地实现内部使用。 */
-  private session_path(session_id: string, origin_type: string): string {
+  private session_path(session_id: string, category: string): string {
     return get_agent_session_path(
       this.storage_root_path,
-      origin_type,
+      category,
       session_id,
     );
   }
@@ -327,10 +358,10 @@ export class LocalSessionStore implements SessionStore {
   /** 校验目标 Session 确实属于当前 Agent 与 Workspace。 */
   private async assert_session_owner(
     session_id: string,
-    origin_type: string,
+    category: string,
     archived: boolean,
   ): Promise<void> {
-    if (await this.is_session_owner(session_id, origin_type, archived)) return;
+    if (await this.is_session_owner(session_id, category, archived)) return;
     throw new Error(
       `Session "${session_id}" belongs to another Agent`,
     );
@@ -339,16 +370,16 @@ export class LocalSessionStore implements SessionStore {
   /** 判断 Session metadata 是否匹配当前查询视图。 */
   private async is_session_owner(
     session_id: string,
-    origin_type: string,
+    category: string,
     archived: boolean,
   ): Promise<boolean> {
-    const cache_key = this.session_cache_key(session_id, origin_type);
+    const cache_key = this.session_cache_key(session_id, category);
     if (this.database_location.type === "memory") {
       const cached = (archived ? this.archived_sessions : this.sessions).get(cache_key);
       if (cached) {
         try {
           const metadata = await cached.read_metadata();
-          return metadata.agent_id === this.agent_id && metadata.origin.type === origin_type;
+          return metadata.agent_id === this.agent_id && metadata.origin.category === category;
         } catch {
           return false;
         }
@@ -358,13 +389,13 @@ export class LocalSessionStore implements SessionStore {
     const file_path = archived
       ? get_agent_archived_session_database_path(
         this.storage_root_path,
-        origin_type,
+        category,
         session_id,
       )
-      : get_agent_session_database_path(this.storage_root_path, origin_type, session_id);
+      : get_agent_session_database_path(this.storage_root_path, category, session_id);
     if (!(await this.files.path_exists(file_path))) return false;
-    const metadata = read_session_metadata_from_database(file_path, origin_type);
-    return metadata?.agent_id === this.agent_id && metadata.origin.type === origin_type;
+    const metadata = read_session_metadata_from_database(file_path, category);
+    return metadata?.agent_id === this.agent_id && metadata.origin.category === category;
   }
 
   /** 从内存数据库缓存投影 Session 列表。 */
@@ -373,11 +404,16 @@ export class LocalSessionStore implements SessionStore {
     executing_session_ids: ReadonlySet<string>,
     storages = this.sessions,
   ): Promise<AgentSessionSummaryPage> {
-    const origin_type = normalize_session_origin_type(input?.origin_type ?? SESSION_ORIGIN_TYPE_WORK);
+    const category = normalize_session_origin_category(input?.category ?? SESSION_ORIGIN_CATEGORY_WORK);
+    // 归档查询没有角色维度，只有活动列表需要；统一取一次避免在循环里判分支。
+    const origin_type_filter = String(
+      (input as AgentListSessionsInput | undefined)?.origin_type ?? "",
+    ).trim();
     const query = String(input?.query || "").trim().toLowerCase();
     const summaries: AgentSessionSummary[] = [];
     for (const storage of storages.values()) {
-      if (storage.origin.type !== origin_type) continue;
+      if (storage.origin.category !== category) continue;
+      if (origin_type_filter && storage.origin.type !== origin_type_filter) continue;
       const metadata = await storage.read_metadata();
       if ((this.workspace_id || input?.workspace_id) &&
           metadata.workspace_id !== (this.workspace_id || input?.workspace_id)) continue;
@@ -409,7 +445,7 @@ export class LocalSessionStore implements SessionStore {
   }
 
   /** 返回来源分区内唯一的 Session Store 缓存键。 */
-  private session_cache_key(session_id: string, origin_type: string): string {
-    return `${origin_type}\u0000${normalize_session_id(session_id)}`;
+  private session_cache_key(session_id: string, category: string): string {
+    return `${category}\u0000${normalize_session_id(session_id)}`;
   }
 }

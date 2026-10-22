@@ -133,6 +133,7 @@ test("CityHTTP 按任意 origin 类型确定性访问 Session", async () => {
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
           origin: {
+            category: "work",
             type: "automation/daily",
             schedule_id: "daily-report",
           },
@@ -142,6 +143,7 @@ test("CityHTTP 按任意 origin 类型确定性访问 Session", async () => {
     assert.equal(create_response.status, 200);
     const created = (await create_response.json()).session;
     assert.deepEqual(created.origin, {
+      category: "work",
       type: "automation/daily",
       schedule_id: "daily-report",
     });
@@ -151,7 +153,7 @@ test("CityHTTP 按任意 origin 类型确定性访问 Session", async () => {
     );
     assert.deepEqual((await default_list.json()).sessions, []);
 
-    const origin_query = "origin_type=automation%2Fdaily";
+    const origin_query = "category=work";
     const origin_list = await transport.router().request(
       `/agents/first_agent/workspaces/first/api/sdk/sessions?${origin_query}`,
     );

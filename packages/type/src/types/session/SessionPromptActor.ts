@@ -15,8 +15,8 @@ export type SessionPromptActor =
       workspace_id: string | null;
       /** 来源 Session 标识。 */
       session_id: string;
-      /** 来源 Session 存储分区。 */
-      origin_type: string;
+      /** 来源 Session 分类；Session 身份由分类与标识共同组成。 */
+      category: string;
     }
   | {
       /** 宿主自动执行对象，不冒用用户或 Session。 */

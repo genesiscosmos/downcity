@@ -285,9 +285,9 @@ function create_local_chat_sessions(
   };
   return {
     create: async () => wrap(await sessions.create({ workspace })),
-    get: async (session_id, origin_type) => wrap(await sessions.get(
+    get: async (session_id, category) => wrap(await sessions.get(
       session_id,
-      origin_type,
+      category,
       { workspace },
     )),
     list: async (input) => await sessions.list({ ...input, workspace_id: workspace.id }),

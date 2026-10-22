@@ -83,7 +83,7 @@ function create_turn_input(model) {
     input: {
       turn_context: create_session_turn_context({
         session_id: "tool-loop-limit-session",
-        session_origin: { type: "work" },
+        session_origin: { category: "work", type: "work" },
         turn_id: "tool-loop-limit-turn",
         append_internal_user_message: async (parts) => {
           internal_parts.push(...parts);

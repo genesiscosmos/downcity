@@ -21,9 +21,9 @@ import {
   get_agent_sessions_path,
 } from "@/session/storage/LocalStorePaths.js";
 import {
-  normalize_session_origin_type,
+  normalize_session_origin_category,
   restore_session_origin,
-  SESSION_ORIGIN_TYPE_WORK,
+  SESSION_ORIGIN_CATEGORY_WORK,
   type FileSystem,
   type SessionMessage,
 } from "@downcity/type";
@@ -135,7 +135,7 @@ export function build_session_info(input: SessionBrowseBaseInput): AgentSessionI
 /** 只读打开一个现有数据库并读取 Session 状态；失败时不改写磁盘。 */
 export function read_session_metadata_from_database(
   database_path: string,
-  fallback_origin_type: string,
+  fallback_category: string,
 ): SessionHistoryMeta | null {
   let database: DatabaseSync | null = null;
   try {
@@ -152,7 +152,7 @@ export function read_session_metadata_from_database(
       session_id: row.session_id,
       agent_id: row.agent_id,
       ...(row.workspace_id ? { workspace_id: row.workspace_id } : {}),
-      origin: restore_session_origin(JSON.parse(row.origin), fallback_origin_type),
+      origin: restore_session_origin(JSON.parse(row.origin), fallback_category),
       timezone: row.timezone,
       ...(row.title ? { title: row.title } : {}),
       ...(row.model_label ? { model_label: row.model_label } : {}),
@@ -220,10 +220,10 @@ async function list_session_summary_page(input: {
   /** 是否扫描归档目录。 */
   archived: boolean;
 }): Promise<AgentSessionSummaryPage> {
-  const origin_type = normalize_session_origin_type(input.input?.origin_type ?? SESSION_ORIGIN_TYPE_WORK);
+  const category = normalize_session_origin_category(input.input?.category ?? SESSION_ORIGIN_CATEGORY_WORK);
   const sessions_path = input.archived
-    ? get_agent_archived_sessions_path(input.project_root, origin_type)
-    : get_agent_sessions_path(input.project_root, origin_type);
+    ? get_agent_archived_sessions_path(input.project_root, category)
+    : get_agent_sessions_path(input.project_root, category);
   if (!(await input.files.path_exists(sessions_path))) {
     return { items: [], total: 0, has_more: false };
   }
@@ -233,14 +233,16 @@ async function list_session_summary_page(input: {
     if (!entry.is_directory) continue;
     const session_id = decode_session_id(entry.name);
     const database_path = input.archived
-      ? get_agent_archived_session_database_path(input.project_root, origin_type, session_id)
-      : get_agent_session_database_path(input.project_root, origin_type, session_id);
+      ? get_agent_archived_session_database_path(input.project_root, category, session_id)
+      : get_agent_session_database_path(input.project_root, category, session_id);
     if (!(await input.files.path_exists(database_path))) continue;
-    const metadata = read_session_metadata_from_database(database_path, origin_type);
+    const metadata = read_session_metadata_from_database(database_path, category);
+    const origin_type_filter = String(input.input?.origin_type || "").trim();
     if (
       !metadata ||
       metadata.agent_id !== input.agent_id ||
-      metadata.origin.type !== origin_type ||
+      metadata.origin.category !== category ||
+      (origin_type_filter && metadata.origin.type !== origin_type_filter) ||
       (input.workspace_id && metadata.workspace_id !== input.workspace_id)
     ) continue;
     const summary = build_session_info({

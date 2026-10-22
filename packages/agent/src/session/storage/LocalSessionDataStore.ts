@@ -23,7 +23,7 @@ export class LocalSessionDataStore extends SqliteSessionStorage {
       origin: options.origin,
       database_path: get_agent_session_database_path(
         options.storage_root_path,
-        options.origin.type,
+        options.origin.category,
         options.session_id,
       ),
       database_location: options.database_location,
@@ -32,7 +32,7 @@ export class LocalSessionDataStore extends SqliteSessionStorage {
         files: options.files,
         attachments_dir_path: get_agent_session_attachments_path(
           options.storage_root_path,
-          options.origin.type,
+          options.origin.category,
           options.session_id,
         ),
       }),

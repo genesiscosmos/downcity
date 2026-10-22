@@ -35,7 +35,7 @@ function create_fake_agent() {
   const info = {
     agent_id: "http-test-agent",
     session_id: "http-test-session",
-    origin: { type: "work" },
+    origin: { category: "work", type: "work" },
     created_at: new Date().toISOString(),
     updated_at: new Date().toISOString(),
   };

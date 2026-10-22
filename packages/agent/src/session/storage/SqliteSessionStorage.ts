@@ -120,7 +120,7 @@ export class SqliteSessionStorage implements SessionStorage {
       session_id: row.session_id,
       agent_id: row.agent_id,
       ...(row.workspace_id ? { workspace_id: row.workspace_id } : {}),
-      origin: restore_session_origin(JSON.parse(row.origin), this.origin.type),
+      origin: restore_session_origin(JSON.parse(row.origin), this.origin.category),
       timezone: row.timezone,
       ...(row.title ? { title: row.title } : {}),
       ...(row.model_label ? { model_label: row.model_label } : {}),

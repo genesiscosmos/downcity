@@ -15,7 +15,7 @@ import type { ListSessionMessagesInput, SessionMessagePage } from "@downcity/typ
 import type { AgentArchiveSessionResult } from "@/types/agent/SessionTypes.js";
 import type { SessionInteractionResponse } from "@downcity/type";
 import type { SessionDelegationCaller, SessionDelegationInput, SessionDelegationMessage, SessionDelegationPort, SessionDelegationReceipt } from "@/types/agent/SessionDelegation.js";
-import { is_agent_session_origin } from "@downcity/type";
+import { is_agent_session_origin, normalize_session_origin_category, SESSION_ORIGIN_CATEGORY_WORK } from "@downcity/type";
 import type { SessionWorkContract } from "@/types/agent/SessionWork.js";
 import type {
   SessionCheckDetailToolOutput,
@@ -43,7 +43,7 @@ export interface SessionWorkListEntry {
   /** 最近更新时间戳（ms）。 */
   updated_at?: number;
   /** 会话来源。 */
-  origin: { type: string };
+  origin: { category: string; type: string };
   /** 当前是否正在执行。 */
   executing?: boolean;
 }
@@ -57,7 +57,7 @@ export interface SessionWorkOptions {
     items: SessionWorkListEntry[];
   }>;
   /** 恢复单条会话的运行时实例。 */
-  get_session: (session_id: string, origin_type: string) => Promise<AgentSession>;
+  get_session: (session_id: string, category: string) => Promise<AgentSession>;
   /** 持久化派发与结果回传端口；SessionWork 不持有委派存储。 */
   delegations: SessionDelegationPort;
 }
@@ -113,7 +113,7 @@ export class SessionWork implements SessionWorkContract {
     limit?: number;
   }): Promise<SessionCheckDetailToolOutput> {
     const item = await this.require_list_entry(input.session_id);
-    const session = await this.options.get_session(item.session_id, item.origin.type);
+    const session = await this.options.get_session(item.session_id, item.origin.category);
     const [messages, pending, status] = await Promise.all([
       session.messages({ limit: normalize_limit(input.limit, DEFAULT_MESSAGE_LIMIT) }),
       session.interactions(),
@@ -151,15 +151,17 @@ export class SessionWork implements SessionWorkContract {
   /** 直接读取持久化历史分页，compact 只改变模型副本，不改变此原文。 */
   async messages(input: ListSessionMessagesInput & { /** 目标工作会话标识。 */ session_id: string }): Promise<SessionMessagePage> {
     const item = await this.require_list_entry(input.session_id);
-    const session = await this.options.get_session(item.session_id, item.origin.type);
+    const session = await this.options.get_session(item.session_id, item.origin.category);
     return await session.messages({ limit: input.limit, before_sequence: input.before_sequence });
   }
 
-  /** 仅归档 Work 来源，避免模型移除主对话或外部 Channel 路由。 */
+  /** 仅归档工作分类的会话，避免模型移除主对话或外部聊天路由。 */
   async archive(input: { /** 待归档的工作会话标识。 */ session_id: string }): Promise<AgentArchiveSessionResult> {
     const item = await this.require_list_entry(input.session_id);
-    if (item.origin.type !== "work") throw new Error("session.archive only supports Work Sessions");
-    const session = await this.options.get_session(item.session_id, item.origin.type);
+    if (item.origin.category !== SESSION_ORIGIN_CATEGORY_WORK) {
+      throw new Error("session.archive only supports Work Sessions");
+    }
+    const session = await this.options.get_session(item.session_id, item.origin.category);
     return await session.archive();
   }
 
@@ -170,7 +172,7 @@ export class SessionWork implements SessionWorkContract {
     response: SessionInteractionResponse;
   }): Promise<void> {
     const item = await this.require_list_entry(input.session_id);
-    const session = await this.options.get_session(item.session_id, item.origin.type);
+    const session = await this.options.get_session(item.session_id, item.origin.category);
     const pending = await session.interactions();
     if (!pending.some((entry) => entry.interaction_id === input.interaction_id)) {
       throw new Error(
@@ -186,7 +188,7 @@ export class SessionWork implements SessionWorkContract {
   /** 停止某条会话当前正在执行的 Turn。 */
   async stop(input: { session_id: string }): Promise<void> {
     const item = await this.require_list_entry(input.session_id);
-    const session = await this.options.get_session(item.session_id, item.origin.type);
+    const session = await this.options.get_session(item.session_id, item.origin.category);
     await this.options.delegations.cancel(item.session_id);
     await session.stop();
   }

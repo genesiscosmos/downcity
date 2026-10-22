@@ -59,7 +59,7 @@ function create_turn_input(model, messages, context_window = 100, warnings = [])
   return {
     turn_context: create_session_turn_context({
       session_id: "compact-runner-session",
-      session_origin: { type: "work" },
+      session_origin: { category: "work", type: "work" },
       turn_id: "compact-runner-turn",
       report_model_request_failure: (warning) => warnings.push(warning),
     }),

@@ -6,7 +6,7 @@
 import { createHash } from "node:crypto";
 import { generate_session_id } from "@/session/SessionIdentity.js";
 import { create_session_prompt_actor } from "@/types/sdk/SessionPromptActor.js";
-import { SESSION_ORIGIN_TYPE_WORK } from "@downcity/type";
+import { SESSION_ORIGIN_CATEGORY_WORK } from "@downcity/type";
 import type {
   SessionDelegationCaller,
   SessionDelegationInput,
@@ -38,7 +38,7 @@ export class SessionDelegations implements SessionDelegationPort {
   /** 继续同一工作上下文；每次消息独立记录结果回传与幂等身份。 */
   async send(input: SessionDelegationMessage, caller: SessionDelegationCaller): Promise<SessionDelegationReceipt> {
     const session = await this.options.get_work_session(input.session_id);
-    if (session.origin.type !== SESSION_ORIGIN_TYPE_WORK || !session.workspace_id) {
+    if (session.origin.category !== SESSION_ORIGIN_CATEGORY_WORK || !session.workspace_id) {
       throw new Error("session.send requires a project Work Session");
     }
     if (caller.agent_id === session.agent_id && caller.session_id === session.id) {
@@ -68,7 +68,7 @@ export class SessionDelegations implements SessionDelegationPort {
       await this.options.validate_model(input.model_id, workspace);
     }
     const delegation_id = createHash("sha256")
-      .update(JSON.stringify([caller.agent_id, caller.origin.type, caller.session_id, caller.turn_id, caller.tool_call_id]))
+      .update(JSON.stringify([caller.agent_id, caller.origin.category, caller.session_id, caller.turn_id, caller.tool_call_id]))
       .digest("hex");
     const record = await this.options.store.create({
       delegation_id,
@@ -198,7 +198,7 @@ export class SessionDelegations implements SessionDelegationPort {
           agent_id: record.caller.agent_id,
           workspace_id: record.caller.workspace_id ?? null,
           session_id: record.caller.session_id,
-          origin_type: record.caller.origin.type,
+          category: record.caller.origin.category,
         }),
         query: record.query,
       });

@@ -25,7 +25,8 @@ export interface AgentCreateSessionInput {
   /**
    * 当前 Session 的创建来源。
    *
-   * 省略时使用 `{ type: "work" }`；其他调用方可以使用任意稳定的非空类型。
+   * 省略时使用默认工作会话（`work` 分类、`work` 角色）；调用方也可以声明
+   * 自己的角色，但必须同时给出所在分类。
    */
   readonly origin?: SessionOrigin;
 }
@@ -34,7 +35,13 @@ export interface AgentCreateSessionInput {
  * Session 列表查询输入。
  */
 export interface AgentListSessionsInput {
-  /** 要查询的来源分区；省略时只查询 `chat`。 */
+  /** 要查询的来源分类；省略时查询 `work` 分类。 */
+  category?: string;
+  /**
+   * 分类内按角色过滤；省略时返回该分类的全部会话。
+   *
+   * 用于区分同一分类下的不同角色，例如在 `chat` 分类里只看 Agent 主会话。
+   */
   origin_type?: string;
   /**
    * 只返回绑定到指定 Workspace 的 Session。
@@ -399,16 +406,16 @@ export interface AgentArchiveSessionInput {
    * - 正在执行中的 session 不允许归档。
    */
   id: string;
-  /** Session 所在的来源分区；省略时使用 `chat`。 */
-  origin_type?: string;
+  /** Session 所在的来源分类；省略时使用 `work`。 */
+  category?: string;
 }
 
 /**
  * 列出已归档 session 的输入参数。
  */
 export interface AgentArchiveSessionsInput {
-  /** 要查询的来源分区；省略时只查询 `chat`。 */
-  origin_type?: string;
+  /** 要查询的来源分类；省略时查询 `work` 分类。 */
+  category?: string;
   /**
    * 只返回绑定到指定 Workspace 的归档 Session。
    *

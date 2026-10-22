@@ -22,7 +22,7 @@ async function create_storage(directory_path, options = {}) {
     session_id: options.session_id || "session-1",
     agent_id: options.agent_id || "agent-1",
     workspace_id: "workspace-1",
-    origin: { type: "work" },
+    origin: { category: "work", type: "work" },
     database_path: path.join(directory_path, "session.db"),
     database_location: { type: "file" },
     files: create_files(),
@@ -153,7 +153,7 @@ test("初始化失败会关闭连接并允许同一实例重试", async () => {
   const storage = new SqliteSessionStorage({
     session_id: "session-1",
     agent_id: "agent-1",
-    origin: { type: "work" },
+    origin: { category: "work", type: "work" },
     database_path,
     database_location: { type: "file" },
     files: create_files(),
@@ -177,7 +177,7 @@ test("旧 SQLite schema 必须由外部脚本迁移", async () => {
   const storage = new SqliteSessionStorage({
     session_id: "session-1",
     agent_id: "agent-1",
-    origin: { type: "work" },
+    origin: { category: "work", type: "work" },
     database_path,
     database_location: { type: "file" },
     files: create_files(),

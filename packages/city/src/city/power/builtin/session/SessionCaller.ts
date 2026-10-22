@@ -3,13 +3,13 @@
  * 禁止模型覆盖回传目标，并保留 Work 会话不能递归派发的约束。
  */
 import type { SessionOrigin } from "@downcity/type";
+import { can_coordinate_sessions } from "@downcity/type";
 import type { PowerContext } from "@/power/index.js";
 
-/** 验证发起来源；只允许主会话和 Channel 会话协调工作。 */
+/** 验证发起来源；只有对话分类的会话能协调工作。 */
 export function require_session_coordinator(context: PowerContext): void {
-  const origin_type = context.session?.origin.type;
-  if (origin_type !== "agent" && origin_type !== "channel") {
-    throw new Error("Session coordination requires a main agent or channel session; recursive Work Session delegation is unavailable");
+  if (!can_coordinate_sessions(context.session?.origin)) {
+    throw new Error("Session coordination requires a chat session; recursive Work Session delegation is unavailable");
   }
 }
 

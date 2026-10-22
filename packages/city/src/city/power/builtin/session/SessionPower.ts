@@ -6,6 +6,7 @@
  * 会话可以使用这些动作，Work 会话不能递归派发工作。
  */
 import { z } from "zod";
+import { can_coordinate_sessions } from "@downcity/type";
 import type { SessionWorkContract } from "@downcity/agent";
 import { require_session_coordinator, session_delegation_caller } from "./SessionCaller.js";
 import { Power, type PowerAction, type PowerActions, type PowerContext, type PowerJsonObject, type PowerJsonValue } from "@/power/index.js";
@@ -70,12 +71,11 @@ export class SessionPower extends Power {
     };
   }
 
-  /** 向统一 Power 能力查询报告当前来源是否可以管理会话。 */
+  /** 向统一 Power 能力查询报告当前分类是否可以管理会话。 */
   availability(context: PowerContext) {
-    const origin_type = context.session?.origin.type;
-    const available = origin_type === "agent" || origin_type === "channel";
+    const available = can_coordinate_sessions(context.session?.origin);
     return { enabled: true, available,
-      reasons: available ? [] : ["Session Power requires a main agent or channel session"] };
+      reasons: available ? [] : ["Session Power requires a chat session"] };
   }
 
   /** 动作统一校验来源和参数；身份限制也适用于 Power 的非模型调用入口。 */

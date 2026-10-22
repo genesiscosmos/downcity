@@ -58,18 +58,18 @@ export class RpcRemoteAgentTransport implements RemoteAgentTransport {
     return await this.client.create_session(input);
   }
 
-  async get_info(session_id: string, origin_type: string): Promise<AgentSessionInfo> {
-    return await this.client.get_session(session_id, origin_type);
+  async get_info(session_id: string, category: string): Promise<AgentSessionInfo> {
+    return await this.client.get_session(session_id, category);
   }
 
   async prompt(
     session_id: string,
-    origin_type: string,
+    category: string,
     input: RemotePromptInput,
   ): Promise<{ id: string }> {
     return await this.client.prompt_session({
       session_id,
-      origin_type,
+      category,
       input,
     });
   }
@@ -78,20 +78,20 @@ export class RpcRemoteAgentTransport implements RemoteAgentTransport {
     return await this.client.open_power_channel(input);
   }
 
-  async stop(session_id: string, origin_type: string, expected_turn_id?: string): Promise<AgentSessionStopResult> {
-    return await this.client.stop_session(session_id, origin_type, expected_turn_id);
+  async stop(session_id: string, category: string, expected_turn_id?: string): Promise<AgentSessionStopResult> {
+    return await this.client.stop_session(session_id, category, expected_turn_id);
   }
 
   async subscribe(params: {
     session_id: string;
-    origin_type: string;
+    category: string;
     on_ready: () => void;
     on_event: (event: SessionMutation) => void;
     on_close: (error?: unknown) => void;
   }): Promise<TransportSubscription> {
     const subscription = await this.client.subscribe_session({
       session_id: params.session_id,
-      origin_type: params.origin_type,
+      category: params.category,
       on_ready: params.on_ready,
       on_event: params.on_event,
       on_close: params.on_close,
@@ -105,23 +105,23 @@ export class RpcRemoteAgentTransport implements RemoteAgentTransport {
 
   async messages(
     session_id: string,
-    origin_type: string,
+    category: string,
     input?: ListSessionMessagesInput,
   ): Promise<SessionMessagePage> {
     return await this.client.get_session_messages({
       session_id,
-      origin_type,
+      category,
       input,
     });
   }
 
-  async system(session_id: string, origin_type: string): Promise<AgentSessionSystemSnapshot> {
-    return await this.client.get_session_system(session_id, origin_type);
+  async system(session_id: string, category: string): Promise<AgentSessionSystemSnapshot> {
+    return await this.client.get_session_system(session_id, category);
   }
 
   async fork(
     session_id: string,
-    origin_type: string,
+    category: string,
     input?: AgentSessionForkInput | string,
   ): Promise<AgentSessionInfo> {
     const message_id =
@@ -130,7 +130,7 @@ export class RpcRemoteAgentTransport implements RemoteAgentTransport {
         : String(input?.message_id || "").trim() || undefined;
     return await this.client.fork_session({
       session_id,
-      origin_type,
+      category,
       ...(message_id ? { message_id } : {}),
       ...(typeof input !== "string" && input?.include_message === false ? { include_message: false } : {}),
       ...(typeof input !== "string" && input?.replace === true ? { replace: true } : {}),
@@ -167,29 +167,29 @@ export class RpcRemoteAgentTransport implements RemoteAgentTransport {
     });
   }
 
-  async interactions(session_id: string, origin_type: string): Promise<SessionInteractionRequest[]> {
-    return await this.client.get_session_interactions(session_id, origin_type);
+  async interactions(session_id: string, category: string): Promise<SessionInteractionRequest[]> {
+    return await this.client.get_session_interactions(session_id, category);
   }
 
-  async status(session_id: string, origin_type: string): Promise<AgentSessionStatus> {
-    return await this.client.get_session_status(session_id, origin_type);
+  async status(session_id: string, category: string): Promise<AgentSessionStatus> {
+    return await this.client.get_session_status(session_id, category);
   }
 
   async set(
     session_id: string,
-    origin_type: string,
+    category: string,
     input: RemoteSessionSetInput,
     options?: AgentSessionSetOptions,
   ): Promise<void> {
-    await this.client.set_session(session_id, origin_type, input, options);
+    await this.client.set_session(session_id, category, input, options);
   }
 
   async respond(
     session_id: string,
-    origin_type: string,
+    category: string,
     input: RespondSessionInteractionInput,
   ): Promise<SessionInteractionResult> {
-    return await this.client.respond_session_interaction(session_id, origin_type, input);
+    return await this.client.respond_session_interaction(session_id, category, input);
   }
 
   async close(): Promise<void> {

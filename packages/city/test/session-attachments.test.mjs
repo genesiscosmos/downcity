@@ -20,7 +20,7 @@ async function create_harness() {
     agent_id: "attachment-test-agent",
     database_location: { type: "file" },
     session_id: "attachment-test-session",
-    origin: { type: "work" },
+    origin: { category: "work", type: "work" },
   });
   const messages = new SessionMessages({
     session_id: "attachment-test-session",

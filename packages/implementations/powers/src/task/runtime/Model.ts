@@ -48,14 +48,14 @@ function normalize_task_delivery_session(
   const agent_id = String(input.agent_id || "").trim();
   const workspace_id = String(input.workspace_id || "").trim();
   const session_id = String(input.session_id || "").trim();
-  const origin_type = String(input.origin_type || "").trim();
-  if (!agent_id || !session_id || !origin_type) {
+  const category = String(input.category || "").trim();
+  if (!agent_id || !session_id || !category) {
     return {
       ok: false,
-      error: "Invalid delivery_session: agent_id, session_id and origin_type are required",
+      error: "Invalid delivery_session: agent_id, session_id and category are required",
     };
   }
-  return { ok: true, value: { agent_id, workspace_id: workspace_id || null, session_id, origin_type } };
+  return { ok: true, value: { agent_id, workspace_id: workspace_id || null, session_id, category } };
 }
 
 function normalizeTaskReview(input: TaskRawValue): boolean | null {
