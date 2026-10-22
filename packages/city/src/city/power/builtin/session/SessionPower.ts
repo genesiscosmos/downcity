@@ -1,12 +1,12 @@
 /**
- * Session Power：仅管理当前 Agent 自己的工作会话。
+ * Session Power：管理当前 Agent 的会话。
  *
  * 动作复用 Agent 持有的 SessionWork 服务；派发、恢复和结果投递仍由原服务负责。
- * 调用身份来自 PowerContext，模型不能指定回传目标。只有主会话和 Channel
- * 会话可以使用这些动作，Work 会话不能递归派发工作。
+ * 调用身份来自 PowerContext，模型不能指定回传目标。任何会话都可使用这些动作，
+ * 但派发层数达到上限后不再继续。
  */
 import { z } from "zod";
-import { can_coordinate_sessions } from "@downcity/type";
+import { can_delegate_work, SESSION_DELEGATION_MAX_DEPTH } from "@downcity/type";
 import type { SessionWorkContract } from "@downcity/agent";
 import { require_session_coordinator, session_delegation_caller } from "./SessionCaller.js";
 import { Power, type PowerAction, type PowerActions, type PowerContext, type PowerJsonObject, type PowerJsonValue } from "@/power/index.js";
@@ -20,7 +20,7 @@ import {
 export class SessionPower extends Power {
   readonly name = "session";
   readonly title = "Session";
-  readonly description = "Manage only the current agent's own sessions: start work, optionally select a model, continue work, inspect history, archive, reply, or stop. Other agents' sessions are inaccessible. Use agent.delegate for cross-agent work. Results return automatically. Available to main agent and channel sessions.";
+  readonly description = "Manage only the current agent's own sessions: start work, optionally select a model, continue work, inspect history, archive, reply, or stop. Other agents' sessions are inaccessible. Use agent.delegate for cross-agent work. Results return automatically. Available until the delegation depth limit is reached.";
   readonly actions: PowerActions;
 
   constructor(private readonly options: CityGroupPowerOptions) {
@@ -71,11 +71,11 @@ export class SessionPower extends Power {
     };
   }
 
-  /** 向统一 Power 能力查询报告当前分类是否可以管理会话。 */
+  /** 向统一 Power 能力查询报告当前会话是否还能继续派发。 */
   availability(context: PowerContext) {
-    const available = can_coordinate_sessions(context.session?.origin);
+    const available = can_delegate_work(context.session?.origin);
     return { enabled: true, available,
-      reasons: available ? [] : ["Session Power requires a chat session"] };
+      reasons: available ? [] : [`Session delegation depth limit reached (max ${SESSION_DELEGATION_MAX_DEPTH})`] };
   }
 
   /** 动作统一校验来源和参数；身份限制也适用于 Power 的非模型调用入口。 */

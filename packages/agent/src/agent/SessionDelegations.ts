@@ -6,7 +6,7 @@
 import { createHash } from "node:crypto";
 import { generate_session_id } from "@/session/SessionIdentity.js";
 import { create_session_prompt_actor } from "@/types/sdk/SessionPromptActor.js";
-import { SESSION_ORIGIN_CATEGORY_WORK } from "@downcity/type";
+import { SESSION_ORIGIN_CATEGORY_WORK, read_session_delegation_depth } from "@downcity/type";
 import type {
   SessionDelegationCaller,
   SessionDelegationInput,
@@ -169,9 +169,11 @@ export class SessionDelegations implements SessionDelegationPort {
   private async prepare_work(record: SessionDelegationRecord): Promise<AgentSession> {
     const existing = this.preparations.get(record.delegation_id);
     if (existing) return await existing;
+    // 子会话深度在派发时确定并随委派记录持久化，恢复时不会随调用方变动。
+    const child_depth = read_session_delegation_depth(record.caller.origin) + 1;
     const operation = (async () => {
       const workspace = await this.options.resolve_workspace(record.workspace_id);
-      const session = await this.options.ensure_work_session(record.work_session_id, workspace);
+      const session = await this.options.ensure_work_session(record.work_session_id, workspace, child_depth);
       await this.options.prepare_session(session, record.model_id);
       if (record.title && record.execution_state === "pending") await session.rename(record.title);
       return session;

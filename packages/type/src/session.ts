@@ -9,15 +9,15 @@ export type {
   JsonValue,
 } from "./types/json/Json.js";
 export {
-  can_coordinate_sessions,
+  can_delegate_work,
   is_agent_session_origin,
-  is_chat_session_origin,
-  is_work_session_origin,
   normalize_session_origin,
   normalize_session_origin_category,
   normalize_session_origin_type,
+  read_session_delegation_depth,
   resolve_origin_category,
   restore_session_origin,
+  SESSION_DELEGATION_MAX_DEPTH,
   SESSION_ORIGIN_CATEGORY_CHAT,
   SESSION_ORIGIN_CATEGORY_WORK,
   SESSION_ORIGIN_TYPE_AGENT,

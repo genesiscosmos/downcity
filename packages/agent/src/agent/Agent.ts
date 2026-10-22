@@ -543,8 +543,8 @@ export class Agent {
       agent_id: this.id,
       store: storage.delegations,
       resolve_workspace,
-      ensure_work_session: async (session_id, workspace) =>
-        await this.session_manager.ensure_work_session(session_id, workspace),
+      ensure_work_session: async (session_id, workspace, delegation_depth) =>
+        await this.session_manager.ensure_work_session(session_id, workspace, delegation_depth),
       prepare_session,
       validate_model: async (model_id, workspace) => {
         if (!this.resolve_work_model) throw new Error("Session model selection is not configured by the host");

@@ -1,15 +1,15 @@
 /**
  * 会话派发的调用身份边界。Session Power 和 Agent delegate 共用真实调用方身份，
- * 禁止模型覆盖回传目标，并保留 Work 会话不能递归派发的约束。
+ * 禁止模型覆盖回传目标；派发层数达到上限的会话不再继续派发。
  */
 import type { SessionOrigin } from "@downcity/type";
-import { can_coordinate_sessions } from "@downcity/type";
+import { can_delegate_work, SESSION_DELEGATION_MAX_DEPTH } from "@downcity/type";
 import type { PowerContext } from "@/power/index.js";
 
-/** 验证发起来源；只有对话分类的会话能协调工作。 */
+/** 验证发起来源未超过派发层数上限。 */
 export function require_session_coordinator(context: PowerContext): void {
-  if (!can_coordinate_sessions(context.session?.origin)) {
-    throw new Error("Session coordination requires a chat session; recursive Work Session delegation is unavailable");
+  if (!can_delegate_work(context.session?.origin)) {
+    throw new Error(`Session delegation depth limit reached (max ${SESSION_DELEGATION_MAX_DEPTH})`);
   }
 }
 

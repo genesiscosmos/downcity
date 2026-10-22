@@ -41,6 +41,14 @@ export const SESSION_ORIGIN_TYPE_WORK = "work";
 /** 任务会话的角色。 */
 export const SESSION_ORIGIN_TYPE_TASK = "task";
 
+/**
+ * 派发深度上限。
+ *
+ * 根会话（主会话、外部聊天、任务会话）深度为 0，每派发一层加 1；
+ * 达到上限的会话不能再派发，避免失控嵌套。
+ */
+export const SESSION_DELEGATION_MAX_DEPTH = 3;
+
 /** 顶层分类的封闭取值。 */
 export type SessionOriginCategory =
   | typeof SESSION_ORIGIN_CATEGORY_CHAT
@@ -164,29 +172,33 @@ export function normalize_session_origin(input?: SessionOrigin): SessionOrigin {
   };
 }
 
-/** 判断一个来源是否属于对话分类。 */
-export function is_chat_session_origin(
-  origin: { category?: string } | undefined,
-): boolean {
-  return origin?.category === SESSION_ORIGIN_CATEGORY_CHAT;
-}
-/** 判断一个来源是否属于干活分类。 */
-export function is_work_session_origin(
-  origin: { category?: string } | undefined,
-): boolean {
-  return origin?.category === SESSION_ORIGIN_CATEGORY_WORK;
+/**
+ * 读取一个来源的派发深度。
+ *
+ * 参数用索引签名而不是具体字段：来源在各包里有各自的镜像类型，
+ * 它们共有的只是「可携带任意 JSON 字段」这一点。
+ *
+ * 根会话（主会话、外部聊天、任务会话）没有该字段，按 0 算；字段缺失或非法值
+ * 都回退到 0，避免历史数据阻断派发。
+ */
+export function read_session_delegation_depth(
+  origin: { readonly [key: string]: unknown } | undefined,
+): number {
+  const depth = origin?.delegation_depth;
+  return typeof depth === "number" && Number.isInteger(depth) && depth >= 0 ? depth : 0;
 }
 
 /**
- * 判断一个来源是否允许协调其他会话。
+ * 判断一个来源是否允许派发其他会话。
  *
- * `session` 能力所有动作（开始、继续、观察、答复、停止、归档）共用这一条判据，
- * 由对话分类承担；干活会话专注于被派发的工作，不再递归派发。
+ * `session` 能力所有动作（开始、继续、观察、答复、停止、归档）共用这一条判据。
+ * 限制按派发深度而非来源分类：任何会话都能派发，但分层数到了上限就停止，
+ * 避免失控嵌套。
  */
-export function can_coordinate_sessions(
-  origin: { category?: string } | undefined,
+export function can_delegate_work(
+  origin: { readonly [key: string]: unknown } | undefined,
 ): boolean {
-  return is_chat_session_origin(origin);
+  return read_session_delegation_depth(origin) < SESSION_DELEGATION_MAX_DEPTH;
 }
 
 /** 判断一个来源是否表示 Agent 自己的会话。 */

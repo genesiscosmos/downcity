@@ -36,7 +36,7 @@
 全部由 `@downcity/type` 导出常量。自定义角色仍允许，但必须显式给出分类，否则创建失败。
 
 能力判定按分类展开：`chat` 类的会话可以协调其他会话（`session` 系列动作与 `agent.delegate`），
-`work` 类的会话专注执行、不递归派发；归档只接受 `work` 类。这与分类同时承担分区职责的设计一致。
+能力判定分两个维度：派发能力按派发深度（`can_delegate_work`，上限 3）判定，与分类无关，任何会话都可派发，但层数用尽后停止；归档只接受 `work` 类。分类仍承担分区职责。
 
 因此当前实现的心智模型是：**所有会话共用一套能力，差别来自「在哪干活」；少数协调类动作再按角色收紧**。这个模型本身是自洽的，但缺少登记与文档，导致「角色」事实上退化成了「分区名」。
 
@@ -241,8 +241,8 @@ flowchart TB
 
 | 位置 | 判定 | 语义 |
 | --- | --- | --- |
-| [`SessionPower.ts`](../packages/city/src/city/power/builtin/session/SessionPower.ts) `availability` | `can_coordinate_sessions(origin)` → 分类为 `chat` | 只 gate 该 power 的 system block |
-| [`SessionCaller.ts`](../packages/city/src/city/power/builtin/session/SessionCaller.ts) `require_session_coordinator` | 同上 | **真正的硬拦截**：`session.*` 与 `agent.delegate` 的执行期守卫，禁止工作分类会话递归派发 |
+| [`SessionPower.ts`](../packages/city/src/city/power/builtin/session/SessionPower.ts) `availability` | `can_delegate_work(origin)` | 只 gate 该 power 的 system block |
+| [`SessionCaller.ts`](../packages/city/src/city/power/builtin/session/SessionCaller.ts) `require_session_coordinator` | `can_delegate_work(origin)` → 派发深度 < 3 | **真正的硬拦截**：`session.*` 与 `agent.delegate` 的执行期守卫，阻止派发层数失控 |
 | [`SessionWork.ts`](../packages/agent/src/agent/SessionWork.ts) `archive` | 分类为 `work` 则允许 | `session.archive` 只接受工作分类 |
 | [`SessionWork.ts`](../packages/agent/src/agent/SessionWork.ts) 清单 | 排除角色为 `agent` 的会话 | 会话清单不列「自己」 |
 | [`SessionDelegations.ts`](../packages/agent/src/agent/SessionDelegations.ts) `send` | 必须 `work` 分类且有 `workspace_id` | `session.send` 只续接项目工作会话 |
@@ -290,7 +290,7 @@ flowchart TB
 
 ### 3.2 能力判定收敛（已实现）
 
-`SessionPower.availability()` 与 `require_session_coordinator` 现在共用 `can_coordinate_sessions` 一个判据函数，规则不会再漂移。判定依据从「角色是 agent 或 channel」改为「分类是 chat」，这正是本次设计变更的预期行为：`chat(group)` 与 `chat(chrome)` 自此获得协调能力。
+`SessionPower.availability()` 与 `require_session_coordinator` 现在共用 `can_delegate_work` 一个判据函数，规则不会再漂移。判定依据从「角色是 agent 或 channel」改为「派发深度未达上限」：所有会话都能派发，包括 `work(work)`，但每派发一层深度加一，到达 3 层时停止，避免失控嵌套。
 
 关于「是否要让不可用的 power 工具从模型面消失」，仍保留现状（工具常驻可见，调用时给可读错误），依据是该选择与 core prompt 的「先查可用性」约定一致。
 

@@ -76,8 +76,12 @@ export interface SessionDelegationOptions {
   store: SessionDelegationStore;
   /** 按记录中的项目标识解析工作目录。 */
   resolve_workspace: (workspace_id: string) => Promise<WorkspaceRuntime>;
-  /** 按预分配标识创建或恢复同一个子会话。 */
-  ensure_work_session: (session_id: string, workspace: WorkspaceRuntime) => Promise<AgentSession>;
+  /** 按预分配标识创建或恢复同一个子会话；深度由调用方按父会话计算。 */
+  ensure_work_session: (
+    session_id: string,
+    workspace: WorkspaceRuntime,
+    delegation_depth?: number,
+  ) => Promise<AgentSession>;
   /** 恢复已有工作会话；只允许继续 Work 来源的会话。 */
   get_work_session: (session_id: string) => Promise<AgentSession>;
   /** 恢复父会话并完成宿主 Workspace、模型及消息订阅装配。 */

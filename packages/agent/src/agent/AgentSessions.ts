@@ -313,12 +313,20 @@ export class AgentSessions implements AgentSessionsContract<AgentSession> {
   /**
    * 委派运行时专用的幂等工作会话入口。
    * 标识由已持久化的委派记录预分配；普通 SDK create 仍由集合生成标识。
+   *
+   * 关键点（中文）：派发深度由调用方传入，写入子会话来源并随之持久化；
+   * 已有会话沿用自己 persisted 的深度，不由本次调用覆盖。
    */
-  async ensure_work_session(session_id: string, workspace: WorkspaceRuntime): Promise<AgentSession> {
-    const origin = {
+  async ensure_work_session(
+    session_id: string,
+    workspace: WorkspaceRuntime,
+    delegation_depth?: number,
+  ): Promise<AgentSession> {
+    const origin: SessionOrigin = {
       category: SESSION_ORIGIN_CATEGORY_WORK,
       type: SESSION_ORIGIN_TYPE_WORK,
-    } as const;
+      ...(delegation_depth === undefined ? {} : { delegation_depth }),
+    };
     const context = this.resolve_session_context({ origin, workspace });
     if (await context.store.has_session(session_id, origin.category)) {
       return await this.get(session_id, origin.category, { workspace });
