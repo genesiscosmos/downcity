@@ -15,6 +15,7 @@ export {
   normalize_session_origin_category,
   normalize_session_origin_type,
   read_session_delegation_depth,
+  resolve_delegation_blocked_reason,
   resolve_origin_category,
   restore_session_origin,
   SESSION_DELEGATION_MAX_DEPTH,

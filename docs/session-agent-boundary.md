@@ -241,8 +241,8 @@ flowchart TB
 
 | 位置 | 判定 | 语义 |
 | --- | --- | --- |
-| [`SessionPower.ts`](../packages/city/src/city/power/builtin/session/SessionPower.ts) `availability` | `can_delegate_work(origin)` | 只 gate 该 power 的 system block |
-| [`SessionCaller.ts`](../packages/city/src/city/power/builtin/session/SessionCaller.ts) `require_session_coordinator` | `can_delegate_work(origin)` → 派发深度 < 3 | **真正的硬拦截**：`session.*` 与 `agent.delegate` 的执行期守卫，阻止派发层数失控 |
+| [`SessionPower.ts`](../packages/city/src/city/power/builtin/session/SessionPower.ts) `availability` | `resolve_delegation_blocked_reason(origin)` | 只 gate 该 power 的 system block |
+| [`SessionCaller.ts`](../packages/city/src/city/power/builtin/session/SessionCaller.ts) `require_session_coordinator` | 同上：非 task 且深度 < 3 | **真正的硬拦截**：`session.*` 与 `agent.delegate` 的执行期守卫 |
 | [`SessionWork.ts`](../packages/agent/src/agent/SessionWork.ts) `archive` | 分类为 `work` 则允许 | `session.archive` 只接受工作分类 |
 | [`SessionWork.ts`](../packages/agent/src/agent/SessionWork.ts) 清单 | 排除角色为 `agent` 的会话 | 会话清单不列「自己」 |
 | [`SessionDelegations.ts`](../packages/agent/src/agent/SessionDelegations.ts) `send` | 必须 `work` 分类且有 `workspace_id` | `session.send` 只续接项目工作会话 |

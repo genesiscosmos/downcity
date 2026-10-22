@@ -1,16 +1,15 @@
 /**
  * 会话派发的调用身份边界。Session Power 和 Agent delegate 共用真实调用方身份，
- * 禁止模型覆盖回传目标；派发层数达到上限的会话不再继续派发。
+ * 禁止模型覆盖回传目标；不能派发的来源由原因函数统一给出。
  */
 import type { SessionOrigin } from "@downcity/type";
-import { can_delegate_work, SESSION_DELEGATION_MAX_DEPTH } from "@downcity/type";
+import { resolve_delegation_blocked_reason } from "@downcity/type";
 import type { PowerContext } from "@/power/index.js";
 
-/** 验证发起来源未超过派发层数上限。 */
+/** 验证发起来源允许派发。 */
 export function require_session_coordinator(context: PowerContext): void {
-  if (!can_delegate_work(context.session?.origin)) {
-    throw new Error(`Session delegation depth limit reached (max ${SESSION_DELEGATION_MAX_DEPTH})`);
-  }
+  const blocked = resolve_delegation_blocked_reason(context.session?.origin);
+  if (blocked) throw new Error(blocked);
 }
 
 /** 从运行时生成持久化委派身份，回传始终指向实际发起会话。 */

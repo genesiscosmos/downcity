@@ -189,16 +189,35 @@ export function read_session_delegation_depth(
 }
 
 /**
+ * 解析阻止派发的原因；可以派发时返回 null。
+ *
+ * 这是「能不能派发」的唯一来源，判据与用户可见原因共用同一条逻辑：
+ * - 任务会话已经是自动执行链路的一环，再向外派发会让职责与额度都不可控，
+ *   因此一律不允许。
+ * - 其余会话按派发层数限制，避免失控嵌套。
+ */
+export function resolve_delegation_blocked_reason(
+  origin: { readonly [key: string]: unknown } | undefined,
+): string | null {
+  if (String(origin?.type ?? "").trim() === SESSION_ORIGIN_TYPE_TASK) {
+    return "Task sessions cannot delegate work";
+  }
+  if (read_session_delegation_depth(origin) >= SESSION_DELEGATION_MAX_DEPTH) {
+    return `Session delegation depth limit reached (max ${SESSION_DELEGATION_MAX_DEPTH})`;
+  }
+  return null;
+}
+
+/**
  * 判断一个来源是否允许派发其他会话。
  *
  * `session` 能力所有动作（开始、继续、观察、答复、停止、归档）共用这一条判据。
- * 限制按派发深度而非来源分类：任何会话都能派发，但分层数到了上限就停止，
- * 避免失控嵌套。
+ * 任务会话不能派发；其余会话按派发深度限制，分层数到了上限就停止。
  */
 export function can_delegate_work(
   origin: { readonly [key: string]: unknown } | undefined,
 ): boolean {
-  return read_session_delegation_depth(origin) < SESSION_DELEGATION_MAX_DEPTH;
+  return resolve_delegation_blocked_reason(origin) === null;
 }
 
 /** 判断一个来源是否表示 Agent 自己的会话。 */

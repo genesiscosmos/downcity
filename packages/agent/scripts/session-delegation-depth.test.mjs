@@ -13,9 +13,30 @@ import test from "node:test";
 import {
   can_delegate_work,
   read_session_delegation_depth,
+  resolve_delegation_blocked_reason,
   SESSION_DELEGATION_MAX_DEPTH,
 } from "@downcity/type";
 import { Agent } from "../bin/agent/Agent.js";
+
+test("任务会话不能派发，其余会话按深度限制", () => {
+  // 任务会话已经是自动执行链路的一环，无论深度如何都不允许再向外派发。
+  assert.equal(can_delegate_work({ category: "work", type: "task" }), false);
+  assert.equal(can_delegate_work({ category: "work", type: "task", delegation_depth: 0 }), false);
+  assert.match(
+    resolve_delegation_blocked_reason({ category: "work", type: "task" }) ?? "",
+    /task sessions cannot delegate/i,
+  );
+
+  // 普通工作会话从深度 0 开始就能派发。
+  assert.equal(can_delegate_work({ category: "work", type: "work" }), true);
+  assert.equal(can_delegate_work({ category: "chat", type: "agent" }), true);
+
+  // 原因文案与判据同源：达到上限时两者同时生效。
+  const at_limit = { category: "work", type: "work", delegation_depth: SESSION_DELEGATION_MAX_DEPTH };
+  assert.equal(can_delegate_work(at_limit), false);
+  assert.match(resolve_delegation_blocked_reason(at_limit) ?? "", /depth limit reached/i);
+  assert.equal(resolve_delegation_blocked_reason({ category: "work", type: "work" }), null);
+});
 
 test("派发深度判据按层数收紧，且缺失或非法值一律按 0 处理", () => {
   assert.equal(read_session_delegation_depth(undefined), 0);
