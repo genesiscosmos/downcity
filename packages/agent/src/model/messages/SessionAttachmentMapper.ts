@@ -1,7 +1,8 @@
 /**
  * Session 附件持久化模块。
  *
- * 本模块只负责在 User Message 入库前把 Data URL 写入 Session Attachment Store。
+ * 本模块在 User Message 入库前把 Data URL 写入 Session Attachment Store，
+ * 并在附件后追加 context part，向模型说明附件的本地保存路径。
  * 模型执行阶段的文件读取与 `ModelFileContent` 转换由 `SessionModelMessages` 负责。
  */
 
@@ -24,7 +25,14 @@ export async function persist_user_prompt_file_parts(
       media_type: part.media_type,
       ...(part.filename ? { filename: part.filename } : {}),
     });
-    output.push({ ...part, url: stored_path });
+    output.push(
+      { ...part, url: stored_path },
+      {
+        type: "context",
+        tag: "attachment_path",
+        context: `对应${part.media_type.startsWith("image/") ? "图片" : "附件"}路径：${stored_path}`,
+      },
+    );
   }
   return output;
 }
