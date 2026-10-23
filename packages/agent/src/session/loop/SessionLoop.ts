@@ -66,6 +66,7 @@ import {
 import type { SessionTurnCompletionOptions } from "@/types/session/SessionTurnCompletion.js";
 
 import { SessionOccupation } from "./SessionOccupation.js";
+import { SessionChildWorkLifecycle } from "./SessionChildWorkLifecycle.js";
 import { SessionBusyError } from "@/session/SessionBusyError.js";
 import { local_user_prompt_actor, session_prompt_actor_schema, same_session_prompt_actor } from "@/types/sdk/SessionPromptActor.js";
 import type { SessionPromptActor } from "@/types/sdk/SessionPromptActor.js";
@@ -82,6 +83,8 @@ export class SessionLoop {
   /** 由 Agent 提供的写前日志，失败不能通过普通 Hook 吞掉。 */
   private readonly completions: SessionLoopOptions["completions"];
   private readonly session_origin: SessionLoopOptions["session_origin"];
+  /** 子工作等待与取消由独立模块管理，输入消费仍归本 Loop。 */
+  private readonly child_work: SessionChildWorkLifecycle;
   /** 当前 Session 的目录解析器。 */
   private readonly get_workspace_path: SessionLoopOptions["get_workspace_path"];
   private readonly step_input: StepInput | null;
@@ -127,6 +130,7 @@ export class SessionLoop {
     this.session_id = String(options.session_id || "").trim();
     this.completions = options.completions;
     this.session_origin = options.session_origin;
+    this.child_work = new SessionChildWorkLifecycle(options.child_work, options.logger);
     this.get_workspace_path = options.get_workspace_path;
     this.maintain_context = options.maintain_context;
     this.state = options.state;
@@ -166,6 +170,7 @@ export class SessionLoop {
    * 未提供 `actor` 时按本地用户处理；之后所有占用仲裁、幂等归属与恢复都基于归一化结果。
    */
   async prompt(input: AgentSessionPromptInput): Promise<AgentSessionTurnHandle> {
+    input.abort_signal?.throwIfAborted();
     let normalized: NormalizedAgentSessionPromptInput = {
       ...input,
       actor: session_prompt_actor_schema.parse(input.actor ?? local_user_prompt_actor),
@@ -190,13 +195,17 @@ export class SessionLoop {
     input: NormalizedAgentSessionPromptInput,
   ): Promise<AgentSessionTurnHandle> {
     const stop_generation = this.stop_generation;
+    input.abort_signal?.throwIfAborted();
     await this.initialize_occupation();
+    input.abort_signal?.throwIfAborted();
     const identity = resolve_prompt_request_identity(this.session_id, input.request_id);
     if (identity) {
       const previous = await this.messages.read_message(identity.message_id);
+      input.abort_signal?.throwIfAborted();
       if (previous?.role === "user") {
         this.assert_prompt_actor(previous, input);
         const existing = await this.resolve_idempotent_prompt(identity);
+        input.abort_signal?.throwIfAborted();
         if (existing) return await this.prompt_with_identity(input, identity);
       }
     }
@@ -207,6 +216,7 @@ export class SessionLoop {
         throw new SessionBusyError(this.session_id, current, this.current_turn_id());
       }
       await this.active_turn.deferred_finished.promise;
+      input.abort_signal?.throwIfAborted();
       return await this.submit_normalized_prompt(input);
     }
     const pending_actor = identity ? this.pending_actors.get(identity.turn_id) : undefined;
@@ -288,6 +298,7 @@ export class SessionLoop {
       throw new Error("session.prompt requires a non-empty query");
     }
     await this.state.ensure_runnable();
+    input.abort_signal?.throwIfAborted();
     if (this.stopping || stop_generation !== this.stop_generation) throw new Error(QUEUED_PROMPT_CANCELLED_MESSAGE);
     const request_identity = resolve_prompt_request_identity(this.session_id, input.request_id);
     if (!request_identity) {
@@ -299,7 +310,9 @@ export class SessionLoop {
     const powers_descriptors = describe_prompt_powers(input.powers ?? []);
     if (pending_handle) {
       if (!isDeepStrictEqual(this.pending_power_descriptors.get(request_identity.turn_id), powers_descriptors)) throw new Error("request_id already belongs to different Prompt Powers or query");
-      return await pending_handle;
+      const handle = await pending_handle;
+      input.abort_signal?.throwIfAborted();
+      return handle;
     }
     this.pending_power_descriptors.set(request_identity.turn_id, powers_descriptors);
     const operation = this.prompt_with_identity(input, request_identity, stop_generation);
@@ -321,6 +334,7 @@ export class SessionLoop {
     stop_generation = this.stop_generation,
   ): Promise<AgentSessionTurnHandle> {
     const previous = await this.messages.read_message(request_identity.message_id);
+    input.abort_signal?.throwIfAborted();
     if (previous?.role === "user") {
       this.assert_prompt_actor(previous, input);
       const previous_meta = read_session_message_meta(previous);
@@ -336,8 +350,10 @@ export class SessionLoop {
       })) throw new Error("request_id already belongs to a different callback configuration");
     }
     const existing_handle = await this.resolve_idempotent_prompt(request_identity);
+    input.abort_signal?.throwIfAborted();
     if (existing_handle) return existing_handle;
     const persisted_message = await this.messages.read_message(request_identity.message_id);
+    input.abort_signal?.throwIfAborted();
     if (this.stopping || stop_generation !== this.stop_generation) throw new Error(QUEUED_PROMPT_CANCELLED_MESSAGE);
     if (this.closing && this.active_turn) {
       await this.active_turn.deferred_finished.promise;
@@ -357,6 +373,7 @@ export class SessionLoop {
     request_identity?: PromptRequestIdentity,
     persisted_message?: SessionUserMessage,
   ): Promise<AgentSessionTurnHandle> {
+    input.abort_signal?.throwIfAborted();
     const deferred_handle = create_deferred<AgentSessionTurnHandle>();
     this.pending_prompt_count += 1;
     this.enqueue_command({
@@ -383,6 +400,7 @@ export class SessionLoop {
   /** 追加 Command，并确保空闲 Session 也会主动消费维护操作。 */
   enqueue_command(command: SessionCommand): void {
     this.queue.enqueue_command(command);
+    if (command.kind === "prompt") this.child_work.notify_prompt();
     this.ensure_processing();
   }
 
@@ -453,7 +471,10 @@ export class SessionLoop {
 
     const stopped = Boolean(active_turn || cancelled_queued_prompts > 0);
     try {
-      await this.interactions.cancel_all("turn_stopped");
+      await Promise.all([
+        this.interactions.cancel_all("turn_stopped"),
+        active_turn?.turn_context ? this.child_work.cancel(active_turn.turn_context) : Promise.resolve(),
+      ]);
       if (active_turn) await active_turn.deferred_finished.promise;
     } finally { if (this.stop_generation === stop_generation) this.stopping = false; }
     return {
@@ -631,11 +652,13 @@ export class SessionLoop {
     const active_turn = this.require_active_turn();
     if (active_turn.prompt_started) {
       try {
+        input.abort_signal?.throwIfAborted();
         const message = persisted_message || await this.persist_prompt_message(
           input,
           active_turn.turn_id,
           message_id,
         );
+        input.abort_signal?.throwIfAborted();
         active_turn.turn_context?.input.observe_user_message(message);
         this.pending_prompt_count = Math.max(0, this.pending_prompt_count - 1);
         deferred_handle.resolve(create_turn_handle(active_turn));
@@ -654,6 +677,7 @@ export class SessionLoop {
     this.pending_prompt_count = Math.max(0, this.pending_prompt_count - 1);
     let handle_resolved = false;
     try {
+      input.abort_signal?.throwIfAborted();
       if (read_session_message_meta(persisted_message)?.powers !== undefined) {
         throw new Error("Caller Power execution was interrupted; automatic replay is unavailable");
       }
@@ -662,13 +686,12 @@ export class SessionLoop {
           active_turn.turn_id,
           message_id,
         );
+      input.abort_signal?.throwIfAborted();
       active_turn.turn_context?.input.observe_user_message(message);
       // 只有 canonical user message 已经写入 Session 后，调用方才认为输入被接收。
       deferred_handle.resolve(create_turn_handle(active_turn));
       handle_resolved = true;
-      const result = await this.execute_prompt_turn({
-        active_turn,
-      });
+      const result = await this.execute_prompt_turn({ active_turn, abort_signal: input.abort_signal });
       const final_result = await complete_session_turn(
         this.turn_completion_options(),
         active_turn,
@@ -698,6 +721,9 @@ export class SessionLoop {
     active_turn: ActiveSessionTurnState,
     error: unknown,
   ): Promise<void> {
+    this.closing = true;
+    this.cancel_queued_prompts();
+    if (active_turn.turn_context) await this.child_work.cancel(active_turn.turn_context);
     if (error instanceof CompletionPersistenceError) {
       this.recovered_turn_id = active_turn.turn_id;
       if (this.active_turn === active_turn) this.active_turn = null;
@@ -723,7 +749,10 @@ export class SessionLoop {
 
   /** 执行一个 Turn 内的模型与 Tool Step Loop。 */
   private async execute_prompt_turn(input: {
+    /** 当前活动 Turn。 */
     active_turn: ActiveSessionTurnState;
+    /** 宿主的输入接收取消信号；不传给模型。 */
+    abort_signal?: AbortSignal;
   }): Promise<{
     text: string;
     success: boolean;
@@ -736,7 +765,7 @@ export class SessionLoop {
     }
     let result: SessionTurnExecutionResult;
     try {
-      result = await this.run_turn_with_context_advance(turn_context);
+      result = await this.run_turn_with_context_advance(turn_context, input.abort_signal);
     } catch (error) {
       result = {
         text: "",
@@ -745,13 +774,24 @@ export class SessionLoop {
       };
     }
 
-    // 输入到达最终模型响应之后时仍由本 Turn 消费；关闭窗口与最后检查之间没有 await。
-    while (result.success && !turn_context.lifecycle.abort_signal.aborted && this.has_pending_prompt()) {
-      await this.drain_queued_inputs();
-      result = await this.run_turn_with_context_advance(turn_context);
+    // 子工作等待可被同步入队唤醒；先消费输入，投递方的 accept 才能兑现。
+    while (result.success && !turn_context.lifecycle.abort_signal.aborted
+      && (this.has_pending_prompt()
+        || await this.child_work.wait(turn_context, () => this.has_pending_prompt())
+        || this.has_pending_prompt())
+      && !turn_context.lifecycle.abort_signal.aborted) {
+      await turn_context.input.checkpoint();
+      if (turn_context.lifecycle.abort_signal.aborted) break;
+      const compact_required = result.compact_required;
+      result = await this.run_turn_with_context_advance(turn_context, input.abort_signal);
+      if (compact_required) result.compact_required = true;
     }
+    // await 返回后已同步复查队列；从最后检查到关闭窗口之间没有 await。
     this.closing = true;
-    if (!result.success || turn_context.lifecycle.abort_signal.aborted) this.cancel_queued_prompts();
+    if (!result.success || turn_context.lifecycle.abort_signal.aborted) {
+      this.cancel_queued_prompts();
+      await this.child_work.cancel(turn_context);
+    }
 
     if (!result.success && !turn_context.lifecycle.abort_signal.aborted && result.error) {
       await assistant_output.append_error({
@@ -805,11 +845,16 @@ export class SessionLoop {
    */
   private async run_turn_with_context_advance(
     turn_context: SessionTurnContext,
+    abort_signal?: AbortSignal,
   ): Promise<SessionTurnExecutionResult> {
+    abort_signal?.throwIfAborted();
     return await this.session_executor.execute({
       turn_context,
-      resolve_step_input: async (advance_count) =>
-        await this.require_step_input(turn_context, advance_count),
+      resolve_step_input: async (advance_count) => {
+        const input = await this.require_step_input(turn_context, advance_count);
+        abort_signal?.throwIfAborted();
+        return input;
+      },
     });
   }
 

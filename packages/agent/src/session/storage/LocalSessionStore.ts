@@ -8,6 +8,8 @@
  */
 
 import { isDeepStrictEqual } from "node:util";
+import type { SessionReadView } from "@/types/store/SessionReadView.js";
+import { create_session_read_view, read_file_session_history } from "./SessionHistoryReader.js";
 import { normalize_session_id } from "@/session/SessionIdentity.js";
 import type {
   AgentArchiveSessionResult,
@@ -173,6 +175,33 @@ export class LocalSessionStore implements SessionStore {
     });
     this.sessions.set(cache_key, opened);
     return opened;
+  }
+
+  /** 只读查询已有活动或归档历史，禁止触发来源迁移或 Session 初始化。 */
+  async read_session(session_id: string, category: string): Promise<SessionReadView> {
+    const resolved_id = normalize_session_id(session_id);
+    const resolved_category = normalize_session_origin_category(category);
+    if (!resolved_id) throw new Error("Session id is required");
+    if (this.database_location.type === "memory") {
+      const key = this.session_cache_key(resolved_id, resolved_category);
+      const active = this.sessions.get(key);
+      const storage = active ?? this.archived_sessions.get(key);
+      if (!storage) throw new Error("session_target_forbidden: Session is unavailable to this Agent");
+      const metadata = await storage.read_metadata();
+      if (metadata.agent_id !== this.agent_id || metadata.origin.category !== resolved_category) {
+        throw new Error("session_target_forbidden: Session is unavailable to this Agent");
+      }
+      return create_session_read_view(metadata, !active, storage);
+    }
+    const active_path = get_agent_session_database_path(this.storage_root_path, resolved_category, resolved_id);
+    const archived = !(await this.files.path_exists(active_path));
+    const database_path = archived
+      ? get_agent_archived_session_database_path(this.storage_root_path, resolved_category, resolved_id)
+      : active_path;
+    if (!(await this.files.path_exists(database_path))) {
+      throw new Error("session_target_forbidden: Session is unavailable to this Agent");
+    }
+    return read_file_session_history(database_path, this.agent_id, resolved_id, resolved_category, archived);
   }
 
   /** 判断活动 Session 是否存在。 */

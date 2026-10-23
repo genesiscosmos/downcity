@@ -3,7 +3,7 @@
  *
  * 职责说明（中文）
  * - session 工具让 Agent 安排、继续、观察和收回同一容器中目标 Agent 的工作会话。
- * - 它们只出现在 Agent 主会话和 Channel 会话中，Work Session 不会递归派发。
+ * - 全部 Session 角色可读取；创建与控制由角色、深度及父子关系分别授权。
  *
  * 关键点（中文）
  * - 工具不接触 Session 内部结构，只消费公开的摘要、消息投影和交互入口。
@@ -47,6 +47,10 @@ export interface SessionToolSummary {
   session_id: string;
   /** 用户可见标题；未生成时省略。 */
   title?: string;
+  /** 会话的来源分类；与 session_id 一起构成完整引用。 */
+  session_category: "chat" | "work";
+  /** 是否为已归档的只读历史。 */
+  archived?: boolean;
   /** 当前状态。 */
   state: SessionToolState;
   /** 最近更新的预览文本；用于让对话判断这条活是什么。 */

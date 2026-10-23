@@ -41,6 +41,7 @@ import { SessionCompletions } from "@/agent/SessionCompletions.js";
 import type { AgentStorage } from "@/types/agent/AgentStorage.js";
 import type { SessionSystemMessage } from "@downcity/type";
 import type { SessionComposer } from "@/types/session/SessionComposer.js";
+import type { SessionChildWorkInput } from "@/types/session/SessionChildWork.js";
 import {
   build_session_system_blocks,
   resolve_session_power_system_blocks,
@@ -181,12 +182,19 @@ export class Agent {
       session_composer: this.session_composer,
       resolve_session_context: (input) => {
         const storage = this.resolve_storage();
+        const child_work = {
+          wait: async (parent: SessionChildWorkInput) =>
+            await this.resolve_delegations().wait_for_children(parent),
+          cancel: async (parent: SessionChildWorkInput) =>
+            await this.resolve_delegations().cancel_children(parent),
+        };
         // 默认目录只用于新建会话；恢复时目录由宿主在 get() 时注入，
         // 用默认值顶替会变成一次静默换目录。
         const workspace = input?.workspace
           ?? (input?.creating ? this.workspace : undefined);
         if (!workspace) return {
           workspace_path: ".",
+          child_work,
           completions: this.resolve_completions(),
           logger: this.logger,
           get_tools: () => this.resolve_tools(),
@@ -199,6 +207,7 @@ export class Agent {
         this.resolve_tools(workspace);
         return {
           workspace_path: workspace.path,
+          child_work,
           completions: this.resolve_completions(),
           workspace_id: workspace.id,
           logger: this.logger,
@@ -494,7 +503,18 @@ export class Agent {
   private resolve_session_work(): SessionWork {
     this.session_work ??= new SessionWork({
       agent_id: this.id,
-      list_sessions: async (input) => await this.session_manager.list(input),
+      list_sessions: async (input) => {
+        const pages = await Promise.all(["chat", "work"].flatMap((category) => [
+          this.session_manager.list({ ...input, category }),
+          this.session_manager.archived({ ...input, category }).then((page) => ({
+            ...page, items: page.items.map((item) => ({ ...item, archived: true })),
+          })),
+        ]));
+        return { items: pages.flatMap((page) => page.items)
+          .sort((left, right) => (right.updated_at ?? 0) - (left.updated_at ?? 0)).slice(0, input.limit) };
+      },
+      is_executing: (session_id, category) => this.session_manager.list_executing_session_ids(undefined, category).includes(session_id),
+      read_session: async (session_id, category) => await this.resolve_storage().sessions.read_session(session_id, category),
       get_session: async (session_id, category) => await this.restore_work_session(session_id, category),
       delegations: this.resolve_delegations(),
     });
@@ -543,8 +563,8 @@ export class Agent {
       agent_id: this.id,
       store: storage.delegations,
       resolve_workspace,
-      ensure_work_session: async (session_id, workspace, delegation_depth) =>
-        await this.session_manager.ensure_work_session(session_id, workspace, delegation_depth),
+      ensure_work_session: async (session_id, workspace, delegation_depth, child_origin) =>
+        await this.session_manager.ensure_work_session(session_id, workspace, delegation_depth, child_origin),
       prepare_session,
       validate_model: async (model_id, workspace) => {
         if (!this.resolve_work_model) throw new Error("Session model selection is not configured by the host");

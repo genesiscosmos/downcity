@@ -14,6 +14,7 @@ import type {
   AgentListSessionsInput,
   AgentSessionSummaryPage,
 } from "@/types/agent/SessionTypes.js";
+import type { SessionReadView } from "./SessionReadView.js";
 import type { SessionStorage } from "@/types/store/SessionStorage.js";
 import type { SessionOrigin } from "@downcity/type";
 
@@ -24,6 +25,9 @@ export interface SessionStore {
 
   /** 打开一个已有 Session；完整来源必须从数据库状态恢复。 */
   open_session(session_id: string, category?: string): Promise<SessionStorage>;
+
+  /** 读取当前 Agent 的活动或归档历史，不恢复执行器或修改生命周期。 */
+  read_session(session_id: string, category: string): Promise<SessionReadView>;
 
   /** 判断活动 Session 是否存在。 */
   has_session(session_id: string, category?: string): Promise<boolean>;

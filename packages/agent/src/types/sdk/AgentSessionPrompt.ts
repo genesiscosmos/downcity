@@ -42,6 +42,8 @@ export type AgentSessionPromptContent = SessionUserContent;
  * - 远程 Session 中，Data URL 在服务端落盘；调用方本地路径必须对服务端可访问。
  */
 export interface AgentSessionPromptInput {
+  /** 宿主取消本次输入接收；非模型参数，不持久化，也不替代已接收 Turn 的 stop。 */
+  abort_signal?: AbortSignal;
   /** 只在创建本次 Turn 时装配的调用方 Powers；运行中追加输入不能替换。 */
   powers?: readonly PromptPower[];
   /**

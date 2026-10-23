@@ -7,7 +7,7 @@
  * - 它描述的是「一件活的完整动作」，而不是对 Session 方法逐一转发。
  *
  * 关键点（中文）
- * - 这组能力只注入 Agent 主会话和 Channel 会话，工作会话不会递归派发。
+ * - 所有角色可读取当前 Agent 的会话；创建和控制依赖可信调用身份与直接父子关系。
  */
 
 import type { ListSessionMessagesInput, SessionMessagePage } from "@downcity/type";
@@ -34,6 +34,8 @@ export interface SessionWorkContract {
   read(input: {
     /** 目标会话稳定标识。 */
     session_id: string;
+    /** 目标所属分类，明确区分 chat/work 分区。 */
+    session_category: "chat" | "work";
     /** 返回的最近消息条数上限。 */
     limit?: number;
   }): Promise<SessionCheckDetailToolOutput>;
@@ -42,13 +44,15 @@ export interface SessionWorkContract {
   messages(input: ListSessionMessagesInput & {
     /** 目标会话稳定标识。 */
     session_id: string;
+    /** 目标所属分类。 */
+    session_category: "chat" | "work";
   }): Promise<SessionMessagePage>;
 
   /** 归档空闲会话，由 Session 集合拥有者管理存储与索引。 */
   archive(input: {
     /** 目标会话稳定标识。 */
     session_id: string;
-  }): Promise<AgentArchiveSessionResult>;
+  }, caller: SessionDelegationCaller): Promise<AgentArchiveSessionResult>;
 
   /** 代答某条会话正在等待的用户响应。 */
   reply(input: {
@@ -58,11 +62,11 @@ export interface SessionWorkContract {
     interaction_id: string;
     /** 与原请求一致的完整结构化响应。 */
     response: SessionInteractionResponse;
-  }): Promise<void>;
+  }, caller: SessionDelegationCaller): Promise<void>;
 
   /** 停止某条会话当前正在执行的 Turn。 */
   stop(input: {
     /** 目标会话稳定标识。 */
     session_id: string;
-  }): Promise<void>;
+  }, caller: SessionDelegationCaller): Promise<void>;
 }

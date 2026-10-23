@@ -6,7 +6,7 @@
  * - 只读取公开的摘要与消息投影，不缓存会话，也不持有存储。
  *
  * 关键点（中文）
- * - 清单排除 Agent 自己的会话，否则清单里会出现「自己」。
+ * - 清单包含当前 Agent 的全部分类；详情和历史直接读取存储，不恢复执行器。
  * - `spawn` 不等待 Turn 结束：派活的意义就是 Agent 会话立刻能继续。
  * - 详情按最近消息分页读取，让对话能回答「它做了什么」，而不把整段历史塞进上下文。
  */
@@ -15,7 +15,9 @@ import type { ListSessionMessagesInput, SessionMessagePage } from "@downcity/typ
 import type { AgentArchiveSessionResult } from "@/types/agent/SessionTypes.js";
 import type { SessionInteractionResponse } from "@downcity/type";
 import type { SessionDelegationCaller, SessionDelegationInput, SessionDelegationMessage, SessionDelegationPort, SessionDelegationReceipt } from "@/types/agent/SessionDelegation.js";
-import { is_agent_session_origin, normalize_session_origin_category, SESSION_ORIGIN_CATEGORY_WORK } from "@downcity/type";
+import { SESSION_ORIGIN_CATEGORY_WORK } from "@downcity/type";
+import type { SessionStore } from "@/types/store/SessionStore.js";
+import { require_direct_work_child } from "./SessionWorkPolicy.js";
 import type { SessionWorkContract } from "@/types/agent/SessionWork.js";
 import type {
   SessionCheckDetailToolOutput,
@@ -46,6 +48,8 @@ export interface SessionWorkListEntry {
   origin: { category: string; type: string };
   /** 当前是否正在执行。 */
   executing?: boolean;
+  /** 是否来自归档区，只可读取。 */
+  archived?: boolean;
 }
 
 /** SessionWork 构造参数。 */
@@ -58,6 +62,10 @@ export interface SessionWorkOptions {
   }>;
   /** 恢复单条会话的运行时实例。 */
   get_session: (session_id: string, category: string) => Promise<AgentSession>;
+  /** 只查看集合持有的运行状态，不恢复目标执行器。 */
+  is_executing: (session_id: string, category: string) => boolean;
+  /** 只读持久化会话入口，不恢复执行器。 */
+  read_session: SessionStore["read_session"];
   /** 持久化派发与结果回传端口；SessionWork 不持有委派存储。 */
   delegations: SessionDelegationPort;
 }
@@ -77,21 +85,23 @@ export class SessionWork implements SessionWorkContract {
 
   /** 继续已有的工作会话，复用持久化派发与结果回传。 */
   async send(input: SessionDelegationMessage, caller: SessionDelegationCaller): Promise<SessionDelegationReceipt> {
-    await this.require_list_entry(input.session_id);
+    await this.require_control_target(input.session_id, caller);
     return await this.options.delegations.send(input, caller);
   }
 
-  /** 列出当前 Agent 除自己那条之外的全部会话。 */
+  /** 列出当前 Agent 的全部活动会话，不按委派角色过滤。 */
   async list(input?: { limit?: number }): Promise<SessionToolSummary[]> {
     const page = await this.options.list_sessions({
       limit: normalize_limit(input?.limit, DEFAULT_SESSION_LIMIT),
     });
     const summaries: SessionToolSummary[] = [];
     for (const item of page.items) {
-      if (is_agent_session_origin(item.origin)) continue;
+
       const pending_interaction_count = await this.count_pending(item);
       summaries.push({
         session_id: item.session_id,
+        session_category: item.origin.category as "chat" | "work",
+        archived: item.archived === true,
         agent_id: this.options.agent_id,
         ...(item.workspace_id ? { workspace_id: item.workspace_id } : {}),
         ...(item.title ? { title: item.title } : {}),
@@ -110,25 +120,28 @@ export class SessionWork implements SessionWorkContract {
   /** 读取单条会话的摘要、最近消息与待响应 Interaction。 */
   async read(input: {
     session_id: string;
+    session_category: "chat" | "work";
     limit?: number;
   }): Promise<SessionCheckDetailToolOutput> {
-    const item = await this.require_list_entry(input.session_id);
-    const session = await this.options.get_session(item.session_id, item.origin.category);
-    const [messages, pending, status] = await Promise.all([
-      session.messages({ limit: normalize_limit(input.limit, DEFAULT_MESSAGE_LIMIT) }),
-      session.interactions(),
-      session.status(),
+    const snapshot = await this.options.read_session(input.session_id, input.session_category);
+    const item = snapshot.metadata;
+    const [messages, pending] = await Promise.all([
+      snapshot.messages({ limit: normalize_limit(input.limit, DEFAULT_MESSAGE_LIMIT) }),
+      snapshot.interactions(),
     ]);
+    const executing = this.options.is_executing(input.session_id, input.session_category);
     const failure = resolve_failure_text(messages.items);
     return {
       mode: "detail",
       session: {
-        session_id: item.session_id,
+        session_id: input.session_id,
+        session_category: input.session_category,
+        archived: snapshot.archived,
         agent_id: this.options.agent_id,
         ...(item.workspace_id ? { workspace_id: item.workspace_id } : {}),
         ...(item.title ? { title: item.title } : {}),
         state: resolve_session_state({
-          executing: status.state === "running",
+          executing,
           pending_interaction_count: pending.length,
         }),
         ...(item.preview_text ? { preview_text: item.preview_text } : {}),
@@ -149,15 +162,18 @@ export class SessionWork implements SessionWorkContract {
   }
 
   /** 直接读取持久化历史分页，compact 只改变模型副本，不改变此原文。 */
-  async messages(input: ListSessionMessagesInput & { /** 目标工作会话标识。 */ session_id: string }): Promise<SessionMessagePage> {
-    const item = await this.require_list_entry(input.session_id);
-    const session = await this.options.get_session(item.session_id, item.origin.category);
-    return await session.messages({ limit: input.limit, before_sequence: input.before_sequence });
+  async messages(input: ListSessionMessagesInput & {
+    /** 目标会话标识。 */ session_id: string;
+    /** 目标持久化分类。 */ session_category: "chat" | "work";
+  }): Promise<SessionMessagePage> {
+    const snapshot = await this.options.read_session(input.session_id, input.session_category);
+    return await snapshot.messages({ limit: normalize_limit(input.limit, DEFAULT_MESSAGE_LIMIT), before_sequence: input.before_sequence });
   }
 
   /** 仅归档工作分类的会话，避免模型移除主对话或外部聊天路由。 */
-  async archive(input: { /** 待归档的工作会话标识。 */ session_id: string }): Promise<AgentArchiveSessionResult> {
-    const item = await this.require_list_entry(input.session_id);
+  async archive(input: { /** 待归档的工作会话标识。 */ session_id: string }, caller: SessionDelegationCaller): Promise<AgentArchiveSessionResult> {
+    const item = await this.require_control_target(input.session_id, caller);
+    await this.require_idle_subtree(input.session_id);
     if (item.origin.category !== SESSION_ORIGIN_CATEGORY_WORK) {
       throw new Error("session.archive only supports Work Sessions");
     }
@@ -170,14 +186,17 @@ export class SessionWork implements SessionWorkContract {
     session_id: string;
     interaction_id: string;
     response: SessionInteractionResponse;
-  }): Promise<void> {
-    const item = await this.require_list_entry(input.session_id);
+  }, caller: SessionDelegationCaller): Promise<void> {
+    const item = await this.require_control_target(input.session_id, caller);
     const session = await this.options.get_session(item.session_id, item.origin.category);
     const pending = await session.interactions();
     if (!pending.some((entry) => entry.interaction_id === input.interaction_id)) {
       throw new Error(
         `Interaction is not pending on session "${input.session_id}": ${input.interaction_id}`,
       );
+    }
+    if (pending.find((entry) => entry.interaction_id === input.interaction_id)?.type !== "question") {
+      throw new Error("session.reply cannot approve operations; use the user's approval interface");
     }
     await session.respond({
       interaction_id: input.interaction_id,
@@ -186,28 +205,54 @@ export class SessionWork implements SessionWorkContract {
   }
 
   /** 停止某条会话当前正在执行的 Turn。 */
-  async stop(input: { session_id: string }): Promise<void> {
-    const item = await this.require_list_entry(input.session_id);
-    const session = await this.options.get_session(item.session_id, item.origin.category);
-    await this.options.delegations.cancel(item.session_id);
-    await session.stop();
+  async stop(input: { /** 目标普通 Work 标识。 */ session_id: string }, caller: SessionDelegationCaller): Promise<void> {
+    await this.require_control_target(input.session_id, caller);
+    await this.stop_subtree(input.session_id, new Set(), false);
   }
 
-  /** 按标识取出属于当前 Agent 的一条会话；不存在时明确失败。 */
-  private async require_list_entry(session_id_input: string): Promise<SessionWorkListEntry> {
-    const session_id = String(session_id_input || "").trim();
-    if (!session_id) throw new Error("Session id is required");
-    const page = await this.options.list_sessions({ limit: Number.MAX_SAFE_INTEGER });
-    const item = page.items.find((candidate) => candidate.session_id === session_id);
-    if (!item) throw new Error(`Session is not owned by this agent: ${session_id}`);
-    return item;
+  /** 控制权限在服务层检查，非 Power 调用也不能跳过父子约束。 */
+  private async require_control_target(session_id: string, caller: SessionDelegationCaller): Promise<SessionWorkListEntry> {
+    const snapshot = await this.options.read_session(session_id, "work");
+    if (snapshot.archived) throw new Error("session_archived: cannot control an archived Session");
+    require_direct_work_child(this.options.agent_id, caller, {
+      id: session_id, agent_id: snapshot.metadata.agent_id, origin: snapshot.metadata.origin,
+    });
+    return { ...snapshot.metadata, session_id, origin: snapshot.metadata.origin };
+  }
+
+  /** 先终止父执行，再扫描子关系，覆盖停止前已提交的子创建。 */
+  private async stop_subtree(session_id: string, visited: Set<string>, suppress_delivery = true): Promise<void> {
+    if (visited.has(session_id)) return;
+    visited.add(session_id);
+    await this.options.delegations.cancel(session_id, suppress_delivery);
+    const session = await this.options.get_session(session_id, "work");
+    await session.stop();
+    for (const child_id of await this.options.delegations.children(session_id, "work")) {
+      const snapshot = await this.options.read_session(child_id, "work");
+      if (!snapshot.archived) await this.stop_subtree(child_id, visited);
+    }
+  }
+
+  /** 归档前验证整个子树空闲，保留关系而不递归删除历史。 */
+  private async require_idle_subtree(session_id: string, visited = new Set<string>()): Promise<void> {
+    if (visited.has(session_id)) throw new Error("session_relation_invalid: cyclic Work tree");
+    visited.add(session_id);
+    const snapshot = await this.options.read_session(session_id, "work");
+    if (snapshot.archived) return;
+    const session = await this.options.get_session(session_id, "work");
+    if ((await session.status()).state === "running" || (await snapshot.interactions()).length) {
+      throw new Error("session_subtree_busy: finish or stop child work before archiving");
+    }
+    for (const child_id of await this.options.delegations.children(session_id, "work")) {
+      await this.require_idle_subtree(child_id, visited);
+    }
   }
 
   /** 读取一条会话当前待响应的 Interaction 数量；读取失败时按零处理。 */
   private async count_pending(item: SessionWorkListEntry): Promise<number> {
     try {
-      const session = await this.options.get_session(item.session_id, item.origin.type);
-      return (await session.interactions()).length;
+      const snapshot = await this.options.read_session(item.session_id, item.origin.category);
+      return (await snapshot.interactions()).length;
     } catch {
       return 0;
     }

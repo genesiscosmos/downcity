@@ -3,6 +3,7 @@
  * 依赖受控 FileSystem，独立 SDK 的内存存储与 City 的持久化存储使用同一协议。
  * 数据损坏明确失败；执行与投递更新读取最新记录，避免停止和完成互相覆盖。
  */
+import { createHash } from "node:crypto";
 import type { FileSystem } from "@downcity/type";
 import type { SessionDelegationRecord, SessionDelegationStore } from "@/types/agent/SessionDelegation.js";
 
@@ -22,10 +23,20 @@ export class LocalSessionDelegationStore implements SessionDelegationStore {
   }
 
   /** 同一工具调用只创建一条委派。 */
-  async create(record: SessionDelegationRecord): Promise<SessionDelegationRecord> {
-    return await this.transaction(record.delegation_id, async () => {
+  async create(record: SessionDelegationRecord, unique_child = false): Promise<SessionDelegationRecord> {
+    await this.files.ensure_directory("delegations");
+    // 创建记录就是子名额的事实源；全局创建锁保证并发和重启后都只能绑定一次。
+    return await this.files.with_file_lock("delegations/create.lock", async () => {
       const existing = await this.get(record.delegation_id);
+      if (await this.files.path_exists(this.closed_turn_path(record.caller.agent_id,
+        record.caller.origin.category, record.caller.session_id, record.caller.turn_id))) {
+        throw new Error("Parent Turn is closed; cannot submit child work");
+      }
       if (existing) return existing;
+      if (unique_child && !record.followup) {
+        const children = await this.children(record.caller.agent_id, record.caller.origin.category, record.caller.session_id);
+        if (children.length) throw new Error(`work_child_limit_reached: continue child ${children[0]!.work_session_id} with session.send`);
+      }
       await this.save(record);
       return record;
     });
@@ -45,12 +56,39 @@ export class LocalSessionDelegationStore implements SessionDelegationStore {
 
   /** 返回待执行或待投递的记录；不把终态委派重新启动。 */
   async pending(): Promise<SessionDelegationRecord[]> {
+    return (await this.list_records()).filter((record) => record.delivery_state === "pending");
+  }
+
+  /** 从创建记录恢复固定父子关系，结束和归档不释放子名额。 */
+  async children(agent_id: string, category: string, session_id: string): Promise<SessionDelegationRecord[]> {
+    return (await this.list_records()).filter((record) => !record.followup
+      && record.caller.agent_id === agent_id && record.caller.origin.category === category
+      && record.caller.session_id === session_id);
+  }
+
+  /** 停止封闭与创建共用事务锁，覆盖异步准备期间尚未提交的子请求。 */
+  async close_turn(agent_id: string, category: string, session_id: string, turn_id: string): Promise<void> {
+    await this.files.ensure_directory("delegations");
+    await this.files.with_file_lock("delegations/create.lock", async () => {
+      await this.files.ensure_directory("delegations/closed");
+      await this.files.write_file_atomically(this.closed_turn_path(agent_id, category, session_id, turn_id), "closed");
+    });
+  }
+
+  /** 已停止父 Turn 的稳定标识，禁止跨重启复活迟到的子请求。 */
+  private closed_turn_path(agent_id: string, category: string, session_id: string, turn_id: string): string {
+    const key = createHash("sha256").update(JSON.stringify([agent_id, category, session_id, turn_id])).digest("hex");
+    return `delegations/closed/${key}`;
+  }
+
+  /** 扫描权威快照，不额外维护可能漂移的名额索引。 */
+  private async list_records(): Promise<SessionDelegationRecord[]> {
     if (!(await this.files.path_exists("delegations"))) return [];
     const records: SessionDelegationRecord[] = [];
     for (const entry of await this.files.read_directory("delegations")) {
       if (!entry.is_file || !/^[a-f0-9]{64}\.json$/.test(entry.name)) continue;
       const record = await this.get(entry.name.slice(0, -5));
-      if (record?.delivery_state === "pending") records.push(record);
+      if (record) records.push(record);
     }
     return records;
   }

@@ -4,6 +4,7 @@
  * 这些类型描述 Turn 编排所依赖的领域对象，不实现任何调度行为。
  */
 
+import type { SessionChildWork } from "./SessionChildWork.js";
 import type { SessionCompletionPort } from "@/types/agent/SessionCompletion.js";
 import type { ToolCallContext, ToolHookSet } from "@downcity/type";
 import type { SessionEventHub } from "@/session/messages/SessionEventHub.js";
@@ -60,6 +61,8 @@ export interface ActiveSessionTurnState {
 export interface SessionLoopOptions {
   /** Turn 终态前的可靠写前日志；省略时只提供普通 Session Hook。 */
   completions?: SessionCompletionPort;
+  /** Agent 提供的子工作等待与取消能力，不由 Loop 管理委派存储。 */
+  child_work?: SessionChildWork;
   /** 当前 Session 的稳定标识。 */
   session_id: string;
   /** 当前 Session 的完整来源元数据。 */

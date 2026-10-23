@@ -2,7 +2,7 @@
  * @file 验证会话派发深度：判据按层数收紧，子会话在创建时记录父深度加一。
  *
  * 关键点（中文）
- * - 根会话（主会话、外部聊天、任务会话）没有深度字段，按 0 计算。
+ * - Chat 根会话缺省深度为 0；无效工作深度拒绝委派，Task 始终禁止委派。
  * - 达到上限的会话不能再派发；上限值由 `SESSION_DELEGATION_MAX_DEPTH` 单一来源给出。
  * - 深度随会话来源持久化，恢复已有会话时不因调用方变化而改写。
  */
@@ -27,28 +27,29 @@ test("任务会话不能派发，其余会话按深度限制", () => {
     /task sessions cannot delegate/i,
   );
 
-  // 普通工作会话从深度 0 开始就能派发。
-  assert.equal(can_delegate_work({ category: "work", type: "work" }), true);
+  // 普通工作会话必须提供明确深度；缺失深度不能恢复成根会话权限。
+  assert.equal(can_delegate_work({ category: "work", type: "work" }), false);
+  assert.equal(can_delegate_work({ category: "work", type: "work", delegation_depth: 1 }), true);
   assert.equal(can_delegate_work({ category: "chat", type: "agent" }), true);
 
   // 原因文案与判据同源：达到上限时两者同时生效。
   const at_limit = { category: "work", type: "work", delegation_depth: SESSION_DELEGATION_MAX_DEPTH };
   assert.equal(can_delegate_work(at_limit), false);
   assert.match(resolve_delegation_blocked_reason(at_limit) ?? "", /depth limit reached/i);
-  assert.equal(resolve_delegation_blocked_reason({ category: "work", type: "work" }), null);
+  assert.notEqual(resolve_delegation_blocked_reason({ category: "work", type: "work" }), null);
 });
 
-test("派发深度判据按层数收紧，且缺失或非法值一律按 0 处理", () => {
-  assert.equal(read_session_delegation_depth(undefined), 0);
+test("派发深度判据按层数收紧，缺失或非法工作深度拒绝派发", () => {
+  assert.equal(read_session_delegation_depth(undefined), Infinity);
   assert.equal(read_session_delegation_depth({ category: "chat", type: "agent" }), 0);
   assert.equal(read_session_delegation_depth({ delegation_depth: 2 }), 2);
-  // 历史数据或异常值不能阻断派发，回退到根会话深度。
-  assert.equal(read_session_delegation_depth({ delegation_depth: -1 }), 0);
-  assert.equal(read_session_delegation_depth({ delegation_depth: 1.5 }), 0);
-  assert.equal(read_session_delegation_depth({ delegation_depth: "1" }), 0);
+  // 无效数据不能放宽成 Chat 根会话权限。
+  assert.equal(read_session_delegation_depth({ delegation_depth: -1 }), Infinity);
+  assert.equal(read_session_delegation_depth({ delegation_depth: 1.5 }), Infinity);
+  assert.equal(read_session_delegation_depth({ delegation_depth: "1" }), Infinity);
 
-  assert.equal(can_delegate_work(undefined), true);
-  assert.equal(can_delegate_work({ delegation_depth: SESSION_DELEGATION_MAX_DEPTH - 1 }), true);
+  assert.equal(can_delegate_work(undefined), false);
+  assert.equal(can_delegate_work({ category: "work", type: "work", delegation_depth: SESSION_DELEGATION_MAX_DEPTH - 1 }), true);
   assert.equal(can_delegate_work({ delegation_depth: SESSION_DELEGATION_MAX_DEPTH }), false);
   assert.equal(can_delegate_work({ delegation_depth: SESSION_DELEGATION_MAX_DEPTH + 1 }), false);
 });

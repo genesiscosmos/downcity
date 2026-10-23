@@ -8,8 +8,14 @@ import type { PowerContext } from "@/power/index.js";
 
 /** 验证发起来源允许派发。 */
 export function require_session_coordinator(context: PowerContext): void {
+  require_session_reader(context);
   const blocked = resolve_delegation_blocked_reason(context.session?.origin);
   if (blocked) throw new Error(blocked);
+}
+
+/** 所有角色均可读取当前 Agent 的历史；不依赖委派深度与 Turn。 */
+export function require_session_reader(context: PowerContext): void {
+  if (!context.session || !context.agent.id) throw new Error("session_context_required: a trusted Agent Session is required");
 }
 
 /** 从运行时生成持久化委派身份，回传始终指向实际发起会话。 */

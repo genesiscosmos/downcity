@@ -44,10 +44,10 @@ export const SESSION_ORIGIN_TYPE_TASK = "task";
 /**
  * 派发深度上限。
  *
- * 根会话（主会话、外部聊天、任务会话）深度为 0，每派发一层加 1；
- * 达到上限的会话不能再派发，避免失控嵌套。
+ * Chat 根会话深度为 0，一级 Work 为 1，二级 Work 为 2。
+ * 达到上限的会话不能再创建，但始终可读取会话历史。
  */
-export const SESSION_DELEGATION_MAX_DEPTH = 3;
+export const SESSION_DELEGATION_MAX_DEPTH = 2;
 
 /** 顶层分类的封闭取值。 */
 export type SessionOriginCategory =
@@ -178,14 +178,16 @@ export function normalize_session_origin(input?: SessionOrigin): SessionOrigin {
  * 参数用索引签名而不是具体字段：来源在各包里有各自的镜像类型，
  * 它们共有的只是「可携带任意 JSON 字段」这一点。
  *
- * 根会话（主会话、外部聊天、任务会话）没有该字段，按 0 算；字段缺失或非法值
- * 都回退到 0，避免历史数据阻断派发。
+ * 对话根会话缺省为 0；工作会话缺少深度或值非法时返回 Infinity，禁止越权派发。
+ * 该函数只服务于写操作；读取历史不依赖深度。
  */
 export function read_session_delegation_depth(
   origin: { readonly [key: string]: unknown } | undefined,
 ): number {
   const depth = origin?.delegation_depth;
-  return typeof depth === "number" && Number.isInteger(depth) && depth >= 0 ? depth : 0;
+  if (depth === undefined && origin?.category === SESSION_ORIGIN_CATEGORY_CHAT) return 0;
+  return typeof depth === "number" && Number.isInteger(depth) && depth >= 0
+    ? depth : Number.POSITIVE_INFINITY;
 }
 
 /**
@@ -202,17 +204,26 @@ export function resolve_delegation_blocked_reason(
   if (String(origin?.type ?? "").trim() === SESSION_ORIGIN_TYPE_TASK) {
     return "Task sessions cannot delegate work";
   }
-  if (read_session_delegation_depth(origin) >= SESSION_DELEGATION_MAX_DEPTH) {
+  const origin_type = String(origin?.type ?? "");
+  const known_chat = origin?.category === SESSION_ORIGIN_CATEGORY_CHAT
+    && ORIGIN_CATEGORY_BY_TYPE[origin_type] === SESSION_ORIGIN_CATEGORY_CHAT;
+  const ordinary_work = origin?.category === SESSION_ORIGIN_CATEGORY_WORK
+    && origin_type === SESSION_ORIGIN_TYPE_WORK;
+  if (!known_chat && !ordinary_work) return "Session role cannot delegate work";
+  if (known_chat && read_session_delegation_depth(origin) !== 0) return "Invalid Chat delegation depth";
+  const depth = read_session_delegation_depth(origin);
+  if (depth >= SESSION_DELEGATION_MAX_DEPTH) {
     return `Session delegation depth limit reached (max ${SESSION_DELEGATION_MAX_DEPTH})`;
   }
+  if (ordinary_work && depth !== 1) return "Invalid Work delegation depth; only first-level Work can create children";
   return null;
 }
 
 /**
  * 判断一个来源是否允许派发其他会话。
  *
- * `session` 能力所有动作（开始、继续、观察、答复、停止、归档）共用这一条判据。
- * 任务会话不能派发；其余会话按派发深度限制，分层数到了上限就停止。
+ * 仅判断创建工作能力；读取历史与控制已有直接子会话分别授权。
+ * 任务会话不能派发；Chat 和一级普通 Work 可以创建，二级 Work 达到上限。
  */
 export function can_delegate_work(
   origin: { readonly [key: string]: unknown } | undefined,

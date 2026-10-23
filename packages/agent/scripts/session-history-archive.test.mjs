@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { Agent, City, Workspace } from "../../city/bin/index.js";
 import { MockModelClient } from "./ModelClientMock.mjs";
+import { create_work_origin } from "../bin/agent/SessionWorkPolicy.js";
 
 /** 真实 Session 存储和集合，模型使用固定结果，不消耗外部额度。 */
 async function fixture(generate = async () => ({ text: "result" })) {
@@ -14,13 +15,17 @@ async function fixture(generate = async () => ({ text: "result" })) {
   const tool = city.power_tools.session;
   assert.ok(tool, "City registers Session Power");
   const context = { agent_id: agent.id, agent_name: agent.name, agent_description: "", agent_instructions: [], session_id: main.id, session_origin: main.origin, turn_id: "caller-turn", tool_call_id: "call" };
-  return { city, agent, workspace, main, tool, context };
+  const create_work = async () => await agent.sessions.create({ workspace, origin: create_work_origin({
+    agent_id: agent.id, session_id: main.id, origin: main.origin,
+    turn_id: context.turn_id, tool_call_id: context.tool_call_id,
+  }) });
+  return { city, agent, workspace, main, tool, context, create_work };
 }
 
 test("messages 分页读取 compact 前原文，归档后列表保留历史而旧句柄不再执行", async () => {
   const f = await fixture();
   try {
-    const work = await f.agent.sessions.create({ workspace: f.workspace });
+    const work = await f.create_work();
     for (let index = 0; index < 4; index++) {
       await (await work.prompt({ actor: { kind: "user", user_id: "local" }, query: `original-${index}:` + "原始历史内容。".repeat(2200) })).finished;
     }
@@ -30,7 +35,7 @@ test("messages 分页读取 compact 前原文，归档后列表保留历史而�
     let before_sequence;
     let pages = 0;
     while (true) {
-      const page = (await f.tool.execute({ action: "messages", args: { session_id: work.id, limit: 3, ...(before_sequence ? { before_sequence } : {}) } }, f.context)).output.data;
+      const page = (await f.tool.execute({ action: "messages", args: { session_id: work.id, session_category: "work", limit: 3, ...(before_sequence ? { before_sequence } : {}) } }, f.context)).output.data;
       assert.equal(page.source, "canonical_history");
       assert.equal(page.trust_level, "reference");
       entries.push(...page.items);
@@ -62,13 +67,13 @@ test("运行和占用中的工作不能归档，结束后 SDK session.archive �
   const started = new Promise((resolve) => { entered = resolve; });
   const f = await fixture(async () => { entered(); await gate; return { text: "done" }; });
   try {
-    const work = await f.agent.sessions.create({ workspace: f.workspace });
+    const work = await f.create_work();
     const turn = await work.prompt({ actor: { kind: "user", user_id: "local" }, query: "work" });
     await started;
     await assert.rejects(work.archive(), /executing|queued/);
     const busy = await f.tool.execute({ action: "archive", args: { session_id: work.id } }, f.context);
     assert.equal(busy.output.success, false);
-    assert.match(busy.output.error, /executing|queued/);
+    assert.match(busy.output.error, /session_subtree_busy|executing|queued/);
     release();
     await turn.finished;
     // finished 与队列消费者释放处于相邻 microtask，等待本轮事件循环收口。
@@ -77,14 +82,14 @@ test("运行和占用中的工作不能归档，结束后 SDK session.archive �
     await assert.rejects(work.prompt({ actor: { kind: "user", user_id: "local" }, query: "must reject" }), /archived/);
     const self = await f.tool.execute({ action: "archive", args: { session_id: f.main.id } }, f.context);
     assert.equal(self.output.success, false);
-    assert.match(self.output.error, /calling Session/);
+    assert.match(self.output.error, /session_target_forbidden/);
   } finally { release(); await f.city.close(); }
 });
 
 test("归档期间拒绝并发 prompt，归档失败恢复原句柄", async () => {
   const f = await fixture();
   try {
-    const work = await f.agent.sessions.create({ workspace: f.workspace });
+    const work = await f.create_work();
     work.begin_archive();
     await assert.rejects(work.prompt({ actor: { kind: "user", user_id: "local" }, query: "race" }), /archiving/);
     work.finish_archive(false);

@@ -27,6 +27,8 @@ import type {
   AgentSession,
   AgentSessions as AgentSessionsContract,
 } from "@/types/agent/SessionActor.js";
+import { isDeepStrictEqual } from "node:util";
+import type { SessionChildWork } from "@/types/session/SessionChildWork.js";
 import type { AgentManagedSession } from "@/types/session/SessionOptions.js";
 import { Session } from "@/session/Session.js";
 import type { SessionRemovalEvent } from "@/types/agent/SessionRemoval.js";
@@ -68,6 +70,8 @@ type AgentSessionsOptions = {
   resolve_session_context: (input?: SessionContextResolution) => {
     /** Agent 拥有的可靠完成事件写前端口。 */
     completions?: SessionCompletionPort;
+    /** 子 Turn 的等待与失败取消端口。 */
+    child_work?: SessionChildWork;
     workspace_path: string;
     workspace_id?: string;
     logger: Logger;
@@ -321,15 +325,20 @@ export class AgentSessions implements AgentSessionsContract<AgentSession> {
     session_id: string,
     workspace: WorkspaceRuntime,
     delegation_depth?: number,
+    child_origin?: SessionOrigin,
   ): Promise<AgentSession> {
-    const origin: SessionOrigin = {
+    const origin: SessionOrigin = child_origin ?? {
       category: SESSION_ORIGIN_CATEGORY_WORK,
       type: SESSION_ORIGIN_TYPE_WORK,
       ...(delegation_depth === undefined ? {} : { delegation_depth }),
     };
     const context = this.resolve_session_context({ origin, workspace });
     if (await context.store.has_session(session_id, origin.category)) {
-      return await this.get(session_id, origin.category, { workspace });
+      const session = await this.get(session_id, origin.category, { workspace });
+      if (child_origin && !isDeepStrictEqual(session.origin, child_origin)) {
+        throw new Error("session_relation_invalid: persisted Work Session origin differs from creation record");
+      }
+      return session;
     }
     return await this.create_with_id(session_id, origin, workspace);
   }
@@ -585,6 +594,7 @@ export class AgentSessions implements AgentSessionsContract<AgentSession> {
       get_agent_model: () => this.get_agent_model(),
       get_hooks: () => context.get_hooks(),
       completions: context.completions,
+      child_work: context.child_work,
       archive_session: async (session_id) => await this.archive({ id: session_id, category: resolved_origin.category }),
       composer: this.session_composer,
     });

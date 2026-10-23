@@ -113,6 +113,8 @@ export class Session implements AgentSession {
   private readonly get_hooks: SessionOptions["get_hooks"];
   /** fork 保持同一 Agent 的可靠完成写前端口。 */
   private readonly completions: SessionOptions["completions"];
+  /** fork 沿用端口，由各自 Loop 生成当前 Session/Turn 身份。 */
+  private readonly child_work: SessionOptions["child_work"];
   private readonly get_instruction_system_blocks:
     SessionOptions["get_instruction_system_blocks"];
   /** 当前 Session 的一次性初始化任务，避免缓存实例被重复恢复运行时状态。 */
@@ -148,6 +150,7 @@ export class Session implements AgentSession {
     this.get_agent_model = options.get_agent_model;
     this.get_hooks = options.get_hooks;
     this.completions = options.completions;
+    this.child_work = options.child_work;
     this.get_instruction_system_blocks = options.get_instruction_system_blocks;
     this.composer = options.composer ?? new DefaultSessionComposer();
     if (!this.id) {
@@ -214,6 +217,7 @@ export class Session implements AgentSession {
     });
     this.session_loop = new SessionLoop({
       completions: options.completions,
+      child_work: this.child_work,
       session_id: this.id,
       session_origin: this.origin,
       get_workspace_path: () => this.get_workspace_path(),
@@ -456,8 +460,10 @@ export class Session implements AgentSession {
    * 追加一条新的 Session prompt。
    */
   async prompt(input: AgentSessionPromptInput): Promise<AgentSessionTurnHandle> {
+    input.abort_signal?.throwIfAborted();
     if (this.archive_state !== "active") throw new Error(`Session is ${this.archive_state}: ${this.id}`);
     await this.step_input.initialize();
+    input.abort_signal?.throwIfAborted();
     if (this.archive_state !== "active") throw new Error(`Session is ${this.archive_state}: ${this.id}`);
     if (this.replacing_history) throw new Error("Session history is being replaced");
     if (input.powers?.length) {
@@ -764,6 +770,7 @@ export class Session implements AgentSession {
   private create_fork_session(session_id: string): this {
     return this.create_child_session({
       completions: this.completions,
+      child_work: this.child_work,
       archive_session: this.archive_session,
       agent_id: this.agent_id,
       get_agent_name: this.get_agent_name,
