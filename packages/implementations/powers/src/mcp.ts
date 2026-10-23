@@ -5,7 +5,6 @@ export { McpConnection, resolve_mcp_variables } from "./mcp/runtime/Transport.js
 export type {
   McpCallResult,
   McpHttpTransportConfig,
-  McpPowerConfig,
   McpServerConfig,
   McpServerStatus,
   McpStdioTransportConfig,

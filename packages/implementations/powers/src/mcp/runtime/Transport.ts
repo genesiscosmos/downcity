@@ -18,7 +18,7 @@ interface McpTransport {
   /** 调用 MCP 方法。 */
   request(method: string, params?: Record<string, unknown>, signal?: AbortSignal): Promise<Record<string, unknown>>;
   /** 发送不等待响应的 MCP 通知。 */
-  notify(method: string, params?: Record<string, unknown>): Promise<void>;
+  notify(method: string, params?: Record<string, unknown>, signal?: AbortSignal): Promise<void>;
   /** 关闭底层连接。 */
   close(): Promise<void>;
 }
@@ -44,7 +44,7 @@ export class McpConnection {
       capabilities: {},
       clientInfo: { name: "downcity", version: "1.0.0" },
     }, signal);
-    await this.transport.notify("notifications/initialized").catch(() => undefined);
+    await this.transport.notify("notifications/initialized", {}, signal);
     this.initialized = true;
   }
 
@@ -83,6 +83,8 @@ class StdioTransport implements McpTransport {
       env: child_env,
       stdio: ["pipe", "pipe", "pipe"],
     });
+    // stderr 必须持续消费，避免输出较多的本地 Server 因管道写满而停住。
+    this.child.stderr.resume();
     const lines = createInterface({ input: this.child.stdout });
     lines.on("line", (line) => this.handle_line(line));
     this.child.on("error", (error) => this.reject_all(error));
@@ -164,8 +166,8 @@ class HttpTransport implements McpTransport {
     return json.result ?? {};
   }
 
-  async notify(method: string, params: Record<string, unknown> = {}): Promise<void> {
-    await fetch(this.config.url, {
+  async notify(method: string, params: Record<string, unknown> = {}, signal?: AbortSignal): Promise<void> {
+    const response = await fetch(this.config.url, {
       method: "POST",
       headers: {
         accept: "application/json, text/event-stream",
@@ -173,7 +175,10 @@ class HttpTransport implements McpTransport {
         ...(this.config.headers ?? {}),
       },
       body: JSON.stringify({ jsonrpc: "2.0", method, params }),
+      signal,
     });
+    await response.body?.cancel();
+    if (!response.ok) throw new Error(`MCP HTTP notification failed: ${response.status} ${response.statusText}`);
   }
 
   async close(): Promise<void> {

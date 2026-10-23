@@ -1,195 +1,239 @@
-/** MCP Power 的 Desktop Config Renderer。 */
+/**
+ * MCP 的 Sidebar、Mainview 与 Config Renderer。
+ * 业务插槽只读取连接状态；Config 通过独立管理通道逐文件编辑原始 TOML，
+ * 使用载入原文检测外部修改，并保留其他文件尚未保存的草稿。
+ */
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { define_power_renderer } from "@downcity/city/power/react";
-import type { McpPowerConfig, McpServerConfig, McpServerStatus } from "@/mcp/types/McpPower.js";
-import type { PowerRendererUiComponents } from "@downcity/city/power/react";
+import type { McpServerFilesView as McpConfigSnapshotView } from "@/mcp/types/McpServerFiles.js";
+import type { McpStatusResult as McpRendererStatusView } from "@/mcp/types/McpPower.js";
+import type {
+  McpConfigEditorState,
+  McpConfigFileDraft,
+  McpConfigTestView,
+} from "@/mcp/types/McpPowerRenderer.js";
 
-interface McpConfigView {
-  /** 脱敏后的 server 配置。 */
-  servers: McpServerConfig[];
-}
-
-interface McpStatusView {
-  /** server 运行状态。 */
-  servers: McpServerStatus[];
-}
-
-/** MCP Power Renderer 定义。 */
+/** MCP 的三个独立界面入口。 */
 export const MCP_POWER_RENDERER = define_power_renderer({
-  sidebar: function McpPowerSidebar({ power, ui }) {
+  sidebar: function mcp_power_sidebar({ power, ui }) {
     const { Callout, LoadingState, Sidebar, SidebarSection, SidebarTreeItem, Status } = ui.components;
-    const [status, set_status] = useState<McpStatusView>();
+    const [status, set_status] = useState<McpRendererStatusView>();
     const [error, set_error] = useState("");
-    const load = useCallback(async () => {
-      try {
-        set_status(await power.invoke<McpStatusView>("mcp.status"));
-        set_error("");
-      } catch (reason) {
-        set_error(to_error_message(reason));
-      }
-    }, [power]);
-    useEffect(() => { void load(); }, [load, ui.revision]);
-    if (!status) return <Sidebar>{error ? <Callout tone="danger">{error}</Callout> : <LoadingState label="正在读取 MCP 状态…" />}</Sidebar>;
+    useEffect(() => {
+      let disposed = false;
+      void power.invoke<McpRendererStatusView>("mcp.status")
+        .then((next) => { if (!disposed) { set_status(next); set_error(""); } })
+        .catch((reason: unknown) => { if (!disposed) set_error(to_error_message(reason)); });
+      return () => { disposed = true; };
+    }, [power, ui.revision]);
     return <Sidebar>
-      <SidebarSection label="MCP Servers">
+      {error ? <Callout tone="danger">{error}</Callout> : null}
+      {!status && !error ? <LoadingState label="正在读取 MCP 状态…" /> : null}
+      {status ? <SidebarSection label="MCP Servers">
         {status.servers.length === 0 ? <Callout tone="default">尚未配置 MCP Server</Callout> : status.servers.map((server) => <SidebarTreeItem
-          key={server.id}
-          kind="leaf"
-          depth={0}
-          label={server.id}
+          key={server.id} kind="leaf" depth={0} label={server.id}
           trailing={<Status tone={server.state === "ready" ? "success" : server.state === "error" ? "danger" : "warning"}>{`${server.state} · ${server.tool_count}`}</Status>}
           on_select={() => undefined}
         />)}
-      </SidebarSection>
+      </SidebarSection> : null}
     </Sidebar>;
   },
-  mainview: function McpPowerMainview({ power, ui }) {
-    const { Callout, Group, LoadingState, Page, Row, Section, Toolbar, Button, Status } = ui.components;
-    const [status, set_status] = useState<McpStatusView>();
+  mainview: function mcp_power_mainview({ power, ui }) {
+    const { Button, Callout, Group, LoadingState, Page, Row, Section, Status, Toolbar } = ui.components;
+    const [status, set_status] = useState<McpRendererStatusView>();
     const [error, set_error] = useState("");
-    const load = useCallback(async () => {
+    const [refreshing, set_refreshing] = useState(false);
+    const request_sequence = useRef(0);
+    useEffect(() => {
+      const sequence = ++request_sequence.current;
+      void power.invoke<McpRendererStatusView>("mcp.status")
+        .then((next) => { if (sequence === request_sequence.current) { set_status(next); set_error(""); } })
+        .catch((reason: unknown) => { if (sequence === request_sequence.current) set_error(to_error_message(reason)); });
+      return () => { request_sequence.current++; };
+    }, [power, ui.revision]);
+    const refresh = async () => {
+      const sequence = ++request_sequence.current;
+      set_refreshing(true);
+      set_error("");
       try {
-        set_status(await power.invoke<McpStatusView>("mcp.status"));
-        set_error("");
+        const next = await power.invoke<McpRendererStatusView>("mcp.refresh");
+        if (sequence === request_sequence.current) set_status(next);
+        ui.invalidate();
       } catch (reason) {
-        set_error(to_error_message(reason));
+        if (sequence === request_sequence.current) set_error(to_error_message(reason));
+      } finally {
+        set_refreshing(false);
       }
-    }, [power]);
-    useEffect(() => { void load(); }, [load, ui.revision]);
-    if (!status) return <LoadingState label="正在读取 MCP 状态…" />;
+    };
     return <Page>
+      <Toolbar title="MCP" description="查看外部 MCP Server 的连接状态和工具数量。" actions={<Button disabled={refreshing} on_click={() => void refresh()}>{refreshing ? "刷新中…" : "刷新连接"}</Button>} />
       {error ? <Callout tone="danger">{error}</Callout> : null}
-      <Toolbar title="MCP" description="管理外部 MCP Server 的连接状态和工具面。" actions={<Button on_click={() => void load()}>刷新</Button>} />
-      <Callout tone="default">通过 mcp.servers、mcp.tools 和 mcp.call 发现与调用工具。已启用 Server 的调用直接执行，描述和结果作为外部数据处理。</Callout>
-      <Section title="连接状态">
-        {status.servers.length === 0 ? <Group><Row label="暂无配置的 MCP Server" /></Group> : status.servers.map((server) => <Group key={server.id} label={server.id}>
-          <Row label="状态" trailing={<Status tone={server.state === "ready" ? "success" : server.state === "error" ? "danger" : "warning"}>{server.state}</Status>} />
-          <Row label="工具数量" trailing={<span>{String(server.tool_count)}</span>} />
-          {server.last_error ? <Row label="最近错误" trailing={<span>{server.last_error}</span>} /> : null}
-          {server.updated_at ? <Row label="更新时间" trailing={<span>{server.updated_at}</span>} /> : null}
-        </Group>)}
-      </Section>
+      {!status && !error ? <LoadingState label="正在读取 MCP 状态…" /> : null}
+      <Callout tone="default">保存配置不会启动 Server，idle 表示尚未连接。刷新连接会重新扫描文件并重连；首次发现或调用工具也会连接。</Callout>
+      {status ? <>
+        <Group><Row label="配置目录" description={status.directory} /></Group>
+        <Section title="连接状态">
+          {status.servers.length === 0 ? <Group><Row label="暂无配置的 MCP Server" /></Group> : status.servers.map((server) => <Group key={server.id} label={server.id}>
+            <Row label="状态" trailing={<Status tone={server.state === "ready" ? "success" : server.state === "error" ? "danger" : "warning"}>{server.state}</Status>} />
+            <Row label="工具数量" trailing={<span>{String(server.tool_count)}</span>} />
+            {server.last_error ? <Row label="最近错误" description={server.last_error} /> : null}
+            {server.updated_at ? <Row label="更新时间" description={server.updated_at} /> : null}
+          </Group>)}
+        </Section>
+      </> : null}
     </Page>;
   },
-  config: function McpPowerConfigView({ config, ui }) {
-    const { Button, Callout, Group, Input, LoadingState, Page, Row, Section, Select, Switch, Textarea, Toolbar } = ui.components;
-    const [draft, set_draft] = useState<McpPowerConfig>({ servers: [] });
-    const [status, set_status] = useState<McpStatusView>({ servers: [] });
+  config: function mcp_power_config({ config, ui }) {
+    const { Button, Callout, Field, Group, Input, LoadingState, Page, Row, Section, Textarea, Toolbar } = ui.components;
+    const [editor, set_editor] = useState<McpConfigEditorState>({ directory: "", drafts: [] });
     const [loading, set_loading] = useState(true);
-    const [saving, set_saving] = useState(false);
+    const [busy, set_busy] = useState("");
+    const busy_ref = useRef(false);
     const [error, set_error] = useState("");
+    const [delete_id, set_delete_id] = useState<string>();
+    const draft_sequence = useRef(0);
 
-    const load = useCallback(async () => {
-      set_loading(true);
-      set_error("");
-      try {
-        const [next, next_status] = await Promise.all([
-          config.invoke<McpConfigView>("mcp.config.read"),
-          config.invoke<{ servers: McpServerStatus[] }>("mcp.config.status").catch(() => ({ servers: [] })),
-        ]);
-        set_draft({ servers: next.servers.map(normalize_server) });
-        set_status(next_status);
-      } catch (reason) {
-        set_error(to_error_message(reason));
-      } finally {
-        set_loading(false);
-      }
-    }, [config]);
-    useEffect(() => { void load(); }, [load]);
-
-    const update_server = (index: number, patch: Partial<McpServerConfig>) => {
-      set_draft((current) => ({
-        servers: current.servers.map((server, server_index) => server_index === index ? { ...server, ...patch } : server),
+    const apply_snapshot = useCallback((snapshot: McpConfigSnapshotView, replace_id?: string) => {
+      set_editor((current) => ({
+        directory: snapshot.directory,
+        drafts: merge_snapshot(current.drafts, snapshot, replace_id),
       }));
-    };
-    const add_server = () => set_draft((current) => ({
-      servers: [...current.servers, create_default_server(current.servers)],
+    }, []);
+    useEffect(() => {
+      let disposed = false;
+      set_loading(true);
+      void config.invoke<McpConfigSnapshotView>("mcp.config.read")
+        .then((snapshot) => { if (!disposed) { apply_snapshot(snapshot); set_error(""); } })
+        .catch((reason: unknown) => { if (!disposed) set_error(to_error_message(reason)); })
+        .finally(() => { if (!disposed) set_loading(false); });
+      return () => { disposed = true; };
+    }, [apply_snapshot, config]);
+
+    const update_content = (draft_key: string, content: string) => set_editor((current) => ({
+      ...current,
+      drafts: current.drafts.map((draft) => draft.draft_key === draft_key ? { ...draft, content } : draft),
     }));
-    const remove_server = (index: number) => set_draft((current) => ({
-      servers: current.servers.filter((_server, server_index) => server_index !== index),
-    }));
-    const save = async () => {
-      set_saving(true);
+    // 管理动作串行执行，避免较早返回的目录快照覆盖较新的操作结果。
+    const run_operation = async (operation_id: string, server_id: string | undefined, operation: () => Promise<void>) => {
+      if (busy_ref.current) return;
+      busy_ref.current = true;
+      set_busy(operation_id);
       set_error("");
+      if (server_id) set_editor((current) => ({ ...current, drafts: current.drafts.map((draft) => draft.id === server_id ? { ...draft, operation_error: undefined } : draft) }));
       try {
-        await config.invoke("mcp.config.save", draft as unknown as import("@downcity/city/power").PowerJsonValue);
-        ui.toast({ type: "success", message: "MCP 配置已保存" });
-        ui.invalidate();
-        await load();
+        await operation();
       } catch (reason) {
         const message = to_error_message(reason);
-        set_error(message);
-        ui.toast({ type: "error", message });
+        if (server_id) set_editor((current) => ({ ...current, drafts: current.drafts.map((draft) => draft.id === server_id ? { ...draft, operation_error: message } : draft) }));
+        else set_error(message);
       } finally {
-        set_saving(false);
+        busy_ref.current = false;
+        set_busy("");
       }
     };
-    const test = async (server_id: string) => {
-      try {
-        const result = await config.invoke<{ tool_count: number; tools: string[] }>("mcp.config.test", { server_id });
-        ui.toast({ type: "success", message: `${server_id}: ${result.tool_count} 个工具` });
-      } catch (reason) {
-        ui.toast({ type: "error", message: to_error_message(reason) });
-      }
-    };
-    const reload = async (server_id: string) => {
-      try {
-        await config.invoke("mcp.config.reload", { server_id });
-        ui.toast({ type: "success", message: `${server_id} 已重载` });
-        await load();
-      } catch (reason) {
-        ui.toast({ type: "error", message: to_error_message(reason) });
-      }
+    const save_file = (draft: McpConfigFileDraft) => run_operation(`save:${draft.id}`, draft.id, async () => {
+      const snapshot = await config.invoke<McpConfigSnapshotView>("mcp.config.save", {
+        server_id: draft.id,
+        content: draft.content,
+        ...(draft.create ? { create: true } : { expected_content: draft.original_content }),
+      });
+      apply_snapshot(snapshot, draft.id);
+      ui.invalidate();
+      ui.toast({ type: "success", message: `${draft.id} 已保存` });
+    });
+    const remove_file = (draft: McpConfigFileDraft) => run_operation(`remove:${draft.id}`, draft.id, async () => {
+      const snapshot = await config.invoke<McpConfigSnapshotView>("mcp.config.remove", {
+        server_id: draft.id, expected_content: draft.original_content,
+      });
+      apply_snapshot(snapshot, draft.id);
+      set_delete_id(undefined);
+      ui.invalidate();
+      ui.toast({ type: "success", message: `${draft.id} 已删除` });
+    });
+    const reread_file = (draft: McpConfigFileDraft) => run_operation(`read:${draft.id}`, draft.id, async () => {
+      if (draft.content !== draft.original_content && !await ui.confirm({ title: `重新读取 ${draft.id}`, description: "将丢弃该文件的未保存内容，并读取磁盘上的最新原文。", action: "重新读取" })) return;
+      apply_snapshot(await config.invoke<McpConfigSnapshotView>("mcp.config.read"), draft.id);
+    });
+    const test_file = (draft: McpConfigFileDraft) => run_operation(`test:${draft.id}`, draft.id, async () => {
+      const result = await config.invoke<McpConfigTestView>("mcp.config.test", { server_id: draft.id });
+      ui.toast({ type: "success", message: `${draft.id}: ${result.tool_count} 个工具` });
+    });
+    const reload = () => run_operation("reload", undefined, async () => {
+      apply_snapshot(await config.invoke<McpConfigSnapshotView>("mcp.config.reload"));
+      ui.invalidate();
+      ui.toast({ type: "success", message: "已重新扫描配置并刷新连接" });
+    });
+    const add_server = () => {
+      const draft_key = `new:${++draft_sequence.current}`;
+      set_editor((current) => {
+      let server_id = "server";
+      let suffix = 2;
+      while (current.drafts.some((draft) => draft.id === server_id)) server_id = `server_${suffix++}`;
+      return { ...current, drafts: [...current.drafts, {
+        draft_key, id: server_id, path: "", content: DEFAULT_SERVER_CONTENT, original_content: "", create: true,
+      }] };
+      });
     };
 
     if (loading) return <LoadingState label="正在读取 MCP 配置…" />;
     return <Page>
+      <Toolbar title="MCP Servers" description="每个 Server 使用一个 TOML 文件，分别保存和删除。" actions={<span>
+        <Button disabled={Boolean(busy)} on_click={() => void run_operation("read", undefined, async () => {
+          apply_snapshot(await config.invoke<McpConfigSnapshotView>("mcp.config.read"));
+        })}>{busy === "read" ? "读取中…" : "重新扫描文件"}</Button>
+        <Button disabled={Boolean(busy)} on_click={() => void reload()}>{busy === "reload" ? "刷新中…" : "刷新连接"}</Button>
+      </span>} />
+      <Callout tone="default">读取、创建和保存文件均不会启动 Server，保存后 idle 属于正常状态。重新扫描文件会保留未保存草稿；重新读取单个文件会替换该草稿。刷新连接会重扫并重连已保存的配置，测试也使用已保存文件。stdio 请填写已安装的可执行程序路径。</Callout>
       {error ? <Callout tone="danger">{error}</Callout> : null}
-      <Toolbar title="MCP Servers" description="配置外部 MCP Server，并将其工具提供给 Agent。" actions={<Button variant="primary" disabled={saving} on_click={() => void save()}>{saving ? "保存中…" : "保存"}</Button>} />
-      <Callout tone="warning">stdio Server 会在本机执行任意代码。只配置可信来源；Server 返回的工具描述和结果都按外部数据处理。</Callout>
-      <Section title="Servers" action={<Button on_click={add_server}>添加 Server</Button>}>
-        {draft.servers.map((server, index) => {
-          const server_status = status.servers.find((item) => item.id === server.id);
-          return <Group key={`${server.id}-${index}`} label={server.title || server.id || "新 Server"}>
-            <Row label="启用" trailing={<Switch aria_label={`启用 ${server.id || "MCP Server"}`} checked={server.enabled} on_checked_change={(checked) => update_server(index, { enabled: checked })} />} />
-            <Row label="ID" trailing={<Input value={server.id} on_value_change={(value) => update_server(index, { id: value })} />} />
-            <Row label="标题" trailing={<Input value={server.title || ""} on_value_change={(value) => update_server(index, { title: value })} />} />
-            <Row label="传输" trailing={<Select value={server.transport.type} options={[{ value: "stdio", label: "stdio" }, { value: "http", label: "Streamable HTTP" }]} on_value_change={(value) => update_server(index, { transport: value === "http" ? { type: "http", url: "" } : { type: "stdio", command: "" } })} />} />
-            {server.transport.type === "stdio"
-              ? <>
-                <Row label="命令" trailing={<Input value={server.transport.command} on_value_change={(value) => update_server(index, { transport: { type: "stdio", command: value, args: server.transport.type === "stdio" ? server.transport.args : undefined, env: server.transport.type === "stdio" ? server.transport.env : undefined, cwd: server.transport.type === "stdio" ? server.transport.cwd : undefined } })} />} />
-                <Row label="参数" trailing={<Textarea value={(server.transport.type === "stdio" ? server.transport.args : [])?.join("\n") || ""} on_value_change={(value) => update_server(index, { transport: { type: "stdio", command: server.transport.type === "stdio" ? server.transport.command : "", args: value.split("\n").filter(Boolean), env: server.transport.type === "stdio" ? server.transport.env : undefined, cwd: server.transport.type === "stdio" ? server.transport.cwd : undefined } })} />} />
-                <Row label="工作目录" trailing={<Input value={server.transport.type === "stdio" ? server.transport.cwd || "" : ""} on_value_change={(value) => update_server(index, { transport: { type: "stdio", command: server.transport.type === "stdio" ? server.transport.command : "", args: server.transport.type === "stdio" ? server.transport.args : undefined, env: server.transport.type === "stdio" ? server.transport.env : undefined, cwd: value } })} />} />
-              </>
-              : <>
-                <Row label="URL" trailing={<Input value={server.transport.type === "http" ? server.transport.url : ""} on_value_change={(value) => update_server(index, { transport: { type: "http", url: value, headers: server.transport.type === "http" ? server.transport.headers : undefined } })} />} />
-                <Row label="Headers" trailing={<Textarea value={format_headers(server.transport.type === "http" ? server.transport.headers : undefined)} on_value_change={(value) => update_server(index, { transport: { type: "http", url: server.transport.type === "http" ? server.transport.url : "", headers: parse_headers(value) } })} />} />
-              </>}
-            <Row label="信任级别" trailing={<Select value={server.trust} options={[{ value: "untrusted", label: "不可信来源" }, { value: "trusted", label: "可信来源" }]} on_value_change={(value) => update_server(index, { trust: value as McpServerConfig["trust"] })} />} />
-            <Row label="调用超时（ms）" trailing={<Input type="number" value={String(server.request_timeout_ms)} on_value_change={(value) => update_server(index, { request_timeout_ms: Number(value) || 60000 })} />} />
-            <Row label="结果上限" trailing={<Input type="number" value={String(server.max_result_chars)} on_value_change={(value) => update_server(index, { max_result_chars: Number(value) || 100000 })} />} />
-            <Row label={server_status ? `状态：${server_status.state}，工具 ${server_status.tool_count}` : "尚未连接"} trailing={<InlineActions Button={Button} on_test={() => void test(server.id)} on_reload={() => void reload(server.id)} on_remove={() => remove_server(index)} />} />
-          </Group>;
-        })}
+      {editor.directory ? <Group><Row label="配置目录" description={editor.directory} /></Group> : null}
+      <Section title="Server 文件" action={<Button disabled={Boolean(busy) || !editor.directory} on_click={add_server}>新建 Server</Button>}>
+        {editor.drafts.length === 0 ? <Callout tone="default">尚无 Server 文件。</Callout> : null}
+        {editor.drafts.map((draft) => <Group key={draft.draft_key} label={draft.id}>
+          {draft.create ? <Field label="Server ID" description="保存后以该 ID 创建独立 TOML 文件。">
+            <Input value={draft.id} disabled={Boolean(busy)} on_value_change={(value) => {
+              set_editor((current) => ({ ...current, drafts: current.drafts.map((item) => item.draft_key === draft.draft_key ? { ...item, id: value } : item) }));
+            }} />
+          </Field> : <Row label="文件路径" description={draft.path} />}
+          {draft.error ? <Callout tone="danger">{draft.error}</Callout> : null}
+          {draft.operation_error ? <Callout tone="danger">{draft.operation_error}</Callout> : null}
+          <Field label="TOML" description={draft.create || draft.content !== draft.original_content ? "未保存" : "已载入文件原文"}>
+            <Textarea value={draft.content} rows={14} disabled={Boolean(busy)} on_value_change={(value) => update_content(draft.draft_key, value)} />
+          </Field>
+          <Row label="文件操作" trailing={<span>
+            <Button variant="primary" disabled={Boolean(busy) || !draft.id.trim() || editor.drafts.some((item) => item !== draft && item.id === draft.id) || (!draft.create && draft.content === draft.original_content)} on_click={() => void save_file(draft)}>{busy === `save:${draft.id}` ? "保存中…" : draft.create ? "创建文件" : "保存文件"}</Button>
+            {!draft.create ? <>
+              <Button disabled={Boolean(busy)} on_click={() => void reread_file(draft)}>重新读取</Button>
+              <Button disabled={Boolean(busy)} on_click={() => void test_file(draft)}>测试已保存文件</Button>
+            </> : null}
+            <Button variant="destructive" disabled={Boolean(busy)} on_click={() => {
+              if (draft.create) set_editor((current) => ({ ...current, drafts: current.drafts.filter((item) => item !== draft) }));
+              else set_delete_id(draft.id);
+            }}>{draft.create ? "丢弃草稿" : "删除"}</Button>
+          </span>} />
+          {delete_id === draft.id && !draft.create ? <Row label="确认删除这个 Server 文件？" trailing={<span>
+            <Button variant="destructive" disabled={Boolean(busy)} on_click={() => void remove_file(draft)}>确认删除</Button>
+            <Button disabled={Boolean(busy)} on_click={() => set_delete_id(undefined)}>取消</Button>
+          </span>} /> : null}
+        </Group>)}
       </Section>
     </Page>;
   },
 });
 
-function InlineActions({ Button, on_test, on_reload, on_remove }: { Button: PowerRendererUiComponents["Button"]; on_test: () => void; on_reload: () => void; on_remove: () => void }) {
-  return <span><Button on_click={on_test}>测试</Button><Button on_click={on_reload}>重载</Button><Button variant="destructive" on_click={on_remove}>删除</Button></span>;
+/** 新建草稿只提供可直接编辑的最小 TOML 模板。 */
+const DEFAULT_SERVER_CONTENT = '# 将 command 替换为本机已安装的 MCP Server 可执行程序路径\nenabled = true\n\n[transport]\ntype = "stdio"\ncommand = "/absolute/path/to/mcp-server"\nargs = []\n';
+
+/** 合并快照时只替换操作目标和未编辑文件，保留其他草稿及其原文基线。 */
+function merge_snapshot(drafts: McpConfigFileDraft[], snapshot: McpConfigSnapshotView, replace_id?: string): McpConfigFileDraft[] {
+  const preserved = drafts.filter((draft) => draft.id !== replace_id && (draft.create || draft.content !== draft.original_content));
+  return [
+    ...snapshot.servers.map((file) => preserved.find((draft) => draft.id === file.id) ?? { ...file, draft_key: `file:${file.id}`, original_content: file.content, create: false }),
+    ...preserved.filter((draft) => !snapshot.servers.some((file) => file.id === draft.id)),
+  ];
 }
 
-function normalize_server(server: McpServerConfig): McpServerConfig {
-  return { ...server, title: server.title || "", disabled_tools: server.disabled_tools || [], attach_media: Boolean(server.attach_media) };
+/** 将通道错误转为可见消息，不对配置原文进行解析或转换。 */
+function to_error_message(reason: unknown): string {
+  return reason instanceof Error ? reason.message : String(reason);
 }
-function create_default_server(servers: readonly McpServerConfig[]): McpServerConfig {
-  let id = "server";
-  let suffix = 2;
-  while (servers.some((server) => server.id === id)) id = `server_${suffix++}`;
-  return { id, title: "", enabled: true, transport: { type: "stdio", command: "" }, trust: "untrusted", request_timeout_ms: 60000, idle_timeout_ms: 0, max_result_chars: 100000, disabled_tools: [], attach_media: false };
-}
-function format_headers(headers?: Record<string, string>): string { return Object.entries(headers || {}).map(([key, value]) => `${key}: ${value}`).join("\n"); }
-function parse_headers(value: string): Record<string, string> { return Object.fromEntries(value.split("\n").map((line) => line.split(/:\s*/, 2)).filter(([key, item]) => Boolean(key && item))); }
-function to_error_message(reason: unknown): string { return reason instanceof Error ? reason.message : String(reason); }

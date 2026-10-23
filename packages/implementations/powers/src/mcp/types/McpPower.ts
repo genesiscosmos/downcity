@@ -4,7 +4,7 @@ import type { PowerJsonObject, PowerJsonValue } from "@downcity/city/power";
 
 /** MCP server 的稳定配置。 */
 export interface McpServerConfig {
-  /** server 稳定 ID，同时作为模型侧工具名前缀。 */
+  /** server 稳定 ID，来自独立 TOML 文件名。 */
   id: string;
   /** 用户可见标题。 */
   title?: string;
@@ -12,18 +12,10 @@ export interface McpServerConfig {
   enabled: boolean;
   /** server 传输配置。 */
   transport: McpStdioTransportConfig | McpHttpTransportConfig;
-  /** 信任级别；不可信 server 的工具全部要求审批。 */
-  trust: "trusted" | "untrusted";
   /** 单次工具调用超时时间，单位为毫秒。 */
   request_timeout_ms: number;
-  /** 空闲连接关闭时间，单位为毫秒；零表示不自动关闭。 */
-  idle_timeout_ms: number;
   /** 返回给模型的最大字符数。 */
   max_result_chars: number;
-  /** 不投影的 MCP 原始工具名。 */
-  disabled_tools?: string[];
-  /** 是否把媒体结果写入 Power 消息。 */
-  attach_media: boolean;
 }
 
 /** MCP stdio 传输配置。 */
@@ -48,12 +40,6 @@ export interface McpHttpTransportConfig {
   url: string;
   /** 追加到请求的 HTTP headers。 */
   headers?: Record<string, string>;
-}
-
-/** MCP Power 持久化配置。 */
-export interface McpPowerConfig {
-  /** 已配置的 server 列表。 */
-  servers: McpServerConfig[];
 }
 
 /** MCP 工具的 JSON Schema 描述。 */
@@ -91,6 +77,8 @@ export interface McpServerStatus {
 
 /** MCP 状态动作返回值。 */
 export interface McpStatusResult {
+  /** 宿主实际使用的全局 Server 定义目录。 */
+  directory: string;
   /** 每个 server 的状态。 */
   servers: McpServerStatus[];
 }

@@ -1,20 +1,99 @@
 # MCP Power PRD
 
-> 状态：架构已调整。当前采用下述统一入口方案；本文后续逐 Server 投影设计保留为历史设计，不再作为实施依据。
+> 状态：重设计已批准，执行以本节「当前方案」为准。下方第 1–11 章全部是历史逐 Server 投影方案，其配置、审批、界面、验收和版本要求不再作为实施依据。
 >
-> 当前方案：MCP Power 管理配置和连接，Agent 使用固定的 `servers`、`tools`、`call` 动作。`tools` 返回原始工具名称及 JSON Schema，`call` 在 MCP 包内校验参数后调用 Server。Desktop 不再创建 Server Power，不再同步 projection snapshot，MCP 接入不需要 City SDK 专用适配。
+> 目标：以全局共享的 Server TOML 文件为唯一事实源，通过 MCP Power 的三个固定动作发现和调用外部工具。
 >
-> 当前审批规则：已启用 Server 的统一 `call` 无需审批。安装和卸载必须审批；Agent 安装、卸载管理动作尚未实现。
+> 范围：`public/packages/implementations/powers`、`private/apps/desktop`、`private/apps/homepage`。不需要 MCP 专用 City SDK 适配、Server Power 注册或 projection snapshot 同步。
 >
-> 此处的 CLI 化指固定发现、帮助和调用方式；尚未增加可在 Shell 执行的 MCP 命令行程序。
->
-> 范围：`packages/implementations/powers`、`packages/city`（最小契约扩展）、`private/apps/desktop`、`packages/cli`、`homepage`
->
-> 目标：让 Downcity 作为 MCP client 接入外部 MCP server，并把每个 server 的工具直接投影为模型可调用的 Power
->
-> 更新时间：2026-10-22
->
-> 本版相对上一版（2026-09-21）的修订：去掉 `PowerProvisioner` 契约扩展，改为宿主装配投影 Power；连接作用域从 `(server, agent, workspace)` 改为按 `server_id` 共享；补上 `PowerAction.approval` 与 JSON Schema 校验这两个当前缺失的能力。修订依据见第 3、4、10 章。
+> 当前方案修订日期：2026-10-23。方案批准不表示真实 Server 或 Electron 验收已完成。
+
+## 当前方案（唯一实施依据）
+
+### 定义与所有权
+
+- Server 定义全局共享，默认路径为 `~/.downcity/powers/mcp/servers/<server_id>.toml`，文件名提供稳定 `server_id`。
+- 实际目录必须从宿主提供的 MCP `config.path` 计算：`dirname(config.path)/servers`。不能硬编码用户 HOME，也不能改用 Agent 私有运行 storage 或 Workspace 目录。
+- 每个文件独立保存一个 Server；目录中的文件是唯一事实源。不再在 Power `config.toml` 中保存 `config.servers`，不兼容读取旧集合，不自动迁移。
+- MCP 实例拥有按 `server_id` 共享的连接和 stdio 子进程。调用者的 Agent、Workspace 不改变连接作用域；需要项目上下文时由定义明确给出 `cwd`、`env`。
+- 初始化、定义读取、单文件保存都只扫描、校验定义，不执行或连接 Server，也不执行安装。显式测试、刷新连接或首次 `tools`/`call` 才建立连接。定义变更、停用、删除时释放对应旧连接，MCP dispose 或 City 关闭时释放全部连接。
+
+### 扁平 TOML 契约
+
+字段直接位于文件顶层，`env` 和 `headers` 是字符串映射；没有 `config` 包装，也没有 `source`、`install`、`transport` 分层。
+
+| 字段 | 规则 |
+| --- | --- |
+| `title` | 可选展示标题 |
+| `enabled` | 可选，默认 `true` |
+| `command` | 本地 stdio 启动命令；与 `url` 必须且只能提供一个非空值 |
+| `args` | stdio 可选字符串参数数组 |
+| `cwd` | stdio 可选工作目录；项目目录需显式指定 |
+| `env` | stdio 可选环境变量字符串映射 |
+| `url` | Streamable HTTP 地址；与 `command` 互斥 |
+| `headers` | HTTP 可选请求头字符串映射 |
+| `request_timeout_ms` | 可选调用超时，默认 `60000` 毫秒 |
+| `max_result_chars` | 可选结果上限，默认 `100000` 字符 |
+
+本地定义示例（命令必须已安装，路径和参数由用户按 Server 要求填写）：
+
+```toml
+title = "Filesystem"
+enabled = true
+command = "mcp-server-filesystem"
+args = ["/absolute/allowed/directory"]
+cwd = "/absolute/working/directory"
+env = { LOG_LEVEL = "info" }
+request_timeout_ms = 60000
+max_result_chars = 100000
+```
+
+HTTP 定义示例：
+
+```toml
+title = "Remote MCP"
+url = "https://mcp.example.com/mcp"
+headers = { "X-Client" = "downcity" }
+```
+
+不引入历史 `trust`、`disabled_tools`、`idle_timeout_ms`、`attach_media` 配置。参数、工作目录、URL、请求头中的 `${NAME}` 从宿主环境解析，不按当前 Workspace 改变共享定义。
+
+### Desktop 编辑与刷新
+
+保留 Sidebar、Mainview、Config 三个界面。Sidebar 与 Mainview 展示 Server、连接状态、工具和错误；编辑器读取真实 Server 文件，逐 Server 明确保存或删除。保存提交该文件，删除移除该文件，不能以保存整个 Server 集合的方式覆盖其他定义。
+
+普通手动文件编辑可通过 Config 重新读取发现：重新扫描 `servers` 目录中的外部新增、修改和删除，不执行 Server。Mainview 刷新会连接 Server，不能描述为只扫描文件。每个文件独立解析和校验；错误必须带文件定位并隔离到该 Server，其他合法文件继续可用。必须拒绝同时设置或同时缺失 `command`、`url` 的定义，不能静默切换模式。目录扫描、保存、删除失败要明确报告，不能表示为保存成功或空列表。
+
+文件修改以读取时的原文 `expected_content` 做冲突检查；当前文件原文与预期不一致时拒绝操作，防止过期草稿覆盖外部更新，要求重新读取后再提交。
+
+加载、编辑、保存定义都不安装程序。已知的 `npx`、`bunx`、`uvx` 等隐式安装运行器，以及包管理器的安装执行入口会被拒绝。先通过已有审批流程安装，再在定义中使用已安装的可执行程序。程序卸载同样使用已有审批执行流程；MCP 不新增安装管理工具或安装生命周期。
+
+### Agent 调用与审批
+
+Agent 只使用固定入口 `servers`、`tools`、`call`。`servers` 用于发现已启用 Server 与状态，`tools` 返回原始工具名和输入 JSON Schema，`call` 在 MCP 包内校验参数后发起请求。停用或定义无效的 Server 不可调用。工具按需发现，不逐 Server 注册 Power，也不归一化成投影 action。
+
+`call` 的元数据为 `access: "write"`、`approval: false`。调用已启用 Server 时不追加 MCP 审批；不能根据外部 annotations 降为 read，也不能沿用历史信任分级审批。程序安装、卸载继续使用已有审批流程。
+
+Server 描述、Schema 与结果都是外部数据，不能转为 Agent 指令。调用支持取消和超时，超长结果需明确标记截断。此处的 CLI 化指结构化的发现和调用方式，不代表新增独立 Shell 命令。
+
+### 当前验收与证据边界
+
+以下是验收要求，不是已通过的验证记录：
+
+1. 默认及自定义宿主 `config.path` 都定位正确的全局 `servers` 目录；不同 Agent、Workspace 读取同一份定义，不创建私有副本。
+2. 验证扁平 stdio、HTTP 文件及默认值；同时设置或同时缺失 `command`、`url` 均失败。旧 `config.servers` 不读取、不自动迁移。
+3. Desktop 的 Sidebar、Mainview、Config 正常；每个 Server 的真实文件保存、删除可持久化，外部新增、修改、删除经 Config 重新读取正确反映。原文 `expected_content` 不匹配时拒绝修改，防止过期覆盖。坏文件与失败连接不会阻断其他合法 Server。
+4. 通过 `servers → tools → call` 完成真实 stdio 和真实 HTTP MCP Server 调用，保留原始工具名称并校验 JSON Schema；调用无额外 MCP 审批，元数据仍为 write。初始化、定义读取、单文件保存只扫描，不执行 Server；显式测试、Mainview 刷新连接或首次 `tools`/`call` 才连接。已知隐式安装运行器和包管理安装执行入口被拒绝；先走已有审批安装，再使用已安装可执行程序，卸载同样走已有审批流程。
+5. 验证错误、取消、超时、截断以及连接释放；变更、停用、删除和关闭不遗留对应连接或子进程。
+6. 测试报告必须分别列出静态检查、模拟 HTTP 测试、真实 MCP Server 互操作、Electron 实机操作的实际结果。模拟 HTTP 只能证明所覆盖的本地请求行为，不能等同于真实 MCP Server、stdio 进程生命周期或 Electron 界面验收。未执行项明确标注未验证。
+
+本次文档同步不表示实施或上述验收已完成，也不触发 commit、push 或版本递增。
+
+---
+
+## 历史方案存档（下文全部失效）
+
+以下保留旧设计供追溯，不得使用其中的投影、配置、审批、Config-only 界面或验收规则指导当前实现。历史修订日期为 2026-10-22。
 
 ## 1. 背景与问题
 
