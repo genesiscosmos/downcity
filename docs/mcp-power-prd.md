@@ -1,6 +1,12 @@
 # MCP Power PRD
 
-> 状态：待评审
+> 状态：架构已调整。当前采用下述统一入口方案；本文后续逐 Server 投影设计保留为历史设计，不再作为实施依据。
+>
+> 当前方案：MCP Power 管理配置和连接，Agent 使用固定的 `servers`、`tools`、`call` 动作。`tools` 返回原始工具名称及 JSON Schema，`call` 在 MCP 包内校验参数后调用 Server。Desktop 不再创建 Server Power，不再同步 projection snapshot，MCP 接入不需要 City SDK 专用适配。
+>
+> 当前审批规则：已启用 Server 的统一 `call` 无需审批。安装和卸载必须审批；Agent 安装、卸载管理动作尚未实现。
+>
+> 此处的 CLI 化指固定发现、帮助和调用方式；尚未增加可在 Shell 执行的 MCP 命令行程序。
 >
 > 范围：`packages/implementations/powers`、`packages/city`（最小契约扩展）、`private/apps/desktop`、`packages/cli`、`homepage`
 >

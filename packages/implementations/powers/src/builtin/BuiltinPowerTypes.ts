@@ -78,8 +78,8 @@ export function create_builtin_power_registrations(input: {
     {
       readme: builtin_readme_path("mcp"),
       has_config: true,
-      has_sidebar: false,
-      has_mainview: false,
+      has_sidebar: true,
+      has_mainview: true,
       power: new McpPower(),
     },
   ];

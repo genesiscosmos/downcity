@@ -1,6 +1,6 @@
 {
   "name": "@downcity/powers",
-  "version": "1.5.6",
+  "version": "1.5.7",
   "type": "module",
   "description": "Downcity 内建 power 集合包",
   "files": [

@@ -15,8 +15,63 @@ interface McpStatusView {
   servers: McpServerStatus[];
 }
 
-/** MCP Config Renderer 定义。 */
+/** MCP Power Renderer 定义。 */
 export const MCP_POWER_RENDERER = define_power_renderer({
+  sidebar: function McpPowerSidebar({ power, ui }) {
+    const { Callout, LoadingState, Sidebar, SidebarSection, SidebarTreeItem, Status } = ui.components;
+    const [status, set_status] = useState<McpStatusView>();
+    const [error, set_error] = useState("");
+    const load = useCallback(async () => {
+      try {
+        set_status(await power.invoke<McpStatusView>("mcp.status"));
+        set_error("");
+      } catch (reason) {
+        set_error(to_error_message(reason));
+      }
+    }, [power]);
+    useEffect(() => { void load(); }, [load, ui.revision]);
+    if (!status) return <Sidebar>{error ? <Callout tone="danger">{error}</Callout> : <LoadingState label="正在读取 MCP 状态…" />}</Sidebar>;
+    return <Sidebar>
+      <SidebarSection label="MCP Servers">
+        {status.servers.length === 0 ? <Callout tone="default">尚未配置 MCP Server</Callout> : status.servers.map((server) => <SidebarTreeItem
+          key={server.id}
+          kind="leaf"
+          depth={0}
+          label={server.id}
+          trailing={<Status tone={server.state === "ready" ? "success" : server.state === "error" ? "danger" : "warning"}>{`${server.state} · ${server.tool_count}`}</Status>}
+          on_select={() => undefined}
+        />)}
+      </SidebarSection>
+    </Sidebar>;
+  },
+  mainview: function McpPowerMainview({ power, ui }) {
+    const { Callout, Group, LoadingState, Page, Row, Section, Toolbar, Button, Status } = ui.components;
+    const [status, set_status] = useState<McpStatusView>();
+    const [error, set_error] = useState("");
+    const load = useCallback(async () => {
+      try {
+        set_status(await power.invoke<McpStatusView>("mcp.status"));
+        set_error("");
+      } catch (reason) {
+        set_error(to_error_message(reason));
+      }
+    }, [power]);
+    useEffect(() => { void load(); }, [load, ui.revision]);
+    if (!status) return <LoadingState label="正在读取 MCP 状态…" />;
+    return <Page>
+      {error ? <Callout tone="danger">{error}</Callout> : null}
+      <Toolbar title="MCP" description="管理外部 MCP Server 的连接状态和工具面。" actions={<Button on_click={() => void load()}>刷新</Button>} />
+      <Callout tone="default">通过 mcp.servers、mcp.tools 和 mcp.call 发现与调用工具。已启用 Server 的调用直接执行，描述和结果作为外部数据处理。</Callout>
+      <Section title="连接状态">
+        {status.servers.length === 0 ? <Group><Row label="暂无配置的 MCP Server" /></Group> : status.servers.map((server) => <Group key={server.id} label={server.id}>
+          <Row label="状态" trailing={<Status tone={server.state === "ready" ? "success" : server.state === "error" ? "danger" : "warning"}>{server.state}</Status>} />
+          <Row label="工具数量" trailing={<span>{String(server.tool_count)}</span>} />
+          {server.last_error ? <Row label="最近错误" trailing={<span>{server.last_error}</span>} /> : null}
+          {server.updated_at ? <Row label="更新时间" trailing={<span>{server.updated_at}</span>} /> : null}
+        </Group>)}
+      </Section>
+    </Page>;
+  },
   config: function McpPowerConfigView({ config, ui }) {
     const { Button, Callout, Group, Input, LoadingState, Page, Row, Section, Select, Switch, Textarea, Toolbar } = ui.components;
     const [draft, set_draft] = useState<McpPowerConfig>({ servers: [] });
@@ -111,7 +166,7 @@ export const MCP_POWER_RENDERER = define_power_renderer({
                 <Row label="URL" trailing={<Input value={server.transport.type === "http" ? server.transport.url : ""} on_value_change={(value) => update_server(index, { transport: { type: "http", url: value, headers: server.transport.type === "http" ? server.transport.headers : undefined } })} />} />
                 <Row label="Headers" trailing={<Textarea value={format_headers(server.transport.type === "http" ? server.transport.headers : undefined)} on_value_change={(value) => update_server(index, { transport: { type: "http", url: server.transport.type === "http" ? server.transport.url : "", headers: parse_headers(value) } })} />} />
               </>}
-            <Row label="信任级别" trailing={<Select value={server.trust} options={[{ value: "untrusted", label: "不可信，需要审批" }, { value: "trusted", label: "可信，按只读注解" }]} on_value_change={(value) => update_server(index, { trust: value as McpServerConfig["trust"] })} />} />
+            <Row label="信任级别" trailing={<Select value={server.trust} options={[{ value: "untrusted", label: "不可信来源" }, { value: "trusted", label: "可信来源" }]} on_value_change={(value) => update_server(index, { trust: value as McpServerConfig["trust"] })} />} />
             <Row label="调用超时（ms）" trailing={<Input type="number" value={String(server.request_timeout_ms)} on_value_change={(value) => update_server(index, { request_timeout_ms: Number(value) || 60000 })} />} />
             <Row label="结果上限" trailing={<Input type="number" value={String(server.max_result_chars)} on_value_change={(value) => update_server(index, { max_result_chars: Number(value) || 100000 })} />} />
             <Row label={server_status ? `状态：${server_status.state}，工具 ${server_status.tool_count}` : "尚未连接"} trailing={<InlineActions Button={Button} on_test={() => void test(server.id)} on_reload={() => void reload(server.id)} on_remove={() => remove_server(index)} />} />
