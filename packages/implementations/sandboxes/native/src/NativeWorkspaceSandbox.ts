@@ -20,6 +20,7 @@ import type {
   WorkspaceSandboxSnapshot,
 } from "@downcity/type/shell";
 import { build_shell_command_invocation } from "./command/ShellCommandModel.js";
+import { sanitize_process_environment } from "./policy/ProcessEnvironment.js";
 import { explain_sandbox_denial } from "./policy/DenialExplainer.js";
 import { wrap_sandbox_invocation } from "./policy/Wrapper.js";
 import type { ResolvedSandboxPolicy } from "./types/SandboxPolicy.js";
@@ -30,6 +31,8 @@ export interface NativeWorkspaceSandboxOptions {
   binding: WorkspaceSandboxBinding;
   /** 已解析的围栏策略。 */
   policy: ResolvedSandboxPolicy;
+  /** 宿主明确放行的凭证变量名称；不允许命令调用方自行扩大范围。 */
+  allowed_credential_env?: readonly string[];
 }
 
 /** 当前 Workspace 独享的原生隔离环境。 */
@@ -55,11 +58,7 @@ export class NativeWorkspaceSandbox implements WorkspaceSandbox {
   /** 在宿主启动一个受围栏约束的命令。 */
   async spawn(request: SandboxProcessRequest): Promise<ShellProcessResult> {
     const launcher = this.require_launcher();
-    const env = Object.fromEntries(
-      Object.entries(request.env).filter(
-        (entry): entry is [string, string] => typeof entry[1] === "string",
-      ),
-    );
+    const env = sanitize_process_environment(request.env, this.options.allowed_credential_env);
     const wrapped = wrap_sandbox_invocation({
       platform: process.platform,
       policy: this.policy,

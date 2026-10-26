@@ -9,4 +9,6 @@
 export interface NativeProviderOptions {
   /** 隔离环境出网策略；省略时由 Workspace 绑定决定，默认允许。 */
   network?: "allow" | "deny";
+  /** 宿主明确允许传给命令的凭证变量名称，大小写精确匹配；默认全部移除。Downcity 内部令牌始终移除。 */
+  allowed_credential_env?: readonly string[];
 }

@@ -57,6 +57,16 @@ export class Shell {
   private sandbox?: WorkspaceSandbox;
   /** Shell 首次释放产生的稳定 Promise，保证资源只收口一次。 */
   private dispose_promise?: Promise<void>;
+  /** 当前代 Sandbox 的共享自检结果；失败保持缓存，显式 reset 后才能重试。 */
+  private sandbox_ready?: Promise<void>;
+  /** reset 的共享任务；执行期间拒绝新命令。 */
+  private reset_promise?: Promise<void>;
+  /** 已进入门禁或启动器的任务；reset/dispose 等待其收口后清理进程。 */
+  private readonly pending_starts = new Set<Promise<unknown>>();
+  /** reset 失败后保持拒绝，只有成功 reset 才能恢复。 */
+  private reset_error?: unknown;
+  /** 释放标记，在异步清理开始之前阻止新命令。 */
+  private disposed = false;
   /** 模型可调用的 Shell tools。 */
   readonly tools: ShellToolSet;
 
@@ -77,6 +87,7 @@ export class Shell {
 
   /** 将 Shell 一次性绑定到 Workspace，并创建由自身持有的持久 Sandbox。 */
   bind(input: ShellBinding): void {
+    this.require_active();
     const workspace_id = String(input?.workspace_id || "").trim();
     const root_path = String(input?.root_path || "").trim();
     const data_path = String(input?.data_path || "").trim();
@@ -108,14 +119,39 @@ export class Shell {
       ...(input.network ? { network: input.network } : {}),
       launcher: this.launcher,
     });
-    this.sandbox = sandbox;
+    // 所有 Sandbox 启动（含工具调用与 SDK 短命令）共用一个门禁，host 路径不经过它。
+    this.sandbox = {
+      id: sandbox.id,
+      backend: sandbox.backend,
+      workspace_path: sandbox.workspace_path,
+      spawn: async (request) => {
+        const start = (async () => {
+          await this.ensure_sandbox_ready();
+          return await sandbox.spawn(request);
+        })();
+        this.pending_starts.add(start);
+        try {
+          return await start;
+        } finally {
+          this.pending_starts.delete(start);
+        }
+      },
+      describe: () => sandbox.describe(),
+      stop: () => sandbox.stop(),
+      ...(sandbox.reset ? { reset: () => sandbox.reset!() } : {}),
+      ...(sandbox.explain_denial ? { explain_denial: (output: string) => sandbox.explain_denial!(output) } : {}),
+    };
     this.binding = next_binding;
   }
 
   /** 关闭全部 Shell Sessions，再停止 Sandbox 计算资源并保留持久文件系统。 */
   async dispose(): Promise<void> {
+    this.disposed = true;
     this.dispose_promise ??= (async () => {
       const errors: unknown[] = [];
+      await this.reset_promise?.catch(() => undefined);
+      await this.sandbox_ready?.catch(() => undefined);
+      await Promise.allSettled([...this.pending_starts]);
       try {
         await this.close_sessions();
       } catch (error) {
@@ -133,20 +169,28 @@ export class Shell {
 
   /** 关闭现有 Shell Sessions，并显式删除、重建当前持久 Sandbox。 */
   async reset_sandbox(): Promise<void> {
+    this.require_active();
+    if (this.reset_promise) return await this.reset_promise;
     const sandbox = this.require_sandbox();
-    const results = await Promise.allSettled([
-      this.close_sessions(),
-    ]);
-    const errors = results.flatMap((result) =>
-      result.status === "rejected" ? [result.reason] : []
-    );
-    if (errors.length > 0) {
-      throw new AggregateError(errors, "Shell sessions close failed before Sandbox reset");
-    }
     if (!sandbox.reset) {
       throw new Error(`Sandbox Provider ${this.sandbox_provider.backend} does not support reset`);
     }
-    await sandbox.reset();
+    this.reset_promise = (async () => {
+      await this.sandbox_ready?.catch(() => undefined);
+      await Promise.allSettled([...this.pending_starts]);
+      await this.close_sessions();
+      await sandbox.reset!();
+      this.sandbox_ready = undefined;
+      this.reset_error = undefined;
+    })();
+    try {
+      await this.reset_promise;
+    } catch (error) {
+      this.reset_error = error;
+      throw error;
+    } finally {
+      this.reset_promise = undefined;
+    }
   }
 
   /** 更新后续命令使用的 Workspace 环境变量。 */
@@ -195,6 +239,10 @@ export class Shell {
     payload: Record<string, unknown>,
     execution: ShellExecutionContext,
   ): Promise<ShellActionResponse> {
+    this.require_active();
+    if (this.reset_promise && (action === "start" || action === "exec")) {
+      throw new Error("Shell Sandbox is resetting");
+    }
     const session_id = execution.session?.session_id;
     const turn_id = execution.session?.turn_id;
     const context = this.create_host_context(execution);
@@ -248,6 +296,29 @@ export class Shell {
         }),
       },
     };
+  }
+
+  /** 检查失败保持拒绝；并发调用等待同一个检查，结束后再次核对生命周期。 */
+  private async ensure_sandbox_ready(): Promise<void> {
+    this.require_active();
+    if (this.reset_promise) throw new Error("Shell Sandbox is resetting");
+    if (this.reset_error) throw new Error("Shell Sandbox reset failed; retry reset before execution", { cause: this.reset_error });
+    this.sandbox_ready ??= Promise.resolve().then(async () => {
+      const status = await this.sandbox_provider.check();
+      if (!status.ok) {
+        throw new Error(`Shell Sandbox is not ready (${status.backend}): ` + status.issues
+          .map((issue) => `${issue.code}: ${issue.message} ${issue.fixes.join(" ")}`)
+          .join("; "));
+      }
+    });
+    await this.sandbox_ready;
+    this.require_active();
+    if (this.reset_promise) throw new Error("Shell Sandbox is resetting");
+  }
+
+  /** 已进入释放的 Shell 不再接受新工作。 */
+  private require_active(): void {
+    if (this.disposed) throw new Error("Shell is disposed");
   }
 
   /** 返回已完成的一次性 Workspace 绑定。 */

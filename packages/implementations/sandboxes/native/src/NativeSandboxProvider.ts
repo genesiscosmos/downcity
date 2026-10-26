@@ -95,6 +95,7 @@ export class NativeSandboxProvider implements SandboxProvider {
     return new NativeWorkspaceSandbox({
       binding: normalized_binding,
       policy: resolve_sandbox_policy({ binding: normalized_binding }),
+      allowed_credential_env: [...(this.options.allowed_credential_env ?? [])],
     });
   }
 }

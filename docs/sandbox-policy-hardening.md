@@ -28,10 +28,20 @@ Provider.check 使用自有临时文件检查工作区写入、工作区外写�
 
 Provider.check 发生临时目录、路径解析或包装异常时返回 `ok: false` 与 `canary_failed`，便于装配层展示失败。`native-canary.mjs` 在 Provider 不可用时立即退出，任何验证失败均返回非零退出码，避免 CI 将失败报告视为成功。
 
-Linux Bubblewrap 修改已完成代码和参数级检查，尚未在 Linux 内核环境实跑。本机没有 bwrap，Docker daemon 也未运行，不能将 macOS 检查视作 Linux 验收。
+Linux 已在 Colima VM 中实跑：内核 `6.8.0-64-generic`、Bubblewrap `0.9.0`、Node `18.19.1`。Bubblewrap 启动命令返回 0，network=allow 与 network=deny 两组 Provider.check 均返回 `ok: true`、`issues: []`，原生契约与 Doctor 的 25 项现有测试全部通过。覆盖工作区写入、越界写入拒绝、可写根内只读覆盖、受保护内容遮蔽、子进程继承及 TCP loopback 边界。随后使用官方 Node `22.23.4` Linux ARM64 归档完成受支持版本复验：下载内容与同源 SHASUMS256.txt 校验一致，network=allow 与 network=deny 两组真实自检均返回 `ok: true`、`issues: []`，同一组 25 项现有测试全部通过。Node 22 仅在 VM 自有临时目录中运行，复验结束后清理，未替换系统 Node。此结果补齐受支持 Node 版本下的原生后端验证，不代表完整 CLI/Desktop、PTY、所有网络协议及发布流程均已验收。
+
+该 VM 启用了 `kernel.apparmor_restrict_unprivileged_userns=1`，首次启动报 `bwrap: setting up uid map: Permission denied`。用户在 VM 添加并加载了 `/etc/apparmor.d/downcity-bwrap`：对 `/usr/bin/bwrap` 使用 `flags=(unconfined)` 并授权 `userns`，随后自检通过。全局内核限制未关闭。此配置是验收环境前提，不由 Sandbox 自动安装或提升权限。
 
 ## 后续范围
 
-本轮未引入 strict 读取白名单、read-only 工作区模式、Landlock/seccomp、域名代理、凭证代理、环境变量 scrub 或 Windows 后端。原生 HOME、临时目录和工具链仍与宿主共享，网络仍默认 allow，macOS mach-lookup 仍按原策略放行。上述能力需单独完成策略、生命周期及跨平台验证。
+已增加原生启动边界的环境变量 scrub：按名称移除 token、secret、password、API key、credential 路径与 SSH agent 变量；宿主通过 `allowed_credential_env` 精确授权例外，Downcity 内部令牌始终移除。PATH、HOME、AWS_REGION 等非凭证配置保留；规则不检测值、不记录秘密、不更改调用方快照。假凭证启动器检查已验证默认移除、显式授权、内部令牌不可授权和包装器使用清理后的 SSH socket 视图。原生构建及 25 项现有测试通过。
 
-本轮未修改版本号、提交或发布；准备发布时按仓库 patch 脚本规则确定实际受影响包。
+该清理不是完整凭证隔离：login 配置和可读宿主文件仍可能重新加载凭证，未知名称也无法识别。实际 Git/包管理器认证流程还需要凭证代理。
+
+启动就绪检查已统一到 Shell 持有的 WorkspaceSandbox.spawn 入口，工具执行与 SDK 短命令都会先等待 Provider.check。并发启动共享一次 Promise，失败或异常保持缓存，后续命令继续拒绝；成功 reset 后清除缓存，下次启动重查。不支持 reset 的 Provider 需要重建 Shell/Workspace。reset 期间拒绝新启动，reset 失败保持拒绝直至重试成功。dispose 在异步清理前标记关闭，等待在途检查与启动任务收口，再关闭 Shell Sessions 和停止 Sandbox；等待检查的命令在启动前再次核对释放与 reset 状态。host 执行仍由审批链控制，不因自检失败自动触发。
+
+City 构建和 5 项现有 Workspace/Shell 集成测试通过；受控 Provider 运行检查验证了并发单次自检、失败缓存、reset 后重试，以及自检期间 dispose 后不再 spawn。此次没有把 Provider.check 当作每条命令实际策略验收：它仍是平台级可用性检查，Workspace 绑定专属权限由后端落实。
+
+本轮未引入 strict 读取白名单、read-only 工作区模式、Landlock/seccomp、域名代理、凭证代理或 Windows 后端。原生 HOME、临时目录和工具链仍与宿主共享，网络仍默认 allow，macOS mach-lookup 仍按原策略放行。上述能力需单独完成策略、生命周期及跨平台验证。
+
+首阶段文件与网络边界优化已进入 public 提交 `1cc75bc44`。后续环境清理与启动就绪检查通过仓库 patch 构建脚本提升实际受影响包：`@downcity/sandbox-native` 为 `1.5.1`，`@downcity/city` 为 `1.5.16`；依赖包仅参与构建，不额外提升版本。提交不包含 push 或手动发布操作。
