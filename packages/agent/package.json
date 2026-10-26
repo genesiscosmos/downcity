@@ -1,6 +1,6 @@
 {
   "name": "@downcity/agent",
-  "version": "1.5.16",
+  "version": "1.5.17",
   "type": "module",
   "description": "Downcity 单 Agent SDK 与执行运行时",
   "main": "./bin/index.js",

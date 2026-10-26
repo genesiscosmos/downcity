@@ -23,9 +23,9 @@ export class LocalSessionDelegationStore implements SessionDelegationStore {
   }
 
   /** 同一工具调用只创建一条委派。 */
-  async create(record: SessionDelegationRecord, unique_child = false): Promise<SessionDelegationRecord> {
+  async create(record: SessionDelegationRecord): Promise<SessionDelegationRecord> {
     await this.files.ensure_directory("delegations");
-    // 创建记录就是子名额的事实源；全局创建锁保证并发和重启后都只能绑定一次。
+    // 创建与父 Turn 封闭共用事务锁；重复请求复用记录，独立请求可创建多个子会话。
     return await this.files.with_file_lock("delegations/create.lock", async () => {
       const existing = await this.get(record.delegation_id);
       if (await this.files.path_exists(this.closed_turn_path(record.caller.agent_id,
@@ -33,10 +33,6 @@ export class LocalSessionDelegationStore implements SessionDelegationStore {
         throw new Error("Parent Turn is closed; cannot submit child work");
       }
       if (existing) return existing;
-      if (unique_child && !record.followup) {
-        const children = await this.children(record.caller.agent_id, record.caller.origin.category, record.caller.session_id);
-        if (children.length) throw new Error(`work_child_limit_reached: continue child ${children[0]!.work_session_id} with session.send`);
-      }
       await this.save(record);
       return record;
     });
@@ -59,7 +55,7 @@ export class LocalSessionDelegationStore implements SessionDelegationStore {
     return (await this.list_records()).filter((record) => record.delivery_state === "pending");
   }
 
-  /** 从创建记录恢复固定父子关系，结束和归档不释放子名额。 */
+  /** 从创建记录恢复全部直接子关系，包含已结束和已归档的子会话。 */
   async children(agent_id: string, category: string, session_id: string): Promise<SessionDelegationRecord[]> {
     return (await this.list_records()).filter((record) => !record.followup
       && record.caller.agent_id === agent_id && record.caller.origin.category === category
@@ -81,7 +77,7 @@ export class LocalSessionDelegationStore implements SessionDelegationStore {
     return `delegations/closed/${key}`;
   }
 
-  /** 扫描权威快照，不额外维护可能漂移的名额索引。 */
+  /** 扫描权威快照，不额外维护可能漂移的父子关系索引。 */
   private async list_records(): Promise<SessionDelegationRecord[]> {
     if (!(await this.files.path_exists("delegations"))) return [];
     const records: SessionDelegationRecord[] = [];

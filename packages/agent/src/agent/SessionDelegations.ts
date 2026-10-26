@@ -89,7 +89,7 @@ export class SessionDelegations implements SessionDelegationPort {
       delivery_state: "pending",
       attempt_count: 0,
       retry_at: 0,
-    }, !followup && caller.agent_id === this.options.agent_id && caller.origin.type === "work");
+    });
     if (record.delivery_state === "pending") {
       const session = record.result ? undefined : await this.prepare_work(record);
       this.launch(record.delegation_id, session);

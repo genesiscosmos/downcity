@@ -3,7 +3,7 @@
  *
  * 动作复用 Agent 持有的 SessionWork 服务；派发、恢复和结果投递仍由原服务负责。
  * 调用身份来自 PowerContext，模型不能指定回传目标。全部角色均可读取，
- * 创建与控制由服务层分别校验角色、层级、唯一子名额和直接父子关系。
+ * 创建与控制由服务层分别校验角色、层级和直接父子关系。
  */
 import { z } from "zod";
 import type { SessionWorkContract } from "@downcity/agent";
@@ -19,13 +19,13 @@ import {
 export class SessionPower extends Power {
   readonly name = "session";
   readonly title = "Session";
-  readonly description = "Read the current agent's sessions with check/messages from every Session type, including Task and archived history. Chat can start multiple Work Sessions; first-level Work can create one child during its lifetime; second-level Work and Task cannot delegate. Send/reply/stop/archive only control directly created Work Sessions. Results return automatically. Other agents' sessions are inaccessible.";
+  readonly description = "Read the current agent's sessions with check/messages from every Session type, including Task and archived history. Chat and first-level Work can create multiple Work children without a count or concurrency limit; delegation depth is limited to 2; second-level Work and Task cannot delegate. Send/reply/stop/archive only control directly created Work Sessions. Results return automatically. Other agents' sessions are inaccessible.";
   readonly actions: PowerActions;
 
   constructor(private readonly options: CityGroupPowerOptions) {
     super();
     this.actions = {
-      start: this.action(session_start_input, "Create project work with optional model_id. Chat may create multiple children; first-level Work may create one lifetime child. Task and second-level Work cannot start. Select workspace_id from context.workspaces.list and write a self-contained query. Returns immediately; results return automatically. Do not poll.", "write", async (args, context) => {
+      start: this.action(session_start_input, "Create project work with optional model_id. Chat and first-level Work may create multiple children, including concurrently; only delegation depth is limited. Task and second-level Work cannot start. Select workspace_id from context.workspaces.list and write a self-contained query. Returns immediately; results return automatically. Do not poll.", "write", async (args, context) => {
         const work = this.select_work(context);
         const receipt = await work.spawn(args, session_delegation_caller(context));
         const detail = await work.read({ session_id: receipt.session_id, session_category: "work", limit: 1 });
