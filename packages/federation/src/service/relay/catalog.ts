@@ -54,6 +54,8 @@ export function validate_relay_catalog(input: unknown, models: AIModelDefinition
       if (url.protocol !== "https:" || url.username || url.password || url.search || url.hash) {
         throw httpError(422, "Channel requires a credential-free HTTPS base_url");
       }
+    } else if (!models.some((model) => model.runtime.stream && model.channel_id === channel.id)) {
+      throw httpError(422, "Registered channel must reference an installed adapter channel");
     } else if (channel.base_url || channel.credential_env) {
       throw httpError(422, "Registered channels use their SDK adapter configuration");
     }
@@ -116,7 +118,11 @@ export class RelayCatalogStore {
   }
 
   /** 合并同一实例内的并发缓存未命中；不将可变目录直接交给外部调用方。 */
-  async read(): Promise<RelayCatalogSnapshot> {
+  async read(fresh = false): Promise<RelayCatalogSnapshot> {
+    if (fresh) {
+      await this.loading;
+      this.cached = undefined;
+    }
     if (this.cached && this.cached.expires_at > Date.now()) {
       return { catalog: this.cached.catalog, revision: this.cached.revision };
     }

@@ -103,10 +103,12 @@ const issued = await embassy.user.relay.create_key({
 });
 const requests = await embassy.user.relay.list_requests({ limit: 50 });
 const snapshot = await embassy.admin.relay.catalog();
+const metadata = await embassy.admin.relay.metadata(); // 已安装模板与适配器，不含凭据
+const health = await embassy.admin.relay.health(); // 共享冷却快照，不执行模型探测
 ~~~
 
 Key 管理使用登录身份；调用 Key 不获得通用 user 权限，明文只在签发时返回。消费额度按已完成结算检查，是允许并发在途超出的 Credits 软上限，不预占资金。渠道配置只持有凭据环境变量引用。日志不保存正文或凭据。
 
-第一批仅在同一公开模型的部署间切换；最新媒体若需要另一模型，调用者需显式选择。明确认证/限流拒绝可有限切换，网络异常、5xx、超时和流中断不透明重试。未提供 RPM/TPM、全局并发租约、Responses、Messages 或管理网页。
+第一批仅在同一公开模型的部署间切换；最新媒体若需要另一模型，调用者需显式选择。明确认证/限流拒绝可有限切换，网络异常、5xx、超时和流中断不透明重试。Fedman 提供模型、渠道、部署与 route 管理，revision 冲突须刷新后重新编辑，引用阻止删除。未提供 RPM/TPM、全局并发租约、Responses 或 Messages。
 
 完整接口与配置语义见 [模型中转与 API Key](https://downcity.ai/zh/city-sdk-docs/service/ai/relay)。

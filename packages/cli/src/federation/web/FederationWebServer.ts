@@ -12,7 +12,7 @@ import { createServer, type IncomingMessage, type ServerResponse } from "node:ht
 import { extname, join, normalize } from "node:path";
 import { fileURLToPath } from "node:url";
 import { randomBytes } from "node:crypto";
-import { Embassy, type EmbassyAdmin } from "@downcity/federation";
+import { Embassy, type EmbassyAdmin, type RelayCatalogSnapshot } from "@downcity/federation";
 import { login_federation_admin } from "@/federation/auth/admin.js";
 import { fetch_dashboard_raw_data } from "@/federation/admin/dashboard/dashboard-data.js";
 import { build_dashboard_snapshot } from "@/federation/admin/dashboard/dashboard-metrics.js";
@@ -160,6 +160,23 @@ async function handle_request(
       return;
     }
     const admin = require_admin(admin_state);
+    if (request_url.pathname === "/api/relay/catalog" && method === "GET") {
+      send_json(response, 200, await admin.relay.catalog());
+      return;
+    }
+    if (request_url.pathname === "/api/relay/metadata" && method === "GET") {
+      send_json(response, 200, await admin.relay.metadata());
+      return;
+    }
+    if (request_url.pathname === "/api/relay/health" && method === "GET") {
+      send_json(response, 200, await admin.relay.health());
+      return;
+    }
+    if (request_url.pathname === "/api/relay/configure" && method === "POST") {
+      const body = await read_json_body<RelayCatalogSnapshot>(request);
+      send_json(response, 200, await admin.relay.configure(body.catalog, body.revision));
+      return;
+    }
     if (method === "GET" && request_url.pathname === "/api/dashboard") {
       const range = parse_dashboard_range(request_url.searchParams.get("range"));
       const raw_data = await fetch_dashboard_raw_data(admin, range);

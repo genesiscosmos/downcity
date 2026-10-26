@@ -8,12 +8,13 @@ import type { CityModelDescriptor } from "@downcity/type";
 import type { Service, Context } from "../service.js";
 import type { AIModelDefinition } from "../../types/AI.js";
 import type {
-  RelayInitialization, RelayPrincipal, RelayRequestLog, RelayRequestPage, RelayAttemptRecord, RelayAttemptList,
+  RelayInitialization, RelayPrincipal, RelayRequestLog, RelayRequestPage, RelayAttemptRecord, RelayAttemptList, RelayHealthRecord,
 } from "../../types/Relay.js";
 import { httpError } from "../../utils/helpers.js";
 import { RelayCatalogStore } from "./catalog.js";
 import { RelayKeyStore } from "./keys.js";
 import { RelayRouter } from "./router.js";
+import type { RelayAdminMetadata, RelayAdminHealth } from "../../types/RelayAdmin.js";
 
 /** 可选中转功能，生命周期由 AIService 管理。 */
 export class RelayRuntime {
@@ -35,9 +36,30 @@ export class RelayRuntime {
     service.action("keys/revoke", async (ctx) => await this.keys().update(this.user_id(ctx), {
       key_id: ctx.input.key_id, status: "revoked",
     }), { auth: ["user"] });
-    service.action("relay/catalog", async () => structuredClone(await this.catalog().read()), {
+    service.action("relay/catalog", async () => structuredClone(await this.catalog().read(true)), {
       method: "GET", auth: ["admin"],
     });
+    service.action("relay/metadata", (): RelayAdminMetadata => ({
+      adapters: ["registered", "openai_chat_completions"],
+      templates: this.dependencies!.models.filter((model) => model.runtime.stream).map((model) => ({
+        id: model.id, name: model.name, channel_id: model.channel_id, upstream_model: model.upstream_model,
+      })),
+    }), { method: "GET", auth: ["admin"] });
+    service.action("relay/health", async (): Promise<RelayAdminHealth> => {
+      const { catalog } = await this.catalog().read();
+      const checked_at = Date.now();
+      const rows = await this.dependencies!.database.query<RelayHealthRecord>({
+        sql: "SELECT deployment_id, cooldown_until FROM service_ai_relay_health", params: [],
+      });
+      const cooldowns = new Map(rows.rows.map((row) => [row.deployment_id, row.cooldown_until]));
+      return { checked_at, items: catalog.deployments.map((deployment) => ({
+        deployment_id: deployment.id, channel_id: deployment.channel_id,
+        enabled: deployment.enabled && catalog.models.some((model) => model.id === deployment.model_id && model.enabled) &&
+          catalog.channels.some((channel) => channel.id === deployment.channel_id && channel.enabled),
+        cooldown_until: cooldowns.get(deployment.id) ?? null,
+        cooling: (cooldowns.get(deployment.id) ?? 0) > checked_at,
+      })) };
+    }, { method: "GET", auth: ["admin"] });
     service.action("relay/configure", async (ctx) => await this.catalog().replace(ctx.input.catalog, ctx.input.revision), {
       auth: ["admin"],
     });

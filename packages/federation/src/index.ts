@@ -9,6 +9,7 @@ export { Embassy } from "./embassy/Embassy.js";
 export { EmbassyUser } from "./embassy/EmbassyUser.js";
 export { EmbassyAdmin } from "./embassy/EmbassyAdmin.js";
 export { EmbassyAccount } from "./embassy/EmbassyAccount.js";
+export type { RelayAdminMetadata, RelayAdminTemplate, RelayAdminHealth, RelayAdminDeploymentHealth } from "./types/RelayAdmin.js";
 export { EmbassyRelay, EmbassyRelayAdmin } from "./embassy/EmbassyRelay.js";
 export type {
   RelayCatalog, RelayChannel, RelayDeployment, RelayModel, RelayRoute,

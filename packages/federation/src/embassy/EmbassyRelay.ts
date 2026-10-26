@@ -3,6 +3,7 @@
  * 用户入口沿用当前登录身份，管理员入口沿用 Admin Session。签发结果包含一次性
  * 明文，列表和更新只返回可展示信息。外部推理客户端使用标准 /v1 接口。
  */
+import type { RelayAdminMetadata, RelayAdminHealth } from "../types/RelayAdmin.js";
 import type { ServiceClient } from "../pact/invoker/invoker.js";
 import type {
   RelayCatalog, RelayKeyInfo, RelayKeyIssued, RelayKeyPolicy, RelayKeyUpdate, RelayLogQuery,
@@ -41,6 +42,14 @@ export class EmbassyRelay {
 /** 管理员目录与全局请求查询，不持有渠道明文凭据。 */
 export class EmbassyRelayAdmin {
   constructor(private readonly service: () => ServiceClient) {}
+
+  metadata(): Promise<RelayAdminMetadata> {
+    return this.service().get("relay/metadata");
+  }
+
+  health(): Promise<RelayAdminHealth> {
+    return this.service().get("relay/health");
+  }
 
   catalog(): Promise<RelayCatalogSnapshot> {
     return this.service().get("relay/catalog");
