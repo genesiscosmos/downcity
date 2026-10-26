@@ -20,12 +20,15 @@ function escape_literal(value: string): string {
 /** 渲染文件规则；显式 deny 在 Seatbelt 中优先于所有 allow。 */
 function render_rule(
   rule: ResolvedSandboxPolicy["filesystem_rules"][number],
+  read_exceptions: readonly string[],
 ): string {
   const matcher = rule.scope === "literal" ? "literal" : "subpath";
   const target = `(${matcher} "${escape_literal(rule.path)}")`;
   if (rule.access === "write") return `(allow file-write* ${target})`;
   if (rule.access === "read") return `(deny file-write* ${target})`;
-  return `(deny file-read* ${target})\n(deny file-write* ${target})`;
+  const exceptions = read_exceptions.map((value) => `(require-not (literal "${escape_literal(value)}"))`).join(" ");
+  const read_target = exceptions ? `(require-all ${target} ${exceptions})` : target;
+  return `(deny file-read* ${read_target})\n(deny file-write* ${target})`;
 }
 
 /** 生成一次命令执行使用的完整 seatbelt profile。 */
@@ -46,7 +49,11 @@ export function build_seatbelt_profile(input: {
     "(allow ipc-posix-shm)",
     "(allow file-read-metadata)",
     "(allow file-read*)",
-    ...input.policy.filesystem_rules.map(render_rule),
+    ...input.policy.filesystem_rules.map((rule) => render_rule(rule, input.policy.ssh
+      ? [input.policy.ssh.socket_path, input.policy.ssh.known_hosts_path] : [])),
+    ...(input.policy.ssh ? [
+      `(deny file-write* (literal "${escape_literal(input.policy.ssh.known_hosts_path)}"))`,
+    ] : []),
   ];
   if (input.policy.network === "allow") {
     lines.push(

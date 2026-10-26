@@ -20,6 +20,7 @@ import type {
   WorkspaceSandboxSnapshot,
 } from "@downcity/type/shell";
 import { build_shell_command_invocation } from "./command/ShellCommandModel.js";
+import { apply_ssh_environment } from "./policy/SshAccess.js";
 import { sanitize_process_environment } from "./policy/ProcessEnvironment.js";
 import { explain_sandbox_denial } from "./policy/DenialExplainer.js";
 import { wrap_sandbox_invocation } from "./policy/Wrapper.js";
@@ -59,6 +60,7 @@ export class NativeWorkspaceSandbox implements WorkspaceSandbox {
   async spawn(request: SandboxProcessRequest): Promise<ShellProcessResult> {
     const launcher = this.require_launcher();
     const env = sanitize_process_environment(request.env, this.options.allowed_credential_env);
+    apply_ssh_environment(env, this.policy);
     const wrapped = wrap_sandbox_invocation({
       platform: process.platform,
       policy: this.policy,
@@ -107,12 +109,15 @@ export class NativeWorkspaceSandbox implements WorkspaceSandbox {
       network: this.policy.network,
       read_scope: "host",
       writable_roots: this.policy.writable_roots,
+      allowed_read_paths: this.policy.ssh
+        ? [this.policy.ssh.known_hosts_path] : [],
       denied_read_paths: this.policy.filesystem_rules
         .filter((rule) => rule.access === "deny")
         .map((rule) => rule.path),
-      denied_write_paths: this.policy.filesystem_rules
-        .filter((rule) => rule.access !== "write")
-        .map((rule) => rule.path),
+      denied_write_paths: [
+        ...this.policy.filesystem_rules.filter((rule) => rule.access !== "write").map((rule) => rule.path),
+        ...(this.policy.ssh ? [this.policy.ssh.known_hosts_path] : []),
+      ],
       policy_digest: this.policy.digest,
       persistent: true,
     };

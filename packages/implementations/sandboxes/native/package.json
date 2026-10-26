@@ -1,6 +1,6 @@
 {
   "name": "@downcity/sandbox-native",
-  "version": "1.5.1",
+  "version": "1.5.2",
   "type": "module",
   "description": "Downcity native OS sandbox provider using seatbelt on macOS and bubblewrap on Linux",
   "main": "./bin/index.js",

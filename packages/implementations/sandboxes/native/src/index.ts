@@ -1,7 +1,7 @@
 /** @downcity/sandbox-native 公开入口。 */
 
 export { NativeSandboxProvider } from "./NativeSandboxProvider.js";
-export type { NativeProviderOptions } from "./types/NativeProvider.js";
+export type { NativeProviderOptions, NativeSshAccess } from "./types/NativeProvider.js";
 export type {
   PathRuleSource,
   ResolvedPathRule,

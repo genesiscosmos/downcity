@@ -41,6 +41,13 @@ export interface ResolvedSandboxPolicy {
   filesystem_rules: readonly ResolvedPathRule[];
   /** 允许写入的根路径，用于把拒绝翻译成可执行提示。 */
   writable_roots: readonly string[];
+  /** 宿主显式开放的 SSH 只读端点；允许在 protected 子树中精确重开，不开放兄弟文件。 */
+  ssh?: {
+    /** 已解析的 SSH agent Unix socket 真实路径。 */
+    socket_path: string;
+    /** 已解析的专用主机信任文件真实路径。 */
+    known_hosts_path: string;
+  };
   /** 当前策略的稳定摘要，用于审计还原与变更比对。 */
   digest: string;
 }

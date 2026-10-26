@@ -16,6 +16,7 @@ import type {
   WorkspaceSandbox,
   WorkspaceSandboxBinding,
 } from "@downcity/type/shell";
+import { authorize_ssh } from "./policy/SshAccess.js";
 import { NativeWorkspaceSandbox } from "./NativeWorkspaceSandbox.js";
 import { resolve_sandbox_policy } from "./policy/SandboxPolicy.js";
 import { resolve_wrapper_binary } from "./policy/Wrapper.js";
@@ -94,7 +95,7 @@ export class NativeSandboxProvider implements SandboxProvider {
     };
     return new NativeWorkspaceSandbox({
       binding: normalized_binding,
-      policy: resolve_sandbox_policy({ binding: normalized_binding }),
+      policy: authorize_ssh(resolve_sandbox_policy({ binding: normalized_binding }), this.options.ssh),
       allowed_credential_env: [...(this.options.allowed_credential_env ?? [])],
     });
   }

@@ -35,6 +35,7 @@ export function build_bubblewrap_prefix(policy: ResolvedSandboxPolicy): string[]
     if (rule.source === "device") continue;
     args.push("--bind", rule.path, rule.path);
   }
+  const masked_directories: string[] = [];
   for (const access of ["read", "deny"] as const) {
     for (const rule of policy.filesystem_rules.filter((rule) => rule.access === access)) {
       if (!existsSync(rule.path)) {
@@ -47,12 +48,20 @@ export function build_bubblewrap_prefix(policy: ResolvedSandboxPolicy): string[]
       if (access === "read") {
         args.push("--ro-bind", rule.path, rule.path);
       } else if (statSync(rule.path).isDirectory()) {
-        args.push("--tmpfs", rule.path, "--remount-ro", rule.path);
+        args.push("--tmpfs", rule.path);
+        masked_directories.push(rule.path);
       } else {
         args.push("--ro-bind", "/dev/null", rule.path);
       }
     }
   }
+  if (policy.ssh) {
+    for (const endpoint of [policy.ssh.socket_path, policy.ssh.known_hosts_path]) {
+      args.push("--ro-bind", endpoint, endpoint);
+    }
+  }
+  // 先恢复获准端点再封闭空目录，防止把 socket 所在目录的其他文件开放。
+  for (const directory of masked_directories.reverse()) args.push("--remount-ro", directory);
   args.push("--");
   return args;
 }

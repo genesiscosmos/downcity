@@ -77,6 +77,14 @@ function judge_read(input: {
   base: Pick<CityToolPathExplanation, "resolved_path" | "intent" | "matched_mount">;
 }): CityToolPathExplanation {
   if (input.snapshot.read_scope === "host") {
+    if (input.snapshot.allowed_read_paths?.includes(input.resolved_path)) {
+      return {
+        ...input.base,
+        allowed: true,
+        reason_code: "allowed",
+        reason: "Reading is allowed by an exact host-authorized exception; sibling paths remain protected.",
+      };
+    }
     const denied_path = input.snapshot.denied_read_paths.find((denied) =>
       is_path_inside_root(denied, input.resolved_path)
     );

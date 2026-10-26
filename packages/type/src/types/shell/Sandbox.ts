@@ -231,6 +231,8 @@ export interface WorkspaceSandboxSnapshot {
   writable_roots: readonly string[];
   /** 当前强制拒绝读取的宿主路径；仅在 read_scope 为 host 时生效。 */
   denied_read_paths: readonly string[];
+  /** 受保护父目录中明确重开的精确读取路径；只匹配路径本身，不开放其子树或写权限。 */
+  allowed_read_paths?: readonly string[];
   /** 强制不可写的子树，优先于 writable_roots，包括只读授权与敏感路径。 */
   denied_write_paths: readonly string[];
   /** 当前生效完整策略的稳定摘要，用于审计还原与变更比对。 */
