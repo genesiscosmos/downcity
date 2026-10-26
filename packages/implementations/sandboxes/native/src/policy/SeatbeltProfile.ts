@@ -17,20 +17,15 @@ function escape_literal(value: string): string {
   return value.replaceAll("\\", "\\\\").replaceAll("\"", "\\\"");
 }
 
-/** 渲染一条 allow 子句。 */
-function render_allow(
-  rule: ResolvedSandboxPolicy["write_rules"][number],
+/** 渲染文件规则；显式 deny 在 Seatbelt 中优先于所有 allow。 */
+function render_rule(
+  rule: ResolvedSandboxPolicy["filesystem_rules"][number],
 ): string {
   const matcher = rule.scope === "literal" ? "literal" : "subpath";
-  return `(allow file-write* (${matcher} "${escape_literal(rule.path)}"))`;
-}
-
-/** 渲染一条 deny 子句。 */
-function render_deny(
-  rule: ResolvedSandboxPolicy["deny_read_rules"][number],
-): string {
-  const matcher = rule.scope === "literal" ? "literal" : "subpath";
-  return `(deny file-read* (${matcher} "${escape_literal(rule.path)}"))`;
+  const target = `(${matcher} "${escape_literal(rule.path)}")`;
+  if (rule.access === "write") return `(allow file-write* ${target})`;
+  if (rule.access === "read") return `(deny file-write* ${target})`;
+  return `(deny file-read* ${target})\n(deny file-write* ${target})`;
 }
 
 /** 生成一次命令执行使用的完整 seatbelt profile。 */
@@ -51,8 +46,7 @@ export function build_seatbelt_profile(input: {
     "(allow ipc-posix-shm)",
     "(allow file-read-metadata)",
     "(allow file-read*)",
-    ...input.policy.deny_read_rules.map(render_deny),
-    ...input.policy.write_rules.map(render_allow),
+    ...input.policy.filesystem_rules.map(render_rule),
   ];
   if (input.policy.network === "allow") {
     lines.push(

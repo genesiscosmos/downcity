@@ -178,7 +178,8 @@ export function normalize_session_origin(input?: SessionOrigin): SessionOrigin {
  * 参数用索引签名而不是具体字段：来源在各包里有各自的镜像类型，
  * 它们共有的只是「可携带任意 JSON 字段」这一点。
  *
- * 对话根会话缺省为 0；工作会话缺少深度或值非法时返回 Infinity，禁止越权派发。
+ * Chat 为 0；无委派关系的普通 Work 为 1，表示用户直接创建的工作。
+ * 有委派关系却缺少深度，或显式值非法时返回 Infinity；Subwork 的固定深度为 2。
  * 该函数只服务于写操作；读取历史不依赖深度。
  */
 export function read_session_delegation_depth(
@@ -186,6 +187,9 @@ export function read_session_delegation_depth(
 ): number {
   const depth = origin?.delegation_depth;
   if (depth === undefined && origin?.category === SESSION_ORIGIN_CATEGORY_CHAT) return 0;
+  if (depth === undefined && origin?.category === SESSION_ORIGIN_CATEGORY_WORK
+    && origin.type === SESSION_ORIGIN_TYPE_WORK && origin.parent_session_id === undefined
+    && origin.parent_session_category === undefined && origin.parent_agent_id === undefined) return 1;
   return typeof depth === "number" && Number.isInteger(depth) && depth >= 0
     ? depth : Number.POSITIVE_INFINITY;
 }
@@ -212,6 +216,7 @@ export function resolve_delegation_blocked_reason(
   if (!known_chat && !ordinary_work) return "Session role cannot delegate work";
   if (known_chat && read_session_delegation_depth(origin) !== 0) return "Invalid Chat delegation depth";
   const depth = read_session_delegation_depth(origin);
+  if (!Number.isFinite(depth)) return "session_relation_invalid: invalid or incomplete Work delegation metadata";
   if (depth >= SESSION_DELEGATION_MAX_DEPTH) {
     return `Session delegation depth limit reached (max ${SESSION_DELEGATION_MAX_DEPTH})`;
   }

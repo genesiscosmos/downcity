@@ -56,7 +56,26 @@ export function explain_sandbox_denial(input: {
 }): SandboxDenialExplanation | null {
   if (!is_permission_denied(input.output)) return null;
   const writable_roots = input.policy.writable_roots;
-  const denied_path = extract_denied_paths(input.output)
+  const candidates = extract_denied_paths(input.output);
+  const restricted_path = candidates.find((candidate) => input.policy.filesystem_rules.some(
+    (rule) => rule.access !== "write" && (rule.scope === "literal"
+      ? candidate === rule.path : is_path_inside_root(rule.path, candidate)),
+  ));
+  if (restricted_path) {
+    const read_denied = input.policy.filesystem_rules.some((rule) =>
+      rule.access === "deny" && (rule.scope === "literal"
+        ? restricted_path === rule.path : is_path_inside_root(rule.path, restricted_path))
+    );
+    return {
+      path: restricted_path,
+      code: read_denied ? "read_denied" : "write_denied",
+      reason: read_denied
+        ? `The sandbox blocks access to protected host content at ${restricted_path}.`
+        : `The sandbox makes ${restricted_path} read-only, including inside writable roots.`,
+      writable_roots,
+    };
+  }
+  const denied_path = candidates
     .find((candidate) => !writable_roots.some((root) => is_path_inside_root(root, candidate)));
   if (!denied_path) {
     return {

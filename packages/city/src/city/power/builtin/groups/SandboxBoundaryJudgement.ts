@@ -128,6 +128,17 @@ function judge_write(input: {
   /** 已构造的公共返回字段。 */
   base: Pick<CityToolPathExplanation, "resolved_path" | "intent" | "matched_mount">;
 }): CityToolPathExplanation {
+  const denied_path = input.snapshot.denied_write_paths.find((root) =>
+    is_path_inside_root(root, input.resolved_path)
+  );
+  if (denied_path) {
+    return {
+      ...input.base,
+      allowed: false,
+      reason_code: "write_denied",
+      reason: `Writing is denied: ${input.resolved_path} is inside protected or read-only path ${denied_path}.`,
+    };
+  }
   const writable_root = input.snapshot.writable_roots.find((root) =>
     is_path_inside_root(root, input.resolved_path)
   );

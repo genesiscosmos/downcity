@@ -2,6 +2,7 @@
  * Turn 子工作收尾协调：以输入入队、子工作完成和 abort 唤醒等待。
  * 不消费队列、不启动模型，也不新增执行循环；所有监听在单次等待退出时释放。
  */
+import { read_session_delegation_depth } from "@downcity/type";
 import type { SessionChildWork, SessionChildWorkInput } from "@/types/session/SessionChildWork.js";
 import type { SessionTurnContext } from "@/types/turn/SessionTurnContext.js";
 import type { Logger } from "@/utils/logger/Logger.js";
@@ -30,7 +31,7 @@ export class SessionChildWorkLifecycle {
     const origin = context.session.origin;
     const signal = context.lifecycle.abort_signal;
     if (!this.child_work || origin.category !== "work" || origin.type !== "work"
-      || origin.delegation_depth !== 1 || signal.aborted) return false;
+      || read_session_delegation_depth(origin) !== 1 || signal.aborted) return false;
 
     // 先装监听再检查输入，覆盖子结果在 wait 调用前同步入队的窗口。
     let wake_input!: () => void;

@@ -4,7 +4,7 @@
  * 关键点（中文）
  * - 调用 NativeSandboxProvider.check()，它会在宿主实跑 canary：允许写入与越界拒绝。
  * - 再以真实 launcher 执行一组命令，验证工具链、DNS、git 与 PTY 在围栏内可用。
- * - 这是临时验证产物，结论进入设计文档后即可删除。
+ * - Provider 自检失败时立即以非零状态退出；兼容性验证失败也必须反馈给 CI。
  */
 
 import { spawn } from "node:child_process";
@@ -159,6 +159,12 @@ async function main() {
     status.issues.map((i) => i.message).join(" | "),
   );
 
+  if (!status.ok) {
+    console.error(JSON.stringify(status, null, 2));
+    process.exitCode = 1;
+    return;
+  }
+
   // 2. 真实命令执行。
   const workspace_path = await mkdtemp(path.join(os.tmpdir(), "downcity-native-"));
   const runtime_path = await mkdtemp(path.join(os.tmpdir(), "downcity-native-rt-"));
@@ -223,6 +229,7 @@ async function main() {
   }
   console.log("");
   const failed = results.filter((item) => !item.ok);
+  if (failed.length > 0) process.exitCode = 1;
   console.log(failed.length === 0
     ? `全部 ${results.length} 项通过`
     : `${failed.length}/${results.length} 项未通过: ${failed.map((item) => item.name).join(", ")}`);

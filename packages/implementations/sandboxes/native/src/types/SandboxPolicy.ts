@@ -14,7 +14,7 @@ export type PathRuleSource =
   | "runtime"
   /** 宿主显式授权的目录。 */
   | "granted"
-  /** 敏感目录，强制只读排除。 */
+  /** 敏感目录，强制拒绝访问。 */
   | "protected"
   /** 允许写入的临时目录。 */
   | "temp"
@@ -25,8 +25,8 @@ export type PathRuleSource =
 export interface ResolvedPathRule {
   /** 宿主侧归一化后的绝对路径。 */
   path: string;
-  /** 该路径允许的访问能力。 */
-  access: "ro" | "rw";
+  /** 文件能力：read 强制只读，write 允许读写，deny 拒绝读写；限制规则优先。 */
+  access: "read" | "write" | "deny";
   /** 规则匹配方式：整棵子树或单个文件。 */
   scope: "subpath" | "literal";
   /** 规则来源，用于回答「这个路径为什么可见」。 */
@@ -37,10 +37,8 @@ export interface ResolvedPathRule {
 export interface ResolvedSandboxPolicy {
   /** 出网策略。 */
   network: "allow" | "deny";
-  /** 允许写入的路径规则。 */
-  write_rules: readonly ResolvedPathRule[];
-  /** 强制拒绝读取的敏感路径规则。 */
-  deny_read_rules: readonly ResolvedPathRule[];
+  /** 完整文件规则；read 与 deny 子树不能被 write 规则重新开放。 */
+  filesystem_rules: readonly ResolvedPathRule[];
   /** 允许写入的根路径，用于把拒绝翻译成可执行提示。 */
   writable_roots: readonly string[];
   /** 当前策略的稳定摘要，用于审计还原与变更比对。 */

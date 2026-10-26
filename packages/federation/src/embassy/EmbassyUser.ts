@@ -16,6 +16,7 @@ import {
 } from "../pact/http.js";
 import type { BureauRecord } from "../types/Bureau.js";
 import { EmbassyAccount } from "./EmbassyAccount.js";
+import { EmbassyRelay } from "./EmbassyRelay.js";
 import type { EmbassyAccountLoginOptions, EmbassyAccountLoginResult } from "./types/EmbassyAccount.js";
 import type { EmbassyUserOptions } from "./types/EmbassyInternal.js";
 import type { EmbassyCurrentUser } from "./types/EmbassyUser.js";
@@ -41,6 +42,11 @@ export class EmbassyUser {
       read_user_token: () => this.user_token,
       update_user_token: (user_token) => this.update_user_token(user_token),
     });
+  }
+
+  /** 登录用户的 API Key 管理与中转调用日志。 */
+  get relay(): EmbassyRelay {
+    return new EmbassyRelay(() => this.service("ai"));
   }
 
   /** 用户侧 AI 调用入口。 */

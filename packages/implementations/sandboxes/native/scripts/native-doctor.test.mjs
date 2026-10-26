@@ -106,6 +106,7 @@ function create_fake_provider(behaviors = {}) {
             read_scope: "host",
             writable_roots: [binding.workspace_path, binding.runtime_path],
             denied_read_paths: [],
+            denied_write_paths: [],
             policy_digest: "fake",
             persistent: true,
           };

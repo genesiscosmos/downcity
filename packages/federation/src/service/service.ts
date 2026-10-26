@@ -52,6 +52,8 @@ export interface Context {
   locals: Record<string, unknown>;
   /** 原始 HTTP Request，服务 webhook 等需要读取 header 时使用 */
   request?: Request;
+  /** AI 等执行层组合的取消与期限信号；未提供时使用原始请求信号。 */
+  abort_signal?: AbortSignal;
   /** 原始请求 body 文本，服务 webhook 等需要验签时使用 */
   raw_body?: string;
   /** 当前请求来源 transport。 */

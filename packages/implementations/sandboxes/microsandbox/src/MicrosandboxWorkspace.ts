@@ -120,6 +120,7 @@ export class MicrosandboxWorkspace implements WorkspaceSandbox {
       read_scope: "mounts",
       writable_roots: [workspace_path],
       denied_read_paths: [],
+      denied_write_paths: [],
       policy_digest: createHash("sha256")
         .update(`${this.id}\0${workspace_path}\0rw`)
         .digest("hex")

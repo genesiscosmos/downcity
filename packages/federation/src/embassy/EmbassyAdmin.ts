@@ -25,6 +25,7 @@ import type {
 } from "./types/EmbassyAdmin.js";
 import type { EmbassyAdminOptions } from "./types/EmbassyInternal.js";
 import { EmbassyBureaus } from "./EmbassyBureaus.js";
+import { EmbassyRelayAdmin } from "./EmbassyRelay.js";
 
 /** Embassy 管理员身份子域。 */
 export class EmbassyAdmin {
@@ -38,6 +39,11 @@ export class EmbassyAdmin {
     this.federation_url = normalize_http_url(options.federation_url);
     this.admin_token = read_optional_string(options.admin_token);
     this.fetcher = options.fetch ?? defaultFetch();
+  }
+
+  /** 模型中转目录、渠道部署和全局日志管理。 */
+  get relay(): EmbassyRelayAdmin {
+    return new EmbassyRelayAdmin(() => this.service("ai"));
   }
 
   /** Federation Credits 管理入口。 */

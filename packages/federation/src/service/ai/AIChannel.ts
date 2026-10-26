@@ -131,7 +131,7 @@ export abstract class AIChannel {
       model,
       env: (key) => ctx.env(key),
       ...(reasoning ? { reasoning } : {}),
-      ...(ctx.request?.signal ? { abort_signal: ctx.request.signal } : {}),
+      ...((ctx.abort_signal ?? ctx.request?.signal) ? { abort_signal: ctx.abort_signal ?? ctx.request?.signal } : {}),
       ...(provider_options ? { provider_options } : {}),
     };
   }

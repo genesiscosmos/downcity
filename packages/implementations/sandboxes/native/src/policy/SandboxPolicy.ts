@@ -4,13 +4,13 @@
  * 关键点（中文）
  * - 语义输入（workspace、runtime、授权目录、网络模式）在这里展开成宿主路径规则。
  * - 展开只有一份实现，seatbelt、bubblewrap 与路径解释共用，避免多处漂移。
- * - 只做词法归一化与合并，不访问文件系统，因此路径不存在不改变围栏结论。
- * - 读隔离模型来自 P0 实测：macOS 上 `(allow file-read* (subpath ...))` 会让 sandbox-exec
- *   SIGABRT，因此读用「全局允许 + 敏感目录 deny 排除」，写用白名单。
+ * - 路径按现存祖先解析真实路径，确保符号链接别名不会令权限规则失效。
+ * - 保留宿主可读性，read 子树强制只读，deny 子树拒绝读写。
+ * - 限制规则优先，不能通过重叠 write 授权重新开放。
  */
 
 import { createHash } from "node:crypto";
-import path from "node:path";
+import { resolve_policy_path } from "./PolicyPath.js";
 import type { WorkspaceSandboxBinding } from "@downcity/type/shell";
 import type {
   PathRuleSource,
@@ -24,14 +24,14 @@ function create_rule(input: {
   /** 宿主侧路径。 */
   path: string;
   /** 访问能力。 */
-  access: "ro" | "rw";
+  access: ResolvedPathRule["access"];
   /** 规则来源。 */
   source: PathRuleSource;
   /** 匹配方式；默认整棵子树。 */
   scope?: "subpath" | "literal";
 }): ResolvedPathRule {
   return {
-    path: path.resolve(input.path),
+    path: resolve_policy_path(input.path),
     access: input.access,
     scope: input.scope ?? "subpath",
     source: input.source,
@@ -42,19 +42,22 @@ function create_rule(input: {
  * 按路径合并规则。
  *
  * 关键点（中文）
- * - 同一路径取更强的访问能力，避免 workspace 与授权目录重叠时被降级。
- * - 结果按路径长度升序，浅路径先应用，深路径可以覆盖浅路径。
+ * - 同一路径按 deny > read > write 合并，显式限制不能被隐式授权放宽。
+ * - 结果稳定排序；平台后端先应用写授权，再落实只读与拒绝限制。
  */
 function merge_rules(rules: readonly ResolvedPathRule[]): ResolvedPathRule[] {
   const by_key = new Map<string, ResolvedPathRule>();
+  const priority = { write: 0, read: 1, deny: 2 };
   for (const current of rules) {
     const key = `${current.scope}\0${current.path}`;
     const existing = by_key.get(key);
-    if (!existing || (existing.access === "ro" && current.access === "rw")) {
+    if (!existing || priority[current.access] > priority[existing.access]) {
       by_key.set(key, current);
     }
   }
-  return [...by_key.values()].sort((left, right) => left.path.length - right.path.length);
+  return [...by_key.values()].sort((left, right) =>
+    left.path.length - right.path.length || left.path.localeCompare(right.path)
+  );
 }
 
 /**
@@ -74,45 +77,41 @@ export function resolve_sandbox_policy(input: {
 }): ResolvedSandboxPolicy {
   const platform = input.platform || process.platform;
   const env = input.env || process.env;
-  const write_rules = merge_rules([
+  const filesystem_rules = merge_rules([
     create_rule({
       path: input.binding.workspace_path,
-      access: "rw",
+      access: "write",
       source: "workspace",
     }),
     create_rule({
       path: input.binding.runtime_path,
-      access: "rw",
+      access: "write",
       source: "runtime",
     }),
     ...(input.binding.granted_mounts || []).map((mount) =>
-      create_rule({ path: mount.host_path, access: mount.access, source: "granted" })
+      create_rule({ path: mount.host_path, access: mount.access === "rw" ? "write" : "read", source: "granted" })
     ),
-    ...resolve_write_roots({ platform, env }),
-  ]);
-  const deny_read_rules = merge_rules(
-    resolve_protected_paths({ platform, env }).map((protected_path) =>
+    ...resolve_write_roots({ platform, env }).map((rule) => create_rule({ ...rule, access: "write" })),
+    ...resolve_protected_paths({ platform, env }).map((protected_path) =>
       create_rule({
         path: protected_path.path,
-        access: "ro",
+        access: "deny",
         source: "protected",
         scope: protected_path.scope,
       })
     ),
-  );
+  ]);
   const network = input.binding.network ?? "allow";
   return {
     network,
-    write_rules,
-    deny_read_rules,
-    writable_roots: write_rules
-      .filter((rule) => rule.access === "rw" && rule.scope === "subpath")
+    filesystem_rules,
+    writable_roots: filesystem_rules
+      .filter((rule) => rule.access === "write" && rule.scope === "subpath")
       .map((rule) => rule.path),
     digest: createHash("sha256")
       .update(JSON.stringify({
         network,
-        write: write_rules.map((rule) => [rule.path, rule.access, rule.scope]),
-        deny_read: deny_read_rules.map((rule) => [rule.path, rule.scope]),
+        filesystem: filesystem_rules.map((rule) => [rule.path, rule.access, rule.scope]),
       }))
       .digest("hex")
       .slice(0, 16),

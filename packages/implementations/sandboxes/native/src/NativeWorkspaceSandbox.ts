@@ -68,7 +68,7 @@ export class NativeWorkspaceSandbox implements WorkspaceSandbox {
         cmd: request.cmd,
         login: request.login,
       }),
-      env: process.env,
+      env,
     });
     const child = await launcher.launch({
       command: wrapped.command,
@@ -108,7 +108,12 @@ export class NativeWorkspaceSandbox implements WorkspaceSandbox {
       network: this.policy.network,
       read_scope: "host",
       writable_roots: this.policy.writable_roots,
-      denied_read_paths: this.policy.deny_read_rules.map((rule) => rule.path),
+      denied_read_paths: this.policy.filesystem_rules
+        .filter((rule) => rule.access === "deny")
+        .map((rule) => rule.path),
+      denied_write_paths: this.policy.filesystem_rules
+        .filter((rule) => rule.access !== "write")
+        .map((rule) => rule.path),
       policy_digest: this.policy.digest,
       persistent: true,
     };

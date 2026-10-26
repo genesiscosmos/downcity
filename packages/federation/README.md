@@ -88,4 +88,25 @@ const federation = new Federation({
 });
 ~~~
 
-Federation 继续负责账户、Token、Admin Session、Service、BureauRecord、可信业务路由、discovery 和 JWKS。现有 HTTP endpoint、数据库结构和 Token claim 不因 package 迁移而变化。
+Federation 负责账户、Token、Admin Session、Service、BureauRecord、可信业务路由、discovery 和 JWKS。
+
+## 模型中转
+
+`new AIService({ relay: true, credits }).use(models)` 启用持久化模型、渠道、部署和 route 配置、独立 API Key、`priority_weighted` 路由、共享健康冷却及请求/尝试日志。标准 `GET /v1/models`、`POST /v1/chat/completions` 与原生模型流复用 AIService 和可靠结算。
+
+~~~ts
+const issued = await embassy.user.relay.create_key({
+  name: "Editor",
+  allowed_models: ["deepseek-v4-flash"],
+  spend_limit: 10000,
+  expires_at: null,
+});
+const requests = await embassy.user.relay.list_requests({ limit: 50 });
+const snapshot = await embassy.admin.relay.catalog();
+~~~
+
+Key 管理使用登录身份；调用 Key 不获得通用 user 权限，明文只在签发时返回。消费额度按已完成结算检查，是允许并发在途超出的 Credits 软上限，不预占资金。渠道配置只持有凭据环境变量引用。日志不保存正文或凭据。
+
+第一批仅在同一公开模型的部署间切换；最新媒体若需要另一模型，调用者需显式选择。明确认证/限流拒绝可有限切换，网络异常、5xx、超时和流中断不透明重试。未提供 RPM/TPM、全局并发租约、Responses、Messages 或管理网页。
+
+完整接口与配置语义见 [模型中转与 API Key](https://downcity.ai/zh/city-sdk-docs/service/ai/relay)。

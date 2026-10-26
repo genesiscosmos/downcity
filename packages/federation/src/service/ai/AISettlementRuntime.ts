@@ -142,6 +142,23 @@ export class AISettlementRuntime {
     let charge: AICharge | null = null;
     try {
       charge = (await input.charge) ?? null;
+      if (charge && input.ctx.locals.relay_request_id) {
+        const attribution = input.ctx.metering?.metadata ?? {};
+        charge = {
+          ...charge,
+          metadata: {
+            ...charge.metadata,
+            request_id: input.ctx.locals.relay_request_id,
+            api_key_id: attribution.api_key_id ?? null,
+            attempt_id: attribution.attempt_id ?? null,
+            deployment_id: attribution.deployment_id ?? null,
+            channel_id: input.ctx.metering?.channel_id ?? null,
+            catalog_revision: input.ctx.locals.relay_catalog_revision,
+            template_model_id: input.ctx.locals.relay_template_model_id,
+            pricing_snapshot: input.ctx.locals.relay_pricing,
+          },
+        };
+      }
     } catch (error) {
       console.error("[AIService] billing build failed", {
         usage_id,

@@ -55,6 +55,7 @@ export function create_test_workspace_sandbox(binding, backend = "test-sandbox")
         read_scope: "mounts",
         writable_roots: [workspace_path],
         denied_read_paths: [],
+        denied_write_paths: [],
         policy_digest: `test:${binding.workspace_id}`,
         persistent: true,
       };

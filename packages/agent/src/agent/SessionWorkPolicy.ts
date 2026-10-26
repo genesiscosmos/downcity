@@ -6,11 +6,13 @@ import { read_session_delegation_depth, resolve_delegation_blocked_reason } from
 import type { SessionOrigin } from "@downcity/type";
 import type { SessionDelegationCaller } from "@/types/agent/SessionDelegation.js";
 
-/** 创建前验证发起者角色，拒绝缺失关系的工作会话。 */
+/** 创建者可以是 Chat、用户直接创建的 Work，或 Chat 创建的 Work。 */
 export function require_work_creator(caller: SessionDelegationCaller): void {
   const blocked = resolve_delegation_blocked_reason(caller.origin);
   if (blocked) throw new Error(blocked);
-  if (caller.origin.category === "work"
+  const has_parent = caller.origin.parent_session_id !== undefined
+    || caller.origin.parent_session_category !== undefined || caller.origin.parent_agent_id !== undefined;
+  if (caller.origin.category === "work" && has_parent
     && (typeof caller.origin.parent_session_id !== "string" || !caller.origin.parent_session_id.trim()
       || caller.origin.parent_session_category !== "chat"
       || caller.origin.root_chat_session_id !== caller.origin.parent_session_id
@@ -44,6 +46,8 @@ export function create_work_origin(caller: SessionDelegationCaller): SessionOrig
     parent_agent_id: caller.agent_id,
     parent_session_id: caller.session_id,
     parent_session_category: caller.origin.category,
-    root_chat_session_id: caller.origin.category === "chat" ? caller.session_id : caller.origin.root_chat_session_id!,
+    ...(caller.origin.category === "chat" ? { root_chat_session_id: caller.session_id }
+      : typeof caller.origin.root_chat_session_id === "string"
+        ? { root_chat_session_id: caller.origin.root_chat_session_id } : {}),
   };
 }

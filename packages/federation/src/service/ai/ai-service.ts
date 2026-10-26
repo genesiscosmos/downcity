@@ -73,6 +73,8 @@ import {
 } from "./AIImageJobRuntime.js";
 import { AISettlementRuntime } from "./AISettlementRuntime.js";
 import { validate_ai_decision_request, validate_ai_decision_result } from "./decision-validation.js";
+import { RelayRuntime } from "../relay/runtime.js";
+import { relay_tables } from "../relay/schema.js";
 
 /** AIService 直接暴露的 action 模态列表。模型流与图片任务使用独立 handler。 */
 const MODALITIES = ["video", "tts", "asr", "decision"] as const;
@@ -100,6 +102,8 @@ export class AIService extends Service {
   private readonly settlement_runtime: AISettlementRuntime;
   /** AI 图片异步任务运行时。 */
   private readonly image_runtime: AIImageJobRuntime;
+  /** 可选模型中转控制与执行层。 */
+  readonly relay?: RelayRuntime;
 
   constructor(options: AIServiceOptions = {}) {
     super({
@@ -109,8 +113,10 @@ export class AIService extends Service {
         async_jobs: sqliteAsyncJobs,
         usage_records: ai_usage_records,
         settlement_jobs: ai_settlement_jobs,
+        ...(options.relay ? relay_tables : {}),
       },
     });
+    if (options.relay) this.relay = new RelayRuntime(this);
     this.settlement_runtime = new AISettlementRuntime({ credits: options.credits });
     this.image_runtime = new AIImageJobRuntime({
       image_max_pending_duration_ms: options.image_max_pending_duration_ms,
@@ -129,7 +135,7 @@ export class AIService extends Service {
     // `/stream` 是 CityModel 唯一模型流入口，不经过旧 UIMessage action。
     this.action("stream", async (ctx) => this.handleLanguageModelStream(ctx), {
       auth: ["user", "admin"],
-    }).before((ctx) => this.settlement_runtime.precheck(ctx));
+    }).before(async (ctx) => { await Promise.all([this.settlement_runtime.precheck(ctx), this.relay?.precheck(ctx)]); });
 
     // 图片生成的任务式端点。SDK 通过 image_create / image_result 显式访问。
     this.action("image/create", async (ctx) => this.image_runtime.create_job(ctx), {
@@ -145,7 +151,7 @@ export class AIService extends Service {
     // OpenAI 兼容端点
     this.action("chat/completions", async (ctx) => this.handleChatCompletions(ctx), {
       auth: ["user", "admin"],
-    }).before((ctx) => this.settlement_runtime.precheck(ctx));
+    }).before(async (ctx) => { await Promise.all([this.settlement_runtime.precheck(ctx), this.relay?.precheck(ctx)]); });
 
     // Queue 只负责唤醒；数据库 Settlement Job 才是可靠结算事实源。
     this.action("settlement/process", async (ctx) => {
@@ -155,12 +161,14 @@ export class AIService extends Service {
     }, { auth: ["admin"] });
 
     // 模型列表走同一路径，根据身份决定可见范围。
-    this.action("models", (ctx) => ({
-      items: AIService.listModels(this, {
-        env: ctx.env,
-        identity: ctx.identity?.kind ?? "guest",
-      }),
-    }), { method: "GET", auth: ["user", "admin"] });
+    this.action("models", async (ctx) => {
+      const items = AIService.listModels(this, { env: ctx.env, identity: ctx.identity?.kind ?? "guest" });
+      if (!this.relay) return { items };
+      const descriptors = AIService.listModels(this, { env: () => "configured", identity: "user" });
+      const relay_items = await this.relay.list_models(ctx, descriptors);
+      const native_items = ctx.locals.relay_principal ? [] : items.filter((item) => !this.models.get(item.id)?.runtime.stream);
+      return { items: [...relay_items, ...native_items] };
+    }, { method: "GET", auth: ["user", "admin"] });
   }
 
   // ========== 模型注册 ==========
@@ -181,6 +189,13 @@ export class AIService extends Service {
   /** 初始化 AI Usage Repository 与查询索引。 */
   protected override async on_init(): Promise<void> {
     const database = this.require_service_database();
+    if (this.relay) {
+      await this.relay.initialize({
+        database,
+        table: <T extends Record<string, unknown>>(name: string) => this.require_service_table<T>(name),
+        models: this.models.list(),
+      });
+    }
     await this.settlement_runtime.initialize({
       database,
       usage_records: this.require_service_table<AIUsageRecord>("usage_records"),
@@ -359,8 +374,10 @@ export class AIService extends Service {
       model: request.model_id,
       call,
     };
-    const initial_resolved = this.resolve({ model: request.model_id, mode: LANGUAGE_MODEL_MODE }, ctx.env);
-    const routing = this.plan_text_execution(initial_resolved, ctx, call, LANGUAGE_MODEL_MODE);
+    const initial_resolved = this.relay
+      ? await this.resolve_relay_model(ctx, request.model_id)
+      : this.resolve({ model: request.model_id, mode: LANGUAGE_MODEL_MODE }, ctx.env);
+    const routing = this.relay ? { resolved: initial_resolved } : this.plan_text_execution(initial_resolved, ctx, call, LANGUAGE_MODEL_MODE);
     const resolved = routing.resolved;
     if (resolved.model) {
       ctx.input.call = project_model_call_for_execution(call, resolved.model);
@@ -415,6 +432,13 @@ export class AIService extends Service {
     return await this.settlement_runtime.bind_settlement_response(ctx, execution.response, settlement);
   }
 
+  /** 将 Relay 包装为既有 AIService action，保留统一协议转换和结算链路。 */
+  private async resolve_relay_model(ctx: Context, model_id: string | undefined): Promise<AIResolvedAction> {
+    if (!model_id) throw httpError(422, "model is required");
+    const model = await this.relay!.resolve(ctx, model_id);
+    return { model, action: (execution_ctx) => model.runtime.stream!(execution_ctx, execution_ctx.input.call as unknown as ModelCall) };
+  }
+
   // ========== OpenAI 兼容通路 ==========
 
   private async handleChatCompletions(ctx: Context): Promise<Response> {
@@ -427,8 +451,10 @@ export class AIService extends Service {
         model: model_id,
         call,
       };
-      const initial_resolved = this.resolve({ model: model_id, mode: LANGUAGE_MODEL_MODE }, ctx.env);
-      const routing = this.plan_text_execution(initial_resolved, ctx, call, LANGUAGE_MODEL_MODE);
+      const initial_resolved = this.relay
+        ? await this.resolve_relay_model(ctx, model_id)
+        : this.resolve({ model: model_id, mode: LANGUAGE_MODEL_MODE }, ctx.env);
+      const routing = this.relay ? { resolved: initial_resolved } : this.plan_text_execution(initial_resolved, ctx, call, LANGUAGE_MODEL_MODE);
       const resolved = routing.resolved;
       if (resolved.model) {
         ctx.input.call = project_model_call_for_execution(call, resolved.model);

@@ -24,6 +24,7 @@ import { build_federation_instruction } from "./federation-instruction.js";
 import { collect_federation_env_catalog } from "./federation-env-catalog.js";
 import type { FederationRequestTransport, FederationTrustedIdentity } from "./types.js";
 import type { BureauRecord, RuntimeBureauToken } from "../types/Bureau.js";
+import { AIService } from "../service/ai/ai-service.js";
 
 declare module "hono" {
   interface ContextVariableMap {
@@ -191,7 +192,7 @@ export function build_federation_router(params: {
       const path = `/v1/${encodeURIComponent(service.id)}/${action.id}`;
       const register = def.method === "GET" ? app.get.bind(app) : app.post.bind(app);
 
-      register(path, async (c) => {
+      const handler: Handler = async (c) => {
         let raw_body: string | undefined;
         const input = def.method === "GET"
           ? search_params_to_object(new URL(c.req.raw.url).searchParams)
@@ -226,12 +227,23 @@ export function build_federation_router(params: {
           ctx.waitUntil = undefined;
         }
 
+        if (service instanceof AIService && service.relay && ["chat/completions", "stream"].includes(action.id)) {
+          // 授权或余额检查失败也返回可引用的请求标识，但不生成上游尝试或账单。
+          ctx.locals.relay_request_id = `req_${crypto.randomUUID()}`;
+        }
         try {
-          const identity = await authorize_request(authenticator, trusted_identity_from_env(c.env), c.req.raw, def.auth);
-          ctx.identity = { kind: identity.level };
-          ctx.user = identity.user;
-          ctx.bureau = identity.bureau;
-          ctx.bureau_token = identity.bureau_token;
+          const token = bearerToken(c.req.raw);
+          if (service instanceof AIService && service.relay && token?.startsWith("dck_") &&
+            ["models", "chat/completions", "stream"].includes(action.id)) {
+            // 调用凭据仅在白名单入口解析，保持 guest 身份，不能访问管理或账户 action。
+            await service.relay.authorize(token, ctx);
+          } else {
+            const identity = await authorize_request(authenticator, trusted_identity_from_env(c.env), c.req.raw, def.auth);
+            ctx.identity = { kind: identity.level };
+            ctx.user = identity.user;
+            ctx.bureau = identity.bureau;
+            ctx.bureau_token = identity.bureau_token;
+          }
 
           for (const hook of global_service_hooks(services)) {
             await hook.runBefore(ctx);
@@ -249,8 +261,18 @@ export function build_federation_router(params: {
             await hook.runAfter(ctx);
           }
 
-          if (output instanceof Response) return output;
-          return c.json(output, 200);
+          if (output instanceof Response) {
+            const request_id = ctx.locals.relay_request_id;
+            if (typeof request_id === "string") output.headers.set("x-request-id", request_id);
+            return output;
+          }
+          if (service instanceof AIService && action.id === "models" && new URL(c.req.url).pathname === "/v1/models") {
+            const items = (output as { items: Array<{ id: string; modalities: string[] }> }).items;
+            return c.json({ object: "list", data: items.filter((item) => item.modalities.includes("stream")).map((item) => ({
+              id: item.id, object: "model", created: 0, owned_by: "downcity",
+            })) }, 200);
+          }
+          return c.json(output, 200, service instanceof AIService && action.id.startsWith("keys/") ? no_store_headers() : {});
         } catch (error) {
           ctx.ended_at = new Date();
           ctx.error = error instanceof Error ? error : new Error(String(error));
@@ -259,9 +281,15 @@ export function build_federation_router(params: {
           for (const hook of global_service_hooks(services)) {
             await hook.runOnError(ctx);
           }
-          return build_error_response(error);
+          const response = build_error_response(error);
+          if (typeof ctx.locals.relay_request_id === "string") response.headers.set("x-request-id", ctx.locals.relay_request_id);
+          return service instanceof AIService && action.id.startsWith("keys/") ? with_no_store(response) : response;
         }
-      });
+      };
+      register(path, handler);
+      // 标准兼容路径复用完全相同的授权、hook、执行与结算处理器。
+      if (service instanceof AIService && action.id === "models") register("/v1/models", handler);
+      if (service instanceof AIService && action.id === "chat/completions") register("/v1/chat/completions", handler);
     }
   }
 

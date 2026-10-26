@@ -65,8 +65,8 @@ test("授权目录按声明模式进入可写或只读规则", () => {
 
   assert.ok(policy.writable_roots.includes("/data/cache"));
   assert.ok(!policy.writable_roots.includes("/data/shared"));
-  assert.ok(policy.write_rules.some((rule) =>
-    rule.path === "/data/shared" && rule.access === "ro"
+  assert.ok(policy.filesystem_rules.some((rule) =>
+    rule.path === "/data/shared" && rule.access === "read"
   ));
 });
 
@@ -78,8 +78,9 @@ test("出网策略可显式关闭", () => {
 test("敏感目录进入读排除列表", () => {
   const policy = resolve_sandbox_policy({ binding: create_binding() });
 
-  assert.ok(policy.deny_read_rules.some((rule) => rule.path === `${home_path}/.ssh`));
-  assert.ok(policy.deny_read_rules.every((rule) => rule.source === "protected"));
+  const denied_rules = policy.filesystem_rules.filter((rule) => rule.access === "deny");
+  assert.ok(denied_rules.some((rule) => rule.path === `${home_path}/.ssh`));
+  assert.ok(denied_rules.every((rule) => rule.source === "protected"));
 });
 
 test("seatbelt profile 用全局可读加排除，而不是路径白名单", () => {

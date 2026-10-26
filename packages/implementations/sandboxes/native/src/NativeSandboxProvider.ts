@@ -3,25 +3,23 @@
  *
  * 关键点（中文）
  * - macOS 使用 seatbelt，Linux 使用 bubblewrap；Windows 暂不支持。
- * - `check()` 会实际执行 canary：验证允许写入生效，同时验证越界写入被真正拒绝。
- *   只验证「围栏成立」，不验证工具链完整性。
+ * - `check()` 实跑文件权限、子进程继承与 TCP loopback 隔离探针。
+ * - 自检异常返回不可用状态，不以启动失败冒充隔离成功，也不自动降级为宿主执行。
  * - 宿主进程由 Shell 注入的 launcher 创建，Provider 不持有进程实现。
  */
 
-import { spawn } from "node:child_process";
-import { access, mkdtemp, rm } from "node:fs/promises";
-import os from "node:os";
+import { access } from "node:fs/promises";
 import path from "node:path";
 import type {
   SandboxProvider,
-  SandboxProviderIssue,
   SandboxProviderStatus,
   WorkspaceSandbox,
   WorkspaceSandboxBinding,
 } from "@downcity/type/shell";
 import { NativeWorkspaceSandbox } from "./NativeWorkspaceSandbox.js";
 import { resolve_sandbox_policy } from "./policy/SandboxPolicy.js";
-import { resolve_wrapper_binary, wrap_sandbox_invocation } from "./policy/Wrapper.js";
+import { resolve_wrapper_binary } from "./policy/Wrapper.js";
+import { run_sandbox_canary } from "./doctor/SandboxCanary.js";
 import type { NativeProviderOptions } from "./types/NativeProvider.js";
 
 /** 判断包装器可执行文件是否存在。 */
@@ -63,8 +61,20 @@ export class NativeSandboxProvider implements SandboxProvider {
         }],
       };
     }
-    const issues = await this.run_canary();
-    return { ok: issues.length === 0, backend: this.backend, issues };
+    try {
+      const issues = await run_sandbox_canary(this.options.network ?? "allow");
+      return { ok: issues.length === 0, backend: this.backend, issues };
+    } catch (error) {
+      return {
+        ok: false,
+        backend: this.backend,
+        issues: [{
+          code: "canary_failed",
+          message: `Sandbox self-check could not complete: ${error instanceof Error ? error.message : String(error)}`,
+          fixes: ["Check temporary directory access and the native sandbox wrapper."],
+        }],
+      };
+    }
   }
 
   /** 为 Workspace 创建原生隔离环境。 */
@@ -86,59 +96,5 @@ export class NativeSandboxProvider implements SandboxProvider {
       binding: normalized_binding,
       policy: resolve_sandbox_policy({ binding: normalized_binding }),
     });
-  }
-
-  /**
-   * 实跑一次围栏自检。
-   *
-   * 关键点（中文）
-   * - 只验证「允许的能写、越界的写不了」，不验证工具链完整性。
-   * - canary 在临时目录内进行，结束后清理自己的探针文件。
-   */
-  private async run_canary(): Promise<SandboxProviderIssue[]> {
-    const issues: SandboxProviderIssue[] = [];
-    const probe_root = await mkdtemp(path.join(os.tmpdir(), "downcity-canary-"));
-    const denied_target = path.join(os.homedir(), `.downcity-canary-${process.pid}`);
-    const binding: WorkspaceSandboxBinding = {
-      workspace_id: "canary",
-      workspace_path: probe_root,
-      runtime_path: probe_root,
-      network: this.options.network ?? "allow",
-    };
-    const policy = resolve_sandbox_policy({ binding });
-    const run = async (cmd: string): Promise<number> => {
-      const wrapped = wrap_sandbox_invocation({
-        platform: process.platform,
-        policy,
-        invocation: { command: "/bin/sh", args: ["-c", cmd] },
-        env: process.env,
-      });
-      return await new Promise<number>((resolve) => {
-        const child = spawn(wrapped.command, wrapped.args, { stdio: "ignore" });
-        child.once("close", (code) => resolve(typeof code === "number" ? code : -1));
-        child.once("error", () => resolve(-1));
-      });
-    };
-    try {
-      const inside_target = path.join(probe_root, "allowed");
-      if (await run(`printf ok > ${JSON.stringify(inside_target)}`) !== 0) {
-        issues.push({
-          code: "workspace_write_denied",
-          message: "Canary could not write inside the Workspace root",
-          fixes: ["Check that the Workspace directory is writable by the current user."],
-        });
-      }
-      if (await run(`printf bad > ${JSON.stringify(denied_target)}`) === 0) {
-        issues.push({
-          code: "denial_not_enforced",
-          message: "Canary wrote outside the Workspace, the fence is not effective",
-          fixes: ["Reinstall the platform wrapper and rerun the sandbox check."],
-        });
-      }
-    } finally {
-      await rm(denied_target, { force: true }).catch(() => undefined);
-      await rm(probe_root, { recursive: true, force: true }).catch(() => undefined);
-    }
-    return issues;
   }
 }

@@ -4,7 +4,7 @@
  * 关键点（中文）
  * - Shell 持有 Provider，Provider 为 Shell 绑定的 Workspace 创建独立且可恢复的隔离环境。
  * - Workspace Sandbox 只暴露命令启动与停止能力，不理解 Agent 或 Chat Session。
- * - 宿主文件只有通过 Workspace 绑定显式授权后才会进入隔离环境的可见范围。
+ * - 宿主可见性取决于后端 read_scope；原生后端允许宿主读取，敏感路径除外。
  * - 平台差异（microVM、原生 OS 围栏、云电脑）全部收敛到 Provider，协议不绑定具体实现。
  */
 
@@ -231,6 +231,8 @@ export interface WorkspaceSandboxSnapshot {
   writable_roots: readonly string[];
   /** 当前强制拒绝读取的宿主路径；仅在 read_scope 为 host 时生效。 */
   denied_read_paths: readonly string[];
+  /** 强制不可写的子树，优先于 writable_roots，包括只读授权与敏感路径。 */
+  denied_write_paths: readonly string[];
   /** 当前生效完整策略的稳定摘要，用于审计还原与变更比对。 */
   policy_digest: string;
   /** 停止计算资源后文件系统是否仍然保留。 */

@@ -27,8 +27,9 @@ test("任务会话不能派发，其余会话按深度限制", () => {
     /task sessions cannot delegate/i,
   );
 
-  // 普通工作会话必须提供明确深度；缺失深度不能恢复成根会话权限。
-  assert.equal(can_delegate_work({ category: "work", type: "work" }), false);
+  // 用户直接创建的普通 Work 无父关系，可在深度上限内创建多个 Subwork。
+  assert.equal(can_delegate_work({ category: "work", type: "work" }), true);
+  assert.equal(read_session_delegation_depth({ category: "work", type: "work" }), 1);
   assert.equal(can_delegate_work({ category: "work", type: "work", delegation_depth: 1 }), true);
   assert.equal(can_delegate_work({ category: "chat", type: "agent" }), true);
 
@@ -36,10 +37,10 @@ test("任务会话不能派发，其余会话按深度限制", () => {
   const at_limit = { category: "work", type: "work", delegation_depth: SESSION_DELEGATION_MAX_DEPTH };
   assert.equal(can_delegate_work(at_limit), false);
   assert.match(resolve_delegation_blocked_reason(at_limit) ?? "", /depth limit reached/i);
-  assert.notEqual(resolve_delegation_blocked_reason({ category: "work", type: "work" }), null);
+  assert.equal(resolve_delegation_blocked_reason({ category: "work", type: "work" }), null);
 });
 
-test("派发深度判据按层数收紧，缺失或非法工作深度拒绝派发", () => {
+test("用户 Work 按工作层级解析，非法或不完整的委派来源拒绝派发", () => {
   assert.equal(read_session_delegation_depth(undefined), Infinity);
   assert.equal(read_session_delegation_depth({ category: "chat", type: "agent" }), 0);
   assert.equal(read_session_delegation_depth({ delegation_depth: 2 }), 2);

@@ -59,6 +59,8 @@ export interface CityToolSandbox {
   readonly writable_roots: readonly string[];
   /** 当前强制拒绝读取的宿主路径；不可用时为空数组。 */
   readonly denied_read_paths: readonly string[];
+  /** 强制不可写的子树，优先于可写根；不可用时为空数组。 */
+  readonly denied_write_paths: readonly string[];
   /** 当前生效策略的稳定摘要，用于审计还原与变更比对；不可用时为 null。 */
   readonly policy_digest: string | null;
   /** 沙箱状态是否跨轮持久。 */

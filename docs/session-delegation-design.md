@@ -30,8 +30,8 @@ Session Power 管理当前 Agent 内部的工作协作：创建工作会话、�
 | 会话 | 身份判定 | 深度 | 创建权限 |
 | --- | --- | --- | --- |
 | Chat Session | 已知对话角色，category=chat | 0 | 可创建多个一级 Work Session |
-| 一级 Work Session | type=work，直接父会话为 Chat | 1 | 可创建多个二级 Work Session，支持并行 |
-| 二级 Work Session | type=work，直接父会话为一级 Work | 2 | 不可创建 |
+| Work Session | type=work，由 Chat 创建，或用户直接创建且无父关系 | 1（工作角色层级） | 可创建多个 Subwork，支持并行 |
+| Subwork | type=work，直接父会话为 Work | 2（工作角色层级） | 不可创建 |
 | Task Session | type=task | 不用于授权 | 不可创建 |
 
 Task 的委派与控制动作优先按角色拒绝，不能因分类为 work 而获得普通 Work 权限；读取动作单独授权。未知自定义角色拥有读取能力，默认不能创建或控制其他会话，必须明确接入写操作授权规则。
@@ -113,7 +113,7 @@ Chat 和一级 Work 均不设子会话数量或并发上限，只限制委派深
 | --- | --- |
 | `parent_session_id` | 创建该 Work 的直接父会话 ID；创建后不可修改 |
 | `parent_session_category` | 父会话分类；Session ID 仅在分类内唯一，查询父会话必须携带该字段 |
-| `root_chat_session_id` | 所属根 Chat 的 ID；由运行时继承，用于工作树展示和定位 |
+| `root_chat_session_id` | 可选根 Chat 的 ID；用户直接创建的 Work 及其 Subwork 没有此字段 |
 | `delegation_depth` | Chat 为 0，一级 Work 为 1，二级 Work 为 2；由运行时计算和校验 |
 
 关系必须与当前 Agent 身份共同确定。深度是派生缓存，不能作为唯一授权证据；它必须与父子关系一致。
@@ -231,7 +231,9 @@ sequenceDiagram
 
 全部直接子关系复用持久化创建委派记录，不新增重复索引；创建与父 Turn 封闭共用文件事务锁。文件历史使用 SQLite readOnly 短连接与现有 canonical 解码器，不初始化目标 Session。内存历史复用现有存储。
 
-历史关系不做猜测迁移；缺少合法深度或父子来源的历史 Work 继续可读，但不能自动获得新的委派与控制权限。
+无父关系且未声明深度的普通 Work 表示用户直接创建的 Work，逻辑工作层级为 1，可创建多个 Subwork；这不是到 Chat 的物理距离。由 Chat 创建的 Work 同样为 1，Subwork 为 2。无需修改已有用户 Work 的数据库。已带父关系却缺失深度或显式深度非法的会话拒绝委派，并报告关系错误。
+
+用户直接创建的 Work 与 Chat 创建的一级 Work 使用相同数量规则：允许多个子会话，Subwork 继续委派仍按深度拒绝。
 
 定向构建 type/agent/federation/city 已通过。现有检查首轮 65 项中 61 项通过；更新旧读取参数和旧归档授权夹具后，归档组 3 项通过。剩余两个 Composer 检查使用不足 10k token 的文本却预期发生压缩，与现有 ContextTokenBudget 的保留策略不一致；未修改这部分策略或检查。
 

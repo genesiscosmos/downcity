@@ -189,6 +189,8 @@ export type AIModelEnvRequirement = CityModelEnvRequirement;
 
 /** AIService 配置。 */
 export interface AIServiceOptions {
+  /** 启用独立 API Key、持久化模型渠道目录、路由恢复和调用日志；默认关闭。 */
+  relay?: boolean;
   /** AI 专用 Credits 桥接。 */
   credits?: AICreditsBridge;
   /** 图片异步任务允许保持 queued/running 的最长时间，单位毫秒。 */

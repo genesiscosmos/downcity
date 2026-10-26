@@ -27,7 +27,7 @@ class GetSandboxAction extends CityAction {
   readonly description =
     "Read the sandbox backend, instance, workdir, mounts, read scope and writable roots.";
   readonly returns =
-    "available, backend, sandbox_id, workdir, mounts(host_path, sandbox_path, mode), network, read_scope, writable_roots, denied_read_paths, policy_digest, persistent";
+    "available, backend, sandbox_id, workdir, mounts(host_path, sandbox_path, mode), network, read_scope, writable_roots, denied_read_paths, denied_write_paths, policy_digest, persistent";
 
   protected async run(
     _args: Record<string, never>,
@@ -45,6 +45,7 @@ class GetSandboxAction extends CityAction {
         read_scope: null,
         writable_roots: [],
         denied_read_paths: [],
+        denied_write_paths: [],
         policy_digest: null,
         persistent: false,
       };
@@ -59,6 +60,7 @@ class GetSandboxAction extends CityAction {
       read_scope: snapshot.read_scope,
       writable_roots: snapshot.writable_roots,
       denied_read_paths: snapshot.denied_read_paths,
+      denied_write_paths: snapshot.denied_write_paths,
       policy_digest: snapshot.policy_digest,
       persistent: snapshot.persistent,
     };
