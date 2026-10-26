@@ -79,6 +79,7 @@
     "@downcity/city": "workspace:^",
     "@downcity/type": "workspace:*",
     "@larksuiteoapi/node-sdk": "^1.73.3",
+    "@modelcontextprotocol/sdk": "^1.32.1",
     "@openuidev/lang-core": "1.0.1",
     "@openuidev/react-lang": "1.0.1",
     "@openuidev/react-ui": "0.18.1",

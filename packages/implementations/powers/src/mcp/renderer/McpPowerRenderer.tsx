@@ -44,6 +44,22 @@ export const MCP_POWER_RENDERER = define_power_renderer({
     const [status, set_status] = useState<McpRendererStatusView>();
     const [error, set_error] = useState("");
     const [refreshing, set_refreshing] = useState(false);
+    const [authorizing, set_authorizing] = useState<string[]>([]);
+    useEffect(() => {
+      let disposed = false;
+      const timer = setInterval(() => {
+        void power.invoke<McpRendererStatusView>("mcp.status").then((next) => { if (!disposed) set_status(next); }).catch(() => undefined);
+      }, 1500);
+      return () => { disposed = true; clearInterval(timer); };
+    }, [power]);
+    const authorize = async (server_id: string, cancel = false) => {
+      set_authorizing((current) => [...current, server_id]);
+      try {
+        set_status(await power.invoke<McpRendererStatusView>(cancel ? "mcp.cancel_authorization" : "mcp.reauthorize", { server_id }));
+        set_error("");
+      } catch (reason) { set_error(to_error_message(reason)); }
+      finally { set_authorizing((current) => current.filter((id) => id !== server_id)); }
+    };
     const request_sequence = useRef(0);
     useEffect(() => {
       const sequence = ++request_sequence.current;
@@ -77,6 +93,10 @@ export const MCP_POWER_RENDERER = define_power_renderer({
           {status.servers.length === 0 ? <Group><Row label="暂无配置的 MCP Server" /></Group> : status.servers.map((server) => <Group key={server.id} label={server.id}>
             <Row label="状态" trailing={<Status tone={server.state === "ready" ? "success" : server.state === "error" ? "danger" : "warning"}>{server.state}</Status>} />
             <Row label="工具数量" trailing={<span>{String(server.tool_count)}</span>} />
+            {server.can_authorize ? <Row label="OAuth" description={server.auth_state ?? "none"} trailing={<span>
+              <Button disabled={authorizing.includes(server.id) || server.auth_state === "authorizing" || server.state === "disabled"} on_click={() => void authorize(server.id)}>重新授权</Button>
+              {server.auth_state === "authorizing" ? <Button on_click={() => void authorize(server.id, true)}>取消授权</Button> : null}
+            </span>} /> : null}
             {server.last_error ? <Row label="最近错误" description={server.last_error} /> : null}
             {server.updated_at ? <Row label="更新时间" description={server.updated_at} /> : null}
           </Group>)}
@@ -222,7 +242,7 @@ export const MCP_POWER_RENDERER = define_power_renderer({
 });
 
 /** 新建草稿只提供可直接编辑的最小 TOML 模板。 */
-const DEFAULT_SERVER_CONTENT = '# 将 command 替换为本机已安装的 MCP Server 可执行程序路径\nenabled = true\n\n[transport]\ntype = "stdio"\ncommand = "/absolute/path/to/mcp-server"\nargs = []\n';
+const DEFAULT_SERVER_CONTENT = '# 将 command 替换为本机已安装的 MCP Server 可执行程序路径\nenabled = true\n\ncommand = "/absolute/path/to/mcp-server"\nargs = []\n';
 
 /** 合并快照时只替换操作目标和未编辑文件，保留其他草稿及其原文基线。 */
 function merge_snapshot(drafts: McpConfigFileDraft[], snapshot: McpConfigSnapshotView, replace_id?: string): McpConfigFileDraft[] {

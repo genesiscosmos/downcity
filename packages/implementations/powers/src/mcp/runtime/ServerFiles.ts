@@ -25,10 +25,14 @@ const server_schema = z.object({
   env: z.record(z.string(), z.string()).optional(),
   url: z.url().refine((value) => ["http:", "https:"].includes(new URL(value).protocol), "URL must use http or https").optional(),
   headers: z.record(z.string(), z.string()).optional(),
+  auth: z.literal("oauth").optional(),
+  client_id: z.string().trim().min(1).optional(),
+  client_name: z.string().trim().min(1).optional(),
   request_timeout_ms: z.number().int().positive().max(300_000).default(60_000),
   max_result_chars: z.number().int().positive().default(100_000),
 }).strict().superRefine((value, context) => {
   if (Boolean(value.command) === Boolean(value.url)) context.addIssue({ code: "custom", message: "Exactly one of command or url is required" });
+  if (value.command && [value.auth, value.client_id, value.client_name].some((item) => item !== undefined)) context.addIssue({ code: "custom", message: "OAuth requires url" });
   if (value.command && value.headers !== undefined) context.addIssue({ code: "custom", message: "headers requires url" });
   if (value.url && [value.args, value.cwd, value.env].some((item) => item !== undefined)) context.addIssue({ code: "custom", message: "args, cwd and env require command" });
 });
@@ -44,7 +48,7 @@ export function parse_server_file(server_id: string, content: string): McpServer
     request_timeout_ms: value.request_timeout_ms, max_result_chars: value.max_result_chars,
     transport: value.command
       ? { type: "stdio", command: value.command, args: value.args, cwd: value.cwd, env: value.env }
-      : { type: "http", url: value.url!, headers: value.headers },
+      : { type: "http", url: value.url!, headers: value.headers, auth: value.auth, client_id: value.client_id, client_name: value.client_name },
   };
 }
 

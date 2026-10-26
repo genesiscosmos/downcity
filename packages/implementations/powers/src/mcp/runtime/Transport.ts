@@ -3,6 +3,8 @@
 import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { createInterface } from "node:readline";
+import { HttpConnection } from "./HttpConnection.js";
+import type { McpOAuthProvider } from "../auth/OAuthSession.js";
 import type { McpCallResult, McpHttpTransportConfig, McpStdioTransportConfig, McpToolDefinition } from "@/mcp/types/McpPower.js";
 
 interface JsonRpcResponse {
@@ -26,44 +28,50 @@ interface McpTransport {
 /** MCP server 连接封装。 */
 export class McpConnection {
   /** 底层 JSON-RPC transport。 */
-  private readonly transport: McpTransport;
+  private readonly transport?: McpTransport;
+  /** SDK-managed HTTP connection when configured. */
+  private readonly http?: HttpConnection;
   /** 是否已完成 MCP 初始化。 */
   private initialized = false;
 
-  constructor(config: McpStdioTransportConfig | McpHttpTransportConfig, cwd?: string, env?: Record<string, string>) {
-    this.transport = config.type === "stdio"
-      ? new StdioTransport(config, cwd, env)
-      : new HttpTransport(config);
+  constructor(config: McpStdioTransportConfig | McpHttpTransportConfig, cwd?: string, env?: Record<string, string>, oauth?: McpOAuthProvider) {
+    if (config.type === "http") {
+      this.http = new HttpConnection(config, oauth);
+    } else this.transport = new StdioTransport(config, cwd, env);
   }
 
   /** 初始化 MCP 会话。 */
   async initialize(signal?: AbortSignal): Promise<void> {
+    if (this.http) return await this.http.initialize(signal);
     if (this.initialized) return;
-    await this.transport.request("initialize", {
+    await this.transport!.request("initialize", {
       protocolVersion: "2025-06-18",
       capabilities: {},
       clientInfo: { name: "downcity", version: "1.0.0" },
     }, signal);
-    await this.transport.notify("notifications/initialized", {}, signal);
+    await this.transport!.notify("notifications/initialized", {}, signal);
     this.initialized = true;
   }
 
   /** 获取当前 server 的工具清单。 */
   async list_tools(signal?: AbortSignal): Promise<McpToolDefinition[]> {
+    if (this.http) return await this.http.list_tools(signal);
     await this.initialize(signal);
-    const result = await this.transport.request("tools/list", {}, signal);
+    const result = await this.transport!.request("tools/list", {}, signal);
     return Array.isArray(result.tools) ? result.tools as McpToolDefinition[] : [];
   }
 
   /** 调用 MCP 工具。 */
   async call_tool(name: string, arguments_value: Record<string, unknown>, signal?: AbortSignal): Promise<McpCallResult> {
+    if (this.http) return await this.http.call_tool(name, arguments_value, signal);
     await this.initialize(signal);
-    return await this.transport.request("tools/call", { name, arguments: arguments_value }, signal) as McpCallResult;
+    return await this.transport!.request("tools/call", { name, arguments: arguments_value }, signal) as McpCallResult;
   }
 
   /** 关闭连接。 */
   async close(): Promise<void> {
-    await this.transport.close();
+    if (this.http) await this.http.close();
+    await this.transport?.close();
   }
 }
 
@@ -135,63 +143,6 @@ class StdioTransport implements McpTransport {
     for (const request of this.pending.values()) request.reject(error);
     this.pending.clear();
   }
-}
-
-/** Streamable HTTP JSON-RPC transport。 */
-class HttpTransport implements McpTransport {
-  /** MCP endpoint。 */
-  private readonly config: McpHttpTransportConfig;
-  /** 下一个 JSON-RPC 请求 ID。 */
-  private request_id = 0;
-
-  constructor(config: McpHttpTransportConfig) {
-    this.config = config;
-  }
-
-  async request(method: string, params: Record<string, unknown> = {}, signal?: AbortSignal): Promise<Record<string, unknown>> {
-    const response = await fetch(this.config.url, {
-      method: "POST",
-      headers: {
-        accept: "application/json, text/event-stream",
-        "content-type": "application/json",
-        ...(this.config.headers ?? {}),
-      },
-      body: JSON.stringify({ jsonrpc: "2.0", id: ++this.request_id, method, params }),
-      signal,
-    });
-    if (!response.ok) throw new Error(`MCP HTTP request failed: ${response.status} ${response.statusText}`);
-    const text = await response.text();
-    const json = parse_http_response(text);
-    if (json.error) throw new Error(json.error.message || "MCP HTTP request failed");
-    return json.result ?? {};
-  }
-
-  async notify(method: string, params: Record<string, unknown> = {}, signal?: AbortSignal): Promise<void> {
-    const response = await fetch(this.config.url, {
-      method: "POST",
-      headers: {
-        accept: "application/json, text/event-stream",
-        "content-type": "application/json",
-        ...(this.config.headers ?? {}),
-      },
-      body: JSON.stringify({ jsonrpc: "2.0", method, params }),
-      signal,
-    });
-    await response.body?.cancel();
-    if (!response.ok) throw new Error(`MCP HTTP notification failed: ${response.status} ${response.statusText}`);
-  }
-
-  async close(): Promise<void> {
-    // Streamable HTTP 无需持有本地连接资源。
-  }
-}
-
-/** 解析 JSON 或 SSE data 行。 */
-function parse_http_response(text: string): JsonRpcResponse {
-  const trimmed = text.trim();
-  if (trimmed.startsWith("{")) return JSON.parse(trimmed) as JsonRpcResponse;
-  const data = trimmed.split("\n").filter((line) => line.startsWith("data:")).map((line) => line.slice(5).trim()).join("");
-  return JSON.parse(data || "{}");
 }
 
 /** 解析可选的配置变量引用。 */

@@ -1,6 +1,7 @@
 /** MCP Power 的配置、工具与运行状态协议。 */
 
 import type { PowerJsonObject, PowerJsonValue } from "@downcity/city/power";
+import type { McpOAuthTransportConfig, McpOAuthState } from "../auth/OAuthTypes.js";
 
 /** MCP server 的稳定配置。 */
 export interface McpServerConfig {
@@ -33,7 +34,7 @@ export interface McpStdioTransportConfig {
 }
 
 /** MCP Streamable HTTP 传输配置。 */
-export interface McpHttpTransportConfig {
+export interface McpHttpTransportConfig extends McpOAuthTransportConfig {
   /** 传输类型。 */
   type: "http";
   /** MCP endpoint URL。 */
@@ -69,6 +70,10 @@ export interface McpServerStatus {
   state: "disabled" | "idle" | "ready" | "error";
   /** 当前可调用工具数量。 */
   tool_count: number;
+  /** Non-secret OAuth state; omitted for local stdio servers. */
+  auth_state?: McpOAuthState;
+  /** HTTP servers support explicit reauthorization. */
+  can_authorize?: boolean;
   /** 最近一次错误。 */
   last_error?: string;
   /** 最近一次成功更新时间。 */

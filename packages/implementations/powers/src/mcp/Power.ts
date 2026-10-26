@@ -8,6 +8,10 @@
 
 import { Power, create_action } from "@downcity/city/power";
 import { z } from "zod";
+import { wait_for_mcp } from "./runtime/Cancellation.js";
+import { dirname } from "node:path";
+import { McpOAuthProvider } from "./auth/OAuthSession.js";
+import { McpOAuthStorage } from "./auth/OAuthStorage.js";
 import type { PowerActions, PowerJsonObject, PowerJsonValue, PowerLifecycleContext, PowerActionResult } from "@downcity/city/power";
 import { McpConnection, resolve_mcp_variables } from "@/mcp/runtime/Transport.js";
 import type { McpServerConfig, McpServerStatus, McpStatusResult } from "@/mcp/types/McpPower.js";
@@ -31,6 +35,16 @@ export class McpPower extends Power {
   private readonly runtimes = new Map<string, McpServerRuntime>();
   /** 全局文件存储，由宿主 config.path 定位。 */
   private files?: McpServerFiles;
+  /** Per-server connection single-flight, independent of the configuration lock. */
+  private readonly connecting = new Map<string, Promise<void>>();
+  /** One OAuth coordinator for each live HTTP connection. */
+  private readonly providers = new Map<string, McpOAuthProvider>();
+  /** Servers whose next connection was explicitly requested to ignore saved OAuth credentials. */
+  private readonly force_login = new Set<string>();
+  /** UI reauthorization requests for one server share the same operation. */
+  private readonly reauthorizing = new Map<string, Promise<PowerJsonObject>>();
+  /** Reject late connection requests once City starts disposal. */
+  private disposed = false;
   /** 错误定义的无凭据状态。 */
   private file_errors: McpServerStatus[] = [];
   /** 串行化扫描与连接操作，防止过期连接覆盖新定义。 */
@@ -51,7 +65,7 @@ export class McpPower extends Power {
       await this.reload_all();
       return as_json(await this.server_files().read());
     }) });
-    context.power.config_action({ id: "mcp.config.test", run: async (input) => await this.exclusive(async () => await this.test_config(input)) });
+    context.power.config_action({ id: "mcp.config.test", run: async (input) => await this.test_config(input) });
     context.power.config_action({ id: "mcp.config.reload", run: async (input) => await this.reload_config(input) });
     context.power.config_action({ id: "mcp.config.status", run: async () => await this.read_status() });
     this.actions.servers = create_action({
@@ -71,12 +85,13 @@ export class McpPower extends Power {
           additionalProperties: false,
         },
       },
-      execute: async ({ input }) => await this.exclusive(async () => {
-        await this.reload_all();
+      timeout_ms: 300_000,
+      execute: async ({ context, input }) => {
+        await this.exclusive(async () => await this.reload_all());
         const server_id = read_server_id(input);
-        await this.ensure_connection(server_id);
+        await this.ensure_connection(server_id, context.abort_signal);
         return { success: true, data: this.list_server_tools(server_id) };
-      }),
+      },
     });
     this.actions.call = create_action({
       description: "Call one tool on an enabled MCP server. Use mcp.tools first and pass the exact tool name and schema-conforming arguments.",
@@ -101,11 +116,11 @@ export class McpPower extends Power {
         },
       },
       timeout_ms: 300_000,
-      execute: async ({ context, input }) => await this.exclusive(async () => {
-        await this.reload_all();
-        await this.ensure_connection(read_server_id(input));
+      execute: async ({ context, input }) => {
+        await this.exclusive(async () => await this.reload_all());
+        await this.ensure_connection(read_server_id(input), context.abort_signal);
         return await this.call_configured_tool(input, context.abort_signal);
-      }),
+      },
     });
     context.power.action({
       id: "mcp.status",
@@ -113,19 +128,38 @@ export class McpPower extends Power {
     });
     context.power.action({
       id: "mcp.refresh",
-      run: async () => await this.exclusive(async () => {
-        await this.reload_all(true);
-        return as_json(this.status_result());
-      }),
+      run: async () => { await this.refresh_connections(); return as_json(this.status_result()); },
     });
+    context.power.action({ id: "mcp.cancel_authorization", run: async (input) => {
+      await this.exclusive(async () => {
+        await this.remove_runtime(read_server_id(input));
+        await this.reload_all();
+      });
+      return as_json(this.status_result());
+    } });
+    context.power.action({ id: "mcp.reauthorize", run: async (input) => {
+      const server_id = read_server_id(input);
+      let pending = this.reauthorizing.get(server_id);
+      if (!pending) {
+        pending = this.reauthorize_server(server_id).finally(() => {
+          if (this.reauthorizing.get(server_id) === pending) this.reauthorizing.delete(server_id);
+        });
+        this.reauthorizing.set(server_id, pending);
+      }
+      return await pending;
+    } });
     await this.reload_all();
   }
 
   /** 关闭全部 MCP 连接。 */
   async dispose(): Promise<void> {
+    this.disposed = true;
     await this.exclusive(async () => {
       const runtimes = [...this.runtimes.values()];
       this.runtimes.clear();
+      for (const provider of this.providers.values()) provider.close();
+      this.providers.clear();
+      this.connecting.clear();
       await Promise.allSettled(runtimes.map(async (runtime) => await runtime.connection?.close()));
     });
   }
@@ -149,24 +183,21 @@ export class McpPower extends Power {
     const config = (await this.server_files().scan()).configs.find((item) => item.id === server_id);
     if (!config) throw new Error(`Unknown or invalid MCP server: ${server_id}`);
     if (!config.enabled) throw new Error(`MCP server is disabled: ${server_id}`);
-    const runtime = await this.connect_server(config, true);
-    try {
-      return { success: true, server_id, tool_count: runtime.tools.length, tools: runtime.tools.slice(0, 20).map((tool) => tool.name) };
-    } finally {
-      await runtime.connection?.close();
-    }
+    await this.exclusive(async () => await this.reload_all());
+    await this.ensure_connection(server_id);
+    const runtime = this.runtimes.get(server_id)!;
+    return { success: true, server_id, tool_count: runtime.tools.length, tools: runtime.tools.slice(0, 20).map((tool) => tool.name) };
   }
 
   /** 显式刷新连接；配置页与 Mainview 使用同一目录。 */
   private async reload_config(input: PowerJsonValue | undefined): Promise<PowerJsonObject> {
-    return await this.exclusive(async () => {
-      await this.reload_all(true, input === undefined ? undefined : read_server_id(input));
-      return as_json(await this.server_files().read());
-    });
+    await this.refresh_connections(input === undefined ? undefined : read_server_id(input));
+    return as_json(await this.server_files().read());
   }
 
   /** 扫描定义并使连接缓存失效；普通读取、编辑不启动任何 Server。 */
-  private async reload_all(connect = false, server_id?: string): Promise<void> {
+  private async reload_all(): Promise<void> {
+    if (this.disposed) return;
     const scan = await this.server_files().scan();
     this.file_errors = scan.servers.filter((file) => file.error).map((file) => ({
       id: file.id, state: "error", tool_count: 0,
@@ -176,24 +207,56 @@ export class McpPower extends Power {
     await Promise.all([...this.runtimes.keys()].filter((id) => !ids.has(id)).map(async (id) => await this.remove_runtime(id)));
     for (const config of scan.configs) {
       const current = this.runtimes.get(config.id);
-      const reconnect = connect && (!server_id || server_id === config.id);
-      if (current && !reconnect && JSON.stringify(current.config) === JSON.stringify(config)) continue;
+      if (current && JSON.stringify(current.config) === JSON.stringify(config)) continue;
       await this.remove_runtime(config.id);
-      this.runtimes.set(config.id, { config, tools: [], status: { id: config.id, state: config.enabled ? "idle" : "disabled", tool_count: 0 } });
+      this.runtimes.set(config.id, { config, tools: [], status: { id: config.id, state: config.enabled ? "idle" : "disabled", tool_count: 0, ...(config.transport.type === "http" ? { can_authorize: true, auth_state: "none" as const } : {}) } });
     }
-    if (connect) await Promise.all(scan.configs.filter((config) => config.enabled && (!server_id || config.id === server_id))
-      .map(async (config) => await this.connect_server(config).catch(() => undefined)));
   }
 
   /** 工具发现或调用才建立连接，禁用与错误定义不可执行。 */
-  private async ensure_connection(server_id: string): Promise<void> {
+  private async ensure_connection(server_id: string, signal?: AbortSignal): Promise<void> {
+    if (this.disposed) throw new Error("MCP Power is disposed");
+    signal?.throwIfAborted();
     const runtime = this.runtimes.get(server_id);
     if (!runtime?.config.enabled) throw new Error(`MCP server is unavailable: ${server_id}`);
-    if (runtime.status.state !== "ready") await this.connect_server(runtime.config);
+    if (runtime.status.state === "ready") return;
+    let pending = this.connecting.get(server_id);
+    if (!pending) {
+      pending = this.connect_server(runtime.config, signal).then(() => undefined).finally(() => {
+        if (this.connecting.get(server_id) === pending) this.connecting.delete(server_id);
+      });
+      this.connecting.set(server_id, pending);
+    }
+    await wait_for_mcp(pending, signal);
+    signal?.throwIfAborted();
+  }
+
+  /** Reauthorization invalidates only one server under lock, then waits for login outside it. */
+  private async reauthorize_server(server_id: string): Promise<PowerJsonObject> {
+    await this.exclusive(async () => {
+      await this.reload_all();
+      const runtime = this.runtimes.get(server_id);
+      if (!runtime?.config.enabled || runtime.config.transport.type !== "http") throw new Error("OAuth requires an enabled HTTP server");
+      this.force_login.add(server_id);
+      await this.remove_runtime(server_id);
+      await this.reload_all();
+    });
+    await this.ensure_connection(server_id);
+    return as_json(this.status_result());
+  }
+
+  /** Reset under the short configuration lock; connect outside it. */
+  private async refresh_connections(server_id?: string): Promise<void> {
+    await this.exclusive(async () => {
+      for (const id of this.runtimes.keys()) if (!server_id || id === server_id) await this.remove_runtime(id);
+      await this.reload_all();
+    });
+    await Promise.all([...this.runtimes.values()].filter((runtime) => runtime.config.enabled && (!server_id || runtime.config.id === server_id))
+      .map(async (runtime) => await this.ensure_connection(runtime.config.id).catch(() => undefined)));
   }
 
   /** 建立连接并缓存工具清单；连接超时不阻塞 City 启动。 */
-  private async connect_server(config: McpServerConfig, temporary = false): Promise<McpServerRuntime> {
+  private async connect_server(config: McpServerConfig, signal?: AbortSignal): Promise<McpServerRuntime> {
     const context = this.lifecycle_context;
     if (!context) throw new Error("MCP Power is not initialized");
     const env = Object.fromEntries(Object.entries(process.env).filter((entry): entry is [string, string] => typeof entry[1] === "string"));
@@ -207,18 +270,28 @@ export class McpPower extends Power {
         }
       : { ...config.transport, url: resolve_mcp_variables(config.transport.url, env), headers: resolve_headers(config.transport.headers, env) };
     const runtime: McpServerRuntime = { config, tools: [], status: { id: config.id, state: "idle", tool_count: 0 } };
+    this.runtimes.set(config.id, runtime);
     try {
       if (resolved_transport.type === "stdio") assert_runtime_command(resolved_transport.command, resolved_transport.args);
-      runtime.connection = new McpConnection(resolved_transport);
-      runtime.tools = await runtime.connection.list_tools(AbortSignal.timeout(Math.max(1, config.request_timeout_ms)));
-      runtime.status = { id: config.id, state: "ready", tool_count: runtime.tools.length, updated_at: new Date().toISOString() };
-      if (!temporary) {
-        this.runtimes.set(config.id, runtime);
+      let oauth: McpOAuthProvider | undefined;
+      if (resolved_transport.type === "http") {
+        runtime.status.can_authorize = true;
+        oauth = new McpOAuthProvider({ server_id: config.id, endpoint: resolved_transport.url, config: resolved_transport,
+          storage: new McpOAuthStorage(dirname(context.config.path)), open_external: (input) => context.system.open_external(input),
+          force_login: this.force_login.delete(config.id),
+          on_state: (auth_state) => { runtime.status.auth_state = auth_state; },
+        });
+        this.providers.set(config.id, oauth);
       }
+      runtime.connection = new McpConnection(resolved_transport, undefined, undefined, oauth);
+      const timeout = AbortSignal.timeout(resolved_transport.type === "http" ? 300_000 : Math.max(1, config.request_timeout_ms));
+      await runtime.connection.list_tools(AbortSignal.any([timeout, ...(signal ? [signal] : [])])).then((tools) => { runtime.tools = tools; });
+      if (this.runtimes.get(config.id) !== runtime) throw new Error("MCP configuration changed during connection");
+      runtime.status = { ...runtime.status, id: config.id, state: "ready", tool_count: runtime.tools.length, updated_at: new Date().toISOString() };
       return runtime;
     } catch (error) {
-      runtime.status = { id: config.id, state: "error", tool_count: 0, last_error: error instanceof Error ? error.message : String(error), updated_at: new Date().toISOString() };
-      if (!temporary) this.runtimes.set(config.id, runtime);
+      runtime.status = { ...runtime.status, id: config.id, state: "error", tool_count: 0, last_error: "MCP connection failed. Check server configuration or retry OAuth authorization.", updated_at: new Date().toISOString() };
+      // Stale connection completions must never overwrite a reconfigured server.
       await runtime.connection?.close();
       throw error;
     }
@@ -268,6 +341,9 @@ export class McpPower extends Power {
   private async remove_runtime(server_id: string): Promise<void> {
     const runtime = this.runtimes.get(server_id);
     if (!runtime) return;
+    this.providers.get(server_id)?.close();
+    this.providers.delete(server_id);
+    this.connecting.delete(server_id);
     await runtime.connection?.close();
     this.runtimes.delete(server_id);
   }
