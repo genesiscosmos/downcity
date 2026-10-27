@@ -7,7 +7,7 @@
  * - 来源路径仅供展示；读取只接受目录 ID 与 Agent ID，宿主重新发现实际文件。
  */
 
-import type { McpServerStatus } from "@/mcp/types/McpPower.js";
+import type { McpServerStatus } from "@/mcp/types/Mcp.js";
 
 /** Safe global MCP summary; connection credentials stay in config actions. */
 export interface SkillMainviewMcpServer extends McpServerStatus {

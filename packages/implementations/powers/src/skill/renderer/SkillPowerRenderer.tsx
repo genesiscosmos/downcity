@@ -2,7 +2,7 @@
 
 import { skill_resource_sidebar, skill_resource_mainview } from "./SkillResources.js";
 import { skill_agent_config } from "./SkillAgentConfig.js";
-import { mcp_resource_config } from "@/mcp/renderer/McpPowerRenderer.js";
+import { mcp_resource_config } from "@/mcp/renderer/McpResources.js";
 import { define_power_renderer } from "@downcity/city/power/react";
 
 /** Skill Power Renderer 定义。 */

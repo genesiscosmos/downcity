@@ -34,7 +34,7 @@ import {
 } from "@/skill/runtime/AgentRoot.js";
 import { build_skills_system_text } from "@/skill/runtime/SystemProvider.js";
 import { SKILL_POWER_PROMPT } from "@/skill/SkillPromptAssets.js";
-import { McpRuntime } from "@/mcp/Power.js";
+import { McpRuntime } from "@/mcp/runtime/McpRuntime.js";
 import { register_skill_power_host_actions } from "@/skill/host/SkillPowerHostActions.js";
 
 /** 读取一个可选的作用域参数。 */

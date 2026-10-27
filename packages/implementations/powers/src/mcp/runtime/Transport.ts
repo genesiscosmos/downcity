@@ -1,11 +1,10 @@
 /** MCP JSON-RPC transport：stdio 与 Streamable HTTP 的最小统一实现。 */
 
 import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
-import { randomUUID } from "node:crypto";
 import { createInterface } from "node:readline";
 import { HttpConnection } from "./HttpConnection.js";
 import type { McpOAuthProvider } from "../auth/OAuthSession.js";
-import type { McpCallResult, McpHttpTransportConfig, McpStdioTransportConfig, McpToolDefinition } from "@/mcp/types/McpPower.js";
+import type { McpCallResult, McpHttpTransportConfig, McpStdioTransportConfig, McpToolDefinition } from "@/mcp/types/Mcp.js";
 
 interface JsonRpcResponse {
   /** JSON-RPC 请求 ID。 */
@@ -162,9 +161,4 @@ class StdioTransport implements McpTransport {
 /** 解析可选的配置变量引用。 */
 export function resolve_mcp_variables(value: string, env: Record<string, string | undefined>): string {
   return value.replace(/\$\{([A-Za-z_][A-Za-z0-9_]*)\}/g, (_match, name: string) => env[name] ?? "");
-}
-
-/** 生成连接诊断 ID。 */
-export function create_mcp_connection_id(): string {
-  return randomUUID();
 }

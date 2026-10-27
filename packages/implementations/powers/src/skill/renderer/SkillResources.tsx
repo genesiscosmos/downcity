@@ -2,8 +2,8 @@
 import { useEffect, useState } from "react";
 import type { PowerMainviewComponentProps, PowerSidebarComponentProps } from "@downcity/city/power/react";
 import type { SkillMainviewSnapshot, SkillMainviewReadResult } from "@/skill/types/SkillMainview.js";
-import type { McpStatusResult } from "@/mcp/types/McpPower.js";
-import { mcp_resource_detail as Mcp_resource_detail } from "@/mcp/renderer/McpPowerRenderer.js";
+import type { McpStatusResult } from "@/mcp/types/Mcp.js";
+import { mcp_resource_detail as Mcp_resource_detail } from "@/mcp/renderer/McpResources.js";
 import { collect_skills, find_skill_resource } from "./SkillResourceModel.js";
 
 /** Load each resource family independently so one unavailable source does not hide the other. */

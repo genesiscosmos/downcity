@@ -13,7 +13,7 @@ import { randomUUID } from "node:crypto";
 import { parse } from "smol-toml";
 import { z } from "zod";
 import type { PowerJsonValue } from "@downcity/city/power";
-import type { McpServerConfig } from "../types/McpPower.js";
+import type { McpServerConfig } from "../types/Mcp.js";
 import type { McpServerFileScan, McpServerFilesView } from "../types/McpServerFiles.js";
 
 const server_schema = z.object({

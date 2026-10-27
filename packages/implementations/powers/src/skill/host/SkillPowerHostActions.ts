@@ -8,7 +8,7 @@
  */
 
 import fs from "fs-extra";
-import type { McpRuntime } from "@/mcp/Power.js";
+import type { McpRuntime } from "@/mcp/runtime/McpRuntime.js";
 import path from "node:path";
 import { createHash as create_hash } from "node:crypto";
 import type { PowerJsonValue, PowerLifecycleContext } from "@downcity/city/power";

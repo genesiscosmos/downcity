@@ -8,14 +8,14 @@
 
 import { create_action } from "@downcity/city/power";
 import { z } from "zod";
-import { wait_for_mcp } from "./runtime/Cancellation.js";
+import { wait_for_mcp } from "./Cancellation.js";
 import { dirname, join } from "node:path";
-import { McpAssignments } from "./runtime/Assignments.js";
-import { McpOAuthProvider } from "./auth/OAuthSession.js";
-import { McpOAuthStorage } from "./auth/OAuthStorage.js";
+import { McpAssignments } from "./Assignments.js";
+import { McpOAuthProvider } from "../auth/OAuthSession.js";
+import { McpOAuthStorage } from "../auth/OAuthStorage.js";
 import type { PowerActions, PowerJsonObject, PowerJsonValue, PowerLifecycleContext, PowerActionResult } from "@downcity/city/power";
 import { McpConnection, resolve_mcp_variables } from "@/mcp/runtime/Transport.js";
-import type { McpServerConfig, McpServerStatus, McpStatusResult } from "@/mcp/types/McpPower.js";
+import type { McpServerConfig, McpServerStatus, McpStatusResult } from "@/mcp/types/Mcp.js";
 import type { McpServerRuntime } from "@/mcp/types/McpServerFiles.js";
 import { McpServerFiles } from "@/mcp/runtime/ServerFiles.js";
 import { assert_runtime_command } from "@/mcp/runtime/CommandPolicy.js";
@@ -258,7 +258,7 @@ export class McpRuntime {
 
   /** 工具发现或调用才建立连接，禁用与错误定义不可执行。 */
   private async ensure_connection(server_id: string, signal?: AbortSignal): Promise<void> {
-    if (this.disposed) throw new Error("MCP Power is disposed");
+    if (this.disposed) throw new Error("MCP runtime is disposed");
     signal?.throwIfAborted();
     const runtime = this.runtimes.get(server_id);
     if (!runtime?.config.enabled) throw new Error(`MCP server is unavailable: ${server_id}`);
@@ -301,7 +301,7 @@ export class McpRuntime {
   /** 建立连接并缓存工具清单；连接超时不阻塞 City 启动。 */
   private async connect_server(config: McpServerConfig, signal?: AbortSignal): Promise<McpServerRuntime> {
     const context = this.lifecycle_context;
-    if (!context) throw new Error("MCP Power is not initialized");
+    if (!context) throw new Error("MCP runtime is not initialized");
     const env = Object.fromEntries(Object.entries(process.env).filter((entry): entry is [string, string] => typeof entry[1] === "string"));
     const resolved_transport = config.transport.type === "stdio"
       ? {
@@ -411,7 +411,7 @@ export class McpRuntime {
 
   /** 获取初始化后唯一的文件存储。 */
   private server_files(): McpServerFiles {
-    if (!this.files) throw new Error("MCP Power is not initialized");
+    if (!this.files) throw new Error("MCP runtime is not initialized");
     return this.files;
   }
 

@@ -2,7 +2,7 @@
 import { wait_for_mcp } from "./Cancellation.js";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StreamableHTTPClientTransport, StreamableHTTPError } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
-import type { McpHttpTransportConfig, McpCallResult, McpToolDefinition } from "../types/McpPower.js";
+import type { McpHttpTransportConfig, McpCallResult, McpToolDefinition } from "../types/Mcp.js";
 import type { McpOAuthProvider } from "../auth/OAuthSession.js";
 
 /** Serializes operations for one endpoint only; authorization cannot block other servers. */

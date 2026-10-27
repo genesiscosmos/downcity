@@ -1,4 +1,4 @@
-/** MCP Power 的配置、工具与运行状态协议。 */
+/** SkillPower 内部 MCP 服务的配置、工具与运行状态协议。 */
 
 import type { PowerJsonObject, PowerJsonValue } from "@downcity/city/power";
 import type { McpOAuthTransportConfig, McpOAuthState } from "../auth/OAuthTypes.js";

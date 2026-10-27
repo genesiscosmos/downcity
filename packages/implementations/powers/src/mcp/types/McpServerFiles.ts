@@ -5,7 +5,7 @@
  * 不携带 env、headers 或 TOML 原文，避免凭据进入模型上下文。
  */
 
-import type { McpServerConfig } from "./McpPower.js";
+import type { McpServerConfig, McpServerStatus, McpToolDefinition } from "./Mcp.js";
 
 /** 单个定义文件的编辑快照，包括无法解析的原文。 */
 export interface McpServerFile {
@@ -33,14 +33,14 @@ export interface McpServerFileScan extends McpServerFilesView {
   configs: McpServerConfig[];
 }
 
-/** 单个 Server 的连接缓存，由 MCP Power 生命周期持有。 */
+/** 单个 Server 的连接缓存，由 SkillPower 持有的 MCP runtime 管理生命周期。 */
 export interface McpServerRuntime {
   /** 当前有效且已归一化的 Server 定义。 */
   config: McpServerConfig;
   /** 惰性创建的 MCP 连接。 */
   connection?: import("../runtime/Transport.js").McpConnection;
   /** 最近发现的工具清单。 */
-  tools: import("./McpPower.js").McpToolDefinition[];
+  tools: McpToolDefinition[];
   /** 无凭据的运行状态。 */
-  status: import("./McpPower.js").McpServerStatus;
+  status: McpServerStatus;
 }
