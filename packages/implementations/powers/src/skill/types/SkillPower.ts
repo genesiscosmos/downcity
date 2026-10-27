@@ -22,6 +22,12 @@ export const SKILL_POWER_ACTIONS = {
    * 读取 skill 正文。
    */
   lookup: "lookup",
+  /** List enabled MCP servers explicitly assigned to the current Agent. */
+  servers: "servers",
+  /** Discover a single assigned MCP server's tool schemas. */
+  tools: "tools",
+  /** Validate and invoke a tool on an assigned MCP server. */
+  call: "call",
 } as const;
 
 /**

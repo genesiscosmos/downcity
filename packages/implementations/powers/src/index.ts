@@ -12,7 +12,6 @@ export * from "./memory.js";
 export * from "./skill.js";
 export * from "./task.js";
 export * from "./web.js";
-export * from "./mcp.js";
 export * from "./presentation.js";
 export {
   create_builtin_power_registrations,

@@ -7,6 +7,18 @@
  * - 该协议只描述用户管理 Skill 所需的稳定数据，不暴露 Agent 运行实例或本地路径。
  */
 
+import type { McpServerStatus } from "@/mcp/types/McpPower.js";
+
+/** Safe global MCP summary; connection credentials stay in config actions. */
+export interface SkillMainviewMcpServer extends McpServerStatus {
+  /** User-visible title from the global definition, falling back to its ID. */
+  readonly title: string;
+  /** Whether the global definition permits connections. */
+  readonly enabled: boolean;
+  /** Registered Agents currently assigned this global server. */
+  readonly linked_agent_ids: string[];
+}
+
 /**
  * 功能页展示的一条 Agent 已绑定 Skill。
  */
@@ -92,6 +104,9 @@ export interface SkillMainviewAgent {
    * 该 Agent 私有目录中发现的 Skill。
    */
   readonly skills: SkillMainviewItem[];
+
+  /** Explicit MCP allowlist; missing global definitions remain visible by ID for removal. */
+  readonly mcp_server_ids: string[];
 }
 
 /**
@@ -114,6 +129,9 @@ export interface SkillMainviewSnapshot {
    * 用户目录中可关联的 Skill。
    */
   readonly available: SkillMainviewAvailableItem[];
+
+  /** Global MCP definitions with safe live state and assignment summaries. */
+  readonly mcp_servers: SkillMainviewMcpServer[];
 }
 
 /**

@@ -1,4 +1,9 @@
-/** Power Sidebar、Mainview、Config、Message 与宿主 UI 注入协议。 */
+/**
+ * Power Sidebar、Mainview、Config、Agent Profile、Message 与宿主 UI 注入协议。
+ *
+ * Agent Profile 通过可选 agent_config 声明单个页签。宿主按已启用 Power 收集，
+ * 为页签 ID 添加 Power 命名空间，并注入当前 Agent、业务网关与统一 UI。
+ */
 
 import type { SessionAgentPowerPart, SessionAgentToolPart, SessionPowerContent, JsonObject } from "@downcity/type";
 
@@ -671,6 +676,29 @@ export type PowerMainviewComponent = (
   props: PowerMainviewComponentProps,
 ) => ReactNode;
 
+/** Agent 配置页签接收的属性；Agent 身份由宿主提供，业务操作由所属 Power 校验。 */
+export interface PowerAgentConfigComponentProps {
+  /** 当前正在配置的 Agent 稳定标识。 */
+  readonly agent_id: string;
+  /** 已绑定所属 Power 的业务 action 网关，与 Mainview 使用相同的执行入口。 */
+  readonly power: PowerActionGateway;
+  /** 宿主提供的反馈能力、刷新版本与统一 UI 组件。 */
+  readonly ui: PowerRendererUi;
+}
+
+/** Power 在 Agent Profile 中提供的独立配置组件。 */
+export type PowerAgentConfigComponent = (props: PowerAgentConfigComponentProps) => ReactNode;
+
+/** 单个 Power 注册的 Agent Profile 页签；宿主为 id 添加 Power 命名空间。 */
+export interface PowerAgentConfigDefinition {
+  /** 所属 Power 内稳定且非空的页签标识，例如 skills。 */
+  readonly id: string;
+  /** 页签直接展示的非空名称，由 Power 提供。 */
+  readonly label: string;
+  /** 宿主选择此页签时挂载的 React 组件。 */
+  readonly component: PowerAgentConfigComponent;
+}
+
 /** Power 自己拥有的 Config 组件。 */
 export type PowerConfigComponent = (
   props: PowerConfigComponentProps,
@@ -742,6 +770,9 @@ export interface PowerRendererDefinition {
 
   /** 设置中心内由宿主绑定当前 Power 的独立配置界面。 */
   readonly config?: PowerConfigComponent;
+
+  /** 已启用 Power 自动贡献到 Agent Profile 的页签，无需 power.json 能力标记。 */
+  readonly agent_config?: PowerAgentConfigDefinition;
 
   /** 回复正文中的结构化内容；允许只注册此插槽。 */
   readonly message?: PowerMessageComponent;

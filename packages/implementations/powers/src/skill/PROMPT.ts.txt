@@ -17,7 +17,7 @@ skill({
 });
 ```
 
-Available actions are `list` and `lookup`.
+Available actions are `list`, `lookup`, `servers`, `tools`, and `call`. The MCP actions expose only servers assigned to the current Agent.
 
 `list` returns the skills in your own skill directory by default. Pass `scope` to read other sources: `project` for the current workspace `.agents/skills`, `home` for the user directory `~/.agents/skills`, and `all` for the union of your directory, project, and home. `lookup` accepts the same `scope`.
 

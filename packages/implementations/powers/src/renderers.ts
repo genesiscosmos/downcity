@@ -6,7 +6,6 @@ import { MESSENGER_POWER_RENDERER } from "@/messenger/renderer/MessengerPowerRen
 import { MEMORY_POWER_RENDERER } from "@/memory/renderer/MemoryPowerRenderer.js";
 import { SKILL_POWER_RENDERER } from "@/skill/renderer/SkillPowerRenderer.js";
 import { WEB_POWER_RENDERER } from "@/web/renderer/WebPowerRenderer.js";
-import { MCP_POWER_RENDERER } from "@/mcp/renderer/McpPowerRenderer.js";
 
 /** 官方 Power ID 到 Renderer 定义的稳定映射。 */
 export const BUILTIN_POWER_RENDERERS: Readonly<Record<string, PowerRendererDefinition>> = {
@@ -15,5 +14,4 @@ export const BUILTIN_POWER_RENDERERS: Readonly<Record<string, PowerRendererDefin
   messenger: MESSENGER_POWER_RENDERER,
   memory: MEMORY_POWER_RENDERER,
   web: WEB_POWER_RENDERER,
-  mcp: MCP_POWER_RENDERER,
 };

@@ -3,7 +3,7 @@
  *
  * 关键点（中文）
  * - Skill 按 Agent 划分：权威来源是 `~/.downcity/agents/<agent-id>/skills`。
- * - 模型侧只有 `list` 与 `lookup`：默认只看自己的目录，可用 `scope` 读取 project / home。
+ * - `list` / `lookup` 读取技能；`servers` / `tools` / `call` 使用当前 Agent 分配的 MCP。
  * - 安装与关联：模型可以自己装进自己的技能目录，用户也可以在 Skills 页面操作。
  * - skills overview 通过 `power.system` 注入，清单与 `list` 默认结果保持一致。
  */
@@ -34,6 +34,7 @@ import {
 } from "@/skill/runtime/AgentRoot.js";
 import { build_skills_system_text } from "@/skill/runtime/SystemProvider.js";
 import { SKILL_POWER_PROMPT } from "@/skill/SkillPromptAssets.js";
+import { McpRuntime } from "@/mcp/Power.js";
 import { register_skill_power_host_actions } from "@/skill/host/SkillPowerHostActions.js";
 
 /** 读取一个可选的作用域参数。 */
@@ -208,6 +209,8 @@ function create_skill_power_actions(input: {
  * SkillPower：按 Agent 划分的技能发现、读取与 system 注入。
  */
 export class SkillPower extends Power {
+  /** MCP connections, configuration and assignments owned by this single Power. */
+  private readonly mcp_runtime = new McpRuntime();
   /** Power 稳定名称，即模型侧工具名。 */
   readonly name = "skill";
 
@@ -216,7 +219,7 @@ export class SkillPower extends Power {
 
   /** Power 用途说明。 */
   readonly description =
-    "Lists and reads the skills assigned to this agent, and injects the agent skill inventory into system prompts.";
+    "Lists and reads assigned skills, injects skill inventory, and discovers and calls assigned MCP servers through servers, tools, and call.";
 
   /** 构造期解析后的选项。 */
   private readonly options: ResolvedSkillPowerOptions;
@@ -245,13 +248,21 @@ export class SkillPower extends Power {
         options: this.options,
       }),
     ).trim();
-    return [SKILL_POWER_PROMPT, dynamic_text].filter(Boolean).join("\n\n");
+    return [SKILL_POWER_PROMPT, this.mcp_runtime.system(), dynamic_text].filter(Boolean).join("\n\n");
   }
 
   /** 注册 Skill Power 的宿主管理 actions。 */
-  initialize(context: PowerLifecycleContext): void {
+  async initialize(context: PowerLifecycleContext): Promise<void> {
+    await this.mcp_runtime.initialize(context);
+    Object.assign(this.actions, this.mcp_runtime.actions);
     register_skill_power_host_actions(context, {
       agents_root: resolve_agents_root(context.data_root_path),
+      mcp_runtime: this.mcp_runtime,
     });
+  }
+
+  /** Close all owned MCP connections and pending OAuth sessions. */
+  async dispose(): Promise<void> {
+    await this.mcp_runtime.dispose();
   }
 }

@@ -79,7 +79,6 @@ test("Renderer 子路径统一导出 React Surface registry", async () => {
   const renderers = await import("@downcity/powers/renderers");
   assert.equal(typeof power_react.define_power_renderer, "function");
   assert.deepEqual(Object.keys(renderers.BUILTIN_POWER_RENDERERS).sort(), [
-    "mcp",
     "memory",
     "messenger",
     "presentation",

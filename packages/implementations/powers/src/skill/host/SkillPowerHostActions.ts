@@ -8,6 +8,7 @@
  */
 
 import fs from "fs-extra";
+import type { McpRuntime } from "@/mcp/Power.js";
 import path from "node:path";
 import type { PowerJsonValue, PowerLifecycleContext } from "@downcity/city/power";
 import { listSkills, lookupSkill } from "@/skill/Action.js";
@@ -31,6 +32,8 @@ export interface SkillPowerHostRuntime {
    * Agent 技能目录根，即 `<data_root_path>/agents`。
    */
   agents_root: string;
+  /** Owned MCP service supplying safe summaries and persisted Agent assignments. */
+  mcp_runtime: McpRuntime;
 }
 
 /** 注册 Skill Power 的宿主管理 actions。 */
@@ -38,9 +41,35 @@ export function register_skill_power_host_actions(
   context: PowerLifecycleContext,
   runtime: SkillPowerHostRuntime,
 ): void {
+  for (const assigned of [true, false]) {
+    context.power.action({
+      id: assigned ? "skill.mcp.assign" : "skill.mcp.unassign",
+      run: async (input) => {
+        const agent_id = read_required_string(input, "agent_id");
+        const server_id = read_required_string(input, "server_id");
+        if (!(await context.system.list_agents()).some((agent) => agent.agent_id === agent_id)) {
+          throw new Error(`Unknown Agent: ${agent_id}`);
+        }
+        if (assigned && !(await runtime.mcp_runtime.snapshot_servers()).some((server) => server.id === server_id)) {
+          throw new Error(`Unknown MCP server: ${server_id}`);
+        }
+        await runtime.mcp_runtime.assignments.set(agent_id, server_id, assigned);
+        return as_json({ ...await create_snapshot(context, runtime), operation_success: true });
+      },
+    });
+  }
   context.power.action({
     id: "skill.snapshot",
     run: async () => as_json(await create_snapshot(context, runtime)),
+  });
+  context.power.action({
+    id: "skill.read_home",
+    run: async (input) => as_json(await lookupSkill({
+      scope: "home",
+      context: create_home_context(runtime),
+      options: resolveSkillPowerOptions(),
+      request: { name: read_required_string(input, "skill_id") },
+    })),
   });
   context.power.action({
     id: "skill.read",
@@ -68,15 +97,20 @@ async function create_snapshot(
   runtime: SkillPowerHostRuntime,
 ): Promise<SkillMainviewSnapshot> {
   const agents = await context.system.list_agents();
-  const views = agents.map((agent) => ({
+  const views = await Promise.all(agents.map(async (agent) => ({
     agent_id: agent.agent_id,
     name: agent.name,
     skills: list_agent_skills(runtime, agent.agent_id),
-  }));
+    mcp_server_ids: await runtime.mcp_runtime.assignments.read(agent.agent_id),
+  })));
 
   return {
     success: true,
     agents: views,
+    mcp_servers: (await runtime.mcp_runtime.snapshot_servers()).map((server) => ({
+      ...server,
+      linked_agent_ids: views.filter((view) => view.mcp_server_ids.includes(server.id)).map((view) => view.agent_id),
+    })),
     available: list_home_skills(runtime).map((skill) =>
       to_available_item(
         skill,

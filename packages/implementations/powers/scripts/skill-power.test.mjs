@@ -2,7 +2,7 @@
  * SkillPower action 目录、作用域与 system prompt 回归测试。
  *
  * 关键点（中文）
- * - 模型侧只暴露 list / lookup，且默认只看 Agent 技能目录。
+ * - 模型侧暴露 Skill 读取及已分配 MCP 的发现与调用，Skill 默认只看 Agent 技能目录。
  * - list 的 project / home / all 必须返回对应来源。
  * - lookup 必须通过标准 messages 协议注入 skill 正文，而不是自定义 payload。
  * - system prompt 只列出当前 Agent 的可用 skill，并给出自装命令。
@@ -76,8 +76,11 @@ async function start_power(data_root_path) {
   return power;
 }
 
-test("SkillPower 只暴露 list 与 lookup", () => {
-  assert.deepEqual(Object.keys(new SkillPower().actions).sort(), ["list", "lookup"]);
+test("SkillPower exposes skill lookup and assigned MCP actions", async () => {
+  const fixture = create_fixture();
+  const power = await start_power(fixture.base);
+  assert.deepEqual(Object.keys(power.actions).sort(), ["call", "list", "lookup", "servers", "tools"]);
+  await power.dispose();
 });
 
 test("list 默认只返回当前 Agent 私有目录的 skill", async () => {
@@ -190,7 +193,7 @@ test("system prompt 不再宣称 40 条上限", async () => {
 
   const prompt = await power.system(create_skill_context(fixture.workspace_path, fixture.base));
 
-  assert.doesNotMatch(prompt, /40/);
+  assert.doesNotMatch(prompt, /(?:limit(?:ed)?\s+to|at most|maximum(?:\s+of)?|上限|最多)\s*40\b/i);
 });
 
 test("软链接的 skill 会被发现并标记来源", async () => {

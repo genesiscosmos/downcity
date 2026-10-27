@@ -47,10 +47,6 @@
     "./web": {
       "types": "./bin/web.d.ts",
       "import": "./bin/web.js"
-    },
-    "./mcp": {
-      "types": "./bin/mcp.d.ts",
-      "import": "./bin/mcp.js"
     }
   },
   "scripts": {
