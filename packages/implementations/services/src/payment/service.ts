@@ -10,9 +10,12 @@
 import { InstallableService, type EnvRequirement, type ServiceInstallContext } from "@downcity/federation";
 import { paymentEvents, paymentPayments } from "./schema.js";
 import { mergeEnvRequirements, normalizeProviders } from "./helpers.js";
-import { installPaymentRoutes } from "./routes.js";
+import { installPaymentRoutes, syncPaymentEvent } from "./routes.js";
+import { paymentInbox } from "./inbox-schema.js";
+import { PaymentInbox } from "./PaymentInbox.js";
 import type {
   PaymentProvider,
+  PaymentEventRecord,
   PaymentRecord,
   PaymentServiceOptions,
   PaymentTopupResolution,
@@ -40,8 +43,11 @@ export class PaymentService extends InstallableService {
   readonly schema = {
     payments: paymentPayments,
     events: paymentEvents,
+    inbox: paymentInbox,
   };
 
+  /** 数据库支撑的事件执行器，由定期恢复和 Queue 共同唤醒。 */
+  inbox!: PaymentInbox;
   private readonly options: PaymentServiceOptions;
   private readonly providers: PaymentProvider[];
 
@@ -62,7 +68,54 @@ export class PaymentService extends InstallableService {
   }
 
   install(ctx: ServiceInstallContext): void {
+    const events = ctx.table<PaymentEventRecord>("events");
+    this.inbox = new PaymentInbox(ctx.table("inbox"), {
+      send: async (message) => {
+        if (!this._queue) throw new Error("payment queue is not installed");
+        await this._queue.send(message);
+      },
+    }, async (provider_id, event) => {
+      const provider = this.providers.find((item) => item.id === provider_id);
+      if (!provider) throw new Error("payment provider unavailable");
+      const status = await syncPaymentEvent({ provider, event, payments: ctx.table<PaymentRecord>("payments"), service: this });
+      await events.update({ where: { event_id: `${provider_id}:${event.event_id}` },
+        values: { sync_status: status, sync_error: "" } });
+      return status;
+    }, ctx.database);
+    this.hook.before(async (context) => {
+      if (context.action?.id === "checkout/create") {
+        if (!this._queue) throw new Error("payment queue is not installed");
+        this._queue.require_available();
+      }
+    });
+    // 直接 Action 保留抛错语义，让 Queue 重试失败的后台处理。
+    this.action("events/process", async (context) => {
+      await this.inbox.process(String(context.input.event_id ?? ""));
+      return { processed: true };
+    }, { auth: ["admin"] });
+    this.action("events/recover", async () => await this.inbox.recover(), { auth: ["admin"] });
+    ctx.route({ method: "GET", path: "/events/inbox", auth: ["admin"], handler: async (context) =>
+      context.jsonResponse({ items: await this.inbox.list() }) });
+    ctx.route({ method: "POST", path: "/events/replay", auth: ["admin"], handler: async (context) => {
+      const input = await context.json();
+      await this.inbox.replay(String(input.event_id ?? ""));
+      return context.jsonResponse({ accepted: true });
+    } });
     installPaymentRoutes(this, ctx);
+  }
+
+  /** 建立恢复索引，使周期扫描只读取待执行状态。 */
+  protected override async on_init(): Promise<void> {
+    if (!this._database) throw new Error("payment database is not installed");
+    await this._database.atomic([
+      { sql: "CREATE INDEX IF NOT EXISTS payment_inbox_pending_idx ON service_payment_inbox (status, next_attempt_at)", params: [] },
+      { sql: "CREATE INDEX IF NOT EXISTS payment_inbox_lease_idx ON service_payment_inbox (status, lease_until)", params: [] },
+    ]);
+  }
+
+  /** 宿主周期调用，恢复消息丢失或执行中断的可信事件。 */
+  async recover_events(): Promise<{ scheduled: number }> {
+    return await this.inbox.recover();
   }
 
   /** 通知接入方处理已确认支付订单。 */

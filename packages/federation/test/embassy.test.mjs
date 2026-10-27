@@ -18,7 +18,7 @@ test("Embassy 只公开 user 和 admin 身份子域", () => {
   assert.equal("city" in embassy, false)
 })
 
-test("Embassy account 登录成功后更新当前 User Token", async () => {
+test("Embassy account 查询状态不交付 Token，显式交换后更新当前 User Token", async () => {
   const requests = []
   const embassy = new Embassy({
     federation_url: "https://fed.example.com",
@@ -28,22 +28,41 @@ test("Embassy account 登录成功后更新当前 User Token", async () => {
         status: "done",
         login_id: "login_1",
         provider: "local",
-        user_token: "user_token_1",
-        user_id: "user_1",
+        ...(url.endsWith("/login/start") ? { login_secret: "private_login_proof" } : {}),
+        ...(url.endsWith("/login/exchange") ? { user_token: "user_token_1" } : {}),
       })
     },
   })
 
   const result = await embassy.user.account.login_start({
     provider: "local",
+    client_type: "cli",
     bureau_id: "bureau_product",
   })
 
   assert.equal(result.status, "done")
+  assert.equal(result.user_token, undefined)
+  assert.equal(embassy.user.account.token(), undefined)
+  const status = await embassy.user.account.status()
+  assert.equal(status.status, "done")
+  assert.equal(status.user_token, undefined)
+  assert.equal(embassy.user.account.token(), undefined)
+  assert.equal(requests[1].url, "https://fed.example.com/v1/accounts/login/result")
+  assert.equal(requests[1].init.method, "POST")
+  assert.deepEqual(JSON.parse(requests[1].init.body), {
+    login_id: "login_1", login_secret: "private_login_proof",
+  })
+  await embassy.user.account.exchange()
   assert.equal(embassy.user.account.token(), "user_token_1")
+  assert.equal(requests[2].url, "https://fed.example.com/v1/accounts/login/exchange")
+  const exchange = JSON.parse(requests[2].init.body)
+  assert.equal(exchange.login_id, "login_1")
+  assert.equal(exchange.login_secret, "private_login_proof")
+  assert.equal(typeof exchange.exchange_id, "string")
   assert.equal(requests[0].url, "https://fed.example.com/v1/accounts/login/start")
   assert.deepEqual(JSON.parse(requests[0].init.body), {
     provider: "local",
+    client_type: "cli",
     bureau_id: "bureau_product",
   })
 })
@@ -58,9 +77,11 @@ test("Embassy user current 使用登录后写入的 User Token", async () => {
         return json({
           status: "done",
           login_id: "login_1",
-          user_token: "user_token_1",
-          user_id: "user_1",
+          login_secret: "private_login_proof",
         })
+      }
+      if (url.endsWith("/login/exchange")) {
+        return json({ status: "done", login_id: "login_1", user_token: "user_token_1" })
       }
       return json({
         user: {
@@ -72,15 +93,17 @@ test("Embassy user current 使用登录后写入的 User Token", async () => {
     },
   })
 
-  await embassy.user.account.login_start({
+  await embassy.user.account.login({
     provider: "local",
+    client_type: "cli",
     bureau_id: "bureau_product",
   })
   const current_user = await embassy.user.current()
 
   assert.equal(current_user.user.user_id, "user_1")
-  assert.equal(requests[1].url, "https://fed.example.com/v1/accounts/me")
-  assert.equal(requests[1].init.headers.authorization, "Bearer user_token_1")
+  assert.equal(requests[1].url, "https://fed.example.com/v1/accounts/login/exchange")
+  assert.equal(requests[2].url, "https://fed.example.com/v1/accounts/me")
+  assert.equal(requests[2].init.headers.authorization, "Bearer user_token_1")
 })
 
 test("Embassy admin 登录后立即提供管理能力", async () => {

@@ -88,6 +88,28 @@ export function build_federation_router(params: {
     }
   });
 
+  // 新受保护请求的在线检查入口；只验证实际 Bearer，不使用进程内可信身份。
+  // 每次查询持久化撤销状态，不缓存结果，也不干预已开始的流。
+  app.get("/v1/federation/token", async (c) => {
+    try {
+      const token = bearerToken(c.req.raw);
+      if (!token) throw httpError(401, "Authentication required");
+      const payload = await authenticator.verifyToken(token);
+      return c.json({
+        active: true,
+        token_id: payload.jti,
+        user_id: payload.user_id,
+        bureau_id: payload.bureau_id,
+        expires_at: new Date(payload.exp * 1000).toISOString(),
+      }, 200, no_store_headers());
+    } catch (error) {
+      const status_code = (error as { /** 已分类的凭证验证 HTTP 状态。 */ statusCode?: number }).statusCode;
+      return with_no_store(build_error_response(status_code === 401
+        ? httpError(401, "User token is inactive")
+        : httpError(503, "Federation token validity check unavailable")));
+    }
+  });
+
   app.post("/v1/admin/login", async (c) => {
     try {
       const input = await c.req.json<FederationAdminLoginInput>();
@@ -415,12 +437,12 @@ function build_error_response(error: unknown): Response {
   } }, { status: status as number });
 }
 
-/** 管理员认证响应禁止被浏览器或中间代理缓存。 */
+/** 认证与 Token 有效性响应禁止被浏览器或中间代理缓存。 */
 function no_store_headers(): Record<string, string> {
   return { "cache-control": "no-store", pragma: "no-cache" };
 }
 
-/** 为错误响应补齐管理员认证端点的禁止缓存语义。 */
+/** 为认证端点错误响应补齐禁止缓存语义。 */
 function with_no_store(response: Response): Response {
   for (const [key, value] of Object.entries(no_store_headers())) response.headers.set(key, value);
   return response;

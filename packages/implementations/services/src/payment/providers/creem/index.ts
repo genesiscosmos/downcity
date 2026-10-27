@@ -6,6 +6,7 @@
  * - 负责声明 env、生成支付方式、创建 Checkout、解析 webhook
  */
 
+import { read_minor_amount } from "../../confirmation.js";
 import {
   normalizeCurrency,
   normalizeOptionalText,
@@ -105,6 +106,8 @@ export function creemPaymentProvider(options: CreemPaymentProviderOptions = {}):
         payment_id: normalizeOptionalText(metadata.payment_id) || normalizeOptionalText(object.request_id),
         provider_session_id: checkout_id,
         provider_order_id: order_id,
+        amount_minor: read_minor_amount(order.amount_paid ?? order.amount),
+        currency: normalizeCurrency(order.currency),
         ref: order_id || checkout_id,
         meta: {
           provider: "creem",

@@ -1,18 +1,17 @@
 /**
  * Accounts 服务持久化边界。
  *
- * 本模块唯一负责 login state、better-auth 用户/账号/Session 和 Downcity Profile
+ * 本模块负责旧登录流程作废、better-auth 用户/账号/Session 和 Downcity Profile
  * 的数据库读写。登录流程与 HTTP 协议只通过这些显式方法访问认证事实。
  */
 
 import type { ServiceDatabaseContext } from "@downcity/federation";
 import { listAccountUsageRegistrations } from "./admin-queries.js";
 import { readPreparedFirst, runPrepared } from "./db.js";
-import type { AuthAccountRow, AuthUserRow, LoginStateRow } from "./rows.js";
+import type { AuthAccountRow, AuthUserRow } from "./rows.js";
 import {
   ACCOUNTS_LOGIN_STATE_TABLE,
   AUTH_ACCOUNT_TABLE,
-  AUTH_SESSION_TABLE,
   AUTH_USER_TABLE,
   USER_PROFILE_TABLE,
   type UserProfileRow,
@@ -21,12 +20,7 @@ import type { AccountsUsageRegistration } from "./types.js";
 import type { AccountsPreparedStatement } from "./types/DatabaseStatement.js";
 import type { AccountsProfileWriteInput } from "./types/AccountsStore.js";
 import type { OAuthProviderProfile } from "./oauth.js";
-import { normalizeBool, prefixedId, randomToken } from "./utils.js";
-
-/** 登录 state 的最长有效时间。 */
-const LOGIN_STATE_TTL_MS = 5 * 60 * 1000;
-/** OAuth 登录写入的 better-auth Session 有效时间。 */
-const AUTH_SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000;
+import { normalizeBool, prefixedId } from "./utils.js";
 
 /** Accounts 服务的数据库事实访问器。 */
 export class AccountsStore {
@@ -42,46 +36,21 @@ export class AccountsStore {
     return this.database.drizzle;
   }
 
-  /** 创建一次登录 state。 */
-  async create_login_state(
-    bureau_id: string,
-    provider: string,
-    state: string,
-    user_token = "",
-  ): Promise<void> {
-    await runPrepared(
-      this.prepare(`INSERT INTO ${ACCOUNTS_LOGIN_STATE_TABLE} (state, bureau_id, provider, user_token, created_at) VALUES (?, ?, ?, ?, ?)`),
-      [state, bureau_id, provider, user_token, Date.now()],
-    );
-  }
-
-  /** 读取未过期的登录 state，并清理命中的过期记录。 */
-  async read_login_state(state: string): Promise<LoginStateRow | null> {
-    const row = await readPreparedFirst(
-      this.prepare(`SELECT state, bureau_id, provider, user_token, created_at FROM ${ACCOUNTS_LOGIN_STATE_TABLE} WHERE state = ?`),
-      [state],
-    ) as LoginStateRow | null;
-    if (!row) return null;
-    if (Date.now() - Number(row.created_at) > LOGIN_STATE_TTL_MS) {
-      await runPrepared(
-        this.prepare(`DELETE FROM ${ACCOUNTS_LOGIN_STATE_TABLE} WHERE state = ?`),
-        [state],
-      );
-      return null;
+  /** Explicitly invalidate legacy public-state login flows without touching account history. */
+  async invalidate_legacy_logins(): Promise<void> {
+    await this.database.query({ sql: `DELETE FROM ${ACCOUNTS_LOGIN_STATE_TABLE}`, params: [] });
+    try {
+      await this.database.query({
+        sql: `CREATE UNIQUE INDEX IF NOT EXISTS auth_accounts_provider_identity_unique ON ${AUTH_ACCOUNT_TABLE} (providerId, accountId)`,
+        params: [],
+      });
+    } catch {
+      throw new Error("Accounts identity index could not be initialized. Check duplicate providerId/accountId records and database permissions; no accounts have been merged or deleted.");
     }
-    return row;
   }
 
-  /** 把最终 User Token 回填到登录 state。 */
-  async resolve_login_state(state: string, user_token: string): Promise<void> {
-    await runPrepared(
-      this.prepare(`UPDATE ${ACCOUNTS_LOGIN_STATE_TABLE} SET user_token = ? WHERE state = ?`),
-      [user_token, state],
-    );
-  }
-
-  /** 确保 OAuth 用户和账号存在，并记录当前认证 Session 与 Profile。 */
-  async ensure_oauth_user(profile: OAuthProviderProfile, request: Request): Promise<string> {
+  /** Resolve the provider's stable identity and update its profile without email linking or a native session. */
+  async ensure_oauth_user(profile: OAuthProviderProfile, _request: Request): Promise<string> {
     const now = new Date().toISOString();
     const email = profile.email.trim().toLowerCase();
     const existing_account = await readPreparedFirst(
@@ -89,11 +58,17 @@ export class AccountsStore {
       [profile.provider, profile.provider_user_id],
     ) as AuthAccountRow | null;
 
+    if (!profile.provider_user_id.trim()) throw new Error("OAuth provider identity is missing");
     let user = existing_account
       ? await this.find_auth_user_by_id(existing_account.userId)
-      : email
-        ? await this.find_auth_user_by_email(email)
-        : null;
+      : null;
+    if (existing_account && !user) {
+      throw new Error("OAuth account identity is inconsistent; contact account support");
+    }
+    const email_owner = email ? await this.find_auth_user_by_email(email) : null;
+    if (email_owner && email_owner.id !== user?.id) {
+      throw new Error("This email belongs to another account. Sign in to that account and use a verified account-linking or recovery flow; automatic linking is disabled.");
+    }
 
     if (!user) {
       user = {
@@ -105,15 +80,27 @@ export class AccountsStore {
         createdAt: now,
         updatedAt: now,
       };
-      await runPrepared(
-        this.prepare(`INSERT INTO ${AUTH_USER_TABLE} (id, email, emailVerified, name, image, createdAt, updatedAt) VALUES (?, ?, ?, ?, ?, ?, ?)`),
-        [user.id, user.email, normalizeBool(user.emailVerified), user.name, user.image, user.createdAt, user.updatedAt],
-      );
+      try {
+        await this.database.atomic([
+          {
+            sql: `INSERT INTO ${AUTH_USER_TABLE} (id, email, emailVerified, name, image, createdAt, updatedAt) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+            params: [user.id, user.email, normalizeBool(user.emailVerified), user.name, user.image, user.createdAt, user.updatedAt],
+          },
+          {
+            sql: `INSERT INTO ${AUTH_ACCOUNT_TABLE} (id, accountId, providerId, userId, accessToken, refreshToken, idToken, accessTokenExpiresAt, refreshTokenExpiresAt, scope, password, createdAt, updatedAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            params: [prefixedId("acc"), profile.provider_user_id, profile.provider, user.id,
+              null, null, null, null, null, null, null, now, now],
+          },
+        ]);
+      } catch {
+        throw new Error("OAuth account could not be created safely. The identity or email may already be registered; retry login or use account recovery. Automatic linking is disabled.");
+      }
     } else {
       user = {
         ...user,
-        email,
-        emailVerified: normalizeBool(user.emailVerified) || profile.email_verified ? 1 : 0,
+        // An established provider identity never overwrites the account's primary email.
+        email: user.email,
+        emailVerified: normalizeBool(user.emailVerified),
         name: profile.display_name || user.name,
         image: profile.avatar_url || user.image,
         updatedAt: now,
@@ -124,49 +111,16 @@ export class AccountsStore {
       );
     }
 
-    if (!existing_account) {
-      await runPrepared(
-        this.prepare(`INSERT INTO ${AUTH_ACCOUNT_TABLE} (id, accountId, providerId, userId, accessToken, refreshToken, idToken, accessTokenExpiresAt, refreshTokenExpiresAt, scope, password, createdAt, updatedAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`),
-        [
-          prefixedId("acc"),
-          profile.provider_user_id,
-          profile.provider,
-          user.id,
-          null,
-          null,
-          null,
-          null,
-          null,
-          null,
-          null,
-          now,
-          now,
-        ],
-      );
-    } else {
+    if (existing_account) {
       await runPrepared(
         this.prepare(`UPDATE ${AUTH_ACCOUNT_TABLE} SET updatedAt = ? WHERE id = ?`),
         [now, existing_account.id],
       );
     }
 
-    await runPrepared(
-      this.prepare(`INSERT INTO ${AUTH_SESSION_TABLE} (id, expiresAt, token, createdAt, updatedAt, ipAddress, userAgent, userId) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`),
-      [
-        prefixedId("sess"),
-        new Date(Date.now() + AUTH_SESSION_TTL_MS).toISOString(),
-        randomToken(32),
-        now,
-        now,
-        String(request.headers.get("x-forwarded-for") ?? ""),
-        String(request.headers.get("user-agent") ?? ""),
-        user.id,
-      ],
-    );
-
     await this.upsert_profile({
       user_id: user.id,
-      email,
+      email: user.email,
       display_name: profile.display_name,
       avatar_url: profile.avatar_url,
     });

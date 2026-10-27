@@ -243,6 +243,8 @@ export interface AccountsOAuthProvider extends AccountsProvider {
  * Accounts 登录启动请求。
  */
 export interface AccountsLoginStartRequest extends Record<string, unknown> {
+  /** Explicit surface; web binds a same-origin browser, device supports BFF clients using human code confirmation. */
+  client_type: "web" | "cli" | "desktop" | "device";
   /**
    * 目标登录 provider ID，例如 `github`、`email` 或 `local`。
    */
@@ -258,6 +260,8 @@ export interface AccountsLoginStartRequest extends Record<string, unknown> {
  * Accounts 登录继续请求。
  */
 export interface AccountsLoginContinueRequest extends Record<string, unknown> {
+  /** Private credential from start; send in JSON only, never URLs or logs. */
+  login_secret?: string;
   /**
    * `login/start` 返回的登录流程 ID。
    */
@@ -273,10 +277,24 @@ export interface AccountsLoginContinueRequest extends Record<string, unknown> {
  * Accounts 登录结果读取请求。
  */
 export interface AccountsLoginResultRequest extends Record<string, unknown> {
+  /** Private initiating-client proof, required for every status request. */
+  login_secret?: string;
   /**
    * `login/start` 返回的登录流程 ID。
    */
   login_id?: string;
+}
+
+/** Claim material returned only from start, not repeated in polling responses. */
+export interface AccountsLoginStartProof {
+  /** Private claim secret; present only in the successful start response. */
+  login_secret?: string;
+}
+
+/** One exchange operation, retried with the same random identifier for at most 60 seconds. */
+export interface AccountsLoginExchangeRequest extends AccountsLoginResultRequest {
+  /** Client-generated random URL-safe identifier, 20-128 characters; persist across transport retries. */
+  exchange_id: string;
 }
 
 /**
@@ -287,7 +305,7 @@ export type AccountsLoginStatus = "input_required" | "redirect_required" | "pend
 /**
  * 输入步骤结果。
  */
-export interface AccountsLoginInputRequiredResult {
+export interface AccountsLoginInputRequiredResult extends AccountsLoginStartProof {
   /**
    * 当前登录状态。
    */
@@ -312,7 +330,7 @@ export interface AccountsLoginInputRequiredResult {
 /**
  * OAuth 跳转步骤结果。
  */
-export interface AccountsLoginRedirectRequiredResult {
+export interface AccountsLoginRedirectRequiredResult extends AccountsLoginStartProof {
   /**
    * 当前登录状态。
    */
@@ -333,10 +351,8 @@ export interface AccountsLoginRedirectRequiredResult {
    */
   url: string;
 
-  /**
-   * OAuth state，等同于 `login_id`。
-   */
-  state: string;
+  /** Code displayed by the initiating CLI/Desktop before opening url; never include it in url. */
+  user_code?: string;
 }
 
 /**
@@ -362,7 +378,7 @@ export interface AccountsLoginPendingResult {
 /**
  * 登录完成结果。
  */
-export interface AccountsLoginDoneResult {
+export interface AccountsLoginDoneResult extends AccountsLoginStartProof {
   /**
    * 当前登录状态。
    */
@@ -379,7 +395,7 @@ export interface AccountsLoginDoneResult {
   provider?: string;
 
   /**
-   * City user token。
+   * City user token；仅 login/exchange 返回，start/continue/result 均不返回。
    */
   user_token?: string;
 

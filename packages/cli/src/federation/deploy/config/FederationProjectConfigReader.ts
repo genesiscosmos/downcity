@@ -110,8 +110,49 @@ function normalize_deployment(
     port,
     url: read_optional_string(input, "url"),
     scripts: normalize_scripts(read_record(input, "scripts")),
+    crons: normalize_crons(input.crons, target, config_path),
     resources: normalize_resources(read_record(input, "resources"), target, project_name),
   };
+}
+
+/** 校验最多三条 UTC 五字段数字 cron；空数组显式清空定时触发。 */
+function normalize_crons(
+  input: unknown,
+  target: FederationDeploymentTarget,
+  config_path: string,
+): string[] | undefined {
+  if (input === undefined) return undefined;
+  if (!Array.isArray(input) || input.length > 3) {
+    throw invalid_config(config_path, "deployment.crons must be an array of at most 3 cron expressions.");
+  }
+  if (target !== "cloudflare-workers") {
+    throw invalid_config(config_path, "deployment.crons requires cloudflare-workers.");
+  }
+  const limits = [[0, 59], [0, 23], [1, 31], [1, 12], [0, 6]] as const;
+  return input.map((value: unknown) => {
+    const fields = typeof value === "string" ? value.trim().split(/\s+/u) : [];
+    if (fields.length !== 5 || !fields.every((field, index) => {
+      const [minimum, maximum] = limits[index]!;
+      return field.split(",").every((part) => valid_cron_part(part, minimum, maximum));
+    })) {
+      throw invalid_config(config_path, "deployment.crons requires valid five-field numeric cron expressions.");
+    }
+    return fields.join(" ");
+  });
+}
+
+/** 校验单个通配符、数字或升序范围，以及可选的正整数步长。 */
+function valid_cron_part(part: string, minimum: number, maximum: number): boolean {
+  const match = /^(\*|\d+(?:-\d+)?)(?:\/(\d+))?$/u.exec(part);
+  if (!match) return false;
+  const step = match[2] === undefined ? 1 : Number(match[2]);
+  if (!Number.isSafeInteger(step) || step < 1 || step > maximum - minimum + 1) return false;
+  if (match[1] === "*") return true;
+  const bounds = match[1]!.split("-").map(Number);
+  const start = bounds[0]!;
+  const end = bounds[1] ?? start;
+  return Number.isSafeInteger(start) && Number.isSafeInteger(end)
+    && start >= minimum && end <= maximum && start <= end;
 }
 
 /** 读取用户提供的阶段脚本。 */

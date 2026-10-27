@@ -6,6 +6,7 @@
  * - 负责声明 env、生成支付方式、创建 Checkout、解析 webhook
  */
 
+import { decimal_minor_amount } from "../../confirmation.js";
 import {
   normalizeCurrency,
   normalizeOptionalText,
@@ -108,6 +109,8 @@ export function waffoPaymentProvider(options: WaffoPaymentProviderOptions = {}):
         payment_id: normalizeOptionalText(data.orderMerchantExternalId),
         provider_payment_id: payment_id,
         provider_order_id: order_id,
+        amount_minor: decimal_minor_amount(data.orderAmount, normalizeCurrency(data.orderCurrency)),
+        currency: normalizeCurrency(data.orderCurrency),
         ref: payment_id || order_id,
         meta: {
           provider: "waffo",

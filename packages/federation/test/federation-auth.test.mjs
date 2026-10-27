@@ -1,5 +1,5 @@
 /**
- * Federation Ed25519 user_token 与 Bureau 本地验签集成测试。
+ * Federation Ed25519 user_token、Bureau 本地验签与在线有效性检查集成测试。
  */
 
 import assert from "node:assert/strict"
@@ -131,7 +131,7 @@ test("Federation 注册 Bureau 服务入口并按 User Token 解析当前 Bureau
   }
 })
 
-test("Federation 不默认创建 Bureau Token，Bureau 使用 JWKS 本地验签", async () => {
+test("Federation 不默认创建 Bureau Token，Bureau 使用 JWKS 验签并在线确认有效性", async () => {
   const temp_dir = await fs.mkdtemp(path.join(os.tmpdir(), "downcity-bureau-local-"))
   try {
     const federation = create_test_federation({
@@ -197,7 +197,9 @@ test("Federation 不默认创建 Bureau Token，Bureau 使用 JWKS 本地验签"
       "/v1/bureaus/me",
       "/.well-known/downcity.json",
       "/.well-known/jwks.json",
+      "/v1/federation/token",
       "/v1/bureaus/me",
+      "/v1/federation/token",
     ])
     assert.equal(requested_paths.includes("/v1/accounts/identify"), false)
 

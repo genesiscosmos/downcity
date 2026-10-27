@@ -72,6 +72,14 @@ const checkout = await user.service("payment").action("checkout/create").invoke(
 });
 ```
 
+## 支付事件安全与恢复
+
+`PaymentService` 必须装配可用的 Federation Queue，创建 checkout 前会检查队列。webhook 完成 Provider 验签后先保存事件，再通过持久化 Inbox 入队；派发失败返回 503，已保存的事件仍可恢复。
+
+宿主需要周期调用 `payment.recover_events()`（也可调用管理员 action `events/recover`），以恢复丢失消息和过期执行租约。管理员可通过 `GET /v1/payment/events/inbox` 查看处理状态，通过 `POST /v1/payment/events/replay` 提交 `{ event_id }` 重放需要人工处理的事件；重放仍执行完整支付校验。
+
+确认 paid 时只接受已验签的安全整数本金、币种和 Provider 交易身份，并与本地订单核对。订单先持久化为 paid，再调用 `on_paid(record)`；回调失败后可重试，接入方必须按 `record.payment_id` 幂等发放 Credits。重复 paid 事件同样执行校验和回调重试，非 paid 通知只能更新 pending 订单。支付结果跳转页本身不确认付款。
+
 ## 包含的服务
 
 - `AccountsService`：统一账号服务容器，负责账号表、better-auth、profile、OAuth callback 和 `user_token` 签发

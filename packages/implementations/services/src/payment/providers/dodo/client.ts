@@ -43,6 +43,13 @@ export async function createDodoCheckoutSession(
   client: DodoPayments,
   input: DodoCreateCheckoutSessionInput,
 ): Promise<DodoCheckoutSessionResult> {
+  // SDK 的 amount 只对 pay_what_you_want 一次性产品生效；固定价产品会忽略它。
+  const product = await client.products.retrieve(input.product_id);
+  const price = product.price;
+  if (price.type !== "one_time_price" || !price.pay_what_you_want || price.currency.toLowerCase() !== input.currency.toLowerCase()
+    || price.price > input.payment.amount_minor || price.discount || price.discount_bps || price.purchasing_power_parity || !price.tax_inclusive) {
+    throw new Error("Dodo requires a matching tax-inclusive, undiscounted pay-what-you-want one-time product");
+  }
   const response = await client.checkoutSessions.create({
     product_cart: [{
       product_id: input.product_id,

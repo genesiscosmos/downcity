@@ -148,6 +148,10 @@ export interface PaymentProviderWebhookEvent {
   provider_payment_id?: string;
   /** provider order ID。 */
   provider_order_id?: string;
+  /** 已验签的实际支付本金，使用币种最小单位；不得从客户端或 metadata 推断。 */
+  amount_minor?: number;
+  /** 与可信支付本金对应的已验签币种代码。 */
+  currency?: string;
   /** 入账流水外部引用。 */
   ref?: string;
   /** 入账 metadata。 */

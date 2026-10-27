@@ -8,6 +8,7 @@
 import { httpError, InstallableService } from "@downcity/federation";
 import type { EnvRequirement, ServiceInstallContext } from "@downcity/federation";
 import { AccountsRuntime } from "./AccountsRuntime.js";
+import { login_flows } from "./login-schema.js";
 import { mergeAccountsEnvRequirements, normalizeAccountsProviders } from "./helpers.js";
 import { register_accounts_routes } from "./routes.js";
 import {
@@ -47,6 +48,7 @@ export class AccountsService extends InstallableService {
   readonly schema = {
     profile: userProfiles,
     login_states: accountsLoginStates,
+    login_flows,
     auth_users: authUsers,
     auth_sessions: authSessions,
     auth_accounts: authAccounts,
@@ -68,7 +70,7 @@ export class AccountsService extends InstallableService {
     this.instruction = ({ actions }) => [
       "提供 Downcity 的统一账号服务容器，具体登录方式由 email / phone / OAuth 等 provider 决定。",
       "provider 满足 required env 或 runtime 配置后，才会出现在 /providers 中供客户端使用。",
-      "登录开始时传入 bureau_id，认证成功后通过 login/result 读取绑定该 Bureau 的 user_token。",
+      "登录开始时传入 bureau_id 和 client_type，保存 login_secret；POST login/result 只查状态，完成后 POST login/exchange 一次性交换 Token。CLI/Desktop 必须展示 user_code 并在浏览器确认授权。",
       "OAuth 回调地址固定为 /v1/accounts/oauth/callback，服务会根据 Federation 公网地址生成完整回调 URL。",
       `当前暴露 ${actions.length} 个动作，常用流程由 /providers 返回的 provider 决定。`,
     ].join("\n");
@@ -90,7 +92,7 @@ export class AccountsService extends InstallableService {
 
   /** 初始化 better-auth 运行时。 */
   protected override async on_init(): Promise<void> {
-    this.require_runtime().initialize();
+    await this.require_runtime().initialize();
   }
 
   /** 向 UsageService 投影注册用户及首次创建时间。 */

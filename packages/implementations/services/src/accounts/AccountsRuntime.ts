@@ -10,10 +10,10 @@ import { betterAuth } from "better-auth/minimal";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { listAccountSessions, listAccountUsers } from "./admin-queries.js";
 import { AccountsStore } from "./AccountsStore.js";
-import { oauthErrorResponse, oauthSuccessResponse } from "./oauth-pages.js";
+import { oauthErrorResponse, oauthSuccessResponse, oauth_confirmation_response } from "./oauth-pages.js";
+import { LoginFlow } from "./LoginFlow.js";
 import {
   buildOAuthAuthorizeURL,
-  buildSocialProviders,
   readOAuthProviderId,
   resolveOAuthProfile,
   type OAuthProviderId,
@@ -29,13 +29,8 @@ import {
   authVerifications,
   type UserProfileRow,
 } from "./schema.js";
-import type { LoginStateRow } from "./rows.js";
 import type {
   AccountsEmailProvider,
-  AccountsLoginDoneResult,
-  AccountsLoginInputRequiredResult,
-  AccountsLoginRedirectRequiredResult,
-  AccountsLoginResult,
   AccountsOAuthProvider,
   AccountsProviderContext,
   AccountsProviderItem,
@@ -45,7 +40,7 @@ import type {
   AccountsRouteResult,
   AccountsRuntimeOptions,
 } from "./types/AccountsRuntime.js";
-import { randomToken, readErrorMessage } from "./utils.js";
+import { readErrorMessage } from "./utils.js";
 
 /** 本机登录使用的稳定用户 ID。 */
 const LOCAL_USER_ID = "local-user";
@@ -66,12 +61,18 @@ export class AccountsRuntime {
   /** Accounts 数据库事实访问器。 */
   private readonly store: AccountsStore;
 
+  /** Login proof, browser consent and result exchange boundary. */
+  readonly flow: LoginFlow;
+
   constructor(private readonly options: AccountsRuntimeOptions) {
     this.store = new AccountsStore(options.database);
+    this.flow = new LoginFlow(options.database);
   }
 
   /** 初始化 better-auth 及其 Provider 配置。 */
-  initialize(): void {
+  async initialize(): Promise<void> {
+    await this.store.invalidate_legacy_logins();
+    await this.flow.cleanup();
     this.auth = betterAuth({
       secret: this.options.read_env("BETTER_AUTH_SECRET"),
       database: drizzleAdapter(this.store.read_drizzle_database() as never, {
@@ -84,15 +85,22 @@ export class AccountsRuntime {
         },
       }),
       baseURL: this.options.read_base_url(),
+      basePath: "/v1/accounts/auth",
       user: { modelName: AUTH_USER_TABLE },
-      account: { modelName: AUTH_ACCOUNT_TABLE },
+      account: {
+        modelName: AUTH_ACCOUNT_TABLE,
+        accountLinking: { enabled: false },
+      },
       session: { modelName: AUTH_SESSION_TABLE },
       verification: { modelName: AUTH_VERIFICATION_TABLE },
       emailAndPassword: {
-        enabled: true,
+        enabled: Boolean(this.get_enabled_email_provider()),
         autoSignIn: false,
+        requireEmailVerification: true,
       },
       emailVerification: {
+        sendOnSignUp: true,
+        autoSignInAfterVerification: false,
         sendVerificationEmail: async ({ user, url }: { user: { email: string }; url: string }) => {
           const provider = this.get_enabled_email_provider();
           if (!provider) throw new Error("Email provider is not configured");
@@ -103,10 +111,8 @@ export class AccountsRuntime {
           });
         },
       },
-      socialProviders: buildSocialProviders(
-        this.options.read_env,
-        this.get_registered_oauth_provider_ids(),
-      ),
+      // OAuth uses the explicit Accounts consent flow, never native sign-in/linking endpoints.
+      socialProviders: {},
     } as any);
   }
 
@@ -117,7 +123,19 @@ export class AccountsRuntime {
 
   /** 读取 better-auth 原生 HTTP Handler。 */
   get_auth_handler(): (request: Request) => Promise<Response> {
-    return this.require_auth().handler;
+    return async (request) => {
+      const path = new URL(request.url).pathname;
+      // Native routes cannot bypass Accounts provider or login policies.
+      if (!this.get_enabled_email_provider()
+        || request.method !== "GET"
+        || path !== "/v1/accounts/auth/verify-email") {
+        return new Response("Not found", { status: 404 });
+      }
+      const result = await this.verify_email_account(this.install_context, {
+        token: new URL(request.url).searchParams.get("token") ?? "",
+      });
+      return Response.json(result.body, { status: result.status ?? 200, headers: { "cache-control": "no-store" } });
+    };
   }
 
   /** 当前服务是否启用本机账户登录。 */
@@ -135,52 +153,19 @@ export class AccountsRuntime {
     await this.options.require_active_bureau(bureau_id);
   }
 
-  /** 读取未过期的登录 state。 */
-  async read_login_state(state: string): Promise<LoginStateRow | null> {
-    return await this.store.read_login_state(state);
+  /** Select a configured provider before allocating any login flow. */
+  login_provider(provider_id: string): AccountsProviderItem | undefined {
+    return this.list_visible_providers().find((provider) => provider.id === provider_id && provider.enabled);
   }
 
-  /** 回填登录 state 的最终 User Token。 */
-  async resolve_login_state(state: string, user_token: string): Promise<void> {
-    await this.store.resolve_login_state(state, user_token);
-  }
-
-  /** 创建 OAuth 登录跳转结果。 */
-  async create_oauth_start_result(
-    bureau_id: string,
-    provider: OAuthProviderId,
-  ): Promise<{ data: AccountsLoginRedirectRequiredResult } | { error: string; status: number }> {
-    const config = this.get_enabled_oauth_provider_config(provider);
-    if (!config) return { error: "provider not configured", status: 400 };
-    const login_id = randomToken(24);
-    await this.store.create_login_state(bureau_id, provider, login_id);
-    return {
-      data: {
-        status: "redirect_required",
-        login_id,
-        provider,
-        url: buildOAuthAuthorizeURL(config, this.get_oauth_callback_url(), login_id),
-        state: login_id,
-      },
-    };
-  }
-
-  /** 创建 Email 登录输入步骤。 */
-  async start_email_login(
-    bureau_id: string,
-  ): Promise<{ data: AccountsLoginInputRequiredResult } | { error: string; status: number }> {
-    const email_provider = this.get_enabled_email_provider();
-    if (!email_provider) return { error: "email provider not configured", status: 400 };
-    const login_id = randomToken(24);
-    await this.store.create_login_state(bureau_id, "email", login_id);
-    return {
-      data: {
-        status: "input_required",
-        login_id,
-        provider: "email",
-        inputs: email_provider.method(this.get_provider_context()).inputs,
-      },
-    };
+  /** Start browser authorization through a server-side landing route, not a bare provider URL. */
+  async authorize_oauth(login_id: string, request: Request): Promise<Response> {
+    const row = await this.flow.read(login_id);
+    const provider = readOAuthProviderId(row.provider);
+    const config = provider ? this.get_enabled_oauth_provider_config(provider) : undefined;
+    if (!config) return oauthErrorResponse("OAuth provider is not enabled");
+    return await this.flow.authorize(login_id, request,
+      (state) => buildOAuthAuthorizeURL(config, this.get_oauth_callback_url(), state));
   }
 
   /** 校验 Email 密码并签发 User Token。 */
@@ -208,9 +193,24 @@ export class AccountsRuntime {
         return { error: error.message ?? "invalid email or password", status: 401 };
       }
       const data = await result.json() as {
-        user?: { id: string; email: string; name?: string; image?: string | null };
+        /** Authenticated user returned by successful password verification. */
+        user?: {
+          /** Stable nonempty authentication identity. */
+          id: string;
+          /** Normalized primary email. */
+          email: string;
+          /** Explicitly verified ownership of the primary email. */
+          emailVerified?: boolean;
+          /** Optional display name. */
+          name?: string;
+          /** Optional avatar URL. */
+          image?: string | null;
+        };
       };
-      const user_id = String(data.user?.id ?? "");
+      const user_id = String(data.user?.id ?? "").trim();
+      if (!user_id || !data.user?.email || data.user.emailVerified !== true) {
+        return { error: "verified email authentication required", status: 401 };
+      }
       if (user_id) {
         await this.store.upsert_profile({
           user_id,
@@ -235,37 +235,10 @@ export class AccountsRuntime {
     }
   }
 
-  /** 创建本机登录流程并立即写入签发结果。 */
-  async start_local_login(
-    ctx: ServiceInstallContext,
-    bureau_id: string,
-  ): Promise<AccountsLoginDoneResult> {
-    const login_id = randomToken(24);
-    const result = await this.create_local_login_token(ctx, bureau_id);
-    await this.store.create_login_state(bureau_id, "local", login_id, result.user_token);
-    return { status: "done", login_id, provider: "local" };
-  }
-
-  /** 读取登录流程的当前公开结果。 */
-  async read_login_result(
-    login_id: string,
-  ): Promise<{ data: AccountsLoginResult } | { error: string; status: number }> {
-    const entry = await this.store.read_login_state(login_id);
-    if (!entry) return { error: "login expired or invalid", status: 404 };
-    if (!entry.user_token) {
-      return {
-        data: { status: "pending", login_id, provider: entry.provider },
-      };
-    }
-    return {
-      data: {
-        status: "done",
-        login_id,
-        provider: entry.provider,
-        user_token: entry.user_token,
-        user_id: entry.provider === "local" ? LOCAL_USER_ID : undefined,
-      },
-    };
+  /** Sign a local token only after the route has validated the explicit local login policy. */
+  async local_login_token(ctx: ServiceInstallContext, bureau_id: string): Promise<string> {
+    if (!this.is_local_login_enabled()) throw new Error("local login is disabled");
+    return (await this.create_local_login_token(ctx, bureau_id)).user_token;
   }
 
   /** 注册 Email 账号并触发验证邮件。 */
@@ -314,7 +287,6 @@ export class AccountsRuntime {
         body: {
           success: true,
           message: "verification email sent",
-          verification_token: data.token,
           user_id: data.user?.id,
         },
       };
@@ -323,9 +295,9 @@ export class AccountsRuntime {
     }
   }
 
-  /** 验证 Email 并为指定 Bureau 签发 User Token。 */
+  /** 验证邮箱所有权；验证完成后通过正常密码登录获取 User Token。 */
   async verify_email_account(
-    ctx: ServiceInstallContext,
+    _ctx: ServiceInstallContext,
     input: { token?: string; bureau_id?: string },
   ): Promise<AccountsRouteResult> {
     if (!this.get_enabled_email_provider()) {
@@ -335,28 +307,18 @@ export class AccountsRuntime {
     if (!token) return { body: { error: "verification token required" }, status: 400 };
 
     try {
-      const result = await (this.require_auth().api as any).verifyEmail({
-        body: { token },
+      const result = await this.require_auth().api.verifyEmail({
+        query: { token },
         asResponse: true,
       });
-      const data = await result.json() as {
-        user?: { id: string; email: string; name?: string; image?: string | null };
-      };
-      const user_id = String(data.user?.id ?? "");
-      if (user_id) {
-        await this.store.upsert_profile({
-          user_id,
-          email: String(data.user?.email ?? ""),
-          display_name: String(data.user?.name ?? data.user?.email?.split("@")[0] ?? ""),
-          avatar_url: String(data.user?.image ?? ""),
-        });
+      if (!result.ok) {
+        return { body: { error: "email verification failed or expired" }, status: 400 };
       }
-      const user_token = await ctx.createUserToken({
-        bureau_id: String(input.bureau_id ?? ""),
-        user_id,
-        ttl: this.options.service_options.token_ttl,
-      });
-      return { body: { user_token: user_token.user_token, user_id } };
+      const data = await result.json() as { /** Dependency verification confirmation flag. */ status?: boolean };
+      if (data.status !== true) {
+        return { body: { error: "email verification was not confirmed" }, status: 400 };
+      }
+      return { body: { success: true, message: "email verified; sign in with your password" } };
     } catch (error) {
       return { body: { error: readErrorMessage(error) }, status: 500 };
     }
@@ -372,8 +334,7 @@ export class AccountsRuntime {
 
     try {
       if (!state || !code) throw new Error("Missing state or code");
-      const entry = await this.store.read_login_state(state);
-      if (!entry) throw new Error("login expired or invalid");
+      const entry = await this.flow.callback(state, request);
       const provider = readOAuthProviderId(String(entry.provider));
       if (!provider) throw new Error("Invalid OAuth provider");
       const profile = await resolveOAuthProfile(
@@ -383,12 +344,28 @@ export class AccountsRuntime {
         this.get_oauth_callback_url(),
       );
       const user_id = await this.store.ensure_oauth_user(profile, request);
-      const result = await this.create_user_token(entry.bureau_id, user_id);
-      await this.store.resolve_login_state(state, result.user_token);
+      const csrf = await this.flow.authenticated(entry, user_id);
+      return oauth_confirmation_response(entry.login_id, csrf, provider,
+        `${profile.display_name || profile.login} (${profile.provider_user_id})`,
+        entry.bureau_id, entry.client_type);
     } catch (caught) {
       return oauthErrorResponse(readErrorMessage(caught));
     }
-    return oauthSuccessResponse();
+  }
+
+  /** Issue a token only after browser-bound explicit authorization has passed. */
+  async confirm_oauth(request: Request): Promise<Response> {
+    try {
+      const entry = await this.flow.confirm(request);
+      await this.require_active_bureau(entry.bureau_id);
+      if (!entry.user_id) throw new Error("authenticated identity missing");
+      const result = await this.create_user_token(entry.bureau_id, entry.user_id);
+      await this.flow.ready(entry.login_id, "issuing", result.user_token);
+      return oauthSuccessResponse();
+    } catch (error) {
+      const status_code = (error as { /** 安全确认失败的 HTTP 状态。 */ statusCode?: number }).statusCode;
+      return oauthErrorResponse(readErrorMessage(error), status_code && status_code >= 400 && status_code < 600 ? status_code : 500);
+    }
   }
 
   /** 返回产品侧当前可见的登录方式。 */
@@ -450,13 +427,6 @@ export class AccountsRuntime {
   /** 构造 Provider 可读取的最小运行时上下文。 */
   private get_provider_context(): AccountsProviderContext {
     return { env: this.options.read_env };
-  }
-
-  /** 读取已注册 OAuth Provider ID。 */
-  private get_registered_oauth_provider_ids(): OAuthProviderId[] {
-    return this.options.providers
-      .filter((provider): provider is AccountsOAuthProvider => provider.type === "oauth")
-      .map((provider) => provider.id);
   }
 
   /** 读取当前环境下已启用的 Email Provider。 */

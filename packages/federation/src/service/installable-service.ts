@@ -50,6 +50,8 @@ export interface ServiceInstallContext {
   };
 
   createUserToken(input: CreateUserTokenInput): Promise<UserTokenIssueResult>;
+  /** 验证原始 User Token 后持久化撤销其 jti；重复撤销幂等，失败时抛错。 */
+  revoke_user_token(token: string): Promise<void>;
   /** 使用 Federation Key Ring 签发受众绑定的 Service Token。 */
   create_service_token(
     input: CreateFederationServiceTokenInput,
@@ -246,6 +248,11 @@ export abstract class InstallableService extends Service {
       async createUserToken(input) {
         if (!self._authenticator) throw new Error("Authenticator not ready");
         return self._authenticator.createToken(input);
+      },
+
+      async revoke_user_token(token) {
+        if (!self._authenticator) throw new Error("Authenticator not ready");
+        await self._authenticator.revoke_user_token(token);
       },
 
       async create_service_token(input) {

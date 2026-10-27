@@ -120,6 +120,7 @@ async function email_login(input: EmbassyLoginInput): Promise<EmbassyUserSession
   const embassy = new Embassy({ federation_url: input.federation_url });
   const result = await embassy.user.account.login({
     provider: "email",
+    client_type: "cli",
     bureau_id: input.bureau_id,
     input: { email, password },
   });
@@ -163,7 +164,7 @@ async function email_register(input: EmbassyLoginInput): Promise<EmbassyUserSess
   emitCliBlock({
     tone: "success",
     title: "Verification code sent",
-    note: "If email delivery is unavailable, check server logs for the verification code.",
+    note: "Open your verification email, or paste its verification token below.",
   });
 
   const verify_response = (await prompts({
@@ -178,14 +179,13 @@ async function email_register(input: EmbassyLoginInput): Promise<EmbassyUserSess
     token: verification_token,
     bureau_id: input.bureau_id,
   });
-  if (verified.error || !verified.user_token) {
-    throw new Error(verified.error || "verification failed: no token");
-  }
+  if (verified.error || !verified.success) throw new Error(verified.error || "verification failed");
+  const result = await embassy.user.account.login({
+    provider: "email", bureau_id: input.bureau_id, client_type: "cli", input: { email, password },
+  });
+  const done = read_done_login_result(result, "verified email login");
   return await build_verified_user_session({
-    ...input,
-    user_token: verified.user_token,
-    user_id: verified.user_id || registered.user_id,
-    user_label: email,
+    ...input, user_token: done.user_token, user_id: done.user_id || registered.user_id, user_label: email,
   });
 }
 
@@ -196,8 +196,12 @@ async function oauth_auth(
   const embassy = new Embassy({ federation_url: input.federation_url });
   const result = await embassy.user.account.login({
     provider,
+    client_type: "cli",
     bureau_id: input.bureau_id,
-    on_authorize: (authorization_url) => {
+    on_authorize: (authorization_url, user_code) => {
+      if (!user_code) throw new Error("Authorization code was not provided");
+      emitCliBlock({ tone: "info", title: "Confirm this sign-in", facts: [{ label: "authorization_code", value: user_code }],
+        note: "Enter this terminal’s code in the authorization page. Never use a code sent by another person." });
       const opened = open_system_browser(authorization_url);
       emitCliBlock({
         tone: opened ? "info" : "warning",
@@ -229,6 +233,7 @@ async function input_auth(
   const embassy = new Embassy({ federation_url: input.federation_url });
   const result = await embassy.user.account.login({
     provider,
+    client_type: "cli",
     bureau_id: input.bureau_id,
   });
   const done = read_done_login_result(result, "login");

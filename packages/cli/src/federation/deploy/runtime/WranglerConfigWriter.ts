@@ -38,6 +38,10 @@ export function writeWranglerConfig(
     "workers_dev = true",
   ];
 
+  if (config.deployment.crons !== undefined) {
+    lines.push("", "[triggers]", `crons = ${tomlArray(config.deployment.crons)}`);
+  }
+
   if (config.deployment.resources.d1) {
     lines.push(
       "",

@@ -17,6 +17,8 @@ test("Waffo provider maps paid webhook to a Payment order", async () => {
       orderId: "order_1",
       paymentId: "provider_pay_1",
       orderMerchantExternalId: "pay_1",
+      orderAmount: "5.00",
+      orderCurrency: "USD",
       orderMetadata: { payment_id: "pay_1" },
     },
   }, private_key))

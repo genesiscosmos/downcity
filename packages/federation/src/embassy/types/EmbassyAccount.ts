@@ -45,6 +45,9 @@ export interface EmbassyAccountProvider extends Record<string, unknown> {
 
 /** 开始登录流程的输入。 */
 export interface EmbassyAccountLoginStartInput extends Record<string, unknown> {
+  /** Explicit surface: web requires same-origin cookies; device is for BFF clients with human code confirmation. */
+  client_type: "web" | "cli" | "desktop" | "device";
+
   /** 登录 Provider ID。 */
   provider: string;
 
@@ -54,6 +57,8 @@ export interface EmbassyAccountLoginStartInput extends Record<string, unknown> {
 
 /** 继续登录流程的输入。 */
 export interface EmbassyAccountContinueInput extends Record<string, unknown> {
+  /** Private start proof; omit to use this accessor's current flow. Never place in URLs or logs. */
+  login_secret?: string;
   /** login_start 返回的登录流程 ID；省略时使用当前流程。 */
   login_id?: string;
 
@@ -63,6 +68,8 @@ export interface EmbassyAccountContinueInput extends Record<string, unknown> {
 
 /** 登录流程公共字段。 */
 export interface EmbassyAccountLoginBaseResult extends Record<string, unknown> {
+  /** Private claim credential, returned only by login_start; retain securely for resumed flows. */
+  login_secret?: string;
   /** 当前登录状态。 */
   status: "input_required" | "redirect_required" | "pending" | "done";
 
@@ -93,8 +100,8 @@ export interface EmbassyAccountRedirectResult extends EmbassyAccountLoginBaseRes
   /** 宿主需要打开的授权 URL。 */
   url: string;
 
-  /** OAuth state。 */
-  state?: string;
+  /** Display this code in the originating CLI/Desktop before opening url; browser requires it to approve delivery. */
+  user_code?: string;
 }
 
 /** 登录流程仍在等待。 */
@@ -108,7 +115,7 @@ export interface EmbassyAccountDoneResult extends EmbassyAccountLoginBaseResult 
   /** 当前状态固定为完成。 */
   status: "done";
 
-  /** 登录成功后签发的 User Token。 */
+  /** User Token, present only after exchange or successful high-level login; status never returns it. */
   user_token?: string;
 
   /** 登录成功后的 Federation 用户 ID。 */
@@ -130,8 +137,8 @@ export interface EmbassyAccountLoginOptions extends EmbassyAccountLoginStartInpu
   /** 输入型 Provider 需要提交的字段。 */
   input?: Record<string, unknown>;
 
-  /** OAuth 授权 URL 发布给宿主的回调。 */
-  on_authorize?: (url: string) => void | Promise<void>;
+  /** Publish authorization URL and optional device code. Display the code before opening the browser. */
+  on_authorize?: (url: string, user_code?: string) => void | Promise<void>;
 
   /** OAuth 或异步 Provider 的轮询间隔，单位毫秒。 */
   poll_interval_ms?: number;

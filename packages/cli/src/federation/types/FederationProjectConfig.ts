@@ -75,6 +75,12 @@ export interface FederationDeploymentConfig {
   url?: string;
   /** 对内置构建和部署阶段的脚本覆盖。 */
   scripts?: FederationDeploymentScriptsConfig;
+  /**
+   * Cloudflare Workers 的 UTC 定时触发规则，最多 3 条五字段 cron。
+   * 按分钟、小时、日、月、星期排列，支持数字、*、范围、列表与步长；星期为 0–6。
+   * 例如分钟字段使用每五分钟步长；Worker 需自行实现 scheduled 入口。
+   */
+  crons?: string[];
   /** 部署目标需要的资源声明。 */
   resources: FederationProjectResourcesConfig;
 }

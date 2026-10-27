@@ -134,8 +134,13 @@ test("Cloudflare 模板通过统一 deployment 配置生成 Wrangler binding", a
       name: "cloudflare-test",
     }));
 
+    const config_path = path.join(project_dir, "federation.json");
+    const raw_config = JSON.parse(fs.readFileSync(config_path, "utf8"));
+    raw_config.deployment.crons = ["  */5   * * * *  "];
+    fs.writeFileSync(config_path, JSON.stringify(raw_config));
     const config_file = reader.read_federation_project_config(project_dir);
     assert.equal(config_file.config.deployment.target, "cloudflare-workers");
+    assert.deepEqual(config_file.config.deployment.crons, ["*/5 * * * *"]);
     assert.equal(config_file.config.deployment.resources.d1.name, "cloudflare-test-db");
     assert.equal(config_file.config.deployment.resources.queue.name, "cloudflare-test-queue");
     assert.equal(config_file.config.deployment.resources.storage.name, "cloudflare-test-storage");
@@ -149,6 +154,7 @@ test("Cloudflare 模板通过统一 deployment 配置生成 Wrangler binding", a
     assert.match(wrangler, /database_name = "cloudflare-test-db"/u);
     assert.match(wrangler, /queue = "cloudflare-test-queue"/u);
     assert.match(wrangler, /bucket_name = "cloudflare-test-storage"/u);
+    assert.ok(wrangler.includes('[triggers]\ncrons = ["*/5 * * * *"]'));
     assert.doesNotMatch(wrangler, /DOWNCITY_FEDERATION_ADMIN_/u);
     fs.rmSync(path.dirname(result.config_path), { recursive: true, force: true });
   } finally {

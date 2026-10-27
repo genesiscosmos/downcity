@@ -3,6 +3,7 @@
  *
  * Bureau 使用绑定自身的机器凭证访问 Federation，并使用 Federation JWKS 在本地
  * 验证统一 User Token audience，再校验已签名的 `bureau_id` 与自身身份一致。
+ * 每次建立受保护请求身份时在线检查 Token 撤销状态；检查不可用时拒绝访问。
  */
 
 import { decodeProtectedHeader, importJWK, jwtVerify } from "jose";
@@ -34,7 +35,7 @@ interface BureauCache {
   expires_at: number;
 }
 
-/** 已通过本地验签的用户后端会话。 */
+/** 已通过本地验签及 Federation 在线有效性检查的用户后端会话。 */
 export class BureauUser {
   /** 当前用户身份。 */
   readonly identity: BureauIdentity;
@@ -115,7 +116,7 @@ export class Bureau {
     };
   }
 
-  /** 从 HTTP Request 或 user_token 中本地识别 Federation 用户。 */
+  /** 从请求或 Token 识别用户，并在线确认未撤销；不缓存有效性结果。 */
   async identify(input: Request | string): Promise<BureauIdentity> {
     const user_token = typeof input === "string" ? read_token_string(input) : read_request_token(input);
     const normalized_token = normalize_user_token(user_token);
@@ -140,13 +141,15 @@ export class Bureau {
       if (payload.bureau_id !== bureau_id) {
         throw httpError(401, "User token belongs to another Bureau");
       }
-      return {
+      const identity: BureauIdentity = {
         user_id: payload.user_id,
         bureau_id: payload.bureau_id,
         metadata: payload.metadata ?? {},
         token_id: payload.jti,
         expires_at: payload.exp,
       };
+      await this.require_active_user_token(user_token, identity);
+      return identity;
     } catch (error) {
       if (is_http_error(error)) throw error;
       throw map_identify_error(error);
@@ -158,6 +161,36 @@ export class Bureau {
     const user_token = typeof input === "string" ? read_token_string(input) : read_request_token(input);
     const identity = await this.identify(user_token);
     return new BureauUser(identity, this.federation_url, user_token, this.fetcher);
+  }
+
+  /** 对本次请求做在线有效性校验，拒绝撤销、身份不匹配与不可用响应。 */
+  private async require_active_user_token(user_token: string, identity: BureauIdentity): Promise<void> {
+    let response: Response;
+    try {
+      response = await this.fetcher(`${this.federation_url}/v1/federation/token`, {
+        method: "GET",
+        headers: { authorization: `Bearer ${user_token}`, accept: "application/json" },
+        cache: "no-store",
+        redirect: "manual",
+        signal: AbortSignal.timeout(10_000),
+      });
+    } catch {
+      throw httpError(503, "Federation token validity check unavailable");
+    }
+    if (!response.ok) {
+      throw httpError([401, 403].includes(response.status) ? 401 : 503,
+        "Federation user token is inactive or validity check unavailable");
+    }
+    let result: Record<string, unknown>;
+    try {
+      result = await response.json() as Record<string, unknown>;
+    } catch {
+      throw httpError(503, "Invalid Federation token validity response");
+    }
+    if (result.active !== true || result.token_id !== identity.token_id
+      || result.user_id !== identity.user_id || result.bureau_id !== identity.bureau_id) {
+      throw httpError(401, "Federation user token is inactive");
+    }
   }
 
   private async get_cache(force_refresh: boolean): Promise<BureauCache> {

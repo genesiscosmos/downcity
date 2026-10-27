@@ -108,6 +108,8 @@ export function dodoPaymentProvider(options: DodoPaymentProviderOptions = {}): P
         payment_id: normalizeOptionalText(payment_event?.data.metadata.payment_id),
         provider_session_id: checkout_session_id,
         provider_payment_id,
+        amount_minor: payment_event?.data.total_amount,
+        currency: payment_event?.data.currency,
         ref: provider_payment_id || checkout_session_id,
         meta: {
           provider: "dodo",

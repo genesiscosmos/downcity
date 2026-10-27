@@ -3,16 +3,16 @@
  *
  * 关键说明（中文）
  * - OAuth callback 面向浏览器，不返回 JSON。
- * - 页面只表达成功或失败，真实 token 统一通过 `login/result` 读取。
+ * - 认证后的确认页只展示可信 Provider 身份和注册目标；Token 由发起端独立交换。
  */
 
 /**
  * 创建 OAuth 失败响应。
  */
-export function oauthErrorResponse(error: string): Response {
+export function oauthErrorResponse(error: string, status = 400): Response {
   return new Response(OAUTH_ERROR_HTML.replace("{{ERROR}}", escapeHTML(error)), {
-    status: 200,
-    headers: { "content-type": "text/html; charset=utf-8" },
+    status,
+    headers: oauth_page_headers,
   });
 }
 
@@ -22,7 +22,44 @@ export function oauthErrorResponse(error: string): Response {
 export function oauthSuccessResponse(): Response {
   return new Response(OAUTH_SUCCESS_HTML, {
     status: 200,
-    headers: { "content-type": "text/html; charset=utf-8" },
+    headers: oauth_page_headers,
+  });
+}
+
+/** Restrict result pages to local styles, prevent framing and suppress callback URL referrers. */
+const oauth_page_headers = {
+  "content-type": "text/html; charset=utf-8",
+  "cache-control": "no-store",
+  "referrer-policy": "no-referrer",
+  "content-security-policy": "default-src 'none'; style-src 'unsafe-inline'; frame-ancestors 'none'; base-uri 'none'",
+  "x-content-type-options": "nosniff",
+};
+
+/** Render consent using only server-selected provider identity and registered Bureau ID. */
+export function oauth_confirmation_response(
+  login_id: string,
+  csrf: string,
+  provider: string,
+  identity: string,
+  bureau_id: string,
+  client_type: string,
+): Response {
+  const hidden = (name: string, value: string) => `<input type="hidden" name="${name}" value="${escapeHTML(value)}">`;
+  return new Response(`<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>Authorize Downcity</title>
+<body><main><h1>Authorize Downcity ${escapeHTML(client_type)}</h1>
+<p>Signed in through ${escapeHTML(provider)} as ${escapeHTML(identity)}.</p>
+<p>Authorize access to registered Bureau: <strong>${escapeHTML(bureau_id)}</strong></p>
+<p>Only approve a login you started. Never enter a code sent by another person.</p>
+<form method="post" action="/v1/accounts/oauth/confirm">${hidden("login_id", login_id)}${hidden("csrf", csrf)}
+${client_type === "web" ? "" : '<label>Enter the code displayed by your original Downcity client <input name="user_code" required autocomplete="off" maxlength="16"></label>'}
+<button type="submit">Authorize this login</button></form></main></body></html>`, {
+    headers: {
+      "content-type": "text/html; charset=utf-8",
+      "cache-control": "no-store",
+      "referrer-policy": "no-referrer",
+      "content-security-policy": "default-src 'none'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'",
+      "x-content-type-options": "nosniff",
+    },
   });
 }
 
@@ -85,7 +122,7 @@ const OAUTH_SUCCESS_HTML = `<!DOCTYPE html>
 <body>
 <div class="box">
   <h1>Login Successful</h1>
-  <p>You can close this window and return to the CLI.</p>
+  <p>Authorization confirmed. Close this window and return to the client that started this login.</p>
 </div>
 </body>
 </html>`;

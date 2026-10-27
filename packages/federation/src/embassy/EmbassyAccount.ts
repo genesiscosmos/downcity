@@ -21,7 +21,12 @@ const DEFAULT_MAX_POLL_ATTEMPTS = 180;
 /** Federation Accounts Service 访问器。 */
 export class EmbassyAccount {
   private readonly options: EmbassyAccountOptions;
+  /** Public identifier of the current flow. */
   private login_id?: string;
+  /** Private initiating-client claim proof. */
+  private login_secret?: string;
+  /** Exchange identifier retained across transport retries. */
+  private exchange_id?: string;
 
   constructor(options: EmbassyAccountOptions) {
     this.options = options;
@@ -42,7 +47,8 @@ export class EmbassyAccount {
       .action("login/start")
       .invoke<EmbassyAccountLoginResult>(input);
     this.login_id = read_login_id(result);
-    this.accept_user_token(result);
+    this.login_secret = read_required_login_id(result.login_secret);
+    this.exchange_id = undefined;
     return result;
   }
 
@@ -51,25 +57,50 @@ export class EmbassyAccount {
     input: EmbassyAccountContinueInput,
   ): Promise<EmbassyAccountLoginResult> {
     const login_id = read_required_login_id(input.login_id ?? this.login_id);
+    if (input.login_secret) {
+      if (login_id !== this.login_id) this.exchange_id = undefined;
+      this.login_id = login_id;
+      this.login_secret = input.login_secret;
+    }
+    if (login_id !== this.login_id) throw new Error("login proof for this flow is required");
     const result = await this.options.accounts()
       .action("login/continue")
       .invoke<EmbassyAccountLoginResult>({
         ...input,
         login_id,
+        login_secret: read_required_login_id(this.login_secret),
       });
     this.login_id = read_login_id(result);
-    this.accept_user_token(result);
     return result;
   }
 
-  /** 查询当前登录流程状态。 */
-  async status(login_id?: string): Promise<EmbassyAccountLoginResult> {
+  /** Query state only. Supply both fields to restore a securely persisted flow after web navigation. */
+  async status(login_id?: string, login_secret?: string): Promise<EmbassyAccountLoginResult> {
     const current_login_id = read_required_login_id(login_id ?? this.login_id);
-    const result = await this.options.accounts()
-      .get<EmbassyAccountLoginResult>("login/result", {
-        login_id: current_login_id,
-      });
-    this.login_id = read_login_id(result);
+    if (login_secret) {
+      if (current_login_id !== this.login_id) this.exchange_id = undefined;
+      this.login_id = current_login_id;
+      this.login_secret = login_secret;
+    }
+    if (current_login_id !== this.login_id) throw new Error("login proof for this flow is required");
+    return await this.options.accounts().action("login/result").invoke<EmbassyAccountLoginResult>({
+      login_id: current_login_id,
+      login_secret: read_required_login_id(this.login_secret),
+    });
+  }
+
+  /** Exchange once; retry this method after transport failure to reuse the same exchange_id. */
+  async exchange(exchange_id?: string): Promise<EmbassyAccountDoneResult> {
+    const login_id = read_required_login_id(this.login_id);
+    const login_secret = read_required_login_id(this.login_secret);
+    if (exchange_id && this.exchange_id && exchange_id !== this.exchange_id) {
+      throw new Error("reuse the original exchange_id for login retries");
+    }
+    this.exchange_id ??= exchange_id ?? crypto.randomUUID();
+    const result = await this.options.accounts().action("login/exchange").invoke<EmbassyAccountDoneResult>({
+      login_id, login_secret, exchange_id: this.exchange_id,
+    });
+    if (!result.user_token) throw new Error("login exchange returned no token");
     this.accept_user_token(result);
     return result;
   }
@@ -90,14 +121,14 @@ export class EmbassyAccount {
     }
     if (result.status === "redirect_required") {
       if (!options.on_authorize) return result;
-      await options.on_authorize(result.url);
+      await options.on_authorize(result.url, result.user_code);
       return await this.poll_until_complete(options);
     }
     if (result.status === "pending") {
       return await this.poll_until_complete(options);
     }
     if (result.status === "done" && !result.user_token) {
-      return await this.status(result.login_id);
+      return await this.exchange();
     }
     return result;
   }
@@ -107,9 +138,19 @@ export class EmbassyAccount {
     return this.options.read_user_token();
   }
 
-  /** 清理当前 Embassy 实例中的 User Session。 */
-  logout(): void {
+  /** Revoke before clearing local credentials; failure preserves the token for retry. */
+  async logout(): Promise<void> {
+    if (this.options.read_user_token()) {
+      try {
+        await this.options.accounts().action("logout").invoke({});
+      } catch (error) {
+        // 已撤销/到期可安全清理；网络或存储故障必须保留凭据以便重试。
+        if ((error as { /** HTTP 鉴权失败状态。 */ status?: number }).status !== 401) throw error;
+      }
+    }
     this.login_id = undefined;
+    this.login_secret = undefined;
+    this.exchange_id = undefined;
     this.options.update_user_token(undefined);
   }
 
@@ -129,7 +170,7 @@ export class EmbassyAccount {
     let result: EmbassyAccountLoginResult | undefined;
     for (let attempt = 0; attempt < max_attempts; attempt += 1) {
       result = await this.status();
-      if (result.status === "done") return result;
+      if (result.status === "done") return await this.exchange();
       await new Promise<void>((resolve) => setTimeout(resolve, interval_ms));
     }
     throw new Error("Federation account login timed out");

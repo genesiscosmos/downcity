@@ -65,13 +65,8 @@ export interface RegisterResult {
  * email verify 结果。
  */
 export interface VerifyResult {
-  /** Federation User Token。 */
-  user_token?: string;
-
-  /**
-   * 用户 ID。
-   */
-  user_id?: string;
+  /** 仅确认邮箱归属成功；随后必须正常密码登录领取凭证。 */
+  success?: boolean;
 
   /**
    * 服务端错误信息。

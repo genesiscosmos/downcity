@@ -1,3 +1,4 @@
+/** Existing Accounts integration cases exercise verified login and explicit OAuth delivery authorization. */
 import assert from "node:assert/strict"
 import fs from "node:fs/promises"
 import os from "node:os"
@@ -20,7 +21,7 @@ test("accountsService registers users, logs in, and issues Federation tokens", a
 
   try {
     process.chdir(tempDir)
-    const { base, adminSecret } = await setupBase(tempDir)
+    const { base, adminSecret, verification_emails } = await setupBase(tempDir)
 
     const city = await (await base.fetch(adminRequest(adminSecret, {
       path: "/v1/bureaus/create",
@@ -36,18 +37,30 @@ test("accountsService registers users, logs in, and issues Federation tokens", a
     assert.equal(registered.success, true)
     assert.equal(typeof registered.user_id, "string")
 
-    if (registered.verification_token) {
-      const verifyResponse = await base.fetch(jsonRequest("/v1/accounts/verify-email", {
-        token: registered.verification_token,
-        bureau_id: city.bureau_id,
-      }))
-      assert.equal(verifyResponse.status, 200)
-      const verified = await verifyResponse.json()
-      assert.equal(verified.user_token.startsWith("ub_"), true)
-    }
+    assert.equal(registered.verification_token, undefined)
+    assert.equal(verification_emails.length, 1)
+    const verification_url = new URL(verification_emails[0].text.replace(/^Verification: /, ""))
+    const unverified_start = await (await base.fetch(jsonRequest("/v1/accounts/login/start", {
+      provider: "email", client_type: "cli", bureau_id: city.bureau_id,
+    }))).json()
+    const unverified_login = await base.fetch(jsonRequest("/v1/accounts/login/continue", {
+      login_id: unverified_start.login_id,
+      login_secret: unverified_start.login_secret,
+      input: { email: "user@example.com", password: "password123" },
+    }))
+    assert.equal(unverified_login.status, 401)
+    assert.equal((await unverified_login.json()).user_token, undefined)
+    const verify_response = await base.fetch(jsonRequest("/v1/accounts/verify-email", {
+      token: verification_url.searchParams.get("token"),
+    }))
+    assert.equal(verify_response.status, 200)
+    const verified = await verify_response.json()
+    assert.equal(verified.success, true)
+    assert.equal(verified.user_token, undefined)
 
     const authStartResponse = await base.fetch(jsonRequest("/v1/accounts/login/start", {
       provider: "email",
+      client_type: "cli",
       bureau_id: city.bureau_id,
     }))
     assert.equal(authStartResponse.status, 200)
@@ -59,6 +72,7 @@ test("accountsService registers users, logs in, and issues Federation tokens", a
 
     const authContinueResponse = await base.fetch(jsonRequest("/v1/accounts/login/continue", {
       login_id: authStarted.login_id,
+      login_secret: authStarted.login_secret,
       input: {
         email: "user@example.com",
         password: "password123",
@@ -69,12 +83,8 @@ test("accountsService registers users, logs in, and issues Federation tokens", a
     assert.equal(authContinued.status, "done")
     assert.equal(authContinued.login_id, authStarted.login_id)
 
-    const authResultResponse = await base.fetch(new Request(`http://localhost/v1/accounts/login/result?login_id=${authStarted.login_id}`))
-    assert.equal(authResultResponse.status, 200)
-    const authResult = await authResultResponse.json()
-    assert.equal(authResult.status, "done")
+    const authResult = await exchange_completed_login(base, authStarted)
     assert.equal(authResult.provider, "email")
-    assert.equal(authResult.user_token.startsWith("ub_"), true)
 
     const meResponse = await base.fetch(new Request("http://localhost/v1/accounts/me", {
       method: "GET",
@@ -86,6 +96,14 @@ test("accountsService registers users, logs in, and issues Federation tokens", a
     const me = await meResponse.json()
     assert.equal(me.user.user_id, registered.user_id)
     assert.equal(me.user.bureau_id, city.bureau_id)
+    const logout = await base.fetch(new Request("http://localhost/v1/accounts/logout", {
+      method: "POST", headers: { authorization: `Bearer ${authResult.user_token}` }, body: "{}",
+    }))
+    assert.equal(logout.status, 200)
+    const revoked = await base.fetch(new Request("http://localhost/v1/federation/token", {
+      headers: { authorization: `Bearer ${authResult.user_token}` },
+    }))
+    assert.equal(revoked.status, 401)
   } finally {
     process.chdir(cwd)
     await fs.rm(tempDir, { recursive: true, force: true })
@@ -247,6 +265,7 @@ test("accountsService exposes local login when enabled", async () => {
 
     const authStartResponse = await base.fetch(jsonRequest("/v1/accounts/login/start", {
       provider: "local",
+      client_type: "cli",
       bureau_id: city.bureau_id,
     }))
     assert.equal(authStartResponse.status, 200)
@@ -255,13 +274,8 @@ test("accountsService exposes local login when enabled", async () => {
     assert.equal(authStarted.provider, "local")
     assert.equal(typeof authStarted.login_id, "string")
 
-    const authResultResponse = await base.fetch(new Request(`http://localhost/v1/accounts/login/result?login_id=${authStarted.login_id}`))
-    assert.equal(authResultResponse.status, 200)
-    const authResult = await authResultResponse.json()
-    assert.equal(authResult.status, "done")
+    const authResult = await exchange_completed_login(base, authStarted)
     assert.equal(authResult.provider, "local")
-    assert.equal(authResult.user_id, "local-user")
-    assert.equal(authResult.user_token.startsWith("ub_"), true)
 
     const meResponse = await base.fetch(new Request("http://localhost/v1/accounts/me", {
       method: "GET",
@@ -277,7 +291,7 @@ test("accountsService exposes local login when enabled", async () => {
   }
 })
 
-test("accountsService exposes better-auth passthrough as an installed public route", async () => {
+test("accountsService rejects native session passthrough outside its allowlist", async () => {
   const cwd = process.cwd()
   const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "downcity-accounts-auth-route-"))
 
@@ -293,8 +307,8 @@ test("accountsService exposes better-auth passthrough as an installed public rou
     }))
     const body = await response.text()
 
-    assert.notEqual(response.status, 401)
-    assert.doesNotMatch(body, /Authentication required/)
+    assert.equal(response.status, 404)
+    assert.equal(body, "Not found")
   } finally {
     process.chdir(cwd)
     await fs.rm(tempDir, { recursive: true, force: true })
@@ -324,17 +338,20 @@ test("accountsService does not expose email login without an email provider", as
 
     const loginResponse = await base.fetch(jsonRequest("/v1/accounts/login/start", {
       provider: "email",
+      client_type: "cli",
       bureau_id: bureau.bureau_id,
     }))
     assert.equal(loginResponse.status, 400)
-    assert.deepEqual(await loginResponse.json(), { error: "email provider not configured" })
+    const login_error = await loginResponse.json()
+    assert.equal(login_error.error.message, "login provider is not enabled")
+    assert.equal(typeof login_error.error.type, "string")
   } finally {
     process.chdir(cwd)
     await fs.rm(tempDir, { recursive: true, force: true })
   }
 })
 
-test("accountsService completes Google OAuth callback and resolves the state token", async () => {
+test("accountsService delivers Google OAuth login only after browser confirmation and exchange", async () => {
   const cwd = process.cwd()
   const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "downcity-accounts-service-"))
   const originalFetch = globalThis.fetch
@@ -353,16 +370,18 @@ test("accountsService completes Google OAuth callback and resolves the state tok
 
     const startResponse = await base.fetch(jsonRequest("/v1/accounts/login/start", {
       provider: "google",
+      client_type: "cli",
       bureau_id: city.bureau_id,
     }))
     assert.equal(startResponse.status, 200)
     const start = await startResponse.json()
     assert.equal(start.status, "redirect_required")
     assert.equal(typeof start.login_id, "string")
-    assert.equal(start.state, start.login_id)
-    assert.equal(typeof start.state, "string")
+    assert.equal(start.state, undefined)
+    assert.equal(typeof start.login_secret, "string")
     assert.equal(start.provider, "google")
-    assert.match(start.url, /^https:\/\/accounts\.google\.com\/o\/oauth2\/v2\/auth\?/)
+    const authorization = await begin_oauth_authorization(base, start)
+    assert.match(authorization.provider_url, /^https:\/\/accounts\.google\.com\/o\/oauth2\/v2\/auth\?/)
 
     globalThis.fetch = async (input, init) => {
       const url = typeof input === "string" ? input : input.url
@@ -387,16 +406,9 @@ test("accountsService completes Google OAuth callback and resolves the state tok
       throw new Error(`Unexpected fetch URL: ${url}`)
     }
 
-    const callbackResponse = await base.fetch(new Request(`http://localhost/v1/accounts/oauth/callback?state=${start.state}&code=test-google-code`))
-    assert.equal(callbackResponse.status, 200)
-    assert.match(await callbackResponse.text(), /Login Successful/)
-
-    const loginResultResponse = await base.fetch(new Request(`http://localhost/v1/accounts/login/result?login_id=${start.login_id}`))
-    assert.equal(loginResultResponse.status, 200)
-    const loginResult = await loginResultResponse.json()
-    assert.equal(loginResult.status, "done")
+    await confirm_oauth_authorization(base, start, authorization, "test-google-code")
+    const loginResult = await exchange_completed_login(base, start)
     assert.equal(loginResult.provider, "google")
-    assert.equal(loginResult.user_token.startsWith("ub_"), true)
 
     const meResponse = await base.fetch(new Request("http://localhost/v1/accounts/me", {
       method: "GET",
@@ -415,7 +427,7 @@ test("accountsService completes Google OAuth callback and resolves the state tok
   }
 })
 
-test("accountsService completes WeChat website OAuth callback and resolves the state token", async () => {
+test("accountsService delivers WeChat OAuth login only after browser confirmation and exchange", async () => {
   const cwd = process.cwd()
   const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "downcity-accounts-service-"))
   const originalFetch = globalThis.fetch
@@ -434,17 +446,19 @@ test("accountsService completes WeChat website OAuth callback and resolves the s
 
     const startResponse = await base.fetch(jsonRequest("/v1/accounts/login/start", {
       provider: "wechat",
+      client_type: "cli",
       bureau_id: city.bureau_id,
     }))
     assert.equal(startResponse.status, 200)
     const start = await startResponse.json()
     assert.equal(start.status, "redirect_required")
     assert.equal(typeof start.login_id, "string")
-    assert.equal(start.state, start.login_id)
-    assert.equal(typeof start.state, "string")
+    assert.equal(start.state, undefined)
+    assert.equal(typeof start.login_secret, "string")
     assert.equal(start.provider, "wechat")
-    assert.match(start.url, /^https:\/\/open\.weixin\.qq\.com\/connect\/qrconnect\?/)
-    assert.match(start.url, /scope=snsapi_login/)
+    const authorization = await begin_oauth_authorization(base, start)
+    assert.match(authorization.provider_url, /^https:\/\/open\.weixin\.qq\.com\/connect\/qrconnect\?/)
+    assert.match(authorization.provider_url, /scope=snsapi_login/)
 
     globalThis.fetch = async (input) => {
       const url = typeof input === "string" ? input : input.url
@@ -480,16 +494,9 @@ test("accountsService completes WeChat website OAuth callback and resolves the s
       throw new Error(`Unexpected fetch URL: ${url}`)
     }
 
-    const callbackResponse = await base.fetch(new Request(`http://localhost/v1/accounts/oauth/callback?state=${start.state}&code=test-wechat-code`))
-    assert.equal(callbackResponse.status, 200)
-    assert.match(await callbackResponse.text(), /Login Successful/)
-
-    const loginResultResponse = await base.fetch(new Request(`http://localhost/v1/accounts/login/result?login_id=${start.login_id}`))
-    assert.equal(loginResultResponse.status, 200)
-    const loginResult = await loginResultResponse.json()
-    assert.equal(loginResult.status, "done")
+    await confirm_oauth_authorization(base, start, authorization, "test-wechat-code")
+    const loginResult = await exchange_completed_login(base, start)
     assert.equal(loginResult.provider, "wechat")
-    assert.equal(loginResult.user_token.startsWith("ub_"), true)
 
     const meResponse = await base.fetch(new Request("http://localhost/v1/accounts/me", {
       method: "GET",
@@ -509,7 +516,86 @@ test("accountsService completes WeChat website OAuth callback and resolves the s
   }
 })
 
+/** Existing OAuth cases open the landing URL to obtain the browser binding and independent state. */
+async function begin_oauth_authorization(base, start) {
+  assert.equal(new URL(start.url).pathname, "/v1/accounts/oauth/authorize")
+  assert.equal(new URL(start.url).searchParams.get("login_secret"), null)
+  assert.equal(typeof start.user_code, "string")
+  const response = await base.fetch(new Request(start.url))
+  assert.equal(response.status, 303)
+  const provider_url = response.headers.get("location")
+  const state = new URL(provider_url).searchParams.get("state")
+  assert.ok(state)
+  assert.notEqual(state, start.login_id)
+  const cookie = response.headers.get("set-cookie")?.split(";")[0]
+  assert.ok(cookie)
+  return { provider_url, state, cookie }
+}
+
+/** Authentication alone remains pending; explicit browser consent plus the original code allows exchange. */
+async function confirm_oauth_authorization(base, start, authorization, code) {
+  const callback_response = await base.fetch(new Request(
+    `http://localhost/v1/accounts/oauth/callback?state=${authorization.state}&code=${code}`,
+    { headers: { cookie: authorization.cookie } },
+  ))
+  assert.equal(callback_response.status, 200)
+  const html = await callback_response.text()
+  assert.match(html, /Authorize this login/)
+  const csrf = /name="csrf" value="([^"]+)"/.exec(html)?.[1]
+  assert.ok(csrf)
+  const pending_response = await base.fetch(jsonRequest("/v1/accounts/login/result", {
+    login_id: start.login_id, login_secret: start.login_secret,
+  }))
+  assert.equal(pending_response.status, 200)
+  const pending = await pending_response.json()
+  assert.equal(pending.status, "pending")
+  assert.equal(pending.user_token, undefined)
+  const premature = await base.fetch(jsonRequest("/v1/accounts/login/exchange", {
+    login_id: start.login_id, login_secret: start.login_secret, exchange_id: crypto.randomUUID(),
+  }))
+  assert.equal(premature.status, 409)
+  const wrong_code = await base.fetch(new Request("http://localhost/v1/accounts/oauth/confirm", {
+    method: "POST", headers: { cookie: authorization.cookie, origin: "http://localhost" },
+    body: new URLSearchParams({ login_id: start.login_id, csrf, user_code: "NOT-THE-CODE" }),
+  }))
+  assert.equal(wrong_code.status, 403)
+  const confirmation = await base.fetch(new Request("http://localhost/v1/accounts/oauth/confirm", {
+    method: "POST",
+    headers: { cookie: authorization.cookie, origin: "http://localhost" },
+    body: new URLSearchParams({ login_id: start.login_id, csrf, user_code: start.user_code }),
+  }))
+  assert.equal(confirmation.status, 200)
+  assert.match(await confirmation.text(), /Login Successful/)
+}
+
+/** Query completion without token delivery, then explicitly exchange the initiating client's proof. */
+async function exchange_completed_login(base, start) {
+  const proof = { login_id: start.login_id, login_secret: start.login_secret }
+  const status_response = await base.fetch(jsonRequest("/v1/accounts/login/result", proof))
+  assert.equal(status_response.status, 200)
+  const status = await status_response.json()
+  assert.equal(status.status, "done")
+  assert.equal(status.user_token, undefined)
+  const missing_proof = await base.fetch(jsonRequest("/v1/accounts/login/result", { login_id: start.login_id }))
+  assert.equal(missing_proof.status, 403)
+  const exchange_id = crypto.randomUUID()
+  const response = await base.fetch(jsonRequest("/v1/accounts/login/exchange", {
+    ...proof, exchange_id,
+  }))
+  assert.equal(response.status, 200)
+  const result = await response.json()
+  assert.equal(result.status, "done")
+  assert.equal(result.user_token.startsWith("ub_"), true)
+  const retry = await base.fetch(jsonRequest("/v1/accounts/login/exchange", { ...proof, exchange_id }))
+  assert.equal(retry.status, 200)
+  assert.equal((await retry.json()).user_token, result.user_token)
+  const second_exchange = await base.fetch(jsonRequest("/v1/accounts/login/exchange", { ...proof, exchange_id: crypto.randomUUID() }))
+  assert.equal(second_exchange.status, 409)
+  return result
+}
+
 async function setupBase(tempDir, env = {}, accountsOptions = {}) {
+  const verification_emails = []
   const db = createSqliteDb(path.join(tempDir, "test.sqlite"))
   const base = new Federation({ database: db })
   base.use(new AccountsService({
@@ -517,7 +603,7 @@ async function setupBase(tempDir, env = {}, accountsOptions = {}) {
     ...accountsOptions,
     providers: [
       emailAccountsProvider({
-        send_email: async () => {},
+        send_email: async (message) => { verification_emails.push(message) },
       }),
       githubAccountsProvider(),
       googleAccountsProvider(),
@@ -534,6 +620,7 @@ async function setupBase(tempDir, env = {}, accountsOptions = {}) {
   return {
     base,
     adminSecret: await create_test_admin_session(base),
+    verification_emails,
   }
 }
 

@@ -16,6 +16,8 @@ import { CREATE_FEDERATION_ACTIVE_AUTH_KEY_INDEX_SQL } from "./auth/key-schema.j
 import { UserTokenAuthority } from "./auth/user-token-authority.js";
 import { BureauTokenStore } from "./auth/bureau-token-store.js";
 import { FederationAdminStore } from "./auth/admin-store.js";
+import { UserTokenRevocationStore } from "./auth/user-token-revocation-store.js";
+import type { UserTokenRevocationRecord } from "./auth/user-token-schema.js";
 import { randomSecret } from "../utils/helpers.js";
 import { initialize_service, type Service } from "../service/service.js";
 import {
@@ -82,6 +84,10 @@ export async function initialize_federation(params: {
     database.table(builtinTables.federation_auth_keys),
   );
   table_map.set("bureau_tokens", database.table(builtinTables.bureau_tokens));
+  table_map.set(
+    "federation_user_token_revocations",
+    database.table(builtinTables.federation_user_token_revocations),
+  );
   table_map.set(
     "federation_administrators",
     database.table(builtinTables.federation_administrators),
@@ -154,6 +160,14 @@ export async function initialize_federation(params: {
     administrator_table as CityTableApi<FederationAdministratorRecord>,
     admin_session_table as CityTableApi<FederationAdminSessionRecord>,
   );
+  const revocation_table = table_map.get("federation_user_token_revocations");
+  if (!revocation_table) throw new Error("User Token revocation table is not initialized");
+  const user_token_revocations = new UserTokenRevocationStore(
+    revocation_table as CityTableApi<UserTokenRevocationRecord>,
+    database,
+  );
+  await database.execute_ddl('CREATE INDEX IF NOT EXISTS federation_user_token_revocations_expiry_idx ON "federation_user_token_revocations" ("expires_at")');
+  await user_token_revocations.cleanup_expired();
   const authenticator = new Authenticator(
     env,
     require_ready,
@@ -161,6 +175,7 @@ export async function initialize_federation(params: {
     key_store,
     bureau_token_store,
     admin_store,
+    user_token_revocations,
   );
 
   for (const service of services) {

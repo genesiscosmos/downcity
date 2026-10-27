@@ -20,6 +20,10 @@ import {
 } from "./auth/admin-schema.js";
 import { EnvStore } from "../service/env/env-store.js";
 import {
+  pg_user_token_revocations,
+  sqlite_user_token_revocations,
+} from "./auth/user-token-schema.js";
+import {
   pg_bureau_servers,
   pg_bureaus,
   sqlite_bureau_servers,
@@ -64,6 +68,7 @@ function builtin_tables_for(schema_id: string): BuiltinTables {
         bureau_tokens: pg_bureau_tokens,
         federation_administrators: pg_federation_administrators,
         federation_admin_sessions: pg_federation_admin_sessions,
+        federation_user_token_revocations: pg_user_token_revocations,
       }
     : {
         bureaus: sqlite_bureaus,
@@ -73,6 +78,7 @@ function builtin_tables_for(schema_id: string): BuiltinTables {
         bureau_tokens: sqlite_bureau_tokens,
         federation_administrators: sqlite_federation_administrators,
         federation_admin_sessions: sqlite_federation_admin_sessions,
+        federation_user_token_revocations: sqlite_user_token_revocations,
       };
 }
 

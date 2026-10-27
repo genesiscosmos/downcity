@@ -1,0 +1,31 @@
+<!-- Accounts login security protocol, deployment notes, and handoff for product callers. -->
+# Accounts login and delivery protocol
+
+All endpoints below are under `/v1/accounts`. Fields use snake_case. Login secrets and tokens must never appear in URLs, analytics or logs. All successful login JSON responses use `Cache-Control: no-store`.
+
+| Endpoint | Request JSON | Response |
+| --- | --- | --- |
+| POST login/start | `provider`, `bureau_id`, required `client_type` | `login_id`, private `login_secret`, `provider`, `status`; OAuth additionally `url` and (external clients) `user_code`; Email additionally `inputs` |
+| POST login/continue | `login_id`, `login_secret`, `input: {email,password}` | `done` without token; only Email accepts input |
+| POST login/result | `login_id`, `login_secret` | `pending` or `done`, `login_id`, `provider`; never a token |
+| POST login/exchange | `login_id`, `login_secret`, `exchange_id` | `done`, `login_id`, `provider`, `user_token` |
+| POST logout | Current User Token in Bearer authorization | `{success:true}` after `ctx.revoke_user_token` completes |
+| POST verify-email | `token` | `{success:true,message}`; never a User Token |
+
+`client_type` must explicitly be `web`, `cli`, `desktop` or `device`. `device` supports BFF-based web products whose HttpOnly cookies belong to a different origin than Federation. BFFs retain the login secret and fixed exchange ID in their own protected session; they display the short code in the originating product window before opening `url`. They do not forward Federation browser cookies.
+
+`web` is for direct same-origin Federation browser clients. Start, continue, status and exchange require an exact same-origin Origin header. Start sets a host-only, HttpOnly, SameSite=Lax binding cookie. HTTPS uses Secure and the `__Host-` prefix; HTTP is permitted only on localhost/loopback for development. Cookies last six minutes to cover a five-minute flow plus the exchange retry window. Cross-origin BFF clients use `device` instead.
+
+The authorization URL is a Federation landing endpoint containing only the public login ID. It binds the browser before redirecting to the provider with an independent OAuth state. Callback consumes that state and authenticates the browser, but does not issue or deliver a token. The confirmation page shows the server-selected provider identity (including provider user ID) and registry-validated Bureau ID. CLI/Desktop/device users must enter the eight-character code from their original client and explicitly approve. Web users explicitly approve in the initiating bound browser. Confirmation requires the binding cookie, same-origin Origin and a one-time CSRF nonce. Device code attempts are limited to five; errors require restarting login. Provider display values are HTML-escaped; caller-provided product labels are not trusted.
+
+Flows expire after five minutes. An atomic conditional database update accepts exactly one exchange ID. Use a random URL-safe 20–128-character identifier (UUID works), generated before the first exchange request and reused after transport failures. Identical exchanges recover the same token for 60 seconds after the first accepted exchange; a different exchange ID receives 409. After expiry, restart login. A request whose response was lost must not create a new exchange ID. State queries remain separate from exchange.
+
+`EmbassyAccount.login()` performs exchange automatically and publishes the device code as the second parameter of `on_authorize(url, user_code?)`. Low-level `login_start()`, `continue()` and `status()` return states only; call `exchange()` on done. SDK retains the same exchange ID across failed network calls. For restored web flows, `status(login_id, login_secret)` restores the initiating proof; `exchange(exchange_id?)` can reuse a securely persisted ID. Do not render or log `login_secret`. `await logout()` revokes remotely before clearing local credentials; failure retains credentials for retry.
+
+Email/password authentication is disabled in better-auth when the Email provider is unavailable. When enabled, verification is mandatory, signup sends verification mail, and verification does not auto-sign in. A successful password response must contain a nonempty user ID, email and explicit `emailVerified: true` before signing a token. `/auth/*` only permits GET `/auth/verify-email` when Email is enabled; callback redirect parameters are ignored and other native sign-in/linking/session endpoints are closed. The dependency API is called with `verifyEmail({query:{token},asResponse:true})`, and both HTTP success and `status:true` are checked.
+
+OAuth identities resolve by provider plus provider user ID. Emails, including unverified or synthesized emails, never cause automatic linking. A collision blocks login with an account-linking/recovery hint. Existing primary email and verification status are not overwritten by a provider profile. New user plus provider identity insertion is atomic, and initialization installs a unique provider identity index. Existing duplicate provider identities prevent initialization and require explicit operator review; no account/history is deleted or merged.
+
+Deployment must create the registered `service_accounts_login_flows_v2` table before Accounts initialization. Initialization invalidates all legacy login-state rows and checks the provider identity index. Pending legacy logins must restart. Completed confirmation clears code/CSRF/OAuth-state material; exchange retains its token response only for the bounded retry window. Expired rows are inaccessible immediately and are physically removed during startup and subsequent login operations; there is no independent idle database cleanup scheduler in this module.
+
+Validation handoff: no new tests were added. Shell execution was unavailable and host execution was not used. Run the services and federation package typechecks and existing tests in the main session. Exercise the device/BFF and direct web browser flows, wrong-browser/Origin/CSRF/code rejection, OAuth state replay, same-ID/different-ID exchange races, Email disabled/unverified cases, identity/email collisions and revocation failure/retry. Homepage docs and all CLI/Desktop/BFF callers are owned by the main session.

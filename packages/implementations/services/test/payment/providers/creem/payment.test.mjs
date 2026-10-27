@@ -11,7 +11,12 @@ test("Creem provider maps paid webhook to a Payment order", async () => {
   const event = await provider.parseWebhook(webhook_input({
     id: "evt_1",
     eventType: "checkout.completed",
-    object: { id: "checkout_1", order: { id: "order_1" }, metadata: { payment_id: "pay_1" } },
+    object: {
+      id: "checkout_1",
+      order: { id: "order_1", amount: 500, sub_total: 500, amount_paid: 500,
+        currency: "USD", tax_amount: 0, discount_amount: 0, status: "paid" },
+      metadata: { payment_id: "pay_1" },
+    },
   }, webhook_secret))
   assert.equal(event.status, "paid")
   assert.equal(event.payment_id, "pay_1")

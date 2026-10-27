@@ -1,5 +1,5 @@
 /**
- * Payment 订单生命周期与 Credits 入账集成测试。
+ * Payment 订单生命周期、持久化事件队列与 Credits 入账集成测试。
  */
 
 import assert from "node:assert/strict"
@@ -18,6 +18,11 @@ test("PaymentService owns orders and tops up Credits after paid webhook", async 
   try {
     process.chdir(temp_dir)
     const federation = new Federation({ database: createSqliteDb(path.join(temp_dir, "test.sqlite")) })
+    const queued_messages = []
+    federation.queue.use({ send: async (message) => { queued_messages.push(message) } })
+    const drain_queue = async () => {
+      while (queued_messages.length) await federation.queue.call(queued_messages.shift())
+    }
     const credits = new CreditsService()
     const provider = create_test_provider()
     let resolved_topup
@@ -73,7 +78,6 @@ test("PaymentService owns orders and tops up Credits after paid webhook", async 
       topup_amount_minor: 99,
       idempotency_key: "checkout:1",
       note: "购买 500 Credits",
-      metadata: { campaign: "summer", nested: { b: 2, a: 1 } },
     })
     const checkout = await (await federation.fetch(request)).json()
     const duplicate = await (await federation.fetch(user_request(token.user_token, "/v1/payment/checkout/create", {
@@ -81,7 +85,6 @@ test("PaymentService owns orders and tops up Credits after paid webhook", async 
       topup_amount_minor: 99,
       idempotency_key: "checkout:1",
       note: "购买 500 Credits",
-      metadata: { nested: { a: 1, b: 2 }, campaign: "summer" },
     }))).json()
     assert.equal(duplicate.payment_id, checkout.payment_id)
     assert.deepEqual(resolved_topup, {
@@ -102,7 +105,6 @@ test("PaymentService owns orders and tops up Credits after paid webhook", async 
       topup_amount_minor: 99,
       idempotency_key: "checkout:1",
       note: "不同说明",
-      metadata: { campaign: "summer", nested: { a: 1, b: 2 } },
     }))
     assert.equal(conflicting_note.ok, false)
 
@@ -130,7 +132,8 @@ test("PaymentService owns orders and tops up Credits after paid webhook", async 
       provider_payment_id,
     }))
     assert.equal(processing_response.status, 200)
-    assert.equal((await processing_response.json()).sync_status, "ignored")
+    assert.equal((await processing_response.json()).sync_status, "pending")
+    await drain_queue()
     assert.equal((await credits.read_account("user_1")).cards.primary.credits, 0)
 
     const succeeded_event = {
@@ -139,10 +142,17 @@ test("PaymentService owns orders and tops up Credits after paid webhook", async 
       status: "paid",
       payment_id: checkout.payment_id,
       provider_payment_id,
+      amount_minor: 99,
+      currency: "usd",
     }
-    assert.equal((await federation.fetch(webhook(succeeded_event))).status, 200)
+    const accepted_paid = await federation.fetch(webhook(succeeded_event))
+    assert.equal(accepted_paid.status, 200)
+    assert.equal((await accepted_paid.json()).sync_status, "pending")
+    assert.equal((await credits.read_account("user_1")).cards.primary.credits, 0)
+    await drain_queue()
     assert.equal((await credits.read_account("user_1")).cards.primary.credits, 990)
     assert.equal((await federation.fetch(webhook(succeeded_event))).status, 200)
+    await drain_queue()
     assert.equal((await credits.read_account("user_1")).cards.primary.credits, 990)
 
     const events_response = await federation.fetch(new Request("http://localhost/v1/payment/events", {
@@ -165,7 +175,8 @@ test("PaymentService owns orders and tops up Credits after paid webhook", async 
       payment_id: checkout.payment_id,
       provider_payment_id,
     }))
-    assert.equal((await late_failed_response.json()).sync_status, "ignored")
+    assert.equal((await late_failed_response.json()).sync_status, "pending")
+    await drain_queue()
     assert.equal((await credits.read_account("user_1")).cards.primary.credits, 990)
 
     const recovery_checkout = await (await federation.fetch(user_request(token.user_token, "/v1/payment/checkout/create", {
@@ -179,15 +190,20 @@ test("PaymentService owns orders and tops up Credits after paid webhook", async 
       status: "failed",
       payment_id: recovery_checkout.payment_id,
     }))
-    assert.equal((await failed_before_paid.json()).sync_status, "applied")
+    assert.equal((await failed_before_paid.json()).sync_status, "pending")
+    await drain_queue()
     assert.equal((await credits.read_account("user_1")).cards.primary.credits, 990)
     const recovered_paid = await federation.fetch(webhook({
       event_id: "event_recovered_paid",
       type: "payment.succeeded",
       status: "paid",
       payment_id: recovery_checkout.payment_id,
+      provider_payment_id: "provider_recovery",
+      amount_minor: 10,
+      currency: "usd",
     }))
-    assert.equal((await recovered_paid.json()).sync_status, "applied")
+    assert.equal((await recovered_paid.json()).sync_status, "pending")
+    await drain_queue()
     assert.equal((await credits.read_account("user_1")).cards.primary.credits, 1_090)
 
     const retry_checkout = await (await federation.fetch(user_request(token.user_token, "/v1/payment/checkout/create", {
@@ -200,17 +216,33 @@ test("PaymentService owns orders and tops up Credits after paid webhook", async 
       type: "payment.succeeded",
       status: "paid",
       payment_id: retry_checkout.payment_id,
+      provider_payment_id: "provider_retry",
+      amount_minor: 5,
+      currency: "usd",
       delivery: 1,
     }
     fail_on_paid_once = true
     const first_retry_response = await federation.fetch(webhook(retry_event))
-    assert.equal(first_retry_response.status, 500)
-    assert.equal((await first_retry_response.json()).sync_status, "failed")
+    assert.equal(first_retry_response.status, 200)
+    assert.equal((await first_retry_response.json()).sync_status, "pending")
+    await assert.rejects(drain_queue(), /temporary credits failure/u)
+    const inbox_response = await federation.fetch(new Request("http://localhost/v1/payment/events/inbox", {
+      headers: { authorization: `Bearer ${admin_secret}` },
+    }))
+    const retry_record = (await inbox_response.json()).items.find((item) => item.event_id === "test:event_on_paid_retry")
+    assert.equal(retry_record.status, "pending")
+    assert.equal(retry_record.last_error, "payment_processing_failed")
     assert.equal((await credits.read_account("user_1")).cards.primary.credits, 1_090)
 
     const recovered_retry_response = await federation.fetch(webhook({ ...retry_event, delivery: 2 }))
     assert.equal(recovered_retry_response.status, 200)
-    assert.equal((await recovered_retry_response.json()).sync_status, "applied")
+    assert.equal((await recovered_retry_response.json()).sync_status, "pending")
+    // 管理员重放重置持久化退避，无需真实等待重试时间。
+    const replay_response = await federation.fetch(admin_request(admin_secret, "/v1/payment/events/replay", {
+      event_id: "test:event_on_paid_retry",
+    }))
+    assert.equal(replay_response.status, 200)
+    await drain_queue()
     assert.equal((await credits.read_account("user_1")).cards.primary.credits, 1_140)
 
     const payments_response = await federation.fetch(new Request("http://localhost/v1/payment/payments", {
@@ -218,6 +250,27 @@ test("PaymentService owns orders and tops up Credits after paid webhook", async 
     }))
     const payment_records = (await payments_response.json()).items
     assert.equal(payment_records.every((item) => item.status === "paid"), true)
+
+    const guarded_checkout = await (await federation.fetch(user_request(token.user_token, "/v1/payment/checkout/create", {
+      method_id: "test", topup_amount_minor: 20, idempotency_key: "checkout:guarded",
+    }))).json()
+    await federation.fetch(webhook({ event_id: "event_wrong_amount", payment_id: guarded_checkout.payment_id,
+      provider_payment_id: "provider_guarded", status: "paid", amount_minor: 1, currency: "usd" }))
+    await assert.rejects(drain_queue(), /does not match order/u)
+    assert.equal((await credits.read_account("user_1")).available_credits, 1_140)
+    const inbox_table = await federation.table("payment.inbox")
+    const mismatch = (await inbox_table.select({ event_id: "test:event_wrong_amount" }))[0]
+    assert.equal(mismatch.status, "review")
+
+    await federation.fetch(webhook({ event_id: "event_lost_delivery", payment_id: guarded_checkout.payment_id,
+      provider_payment_id: "provider_guarded", status: "paid", amount_minor: 20, currency: "usd" }))
+    // 模拟队列消息丢失及旧执行租约过期，恢复必须无需 Provider 再投递。
+    queued_messages.length = 0
+    await inbox_table.update({ where: { event_id: "test:event_lost_delivery" },
+      values: { status: "processing", lease: "interrupted", lease_until: 0 } })
+    assert.equal((await payment.recover_events()).scheduled, 1)
+    await drain_queue()
+    assert.equal((await credits.read_account("user_1")).available_credits, 1_340)
   } finally {
     process.chdir(cwd)
     await fs.rm(temp_dir, { recursive: true, force: true })
@@ -253,6 +306,8 @@ function create_test_provider() {
         status: body.status ?? "paid",
         payment_id: body.payment_id,
         provider_payment_id: body.provider_payment_id,
+        amount_minor: body.amount_minor,
+        currency: body.currency,
       }
     },
     last_payment: () => payment,

@@ -13,6 +13,7 @@ import { parse_user_token_ttl, type UserTokenAuthority } from "./user-token-auth
 import type { FederationKeyStore } from "./federation-key-store.js";
 import type { BureauTokenStore } from "./bureau-token-store.js";
 import type { FederationAdminStore } from "./admin-store.js";
+import type { UserTokenRevocationStore } from "./user-token-revocation-store.js";
 import { USER_TOKEN_AUDIENCE } from "./audience.js";
 import type {
   CreateUserTokenInput,
@@ -58,6 +59,7 @@ export class Authenticator {
     private readonly key_store: FederationKeyStore,
     private readonly bureau_token_store: BureauTokenStore,
     private readonly admin_store: FederationAdminStore,
+    private readonly user_token_revocations: UserTokenRevocationStore,
   ) {}
 
   /** 解析 HTTP Bearer 凭证，失败时返回 guest。 */
@@ -86,7 +88,7 @@ export class Authenticator {
     }
 
     try {
-      const payload = await this.token_authority.verify(token);
+      const payload = await this.verifyToken(token);
       const bureau = await this.read_active_bureau(payload.bureau_id);
       if (!bureau) return { level: "guest" };
       return {
@@ -94,8 +96,11 @@ export class Authenticator {
         user: { user_id: payload.user_id, metadata: payload.metadata ?? {} },
         bureau,
       };
-    } catch {
-      return { level: "guest" };
+    } catch (error) {
+      if ((error as { /** 明确的凭证失效状态。 */ statusCode?: number }).statusCode === 401) {
+        return { level: "guest" };
+      }
+      throw httpError(503, "Federation authentication temporarily unavailable");
     }
   }
 
@@ -147,9 +152,22 @@ export class Authenticator {
     };
   }
 
-  /** 校验 User Token 并返回标准载荷。 */
-  verifyToken(token: string): Promise<UserTokenPayload> {
-    return this.token_authority.verify(token);
+  /** 校验签名、到期、当前会话撤销和 Bureau 状态；存储不可用时拒绝。 */
+  async verifyToken(token: string): Promise<UserTokenPayload> {
+    const payload = await this.token_authority.verify(token);
+    if (await this.user_token_revocations.is_revoked(payload.jti)) {
+      throw httpError(401, "User token revoked");
+    }
+    if (!await this.read_active_bureau(payload.bureau_id)) {
+      throw httpError(401, "User token Bureau unavailable");
+    }
+    return payload;
+  }
+
+  /** 验签后幂等撤销当前 Token；不接收未经验证的 jti 或任意用户 ID。 */
+  async revoke_user_token(token: string): Promise<void> {
+    const payload = await this.token_authority.verify(token);
+    await this.user_token_revocations.revoke(payload);
   }
 
   /** 为可信 Service 签发受众绑定的业务 Token。 */

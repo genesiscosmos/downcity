@@ -11,7 +11,12 @@ test("Stripe provider maps paid webhook to a Payment order", async () => {
   const event = await provider.parseWebhook(webhook_input({
     id: "evt_1",
     type: "checkout.session.completed",
-    data: { object: { id: "cs_1", payment_intent: "pi_1", payment_status: "paid", metadata: { payment_id: "pay_1" } } },
+    data: { object: {
+      id: "cs_1", payment_intent: "pi_1", payment_status: "paid",
+      amount_subtotal: 500, amount_total: 500, currency: "usd",
+      total_details: { amount_tax: 0, amount_discount: 0, amount_shipping: 0 },
+      metadata: { payment_id: "pay_1" },
+    } },
   }, webhook_secret))
   assert.equal(event.status, "paid")
   assert.equal(event.payment_id, "pay_1")

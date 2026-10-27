@@ -6,7 +6,8 @@
  * - PaymentService 自己拥有支付订单；paid 后通过 on_paid 通知接入方发放 Credits。
  */
 
-import type { ServiceInstallContext } from "@downcity/federation";
+import { httpError, type ServiceInstallContext } from "@downcity/federation";
+import type { PaymentInbox } from "./PaymentInbox.js";
 import { resolvePaymentRedirectURL } from "./redirect.js";
 import {
   errorMessage,
@@ -54,8 +55,6 @@ type EventTable = {
   }): Promise<number>;
 };
 
-/** webhook 单次处理租约，避免并发重复入账，同时允许进程中断后恢复。 */
-const PAYMENT_EVENT_PROCESSING_LEASE_MS = 5 * 60 * 1000;
 const PAYMENT_EVENT_LEASE_PREFIX = "lease:";
 /** Checkout 创建租约，超时后允许其他请求使用同一 payment_id 接管。 */
 const PAYMENT_CHECKOUT_CREATION_LEASE_MS = 5 * 60 * 1000;
@@ -67,6 +66,8 @@ const PAYMENT_CHECKOUT_CREATION_LEASE_MS = 5 * 60 * 1000;
  * - 使用 interface 避免 routes.ts 与 service.ts 之间的循环类型依赖。
  */
 interface PaymentServiceLike {
+  /** 仅接收验签后可信事件的持久化执行器。 */
+  inbox: PaymentInbox;
   /** 根据自由充值金额解析服务端 Credits 快照。 */
   resolve_topup(input: PaymentTopupResolutionInput): Promise<{ credits: number }>;
   /** 通知接入方处理已确认支付订单。 */
@@ -248,40 +249,12 @@ export function installPaymentRoutes(service: PaymentServiceLike, ctx: ServiceIn
         }
       }
 
-      const claim = await claimPaymentEvent(events, event_record);
-      if (!claim.claimed) {
-        return requestCtx.jsonResponse({
-          received: true,
-          event_id: eventId,
-          provider: eventProvider.id,
-          sync_status: claim.record.sync_status,
-        });
-      }
-
       try {
-        const syncStatus = await syncPaymentEvent({
-          provider: eventProvider,
-          event: webhookEvent,
-          payments,
-          service,
-        });
-        await finishClaimedPaymentEvent(events, claim.record, syncStatus, "");
-        return requestCtx.jsonResponse({
-          received: true,
-          event_id: eventId,
-          provider: eventProvider.id,
-          sync_status: syncStatus,
-        });
-      } catch (error) {
-        const message = errorMessage(error);
-        await finishClaimedPaymentEvent(events, claim.record, "failed", message);
-        return requestCtx.jsonResponse({
-          received: true,
-          event_id: eventId,
-          provider: eventProvider.id,
-          sync_status: "failed",
-          error: message,
-        }, 500);
+        const sync_status = await service.inbox.accept(eventProvider.id, webhookEvent);
+        return requestCtx.jsonResponse({ received: true, event_id: eventId,
+          provider: eventProvider.id, sync_status });
+      } catch {
+        return requestCtx.jsonResponse({ error: "payment_event_dispatch_failed", event_id: eventId }, 503);
       }
     },
   });
@@ -292,9 +265,9 @@ export function installPaymentRoutes(service: PaymentServiceLike, ctx: ServiceIn
     auth: [],
     handler(requestCtx) {
       return htmlResponse(renderRedirectPage({
-        title: "Payment successful",
-        heading: "Payment completed",
-        description: "Your payment has been accepted. If the Credits view has not refreshed yet, close this page and return to your app.",
+        title: "Payment verification",
+        heading: "Payment is being verified",
+        description: "Credits are issued after a verified payment notification. Return to your app and refresh the order status.",
         request: requestCtx.request,
       }));
     },
@@ -316,85 +289,9 @@ export function installPaymentRoutes(service: PaymentServiceLike, ctx: ServiceIn
 }
 
 /**
- * 原子 claim 一个可处理 webhook 事件。
- *
- * 关键说明（中文）
- * - applied / ignored 是终态，不再执行。
- * - pending / failed 可立即重试。
- * - processing 只有租约过期后才能恢复，避免两个请求同时完成同一笔入账。
- */
-async function claimPaymentEvent(
-  events: EventTable,
-  input: PaymentEventRecord,
-): Promise<{ claimed: boolean; record: PaymentEventRecord }> {
-  let current = input;
-  if (current.sync_status === "applied" || current.sync_status === "ignored") {
-    return { claimed: false, record: current };
-  }
-
-  if (current.sync_status === "processing") {
-    const lease_expires_at = readPaymentEventLease(current.sync_error);
-    if (lease_expires_at > Date.now()) {
-      return { claimed: false, record: current };
-    }
-    const reset = await events.update({
-      where: {
-        event_id: current.event_id,
-        sync_status: "processing",
-        sync_error: current.sync_error,
-      },
-      values: {
-        sync_status: "failed",
-        sync_error: "processing lease expired",
-      },
-    });
-    if (reset === 0) {
-      const latest = (await events.select({ event_id: current.event_id }))[0] ?? current;
-      return { claimed: false, record: latest };
-    }
-    current = {
-      ...current,
-      sync_status: "failed",
-      sync_error: "processing lease expired",
-    };
-  }
-
-  const lease = `${PAYMENT_EVENT_LEASE_PREFIX}${Date.now() + PAYMENT_EVENT_PROCESSING_LEASE_MS}`;
-  const changed = await events.update({
-    where: {
-      event_id: current.event_id,
-      sync_status: current.sync_status,
-    },
-    values: {
-      sync_status: "processing",
-      sync_error: lease,
-    },
-  });
-  if (changed === 0) {
-    const latest = (await events.select({ event_id: current.event_id }))[0] ?? current;
-    return { claimed: false, record: latest };
-  }
-  return {
-    claimed: true,
-    record: {
-      ...current,
-      sync_status: "processing",
-      sync_error: lease,
-    },
-  };
-}
-
-/** 读取 processing 状态中保存的租约截止时间。 */
-function readPaymentEventLease(value: string): number {
-  if (!value.startsWith(PAYMENT_EVENT_LEASE_PREFIX)) return 0;
-  const parsed = Number(value.slice(PAYMENT_EVENT_LEASE_PREFIX.length));
-  return Number.isFinite(parsed) ? parsed : 0;
-}
-
-/**
  * 同步 webhook 事件到本地支付订单，并在首次确认 paid 时通知接入方。
  */
-async function syncPaymentEvent(input: {
+export async function syncPaymentEvent(input: {
   provider: PaymentProvider;
   event: PaymentProviderWebhookEvent;
   payments: PaymentTable;
@@ -406,22 +303,25 @@ async function syncPaymentEvent(input: {
   const payment = await findPaymentByWebhookEvent(payments, provider.id, event);
   // 本地 payment 可能尚未完成 Provider ID 回填；保留 pending，Provider 重发后可恢复。
   if (!payment) return "pending";
-  if (event.status === "paid" && payment.status === "paid") return "applied";
-  if (payment.status !== "pending" && event.status !== "paid") return "ignored";
-
   if (event.status === "paid") {
-    await service.on_paid({
-      ...payment,
-      provider_session_id: event.provider_session_id || payment.provider_session_id,
-      provider_payment_id: event.provider_payment_id || payment.provider_payment_id,
-      provider_order_id: event.provider_order_id || payment.provider_order_id,
-      metadata_json: JSON.stringify({
-        ...read_metadata_json(payment.metadata_json),
-        ref: event.ref,
-        ...(event.meta ?? {}),
-      }),
-    });
+    const external_id = event.provider_payment_id || event.provider_order_id || event.provider_session_id;
+    if (!normalizeOptionalText(external_id) || !Number.isSafeInteger(event.amount_minor) || (event.amount_minor ?? 0) <= 0
+      || event.amount_minor !== payment.amount_minor
+      || !event.currency || event.currency.toLowerCase() !== payment.currency.toLowerCase()) {
+      throw httpError(422, "verified payment amount, currency or transaction identity does not match order");
+    }
+    if (event.provider_session_id && payment.provider_session_id && event.provider_session_id !== payment.provider_session_id
+      || event.provider_order_id && payment.provider_order_id && event.provider_order_id !== payment.provider_order_id
+      || event.provider_payment_id && payment.provider_payment_id && event.provider_payment_id !== payment.provider_payment_id) {
+      throw httpError(422, "verified provider identity does not match order");
+    }
+    // paid 记录是回调的稳定输入；回调失败后重复投递仍可重试。
+    if (payment.status === "paid") {
+      await service.on_paid(payment);
+      return "applied";
+    }
   }
+  if (payment.status !== "pending" && event.status !== "paid") return "ignored";
 
   await updatePayment(payments, payment.payment_id, {
     status: event.status,
@@ -429,6 +329,11 @@ async function syncPaymentEvent(input: {
     provider_payment_id: event.provider_payment_id || payment.provider_payment_id,
     provider_order_id: event.provider_order_id || payment.provider_order_id,
   });
+  if (event.status === "paid") {
+    const paid = (await payments.select({ payment_id: payment.payment_id }))[0];
+    if (!paid || paid.status !== "paid") throw new Error("payment confirmation was not persisted");
+    await service.on_paid(paid);
+  }
   return "applied";
 }
 
@@ -651,7 +556,7 @@ async function updatePayment(
   },
 ): Promise<void> {
   await payments.update({
-    where: { payment_id: paymentId },
+    where: { payment_id: paymentId, ...(input.status === "paid" ? {} : { status: "pending" as const }) },
     values: {
       status: input.status,
       provider_session_id: normalizeOptionalText(input.provider_session_id),
@@ -660,31 +565,6 @@ async function updatePayment(
       updated_at: new Date().toISOString(),
     },
   });
-}
-
-/**
- * 更新事件同步状态。
- */
-async function finishClaimedPaymentEvent(
-  events: EventTable,
-  claimed_record: PaymentEventRecord,
-  syncStatus: PaymentEventSyncStatus,
-  syncError: string,
-): Promise<void> {
-  const changed = await events.update({
-    where: {
-      event_id: claimed_record.event_id,
-      sync_status: "processing",
-      sync_error: claimed_record.sync_error,
-    },
-    values: {
-      sync_status: syncStatus,
-      sync_error: syncError.trim(),
-    },
-  });
-  if (changed === 0) {
-    throw new Error(`Payment event lease lost: ${claimed_record.event_id}`);
-  }
 }
 
 /**

@@ -6,6 +6,7 @@
  * - 负责声明 env、生成支付方式、创建 Checkout、解析 webhook
  */
 
+import { stripe_principal } from "../../confirmation.js";
 import {
   normalizeCurrency,
   normalizeOptionalText,
@@ -102,6 +103,8 @@ export function stripePaymentProvider(options: StripePaymentProviderOptions = {}
         payload: event,
         status,
         payment_id: normalizeOptionalText(metadata.payment_id),
+        amount_minor: is_payment_intent ? undefined : stripe_principal(object),
+        currency: normalizeCurrency(object.currency),
         provider_session_id: is_payment_intent ? undefined : normalizeOptionalText(object.id),
         provider_payment_id: is_payment_intent
           ? normalizeOptionalText(object.id)
