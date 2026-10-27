@@ -10,11 +10,12 @@
 import fs from "fs-extra";
 import type { McpRuntime } from "@/mcp/Power.js";
 import path from "node:path";
+import { createHash as create_hash } from "node:crypto";
 import type { PowerJsonValue, PowerLifecycleContext } from "@downcity/city/power";
-import { listSkills, lookupSkill } from "@/skill/Action.js";
+import { listSkills } from "@/skill/Action.js";
 import { resolveSkillPowerOptions } from "@/skill/Config.js";
 import { assert_safe_agent_id, create_skill_root_context } from "@/skill/runtime/AgentRoot.js";
-import { resolve_skill_root, type SkillRootContext } from "@/skill/runtime/Paths.js";
+import type { SkillRootContext } from "@/skill/runtime/Paths.js";
 import type { SkillSummary } from "@/skill/types/SkillCommand.js";
 import type {
   SkillMainviewAvailableItem,
@@ -64,12 +65,9 @@ export function register_skill_power_host_actions(
   });
   context.power.action({
     id: "skill.read_home",
-    run: async (input) => as_json(await lookupSkill({
-      scope: "home",
-      context: create_home_context(runtime),
-      options: resolveSkillPowerOptions(),
-      request: { name: read_required_string(input, "skill_id") },
-    })),
+    run: async (input) => as_json(await read_discovered_skill(
+      list_home_skills(runtime), read_required_string(input, "skill_id"),
+    )),
   });
   context.power.action({
     id: "skill.read",
@@ -104,6 +102,7 @@ async function create_snapshot(
     mcp_server_ids: await runtime.mcp_runtime.assignments.read(agent.agent_id),
   })));
 
+  const available = list_home_skills(runtime).map((skill) => to_available_item(skill, []));
   return {
     success: true,
     agents: views,
@@ -111,14 +110,12 @@ async function create_snapshot(
       ...server,
       linked_agent_ids: views.filter((view) => view.mcp_server_ids.includes(server.id)).map((view) => view.agent_id),
     })),
-    available: list_home_skills(runtime).map((skill) =>
-      to_available_item(
-        skill,
-        views
-          .filter((view) => view.skills.some((bound) => bound.id === skill.id))
-          .map((view) => view.agent_id),
-      ),
-    ),
+    available: available.map((skill) => ({
+      ...skill,
+      linked_agent_ids: views
+        .filter((view) => view.skills.some((bound) => bound.resource_id === skill.resource_id))
+        .map((view) => view.agent_id),
+    })),
   };
 }
 
@@ -148,12 +145,12 @@ async function read_skill(
   runtime: SkillPowerHostRuntime,
   input: SkillMainviewReadInput,
 ) {
-  return await lookupSkill({
+  const skills = listSkills({
     scope: "agent",
     context: create_agent_context(runtime, input.agent_id),
     options: resolveSkillPowerOptions(),
-    request: { name: input.skill_id },
-  });
+  }).skills;
+  return await read_discovered_skill(skills, input.skill_id);
 }
 
 /** 把用户目录中的 Skill 软链接进 Agent 技能目录。 */
@@ -174,7 +171,7 @@ async function link_skill(
   const link_path = path.join(resolve_agent_skill_dir(runtime, input.agent_id), skill.id);
   try {
     await fs.ensureDir(path.dirname(link_path));
-    await fs.remove(link_path);
+    // Exclusive creation preserves independent copies, existing links and undiscovered entries.
     await fs.symlink(skill.directory_path, link_path, "junction");
     return {
       ...await create_snapshot(context, runtime),
@@ -260,6 +257,7 @@ function create_home_context(runtime: SkillPowerHostRuntime): SkillRootContext {
 /** 把内部摘要投影为已绑定列表条目。 */
 function to_mainview_item(skill: SkillSummary): SkillMainviewItem {
   return {
+    ...resource_identity(skill),
     id: skill.id,
     name: skill.name,
     description: skill.description,
@@ -275,11 +273,32 @@ function to_available_item(
   linked_agent_ids: string[],
 ): SkillMainviewAvailableItem {
   return {
+    ...resource_identity(skill),
     id: skill.id,
     name: skill.name,
     description: skill.description,
     linked_agent_ids,
   };
+}
+
+/** Resolve aliases to the actual resource; source paths are display-only renderer metadata. */
+function resource_identity(skill: SkillSummary) {
+  const canonical_path = fs.realpathSync(skill.directory_path);
+  return {
+    resource_id: create_hash("sha256").update(canonical_path).digest("hex"),
+    source_path: skill.directory_path,
+  };
+}
+
+/** Read only an exact discovered directory ID, never a renderer-provided path or fuzzy name. */
+async function read_discovered_skill(skills: SkillSummary[], skill_id: string) {
+  const target = skills.find((skill) => skill.id === skill_id);
+  if (!target) return { success: false, error: `Skill not found: ${skill_id}` };
+  try {
+    return { success: true, content: await fs.readFile(target.skill_md_path, "utf-8") };
+  } catch (reason) {
+    return { success: false, error: to_error_message(reason) };
+  }
 }
 
 /** 读取对象中的必填字符串。 */

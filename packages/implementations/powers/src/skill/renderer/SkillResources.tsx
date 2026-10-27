@@ -4,6 +4,7 @@ import type { PowerMainviewComponentProps, PowerSidebarComponentProps } from "@d
 import type { SkillMainviewSnapshot, SkillMainviewReadResult } from "@/skill/types/SkillMainview.js";
 import type { McpStatusResult } from "@/mcp/types/McpPower.js";
 import { mcp_resource_detail as Mcp_resource_detail } from "@/mcp/renderer/McpPowerRenderer.js";
+import { collect_skills, find_skill_resource } from "./SkillResourceModel.js";
 
 /** Load each resource family independently so one unavailable source does not hide the other. */
 export function skill_resource_sidebar({ power, navigation, ui }: PowerSidebarComponentProps) {
@@ -26,14 +27,14 @@ export function skill_resource_sidebar({ power, navigation, ui }: PowerSidebarCo
   useEffect(() => {
     if (navigation.route.resource_id) return;
     const first = resources[0];
-    if (first) navigation.navigate({ resource_kind: "skill", resource_id: first.id });
+    if (first) navigation.navigate({ resource_kind: "skill", resource_id: first.route_id });
     else if (snapshot && mcp?.servers[0]) navigation.navigate({ resource_kind: "mcp", resource_id: mcp.servers[0].id });
   }, [snapshot, mcp, navigation.route.resource_id, navigation.navigate]);
   return <Sidebar>
     <SidebarSection label="Skills">
       {!snapshot && !skill_error ? <LoadingState label="正在读取 Skills…" /> : null}
       {skill_error ? <Callout tone="danger">{skill_error}</Callout> : null}
-      {resources.map((item) => <SidebarItem key={item.id} label={item.name} active={navigation.route.resource_kind === "skill" && navigation.route.resource_id === item.id} on_select={() => navigation.navigate({ resource_kind: "skill", resource_id: item.id })} />)}
+      {resources.map((item) => <SidebarItem key={item.route_id} label={`${item.name} · ${item.source_label}`} active={navigation.route.resource_kind === "skill" && find_skill_resource(snapshot, String(navigation.route.resource_id))?.resource_id === item.resource_id} on_select={() => navigation.navigate({ resource_kind: "skill", resource_id: item.route_id })} />)}
       {snapshot && !resources.length ? <SidebarSubText>还没有 Skill</SidebarSubText> : null}
     </SidebarSection>
     <SidebarSection label="MCP">
@@ -51,17 +52,17 @@ export function skill_resource_mainview(props: PowerMainviewComponentProps) {
   const resource_id = typeof props.navigation.route.resource_id === "string" ? props.navigation.route.resource_id : "";
   if (!resource_id) return <Page><EmptyState title="选择一个 Skill 或 MCP Server" description="在左侧浏览资源；在 Agent 设置的 Skills 中分配资源。" /></Page>;
   if (props.navigation.route.resource_kind === "mcp") return <Mcp_resource_detail key={resource_id} {...props} server_id={resource_id} />;
-  return <Skill_resource_detail key={resource_id} {...props} skill_id={resource_id} />;
+  return <Skill_resource_detail key={resource_id} {...props} route_id={resource_id} />;
 }
 
 /** Individual Skill detail inputs. */
 interface SkillResourceDetailProps extends PowerMainviewComponentProps {
-  /** Stable Skill directory identifier selected in the resource sidebar. */
-  readonly skill_id: string;
+  /** Source-owned Skill route selected in the resource sidebar. */
+  readonly route_id: string;
 }
 
 /** Show installed Skill content together with its source and current Agent usage. */
-function Skill_resource_detail({ power, ui, skill_id }: SkillResourceDetailProps) {
+function Skill_resource_detail({ power, ui, route_id }: SkillResourceDetailProps) {
   const { Page, Toolbar, Section, Group, Row, Markdown, LoadingState, Callout, EmptyState } = ui.components;
   const [snapshot, set_snapshot] = useState<SkillMainviewSnapshot>();
   const [content, set_content] = useState("");
@@ -76,37 +77,27 @@ function Skill_resource_detail({ power, ui, skill_id }: SkillResourceDetailProps
       const next = await power.invoke<SkillMainviewSnapshot>("skill.snapshot");
       if (disposed) return;
       set_snapshot(next);
-      const global_skill = next.available.find((item) => item.id === skill_id);
-      const owner = next.agents.find((agent) => agent.skills.some((item) => item.id === skill_id));
-      if (!global_skill && !owner) return;
-      const result = await power.invoke<SkillMainviewReadResult>(global_skill ? "skill.read_home" : "skill.read", global_skill ? { skill_id } : { skill_id, agent_id: owner!.agent_id });
+      const selected = find_skill_resource(next, route_id);
+      if (!selected) return;
+      const result = await power.invoke<SkillMainviewReadResult>(selected.agent_id === null ? "skill.read_home" : "skill.read", selected.agent_id === null ? { skill_id: selected.skill_id } : { skill_id: selected.skill_id, agent_id: selected.agent_id });
       if (disposed) return;
       if (!result.success) throw new Error(result.error || "无法读取 Skill");
       set_content(result.content ?? "");
     })().catch((reason) => { if (!disposed) set_error(error_message(reason)); })
       .finally(() => { if (!disposed) set_loading(false); });
     return () => { disposed = true; };
-  }, [power, skill_id, ui.revision]);
-  const item = collect_skills(snapshot).find((resource) => resource.id === skill_id);
-  const global_skill = snapshot?.available.find((resource) => resource.id === skill_id);
-  const users = snapshot?.agents.filter((agent) => agent.skills.some((skill) => skill.id === skill_id)) ?? [];
+  }, [power, route_id, ui.revision]);
+  const item = find_skill_resource(snapshot, route_id);
+  const users = snapshot?.agents.filter((agent) => agent.skills.some((skill) => skill.resource_id === item?.resource_id)) ?? [];
   return <Page>
-    <Toolbar title={item?.name ?? skill_id} description={item?.description} />
+    <Toolbar title={item?.name ?? "Skill"} description={item?.description} />
     {error ? <Callout tone="danger">{error}</Callout> : null}
     {item ? <Group>
-      <Row label="来源" description={global_skill ? `~/.agents/skills/${skill_id}` : "Agent 已安装目录"} />
+      <Row label="来源" description={`${item.source_label} · ${item.source_path}`} />
       <Row label="使用此 Skill 的 Agent" description={users.map((agent) => agent.name).join("、") || "尚未分配"} />
     </Group> : null}
     {loading ? <LoadingState label="正在读取 Skill…" /> : !item ? <EmptyState title="Skill 已不存在" /> : <Section title="SKILL.md">{content ? <Markdown text={content} /> : !error ? <EmptyState title="Skill 内容为空" size="compact" /> : null}</Section>}
   </Page>;
-}
-
-/** Deduplicate global and Agent-installed resources by their stable directory ID. */
-function collect_skills(snapshot?: SkillMainviewSnapshot) {
-  const items = new Map<string, { /** Stable resource directory name. */ id: string; /** User-visible Skill title. */ name: string; /** Frontmatter description. */ description: string }>();
-  for (const item of snapshot?.available ?? []) items.set(item.id, item);
-  for (const agent of snapshot?.agents ?? []) for (const item of agent.skills) if (!items.has(item.id)) items.set(item.id, item);
-  return [...items.values()].sort((left, right) => left.name.localeCompare(right.name));
 }
 
 /** Normalize gateway errors for display. */

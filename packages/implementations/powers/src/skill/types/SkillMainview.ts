@@ -4,7 +4,7 @@
  * 关键点（中文）
  * - 页面分两层：全局目录（用户目录里的 Skill）与单个 Agent（已绑定的 Skill）。
  * - 可关联来源只有用户目录 `~/.agents/skills`；不做 Workspace 维度，也不在界面里安装。
- * - 该协议只描述用户管理 Skill 所需的稳定数据，不暴露 Agent 运行实例或本地路径。
+ * - 来源路径仅供展示；读取只接受目录 ID 与 Agent ID，宿主重新发现实际文件。
  */
 
 import type { McpServerStatus } from "@/mcp/types/McpPower.js";
@@ -19,10 +19,16 @@ export interface SkillMainviewMcpServer extends McpServerStatus {
   readonly linked_agent_ids: string[];
 }
 
-/**
- * 功能页展示的一条 Agent 已绑定 Skill。
- */
-export interface SkillMainviewItem {
+/** Host-resolved identity shared by entries pointing at the same real directory. */
+export interface SkillMainviewResource {
+  /** Opaque identity derived from the canonical directory; never accepted as a read path. */
+  readonly resource_id: string;
+  /** Installed entry's absolute directory path, for source display only. */
+  readonly source_path: string;
+}
+
+/** 功能页展示的一条 Agent 已绑定 Skill。 */
+export interface SkillMainviewItem extends SkillMainviewResource {
   /**
    * Skill 的稳定目录 ID。
    */
@@ -60,7 +66,7 @@ export interface SkillMainviewItem {
 /**
  * 用户目录中一条可关联的 Skill。
  */
-export interface SkillMainviewAvailableItem {
+export interface SkillMainviewAvailableItem extends SkillMainviewResource {
   /**
    * Skill 的稳定目录 ID。
    */
@@ -80,8 +86,8 @@ export interface SkillMainviewAvailableItem {
    * 该 Skill 已关联到哪些 Agent。
    *
    * 说明（中文）
-   * - 按 Skill ID 判断，不比较路径。
-   * - 全局页用它标出状态，并避免对同一个 Agent 重复关联。
+   * - 按真实资源标识判断，独立复制的同名目录不算共享使用。
+   * - 全局页用它展示指向相同真实目录的 Agent。
    */
   readonly linked_agent_ids: string[];
 }

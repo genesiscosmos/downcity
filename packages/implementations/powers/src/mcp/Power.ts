@@ -73,7 +73,7 @@ export class McpRuntime {
     context.power.config_action({ id: "skill.mcp.config.reload", run: async (input) => await this.reload_config(input) });
     context.power.config_action({ id: "skill.mcp.config.status", run: async () => await this.read_status() });
     this.actions.servers = create_action({
-      description: "List enabled MCP servers and their connection status.",
+      description: "List assigned MCP servers and their connection status.",
       access: "read",
       execute: async ({ context }) => {
         const allowed = new Set(await this.assignments.read(context.agent.id));
@@ -149,7 +149,11 @@ export class McpRuntime {
     });
     context.power.action({
       id: "skill.mcp.refresh",
-      run: async () => { await this.refresh_connections(); return as_json(this.status_result()); },
+      run: async (input) => {
+        const { server_id } = z.object({ server_id: z.string().trim().min(1).optional() }).strict().parse(input === undefined ? {} : input);
+        await this.refresh_connections(server_id);
+        return as_json(this.status_result());
+      },
     });
     context.power.action({ id: "skill.mcp.cancel_authorization", run: async (input) => {
       await this.exclusive(async () => {

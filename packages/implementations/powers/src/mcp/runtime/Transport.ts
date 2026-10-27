@@ -53,12 +53,26 @@ export class McpConnection {
     this.initialized = true;
   }
 
-  /** 获取当前 server 的工具清单。 */
+  /** 获取当前 Server 的全部工具页；支持取消，重复游标按协议错误终止。 */
   async list_tools(signal?: AbortSignal): Promise<McpToolDefinition[]> {
     if (this.http) return await this.http.list_tools(signal);
+    signal?.throwIfAborted();
     await this.initialize(signal);
-    const result = await this.transport!.request("tools/list", {}, signal);
-    return Array.isArray(result.tools) ? result.tools as McpToolDefinition[] : [];
+    const tools: McpToolDefinition[] = [];
+    const seen_cursors = new Set<string>();
+    let cursor: string | undefined;
+    do {
+      signal?.throwIfAborted();
+      const page = await this.transport!.request("tools/list", cursor ? { cursor } : {}, signal);
+      signal?.throwIfAborted();
+      if (Array.isArray(page.tools)) tools.push(...page.tools as McpToolDefinition[]);
+      cursor = typeof page.nextCursor === "string" ? page.nextCursor : undefined;
+      if (cursor) {
+        if (seen_cursors.has(cursor)) throw new Error("MCP tools/list returned a repeated cursor");
+        seen_cursors.add(cursor);
+      }
+    } while (cursor);
+    return tools;
   }
 
   /** 调用 MCP 工具。 */

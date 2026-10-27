@@ -87,7 +87,7 @@ export function mcp_resource_detail({ power, ui, server_id }: McpResourceDetailP
       set_refreshing(true);
       set_error("");
       try {
-        const next = await power.invoke<McpRendererStatusView>("skill.mcp.refresh");
+        const next = await power.invoke<McpRendererStatusView>("skill.mcp.refresh", { server_id });
         if (sequence === request_sequence.current) set_status(next);
         ui.invalidate();
       } catch (reason) {
