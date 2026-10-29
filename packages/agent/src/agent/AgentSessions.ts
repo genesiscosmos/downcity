@@ -7,6 +7,7 @@
  * - Session 对象创建细节集中在这里，避免 facade 和 lifecycle 重复依赖 Session 构造逻辑。
  */
 
+import { SessionLifecycle } from "./SessionLifecycle.js";
 import { allocate_session_id, normalize_session_id } from "@/session/SessionIdentity.js";
 import type { ModelClient, AgentTool as Tool } from "@downcity/type";
 import type { SessionCompletionPort } from "@/types/agent/SessionCompletion.js";
@@ -118,6 +119,8 @@ export class AgentSessions implements AgentSessionsContract<AgentSession> {
   private readonly session_composer: SessionComposer;
   private readonly get_agent_model: AgentSessionsOptions["get_agent_model"];
   private readonly sessions_by_id = new Map<string, AgentManagedSession>();
+  /** 创建、恢复、删除与归档扫描共用的进程内生命周期互斥。 */
+  private readonly lifecycle = new SessionLifecycle();
   /** 新会话初始化后的宿主订阅；恢复已有会话时不触发。 */
   private readonly creation_listeners = new Set<(session: AgentSession) => void | Promise<void>>();
   /** 会话成功离开活动集合后的宿主订阅。 */
@@ -248,6 +251,11 @@ export class AgentSessions implements AgentSessionsContract<AgentSession> {
    * - Workspace 仅用于首次创建；已有会话的目录实例由宿主通过 get/set 明确恢复。
    */
   async self(input?: { workspace?: WorkspaceRuntime }): Promise<AgentSession> {
+    return await this.lifecycle.access(() => this.open_self(input));
+  }
+
+  /** 生命周期保护内恢复或创建 Agent 主会话。 */
+  private async open_self(input?: { /** 首次创建使用的 Workspace 实例。 */ workspace?: WorkspaceRuntime }): Promise<AgentSession> {
     const existing = await this.find_agent_session();
     if (existing) return existing;
     return await this.run_agent_session_creation(async () => {
@@ -310,9 +318,11 @@ export class AgentSessions implements AgentSessionsContract<AgentSession> {
   async create(
     input?: AgentCreateSessionInput & { workspace?: WorkspaceRuntime },
   ): Promise<AgentSession> {
-    const origin = normalize_session_origin(input?.origin);
-    const session_id = await this.allocate_session_id(origin);
-    return await this.create_with_id(session_id, origin, input?.workspace);
+    return await this.lifecycle.access(async () => {
+      const origin = normalize_session_origin(input?.origin);
+      const session_id = await this.allocate_session_id(origin);
+      return await this.create_with_id(session_id, origin, input?.workspace);
+    });
   }
 
   /**
@@ -328,6 +338,11 @@ export class AgentSessions implements AgentSessionsContract<AgentSession> {
     delegation_depth?: number,
     child_origin?: SessionOrigin,
   ): Promise<AgentSession> {
+    return await this.lifecycle.access(() => this.open_work_session(session_id, workspace, delegation_depth, child_origin));
+  }
+
+  /** 生命周期保护内恢复幂等委派或创建会话。 */
+  private async open_work_session(session_id: string, workspace: WorkspaceRuntime, delegation_depth?: number, child_origin?: SessionOrigin): Promise<AgentSession> {
     const origin: SessionOrigin = child_origin ?? {
       category: SESSION_ORIGIN_CATEGORY_WORK,
       type: SESSION_ORIGIN_TYPE_WORK,
@@ -355,6 +370,11 @@ export class AgentSessions implements AgentSessionsContract<AgentSession> {
       creating: true,
       ...(workspace ? { workspace } : {}),
     });
+    if (origin.parent_agent_id === this.agent_id && typeof origin.parent_session_id === "string"
+      && typeof origin.parent_session_category === "string"
+      && !await context.store.has_session(origin.parent_session_id, origin.parent_session_category)) {
+      throw new Error("session_parent_unavailable: parent Session is missing or archived");
+    }
     const session = this.get_or_create_session({
       session_id,
       workspace,
@@ -383,6 +403,11 @@ export class AgentSessions implements AgentSessionsContract<AgentSession> {
     category = SESSION_ORIGIN_CATEGORY_WORK,
     input?: { workspace?: WorkspaceRuntime },
   ): Promise<AgentSession> {
+    return await this.lifecycle.access(() => this.open_existing_session(session_id, category, input));
+  }
+
+  /** 生命周期保护内读取持久化信息并恢复 Session 句柄。 */
+  private async open_existing_session(session_id: string, category: string, input?: { /** 恢复时注入的 Workspace 实例。 */ workspace?: WorkspaceRuntime }): Promise<AgentSession> {
     const resolved_session_id = normalize_session_id(session_id);
     if (!resolved_session_id) {
       throw new Error("sessions.get requires a non-empty session_id");
@@ -434,6 +459,11 @@ export class AgentSessions implements AgentSessionsContract<AgentSession> {
    * - 该方法不处理任何 Power 自有数据。
    */
   async remove(session_id: string, category = SESSION_ORIGIN_CATEGORY_WORK): Promise<boolean> {
+    return await this.lifecycle.access(() => this.remove_existing_session(session_id, category));
+  }
+
+  /** 生命周期保护内删除单个活动会话。 */
+  private async remove_existing_session(session_id: string, category: string): Promise<boolean> {
     const resolved_session_id = normalize_session_id(session_id);
     if (!resolved_session_id) {
       throw new Error("sessions.remove requires a non-empty session_id");
@@ -462,6 +492,11 @@ export class AgentSessions implements AgentSessionsContract<AgentSession> {
    * 清空一个 Session 的消息目录。
    */
   async clear_messages(session_id: string, category = SESSION_ORIGIN_CATEGORY_WORK): Promise<boolean> {
+    return await this.lifecycle.access(() => this.clear_existing_messages(session_id, category));
+  }
+
+  /** 生命周期保护内清理消息，避免与归档搬迁同时进行。 */
+  private async clear_existing_messages(session_id: string, category: string): Promise<boolean> {
     const resolved_session_id = normalize_session_id(session_id);
     if (!resolved_session_id) {
       throw new Error("sessions.clear_messages requires a non-empty session_id");
@@ -504,6 +539,11 @@ export class AgentSessions implements AgentSessionsContract<AgentSession> {
   async archive(
     input: AgentArchiveSessionInput,
   ): Promise<AgentArchiveSessionResult> {
+    return await this.lifecycle.archive(() => this.archive_subtree(input));
+  }
+
+  /** 集合生命周期独占期间扫描并归档子树。 */
+  private async archive_subtree(input: AgentArchiveSessionInput): Promise<AgentArchiveSessionResult> {
     const session_id = normalize_session_id(input?.id || "");
     if (!session_id) {
       throw new Error("sessions.archive requires a non-empty id");
@@ -589,7 +629,7 @@ export class AgentSessions implements AgentSessionsContract<AgentSession> {
    * 永久清空已归档 session。
    */
   async clean_archive(): Promise<AgentCleanArchiveResult> {
-    return await this.resolve_session_context().store.clean_archive();
+    return await this.lifecycle.access(() => this.resolve_session_context().store.clean_archive());
   }
 
   /**
@@ -663,6 +703,7 @@ export class AgentSessions implements AgentSessionsContract<AgentSession> {
    *   而旧订阅仍然挂在被丢弃的实例上。
    */
   release(session_id: string, category = SESSION_ORIGIN_CATEGORY_WORK): boolean {
+    if (this.lifecycle.is_archiving()) return false;
     const resolved_session_id = normalize_session_id(session_id);
     if (!resolved_session_id) return false;
     const cache_key = this.session_cache_key(
