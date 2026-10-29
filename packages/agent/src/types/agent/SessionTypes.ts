@@ -395,7 +395,7 @@ export interface AgentSessionForkInput {
 }
 
 /**
- * 归档单个 session 的输入参数。
+ * 归档 Session 及当前 Agent 下全部后代 Work Session 的输入参数。
  */
 export interface AgentArchiveSessionInput {
   /**
@@ -403,7 +403,8 @@ export interface AgentArchiveSessionInput {
    *
    * 关键点（中文）
    * - 必须指向当前 agent 下已存在的未归档 session。
-   * - 正在执行中的 session 不允许归档。
+   * - 当前 Session 或任一后代正在执行或有排队输入时，不允许归档。
+   * - 先归档后代，再归档当前 Session；存储失败时已归档的后代不回滚，可重试剩余节点。
    */
   id: string;
   /** Session 所在的来源分类；省略时使用 `work`。 */

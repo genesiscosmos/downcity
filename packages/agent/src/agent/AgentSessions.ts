@@ -20,6 +20,7 @@ import type {
   AgentCleanArchiveResult,
   AgentListSessionsInput,
   AgentSessionSummaryPage,
+  AgentSessionSummary,
   AgentSessionSystemBlock,
 } from "@/types/agent/SessionTypes.js";
 import type { AgentSessionConstructor } from "@/types/agent/AgentOptions.js";
@@ -494,7 +495,11 @@ export class AgentSessions implements AgentSessionsContract<AgentSession> {
   }
 
   /**
-   * 归档单个 session。
+   * 归档 Session 及同一 Agent 下的全部后代 Work Session。
+   *
+   * 完整读取目录后，先同步关闭所有已缓存节点的输入，再按子节点优先顺序归档。
+   * 运行中或排队中的任一节点会使预检失败；存储失败时保留尚未归档的父节点，
+   * 已成功归档的子节点不回滚，重试会从活动目录中剩余的节点继续。
    */
   async archive(
     input: AgentArchiveSessionInput,
@@ -504,25 +509,71 @@ export class AgentSessions implements AgentSessionsContract<AgentSession> {
       throw new Error("sessions.archive requires a non-empty id");
     }
     const category = normalize_session_origin_category(input.category ?? SESSION_ORIGIN_CATEGORY_WORK);
-    const cache_key = this.session_cache_key(session_id, category);
-
-    const cached = this.sessions_by_id.get(cache_key);
-    cached?.begin_archive();
+    const plan = await this.collect_archive_plan(session_id, category);
+    const locked = new Set<AgentManagedSession>();
     try {
-      const result = await this.resolve_session_context().store.archive_session(session_id, category);
-      cached?.finish_archive(true);
-      cached?.dispose_title_generation?.();
-      this.sessions_by_id.delete(cache_key);
-      await this.notify_removed({
-        type: "archived", session_id, category,
-        origin_type: cached?.origin.type ?? SESSION_ORIGIN_TYPE_WORK,
-        workspace_id: cached?.workspace_id,
-      });
-      return result;
-    } catch (error) {
-      cached?.finish_archive(false);
-      throw error;
+      // 此循环没有 await：所有节点预检成功前，不移动任何 Session 数据。
+      for (const item of plan) {
+        const cached = this.sessions_by_id.get(this.session_cache_key(item.id, item.category!));
+        if (!cached) continue;
+        cached.begin_archive();
+        locked.add(cached);
+      }
+      let root_result: AgentArchiveSessionResult | undefined;
+      for (const item of plan) {
+        const item_category = item.category!;
+        const cache_key = this.session_cache_key(item.id, item_category);
+        const cached = this.sessions_by_id.get(cache_key);
+        const result = await this.resolve_session_context().store.archive_session(item.id, item_category);
+        cached?.finish_archive(true);
+        if (cached) locked.delete(cached);
+        cached?.dispose_title_generation?.();
+        this.sessions_by_id.delete(cache_key);
+        await this.notify_removed({
+          type: "archived", session_id: item.id, category: item_category,
+          origin_type: cached?.origin.type ?? SESSION_ORIGIN_TYPE_WORK,
+          workspace_id: cached?.workspace_id,
+        });
+        root_result = result;
+      }
+      return root_result!;
+    } finally {
+      for (const cached of locked) cached.finish_archive(false);
     }
+  }
+
+  /** 完整分页读取 Work 目录，按不可变直接父子关系生成后序归档计划，不按 Workspace 截断。 */
+  private async collect_archive_plan(session_id: string, category: string): Promise<AgentArchiveSessionInput[]> {
+    const children = new Map<string, AgentSessionSummary[]>();
+    let cursor: string | undefined;
+    const seen_cursors = new Set<string>();
+    do {
+      const page = await this.list({ category: SESSION_ORIGIN_CATEGORY_WORK, limit: 200, ...(cursor ? { cursor } : {}) });
+      for (const session of page.items) {
+        const origin = session.origin;
+        if (origin.parent_agent_id !== this.agent_id || typeof origin.parent_session_id !== "string"
+          || typeof origin.parent_session_category !== "string") continue;
+        const parent_key = this.session_cache_key(origin.parent_session_id, origin.parent_session_category);
+        const siblings = children.get(parent_key) ?? [];
+        siblings.push(session);
+        children.set(parent_key, siblings);
+      }
+      if (!page.has_more) break;
+      if (!page.next_cursor || seen_cursors.has(page.next_cursor)) throw new Error("Session archive received an invalid pagination cursor");
+      cursor = page.next_cursor;
+      seen_cursors.add(cursor);
+    } while (true);
+    const plan: AgentArchiveSessionInput[] = [];
+    const visited = new Set<string>();
+    const append = (id: string, item_category: string) => {
+      const key = this.session_cache_key(id, item_category);
+      if (visited.has(key)) throw new Error(`Session archive found a cyclic parent relation: ${id}`);
+      visited.add(key);
+      for (const child of children.get(key) ?? []) append(child.session_id, child.origin.category);
+      plan.push({ id, category: item_category });
+    };
+    append(session_id, category);
+    return plan;
   }
 
   /**
