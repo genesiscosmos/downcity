@@ -72,7 +72,7 @@ const exec_input = z.strictObject({
   max_output_tokens: z
     .number()
     .optional()
-    .describe("Maximum output tokens returned in the final result."),
+    .describe("Approximate output token budget for the final result. Use max_output_tokens; max_output_chars is not supported."),
   target: target_schema,
   reason: reason_schema,
 });
@@ -355,6 +355,10 @@ export class ShellPower extends Power {
       "# Shell",
       "",
       "One-shot commands: `shell({ action: \"exec\", args: { cmd } })`.",
+      "Optional output budget: `shell({ action: \"exec\", args: { cmd, max_output_tokens: 2000 } })`.",
+      "Use `max_output_tokens` for output limits; `max_output_chars` is not a supported parameter.",
+      "Arguments are validated strictly. If unsure about supported fields, call `shell()` to read action schemas.",
+      "If validation rejects a field, correct the arguments using the schema before retrying; the command has not run.",
       "Interactive or long-running work: `session_start`, then `session_send` / `session_read` /",
       "`session_list` / `session_stop`.",
       "",
