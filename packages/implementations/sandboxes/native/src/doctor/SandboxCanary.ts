@@ -11,12 +11,13 @@ import os from "node:os";
 import path from "node:path";
 import type { SandboxProviderIssue, SandboxNetworkMode } from "@downcity/type/shell";
 import { resolve_sandbox_policy } from "../policy/SandboxPolicy.js";
-import { run_probe_process } from "./ProbeProcess.js";
+import { describe_probe_result, probe_exited_with, run_probe_process } from "./ProbeProcess.js";
+import type { ProbeProcessResult } from "./ProbeProcess.js";
 import { check_network_boundary } from "./NetworkCanary.js";
 import type { ResolvedSandboxPolicy } from "../types/SandboxPolicy.js";
 
-/** 有界执行探针，返回退出码；启动失败、信号退出和超时统一返回 -1。 */
-async function run_probe(policy: ResolvedSandboxPolicy, cmd: string, targets: string[]): Promise<number> {
+/** 有界执行文件探针，保留启动错误、终止信号和标准错误摘要。 */
+async function run_probe(policy: ResolvedSandboxPolicy, cmd: string, targets: string[]): Promise<ProbeProcessResult> {
   return await run_probe_process(policy, {
     command: "/bin/sh", args: ["-c", cmd, "canary", ...targets],
   });
@@ -51,8 +52,13 @@ export async function run_sandbox_canary(network: SandboxNetworkMode): Promise<S
       { code: "child_denial_not_enforced", cmd: '/bin/sh -c \'if printf bad > "$1"; then exit 0; else exit 77; fi\' canary "$1"', targets: [path.join(readonly_path, "child")], expected: 77 },
     ];
     for (const probe of probes) {
-      if (await run_probe(policy, probe.cmd, probe.targets) !== probe.expected) {
-        issues.push({ code: probe.code, message: `Sandbox canary failed: ${probe.code}`, fixes: ["Check the native sandbox policy and platform wrapper; do not fall back to host execution."] });
+      const result = await run_probe(policy, probe.cmd, probe.targets);
+      if (!probe_exited_with(result, probe.expected)) {
+        issues.push({
+          code: probe.code,
+          message: `Sandbox canary failed: ${probe.code}: ${describe_probe_result(result)}`,
+          fixes: ["Check the native sandbox policy and platform wrapper; do not fall back to host execution."],
+        });
       }
     }
     // 文件探针必须先通过，避免用环境启动失败误判网络隔离。
