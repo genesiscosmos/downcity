@@ -4,6 +4,7 @@
  */
 import { httpError, type FederationTableApi, type ServiceDatabaseContext } from "@downcity/federation";
 import type { PaymentProviderWebhookEvent } from "./types.js";
+import { service_sql_database } from "../shared/database-sql.js";
 import type { PaymentInboxRecord } from "./inbox-schema.js";
 
 /** 支付后台调度所需最小接口。 */
@@ -27,8 +28,13 @@ export class PaymentInbox {
     private readonly table: FederationTableApi<PaymentInboxRecord>,
     private readonly queue: PaymentInboxQueue,
     private readonly synchronize: (provider: string, event: PaymentProviderWebhookEvent) => Promise<string>,
-    private readonly database: ServiceDatabaseContext,
-  ) {}
+    database: ServiceDatabaseContext,
+  ) {
+    this.database = service_sql_database(database);
+  }
+
+  /** 当前方言的参数化事件查询入口。 */
+  private readonly database: ServiceDatabaseContext;
 
   /** 只调用于验签完成后；同一事件只保存第一次收到的可信事实。 */
   async accept(provider: string, event: PaymentProviderWebhookEvent): Promise<string> {

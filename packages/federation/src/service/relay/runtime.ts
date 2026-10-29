@@ -5,15 +5,19 @@
  * 的数据库，与既有结算任务通过稳定 request_id 关联。
  */
 import type { CityModelDescriptor } from "@downcity/type";
+import { query_service_database, settlement_credits_sql } from "../ai/database-sql.js";
 import type { Service, Context } from "../service.js";
+import type { ServiceDatabaseContext } from "../../types/database/Database.js";
+import type { CityTableApi } from "../../store/table-api.js";
 import type { AIModelDefinition } from "../../types/AI.js";
 import type {
-  RelayInitialization, RelayPrincipal, RelayRequestLog, RelayRequestPage, RelayAttemptRecord, RelayAttemptList, RelayHealthRecord,
+  RelayInitialization, RelayPrincipal, RelayRequestLog, RelayRequestPage, RelayAttemptRecord, RelayAttemptList, RelayHealthRecord, RelayCatalogRecord,
 } from "../../types/Relay.js";
 import { httpError } from "../../utils/helpers.js";
 import { RelayCatalogStore } from "./catalog.js";
 import { RelayKeyStore } from "./keys.js";
 import { RelayRouter } from "./router.js";
+import { pg_relay_index_ddl } from "./schema.pg.js";
 import type { RelayAdminMetadata, RelayAdminHealth } from "../../types/RelayAdmin.js";
 
 /** 可选中转功能，生命周期由 AIService 管理。 */
@@ -48,7 +52,7 @@ export class RelayRuntime {
     service.action("relay/health", async (): Promise<RelayAdminHealth> => {
       const { catalog } = await this.catalog().read();
       const checked_at = Date.now();
-      const rows = await this.dependencies!.database.query<RelayHealthRecord>({
+      const rows = await query_service_database<RelayHealthRecord>(this.dependencies!.database, {
         sql: "SELECT deployment_id, cooldown_until FROM service_ai_relay_health", params: [],
       });
       const cooldowns = new Map(rows.rows.map((row) => [row.deployment_id, row.cooldown_until]));
@@ -77,6 +81,21 @@ export class RelayRuntime {
     });
   }
 
+  /** 部署时创建索引并写入默认目录；所有资源显式注入，不依赖 initialize。 */
+  async prepare_database(
+    database: ServiceDatabaseContext,
+    catalog_table: CityTableApi<RelayCatalogRecord>,
+    models: AIModelDefinition[],
+  ): Promise<void> {
+    if (database.schema_id === "postgresql") {
+      for (const sql of pg_relay_index_ddl) {
+        await query_service_database(database, { sql, params: [] });
+      }
+    }
+    await new RelayCatalogStore(catalog_table, models).prepare_database();
+  }
+
+  /** 绑定运行时存储并加载目录，不执行结构 DDL。 */
   async initialize(dependencies: RelayInitialization): Promise<void> {
     this.dependencies = dependencies;
     this.catalog_store = new RelayCatalogStore(dependencies.table("relay_catalog"), dependencies.models);
@@ -153,11 +172,11 @@ export class RelayRuntime {
     }
     if (typeof ctx.input.key_id === "string") { filters.push("r.key_id = ?"); params.push(ctx.input.key_id); }
     params.push(limit);
-    const result = await this.dependencies!.database.query<RelayRequestLog>({
+    const result = await query_service_database<RelayRequestLog>(this.dependencies!.database, {
       sql: `SELECT r.*, s.status AS settlement_status, u.metering_status,
         u.uncached_input_tokens, u.cached_input_tokens, u.output_tokens, u.reasoning_tokens, u.duration_ms,
         u.channel_id, u.upstream_model,
-        CASE WHEN s.status = 'completed' THEN json_extract(s.payload_json, '$.charge.credits') ELSE NULL END AS charged_credits
+        CASE WHEN s.status = 'completed' THEN ${settlement_credits_sql(this.dependencies!.database.schema_id)} ELSE NULL END AS charged_credits
         FROM service_ai_relay_requests r
         LEFT JOIN service_ai_settlement_jobs s ON s.usage_id = r.request_id
         LEFT JOIN service_ai_usage_records u ON u.usage_id = r.request_id
@@ -170,7 +189,7 @@ export class RelayRuntime {
 
   private async list_attempts(ctx: Context, user_id?: string): Promise<RelayAttemptList> {
     const request_id = typeof ctx.input.request_id === "string" ? ctx.input.request_id : "";
-    const result = await this.dependencies!.database.query<RelayAttemptRecord>({
+    const result = await query_service_database<RelayAttemptRecord>(this.dependencies!.database, {
       sql: `SELECT a.* FROM service_ai_relay_attempts a
         JOIN service_ai_relay_requests r ON a.request_id = r.request_id
         WHERE r.request_id = ? ${user_id ? "AND r.user_id = ?" : ""} ORDER BY a.started_at, a.attempt_id`,

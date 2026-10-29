@@ -10,6 +10,8 @@
  */
 
 import type { z } from "zod";
+import type { SessionApprovalRequestInput } from "@downcity/type";
+import { assert_public_execution_input, redact_public_value } from "@/power/core/PowerPrivateValues.js";
 import type {
   CityPowerContext,
   CityActionErrorCode,
@@ -99,6 +101,7 @@ export abstract class CityAction<TArgs = Record<string, never>> implements AnyCi
    * - 声明 `approval` 的动作在这里统一请求审批；拒绝或无人响应时不执行 `run`。
    */
   async execute(raw_args: unknown, context: CityPowerContext): Promise<unknown> {
+    assert_public_execution_input(raw_args, context.interactions);
     const args = this.parse_args(raw_args);
     if (this.approval) {
       const approval = context.interactions.approval;
@@ -115,13 +118,13 @@ export abstract class CityAction<TArgs = Record<string, never>> implements AnyCi
           message: `Action "${this.action}" requires approval, but this call has no Tool Call identity.`,
         });
       }
-      const decision = await approval.request({
+      const decision = await approval.request(redact_public_value<SessionApprovalRequestInput>({
         turn_id: context.turn_id || "",
         tool_call_id: context.tool_call_id,
         tool_name: context.action_id,
         description: this.description,
         payload: { operation: "tool", validated_input: args as never },
-      });
+      }, context.interactions));
       if (!decision.approved) {
         throw new CityActionError({
           code: "internal",

@@ -12,6 +12,7 @@ import type {
   SessionInteractionHandle,
   SessionInteractionPort,
   SessionInteractionRequestInput,
+  SessionSecretStreamRedactor,
 } from "@downcity/type";
 
 /** 无 Session 入口的稳定拒绝原因。 */
@@ -35,6 +36,17 @@ export function create_denied_interaction_port(
   return {
     async request(_input: SessionInteractionRequestInput): Promise<SessionInteractionHandle> {
       throw no_session_error(action_label);
+    },
+    resolve_secret_references(_input: SessionInteractionRequestInput["payload"]): never {
+      throw no_session_error(action_label);
+    },
+    redact_secret_values(value: unknown): unknown {
+      return value;
+    },
+    // No Session means no secret registry or resolution. Preserve ordinary
+    // sandbox Shell execution while interaction and host approval stay denied.
+    create_secret_stream_redactor(): SessionSecretStreamRedactor {
+      return { write: (chunk: string) => chunk, end: () => "" };
     },
   };
 }

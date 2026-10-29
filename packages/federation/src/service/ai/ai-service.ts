@@ -18,7 +18,8 @@
 import { Service, type Context } from "../service.js";
 import { httpError } from "../../utils/helpers.js";
 import type { ActionFn } from "../action.js";
-import { sqliteAsyncJobs } from "../async-job/schema.js";
+import { pgAsyncJobs, sqliteAsyncJobs } from "../async-job/schema.js";
+import type { ServiceDatabaseSchemas } from "../installable-service.js";
 import type { CityModelDescriptor, CityModelType, ModelCall } from "@downcity/type";
 import type {
   AIChannelStreamResult,
@@ -43,6 +44,7 @@ import {
   resolve_text_routing_plan,
 } from "./model-routing.js";
 import { ai_settlement_jobs, ai_usage_records } from "./ai-usage-schema.js";
+import { pg_ai_settlement_jobs, pg_ai_usage_records } from "./ai-usage-schema.pg.js";
 import type {
   AdminAIUsageResult,
   AdminUsageQuery,
@@ -74,7 +76,9 @@ import {
 import { AISettlementRuntime } from "./AISettlementRuntime.js";
 import { validate_ai_decision_request, validate_ai_decision_result } from "./decision-validation.js";
 import { RelayRuntime } from "../relay/runtime.js";
+import type { RelayCatalogRecord } from "../../types/Relay.js";
 import { relay_tables } from "../relay/schema.js";
+import { pg_relay_tables } from "../relay/schema.pg.js";
 
 /** AIService 直接暴露的 action 模态列表。模型流与图片任务使用独立 handler。 */
 const MODALITIES = ["video", "tts", "asr", "decision"] as const;
@@ -95,6 +99,8 @@ function is_language_model_stream_result(value: unknown): value is AIChannelStre
 
 
 export class AIService extends Service {
+  /** 按 Federation 数据库方言声明持久化表，由核心在初始化前选择。 */
+  override readonly database_schemas: ServiceDatabaseSchemas;
   /** 模型注册表 */
   private readonly models = new AIModelRegistry();
 
@@ -109,13 +115,25 @@ export class AIService extends Service {
     super({
       id: "ai",
       name: "AI",
-      tables: {
-        async_jobs: sqliteAsyncJobs,
-        usage_records: ai_usage_records,
-        settlement_jobs: ai_settlement_jobs,
-        ...(options.relay ? relay_tables : {}),
-      },
     });
+    this.database_schemas = {
+      sqlite: {
+        tables: {
+          async_jobs: sqliteAsyncJobs,
+          usage_records: ai_usage_records,
+          settlement_jobs: ai_settlement_jobs,
+          ...(options.relay ? relay_tables : {}),
+        },
+      },
+      postgresql: {
+        tables: {
+          async_jobs: pgAsyncJobs,
+          usage_records: pg_ai_usage_records,
+          settlement_jobs: pg_ai_settlement_jobs,
+          ...(options.relay ? pg_relay_tables : {}),
+        },
+      },
+    };
     if (options.relay) this.relay = new RelayRuntime(this);
     this.settlement_runtime = new AISettlementRuntime({ credits: options.credits });
     this.image_runtime = new AIImageJobRuntime({
@@ -186,7 +204,20 @@ export class AIService extends Service {
     return this.models.size > 0;
   }
 
-  /** 初始化 AI Usage Repository 与查询索引。 */
+  /** 部署阶段统一准备 AI 与可选 Relay 的查询索引。 */
+  protected override async on_prepare_database(): Promise<void> {
+    const database = this.require_service_database();
+    await this.settlement_runtime.prepare_database(database);
+    if (this.relay) {
+      await this.relay.prepare_database(
+        database,
+        this.require_service_table<RelayCatalogRecord>("relay_catalog"),
+        this.models.list(),
+      );
+    }
+  }
+
+  /** 绑定 AI 与 Relay 的运行时存储，不执行结构 DDL。 */
   protected override async on_init(): Promise<void> {
     const database = this.require_service_database();
     if (this.relay) {
@@ -201,6 +232,11 @@ export class AIService extends Service {
       usage_records: this.require_service_table<AIUsageRecord>("usage_records"),
       settlement_jobs: this.require_service_table<AISettlementJobRecord>("settlement_jobs"),
     });
+  }
+
+  /** 周期恢复持久化结算任务；不在启动和数据库准备阶段扣费。 */
+  protected override async on_maintenance(): Promise<void> {
+    await this.settlement_runtime.maintenance();
   }
 
   /** UsageService 使用的 AI 技术用量只读入口。 */

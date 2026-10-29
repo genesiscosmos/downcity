@@ -34,9 +34,12 @@ city agent token create <agent_id> --name local
 city plugin action <plugin_name> <action_name> <agent_id> --input '{}'
 ```
 
-CLI 从本地产品配置装配的 Agent 默认启用 `ask_question` Tool。使用
+CLI 从本地产品配置装配的 Agent 默认启用 `ask_user` Tool。使用
 `city agent chat <agent_id>` 交互时，模型可以在缺少关键信息时显示文本、单选或多选问题；
 回答会通过 Session Interaction 提交，并在同一轮模型执行中继续处理。
+私密问题使用 `type: "secret"` 与 snake_case `name`；本地 Session 使用遮蔽输入和专用提交方法，
+提交前确认私密值数量、名称及覆盖同名值。明文只保存在当前 Session 内存中，释放或重启后丢失。
+缺少专用私密提交接口的远程传输会拒绝收集私密表单，请使用 Desktop 或本地 Session。
 
 Agent 定义保存在 `~/.downcity/agents/<agent_id>/agent.json`，主体指令保存在同目录的 `SOUL.md`。Plugin 以稳定 ID 使用 `~/.downcity/plugins/<plugin_id>/`，每个 Plugin 的唯一明文配置位于自己的 `config.toml`。第三方 Plugin 的安装目录只保留唯一 `plugin.json`、建立 ESM 边界的 `package.json` 与自包含入口，不保留源码和构建配置。Plugin 运行时状态和缓存由宿主放入 `~/.downcity/agents/<agent_id>/plugins/<plugin_id>/`，不写入 Plugin 配置目录，也不按 Workspace 复制。`downcity.db` 只保存 Workspace 索引、Token 与平台状态。Agent 与 Workspace 不绑定，同一个 Agent 可以进入多个 Workspace；Agent 不保存 Plugin 引用，City 自动把全部已注册 Plugin 和同一份配置提供给所有 Agent。CLI daemon 和 Desktop 各自创建独立的 City 实例，加入 City 后，Agent 的 Session 状态统一保存在 `~/.downcity/agents/<agent_id>/sessions/<session_id>/`；未加入 City 时只保存在当前 Agent 实例内存中。Workspace 只在 Session 的 `meta.json` 中作为可选 `workspace_id` 记录，项目目录不创建 `.downcity`。
 

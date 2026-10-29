@@ -6,6 +6,7 @@
  * 绝不透明重新生成。每次尝试在发起上游请求前落库。
  */
 import type { ModelCall, ModelStreamEvent } from "@downcity/type";
+import { query_service_database } from "../ai/database-sql.js";
 import type { Context } from "../service.js";
 import type { AIChannelStreamResult, AIModelDefinition } from "../../types/AI.js";
 import type {
@@ -98,9 +99,11 @@ export class RelayRouter {
     // 日志写入和共享健康读取相互独立，并行完成后才调用上游。
     const [, health] = await Promise.all([
       requests.insert(request),
-      this.dependencies.database.query<RelayHealthRecord>({
+      query_service_database<RelayHealthRecord>(this.dependencies.database, {
         sql: `SELECT deployment_id, cooldown_until FROM service_ai_relay_health
-          WHERE cooldown_until > ? AND deployment_id IN (SELECT value FROM json_each(?))`,
+          WHERE cooldown_until > ? AND deployment_id IN (${this.dependencies.database.schema_id === "postgresql"
+            ? "SELECT jsonb_array_elements_text(CAST(? AS jsonb))"
+            : "SELECT value FROM json_each(?)"})`,
         params: [Date.now(), JSON.stringify(candidates.map((item) => item.id))],
       }),
     ]);
@@ -236,9 +239,10 @@ export class RelayRouter {
 
   /** 并发失败只延长冷却，不让较早失败覆盖较新的截止时间。 */
   private async cooldown(deployment_id: string, duration_ms: number): Promise<void> {
-    await this.dependencies.database.query({
+    const maximum = this.dependencies.database.schema_id === "postgresql" ? "GREATEST" : "MAX";
+    await query_service_database(this.dependencies.database, {
       sql: `INSERT INTO service_ai_relay_health (deployment_id, cooldown_until) VALUES (?, ?)
-        ON CONFLICT(deployment_id) DO UPDATE SET cooldown_until = MAX(cooldown_until, excluded.cooldown_until)`,
+        ON CONFLICT(deployment_id) DO UPDATE SET cooldown_until = ${maximum}(service_ai_relay_health.cooldown_until, excluded.cooldown_until)`,
       params: [deployment_id, Date.now() + Math.min(Math.max(duration_ms, 1000), 300_000)],
     });
   }

@@ -49,6 +49,19 @@ export function writeWranglerConfig(
       `binding = ${tomlString(config.deployment.resources.d1.binding)}`,
       `database_name = ${tomlString(config.deployment.resources.d1.name)}`,
       `database_id = ${tomlString(resolved_database_id)}`,
+      // getPlatformProxy 必须使用与正式 Worker 相同的远程 D1，禁止本地模拟库。
+      "remote = true",
+    );
+  }
+
+  const hyperdrive = config.deployment.resources.hyperdrive;
+  if (hyperdrive) {
+    lines.push(
+      "",
+      "[[hyperdrive]]",
+      `binding = ${tomlString(hyperdrive.binding)}`,
+      `id = ${tomlString(hyperdrive.id)}`,
+      "remote = true",
     );
   }
 

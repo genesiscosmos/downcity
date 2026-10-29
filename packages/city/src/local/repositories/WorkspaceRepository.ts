@@ -4,6 +4,8 @@ import crypto from "node:crypto";
 import path from "node:path";
 import type { LocalDatabase } from "@/local/database/LocalDatabase.js";
 import type { LocalWorkspaceConfig } from "@/local/types/LocalConfig.js";
+import type { LocalWorkspaceSshAuthorization } from "../types/WorkspaceSsh.js";
+import { parse_workspace_ssh_authorization } from "../runtime/WorkspaceSshConfig.js";
 
 /** Workspace 数据库行。 */
 interface WorkspaceRow {
@@ -79,6 +81,22 @@ export class WorkspaceRepository {
     return config;
   }
 
+  /** 保存宿主授权或撤销记录；调用方必须先完成运行实例停用，不可直接用于 UI 乐观更新。 */
+  update_ssh(workspace_id_input: string, authorization: LocalWorkspaceSshAuthorization | null): LocalWorkspaceConfig {
+    const current = this.get(workspace_id_input);
+    if (!current) throw new Error(`Workspace not found: ${workspace_id_input}`);
+    const { ssh: _previous, ...rest } = current;
+    const config: LocalWorkspaceConfig = {
+      ...rest,
+      ...(authorization ? { ssh: parse_workspace_ssh_authorization(authorization) } : {}),
+      updated_at: new Date().toISOString(),
+    };
+    this.database.prepare(`
+      UPDATE workspaces SET config_json = ?, updated_at = ? WHERE workspace_id = ?;
+    `).run(JSON.stringify(config), config.updated_at, current.workspace_id);
+    return config;
+  }
+
   /** 列出全部 Workspace。 */
   list(): LocalWorkspaceConfig[] {
     const rows = this.database.prepare(`
@@ -120,6 +138,7 @@ export class WorkspaceRepository {
       workspace_id: row.workspace_id,
       workspace_path: path.resolve(row.workspace_path),
       name: String(raw.name || "").trim() || path.basename(row.workspace_path),
+      ...(raw.ssh === undefined ? {} : { ssh: parse_workspace_ssh_authorization(raw.ssh) }),
       created_at: String(raw.created_at || row.created_at),
       updated_at: String(raw.updated_at || row.updated_at),
     };

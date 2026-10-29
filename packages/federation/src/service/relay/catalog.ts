@@ -111,9 +111,14 @@ export class RelayCatalogStore {
     private readonly models: AIModelDefinition[],
   ) {}
 
-  async initialize(): Promise<void> {
+  /** 仅在部署准备阶段幂等写入默认目录，保留已配置的目录和版本。 */
+  async prepare_database(): Promise<void> {
     const catalog = validate_relay_catalog(seed_catalog(this.models), this.models);
     await this.table.insert_if_absent({ id: "catalog", revision: 1, catalog_json: JSON.stringify(catalog) });
+  }
+
+  /** 请求运行时仅读取并验证已准备的目录。 */
+  async initialize(): Promise<void> {
     await this.read();
   }
 
@@ -148,7 +153,7 @@ export class RelayCatalogStore {
 
   private async load(): Promise<RelayCatalogSnapshot> {
     const row = (await this.table.select({ id: "catalog" }))[0];
-    if (!row) throw new Error("Relay catalog is not initialized");
+    if (!row) throw new Error("Relay catalog is not prepared; run Federation.prepare_database() before serving requests");
     this.cached = {
       catalog: validate_relay_catalog(JSON.parse(row.catalog_json), this.models),
       revision: row.revision, expires_at: Date.now() + 5000,

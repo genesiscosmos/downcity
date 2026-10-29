@@ -9,7 +9,8 @@
 import fs from "fs-extra";
 import path from "node:path";
 import { generate_id } from "@/utils/Id.js";
-import type { ShellHostContext } from "@downcity/type/shell";
+import type { PrivateShellHostContext } from "@/shell/session/ShellPrivateValues.js";
+import { redact_public_value } from "@/power/core/PowerPrivateValues.js";
 import type {
   ShellApprovalStatus,
   ShellApprovalToolName,
@@ -39,20 +40,21 @@ function build_input_preview(value: string): string {
 }
 
 /** 返回 host 执行审计日志路径。 */
-function resolve_audit_path(context: ShellHostContext): string {
+function resolve_audit_path(context: PrivateShellHostContext): string {
   return path.join(context.data_path, "logs", "host-execution-audit.jsonl");
 }
 
 /** 追加一条权限审计记录。 */
 async function append_audit(params: {
   /** 当前 Shell 宿主上下文。 */
-  context: ShellHostContext;
+  context: PrivateShellHostContext;
   /** 需要持久化的审计字段。 */
   record: Record<string, unknown>;
 }): Promise<void> {
   const file_path = resolve_audit_path(params.context);
   await fs.ensureDir(path.dirname(file_path));
-  await fs.appendFile(file_path, `${JSON.stringify(params.record)}\n`, "utf-8");
+  const record = redact_public_value(params.record, params.context.private_values);
+  await fs.appendFile(file_path, `${JSON.stringify(record)}\n`, "utf-8");
 }
 
 /** 校验 host 执行请求。 */
@@ -77,7 +79,7 @@ export function validate_host_request(params: {
  */
 export async function request_host_approval(params: {
   /** 当前 Shell 宿主上下文。 */
-  context: ShellHostContext;
+  context: PrivateShellHostContext;
   /** 当前 Shell 运行标识。 */
   shell_id: string;
   /** 当前请求来源工具。 */
@@ -113,9 +115,14 @@ export async function request_host_approval(params: {
     : params.tool_name === "shell_exec"
       ? "exec"
       : "start";
+  // Redact the complete input before truncation; a truncated secret prefix
+  // cannot be matched safely by a complete-value redactor afterward.
+  const safe_cmd = redact_public_value(params.cmd, params.context.private_values);
+  const safe_cwd = redact_public_value(params.cwd, params.context.private_values);
+  const safe_reason = redact_public_value(params.reason, params.context.private_values);
   const input_preview = params.input_preview === undefined
     ? undefined
-    : build_input_preview(params.input_preview);
+    : build_input_preview(redact_public_value(params.input_preview, params.context.private_values));
   const base_record = {
     session_id: session_id || null,
     turn_id: turn_id || null,
@@ -123,12 +130,12 @@ export async function request_host_approval(params: {
     agent_id: params.context.config?.id || null,
     tool_name: params.tool_name,
     shell_id: params.shell_id,
-    cmd: params.cmd,
+    cmd: safe_cmd,
     operation,
     ...(input_preview !== undefined ? { input_preview } : {}),
     ...(typeof params.input_chars === "number" ? { input_chars: params.input_chars } : {}),
-    cwd: params.cwd,
-    reason: params.reason,
+    cwd: safe_cwd,
+    reason: safe_reason,
   };
 
   if (!params.context.approval_gateway || !session_id || !turn_id || !tool_call_id) {
@@ -150,12 +157,12 @@ export async function request_host_approval(params: {
     tool_name: params.tool_name,
     source_type: "shell",
     title: `Approve ${params.tool_name}`,
-    ...(params.reason ? { description: params.reason } : {}),
+    ...(params.reason ? { description: safe_reason } : {}),
     payload: {
       operation,
-      command: params.cmd,
-      cwd: params.cwd,
-      reason: params.reason,
+      command: safe_cmd,
+      cwd: safe_cwd,
+      reason: safe_reason,
       ...(input_preview !== undefined ? { input_preview } : {}),
       ...(typeof params.input_chars === "number" ? { input_chars: params.input_chars } : {}),
     } as SessionApprovalPayload,

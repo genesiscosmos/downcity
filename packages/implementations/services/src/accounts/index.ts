@@ -2,23 +2,16 @@
  * Downcity 官方 Accounts 服务。
  *
  * AccountsService 是 Federation 集成边界：声明 Schema 与环境需求，创建登录
- * 运行时并注册路由。Provider 选择、认证流程和持久化分别由内部模块负责。
+ * 运行时并注册路由。数据库准备、定期维护和实例认证初始化使用独立生命周期，
+ * Provider 选择、认证流程和持久化分别由内部模块负责。
  */
 
 import { httpError, InstallableService } from "@downcity/federation";
 import type { EnvRequirement, ServiceInstallContext } from "@downcity/federation";
 import { AccountsRuntime } from "./AccountsRuntime.js";
-import { login_flows } from "./login-schema.js";
+import { accounts_database_schemas } from "./database-schemas.js";
 import { mergeAccountsEnvRequirements, normalizeAccountsProviders } from "./helpers.js";
 import { register_accounts_routes } from "./routes.js";
-import {
-  accountsLoginStates,
-  authAccounts,
-  authSessions,
-  authUsers,
-  authVerifications,
-  userProfiles,
-} from "./schema.js";
 import type {
   AccountsProvider,
   AccountsServiceOptions,
@@ -45,20 +38,14 @@ export class AccountsService extends InstallableService {
   readonly id = "accounts";
   readonly name = "Accounts";
   readonly version = "0.4.0";
-  readonly schema = {
-    profile: userProfiles,
-    login_states: accountsLoginStates,
-    login_flows,
-    auth_users: authUsers,
-    auth_sessions: authSessions,
-    auth_accounts: authAccounts,
-    auth_verifications: authVerifications,
-  };
+  readonly database_schemas = accounts_database_schemas;
 
   /** 已归一化的登录 Provider。 */
   private readonly providers: AccountsProvider[];
-  /** 安装后创建、生命周期跟随 Service 的登录运行时。 */
+  /** 依赖注入后按需创建、生命周期跟随 Service 的登录运行时。 */
   private runtime?: AccountsRuntime;
+  /** 路由安装时保存的上下文；数据库准备和维护不依赖该上下文。 */
+  private install_context?: ServiceInstallContext;
 
   constructor(private readonly options: AccountsServiceOptions = {}) {
     const providers = normalizeAccountsProviders(options.providers ?? []);
@@ -76,21 +63,23 @@ export class AccountsService extends InstallableService {
     ].join("\n");
   }
 
-  /** 创建登录运行时并注册 Accounts 路由。 */
+  /** 保存安装上下文并注册 Accounts 路由，复用已创建的登录运行时。 */
   install(ctx: ServiceInstallContext): void {
-    this.runtime = new AccountsRuntime({
-      service_options: this.options,
-      providers: this.providers,
-      database: ctx.database,
-      install_context: ctx,
-      read_env: (key) => this._env?.get(key),
-      read_base_url: () => this._baseURL,
-      require_active_bureau: (bureau_id) => this.require_active_bureau(bureau_id),
-    });
-    register_accounts_routes(this.runtime, ctx);
+    this.install_context = ctx;
+    register_accounts_routes(this.require_runtime(), ctx);
   }
 
-  /** 初始化 better-auth 运行时。 */
+  /** 在显式数据库准备阶段幂等作废旧登录并建立身份唯一索引。 */
+  protected override async on_prepare_database(): Promise<void> {
+    await this.require_runtime().prepare_database();
+  }
+
+  /** 在独立维护阶段清理过期登录流程。 */
+  protected override async on_maintenance(): Promise<void> {
+    await this.require_runtime().cleanup();
+  }
+
+  /** 仅创建实例所需的 better-auth 认证配置。 */
   protected override async on_init(): Promise<void> {
     await this.require_runtime().initialize();
   }
@@ -120,9 +109,20 @@ export class AccountsService extends InstallableService {
     }
   }
 
-  /** 读取已经完成安装的 Accounts 登录运行时。 */
+  /** 依赖注入后按需创建运行时，允许数据库准备和维护先于路由安装执行。 */
   private require_runtime(): AccountsRuntime {
-    if (!this.runtime) throw new Error("Accounts service runtime is not installed");
+    this.runtime ??= new AccountsRuntime({
+      service_options: this.options,
+      providers: this.providers,
+      database: this.require_service_database(),
+      read_install_context: () => {
+        if (!this.install_context) throw new Error("Accounts service routes are not installed");
+        return this.install_context;
+      },
+      read_env: (key) => this._env?.get(key),
+      read_base_url: () => this._baseURL,
+      require_active_bureau: (bureau_id) => this.require_active_bureau(bureau_id),
+    });
     return this.runtime;
   }
 }

@@ -8,6 +8,7 @@
  */
 
 export { PaymentService } from "./service.js";
+export type { PaymentCardPlan, PaymentEntitlement, PaymentFulfillmentContext } from "./types/Wallet.js";
 export type {
   PaymentOrderSnapshot,
   PaymentServiceOptions,

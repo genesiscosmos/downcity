@@ -13,6 +13,7 @@ import type { PowerAction, PowerActionResult } from "@/power/index.js";
 import type { PowerCallSite, PowerRuntimeHost } from "@/power/index.js";
 import { validate_session_power_content, type JsonValue } from "@downcity/type";
 import { request_power_action_approval } from "./PowerActionApproval.js";
+import { assert_public_execution_input, redact_public_value } from "./PowerPrivateValues.js";
 
 /** Action 超时写入 abort_signal.reason 的内部错误。 */
 class PowerActionTimeoutError extends Error {
@@ -129,8 +130,21 @@ function create_abort_scope(input: {
 export async function execute_power_action(
   input: ExecutePowerActionInput,
 ): Promise<PowerActionResult<JsonValue>> {
+  // Shell owns its audited persistence and streaming path. Other actions can
+  // persist arbitrary input or detached work, so their private input stays blocked.
+  try {
+    if (input.power_name !== "shell") assert_public_execution_input({
+      power: input.power_name,
+      action: input.action_name,
+      payload: input.payload,
+    }, input.site.interactions);
+  } catch {
+    return failure_result(
+      "Private input is not supported by City Power execution yet; the call was blocked before execution.",
+    );
+  }
   const parsed_payload = parse_action_payload(input);
-  if (!("input" in parsed_payload)) return parsed_payload;
+  if (!("input" in parsed_payload)) return redact_public_value(parsed_payload, input.site.interactions);
 
   let timeout_ms: number | undefined;
   try {
@@ -192,13 +206,14 @@ export async function execute_power_action(
         }
       }
     }
-    return result;
+    return redact_public_value(result, input.site.interactions);
   } catch (error) {
-    return failure_result(
+    return failure_result(redact_public_value(
       abort_scope.signal.aborted
         ? error_message(abort_scope.signal.reason || error)
         : error_message(error),
-    );
+      input.site.interactions,
+    ));
   } finally {
     abort_scope.dispose();
   }

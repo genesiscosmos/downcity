@@ -7,6 +7,7 @@
  * - 支付记录与 webhook 事件由 PaymentService 负责，Credits 入账通过 on_paid 边界交给接入方。
  */
 
+import type { PaymentFulfillmentContext } from "./types/Wallet.js";
 import type { EnvRequirement } from "@downcity/federation";
 
 /**
@@ -148,9 +149,9 @@ export interface PaymentProviderWebhookEvent {
   provider_payment_id?: string;
   /** provider order ID。 */
   provider_order_id?: string;
-  /** 已验签的实际支付本金，使用币种最小单位；不得从客户端或 metadata 推断。 */
+  /** 签名事件中的实际结算金额；套餐付款必须提供并匹配订单。 */
   amount_minor?: number;
-  /** 与可信支付本金对应的已验签币种代码。 */
+  /** 签名事件中的结算币种。 */
   currency?: string;
   /** 入账流水外部引用。 */
   ref?: string;
@@ -162,6 +163,8 @@ export interface PaymentProviderWebhookEvent {
  * Payment provider 定义。
  */
 export interface PaymentProvider {
+  /** 支持按订单金额创建套餐checkout且验证付款金额；默认关闭。 */
+  supports_card_purchase?: boolean;
   /** provider ID，例如 `stripe`。 */
   id: string;
   /** provider 展示名。 */
@@ -182,12 +185,19 @@ export interface PaymentProvider {
 export interface PaymentServiceOptions {
   /** 当前 City 启用的支付 provider。 */
   providers: PaymentProvider[];
+  /** 向钱包公布的既有充值策略，未声明时钱包关闭自由充值；实际入账仍由 resolve_topup 校验。 */
+  topup_policy?: {
+    /** 接受的结算币种，小写 ISO 代码。 */
+    currency: string;
+    /** 最低支付金额，最小货币单位的正安全整数。 */
+    minimum_minor: number;
+  };
   /** 根据用户提交的自由充值金额，在服务端解析本次应发放的 Credits。 */
   resolve_topup(input: PaymentTopupResolutionInput):
     | PaymentTopupResolution
     | Promise<PaymentTopupResolution>;
   /** 支付订单首次确认 paid 后触发；接入方应使用 payment_id 幂等发放 Credits。 */
-  on_paid(record: PaymentRecord): Promise<void>;
+  on_paid(record: PaymentRecord, fulfillment: PaymentFulfillmentContext): Promise<void>;
 }
 
 /** 服务端 Credits 结算函数的输入。 */
@@ -217,7 +227,9 @@ export interface PaymentCreateCheckoutInput extends Record<string, unknown> {
   /** `method_id` 的别名，方便服务端脚本直接调用。 */
   provider?: string;
   /** 自由充值金额，单位为结算币种的最小货币单位。 */
-  topup_amount_minor: number;
+  topup_amount_minor?: number;
+  /** 外部支付购买的服务端套餐标识；与充值金额互斥。 */
+  plan_id?: string;
   /** 客户端为本次支付意图提供的稳定幂等键。 */
   idempotency_key: string;
   /** 面向用户与审计的订单说明。 */

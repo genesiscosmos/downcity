@@ -1,6 +1,7 @@
 /** Downcity 本地 Agent 与 Workspace 配置管理视图。 */
 
 import type { JsonObject } from "@downcity/type";
+import type { LocalWorkspaceSshAuthorization } from "./WorkspaceSsh.js";
 
 /** 本地 Workspace 的持久化配置。 */
 export interface LocalWorkspaceConfig {
@@ -10,6 +11,8 @@ export interface LocalWorkspaceConfig {
   workspace_path: string;
   /** Workspace 的用户可见名称。 */
   name: string;
+  /** 宿主批准的 SSH 身份使用记录；缺省表示未授权，不从进程环境自动继承。 */
+  ssh?: LocalWorkspaceSshAuthorization;
   /** 首次登记时间，使用 ISO 8601 字符串。 */
   created_at: string;
   /** 最近更新时间，使用 ISO 8601 字符串。 */

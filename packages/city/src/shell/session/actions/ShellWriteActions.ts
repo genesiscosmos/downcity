@@ -6,7 +6,9 @@
  * - Host Shell 每次写入都必须带 reason 并完成审批。
  */
 
-import type { ShellHostContext } from "@downcity/type/shell";
+import type { PrivateShellHostContext } from "../ShellPrivateValues.js";
+import { create_shell_output_redactor, SHELL_REDACTION_ERROR } from "../ShellPrivateValues.js";
+import { redact_public_value } from "@/power/core/PowerPrivateValues.js";
 import type { ShellRuntimeState } from "@/shell/session/ShellRuntimeTypes.js";
 import type {
   ShellActionResponse,
@@ -14,6 +16,7 @@ import type {
   ShellWriteRequest,
 } from "@downcity/type/shell";
 import {
+  append_session_output,
   build_action_response,
   is_in_memory_session,
   resolve_session,
@@ -29,7 +32,7 @@ import { build_denied_write_approval_response } from "./ShellActionShared.js";
  */
 export async function write_shell_session(
   state: ShellRuntimeState,
-  context: ShellHostContext,
+  context: PrivateShellHostContext,
   request: ShellWriteRequest,
 ): Promise<ShellActionResponse> {
   const shell_id = String(request.shell_id || "").trim();
@@ -52,9 +55,26 @@ export async function write_shell_session(
     throw new Error(`shell session ${shell_id} stdin is closed`);
   }
 
+  // Keep one Session's live registry attached for the process lifetime. A
+  // different Session must not inject private stdin into an unrelated registry.
+  if ((session.private_values || context.private_values)
+    && (!request.owner_context_id || request.owner_context_id !== session.snapshot.owner_context_id)) {
+    throw new Error("Private Shell stdin must come from the Session that started the process.");
+  }
+  if (!session.private_values && context.private_values) {
+    session.output_redactor = create_shell_output_redactor(context.private_values);
+    session.private_values = context.private_values;
+  }
+
+  // Refresh both stream stages against newly submitted values before any
+  // approval wait or stdin echo. Streams retain that snapshot after Session clear.
+  await append_session_output(state, session, "");
+  if (session.output_redaction_failed) throw new Error(SHELL_REDACTION_ERROR);
+
   let approval_id: string | undefined;
   let approval_status: ShellApprovalStatus | undefined;
   const reason = String(request.reason || "").trim();
+  const public_reason = redact_public_value(reason, context.private_values);
   // 关键点（中文）
   // - turn_id 由 tool action 显式传入。
   const turn_id =
@@ -83,18 +103,24 @@ export async function write_shell_session(
       return build_denied_write_approval_response({
         session,
         approval_id: approval.approval_id,
-        reason,
+        reason: public_reason,
         approval_status: approval.status,
       });
     }
   }
-  await session.child.write(chars);
+  // Approval can outlive the originating Session. Never publish a process
+  // handle's exception that could embed the submitted stdin after store clear.
+  try {
+    await session.child.write(chars);
+  } catch {
+    throw new Error("Shell stdin write failed.");
+  }
   return build_action_response({
     shell: {
       ...session.snapshot,
       ...(approval_status ? { approval_status } : {}),
       ...(approval_id ? { approval_id } : {}),
-      ...(reason ? { approval_reason: reason } : {}),
+      ...(reason ? { approval_reason: public_reason } : {}),
       stdin_writable: true,
     },
     note: chars ? "stdin written" : "no chars written",

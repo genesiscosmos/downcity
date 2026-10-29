@@ -11,8 +11,6 @@ import path from "node:path";
 import type {
   ShellActionResponse,
   ShellBinding,
-  ShellExecutionContext,
-  ShellHostContext,
   ShellOptions,
   ShellToolAction,
   ShellToolSet,
@@ -23,6 +21,8 @@ import type {
   WorkspaceShellSandboxCommandInput,
 } from "@downcity/type/shell";
 import type { ShellRuntimeState } from "@/shell/session/ShellRuntimeTypes.js";
+import type { PrivateShellExecutionContext, PrivateShellHostContext } from "@/shell/session/ShellPrivateValues.js";
+import { redact_public_value } from "@/power/core/PowerPrivateValues.js";
 import {
   close_all_shell_sessions,
   close_shell_session,
@@ -237,7 +237,7 @@ export class Shell {
   private async run_action(
     action: ShellToolAction,
     payload: Record<string, unknown>,
-    execution: ShellExecutionContext,
+    execution: PrivateShellExecutionContext,
   ): Promise<ShellActionResponse> {
     this.require_active();
     if (this.reset_promise && (action === "start" || action === "exec")) {
@@ -275,7 +275,7 @@ export class Shell {
   }
 
   /** 根据单次 Tool 调用创建 Shell 最小宿主上下文。 */
-  private create_host_context(execution: ShellExecutionContext = {}): ShellHostContext {
+  private create_host_context(execution: PrivateShellExecutionContext = {}): PrivateShellHostContext {
     const binding = this.require_binding();
     const sandbox = this.require_sandbox();
     const session_id = execution.session?.session_id || "";
@@ -287,7 +287,13 @@ export class Shell {
       data_path: binding.data_path,
       env: execution.workspace_env || this.env,
       config: {},
-      logger: this.options.logger,
+      ...(execution.private_values ? { private_values: execution.private_values } : {}),
+      logger: this.options.logger ? {
+        warn: (message, meta) => this.options.logger!.warn(
+          redact_public_value(message, execution.private_values),
+          redact_public_value(meta, execution.private_values),
+        ),
+      } : undefined,
       approval_gateway: execution.approval_gateway,
       shell_integration: {
         get_run_context: () => ({

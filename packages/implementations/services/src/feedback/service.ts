@@ -14,7 +14,7 @@ import {
   type ServiceInstallContext,
 } from "@downcity/federation";
 import { register_feedback_routes } from "./routes.js";
-import { feedbackMessages } from "./schema.js";
+import { feedback_database_schemas } from "./database-schemas.js";
 import type {
   FeedbackCreateInput,
   FeedbackCreateResult,
@@ -46,9 +46,7 @@ export class FeedbackService extends InstallableService {
   readonly id = "feedback";
   readonly name = "Feedback";
   readonly version = "0.1.0";
-  readonly schema = {
-    messages: feedbackMessages,
-  };
+  readonly database_schemas = feedback_database_schemas;
 
   private messages_table?: FederationTableApi<FeedbackMessage>;
 

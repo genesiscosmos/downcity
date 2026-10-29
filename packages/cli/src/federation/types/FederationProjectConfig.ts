@@ -31,6 +31,20 @@ export interface FederationProjectD1ResourceConfig {
   name: string;
 }
 
+/** 已存在的 Cloudflare Hyperdrive PostgreSQL 资源，不自动创建数据库。 */
+export interface FederationProjectHyperdriveResourceConfig {
+  /** 资源类型，固定为 Hyperdrive。 */
+  type: "hyperdrive";
+  /** Worker 中接收 connectionString 的 binding 名称。 */
+  binding: string;
+  /** 配置读取器从 id 或 id_env 解析并校验的现有 Hyperdrive ID。 */
+  id: string;
+  /** 可选的 Hyperdrive ID 进程环境变量名；配置输入中与 id 二选一。 */
+  id_env?: string;
+  /** 准备阶段独立 PG URL 所在的进程环境变量名；仅保存名称，不保存连接值。 */
+  database_url_env?: string;
+}
+
 /** Cloudflare Queue 资源。 */
 export interface FederationProjectQueueResourceConfig {
   /** 资源类型，固定为 Cloudflare Queue。 */
@@ -57,6 +71,8 @@ export interface FederationProjectStorageResourceConfig {
 export interface FederationProjectResourcesConfig {
   /** Cloudflare Workers 使用的 D1 数据库。 */
   d1?: FederationProjectD1ResourceConfig;
+  /** Cloudflare Workers 使用的现有 PostgreSQL Hyperdrive binding。 */
+  hyperdrive?: FederationProjectHyperdriveResourceConfig;
   /** Cloudflare Workers 使用的异步 Queue。 */
   queue?: FederationProjectQueueResourceConfig;
   /** Cloudflare Workers 使用的默认文件存储。 */

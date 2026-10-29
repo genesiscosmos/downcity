@@ -36,17 +36,22 @@ export function read_credits(value: unknown, label = "credits"): number {
   return normalized;
 }
 
-/** 读取并统一为 UTC ISO 字符串的未来时间。 */
-export function read_future_iso_timestamp(value: unknown, label = "expires_at"): string {
+/** 校验 ISO 格式并归一化时间；允许读取已履约订单的历史到期快照。 */
+export function read_iso_timestamp(value: unknown, label = "expires_at"): string {
   const normalized = read_required_text(value, label);
   if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,3})?(?:Z|[+-]\d{2}:\d{2})$/u.test(normalized)) {
     throw new TypeError(`${label} must be an ISO 8601 timestamp`);
   }
   const timestamp = Date.parse(normalized);
-  if (!Number.isFinite(timestamp) || timestamp <= Date.now()) {
-    throw new TypeError(`${label} must be a future ISO timestamp`);
-  }
+  if (!Number.isFinite(timestamp)) throw new TypeError(`${label} must be an ISO 8601 timestamp`);
   return new Date(timestamp).toISOString();
+}
+
+/** 新发卡必须使用未来时间；已有幂等交易先读取冻结快照。 */
+export function read_future_iso_timestamp(value: unknown, label = "expires_at"): string {
+  const normalized = read_iso_timestamp(value, label);
+  if (Date.parse(normalized) <= Date.now()) throw new TypeError(`${label} must be a future ISO timestamp`);
+  return normalized;
 }
 
 /** 读取查询条数。 */

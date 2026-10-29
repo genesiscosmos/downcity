@@ -540,6 +540,17 @@ export class Session implements AgentSession {
     return await this.session_interactions.respond(input);
   }
 
+  /** 受信客户端提交私密 Question；普通 respond 不接受私密表单。 */
+  async submit_private_question(input: RespondSessionInteractionInput): Promise<SessionInteractionResult> {
+    return await this.session_interactions.submit_private_question(input);
+  }
+
+  /** 宿主释放空闲 Session 时清除私密内存，不删除用户明确写出的配置。 */
+  clear_secrets(): void {
+    if (this.is_executing()) throw new Error("Stop the Session before clearing private values");
+    this.session_interactions.clear_secrets();
+  }
+
   /**
    * 追加一条 user 文本消息。
    */

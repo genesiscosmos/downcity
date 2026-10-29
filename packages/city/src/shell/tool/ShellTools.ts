@@ -20,9 +20,13 @@ import {
   shell_session_input_schema,
 } from "@/shell/tool/ShellToolSchemas.js";
 import { validate_chat_send_command } from "@/shell/tool/ShellToolFormatting.js";
+import {
+  create_private_safe_interaction_port,
+  redact_public_value,
+} from "@/power/core/PowerPrivateValues.js";
+import type { PrivateShellExecutionContext } from "@/shell/session/ShellPrivateValues.js";
 import type {
   ShellToolAction,
-  ShellExecutionContext,
   ShellToolRunner,
   ShellToolSet,
 } from "@downcity/type/shell";
@@ -37,7 +41,7 @@ type JsonObject = Record<string, unknown>;
  */
 function resolve_shell_execution_context(
   context: ToolCallContext,
-): ShellExecutionContext {
+): PrivateShellExecutionContext {
   const turn_id = String(context.turn_id || "").trim();
   return {
     ...(turn_id
@@ -45,8 +49,13 @@ function resolve_shell_execution_context(
       : {}),
     ...(context.tool_call_id ? { tool_call_id: context.tool_call_id } : {}),
     ...(context.abort_signal ? { abort_signal: context.abort_signal } : {}),
-    approval_gateway: context.interactions?.approval,
+    approval_gateway: context.interactions
+      ? create_private_safe_interaction_port(context.interactions).approval
+      : undefined,
     ...(context.workspace_env ? { workspace_env: context.workspace_env } : {}),
+    ...(context.session_id && context.interactions ? {
+      private_values: create_private_safe_interaction_port(context.interactions),
+    } : {}),
   };
 }
 
@@ -215,10 +224,11 @@ function flatten_shell_list_response(params: {
 function format_tool_error(
   prefix: string,
   error: unknown,
+  context: ToolCallContext,
 ): { success: false; error: string } {
   return {
     success: false,
-    error: `${prefix}: ${String(error)}`,
+    error: `${prefix}: ${redact_public_value(String(error), context.interactions)}`,
   };
 }
 
@@ -299,7 +309,7 @@ export function create_shell_tools(runner: ShellToolRunner): ShellToolSet {
         );
         return flatten_shell_exec_response({ response, started_at });
       } catch (error) {
-        return format_tool_error("shell_exec failed", error);
+        return format_tool_error("shell_exec failed", error, options);
       }
     },
   });
@@ -425,7 +435,7 @@ export function create_shell_tools(runner: ShellToolRunner): ShellToolSet {
           error: `unsupported shell_session action: ${String(action)}`,
         };
       } catch (error) {
-        return format_tool_error("shell_session failed", error);
+        return format_tool_error("shell_session failed", error, options);
       }
     },
   });

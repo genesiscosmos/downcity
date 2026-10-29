@@ -26,6 +26,7 @@ import { ChatSecurityController } from "@/city/agent/tui/controllers/ChatSecurit
 import { SessionPickerComponent } from "@/city/agent/tui/dialogs/SessionPicker.js";
 import { ApprovalPanelComponent } from "@/city/agent/tui/dialogs/ApprovalDialog.js";
 import { QuestionPanelComponent } from "@/city/agent/tui/dialogs/QuestionDialog.js";
+import { has_private_questions, supports_private_submission } from "@/city/agent/PrivateQuestions.js";
 import { GenericInteractionPanelComponent } from "@/city/agent/tui/dialogs/InteractionDialog.js";
 import { SecurityPolicyPanelComponent } from "@/city/agent/tui/dialogs/SecurityPolicyDialog.js";
 import type {
@@ -342,6 +343,7 @@ export class AgentChatTuiCoordinator {
       : request.type === "question"
       ? new QuestionPanelComponent({
           request,
+          private_supported: supports_private_submission(this.session_subscription.session),
           on_submit: (answers) => {
             this.hide_interaction_panel();
             void this.respond_interaction_panel(pending, {
@@ -397,6 +399,7 @@ export class AgentChatTuiCoordinator {
       pending.request.interaction_id,
       response,
       pending.session_id,
+      has_private_questions(pending.request),
     );
     if (!handled && !this.stopped) this.interaction_queue.unshift(pending);
     this.ensure_interaction_panel();
@@ -426,23 +429,27 @@ export class AgentChatTuiCoordinator {
     interaction_id: string,
     response: SessionInteractionResponse,
     session_id = this.current_session_id,
+    private_question = false,
   ): Promise<boolean> {
     try {
       const session = this.session_subscription.session;
       if (session_id !== this.current_session_id || !session) {
         throw new Error("Interaction no longer belongs to the active Session.");
       }
-      const result = await session.respond({
-        interaction_id,
-        response,
-      });
+      const input = { interaction_id, response };
+      if (private_question && !supports_private_submission(session)) {
+        throw new Error("This Session transport does not support private submissions.");
+      }
+      const result = private_question && supports_private_submission(session)
+        ? await session.submit_private_question(input)
+        : await session.respond(input);
       if (result.status === "resolved") return true;
       this.add_status_message(
         `Interaction ${interaction_id} is already ${result.status}.`,
       );
       return true;
     } catch (error) {
-      this.add_error_message(this.format_error(error));
+      this.add_error_message(private_question ? "Private answer submission failed. Please enter the values again." : this.format_error(error));
     }
     return false;
   }

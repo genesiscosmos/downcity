@@ -2,7 +2,8 @@
  * Accounts 登录与认证运行时。
  *
  * 本模块负责 Provider 选择、better-auth 调用、OAuth 登录编排和 User Token
- * 签发。数据库事实统一通过 AccountsStore 访问，HTTP 路由由 routes 模块注册。
+ * 签发。数据库准备与过期流程维护由独立生命周期入口执行，实例初始化仅创建
+ * 认证配置。数据库事实统一通过 AccountsStore 访问，HTTP 路由由 routes 模块注册。
  */
 
 import type { ServiceInstallContext } from "@downcity/federation";
@@ -23,10 +24,6 @@ import {
   AUTH_SESSION_TABLE,
   AUTH_USER_TABLE,
   AUTH_VERIFICATION_TABLE,
-  authAccounts,
-  authSessions,
-  authUsers,
-  authVerifications,
   type UserProfileRow,
 } from "./schema.js";
 import type {
@@ -41,6 +38,7 @@ import type {
   AccountsRuntimeOptions,
 } from "./types/AccountsRuntime.js";
 import { readErrorMessage } from "./utils.js";
+import { accounts_database_schemas } from "./database-schemas.js";
 
 /** 本机登录使用的稳定用户 ID。 */
 const LOCAL_USER_ID = "local-user";
@@ -69,19 +67,27 @@ export class AccountsRuntime {
     this.flow = new LoginFlow(options.database);
   }
 
-  /** 初始化 better-auth 及其 Provider 配置。 */
-  async initialize(): Promise<void> {
+  /** 幂等准备数据库：作废旧登录状态，并确保 Provider 身份唯一索引存在。 */
+  async prepare_database(): Promise<void> {
     await this.store.invalidate_legacy_logins();
+  }
+
+  /** 清理过期登录流程，由独立维护生命周期调用。 */
+  async cleanup(): Promise<void> {
     await this.flow.cleanup();
+  }
+
+  /** 仅初始化 better-auth 及其 Provider 配置，不执行持久化维护。 */
+  async initialize(): Promise<void> {
     this.auth = betterAuth({
       secret: this.options.read_env("BETTER_AUTH_SECRET"),
       database: drizzleAdapter(this.store.read_drizzle_database() as never, {
-        provider: "sqlite",
+        provider: this.options.database.schema_id === "postgresql" ? "pg" : "sqlite",
         schema: {
-          [AUTH_USER_TABLE]: authUsers,
-          [AUTH_SESSION_TABLE]: authSessions,
-          [AUTH_ACCOUNT_TABLE]: authAccounts,
-          [AUTH_VERIFICATION_TABLE]: authVerifications,
+          [AUTH_USER_TABLE]: accounts_database_schemas[this.options.database.schema_id]!.tables.auth_users,
+          [AUTH_SESSION_TABLE]: accounts_database_schemas[this.options.database.schema_id]!.tables.auth_sessions,
+          [AUTH_ACCOUNT_TABLE]: accounts_database_schemas[this.options.database.schema_id]!.tables.auth_accounts,
+          [AUTH_VERIFICATION_TABLE]: accounts_database_schemas[this.options.database.schema_id]!.tables.auth_verifications,
         },
       }),
       baseURL: this.options.read_base_url(),
@@ -454,7 +460,7 @@ export class AccountsRuntime {
 
   /** 读取已经完成 Service 安装的 Context。 */
   private get install_context(): ServiceInstallContext {
-    return this.options.install_context;
+    return this.options.read_install_context();
   }
 
   /** 读取已经初始化的 better-auth 实例。 */

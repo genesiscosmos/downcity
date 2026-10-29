@@ -61,11 +61,10 @@ export interface AgentListSessionsInput {
   limit?: number;
 
   /**
-   * 分页游标。
+   * 绑定 Store 与查询条件的不透明快照游标。
    *
-   * 说明（中文）
-   * - 当前使用 SDK 自身生成的透明字符串游标。
-   * - 调用方只负责透传，不应自行解析其内部格式。
+   * 本地快照两分钟后过期，也可能因容量淘汰、删除、归档、清空或 Store 释放提前失效。
+   * 调用方仅原样透传，不解析或持久化；收到 session_list_cursor_expired 时从首页重启。
    */
   cursor?: string;
 
@@ -361,7 +360,7 @@ export interface AgentSessionSummaryPage {
    * - 对分页 UI、结果统计和空态判断更友好。
    */
   total: number;
-  /** 下一页游标。 */
+  /** 同一查询快照的下一页不透明游标；末页省略。 */
   next_cursor?: string;
   /** 是否仍有更多结果。 */
   has_more: boolean;
@@ -434,11 +433,10 @@ export interface AgentArchiveSessionsInput {
   limit?: number;
 
   /**
-   * 分页游标。
+   * 绑定 Store 与归档查询条件的不透明快照游标。
    *
-   * 说明（中文）
-   * - 当前使用 SDK 自身生成的透明字符串游标。
-   * - 调用方只负责透传，不应自行解析其内部格式。
+   * 本地快照两分钟后过期，也可能提前淘汰或失效；仅原样透传，不解析或持久化。
+   * 收到 session_list_cursor_expired 时丢弃部分结果并从首页重新查询。
    */
   cursor?: string;
 

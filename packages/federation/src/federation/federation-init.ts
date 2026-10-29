@@ -19,7 +19,9 @@ import { FederationAdminStore } from "./auth/admin-store.js";
 import { UserTokenRevocationStore } from "./auth/user-token-revocation-store.js";
 import type { UserTokenRevocationRecord } from "./auth/user-token-schema.js";
 import { randomSecret } from "../utils/helpers.js";
-import { initialize_service, type Service } from "../service/service.js";
+import { initialize_service, prepare_service_database, type Service } from "../service/service.js";
+import { measure_startup } from "./startup-timing.js";
+import type { FederationStartupTiming } from "./types.js";
 import {
   InstallableService,
   install_service,
@@ -69,52 +71,28 @@ export async function initialize_federation(params: {
   require_ready: () => Promise<{ bureau: { get(id: string): Promise<BureauRecord | undefined> } }>;
   /** Federation queue facade */
   queue?: unknown;
+  /** 是否执行部署阶段 schema、数据修复与引导。 */
+  prepare_database: boolean;
+  /** 可选的分阶段启动观测。 */
+  on_startup_timing?: (event: FederationStartupTiming) => void;
 }): Promise<FederationInitState> {
   const { runtime, services, require_ready } = params;
   const { database, env, builtinTables } = runtime;
-
-  const service_databases = resolve_service_databases(services, database.schema_id);
-  const user_schema = collect_service_schemas(services);
-  const table_map = new Map<string, CityTableApi>();
-  table_map.set("bureaus", database.table(builtinTables.bureaus));
-  table_map.set("bureau_servers", database.table(builtinTables.bureau_servers));
-  table_map.set("env", database.table(builtinTables.env));
-  table_map.set(
-    "federation_auth_keys",
-    database.table(builtinTables.federation_auth_keys),
-  );
-  table_map.set("bureau_tokens", database.table(builtinTables.bureau_tokens));
-  table_map.set(
-    "federation_user_token_revocations",
-    database.table(builtinTables.federation_user_token_revocations),
-  );
-  table_map.set(
-    "federation_administrators",
-    database.table(builtinTables.federation_administrators),
-  );
-  table_map.set(
-    "federation_admin_sessions",
-    database.table(builtinTables.federation_admin_sessions),
-  );
-
-  for (const [name, table] of Object.entries(user_schema)) {
-    table_map.set(name, database.table(table));
+  const { table_map, service_databases } = collect_database_tables(runtime, services);
+  if (params.prepare_database) {
+    await measure_startup("schema", async () => {
+      await prepare_tables(database, table_map, service_databases);
+      await assert_bureau_server_records(database);
+    }, params.on_startup_timing);
   }
-
-  for (const schema of service_databases) {
-    for (const ddl of schema.ddl ?? []) {
-      await database.execute_ddl(ddl);
-    }
-  }
-  for (const table of table_map.values()) {
-    await database.ensure_table(table.schema);
-  }
-  await assert_bureau_server_records(database);
 
   const env_table = table_map.get("env");
   if (!env_table) throw new Error("Federation env table is not initialized");
   const env_store = new EnvStore(env_table as CityTableApi<EnvEntry>);
-  await env.attachStore(env_store);
+  await measure_startup("env", () => env.attachStore(env_store), params.on_startup_timing);
+  if (!params.prepare_database && env.get("DOWNCITY_DATABASE_PREPARATION_VERSION") !== "1") {
+    throw new Error("Federation database preparation is required before starting this release");
+  }
 
   const bureaus_table = table_map.get("bureaus");
   if (!bureaus_table) throw new Error("Federation Bureau table is not initialized");
@@ -133,7 +111,10 @@ export async function initialize_federation(params: {
     ?? runtime.baseURL
     ?? "http://localhost";
 
-  await bootstrap_default_keys(env);
+  if (params.prepare_database) await bootstrap_default_keys(env);
+  if (!env.get("BETTER_AUTH_SECRET")) {
+    throw new Error("Federation database is not prepared: missing BETTER_AUTH_SECRET");
+  }
 
   const federation_id = env.get("DOWNCITY_FEDERATION_ID");
   if (!federation_id) throw new Error("DOWNCITY_FEDERATION_ID is required");
@@ -142,7 +123,13 @@ export async function initialize_federation(params: {
   const key_store = new FederationKeyStore(
     auth_key_table as CityTableApi<FederationAuthKeyRecord>,
   );
-  await initialize_federation_auth_keys(key_store, database);
+  await measure_startup("auth_keys", async () => {
+    if (params.prepare_database) {
+      await initialize_federation_auth_keys(key_store, database);
+    } else if (!await key_store.get_active_key()) {
+      throw new Error("Federation database is not prepared: missing active signing key");
+    }
+  }, params.on_startup_timing);
   const token_authority = new UserTokenAuthority(
     key_store,
     `urn:downcity:federation:${federation_id}`,
@@ -166,8 +153,9 @@ export async function initialize_federation(params: {
     revocation_table as CityTableApi<UserTokenRevocationRecord>,
     database,
   );
-  await database.execute_ddl('CREATE INDEX IF NOT EXISTS federation_user_token_revocations_expiry_idx ON "federation_user_token_revocations" ("expires_at")');
-  await user_token_revocations.cleanup_expired();
+  if (params.prepare_database) {
+    await database.execute_ddl('CREATE INDEX IF NOT EXISTS federation_user_token_revocations_expiry_idx ON "federation_user_token_revocations" ("expires_at")');
+  }
   const authenticator = new Authenticator(
     env,
     require_ready,
@@ -196,7 +184,14 @@ export async function initialize_federation(params: {
     if (service instanceof InstallableService) {
       install_service(service, database);
     }
-    await initialize_service(service);
+    await measure_startup(`service:${service.id}`, async () => {
+      if (params.prepare_database) await prepare_service_database(service);
+      await initialize_service(service);
+    }, params.on_startup_timing);
+  }
+
+  if (params.prepare_database) {
+    await env.upsert({ key: "DOWNCITY_DATABASE_PREPARATION_VERSION", value: "1" });
   }
 
   return {
@@ -206,6 +201,42 @@ export async function initialize_federation(params: {
     authenticator,
     admin_store,
   };
+}
+
+/** 只创建迁移目标表，不生成任何身份、密钥或配置，也不执行业务数据修复。 */
+export async function prepare_federation_schema(runtime: Runtime, services: Service[]): Promise<void> {
+  const { table_map, service_databases } = collect_database_tables(runtime, services);
+  await prepare_tables(runtime.database, table_map, service_databases);
+}
+
+/** 统一选择方言并收集内置与业务表，保证迁移和在线启动使用同一声明。 */
+function collect_database_tables(runtime: Runtime, services: Service[]): {
+  /** 按逻辑名称索引的表访问对象。 */
+  table_map: Map<string, CityTableApi>;
+  /** 当前方言的业务数据库声明。 */
+  service_databases: ServiceDatabaseSchema[];
+} {
+  const service_databases = resolve_service_databases(services, runtime.database.schema_id);
+  const table_map = new Map<string, CityTableApi>();
+  for (const [name, schema] of Object.entries(runtime.builtinTables)) {
+    table_map.set(name, runtime.database.table(schema));
+  }
+  for (const [name, schema] of Object.entries(collect_service_schemas(services))) {
+    table_map.set(name, runtime.database.table(schema));
+  }
+  return { table_map, service_databases };
+}
+
+/** 执行幂等的结构准备，不写业务数据。 */
+async function prepare_tables(
+  database: Database,
+  table_map: Map<string, CityTableApi>,
+  service_databases: ServiceDatabaseSchema[],
+): Promise<void> {
+  for (const schema of service_databases) {
+    for (const ddl of schema.ddl ?? []) await database.execute_ddl(ddl);
+  }
+  for (const table of table_map.values()) await database.ensure_table(table.schema);
 }
 
 /**
@@ -220,7 +251,7 @@ function resolve_service_databases(
 ): ServiceDatabaseSchema[] {
   const resolved: ServiceDatabaseSchema[] = [];
   for (const service of services) {
-    if (!(service instanceof InstallableService) || !service.database_schemas) continue;
+    if (!service.database_schemas) continue;
     const schema = service.database_schemas[schema_id];
     if (!schema) {
       throw new DatabaseSchemaError(service.id, schema_id);

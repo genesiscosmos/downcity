@@ -23,7 +23,20 @@ export class Database extends CityDatabase {
   constructor(options: DatabaseOptions) {
     const url = String(options?.url ?? "").trim();
     if (!url) throw new TypeError("PostgreSQL Database url is required");
-    const client = postgres(url);
+    const max_connections = options.max_connections ?? 10;
+    const idle_timeout_seconds = options.idle_timeout_seconds ?? 20;
+    const connect_timeout_seconds = options.connect_timeout_seconds ?? 10;
+    for (const [name, value] of Object.entries({ max_connections, idle_timeout_seconds, connect_timeout_seconds })) {
+      if (!Number.isSafeInteger(value) || value <= 0) throw new TypeError(`${name} must be a positive integer`);
+    }
+    const client = postgres(url, {
+      max: max_connections,
+      idle_timeout: idle_timeout_seconds,
+      connect_timeout: connect_timeout_seconds,
+      prepare: options.prepare_statements ?? false,
+      fetch_types: false,
+      onnotice: () => {},
+    });
     const drizzle_database = drizzle(client) as unknown as DrizzleDatabase;
     super({ schema_id: "postgresql", drizzle: drizzle_database });
     this.client = client;

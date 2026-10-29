@@ -11,13 +11,13 @@ import type {
   SessionInteractionQuestion,
 } from "@downcity/type";
 
-/** 模型调用 ask_question 时提交的一条问题；`question_id` 由 Session 生成，不由模型提供。 */
+/** 模型调用 ask_user 时提交的一条问题；`question_id` 由 Session 生成，不由模型提供。secret 问题的 name 用于生成 Session 引用。 */
 export type AskQuestionsToolQuestion = Omit<
   SessionInteractionQuestion,
   "question_id"
 >;
 
-/** 模型调用 ask_question 时提交的结构化输入。 */
+/** 模型调用 ask_user 时提交的结构化输入。 */
 export interface AskQuestionsToolInput {
   /** 问题卡片向用户展示的简短标题。 */
   title: string;
@@ -25,7 +25,7 @@ export interface AskQuestionsToolInput {
   questions: AskQuestionsToolQuestion[];
 }
 
-/** 用户完成回答后返回给模型的结构化 Tool Result。 */
+/** 用户完成回答后返回给模型的结构化 Tool Result；secret 答案只返回 `${secrets.name}` 引用。 */
 export interface AskQuestionsToolOutput {
   /** 当前提问已由用户完整回答。 */
   status: "resolved";

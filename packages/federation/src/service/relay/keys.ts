@@ -5,6 +5,7 @@
  * 只读取可靠结算 completed 的实际 charge，不创建钱包或预占额度。
  */
 import { z } from "zod";
+import { query_service_database, settlement_credits_sql } from "../ai/database-sql.js";
 import type { CityTableApi } from "../../store/table-api.js";
 import type { ServiceDatabaseContext } from "../../types/database/Database.js";
 import type { RelayKeyInfo, RelayKeyIssued, RelayKeyRecord, RelayKeyList, RelayPrincipal } from "../../types/Relay.js";
@@ -91,8 +92,8 @@ export class RelayKeyStore {
   /** 与账户余额检查并行执行，仅读取已完成的可靠结算。 */
   async check_spend(principal: RelayPrincipal): Promise<void> {
     if (principal.spend_limit !== null) {
-      const result = await this.database.query<{ spent: number }>({
-        sql: `SELECT COALESCE(SUM(COALESCE(json_extract(s.payload_json, '$.charge.credits'), 0)), 0) AS spent
+      const result = await query_service_database<{ spent: number }>(this.database, {
+        sql: `SELECT COALESCE(SUM(COALESCE(${settlement_credits_sql(this.database.schema_id)}, 0)), 0) AS spent
           FROM service_ai_relay_requests r JOIN service_ai_settlement_jobs s ON s.usage_id = r.request_id
           WHERE r.key_id = ? AND s.status = 'completed'`,
         params: [principal.key_id],

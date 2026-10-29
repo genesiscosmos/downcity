@@ -118,6 +118,10 @@ export interface AgentSessionActor {
  * 本地 Agent 返回的公开 session 接口。
  */
 export interface AgentSession extends AgentSessionActor {
+  /** 受信宿主提交私密问答；只持久化引用，明文仅存当前 Session 内存。 */
+  submit_private_question(input: RespondSessionInteractionInput): Promise<SessionInteractionResult>;
+  /** 宿主释放 Session 时清除私密内存；不会删除用户明确配置的目标文件。 */
+  clear_secrets(): void;
   /** 可信委派运行时向已登记的父 Turn 投递结果；迟到结果返回 false，不启动新 Turn。 */
   accept_delegation_result(turn_id: string, request_id: string, query: AgentSessionPromptInput["query"]): Promise<boolean>;
   /** 通过拥有者归档当前会话；运行或排队中拒绝，成功后原句柄不可再提交输入。 */

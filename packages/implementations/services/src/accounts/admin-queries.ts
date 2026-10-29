@@ -29,11 +29,11 @@ export async function listAccountUsers(raw_prepare: RawPrepare): Promise<Record<
       `SELECT
         u.id as user_id,
         u.email as auth_email,
-        u.emailVerified as email_verified,
+        u."emailVerified" as email_verified,
         u.name as auth_name,
         u.image as auth_image,
-        u.createdAt as auth_created_at,
-        u.updatedAt as auth_updated_at,
+        u."createdAt" as auth_created_at,
+        u."updatedAt" as auth_updated_at,
         p.email as profile_email,
         p.display_name,
         p.avatar_url,
@@ -42,7 +42,7 @@ export async function listAccountUsers(raw_prepare: RawPrepare): Promise<Record<
         p.updated_at as profile_updated_at
       FROM ${AUTH_USER_TABLE} u
       LEFT JOIN ${USER_PROFILE_TABLE} p ON p.user_id = u.id
-      ORDER BY u.createdAt DESC`,
+      ORDER BY u."createdAt" DESC`,
     ),
     [],
   );
@@ -51,7 +51,7 @@ export async function listAccountUsers(raw_prepare: RawPrepare): Promise<Record<
 /** 读取 Usage 分析所需的注册用户最小事实。 */
 export async function listAccountUsageRegistrations(raw_prepare: RawPrepare): Promise<AccountsUsageRegistration[]> {
   const rows = await readPreparedAll(
-    raw_prepare(`SELECT id as user_id, createdAt as created_at FROM ${AUTH_USER_TABLE} ORDER BY createdAt ASC`),
+    raw_prepare(`SELECT id as user_id, "createdAt" as created_at FROM ${AUTH_USER_TABLE} ORDER BY "createdAt" ASC`),
     [],
   );
   return rows.flatMap((row) => {
@@ -68,7 +68,7 @@ export async function listAccountUsageRegistrations(raw_prepare: RawPrepare): Pr
  */
 export async function listAccountSessions(raw_prepare: RawPrepare): Promise<Record<string, unknown>[]> {
   const rows = await readPreparedAll(
-    raw_prepare(`SELECT id as session_id, userId as user_id, expiresAt as expires_at, createdAt as created_at FROM ${AUTH_SESSION_TABLE} ORDER BY expiresAt DESC`),
+    raw_prepare(`SELECT id as session_id, "userId" as user_id, "expiresAt" as expires_at, "createdAt" as created_at FROM ${AUTH_SESSION_TABLE} ORDER BY "expiresAt" DESC`),
     [],
   );
   return rows.map((row) => ({

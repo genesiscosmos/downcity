@@ -262,31 +262,32 @@ async function execute_tools(
       });
       continue;
     }
-    // 关键点（中文）：模型输入先按工具自己的 schema 校验，非法输入在执行之前
-    // 就形成结构化失败，不会带着错误类型进入工具实现。
-    const validated = validate_tool_input({
-      tool,
-      tool_name: call.tool_name,
-      input: call.input,
-    });
-    if ("error" in validated) {
-      results.push({
-        ...call,
-        success: false,
-        output: { error: validated.error },
-      });
-      continue;
-    }
     try {
       const site: ToolCallSite = {
         tool_call_id: call.tool_call_id,
         messages,
         ...(input.abort_signal ? { abort_signal: input.abort_signal } : {}),
       };
+      const prepared = tool.prepare_input
+        ? await tool.prepare_input(call.input, site)
+        : { public_input: call.input, execution_input: call.input };
+      const validated = validate_tool_input({
+        tool,
+        tool_name: call.tool_name,
+        input: prepared.execution_input,
+      });
+      if ("error" in validated) {
+        results.push({
+          ...call,
+          success: false,
+          output: { error: tool.redact_output?.(validated.error) ?? validated.error },
+        });
+        continue;
+      }
       const output = await tool.execute(validated.input, site);
       results.push({
         ...call,
-        input: validated.input,
+        input: prepared.public_input,
         success: !is_structured_tool_failure(output),
         output,
       });
@@ -294,7 +295,7 @@ async function execute_tools(
       results.push({
         ...call,
         success: false,
-        output: { error: error instanceof Error ? error.message : String(error) },
+        output: { error: tool.redact_output?.(error instanceof Error ? error.message : String(error)) ?? (error instanceof Error ? error.message : String(error)) },
       });
     }
   }

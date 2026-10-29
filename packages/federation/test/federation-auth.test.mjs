@@ -336,8 +336,8 @@ test("多个 Federation 实例并发首次启动时共享唯一 issuer 和 activ
     assert.equal(key_rows.length, 1)
 
     const env_rows = await (await federations[0].table("env")).select()
-    assert.equal(env_rows.length, 2)
-    assert.equal(new Set(env_rows.map((row) => row.key)).size, 2)
+    assert.equal(env_rows.length, 3)
+    assert.equal(new Set(env_rows.map((row) => row.key)).size, 3)
 
     const discoveries = await Promise.all(federations.map(async (federation) => (
       await (await federation.fetch(new Request(

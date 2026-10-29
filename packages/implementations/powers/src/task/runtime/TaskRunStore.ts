@@ -7,7 +7,7 @@
 
 import path from "node:path";
 import type { PowerStorage } from "@downcity/city/power";
-import type { TaskRunDetailView, TaskRunHistoryItemView } from "@/task/types/TaskCommand.js";
+import type { TaskRunDetailView, TaskRunHistoryItemView, TaskRunHistoryPage, TaskRunHistoryPageRequest } from "@/task/types/TaskCommand.js";
 import type {
   ShipTaskRunExecutionStatusV1,
   ShipTaskRunResultStatusV1,
@@ -25,18 +25,59 @@ export async function list_task_runs(params: {
   /** Task 的稳定目录 ID。 */
   readonly task_id: string;
 }): Promise<TaskRunHistoryItemView[]> {
-  const task_directory = getTaskDir(params.storage.path, params.task_id);
-  const entries = await params.storage.files.read_directory(task_directory).catch(() => []);
-  const timestamps = entries
+  const timestamps = await list_run_timestamps(params.storage, params.task_id);
+  return read_run_summaries(params.storage, params.task_id, timestamps);
+}
+
+/**
+ * 先对目录排序并选页，再读取该页摘要，单页最多检查 100 个目录。
+ * 游标是排他的目录时间戳，新增记录或删除游标目录都不会让后续页发生偏移。
+ * 损坏目录仍消耗页额度并推进游标，避免为凑足摘要扫描全部历史。
+ */
+export async function list_task_runs_page(params: TaskRunHistoryPageRequest & {
+  /** TaskPower 生命周期级统一存储。 */
+  readonly storage: PowerStorage;
+}): Promise<TaskRunHistoryPage> {
+  const limit = params.limit ?? 20;
+  if (!Number.isInteger(limit) || limit < 1 || limit > 100) {
+    throw new Error("Task history limit must be an integer between 1 and 100");
+  }
+  const cursor = params.cursor;
+  if (cursor !== undefined && (!is_task_run_timestamp(cursor) || cursor !== cursor.trim())) {
+    throw new Error("Invalid task history cursor");
+  }
+  const timestamps = (await list_run_timestamps(params.storage, params.task_id))
+    .filter((timestamp) => cursor === undefined || timestamp < cursor);
+  const page = timestamps.slice(0, limit);
+  return {
+    runs: await read_run_summaries(params.storage, params.task_id, page),
+    next_cursor: timestamps.length > page.length ? page[page.length - 1]! : null,
+  };
+}
+
+/** 仅枚举安全的运行目录，统一按 UTC 目录时间戳倒序排列。 */
+async function list_run_timestamps(storage: PowerStorage, task_id: string): Promise<string[]> {
+  const entries = await storage.files.read_directory(getTaskDir(storage.path, task_id)).catch(() => []);
+  return entries
     .filter((entry) => entry.is_directory && is_task_run_timestamp(entry.name))
     .map((entry) => entry.name)
     .sort()
     .reverse();
-  const runs = await Promise.all(timestamps.map((timestamp) => read_task_run_summary({
-    ...params,
-    timestamp,
-  })));
-  return runs.filter((run): run is TaskRunHistoryItemView => Boolean(run));
+}
+
+/** 每批最多并行读取 8 条摘要，完整枚举与分页共用读取规则且保持输入顺序。 */
+async function read_run_summaries(
+  storage: PowerStorage,
+  task_id: string,
+  timestamps: readonly string[],
+): Promise<TaskRunHistoryItemView[]> {
+  const runs: TaskRunHistoryItemView[] = [];
+  for (let offset = 0; offset < timestamps.length; offset += 8) {
+    const batch = await Promise.all(timestamps.slice(offset, offset + 8).map((timestamp) =>
+      read_task_run_summary({ storage, task_id, timestamp })));
+    runs.push(...batch.filter((run): run is TaskRunHistoryItemView => Boolean(run)));
+  }
+  return runs;
 }
 
 /** 只读取已提交的完成元数据；恢复流程不得以进度快照证明执行完成。 */
@@ -89,11 +130,10 @@ async function read_task_run_summary(params: {
   readonly timestamp: string;
 }): Promise<TaskRunHistoryItemView | undefined> {
   const run_directory = getTaskRunDir(params.storage.path, params.task_id, params.timestamp);
-  const [meta, progress] = await Promise.all([
-    read_json_object(params.storage, path.join(run_directory, "run.json")),
-    read_json_object(params.storage, path.join(run_directory, "run-progress.json")),
-  ]);
+  const meta = await read_json_object(params.storage, path.join(run_directory, "run.json"));
   if (meta) return completed_summary(params.timestamp, meta);
+  // 完成元数据缺失时才读取进度，已完成执行只需一次摘要文件读取。
+  const progress = await read_json_object(params.storage, path.join(run_directory, "run-progress.json"));
   if (progress) return progress_summary(params.timestamp, progress);
   return undefined;
 }

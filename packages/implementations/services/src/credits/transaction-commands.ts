@@ -30,9 +30,9 @@ export function insert_transaction_command(
 ): CreditsRawCommand {
   return {
     sql: [
-      `INSERT OR IGNORE INTO ${TRANSACTION_TABLE}`,
+      `INSERT INTO ${TRANSACTION_TABLE}`,
       "(transaction_id, kind, user_id, credits, status, idempotency_key, request_json, source, ref, note, metadata_json, created_at, applied_at)",
-      "VALUES (?, ?, ?, ?, 'pending', ?, ?, ?, ?, ?, ?, ?, '')",
+      "VALUES (?, ?, ?, ?, 'pending', ?, ?, ?, ?, ?, ?, ?, '') ON CONFLICT DO NOTHING",
     ].join(" "),
     params: [transaction_id, request.kind, request.user_id, request.credits, request.idempotency_key, request.request_json, request.source, request.ref, request.note, request.metadata_json, now],
   };
@@ -108,14 +108,12 @@ export function update_ephemeral_allocations_command(
   transaction_id: string,
   allocations: CreditsCardAllocation[],
   now: string,
+  schema_id: string,
 ): CreditsRawCommand {
   const allocations_json = serialize_ephemeral_allocations(allocations);
   return {
     sql: [
-      "WITH allocations AS (",
-      "SELECT json_extract(value, '$.card_id') AS card_id,",
-      "CAST(json_extract(value, '$.credits') AS INTEGER) AS credits FROM json_each(?)",
-      ")",
+      allocation_cte(schema_id),
       `UPDATE ${EPHEMERAL_CARD_TABLE} SET`,
       `credits = credits - (SELECT credits FROM allocations WHERE allocations.card_id = ${EPHEMERAL_CARD_TABLE}.card_id),`,
       "transaction_marker = ?, updated_at = ?",
@@ -133,18 +131,15 @@ export function insert_ephemeral_allocation_entries_command(
   transaction_id: string,
   allocations: CreditsCardAllocation[],
   now: string,
+  schema_id: string,
 ): CreditsRawCommand {
   const allocations_json = serialize_ephemeral_allocations(allocations);
   return {
     sql: [
-      "WITH allocations AS (",
-      "SELECT json_extract(value, '$.card_id') AS card_id,",
-      "CAST(json_extract(value, '$.credits') AS INTEGER) AS credits,",
-      "CAST(json_extract(value, '$.entry_index') AS INTEGER) AS entry_index FROM json_each(?)",
-      ")",
+      allocation_cte(schema_id),
       `INSERT INTO ${TRANSACTION_ENTRY_TABLE}`,
       "(entry_id, transaction_id, user_id, card_kind, card_id, credits_delta, credits_after, created_at)",
-      "SELECT ? || allocations.entry_index, ?, cards.user_id, 'ephemeral', cards.card_id,",
+      "SELECT CAST(? AS TEXT) || CAST(allocations.entry_index AS TEXT), ?, cards.user_id, 'ephemeral', cards.card_id,",
       "-allocations.credits, cards.credits, ?",
       `FROM ${EPHEMERAL_CARD_TABLE} AS cards JOIN allocations ON allocations.card_id = cards.card_id`,
       "WHERE cards.transaction_marker = ?",
@@ -159,14 +154,12 @@ export function rollback_ephemeral_allocations_command(
   transaction_id: string,
   allocations: CreditsCardAllocation[],
   now: string,
+  schema_id: string,
 ): CreditsRawCommand {
   const allocations_json = serialize_ephemeral_allocations(allocations);
   return {
     sql: [
-      "WITH allocations AS (",
-      "SELECT json_extract(value, '$.card_id') AS card_id,",
-      "CAST(json_extract(value, '$.credits') AS INTEGER) AS credits FROM json_each(?)",
-      ")",
+      allocation_cte(schema_id),
       `UPDATE ${EPHEMERAL_CARD_TABLE} SET`,
       `credits = credits + (SELECT credits FROM allocations WHERE allocations.card_id = ${EPHEMERAL_CARD_TABLE}.card_id),`,
       "updated_at = ?",
@@ -282,4 +275,11 @@ function serialize_ephemeral_allocations(allocations: CreditsCardAllocation[]): 
     credits: allocation.credits,
     entry_index,
   })));
+}
+
+/** 按当前数据库展开一次扣费中的 Card 分配；bigint 与余额列保持一致。 */
+function allocation_cte(schema_id: string): string {
+  return schema_id === "postgresql"
+    ? 'WITH allocations AS (SELECT * FROM jsonb_to_recordset(CAST(? AS jsonb)) AS allocation(card_id text, credits bigint, entry_index integer))'
+    : "WITH allocations AS (SELECT json_extract(value, '$.card_id') AS card_id, CAST(json_extract(value, '$.credits') AS INTEGER) AS credits, CAST(json_extract(value, '$.entry_index') AS INTEGER) AS entry_index FROM json_each(?))";
 }

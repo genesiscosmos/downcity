@@ -475,6 +475,7 @@ export class AgentSessions implements AgentSessionsContract<AgentSession> {
       await cached.stop();
     }
     cached?.dispose_title_generation?.();
+    cached?.clear_secrets();
     const existed = await this.resolve_session_context().store.remove_session(
       resolved_session_id,
       resolved_category,
@@ -508,6 +509,7 @@ export class AgentSessions implements AgentSessionsContract<AgentSession> {
       throw new Error(`Session "${resolved_session_id}" is currently executing`);
     }
     cached?.dispose_title_generation?.();
+    cached?.clear_secrets();
     const existed = await this.resolve_session_context().store.clear_session_messages(
       resolved_session_id,
       resolved_category,
@@ -568,6 +570,7 @@ export class AgentSessions implements AgentSessionsContract<AgentSession> {
         cached?.finish_archive(true);
         if (cached) locked.delete(cached);
         cached?.dispose_title_generation?.();
+        cached?.clear_secrets();
         this.sessions_by_id.delete(cache_key);
         await this.notify_removed({
           type: "archived", session_id: item.id, category: item_category,
@@ -713,6 +716,7 @@ export class AgentSessions implements AgentSessionsContract<AgentSession> {
     const cached = this.sessions_by_id.get(cache_key);
     if (!cached || cached.is_executing()) return false;
     cached.dispose_title_generation?.();
+    cached.clear_secrets();
     this.sessions_by_id.delete(cache_key);
     return true;
   }

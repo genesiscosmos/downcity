@@ -30,7 +30,7 @@ import {
 } from "../runtime/TaskWorkflowModel.js";
 import { save_task_workflow } from "../runtime/TaskWorkflowState.js";
 import {
-  list_task_runs,
+  list_task_runs_page,
   read_task_run_detail,
 } from "../runtime/TaskRunStore.js";
 
@@ -379,11 +379,12 @@ export function register_task_workspace_actions(
     });
   });
   action("workspace.history", async (input) => {
-    const { task_id } = identity_schema.parse(input);
-    await readTask({ storage: runtime.storage, taskId: task_id });
-    return {
-      runs: await list_task_runs({ storage: runtime.storage, task_id }),
-    };
+    const request = identity_schema.extend({
+      cursor: z.string().regex(/^\d{8}-\d{6}-\d{3}$/u).optional(),
+      limit: z.number().int().min(1).max(100).optional(),
+    }).parse(input);
+    await readTask({ storage: runtime.storage, taskId: request.task_id });
+    return list_task_runs_page({ storage: runtime.storage, ...request });
   });
   action("workspace.run_detail", async (input) => {
     const { task_id, timestamp } = identity_schema
@@ -429,10 +430,8 @@ async function workspace_snapshot(
   ]);
   const tasks: TaskWorkspaceSnapshot["tasks"] = [];
   for (const entry of inspection.tasks) {
-    const definition = await readTask({
-      storage: runtime.storage,
-      taskId: entry.taskId,
-    });
+    // 扫描结果已包含完整定义；仅剥离列表附加字段，保持快照定义的原有结构，避免再次读盘解析。
+    const { last_run_at: _last_run_at, ...definition } = entry;
     tasks.push({
       definition,
       running: runtime.definitions.is_running(entry.taskId),

@@ -7,6 +7,7 @@
 
 import {
   LocalPowerLoader,
+  resolve_workspace_ssh_access,
   type LocalAgentConfig,
   type LocalWorkspaceConfig,
   type PowerRepository,
@@ -76,6 +77,7 @@ export async function create_cli_workspace(
   root_path_input?: string,
 ): Promise<Workspace> {
   const root_path = resolve_local_root_path(root_path_input);
+  const ssh = await resolve_workspace_ssh_access(root_path, config);
   return new Workspace({
     id: config.workspace_id,
     name: config.name,
@@ -88,7 +90,7 @@ export async function create_cli_workspace(
       home_path: os.homedir(),
     }),
     shell: new Shell({
-      sandbox_provider: create_sandbox_provider(),
+      sandbox_provider: create_sandbox_provider(ssh),
     }),
   });
 }
@@ -126,7 +128,7 @@ export async function resolve_cli_agent_model(
 /** 创建 CLI 默认交互 Tool。 */
 export function create_cli_agent_tools(): NonNullable<AgentOptions["tools"]> {
   return {
-    ask_question: AskQuestionsTool as unknown as NonNullable<AgentOptions["tools"]>[string],
+    ask_user: AskQuestionsTool as unknown as NonNullable<AgentOptions["tools"]>[string],
   };
 }
 

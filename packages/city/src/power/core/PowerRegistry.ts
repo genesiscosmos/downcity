@@ -28,6 +28,7 @@ import type {
   PipelineHook,
 } from "@downcity/type";
 import { execute_power_action } from "@/power/core/PowerActionExecution.js";
+import { assert_public_execution_input } from "./PowerPrivateValues.js";
 import type {
   PowerRegistryChange,
   PowerRegistrySubscriber,
@@ -443,6 +444,16 @@ export class PowerRegistry {
     action: string;
     payload?: JsonValue;
   }): Promise<PowerActionResult<JsonValue>> {
+    try {
+      if (normalize_power_name(params.power) !== "shell") assert_public_execution_input({
+        power: params.power,
+        action: params.action,
+        payload: params.payload,
+      }, params.site.interactions);
+    } catch {
+      const message = "Private input is not supported by City Power execution yet; the call was blocked before execution.";
+      return { success: false, error: message, message };
+    }
     const key = normalize_power_name(params.power);
     const record = this.records.get(key);
     if (!record) {

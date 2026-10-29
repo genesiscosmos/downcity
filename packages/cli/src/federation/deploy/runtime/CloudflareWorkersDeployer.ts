@@ -36,6 +36,7 @@ import {
   verify_admin_deployment_credentials,
 } from "@/federation/deploy/runtime/AdminCredentials.js";
 import { provision_cloudflare_admin_database } from "@/federation/deploy/runtime/AdminDatabaseProvisioner.js";
+import { prepare_cloudflare_database } from "@/federation/deploy/runtime/WorkerDatabasePreparer.js";
 import { with_cli_progress } from "@/shared/CliProgress.js";
 
 const WORKER_INITIALIZATION_TIMEOUT_MS = 30_000;
@@ -62,6 +63,18 @@ export async function deploy_cloudflare_workers(
   if (options.verify_only) {
     await verifyWorker(registered?.base_url);
     return;
+  }
+
+  const hyperdrive = config_file.config.deployment.resources.hyperdrive;
+  if (!config_file.config.deployment.resources.d1 && !hyperdrive) {
+    throw new CliError({ title: "Declare deployment.resources.d1 or deployment.resources.hyperdrive" });
+  }
+  if (hyperdrive && options.admin_reset) {
+    throw new CliError({
+      title: "PostgreSQL administrator reset is not implemented in this CLI",
+      note: "Deployment is blocked before preparation or upload because administrator initialization/reset cannot be verified.",
+      fix: "Complete PostgreSQL administrator provisioning support before deploying this project.",
+    });
   }
 
   const version_bump =
@@ -113,7 +126,7 @@ export async function deploy_cloudflare_workers(
     create_if_missing: options.dry_run !== true,
   });
 
-  const admin_credentials = !options.dry_run && (options.admin_reset || !registered?.admin_id)
+  const admin_credentials = !hyperdrive && !options.dry_run && (options.admin_reset || !registered?.admin_id)
     ? await create_admin_deployment_credentials(options.admin_reset ? "reset" : "initialize")
     : undefined;
   const wrangler_result = writeWranglerConfig(config_file, d1_result.resolved_database_id);
@@ -147,7 +160,38 @@ export async function deploy_cloudflare_workers(
   let output = "";
   let worker_url: string | undefined;
   let provisioned_admin_id = registered?.admin_id;
+  let admin_credentials_applied = false;
   try {
+    const migrated_admin_id = await prepare_cloudflare_database({
+      config_file,
+      account_id,
+      config_path: wrangler_result.config_path,
+      dry_run: options.dry_run,
+    });
+    if (hyperdrive && !options.dry_run) {
+      if (!migrated_admin_id) throw new CliError({ title: "PostgreSQL deployment requires a migrated active owner" });
+      provisioned_admin_id = migrated_admin_id;
+    }
+    if (admin_credentials) {
+      const database_binding = config_file.config.deployment.resources.d1?.binding;
+      const database_id = d1_result.resolved_database_id;
+      if (!database_binding || !database_id) {
+        throw new CliError({ title: "Federation administrator deployment requires a D1 database" });
+      }
+      const admin_result = await provision_cloudflare_admin_database({
+        project_dir: config_file.project_dir,
+        account_id,
+        wrangler_config_path: wrangler_result.config_path,
+        database_binding,
+        database_id,
+        credentials: admin_credentials,
+      });
+      provisioned_admin_id = admin_result.admin_id;
+      admin_credentials_applied = admin_result.credentials_applied;
+      if (options.admin_reset && !admin_result.credentials_applied) {
+        throw new CliError({ title: "Federation administrator reset was not applied" });
+      }
+    }
     output = await runWranglerDeploy(config_file, {
       account_id,
       config_path: wrangler_result.config_path,
@@ -160,21 +204,7 @@ export async function deploy_cloudflare_workers(
         detail: `${worker_url}/health`,
       }, async () => await wait_for_worker_health(worker_url!, WORKER_INITIALIZATION_TIMEOUT_MS));
       if (admin_credentials) {
-        const database_binding = config_file.config.deployment.resources.d1?.binding;
-        const database_id = d1_result.resolved_database_id;
-        if (!database_binding || !database_id) {
-          throw new CliError({ title: "Federation administrator deployment requires a D1 database" });
-        }
-        const admin_result = await provision_cloudflare_admin_database({
-          project_dir: config_file.project_dir,
-          account_id,
-          wrangler_config_path: wrangler_result.config_path,
-          database_binding,
-          database_id,
-          credentials: admin_credentials,
-        });
-        provisioned_admin_id = admin_result.admin_id;
-        if (admin_result.credentials_applied) {
+        if (admin_credentials_applied) {
           const verified = await with_cli_progress({
             title: "Verify Federation administrator",
             detail: `${worker_url}/v1/admin/login`,
@@ -334,7 +364,7 @@ async function run_custom_cloudflare_deploy(
   if (options.verify && deployed_url) await verifyWorker(deployed_url);
 }
 
-/** 等待 Worker 完成 Federation 初始化并创建系统表。 */
+/** 等待发布后的 Worker 就绪；数据库已由发布前准备阶段创建。 */
 async function wait_for_worker_health(base_url: string, timeout_ms: number): Promise<void> {
   const health_url = `${base_url.replace(/\/+$/u, "")}/health`;
   const deadline = Date.now() + timeout_ms;

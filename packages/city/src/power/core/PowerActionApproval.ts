@@ -11,7 +11,8 @@
 
 import type { PowerActionResult } from "@/power/index.js";
 import type { PowerCallSite } from "@/power/index.js";
-import type { JsonValue } from "@downcity/type";
+import type { JsonValue, SessionApprovalRequestInput } from "@downcity/type";
+import { redact_public_value } from "./PowerPrivateValues.js";
 
 /** 一次拒绝审批的稳定结果；放行时返回 undefined。 */
 export type PowerActionApprovalDenial = PowerActionResult<JsonValue>;
@@ -59,20 +60,20 @@ export async function request_power_action_approval(input: {
 
   let approved = false;
   try {
-    const decision = await approval.request({
+    const decision = await approval.request(redact_public_value<SessionApprovalRequestInput>({
       turn_id: input.site.turn_id ?? "",
       tool_call_id,
       tool_name: action_label,
       source_type: "tool",
       ...(input.description ? { description: input.description } : {}),
       payload: { operation: "tool", validated_input: input.payload },
-    });
+    }, input.site.interactions));
     approved = decision.approved;
   } catch (error) {
     // 交互端口在无人在场或上游失败时会抛错，统一收敛为明确的未获批准。
     return denial(
       `Power action "${action_label}" was not approved: ${
-        error instanceof Error ? error.message : String(error)
+        redact_public_value(error instanceof Error ? error.message : String(error), input.site.interactions)
       }`,
     );
   }

@@ -6,6 +6,7 @@
  * - close 到达时先等待输出写入链 drain，再统一进入终态收口，避免尾部输出丢读。
  */
 
+import { StringDecoder } from "node:string_decoder";
 import type { ShellRuntimeState, ShellSessionRuntimeState } from "@/shell/session/ShellRuntimeTypes.js";
 import {
   append_session_output,
@@ -24,6 +25,7 @@ async function finalize_exit_after_output_drain(
     const timer = setImmediate(resolve);
     if (typeof timer.unref === "function") timer.unref();
   });
+  await append_session_output(state, session, "", true);
   await session.write_chain.catch(() => undefined);
   await finalize_exit(state, session, exit_code);
 }
@@ -43,20 +45,26 @@ export function attach_shell_process_event_handlers(params: {
 }): void {
   const { state, session } = params;
   const { child } = session;
+  const decoder = new StringDecoder("utf8");
+  let closing = false;
+  const finish = (exit_code: number): void => {
+    if (closing) return;
+    closing = true;
+    const tail = decoder.end();
+    if (tail) void append_session_output(state, session, tail).catch(() => undefined);
+    void finalize_exit_after_output_drain(state, session, exit_code).catch(() => undefined);
+  };
   child.on_data((chunk: string | Buffer) => {
-    void append_session_output(state, session, String(chunk ?? "")).catch(() => undefined);
+    const text = Buffer.isBuffer(chunk) ? decoder.write(chunk) : String(chunk ?? "");
+    void append_session_output(state, session, text).catch(() => undefined);
   });
   child.on_error((error: Error) => {
     void append_session_output(state, session, `\n[process error] ${String(error)}\n`).catch(
       () => undefined,
     );
-    void finalize_exit_after_output_drain(state, session, -1).catch(() => undefined);
+    finish(-1);
   });
   child.on_exit((code: number) => {
-    void finalize_exit_after_output_drain(
-      state,
-      session,
-      typeof code === "number" ? code : -1,
-    ).catch(() => undefined);
+    finish(typeof code === "number" ? code : -1);
   });
 }

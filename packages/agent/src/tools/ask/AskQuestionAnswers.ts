@@ -95,7 +95,7 @@ function assert_answer_options(
   question: SessionInteractionQuestion,
   value: string | string[],
 ): void {
-  if (question.type === "text") return;
+  if (question.type === "text" || question.type === "secret") return;
   const allowed = new Set((question.options ?? []).map((option) => option.value));
   const selected = Array.isArray(value) ? value : [value];
   const invalid = selected.find((item) => !allowed.has(item));

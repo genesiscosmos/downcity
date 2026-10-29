@@ -8,6 +8,9 @@
 
 import { httpError, type ServiceInstallContext } from "@downcity/federation";
 import type { PaymentInbox } from "./PaymentInbox.js";
+import type { PaymentEntitlement } from "./types/Wallet.js";
+import { read_entitlement } from "./wallet.js";
+import { read_positive_integer, read_metadata, stable_stringify, read_metadata_json, without_checkout_lease, to_order_snapshot, readProvider, readWebhookProvider, autoParseWebhook, sortPayments, sortEvents } from "./route-utils.js";
 import { resolvePaymentRedirectURL } from "./redirect.js";
 import {
   errorMessage,
@@ -22,10 +25,8 @@ import type {
   PaymentCreateCheckoutInput,
   PaymentEventRecord,
   PaymentEventSyncStatus,
-  PaymentOrderSnapshot,
   PaymentProvider,
   PaymentProviderWebhookEvent,
-  PaymentProviderWebhookInput,
   PaymentRecord,
   PaymentStatus,
   PaymentTopupResolutionInput,
@@ -66,14 +67,18 @@ const PAYMENT_CHECKOUT_CREATION_LEASE_MS = 5 * 60 * 1000;
  * - 使用 interface 避免 routes.ts 与 service.ts 之间的循环类型依赖。
  */
 interface PaymentServiceLike {
-  /** 仅接收验签后可信事件的持久化执行器。 */
-  inbox: PaymentInbox;
+  /** 宿主明确公布的充值策略，未声明为 null。 */
+  get_topup_policy?(): { /** 结算币种。 */ currency: string; /** 最低minor金额。 */ minimum_minor: number } | null | undefined;
+  /** 服务端解析套餐冻结权益。 */
+  resolve_plan?(plan_id: string, current?: PaymentRecord): Promise<PaymentEntitlement>;
   /** 根据自由充值金额解析服务端 Credits 快照。 */
   resolve_topup(input: PaymentTopupResolutionInput): Promise<{ credits: number }>;
   /** 通知接入方处理已确认支付订单。 */
   on_paid(record: PaymentRecord): Promise<void>;
   /** 获取已挂载的 provider 列表。 */
   getProviders(): PaymentProvider[];
+  /** 已安装的持久化支付事件执行器。 */
+  inbox: PaymentInbox;
 }
 
 /**
@@ -90,7 +95,8 @@ export function installPaymentRoutes(service: PaymentServiceLike, ctx: ServiceIn
     auth: [],
     handler(requestCtx) {
       return requestCtx.jsonResponse({
-        items: providers.map((provider) => provider.method(ctx)),
+        items: providers.map((provider) => ({ ...provider.method(ctx), supports_card_purchase: provider.supports_card_purchase === true })),
+        topup: service.get_topup_policy?.() ?? null,
       });
     },
   });
@@ -101,7 +107,7 @@ export function installPaymentRoutes(service: PaymentServiceLike, ctx: ServiceIn
     auth: ["user"],
     async handler(requestCtx) {
       const body = await requestCtx.json<PaymentCreateCheckoutInput>();
-      if ("credits" in body || "amount_minor" in body) {
+      if (["credits", "amount_minor", "duration_seconds", "success_url", "cancel_url", "redirect_url"].some(key => key in body) || Object.keys(read_metadata(body.metadata)).length) {
         throw new TypeError("checkout only accepts topup_amount_minor; Credits are resolved by the server");
       }
       const provider = readProvider(providers, body.method_id || body.provider);
@@ -112,19 +118,17 @@ export function installPaymentRoutes(service: PaymentServiceLike, ctx: ServiceIn
       }
 
       const user_id = normalizeRequired(requestCtx.user?.user_id, "user_id");
-      const amount_minor = read_positive_integer(body.topup_amount_minor, "topup_amount_minor");
       const idempotency_key = normalizeRequired(body.idempotency_key, "idempotency_key");
       const note = normalizeOptionalText(body.note);
       const payment_id = await create_stable_payment_id(provider.id, user_id, idempotency_key);
       const current_payment = (await payments.select({ payment_id }))[0];
-      const credits = current_payment
-        ? current_payment.credits
-        : read_positive_integer((await service.resolve_topup({
-          user_id,
-          provider: provider.id,
-          currency: method.currency,
-          topup_amount_minor: amount_minor,
-        })).credits, "resolved credits");
+      const plan_id = body.plan_id ? normalizeRequired(body.plan_id, "plan_id") : "";
+      if (plan_id && (body.topup_amount_minor !== undefined || !provider.supports_card_purchase || !service.resolve_plan)) throw new TypeError("card purchase not supported or conflicting amount");
+      const entitlement = plan_id ? await service.resolve_plan!(plan_id, current_payment) : { kind: "topup" as const, plan: null };
+      if (current_payment && read_entitlement(current_payment).kind !== entitlement.kind) throw new TypeError("payment intent differs");
+      const amount_minor = entitlement.plan?.amount_minor ?? read_positive_integer(body.topup_amount_minor, "topup_amount_minor");
+      if (entitlement.plan && entitlement.plan.currency !== method.currency.toLowerCase()) throw new TypeError("plan currency does not match payment method");
+      const credits = current_payment?.credits ?? entitlement.plan?.credits ?? read_positive_integer((await service.resolve_topup({ user_id, provider: provider.id, currency: method.currency, topup_amount_minor: amount_minor })).credits, "resolved credits");
       const reservation = await claim_checkout_creation({
         payments,
         payment_id,
@@ -135,7 +139,7 @@ export function installPaymentRoutes(service: PaymentServiceLike, ctx: ServiceIn
         amount_minor,
         idempotency_key,
         note,
-        metadata: read_metadata(body.metadata),
+        metadata: { wallet_entitlement: entitlement },
       });
       if (reservation.ready) {
         return requestCtx.jsonResponse(toCheckoutResult(reservation.record));
@@ -187,7 +191,7 @@ export function installPaymentRoutes(service: PaymentServiceLike, ctx: ServiceIn
     auth: ["user"],
     async handler(requestCtx) {
       const userId = normalizeRequired(requestCtx.user?.user_id, "user_id");
-      return requestCtx.jsonResponse({ items: sortPayments(await payments.select({ user_id: userId })) });
+      return requestCtx.jsonResponse({ items: sortPayments(await payments.select({ user_id: userId })).map(row => ({ payment_id: row.payment_id, provider: row.provider, status: row.status, credits: row.credits, amount_minor: row.amount_minor, currency: row.currency, created_at: row.created_at, updated_at: row.updated_at })) });
     },
   });
 
@@ -265,9 +269,9 @@ export function installPaymentRoutes(service: PaymentServiceLike, ctx: ServiceIn
     auth: [],
     handler(requestCtx) {
       return htmlResponse(renderRedirectPage({
-        title: "Payment verification",
+        title: "Return to wallet",
         heading: "Payment is being verified",
-        description: "Credits are issued after a verified payment notification. Return to your app and refresh the order status.",
+        description: "Only a verified payment notification can credit your wallet. Return to the wallet and refresh the order status.",
         request: requestCtx.request,
       }));
     },
@@ -305,9 +309,9 @@ export async function syncPaymentEvent(input: {
   if (!payment) return "pending";
   if (event.status === "paid") {
     const external_id = event.provider_payment_id || event.provider_order_id || event.provider_session_id;
-    if (!normalizeOptionalText(external_id) || !Number.isSafeInteger(event.amount_minor) || (event.amount_minor ?? 0) <= 0
+    if (!external_id || !Number.isSafeInteger(event.amount_minor) || (event.amount_minor ?? 0) <= 0
       || event.amount_minor !== payment.amount_minor
-      || !event.currency || event.currency.toLowerCase() !== payment.currency.toLowerCase()) {
+      || event.currency?.toLowerCase() !== payment.currency.toLowerCase()) {
       throw httpError(422, "verified payment amount, currency or transaction identity does not match order");
     }
     if (event.provider_session_id && payment.provider_session_id && event.provider_session_id !== payment.provider_session_id
@@ -315,11 +319,10 @@ export async function syncPaymentEvent(input: {
       || event.provider_payment_id && payment.provider_payment_id && event.provider_payment_id !== payment.provider_payment_id) {
       throw httpError(422, "verified provider identity does not match order");
     }
-    // paid 记录是回调的稳定输入；回调失败后重复投递仍可重试。
-    if (payment.status === "paid") {
-      await service.on_paid(payment);
-      return "applied";
-    }
+  }
+  if (event.status === "paid" && payment.status === "paid") {
+    await service.on_paid(payment);
+    return "applied";
   }
   if (payment.status !== "pending" && event.status !== "paid") return "ignored";
 
@@ -329,11 +332,7 @@ export async function syncPaymentEvent(input: {
     provider_payment_id: event.provider_payment_id || payment.provider_payment_id,
     provider_order_id: event.provider_order_id || payment.provider_order_id,
   });
-  if (event.status === "paid") {
-    const paid = (await payments.select({ payment_id: payment.payment_id }))[0];
-    if (!paid || paid.status !== "paid") throw new Error("payment confirmation was not persisted");
-    await service.on_paid(paid);
-  }
+  if (event.status === "paid") await service.on_paid({ ...payment, status: "paid" });
   return "applied";
 }
 
@@ -556,6 +555,7 @@ async function updatePayment(
   },
 ): Promise<void> {
   await payments.update({
+    // 非付款成功事件只允许推进 pending，旧快照不能覆盖已确认 paid。
     where: { payment_id: paymentId, ...(input.status === "paid" ? {} : { status: "pending" as const }) },
     values: {
       status: input.status,
@@ -583,132 +583,4 @@ function toCheckoutResult(row: PaymentRecord): PaymentCheckoutCreateResult {
     topup_amount_minor: row.amount_minor,
     currency: row.currency,
   };
-}
-
-/** 读取正安全整数。 */
-function read_positive_integer(value: unknown, label: string): number {
-  const normalized = Number(value);
-  if (!Number.isSafeInteger(normalized) || normalized <= 0) {
-    throw new TypeError(`${label} must be a positive safe integer`);
-  }
-  return normalized;
-}
-
-/** 读取结构化 metadata。 */
-function read_metadata(value: unknown): Record<string, unknown> {
-  return value && typeof value === "object" && !Array.isArray(value)
-    ? value as Record<string, unknown>
-    : {};
-}
-
-/** 稳定序列化 Checkout 请求 metadata，用于完整幂等冲突检查。 */
-function stable_stringify(value: unknown): string {
-  return JSON.stringify(sort_json_value(value));
-}
-
-/** 递归排序 JSON 对象字段。 */
-function sort_json_value(value: unknown): unknown {
-  if (Array.isArray(value)) return value.map(sort_json_value);
-  if (!value || typeof value !== "object") return value;
-  return Object.fromEntries(
-    Object.entries(value as Record<string, unknown>)
-      .sort(([left], [right]) => left.localeCompare(right))
-      .map(([key, item]) => [key, sort_json_value(item)]),
-  );
-}
-
-/** 解析数据库中的 metadata JSON。 */
-function read_metadata_json(value: string): Record<string, unknown> {
-  try {
-    return read_metadata(JSON.parse(value || "{}"));
-  } catch {
-    return {};
-  }
-}
-
-/** 移除仅供内部并发控制使用的 Checkout 租约。 */
-function without_checkout_lease(value: Record<string, unknown>): Record<string, unknown> {
-  const { checkout_lease: _checkout_lease, ...metadata } = value;
-  return metadata;
-}
-
-/** 将持久化 Payment 投影为 Provider 所需的只读订单快照。 */
-function to_order_snapshot(row: PaymentRecord): PaymentOrderSnapshot {
-  return {
-    payment_id: row.payment_id,
-    user_id: row.user_id,
-    credits: row.credits,
-    amount_minor: row.amount_minor,
-    currency: row.currency,
-    note: row.note,
-  };
-}
-
-/**
- * 读取指定 provider。
- */
-function readProvider(providers: PaymentProvider[], value: unknown): PaymentProvider {
-  const id = normalizeOptionalText(value);
-  if (!id) throw new TypeError("payment method_id is required");
-  const provider = providers.find((item) => item.id === id);
-  if (!provider) throw new Error(`Payment provider ${id} is not available`);
-  return provider;
-}
-
-/**
- * 根据请求特征识别 webhook 来源 provider。
- */
-function readWebhookProvider(providers: PaymentProvider[], request: Request): PaymentProvider | undefined {
-  const url = new URL(request.url);
-  const explicit = normalizeOptionalText(url.searchParams.get("provider"));
-  if (explicit) return readProvider(providers, explicit);
-
-  if (request.headers.has("stripe-signature")) return providers.find((provider) => provider.id === "stripe");
-  if (request.headers.has("creem-signature")) return providers.find((provider) => provider.id === "creem");
-  if (request.headers.has("x-waffo-signature")) return providers.find((provider) => provider.id === "waffo");
-  if (request.headers.has("webhook-signature") || request.headers.has("svix-signature")) {
-    return providers.find((provider) => provider.id === "dodo");
-  }
-  return undefined;
-}
-
-/**
- * 自动尝试所有 provider 解析 webhook。
- */
-async function autoParseWebhook(
-  providers: PaymentProvider[],
-  input: PaymentProviderWebhookInput,
-): Promise<PaymentProviderWebhookEvent> {
-  for (const provider of providers) {
-    try {
-      const event = await provider.parseWebhook(input);
-      return {
-        ...event,
-        meta: {
-          ...(event.meta ?? {}),
-          provider: provider.id,
-        },
-      };
-    } catch {
-      // 关键点（中文）：自动识别只是兜底，单个 provider 解析失败继续尝试下一个。
-    }
-  }
-  throw new Error("Payment webhook provider is required");
-}
-
-/**
- * 支付记录按更新时间倒序。
- */
-function sortPayments(rows: PaymentRecord[]): PaymentRecord[] {
-  return [...rows].sort((left, right) => {
-    if (left.updated_at === right.updated_at) return right.created_at.localeCompare(left.created_at);
-    return right.updated_at.localeCompare(left.updated_at);
-  });
-}
-
-/**
- * 事件记录按创建时间倒序。
- */
-function sortEvents(rows: PaymentEventRecord[]): PaymentEventRecord[] {
-  return [...rows].sort((left, right) => right.created_at.localeCompare(left.created_at));
 }

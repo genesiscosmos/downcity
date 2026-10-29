@@ -32,6 +32,8 @@ const MAX_VISIBLE_OPTIONS = 6;
 export interface QuestionPanelOptions {
   /** Session 持久化的 Question Interaction 请求。 */
   request: SessionInteractionRequest;
+  /** 当前 Session 是否提供专用私密提交接口；缺少接口时禁止收集私密表单。 */
+  private_supported?: boolean;
   /** 全部问题完成后的结构化回答回调。 */
   on_submit: (answers: SessionInteractionAnswer[]) => void;
   /** 用户主动取消回答时触发，由协调器停止当前 Turn。 */
@@ -45,6 +47,8 @@ export class QuestionPanelComponent implements Component, Focusable {
   private readonly on_cancel: () => void;
   private readonly answers: SessionInteractionAnswer[] = [];
   private input = new Input();
+  private readonly private_supported: boolean;
+  private confirming_private = false;
   private question_index = 0;
   private selected_option_index = 0;
   private selected_values = new Set<string>();
@@ -54,6 +58,7 @@ export class QuestionPanelComponent implements Component, Focusable {
   /** 创建面板并准备第一个问题。 */
   constructor(options: QuestionPanelOptions) {
     this.request = options.request;
+    this.private_supported = options.private_supported ?? false;
     this.on_submit = options.on_submit;
     this.on_cancel = options.on_cancel;
     this.prepare_current_question();
@@ -66,13 +71,19 @@ export class QuestionPanelComponent implements Component, Focusable {
       matchesKey(data, "ctrl+c") ||
       matchesKey(data, "ctrl+d")
     ) {
+      this.clear_private_input();
       this.on_cancel();
       return;
     }
 
+    if (this.has_private_questions && !this.private_supported) return;
+    if (this.confirming_private) {
+      if (matchesKey(data, Key.enter)) this.submit_answers();
+      return;
+    }
     const question = this.current_question;
     if (!question) return;
-    if (question.type === "text") {
+    if (question.type === "text" || question.type === "secret") {
       this.input.handleInput(data);
       return;
     }
@@ -98,6 +109,13 @@ export class QuestionPanelComponent implements Component, Focusable {
     const safe_width = Math.max(0, width);
     if (safe_width <= 0) return [""];
     const inner_width = Math.max(1, safe_width - 2);
+    if (this.has_private_questions && !this.private_supported) {
+      return ["Private input is unavailable for this Session transport.", "Use Desktop or a local Session. Esc stops this turn."].map((line) => truncateToWidth(line, safe_width, ELLIPSIS));
+    }
+    if (this.confirming_private) {
+      const names = this.questions.filter((item) => item.type === "secret").map((item) => item.name);
+      return [`Submit ${names.length} private values to this Session: ${names.join(", ")}`, "Existing values with these names will be replaced.", "Enter confirms submission and replacement · Esc cancels"].map((line) => truncateToWidth(line, safe_width, ELLIPSIS));
+    }
     const question = this.current_question;
     if (!question) return [];
 
@@ -130,6 +148,25 @@ export class QuestionPanelComponent implements Component, Focusable {
     return Array.isArray(questions) ? questions as SessionInteractionQuestion[] : [];
   }
 
+  /** 判断整个表单是否包含私密输入。 */
+  private get has_private_questions(): boolean {
+    return this.questions.some((question) => question.type === "secret");
+  }
+
+  /** 释放明文输入、撤销历史和未提交答案；不写入任何历史或草稿。 */
+  private clear_private_input(): void {
+    this.input = new Input();
+    this.answers.length = 0;
+    this.confirming_private = false;
+  }
+
+  /** 完整回答仅交给专用提交回调，立即释放面板状态。 */
+  private submit_answers(): void {
+    const answers = [...this.answers];
+    this.clear_private_input();
+    this.on_submit(answers);
+  }
+
   /** 为当前问题重置临时输入状态。 */
   private prepare_current_question(): void {
     this.selected_option_index = 0;
@@ -144,7 +181,9 @@ export class QuestionPanelComponent implements Component, Focusable {
     if (!question) return;
     this.answers.push({ question_id: question.question_id, value });
     if (this.answers.length === this.questions.length) {
-      this.on_submit([...this.answers]);
+      this.input = new Input();
+      if (this.has_private_questions) this.confirming_private = true;
+      else this.submit_answers();
       return;
     }
     this.question_index += 1;
@@ -208,6 +247,10 @@ export class QuestionPanelComponent implements Component, Focusable {
     inner_width: number,
     question: SessionInteractionQuestion,
   ): string[] {
+    if (question.type === "secret") {
+      // Input.render would expose its private value. Only a fixed mask reaches the terminal.
+      return [this.input.getValue() ? "  ••••••••" : "  [private input]"];
+    }
     if (question.type === "text") {
       this.input.focused = this.focused;
       return this.input
@@ -246,7 +289,7 @@ export class QuestionPanelComponent implements Component, Focusable {
     inner_width: number,
     question: SessionInteractionQuestion,
   ): string {
-    const hint = question.type === "text"
+    const hint = question.type === "text" || question.type === "secret"
       ? "Enter submit · Esc stop turn"
       : question.type === "multi_select"
         ? "↑↓ navigate · Space toggle · Enter submit · Esc stop turn"

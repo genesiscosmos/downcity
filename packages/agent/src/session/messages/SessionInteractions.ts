@@ -4,7 +4,7 @@
  * 关键点（中文）
  * - 本模块只拥有 pending waiter 与恢复执行；Interaction 的权威状态由 SessionMessages 持久化。
  *   任何终态都必须先提交 canonical Message，再兑现等待 Promise。
- * - 原语只认识信封与 type 字符串：payload 的解释属于它的生产者。
+ * - 通用原语只处理信封；私密 question 的受信提交委托专用解释器，明文不进入消息。
  * - 审批的专用入口（模式判断与决定解释）由 {@link ApprovalInteraction} 承担。
  *
  * Interaction 没有超时：它只能由用户响应，或随所属 Turn/Session 结束而被取消。
@@ -13,6 +13,7 @@
 import type { SessionMessages } from "@/session/messages/SessionMessages.js";
 import { ApprovalInteraction } from "@/session/messages/ApprovalInteraction.js";
 import type {
+  JsonValue,
   RespondSessionInteractionInput,
   SessionApprovalMode,
   SessionInteractionHandle,
@@ -22,9 +23,12 @@ import type {
   SessionInteractionRequestInput,
   SessionInteractionResponse,
   SessionInteractionResult,
+  SessionQuestionResponsePayload,
 } from "@downcity/type";
 import type { SessionPendingInteractionRuntime } from "@/types/session/SessionInteractions.js";
 import { generate_id } from "@/utils/Id.js";
+import { SessionSecrets } from "./SessionSecrets.js";
+import { interaction_questions, prepare_private_question_response, validate_private_questions } from "./PrivateQuestionResponse.js";
 
 /** 单个 Session 的异步用户交互入口。 */
 export class SessionInteractions implements SessionInteractionPort, SessionInteractionLifecycle {
@@ -36,6 +40,12 @@ export class SessionInteractions implements SessionInteractionPort, SessionInter
     string,
     SessionPendingInteractionRuntime
   >();
+  /** 当前 Session 的私密变量；只存在运行时内存，不进入 canonical Message。 */
+  private secrets = new SessionSecrets();
+  /** 提交与取消共用队列，防止两个响应同时改变同一 pending 交互。 */
+  private mutation_chain: Promise<unknown> = Promise.resolve();
+  /** 受信提交完成后的安全回执，允许网络重试但不再读取已提交明文。 */
+  private readonly private_receipts = new Map<string, SessionInteractionResult>();
 
   constructor(options: {
     /** 当前 Interaction 运行时所属 Session 标识。 */
@@ -81,6 +91,7 @@ export class SessionInteractions implements SessionInteractionPort, SessionInter
       created_at: Date.now(),
     };
     this.validate_request(request);
+    validate_private_questions(request);
     if (this.pending_by_id.has(request.interaction_id)) {
       throw new Error(`Session Interaction is already pending: ${request.interaction_id}`);
     }
@@ -96,7 +107,7 @@ export class SessionInteractions implements SessionInteractionPort, SessionInter
     this.pending_by_id.set(request.interaction_id, pending);
 
     try {
-      await this.messages.request_interaction(request);
+      await this.messages.request_interaction(this.secrets.redact(request) as SessionInteractionRequest);
     } catch (error) {
       this.pending_by_id.delete(request.interaction_id);
       throw error;
@@ -117,46 +128,107 @@ export class SessionInteractions implements SessionInteractionPort, SessionInter
   async respond(
     input: RespondSessionInteractionInput,
   ): Promise<SessionInteractionResult> {
-    const pending = this.require_pending(input.interaction_id);
-    this.validate_response(pending.request, input.response);
-    await this.messages.resolve_interaction(
-      input.interaction_id,
-      input.response,
-    );
-    const result: SessionInteractionResult = input.response.outcome === "denied"
-      ? {
-        status: "denied",
-        interaction_id: input.interaction_id,
-        reason: extract_interaction_reason(input.response.payload),
+    return this.serialize(async () => {
+      const pending = this.require_pending(input.interaction_id);
+      this.validate_response(pending.request, input.response);
+      if (interaction_questions(pending.request).some((question) => question.type === "secret")) {
+        throw new Error("Private questions require the private submission endpoint");
       }
-      : {
-        status: "resolved",
-        interaction_id: input.interaction_id,
-        response: structuredClone(input.response),
+      return this.commit_response(input.interaction_id, this.secrets.redact(input.response) as SessionInteractionResponse);
+    });
+  }
+
+  /** 受信客户端专用入口；完整校验后只持久化引用回执。 */
+  async submit_private_question(input: RespondSessionInteractionInput): Promise<SessionInteractionResult> {
+    return this.serialize(async () => {
+      const previous = this.private_receipts.get(input.interaction_id);
+      if (previous) return structuredClone(previous);
+      const pending = this.require_pending(input.interaction_id);
+      this.validate_response(pending.request, input.response);
+      const prepared = prepare_private_question_response(pending.request, input.response);
+      const staged = this.secrets.with_values(prepared.secrets);
+      // 只遮罩答案数据，协议状态、类型及字段标识不能被短密码意外改写。
+      const prepared_payload = prepared.response.payload as unknown as SessionQuestionResponsePayload;
+      const response: SessionInteractionResponse = {
+        ...prepared.response,
+        payload: {
+          answers: prepared_payload.answers.map((answer) => ({
+            question_id: answer.question_id,
+            value: staged.redact(answer.value) as string | string[],
+          })),
+        },
       };
-    this.finish_pending(input.interaction_id, result);
+      await this.messages.resolve_interaction(input.interaction_id, response);
+      this.secrets = staged;
+      const result: SessionInteractionResult = { status: "resolved", interaction_id: input.interaction_id, response };
+      this.private_receipts.set(input.interaction_id, structuredClone(result));
+      this.finish_pending(input.interaction_id, result);
+      return result;
+    });
+  }
+
+  /** 持久化公开响应后再兑现等待者。 */
+  private async commit_response(interaction_id: string, response: SessionInteractionResponse): Promise<SessionInteractionResult> {
+    await this.messages.resolve_interaction(interaction_id, response);
+    const result: SessionInteractionResult = response.outcome === "denied"
+      ? { status: "denied", interaction_id, reason: extract_interaction_reason(response.payload) }
+      : { status: "resolved", interaction_id, response: structuredClone(response) };
+    this.finish_pending(interaction_id, result);
     return result;
+  }
+
+  /** 保持队列可继续执行，单次错误只返回给对应提交者。 */
+  private serialize<T>(operation: () => Promise<T>): Promise<T> {
+    const next = this.mutation_chain.then(operation);
+    this.mutation_chain = next.catch(() => undefined);
+    return next;
+  }
+
+  /**
+   * 展开当前 Session 工具输入中的私密变量引用。
+   *
+   * 关键点（中文）
+   * - 只处理字符串值，不解析对象键、工具名或脚本源码字段。
+   * - 单次展开，私密值中再次出现的占位符不会递归解析。
+   */
+  resolve_secret_references(input: JsonValue): JsonValue {
+    return this.secrets.resolve(input);
+  }
+
+  /** 在执行结果、日志和异常发布前遮罩当前 Session 已知私密值。 */
+  redact_secret_values(value: unknown): unknown {
+    return this.secrets.redact(value);
+  }
+
+  /** 为当前调用创建跨块输出遮罩器，并跟进此 Session 后续私密提交。 */
+  create_secret_stream_redactor() {
+    return this.secrets.create_stream_redactor(() => this.secrets);
   }
 
   /** 取消当前 Session 的全部 pending Interaction。 */
   async cancel_all(
     reason: "turn_stopped" | "session_disposed" | "runtime_interrupted",
   ): Promise<void> {
-    let first_error: unknown;
-    for (const interaction_id of [...this.pending_by_id.keys()]) {
-      const result: SessionInteractionResult = {
-        status: "cancelled",
-        interaction_id,
-        reason,
-      };
-      try {
-        await this.messages.close_interaction(interaction_id, { reason });
-        this.finish_pending(interaction_id, result);
-      } catch (error) {
-        first_error ??= error;
+    return this.serialize(async () => {
+      if (reason === "session_disposed") this.clear_secrets();
+      let first_error: unknown;
+      for (const interaction_id of [...this.pending_by_id.keys()]) {
+        const result: SessionInteractionResult = { status: "cancelled", interaction_id, reason };
+        try {
+          await this.messages.close_interaction(interaction_id, { reason });
+          this.finish_pending(interaction_id, result);
+        } catch (error) {
+          first_error ??= error;
+        }
       }
-    }
-    if (first_error) throw first_error;
+      if (first_error) throw first_error;
+    });
+  }
+
+  /** 释放当前 Session 所有私密值及回执；调用方先停止执行。 */
+  clear_secrets(): void {
+    this.secrets.clear();
+    this.private_receipts.clear();
   }
 
   /**

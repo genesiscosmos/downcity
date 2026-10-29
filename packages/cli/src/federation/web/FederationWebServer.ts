@@ -160,6 +160,19 @@ async function handle_request(
       return;
     }
     const admin = require_admin(admin_state);
+    // 套餐管理复用本地控制面的同源校验与管理员会话，限定路径与字段。
+    if (request_url.pathname === "/api/payment/card-plans" && method === "GET") {
+      send_json(response, 200, await admin.service("payment").get("card-plans/admin"));
+      return;
+    }
+    if (["/api/payment/card-plans/save", "/api/payment/card-plans/delete"].includes(request_url.pathname) && method === "POST") {
+      const body = await read_json_body<Record<string, unknown>>(request);
+      const deleting = request_url.pathname.endsWith("/delete");
+      const fields = deleting ? ["plan_id", "version"] : ["plan_id", "version", "name", "currency", "amount_minor", "credits", "duration_seconds", "enabled"];
+      if (Object.keys(body).some((field) => !fields.includes(field))) throw new FederationWebHttpError(422, "套餐字段无效。");
+      send_json(response, 200, await admin.service("payment").action(deleting ? "card-plans/delete" : "card-plans/save").invoke(body));
+      return;
+    }
     if (request_url.pathname === "/api/relay/catalog" && method === "GET") {
       send_json(response, 200, await admin.relay.catalog());
       return;

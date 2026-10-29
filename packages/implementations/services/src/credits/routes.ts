@@ -12,6 +12,7 @@ import type {
   CreditsTopupInput,
 } from "./types/Input.js";
 import { read_required_text } from "./utils.js";
+import { read_wallet_cards, read_wallet_entries } from "./wallet-reader.js";
 
 interface CreditsQueryBody extends Record<string, unknown> {
   /** 可选用户 ID。 */
@@ -28,6 +29,16 @@ interface CreditsQueryBody extends Record<string, unknown> {
 
 /** 注册 Credits Service 路由。 */
 export function register_credits_routes(service: CreditsService, ctx: ServiceInstallContext): void {
+  ctx.route({ method: "GET", path: "/wallet/me", auth: ["user"], handler: async c => {
+    const user_id = read_user_id(c);
+    const account = await service.read_account(user_id);
+    const cards = await read_wallet_cards(ctx.database, user_id);
+    return c.jsonResponse({ available_credits: account.available_credits, primary: account.cards.primary, cards: cards.map(card => ({ kind: card.kind, card_id: card.card_id, name: card.name, credits: card.credits, expires_at: card.expires_at, status: card.status, created_at: card.created_at, updated_at: card.updated_at })) });
+  } });
+  ctx.route({ method: "GET", path: "/cards/entries/me", auth: ["user"], handler: async c => {
+    const url = new URL(c.request.url);
+    return c.jsonResponse({ items: await read_wallet_entries(ctx.database, read_user_id(c), read_required_text(url.searchParams.get("card_id"), "card_id"), url.searchParams.get("limit") || undefined) });
+  } });
   ctx.route({
     method: "GET",
     path: "/me",

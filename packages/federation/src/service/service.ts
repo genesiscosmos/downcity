@@ -23,6 +23,7 @@ import type { FederationStorage } from "../federation/storage.js";
 import type { FederationRequestTransport } from "../federation/types.js";
 import type { BureauTokenStore } from "../federation/auth/bureau-token-store.js";
 import type { ServiceDatabaseContext } from "../types/database/Database.js";
+import type { ServiceDatabaseSchemas } from "./installable-service.js";
 
 /**
  * 框架内部初始化入口。
@@ -31,6 +32,8 @@ import type { ServiceDatabaseContext } from "../types/database/Database.js";
  * 业务 Service 只能通过 `on_init()` 扩展自己的初始化逻辑。
  */
 const SERVICE_INITIALIZE = Symbol("downcity.service.initialize");
+const SERVICE_PREPARE_DATABASE = Symbol("downcity.service.prepare_database");
+const SERVICE_MAINTENANCE = Symbol("downcity.service.maintenance");
 
 // ===========================================================================
 // 鉴权级别
@@ -181,6 +184,8 @@ export class Service {
   /** Service 级 hook，该 Service 下所有 Action 共享 */
   readonly hook = new Hook();
   tables?: Record<string, AnySQLiteTable | AnyPgTable>;
+  /** 按数据库方言声明表与部署 DDL；初始化时先选择，再注入运行能力。 */
+  readonly database_schemas?: ServiceDatabaseSchemas;
   readonly env?: EnvRequirement[];
   /** 当前模块可选的说明文档。 */
   instruction?: InstructionDefinition;
@@ -243,6 +248,22 @@ export class Service {
    * 子类只应覆盖该方法处理自身状态，框架级安装流程由 Federation 独立保证。
    */
   protected async on_init(): Promise<void> {}
+
+  /** 部署阶段执行幂等数据库准备；不得依赖 on_init 已完成。 */
+  protected async on_prepare_database(): Promise<void> {}
+
+  /** 周期执行有界的数据维护，不能替代请求时的有效期校验。 */
+  protected async on_maintenance(): Promise<void> {}
+
+  /** 框架内部数据库准备入口。 */
+  async [SERVICE_PREPARE_DATABASE](): Promise<void> {
+    await this.on_prepare_database();
+  }
+
+  /** 框架内部周期维护入口。 */
+  async [SERVICE_MAINTENANCE](): Promise<void> {
+    await this.on_maintenance();
+  }
 
   /**
    * 读取当前 Service 的受限数据库能力。
@@ -343,6 +364,16 @@ export class Service {
  */
 export async function initialize_service(service: Service): Promise<void> {
   await service[SERVICE_INITIALIZE]();
+}
+
+/** 执行 Service 部署阶段的幂等数据库准备。 */
+export async function prepare_service_database(service: Service): Promise<void> {
+  await service[SERVICE_PREPARE_DATABASE]();
+}
+
+/** 执行 Service 周期维护。 */
+export async function maintain_service(service: Service): Promise<void> {
+  await service[SERVICE_MAINTENANCE]();
 }
 
 export type InstructionService = Service & InstructionCapable;

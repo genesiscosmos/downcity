@@ -10,7 +10,7 @@
  * - 这一层存在的意义是让上下文注入点唯一：工具实现永远拿到完整的 ToolCallContext。
  */
 
-import type { ModelMessage } from "@downcity/type";
+import type { ModelMessage, ModelJsonValue } from "@downcity/type";
 
 /** 一次模型工具调用自身携带的信息。 */
 export interface ToolCallSite {
@@ -27,12 +27,27 @@ type BoundAgentToolHandler<TInput, TResult> = {
   bivariance_handler(input: TInput, site: ToolCallSite): TResult;
 }["bivariance_handler"];
 
+/** Tool 执行前保留公开输入与实际执行输入的双份快照。 */
+export interface PreparedAgentToolInput {
+  /** 模型提交的原始输入；可以安全进入调用记录。 */
+  readonly public_input: ModelJsonValue;
+  /** 解析 Session 变量后的临时输入；只交给校验器和执行函数。 */
+  readonly execution_input: ModelJsonValue;
+}
+
 /** 已完成 Session 上下文绑定的工具；执行时只需补充本次调用信息。 */
 export interface BoundAgentTool<TInput = unknown, TOutput = unknown> {
   /** 面向模型的工具用途说明。 */
   readonly description?: string;
   /** JSON Schema 或可转换为 JSON Schema 的输入定义。 */
   readonly input_schema: unknown;
+  /** Tool 执行前的统一输入预处理；缺少时原样执行。 */
+  readonly prepare_input?: (
+    input: ModelJsonValue,
+    site: ToolCallSite,
+  ) => PreparedAgentToolInput | Promise<PreparedAgentToolInput>;
+  /** 校验或执行失败时，在结果持久化前遮罩 Session 私密值。 */
+  readonly redact_output?: (value: unknown) => unknown;
   /** 可选执行实现；缺少时该工具只向模型声明能力。 */
   readonly execute?: BoundAgentToolHandler<TInput, TOutput | Promise<TOutput>>;
 }

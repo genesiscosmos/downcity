@@ -26,6 +26,7 @@ import type { DodoPaymentWebhookEvent, DodoWebhookEvent } from "./types.js";
 export function dodoPaymentProvider(options: DodoPaymentProviderOptions = {}): PaymentProvider {
   const label = options.label?.trim() || "Dodo Payments";
   return {
+    supports_card_purchase: true,
     id: "dodo",
     label,
     env: [

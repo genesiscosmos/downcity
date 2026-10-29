@@ -4,6 +4,7 @@
  */
 import { httpError } from "@downcity/federation";
 import type { ServiceDatabaseContext } from "@downcity/federation";
+import { service_sql_database } from "../shared/database-sql.js";
 import { LOGIN_FLOW_TABLE, type LoginFlowRow } from "./login-schema.js";
 import { randomToken } from "./utils.js";
 
@@ -15,7 +16,12 @@ async function digest_secret(value: string): Promise<string> {
 
 /** Bounded ephemeral login persistence and browser authorization. */
 export class LoginFlow {
-  constructor(private readonly database: ServiceDatabaseContext) {}
+  /** 当前方言的参数化数据库入口。 */
+  private readonly database: ServiceDatabaseContext;
+
+  constructor(database: ServiceDatabaseContext) {
+    this.database = service_sql_database(database);
+  }
 
   /** Erase expired credentials, including retained exchange responses. */
   async cleanup(): Promise<void> {

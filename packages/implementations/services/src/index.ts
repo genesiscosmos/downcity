@@ -93,6 +93,7 @@ export {
   stripePaymentProvider,
   waffoPaymentProvider,
 } from "./payment/index.js";
+export type { PaymentCardPlan, PaymentEntitlement, PaymentFulfillmentContext } from "./payment/types/Wallet.js";
 export type {
   PaymentCheckoutCreateResult,
   PaymentCreateCheckoutInput,

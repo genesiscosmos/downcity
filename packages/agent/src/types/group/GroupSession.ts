@@ -127,6 +127,8 @@ export interface GroupSessionContract {
   subscribe(subscriber: GroupEventSubscriber): GroupEventUnsubscribe;
   /** 响应成员 Agent Session 当前等待的 Interaction。 */
   respond_interaction(input: RespondSessionInteractionInput): Promise<void>;
+  /** 受信客户端提交私密问答；明文不进入 Group 共享消息。 */
+  submit_private_question(input: RespondSessionInteractionInput): Promise<void>;
   /** 停止当前传播和成员执行；停止完成后可再次 prompt。 */
   stop(): Promise<void>;
   /** 释放当前上下文，不再接受新的 prompt。 */

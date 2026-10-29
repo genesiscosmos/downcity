@@ -106,6 +106,7 @@ export interface SessionApprovalPayload {
 /** Question 要求的回答形式。 */
 export type SessionInteractionQuestionType =
   | "text"
+  | "secret"
   | "single_select"
   | "multi_select";
 
@@ -130,8 +131,10 @@ export interface SessionInteractionQuestion {
   question_id: string;
   /** 向用户展示的完整问题文本。 */
   question: string;
-  /** 当前问题要求的回答形式。 */
+  /** 当前问题要求的回答形式；secret 的答案只会保存为 Session 引用。 */
   type: SessionInteractionQuestionType;
+  /** secret 问题在当前 Session 中使用的稳定变量名。 */
+  name?: string;
   /** 单选或多选问题允许选择的候选项。 */
   options?: SessionInteractionOption[];
 }
@@ -298,6 +301,14 @@ export interface SessionApprovalPort {
  * - `approval` 是审批专用入口；审批比提问多一层模式判断与决定解释。
  * - 原语不认识业务类型：payload 的解释属于它的生产者。
  */
+/** 逐流维护缓冲的私密输出遮罩器；同一实例不能跨进程输出流复用。 */
+export interface SessionSecretStreamRedactor {
+  /** 输入原始文本块，只返回已确认不含跨块私密值的文本。 */
+  write(chunk: string): string;
+  /** 结束输出流并返回剩余已遮罩文本；重复调用返回空字符串。 */
+  end(): string;
+}
+
 export interface SessionInteractionPort {
   /** 创建并持久化一次 Interaction，返回等待终态结果的句柄。 */
   request(
@@ -305,6 +316,12 @@ export interface SessionInteractionPort {
   ): Promise<SessionInteractionHandle>;
   /** 审批专用入口；未提供时审批不可用。 */
   readonly approval?: SessionApprovalPort;
+  /** 在当前 Session 中解析工具输入里的 `${secrets.name}` 引用。 */
+  resolve_secret_references(input: JsonValue): JsonValue;
+  /** 在结果、日志和异常发布前遮罩当前 Session 已知的私密值。 */
+  redact_secret_values(value: unknown): unknown;
+  /** 创建独立输出流遮罩器，识别跨文本块的私密值并跟进新提交的值。 */
+  create_secret_stream_redactor(): SessionSecretStreamRedactor;
 }
 
 /** 控制面结束 Turn 时使用的 Interaction 生命周期端口。 */

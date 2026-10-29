@@ -8,6 +8,7 @@
  */
 
 import type { ShellHostContext } from "@downcity/type/shell";
+import type { PrivateValuePort, SecretRedactionStream } from "@/power/core/PowerPrivateValues.js";
 import type { ShellProcessHandle } from "@downcity/type/shell";
 import type {
   ShellSessionSnapshot,
@@ -40,6 +41,14 @@ export type ShellSessionRuntimeState = {
    * 当前 shell session 对应的子进程句柄。
    */
   child: ShellProcessHandle;
+  /** Originating Session redactor retained for the lifetime of background output. */
+  private_values?: PrivateValuePort;
+  /** Per-process buffering state; raw pending suffixes never reach publication sinks. */
+  output_redactor: SecretRedactionStream;
+  /** Whether EOF has flushed the output redactor; subsequent events are discarded. */
+  output_finished: boolean;
+  /** A redaction failure suppresses subsequent output and forces a failed terminal status. */
+  output_redaction_failed: boolean;
   /**
    * 当前已缓存的标准输出与标准错误文本。
    */

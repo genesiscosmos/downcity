@@ -98,16 +98,24 @@ export interface FederationHealthStatus {
   queue: boolean;
 }
 
-/**
- * 创建 Federation 实例时传入的顶层配置。
- *
- * 关键说明（中文）
- * - 只接收一个继承 City Database 基类的 Adapter 实例。
- * - 数据库连接、事务与释放均由 Adapter 负责。
- */
+/** 单个启动阶段的性能事件。 */
+export interface FederationStartupTiming {
+  /** 阶段名称，Service 初始化使用 service:<id>。 */
+  phase: string;
+  /** 该阶段消耗的墙钟时间，单位毫秒。 */
+  duration_ms: number;
+  /** 该阶段是否成功完成。 */
+  ok: boolean;
+}
+
+/** 创建 Federation 实例的配置；连接、事务及释放由唯一的 Database Adapter 负责。 */
 export interface FederationOptions {
   /** Federation 唯一主数据库 Adapter。 */
   database: Database;
+  /** 自动准备适合本地开发；prepared 要求部署阶段先调用 prepare_database()。 */
+  database_initialization?: "automatic" | "prepared";
+  /** 启动阶段观测回调；仅包含阶段、耗时和成功状态，不含业务数据。 */
+  on_startup_timing?: (event: FederationStartupTiming) => void;
   /**
    * Federation 默认存储后端。
    *

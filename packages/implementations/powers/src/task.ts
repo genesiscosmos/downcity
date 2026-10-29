@@ -11,5 +11,5 @@ export { TaskPower } from "./task/TaskPower.js";
 export type { TaskPowerOptions } from "./task/types/TaskPowerOptions.js";
 export type { TaskServiceContract, TaskWorkInput, TaskMutationResult } from "./task/types/TaskService.js";
 export type { TaskWorkspaceSnapshot, TaskWorkspaceItem, TaskWorkspaceSaveInput, TaskInboxItem, TaskState, TaskProgress, TaskOccurrence } from "./task/types/TaskWorkflow.js";
-export type { TaskRunDetailView, TaskRunHistoryItemView } from "./task/types/TaskCommand.js";
+export type { TaskRunDetailView, TaskRunHistoryItemView, TaskRunHistoryPage, TaskRunHistoryPageRequest } from "./task/types/TaskCommand.js";
 export type { TaskSchedulerReloadResult } from "./task/types/TaskPowerTypes.js";

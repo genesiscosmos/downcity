@@ -13,6 +13,7 @@
 import type { SessionInteractionPort } from "@downcity/type";
 import { generate_id } from "@/utils/Id.js";
 import { create_denied_interaction_port } from "@/power/core/PowerActionInteraction.js";
+import { create_private_safe_interaction_port } from "@/power/core/PowerPrivateValues.js";
 
 /** 一次 Power 调用的身份与执行面。 */
 export class PowerCall {
@@ -45,7 +46,7 @@ export class PowerCall {
   }) {
     if (input.tool_call_id !== undefined) this.tool_call_id = input.tool_call_id;
     this.trace_id = input.trace_id;
-    this.interactions = input.interactions;
+    this.interactions = create_private_safe_interaction_port(input.interactions);
     this.abort_signal = input.abort_signal;
     Object.freeze(this);
   }

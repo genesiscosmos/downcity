@@ -228,12 +228,13 @@ test("Federation bootstraps internal secrets into the env table", async () => {
     const items = await envProvider.list()
     assert.deepEqual(items.map((item) => item.key).sort(), [
       "BETTER_AUTH_SECRET",
+      "DOWNCITY_DATABASE_PREPARATION_VERSION",
       "DOWNCITY_FEDERATION_ID",
     ])
 
     const envTable = await base.table("env")
     const rows = await envTable.select()
-    assert.equal(rows.length, 2)
+    assert.equal(rows.length, 3)
     for (const row of rows) {
       assert.equal(typeof row.key, "string")
       assert.equal(typeof row.value, "string")

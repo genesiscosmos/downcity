@@ -1,7 +1,7 @@
 /** TaskPower 提供给宿主应用的任务领域协议，与任何界面或 IPC 框架无关。 */
 import type { TaskGenerateInput, TaskGenerateResult } from "./TaskGenerate.js";
 import type { TaskWorkspaceSaveInput, TaskWorkspaceSnapshot } from "./TaskWorkflow.js";
-import type { TaskRunDetailView, TaskRunHistoryItemView } from "./TaskCommand.js";
+import type { TaskRunDetailView, TaskRunHistoryPage, TaskRunHistoryPageRequest } from "./TaskCommand.js";
 import type { TaskSchedulerReloadResult } from "./TaskPowerTypes.js";
 
 /** 修改任务工作生命周期或处理原事项。 */
@@ -44,8 +44,8 @@ export interface TaskServiceContract {
   command: { /** 工作操作。 */ input: TaskWorkInput; /** 提交结果。 */ output: TaskMutationResult };
   /** 异步受理一次真实执行。 */
   run: { /** 执行目标。 */ input: { /** 任务 ID。 */ task_id: string; /** 可选重试发生项。 */ occurrence_id?: string }; /** 受理或失败结果。 */ output: { /** 调用是否成功。 */ success: boolean; /** 可选错误。 */ error?: string; /** 执行受理数据。 */ data?: { /** 是否启动执行。 */ accepted?: boolean } } };
-  /** 查询持久化执行历史。 */
-  history: { /** 历史所属任务。 */ input: { /** 任务 ID。 */ task_id: string }; /** 按时间排列的执行。 */ output: { /** 执行摘要。 */ runs: TaskRunHistoryItemView[] } };
+  /** 按目录游标查询有界执行历史，默认检查最新 20 个目录。 */
+  history: { /** 任务身份、排他游标与页大小。 */ input: TaskRunHistoryPageRequest; /** 当前页摘要及下一页游标。 */ output: TaskRunHistoryPage };
   /** 查询执行的结果与产物。 */
   run_detail: { /** 具体执行定位。 */ input: { /** 任务 ID。 */ task_id: string; /** 执行目录时间戳。 */ timestamp: string }; /** 结果详情。 */ output: { /** 本次执行。 */ run: TaskRunDetailView } };
   /** 删除任务聚合，运行中拒绝删除。 */

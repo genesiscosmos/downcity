@@ -25,6 +25,8 @@ export interface RunCommandParams {
   capture?: boolean;
   /** 进度输出中展示的命令；敏感命令可使用脱敏说明。 */
   display_command?: string;
+  /** 失败时隐藏子进程输出，避免数据库驱动或项目入口泄露连接信息。 */
+  suppress_error_output?: boolean;
 }
 
 /**
@@ -73,7 +75,9 @@ export async function runCommand(params: RunCommandParams): Promise<string> {
       }
       reject(new CliError({
         title: `${params.label} failed`,
-        note: stderr.trim() || stdout.trim() || `Command exited with code ${code ?? "unknown"}.`,
+        note: params.suppress_error_output
+          ? "Database preparation failed. Check prepare_database, the migrated active owner and remote binding support; use database_url_env for an independent PostgreSQL connection. Connection details are suppressed."
+          : stderr.trim() || stdout.trim() || `Command exited with code ${code ?? "unknown"}.`,
         fix: params.command,
       }));
     });

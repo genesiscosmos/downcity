@@ -8,6 +8,7 @@
 
 import { is_bureau_id } from "../../federation/identity/bureau-id.js";
 import type { Context } from "../service.js";
+import type { ServiceDatabaseContext } from "../../types/database/Database.js";
 import type { AIBillInput, AICharge, AIModelDefinition } from "../../types/AI.js";
 import type {
   AdminAIUsageResult,
@@ -53,7 +54,7 @@ export class AISettlementRuntime {
     this.credits = options.credits;
   }
 
-  /** 初始化 Usage Repository、查询索引并恢复少量到期任务。 */
+  /** 仅绑定 Usage Repository；启动及数据库准备不推进历史账务。 */
   async initialize(input: AISettlementRuntimeInitialization): Promise<void> {
     this.usage_repository = new AIUsageRepository(
       input.database,
@@ -61,19 +62,27 @@ export class AISettlementRuntime {
       input.settlement_jobs,
       this.credits,
     );
-    await input.database.query({
+  }
+
+  /** 周期维护推进已到期的结算任务，不由请求初始化触发。 */
+  async maintenance(): Promise<void> {
+    await this.recover_due_settlements();
+  }
+
+  /** 部署准备阶段创建用量与结算索引，不依赖运行时初始化。 */
+  async prepare_database(database: ServiceDatabaseContext): Promise<void> {
+    await database.query({
       sql: "CREATE INDEX IF NOT EXISTS service_ai_usage_records_user_completed_idx ON service_ai_usage_records (user_id, completed_at)",
       params: [],
     });
-    await input.database.query({
+    await database.query({
       sql: "CREATE INDEX IF NOT EXISTS service_ai_usage_records_user_metering_completed_idx ON service_ai_usage_records (user_id, metering_status, completed_at)",
       params: [],
     });
-    await input.database.query({
+    await database.query({
       sql: "CREATE INDEX IF NOT EXISTS service_ai_settlement_jobs_status_next_attempt_idx ON service_ai_settlement_jobs (status, next_attempt_at)",
       params: [],
     });
-    await this.recover_due_settlements();
   }
 
   /** 对消费型 AI Action 执行 Credits 前置检查。 */
@@ -305,8 +314,8 @@ export class AISettlementRuntime {
    * - 结算以数据库为事实源：任务记录已经写入，队列只是“尽快唤醒”的优化。
    *   因此调度不可用时不能抛错，否则会把计费问题升级成用户请求失败。
    * - 与图片任务不同，此处降级是设计内行为，但必须留下可观察的日志。
-   * - 未完成的结算目前只在 AIService 初始化时恢复（`recover_due_settlements`），
-   *   所以降级后会拉长结算延迟；周期恢复由后续恢复流程补充。
+   * - 未完成结算由 Federation.maintenance() 周期恢复；宿主必须配置定时调用，
+   *   队列降级后的恢复延迟取决于维护周期。
    */
   private async enqueue_settlement_retry(
     ctx: Context,
@@ -339,7 +348,7 @@ export class AISettlementRuntime {
   }
 
   /**
-   * 服务初始化时推进已到期的结算任务。
+   * 周期维护时推进已到期的结算任务。
    *
    * 说明（中文）
    * - 结算是“先写数据库记录，再尝试处理”，数据库是唯一事实源；

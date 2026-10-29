@@ -7,7 +7,9 @@
  */
 
 import fs from "fs-extra";
-import type { ShellHostContext } from "@downcity/type/shell";
+import type { PrivateShellHostContext } from "../ShellPrivateValues.js";
+import { create_shell_output_redactor, SHELL_REDACTION_ERROR } from "../ShellPrivateValues.js";
+import { redact_public_value } from "@/power/core/PowerPrivateValues.js";
 import { spawn_shell_process } from "@/shell/sandbox/Sandbox.js";
 import type {
   ShellRuntimeState,
@@ -42,7 +44,6 @@ import {
   resolve_default_shell_path,
   resolve_execution_target,
 } from "./ShellActionShared.js";
-import { bind_shell_runtime } from "./ShellLifecycleActions.js";
 import { wait_shell_session } from "./ShellQueryActions.js";
 
 /**
@@ -50,13 +51,15 @@ import { wait_shell_session } from "./ShellQueryActions.js";
  */
 export async function start_shell_session(
   state: ShellRuntimeState,
-  context: ShellHostContext,
+  context: PrivateShellHostContext,
   request: ShellStartRequest,
 ): Promise<ShellActionResponse> {
+  // Input references have already been resolved exactly once by the caller.
+  // Construct redaction state before filesystem writes, approval or spawn.
+  const output_redactor = create_shell_output_redactor(context.private_values);
   const cmd = String(request.cmd || "").trim();
   if (!cmd) throw new Error("shell.start requires a non-empty cmd");
   ensure_capacity(state);
-  bind_shell_runtime(state, context);
 
   const shell_id = `sh_${generate_id()}`;
   const cwd = resolve_shell_cwd(context, request.cwd);
@@ -79,6 +82,12 @@ export async function start_shell_session(
   const snapshot_file_path = get_shell_snapshot_path(context.data_path, shell_id);
   const output_file_path = get_shell_output_path(context.data_path, shell_id);
 
+  const public_metadata = {
+    cmd: redact_public_value(cmd, context.private_values),
+    cwd: redact_public_value(cwd, context.private_values),
+    shell_path: redact_public_value(shell_path, context.private_values),
+    reason: redact_public_value(reason, context.private_values),
+  };
   await fs.ensureDir(shell_dir);
   await fs.writeFile(output_file_path, "", "utf-8");
 
@@ -104,11 +113,11 @@ export async function start_shell_session(
       return build_denied_approval_response({
         shell_id,
         ...(owner_context_id ? { owner_context_id } : {}),
-        cmd,
-        cwd,
-        shell_path,
+        cmd: public_metadata.cmd,
+        cwd: public_metadata.cwd,
+        shell_path: public_metadata.shell_path,
         approval_id: approval.approval_id,
-        reason,
+        reason: public_metadata.reason,
         approval_status: approval.status,
       });
     }
@@ -129,7 +138,13 @@ export async function start_shell_session(
     rows: request.rows,
   });
   const child = spawn_result.child;
-  const actual_cwd = spawn_result.cwd;
+  let public_cwd: string;
+  try {
+    public_cwd = redact_public_value(spawn_result.cwd, context.private_values);
+  } catch {
+    try { child.kill("SIGKILL"); } catch { /* No output listener or publication sink is attached. */ }
+    throw new Error(SHELL_REDACTION_ERROR);
+  }
 
   const started_at = Date.now();
   let resolve_completion: () => void = () => {};
@@ -140,15 +155,15 @@ export async function start_shell_session(
     snapshot: {
       shell_id,
       ...(owner_context_id ? { owner_context_id } : {}),
-      cmd,
-      cwd: actual_cwd,
-      shell_path,
+      cmd: public_metadata.cmd,
+      cwd: public_cwd,
+      shell_path: public_metadata.shell_path,
       target,
       execution_backend: spawn_result.backend,
       ...(spawn_result.sandbox_id ? { sandbox_id: spawn_result.sandbox_id } : {}),
       ...(approval_status ? { approval_status } : {}),
       ...(approval_id ? { approval_id } : {}),
-      ...(reason ? { approval_reason: reason } : {}),
+      ...(reason ? { approval_reason: public_metadata.reason } : {}),
       stdin_writable: true,
       terminal: request.terminal !== false,
       ...(typeof request.cols === "number" ? { cols: request.cols } : {}),
@@ -165,6 +180,10 @@ export async function start_shell_session(
       external_refs: [],
     },
     child,
+    ...(context.private_values ? { private_values: context.private_values } : {}),
+    output_redactor,
+    output_finished: false,
+    output_redaction_failed: false,
     output_text: "",
     output_file_path,
     snapshot_file_path,

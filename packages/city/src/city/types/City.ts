@@ -93,6 +93,8 @@ export interface CityWorkspaces {
   get(workspace_id: string): WorkspaceRuntime | null;
   /** 返回当前 City 管理的 Workspace 稳定快照。 */
   list(): readonly WorkspaceRuntime[];
+  /** 停用旧 Workspace 后调用宿主工厂重建；期间及失败后拒绝进入和 add，显式重试 replace 才恢复。工厂可在旧实例清理成功后保存配置。 */
+  replace(workspace_id: string, create: () => Promise<WorkspaceRuntime>): Promise<WorkspaceRuntime>;
   /** 释放并移除 Workspace；不存在时返回 null。 */
   remove(workspace_id: string): Promise<WorkspaceRuntime | null>;
 }

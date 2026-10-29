@@ -11,12 +11,14 @@
  */
 
 import type { Hono, ExecutionContext as HonoExecutionContext } from "hono";
-import { Service } from "../service/service.js";
+import { Service, maintain_service } from "../service/service.js";
+import { UserTokenRevocationStore } from "./auth/user-token-revocation-store.js";
+import { measure_startup } from "./startup-timing.js";
 import { asInstallableService, type ServiceDefinition } from "../service/installable-service.js";
 import { EnvService } from "../service/env/env-service.js";
 import { BureausService } from "../service/bureaus/bureaus-service.js";
 import { build_federation_instruction } from "./federation-instruction.js";
-import { initialize_federation } from "./federation-init.js";
+import { initialize_federation, prepare_federation_schema } from "./federation-init.js";
 import { build_federation_router } from "./federation-router.js";
 import { create_federation_runtime } from "./federation-runtime.js";
 import { FederationQueue } from "./queue.js";
@@ -32,6 +34,7 @@ import type { FederationMiddleware, FederationMiddlewareContext } from "../types
 
 export class Federation {
   private readonly runtime: Runtime;
+  private readonly options: FederationOptions;
   readonly queue: FederationQueue;
   private readonly services = new Map<string, Service>();
   private readonly middlewares: FederationMiddleware[] = [];
@@ -43,6 +46,7 @@ export class Federation {
   private bureau_store?: BureauStore;
 
   constructor(options: FederationOptions) {
+    this.options = options;
     this.runtime = create_federation_runtime(options);
     this.queue = new FederationQueue({
       ensure_ready: () => this.ensure_ready(),
@@ -182,12 +186,14 @@ export class Federation {
   /**
    * 执行 Federation 初始化。
    */
-  private async initialize(): Promise<void> {
+  private async initialize(prepare_database: boolean): Promise<void> {
     const state = await initialize_federation({
       runtime: this.runtime,
       services: this.getServices(),
       require_ready: () => this.require_ready(),
       queue: this.queue,
+      prepare_database,
+      on_startup_timing: this.options.on_startup_timing,
     });
 
     this.table_map = state.table_map;
@@ -207,9 +213,41 @@ export class Federation {
    */
   private async ensure_ready(): Promise<void> {
     if (!this.init_promise) {
-      this.init_promise = this.initialize();
+      this.init_promise = measure_startup("total", () => this.initialize(
+        this.options.database_initialization !== "prepared",
+      ), this.options.on_startup_timing);
     }
     await this.init_promise;
+  }
+
+  /**
+   * 迁移专用：只建立空表结构，不引导身份和密钥，供全量旧数据导入。
+   * 导入并验证后必须调用 prepare_database() 完成索引和运行准备。
+   */
+  async prepare_schema(): Promise<void> {
+    if (this.init_promise) throw new Error("Schema preparation requires a fresh Federation instance");
+    await prepare_federation_schema(this.runtime, this.getServices());
+  }
+
+  /**
+   * 部署阶段准备 schema、索引与系统数据，并验证 Service 可初始化。
+   * 必须在该实例处理请求之前调用；失败应阻止发布，不能自动回退到在线迁移。
+   */
+  async prepare_database(): Promise<void> {
+    if (this.init_promise) throw new Error("Database preparation requires a fresh Federation instance");
+    this.init_promise = measure_startup("prepare_database", () => this.initialize(true), this.options.on_startup_timing);
+    await this.init_promise;
+  }
+
+  /** 周期清理过期凭证；运行入口由宿主调度，不由用户请求触发。 */
+  async maintenance(): Promise<void> {
+    await this.ensure_ready();
+    const revocations = new UserTokenRevocationStore(
+      this.runtime.database.table(this.runtime.builtinTables.federation_user_token_revocations),
+      this.runtime.database,
+    );
+    await revocations.cleanup_expired();
+    for (const service of this.getServices()) await maintain_service(service);
   }
 
   /** 幂等释放 Federation 持有的资源。 */

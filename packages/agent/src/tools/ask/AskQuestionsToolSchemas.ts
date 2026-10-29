@@ -28,6 +28,16 @@ const text_question_schema = z
   })
   .strict();
 
+const secret_question_schema = z
+  .object({
+    question: z.string().trim().min(1)
+      .describe("Complete private question shown to the user."),
+    type: z.literal("secret"),
+    name: z.string().regex(/^[a-z][a-z0-9_]{0,63}$/)
+      .describe("Session secret variable name used as ${secrets.name}."),
+  })
+  .strict();
+
 const select_question_schema = z
   .object({
     question: z.string().trim().min(1)
@@ -48,6 +58,7 @@ export const ask_questions_input_schema = z
     questions: z
       .array(z.discriminatedUnion("type", [
         text_question_schema,
+        secret_question_schema,
         select_question_schema,
       ]))
       .min(1)

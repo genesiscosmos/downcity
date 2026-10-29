@@ -116,6 +116,8 @@ const session_send_input = z.strictObject({
   shell_id: z.string().describe("Existing shell session identifier."),
   /** 写入 PTY 的文本。 */
   input: z.string().describe("Text to send to the PTY session."),
+  /** Host stdin writes need their own approval reason. */
+  reason: reason_schema,
   /** 写入后等待输出多久，毫秒。 */
   wait_ms: z
     .number()

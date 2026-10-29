@@ -2,7 +2,7 @@
  * Federation Credits 服务。
  *
  * 服务以 Primary Card 和 Ephemeral Card 持有当前余额，以 Transaction 和 Entry
- * 记录不可变账务事实。所有多表变更都在 SQLite/D1 原子事务中提交。
+ * 记录不可变账务事实。所有多表变更都在当前数据库的原子事务中提交。
  */
 
 import {
@@ -14,15 +14,13 @@ import {
   type UserDailyUsageQuery,
 } from "@downcity/federation";
 import { raw_all, raw_atomic, raw_first } from "./raw.js";
+import { credits_database_schemas } from "./database-schemas.js";
+import { postgres_credits_constraints } from "./postgres-constraints.js";
 import {
   EPHEMERAL_CARD_TABLE,
   PRIMARY_CARD_TABLE,
   TRANSACTION_ENTRY_TABLE,
   TRANSACTION_TABLE,
-  creditsEphemeralCards,
-  creditsPrimaryCards,
-  creditsTransactionEntries,
-  creditsTransactions,
 } from "./schema.js";
 import type {
   CreditsAccount,
@@ -61,6 +59,7 @@ import {
   random_id,
   read_credits,
   read_future_iso_timestamp,
+  read_iso_timestamp,
   read_limit,
   read_required_text,
   read_text,
@@ -73,6 +72,7 @@ import type {
   CreditsDailyUsageResult,
 } from "./types/Usage.js";
 import { register_credits_routes } from "./routes.js";
+import { read_wallet_cards } from "./wallet-reader.js";
 import {
   apply_transaction_command,
   cleanup_pending_transaction_commands,
@@ -97,12 +97,7 @@ export class CreditsService extends InstallableService {
   readonly id = "credits";
   readonly name = "Credits";
   readonly version = "0.1.0";
-  readonly schema = {
-    primary_cards: creditsPrimaryCards,
-    ephemeral_cards: creditsEphemeralCards,
-    transactions: creditsTransactions,
-    transaction_entries: creditsTransactionEntries,
-  };
+  readonly database_schemas = credits_database_schemas;
   private database?: ServiceDatabaseContext;
 
   /** Card 管理 facade。 */
@@ -115,6 +110,8 @@ export class CreditsService extends InstallableService {
     get_ephemeral: (card_id: string) => this.get_ephemeral_card(card_id),
     list_ephemeral: (query: CreditsEphemeralCardQuery = {}) => this.list_ephemeral_cards(query),
     create_ephemeral: (input: CreditsEphemeralCardCreateInput) => this.create_ephemeral_card(input),
+    /** 可信支付履约恢复：允许固定有效期已经结束，仍记录原权益事实，不延长或恢复可用余额；无用户HTTP入口。 */
+    fulfill_ephemeral: (input: CreditsEphemeralCardCreateInput) => this.create_ephemeral_card(input, true),
   };
 
   constructor() {
@@ -131,8 +128,8 @@ export class CreditsService extends InstallableService {
     register_credits_routes(this, ctx);
   }
 
-  /** 初始化动态建表器尚未覆盖的索引与数据库级余额约束。 */
-  protected override async on_init(): Promise<void> {
+  /** 部署阶段建立索引、余额约束并校验历史数据，避免在线实例重复执行。 */
+  protected override async on_prepare_database(): Promise<void> {
     await raw_atomic(this.resolve_raw(), [
       { sql: `CREATE UNIQUE INDEX IF NOT EXISTS service_credits_transactions_kind_idempotency_idx ON ${TRANSACTION_TABLE} (kind, idempotency_key)`, params: [] },
       { sql: `CREATE INDEX IF NOT EXISTS service_credits_transactions_user_created_idx ON ${TRANSACTION_TABLE} (user_id, created_at)`, params: [] },
@@ -140,7 +137,7 @@ export class CreditsService extends InstallableService {
       { sql: `CREATE INDEX IF NOT EXISTS service_credits_ephemeral_cards_user_expires_idx ON ${EPHEMERAL_CARD_TABLE} (user_id, expires_at)`, params: [] },
       { sql: `CREATE INDEX IF NOT EXISTS service_credits_transaction_entries_transaction_idx ON ${TRANSACTION_ENTRY_TABLE} (transaction_id)`, params: [] },
       { sql: `CREATE INDEX IF NOT EXISTS service_credits_transaction_entries_user_created_idx ON ${TRANSACTION_ENTRY_TABLE} (user_id, created_at)`, params: [] },
-      {
+      ...(this.resolve_raw().schema_id === "sqlite" ? [{
         sql: `CREATE TRIGGER IF NOT EXISTS service_credits_primary_cards_nonnegative_insert BEFORE INSERT ON ${PRIMARY_CARD_TABLE} WHEN NEW.credits < 0 BEGIN SELECT RAISE(ABORT, 'primary card credits cannot be negative'); END`,
         params: [],
       },
@@ -155,11 +152,16 @@ export class CreditsService extends InstallableService {
       {
         sql: `CREATE TRIGGER IF NOT EXISTS service_credits_ephemeral_cards_nonnegative_update BEFORE UPDATE OF credits ON ${EPHEMERAL_CARD_TABLE} WHEN NEW.credits < 0 BEGIN SELECT RAISE(ABORT, 'ephemeral card credits cannot be negative'); END`,
         params: [],
-      },
+      }] : postgres_credits_constraints()),
     ]);
     await this.normalize_existing_ephemeral_expirations();
     await this.cleanup_expired_cards();
     await this.assert_existing_data_limits();
+  }
+
+  /** 周期清理过期 Card；请求时仍按有效期计算可用余额。 */
+  protected override async on_maintenance(): Promise<void> {
+    await this.cleanup_expired_cards();
   }
 
   /** 读取用户当前 Credits 账户及其 Card。 */
@@ -188,17 +190,17 @@ export class CreditsService extends InstallableService {
   async list_users(query: CreditsUserQuery = {}): Promise<CreditsUserSummary[]> {
     const rows = await raw_all<Record<string, unknown>>(this.resolve_raw(), [
       `SELECT user_id FROM ${PRIMARY_CARD_TABLE}`,
-      "ORDER BY created_at DESC, rowid DESC LIMIT ?",
+      `ORDER BY created_at DESC, ${this.resolve_raw().schema_id === "postgresql" ? "user_id" : "rowid"} DESC LIMIT ?`,
     ].join(" "), [read_limit(query.limit)]);
     return await Promise.all(rows.map((row) => this.read_user_summary(String(row.user_id))));
   }
 
   /** 创建 Ephemeral Card，并原子写入初始 Topup。 */
-  async create_ephemeral_card(input: CreditsEphemeralCardCreateInput): Promise<CreditsEphemeralCard> {
+  async create_ephemeral_card(input: CreditsEphemeralCardCreateInput, restoring_fulfillment = false): Promise<CreditsEphemeralCard> {
     const user_id = read_required_text(input.user_id, "user_id");
     const name = read_required_text(input.name, "name");
     const credits = read_credits(input.initial_credits, "initial_credits");
-    const expires_at = read_future_iso_timestamp(input.expires_at);
+    const expires_at = read_iso_timestamp(input.expires_at);
     const request = this.create_transaction_request("topup", {
       user_id,
       credits,
@@ -211,6 +213,7 @@ export class CreditsService extends InstallableService {
     });
     const existing = await this.read_idempotent_transaction(request);
     if (existing) return await this.read_ephemeral_from_transaction(existing.transaction_id);
+    if (!restoring_fulfillment) read_future_iso_timestamp(expires_at);
 
     const transaction_id = await this.create_transaction_id(request.kind, request.idempotency_key);
     const card_id = random_id("card");
@@ -224,9 +227,9 @@ export class CreditsService extends InstallableService {
           "(card_id, user_id, name, credits, expires_at, source, ref, transaction_marker, created_at, updated_at)",
           "SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?",
           `WHERE EXISTS (SELECT 1 FROM ${TRANSACTION_TABLE} WHERE transaction_id = ? AND status = 'pending')`,
-          `AND (SELECT COUNT(*) FROM ${EPHEMERAL_CARD_TABLE} WHERE user_id = ? AND expires_at > ? AND credits > 0) < ?`,
-          `AND COALESCE((SELECT credits FROM ${PRIMARY_CARD_TABLE} WHERE user_id = ?), 0)`,
-          `+ COALESCE((SELECT SUM(credits) FROM ${EPHEMERAL_CARD_TABLE} WHERE user_id = ? AND expires_at > ?), 0) <= ?`,
+          `AND (? <= ? OR (SELECT COUNT(*) FROM ${EPHEMERAL_CARD_TABLE} WHERE user_id = ? AND expires_at > ? AND credits > 0) < ?)`,
+          `AND (? <= ? OR COALESCE((SELECT credits FROM ${PRIMARY_CARD_TABLE} WHERE user_id = ?), 0)`,
+          `+ COALESCE((SELECT SUM(credits) FROM ${EPHEMERAL_CARD_TABLE} WHERE user_id = ? AND expires_at > ?), 0) <= ?)`,
         ].join(" "),
         params: [
           card_id,
@@ -240,9 +243,13 @@ export class CreditsService extends InstallableService {
           now,
           now,
           transaction_id,
+          expires_at,
+          now,
           user_id,
           now,
           MAX_ACTIVE_EPHEMERAL_CARDS,
+          expires_at,
+          now,
           user_id,
           user_id,
           now,
@@ -348,8 +355,8 @@ export class CreditsService extends InstallableService {
     const primary_allocation = allocations.find((allocation) => allocation.card_kind === "primary");
     if (ephemeral_allocations.length > 0) {
       commands.push(
-        update_ephemeral_allocations_command(transaction_id, ephemeral_allocations, now),
-        insert_ephemeral_allocation_entries_command(transaction_id, ephemeral_allocations, now),
+        update_ephemeral_allocations_command(transaction_id, ephemeral_allocations, now, this.resolve_raw().schema_id),
+        insert_ephemeral_allocation_entries_command(transaction_id, ephemeral_allocations, now, this.resolve_raw().schema_id),
       );
     }
     if (primary_allocation) {
@@ -375,7 +382,7 @@ export class CreditsService extends InstallableService {
     }
     commands.push(apply_transaction_command(transaction_id, -credits, allocations.length, now));
     if (ephemeral_allocations.length > 0) {
-      commands.push(rollback_ephemeral_allocations_command(transaction_id, ephemeral_allocations, now));
+      commands.push(rollback_ephemeral_allocations_command(transaction_id, ephemeral_allocations, now, this.resolve_raw().schema_id));
     }
     if (primary_allocation) {
       commands.push(rollback_card_command(
@@ -429,7 +436,7 @@ export class CreditsService extends InstallableService {
     const rows = await raw_all<Record<string, unknown>>(this.resolve_raw(), [
       `SELECT * FROM ${TRANSACTION_TABLE}`,
       `WHERE ${clauses.join(" AND ")}`,
-      "ORDER BY created_at DESC, rowid DESC LIMIT ?",
+      `ORDER BY created_at DESC, ${this.resolve_raw().schema_id === "postgresql" ? "transaction_id" : "rowid"} DESC LIMIT ?`,
     ].join(" "), [...params, read_limit(query.limit)]);
     return rows.map(parse_transaction);
   }
@@ -459,7 +466,7 @@ export class CreditsService extends InstallableService {
     const rows = await raw_all<Record<string, unknown>>(this.resolve_raw(), [
       `SELECT * FROM ${TRANSACTION_ENTRY_TABLE}`,
       where,
-      "ORDER BY created_at DESC, rowid DESC LIMIT ?",
+      `ORDER BY created_at DESC, ${this.resolve_raw().schema_id === "postgresql" ? "ledger_sequence" : "rowid"} DESC LIMIT ?`,
     ].join(" "), [...params, read_limit(query.limit)]);
     return rows.map(parse_transaction_entry);
   }
@@ -515,7 +522,7 @@ export class CreditsService extends InstallableService {
     const normalized_user_id = read_required_text(user_id, "user_id");
     const now = new Date().toISOString();
     await raw_atomic(this.resolve_raw(), [{
-      sql: `INSERT OR IGNORE INTO ${PRIMARY_CARD_TABLE} (user_id, credits, transaction_marker, created_at, updated_at) VALUES (?, 0, '', ?, ?)`,
+      sql: `INSERT INTO ${PRIMARY_CARD_TABLE} (user_id, credits, transaction_marker, created_at, updated_at) VALUES (?, 0, '', ?, ?) ON CONFLICT (user_id) DO NOTHING`,
       params: [normalized_user_id, now, now],
     }]);
     const row = await raw_first<Record<string, unknown>>(this.resolve_raw(),
@@ -696,10 +703,12 @@ export class CreditsService extends InstallableService {
 
   private async read_ephemeral_from_transaction(transaction_id: string): Promise<CreditsEphemeralCard> {
     const entry = await raw_first<Record<string, unknown>>(this.resolve_raw(),
-      `SELECT card_id FROM ${TRANSACTION_ENTRY_TABLE} WHERE transaction_id = ? AND card_kind = 'ephemeral' LIMIT 1`,
+      `SELECT card_id, user_id FROM ${TRANSACTION_ENTRY_TABLE} WHERE transaction_id = ? AND card_kind = 'ephemeral' LIMIT 1`,
       [transaction_id]);
     if (!entry) throw httpError(500, "ephemeral card transaction has no entry");
-    return await this.get_ephemeral_card(String(entry.card_id));
+    const card = (await read_wallet_cards(this.resolve_raw(), String(entry.user_id))).find(item => item.card_id === String(entry.card_id));
+    if (!card) throw httpError(404, "ephemeral card not found");
+    return card;
   }
 
   /** 删除指定用户或全局已经过期的 Ephemeral Cards。 */
@@ -750,12 +759,12 @@ export class CreditsService extends InstallableService {
       throw new Error(`user ${String(excessive_cards.user_id)} exceeds ${MAX_ACTIVE_EPHEMERAL_CARDS} active ephemeral cards`);
     }
     const excessive_credits = await raw_first<Record<string, unknown>>(this.resolve_raw(), [
-      "SELECT users.user_id,",
+      "SELECT * FROM (SELECT users.user_id,",
       `COALESCE(primary_card.credits, 0) + COALESCE(SUM(CASE WHEN ephemeral.expires_at > ? THEN ephemeral.credits ELSE 0 END), 0) AS total_credits`,
       `FROM (SELECT user_id FROM ${PRIMARY_CARD_TABLE} UNION SELECT user_id FROM ${EPHEMERAL_CARD_TABLE}) AS users`,
       `LEFT JOIN ${PRIMARY_CARD_TABLE} AS primary_card ON primary_card.user_id = users.user_id`,
       `LEFT JOIN ${EPHEMERAL_CARD_TABLE} AS ephemeral ON ephemeral.user_id = users.user_id`,
-      "GROUP BY users.user_id HAVING total_credits > ? LIMIT 1",
+      "GROUP BY users.user_id, primary_card.credits) AS balances WHERE total_credits > ? LIMIT 1",
     ].join(" "), [now, MAX_USER_CREDITS]);
     if (excessive_credits) {
       throw new Error(`user ${String(excessive_credits.user_id)} exceeds the safe Credits limit`);

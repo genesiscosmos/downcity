@@ -167,8 +167,6 @@ function resolve_route_auth(
 
 export abstract class InstallableService extends Service {
   readonly schema?: Record<string, any>;
-  /** 新 Service 应优先使用的方言感知数据库声明。 */
-  readonly database_schemas?: ServiceDatabaseSchemas;
   /**
    * 服务级全局 hook。
    *

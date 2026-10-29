@@ -401,29 +401,52 @@ export class StepInput {
       }
       wrapped[name] = {
         ...tool,
+        prepare_input: async (input, site) => {
+          await turn_context.output.assistant?.prepare_tool_input({
+            tool_call_id: site.tool_call_id,
+            tool_name: name,
+            input,
+          });
+          return {
+            public_input: input,
+            execution_input: turn_context.interactions
+              ? turn_context.interactions.resolve_secret_references(input)
+              : input,
+          };
+        },
+        redact_output: (value) => turn_context.interactions
+          ? turn_context.interactions.redact_secret_values(value)
+          : value,
         execute: async (args: unknown, site: ToolCallSite) => {
           const tool_call_id = String(site.tool_call_id || "").trim();
           if (!tool_call_id) {
             throw new Error(`Tool execution requires toolCallId: ${name}`);
-          }
-          if (turn_context.output.assistant) {
-            await turn_context.output.assistant.prepare_tool_input({
-              tool_call_id,
-              tool_name: name,
-              input: args,
-            });
           }
           const context = this.create_tool_call_context(turn_context, {
             tool_call_id,
             abort_signal: site.abort_signal || turn_context.lifecycle.abort_signal,
             messages: site.messages,
           });
-          const output = await original_execute(args, context);
-          if (!is_action_result(output)) return output;
-          if (Array.isArray(output.effects)) {
-            turn_context.effects.append(output.effects);
+          let output: unknown;
+          try {
+            output = await original_execute(args, context);
+          } catch (error) {
+            if (!turn_context.interactions) throw error;
+            const safe_error = turn_context.interactions.redact_secret_values(error);
+            throw new Error(
+              safe_error && typeof safe_error === "object" && "message" in safe_error
+                ? String(safe_error.message)
+                : String(safe_error),
+            );
           }
-          for (const message of output.messages) {
+          const safe_output = turn_context.interactions
+            ? turn_context.interactions.redact_secret_values(output)
+            : output;
+          if (!is_action_result(safe_output)) return safe_output;
+          if (Array.isArray(safe_output.effects)) {
+            turn_context.effects.append(safe_output.effects);
+          }
+          for (const message of safe_output.messages) {
             if (message.role === "agent") {
               if (context.abort_signal?.aborted) throw context.abort_signal.reason ?? new Error("Tool execution stopped");
               const published_parts = turn_context.output.assistant
@@ -434,7 +457,7 @@ export class StepInput {
             }
             await turn_context.input.append_internal(message.parts);
           }
-          return output.output;
+          return safe_output.output;
         },
       };
     }

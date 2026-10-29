@@ -39,6 +39,7 @@ import type { StepSnapshot } from "./types/StepSnapshot.js";
 import type { PowerToolInput, PowerToolResult } from "./types/PowerTool.js";
 import { power_tool_input_schema } from "./tool/PowerToolSchemas.js";
 import { execute_power_action } from "./core/PowerActionExecution.js";
+import { assert_public_execution_input } from "./core/PowerPrivateValues.js";
 
 /** 取描述文本首行，用于工具描述中的动作摘要。 */
 function first_line(text: string | undefined): string {
@@ -234,6 +235,11 @@ export abstract class Power implements PowerDefinition {
     call_context: ToolCallContext,
     input: PowerToolInput,
   ): Promise<ActionResult<PowerToolResult>> {
+    try {
+      if (this.name !== "shell") assert_public_execution_input(input, call_context.interactions);
+    } catch {
+      return failure_result(this.name, "", "Private input is not supported by City Power execution yet; the call was blocked before execution.");
+    }
     const power_name = String(this.name || "").trim();
     const action_id = typeof input?.action === "string" ? input.action.trim() : "";
     const args = to_json_object(input?.args ?? {}) ?? {};

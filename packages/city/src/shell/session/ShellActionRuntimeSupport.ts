@@ -24,6 +24,7 @@ import type {
 } from "@downcity/type/shell";
 import { get_shell_output_path, get_shell_snapshot_path } from "./Paths.js";
 import { resolve_owner_context_id } from "./ShellRuntimeEnvironment.js";
+import { SHELL_REDACTION_ERROR } from "./ShellPrivateValues.js";
 export {
   build_shell_env,
   resolve_owner_context_id,
@@ -179,13 +180,6 @@ export function normalize_exec_timeout_ms(
   return Math.max(1, raw);
 }
 
-function normalize_output_chunk(raw: string): string {
-  if (!raw) return "";
-  return raw
-    .replace(/\r\n/g, "\n")
-    .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g, "");
-}
-
 function derive_exit_status(exit_code: number | undefined): ShellSessionStatus {
   if (exit_code === -9 || exit_code === 137) return "killed";
   if (typeof exit_code === "number" && exit_code === 0) return "completed";
@@ -226,6 +220,9 @@ function extract_external_refs_from_text(
  * 持久化 shell snapshot。
  */
 export async function persist_snapshot(session: ShellSessionRuntimeState): Promise<void> {
+  // Snapshot metadata is redacted before insertion; previews and references
+  // derive exclusively from the per-execution redacted output stream. Persist
+  // that safe state even after the originating Session has cleared its store.
   await fs.ensureDir(path.dirname(session.snapshot_file_path));
   await fs.writeJson(session.snapshot_file_path, session.snapshot, { spaces: 2 });
 }
@@ -273,8 +270,23 @@ export async function append_session_output(
   state: ShellRuntimeState,
   session: ShellSessionRuntimeState,
   raw: string,
+  finish = false,
 ): Promise<void> {
-  const text = normalize_output_chunk(raw);
+  if (session.output_finished) return;
+  let text: string;
+  try {
+    // No raw chunk may reach memory, previews, references, disk or waiters.
+    text = finish ? session.output_redactor.end() : session.output_redactor.write(raw);
+    if (finish) session.output_finished = true;
+  } catch {
+    session.output_redaction_failed = true;
+    session.output_finished = true;
+    // Keep lifecycle status active until the real exit event; cleanup can then
+    // retry termination if the initial signal is rejected by the process handle.
+    session.snapshot.exit_code = -1;
+    try { session.child.kill("SIGKILL"); } catch { /* Output stays suppressed even if termination fails. */ }
+    text = `\n${SHELL_REDACTION_ERROR}\n`;
+  }
   if (!text) return;
 
   session.output_text += text;
@@ -414,8 +426,8 @@ export async function finalize_exit(
   exit_code: number,
 ): Promise<void> {
   await update_session_snapshot(session, (snapshot) => {
-    snapshot.status = derive_exit_status(exit_code);
-    snapshot.exit_code = exit_code;
+    snapshot.status = session.output_redaction_failed ? "failed" : derive_exit_status(exit_code);
+    snapshot.exit_code = session.output_redaction_failed ? -1 : exit_code;
     snapshot.ended_at = now_ms();
     snapshot.pid = session.child.pid ?? snapshot.pid;
   });

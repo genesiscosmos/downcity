@@ -1,12 +1,13 @@
 /**
- * ask_question 可选 Tool。
+ * ask_user 可选 Tool。
  *
  * 该 Tool 只负责把模型的结构化 Tool Call 映射到当前 Session 的 Question
  * Interaction。Session 是交互状态和生命周期的唯一拥有者；Tool 等待 Session 返回终态，
- * 再把用户答案作为 Tool Result 交回同一 Turn 的后续模型 Step。
+ * 再把普通答案或私密变量引用作为 Tool Result 交回同一 Turn 的后续模型 Step。
  *
  * Interaction 的 `payload` 由生产者解释，所以问题与回答的校验都在这里：入参先过
- * Schema，回答再过 {@link resolve_ask_question_answers}，核心不参与业务字段。
+ * Schema，回答再过 {@link resolve_ask_question_answers}，核心不参与业务字段；secret
+ * 答案在 Session Interaction 层转成 `${secrets.name}` 引用后才恢复执行。
  */
 
 import {
@@ -26,6 +27,7 @@ import type { ActionResult } from "@downcity/type";
 import { generate_id } from "@/utils/Id.js";
 import type { JsonValue } from "@downcity/type";
 import type { SessionInteractionQuestion } from "@downcity/type";
+import { SESSION_SECRET_INSTRUCTIONS } from "@/model/SecretReference.js";
 
 /**
  * 由调用方显式注册、按当前 Session Turn 上下文执行的提问 Tool。
@@ -34,14 +36,14 @@ import type { SessionInteractionQuestion } from "@downcity/type";
  * ```ts
  * new Agent({
  *   tools: {
- *     ask_question: AskQuestionsTool,
+ *     ask_user: AskQuestionsTool,
  *   },
  * });
  * ```
  */
 export const AskQuestionsTool = define_agent_tool<AskQuestionsToolInput, ActionResult<AskQuestionsToolOutput>>({
   description:
-    "Ask the user one or more questions when missing information would materially change the outcome. The call waits for every answer, then returns them so you can continue the same task. Do not use it for information that can be inferred safely. For single_select and multi_select questions, every option MUST contain both a machine-readable value and a user-visible label; never omit value or use label as value. Example: { value: 'cn', label: '中国' }.",
+    "Ask the user one or more questions when missing information would materially change the outcome. Use type secret with a snake_case name for passwords, API keys, and tokens; secret answers return only a ${secrets.name} reference and never the plaintext. The call waits for every answer, then returns them so you can continue the same task. Do not use it for information that can be inferred safely. For single_select and multi_select questions, every option MUST contain both a machine-readable value and a user-visible label; never omit value or use label as value. Example: { value: 'cn', label: '中国' }. " + SESSION_SECRET_INSTRUCTIONS,
   input_schema: ask_questions_input_schema,
   execute: async (
     input: AskQuestionsToolInput,
@@ -52,7 +54,7 @@ export const AskQuestionsTool = define_agent_tool<AskQuestionsToolInput, ActionR
     const tool_call_id = String(context.tool_call_id || "").trim();
     if (!interaction_port || !turn_id || !tool_call_id) {
       throw new Error(
-        "ask_question requires an active Session tool execution context",
+        "ask_user requires an active Session tool execution context",
       );
     }
 
@@ -67,13 +69,13 @@ export const AskQuestionsTool = define_agent_tool<AskQuestionsToolInput, ActionR
       type: "question",
       turn_id,
       tool_call_id,
-      tool_name: "ask_question",
+      tool_name: "ask_user",
       ...(parsed.title ? { title: parsed.title } : {}),
       payload: { questions } as unknown as JsonValue,
     });
     const result = await handle.result;
     if (result.status === "cancelled") {
-      throw new Error(`ask_question was cancelled: ${result.reason}`);
+      throw new Error(`ask_user was cancelled: ${result.reason}`);
     }
     if (
       result.status !== "resolved" ||
@@ -81,7 +83,7 @@ export const AskQuestionsTool = define_agent_tool<AskQuestionsToolInput, ActionR
       result.response.outcome !== "resolved"
     ) {
       throw new Error(
-        "ask_question received an incompatible Interaction response",
+        "ask_user received an incompatible Interaction response",
       );
     }
     const answers = resolve_ask_question_answers(questions, result.response.payload);

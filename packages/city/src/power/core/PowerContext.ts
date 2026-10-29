@@ -23,6 +23,7 @@ import type { PowerCall } from "@/power/types/PowerCall.js";
 import type { PowerCallSite, PowerRuntimeHost } from "@/power/types/PowerCallSite.js";
 import type { StepSnapshot } from "@/power/types/StepSnapshot.js";
 import { PowerContext } from "@/power/types/PowerContext.js";
+import { redact_public_value } from "./PowerPrivateValues.js";
 
 /** PowerContext 构造输入；全部字段都已由容器解析完成。 */
 export interface CreatePowerContextInput {
@@ -103,7 +104,30 @@ export function create_power_context(input: CreatePowerContextInput): PowerConte
     call: input.call,
     storage: { path: input.data_path, files: input.data_files },
     config: input.config,
-    logger: input.logger,
+    // Redact before calling the Agent logger, which may persist immediately.
+    logger: {
+      log: (level, message, details) => input.logger.log(
+        level,
+        redact_public_value(message, input.call.interactions),
+        redact_public_value(details, input.call.interactions),
+      ),
+      debug: (message, details) => input.logger.debug(
+        redact_public_value(message, input.call.interactions),
+        redact_public_value(details, input.call.interactions),
+      ),
+      info: (message, details) => input.logger.info(
+        redact_public_value(message, input.call.interactions),
+        redact_public_value(details, input.call.interactions),
+      ),
+      warn: (message, details) => input.logger.warn(
+        redact_public_value(message, input.call.interactions),
+        redact_public_value(details, input.call.interactions),
+      ),
+      error: (message, details) => input.logger.error(
+        redact_public_value(message, input.call.interactions),
+        redact_public_value(details, input.call.interactions),
+      ),
+    },
     ...(input.notifications ? { notifications: input.notifications } : {}),
   });
 }

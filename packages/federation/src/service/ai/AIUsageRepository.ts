@@ -6,6 +6,7 @@
  */
 
 import type { CityTableApi } from "../../store/table-api.js";
+import { query_service_database } from "./database-sql.js";
 import type { ServiceDatabaseContext } from "../../types/database/Database.js";
 import type { AICreditsBridge } from "../../types/AI.js";
 import type {
@@ -143,7 +144,7 @@ export class AIUsageRepository {
 
   /** 读取当前到期、可恢复的结算任务 ID。 */
   async list_due_settlements(limit = 20): Promise<string[]> {
-    const result = await this.database.query<{ usage_id: string }>({
+    const result = await query_service_database<{ usage_id: string }>(this.database, {
       sql: [
         "SELECT usage_id FROM service_ai_settlement_jobs",
         "WHERE (status IN ('pending', 'retryable') AND next_attempt_at <= ?)",
@@ -158,7 +159,7 @@ export class AIUsageRepository {
   /** 按用户、当地日期范围与 IANA 时区聚合技术用量。 */
   async aggregate_user_daily_usage(input: UserDailyUsageQuery): Promise<AIDailyUsageResult> {
     const envelope = create_usage_utc_envelope(input.from, input.to);
-    const rows = (await this.database.query<AIUsageRecord>({
+    const rows = (await query_service_database<AIUsageRecord>(this.database, {
       sql: [
         "SELECT * FROM service_ai_usage_records",
         "WHERE user_id = ? AND completed_at >= ? AND completed_at < ?",
@@ -166,7 +167,7 @@ export class AIUsageRepository {
       ].join(" "),
       params: [input.user_id, envelope.from_utc, envelope.to_utc_exclusive],
     })).rows;
-    const first = (await this.database.query<{ completed_at: string }>({
+    const first = (await query_service_database<{ completed_at: string }>(this.database, {
       sql: "SELECT completed_at FROM service_ai_usage_records WHERE user_id = ? ORDER BY completed_at ASC LIMIT 1",
       params: [input.user_id],
     })).rows[0];
@@ -191,7 +192,7 @@ export class AIUsageRepository {
   /** 按日期范围聚合 Federation 全部用户的 AI 技术用量。 */
   async aggregate_admin_usage(input: AdminUsageQuery): Promise<AdminAIUsageResult> {
     const envelope = create_usage_utc_envelope(input.from, input.to);
-    const rows = (await this.database.query<AIUsageRecord>({
+    const rows = (await query_service_database<AIUsageRecord>(this.database, {
       sql: [
         "SELECT * FROM service_ai_usage_records",
         "WHERE user_id IS NOT NULL AND completed_at >= ? AND completed_at < ?",
@@ -319,7 +320,7 @@ export class AIUsageRepository {
       throw new TypeError("Recent AI usage limit must be between 1 and 50");
     }
     const cursor = input.cursor;
-    const result = await this.database.query<AIRecentUsageRow>({
+    const result = await query_service_database<AIRecentUsageRow>(this.database, {
       sql: cursor
         ? [
           "SELECT usage_id, completed_at, model_id, action_id, outcome, metering_status,",

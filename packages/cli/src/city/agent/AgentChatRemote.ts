@@ -255,7 +255,10 @@ function create_local_chat_sessions(
   resolve_model: (model_id: string) => Promise<ModelClient>,
 ): AgentSessions<RemoteAgentSession> {
   const wrap = (session: AgentSession): RemoteAgentSession => {
-    return {
+    return Object.assign({
+      /** Dedicated local private transport; remote clients must expose their own secure implementation. */
+      submit_private_question: (input: Parameters<AgentSession["submit_private_question"]>[0]) => session.submit_private_question(input),
+    }, {
       id: session.id,
       workspace_id: session.get("workspace_id"),
       origin: session.origin,
@@ -281,7 +284,7 @@ function create_local_chat_sessions(
         ...(input.security ? { security: input.security } : {}),
       }, options),
       fork: async (input) => wrap(await session.fork(input)),
-    };
+    } satisfies RemoteAgentSession);
   };
   return {
     create: async () => wrap(await sessions.create({ workspace })),

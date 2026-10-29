@@ -130,6 +130,24 @@ export interface TaskRunHistoryRequest {
   readonly title: string;
 }
 
+/** 宿主按目录游标读取一页历史；Agent 完整历史查询使用独立契约。 */
+export interface TaskRunHistoryPageRequest {
+  /** 历史所属任务的稳定目录 ID。 */
+  readonly task_id: string;
+  /** 上一页返回的目录时间戳；只读取严格早于该游标的目录，省略时读取最新页。 */
+  readonly cursor?: string;
+  /** 本页最多检查的运行目录数，默认 20，允许 1 至 100；损坏记录可能使摘要数少于此值。 */
+  readonly limit?: number;
+}
+
+/** 有界历史页；游标按已检查目录推进，不以有效摘要数量判断是否还有记录。 */
+export interface TaskRunHistoryPage {
+  /** 本页可读取的执行摘要，按目录时间戳倒序排列。 */
+  readonly runs: TaskRunHistoryItemView[];
+  /** 尚有更早目录时返回本页最后检查的目录时间戳；末页返回 null。 */
+  readonly next_cursor: string | null;
+}
+
 /** 读取一条 Task 执行记录详情的输入。 */
 export interface TaskRunDetailRequest {
   /** Task 的唯一标题。 */

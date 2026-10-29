@@ -176,14 +176,45 @@ function normalize_resources(
   if (target === "local") return {};
 
   const d1 = read_record(input ?? {}, "d1");
+  const hyperdrive = read_record(input ?? {}, "hyperdrive");
+  if (input?.hyperdrive !== undefined && !hyperdrive) {
+    throw new CliError({ title: "deployment.resources.hyperdrive must be an object" });
+  }
+  if (d1 && hyperdrive) {
+    throw new CliError({ title: "Declare only one database resource: d1 or hyperdrive" });
+  }
+  const id_env = read_optional_string(hyperdrive ?? {}, "id_env");
+  if (hyperdrive && ((hyperdrive.id !== undefined) === (hyperdrive.id_env !== undefined)
+    || (hyperdrive.id_env !== undefined && (!id_env || !/^[A-Za-z_][A-Za-z0-9_]*$/u.test(id_env))))) {
+    throw new CliError({ title: "Hyperdrive requires exactly one of id or id_env; id_env must be an environment variable name" });
+  }
+  const hyperdrive_id = id_env ? process.env[id_env]?.trim() : read_optional_string(hyperdrive ?? {}, "id");
+  const hyperdrive_binding = read_string(hyperdrive ?? {}, "binding", "HYPERDRIVE");
+  const database_url_env = read_optional_string(hyperdrive ?? {}, "database_url_env");
+  if (hyperdrive && (!hyperdrive_id || !/^[a-f0-9]{32}$/iu.test(hyperdrive_id)
+    || !/^[A-Za-z_][A-Za-z0-9_]*$/u.test(hyperdrive_binding)
+    || (database_url_env !== undefined && !/^[A-Za-z_][A-Za-z0-9_]*$/u.test(database_url_env)))) {
+    throw new CliError({ title: "Hyperdrive requires a 32-character hexadecimal id and valid binding/environment variable names" });
+  }
   const queue = read_record(input ?? {}, "queue");
   const storage = read_record(input ?? {}, "storage");
   return {
-    d1: {
-      type: "d1",
-      binding: read_string(d1 ?? {}, "binding", "DB"),
-      name: read_string(d1 ?? {}, "name", `${project_name}-db`),
-    },
+    ...(d1 ? {
+      d1: {
+        type: "d1" as const,
+        binding: read_string(d1, "binding", "DB"),
+        name: read_string(d1, "name", `${project_name}-db`),
+      },
+    } : {}),
+    ...(hyperdrive ? {
+      hyperdrive: {
+        type: "hyperdrive" as const,
+        binding: hyperdrive_binding,
+        id: hyperdrive_id!,
+        ...(id_env ? { id_env } : {}),
+        ...(database_url_env ? { database_url_env } : {}),
+      },
+    } : {}),
     queue: {
       type: "queue",
       binding: read_string(queue ?? {}, "binding", "DOWNCITY_QUEUE"),

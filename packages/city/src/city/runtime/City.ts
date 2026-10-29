@@ -64,6 +64,10 @@ export class City implements CityRuntime {
 
   /** City 持有的 Workspace 资源，按稳定 ID 索引。 */
   private readonly workspaces_by_id = new Map<string, WorkspaceRuntime>();
+  /** 配置切换或切换失败的 Workspace；禁止读入口与懒创建恢复旧授权。 */
+  private readonly blocked_workspaces = new Set<string>();
+  /** 同一 Workspace 的切换队列，不阻塞其他 Workspace。 */
+  private readonly workspace_transitions = new Map<string, Promise<WorkspaceRuntime>>();
 
   /** City 绑定的 Embassy 服务入口。 */
   readonly embassy?: CityOptions["embassy"];
@@ -163,6 +167,7 @@ export class City implements CityRuntime {
       get: (workspace_id) => this.get_workspace(workspace_id),
       list: () => this.list_workspaces(),
       remove: async (workspace_id) => await this.remove_workspace(workspace_id),
+      replace: async (workspace_id, create) => await this.replace_workspace(workspace_id, create),
     });
     for (const agent of collection_values(options.agents)) {
       this.add_agent(agent);
@@ -258,12 +263,13 @@ export class City implements CityRuntime {
   /** 返回 City 持有的 Workspace；用户查询应使用 `city.workspaces.get()`。 */
   private get_workspace(workspace_id_input: string): WorkspaceRuntime | null {
     const workspace_id = String(workspace_id_input || "").trim();
+    this.require_workspace_available(workspace_id);
     return this.workspaces_by_id.get(workspace_id) ?? null;
   }
 
   /** 返回 City 持有的 Workspace 稳定快照。 */
   private list_workspaces(): readonly WorkspaceRuntime[] {
-    return [...this.workspaces_by_id.values()];
+    return [...this.workspaces_by_id.values()].filter((workspace) => !this.blocked_workspaces.has(workspace.id));
   }
 
   /** 返回当前 City 已注册 Agent 的稳定快照。 */
@@ -328,7 +334,12 @@ export class City implements CityRuntime {
           `Resolved Workspace ID mismatch: expected ${workspace_id}, received ${workspace.id}`,
         );
       }
-      return this.add_workspace(workspace);
+      try {
+        return this.add_workspace(workspace);
+      } catch (error) {
+        await workspace.dispose().catch(() => undefined);
+        throw error;
+      }
     })();
     this.workspace_resolution_promises.set(workspace_id, resolution_promise);
     try {
@@ -431,6 +442,8 @@ export class City implements CityRuntime {
           this.http_transport.close(),
           this.rpc_transport.close(),
         ]));
+        // 等待已开始的配置工厂退出，禁止 Storage 释放后再写入或绑定新实例。
+        await Promise.allSettled([...this.workspace_transitions.values()]);
         results.push(...await Promise.allSettled(
           [...this.groups_by_id.values()].map(async (group) => await this.release_group(group)),
         ));
@@ -521,6 +534,7 @@ export class City implements CityRuntime {
     this.assert_active();
     const workspace_id = String(workspace?.id || "").trim();
     if (!workspace_id) throw new Error("City requires Workspace with a stable id");
+    this.require_workspace_available(workspace_id);
     const existing = this.workspaces_by_id.get(workspace_id);
     if (existing && existing !== workspace) {
       throw new Error(`Workspace already exists in City: ${workspace_id}`);
@@ -539,6 +553,12 @@ export class City implements CityRuntime {
    */
   private async remove_workspace(workspace_id_input: string): Promise<WorkspaceRuntime | null> {
     const workspace_id = String(workspace_id_input || "").trim();
+    this.require_workspace_available(workspace_id);
+    return await this.release_workspace_instance(workspace_id);
+  }
+
+  /** 回收旧实例；失败时保留资源索引以便诊断，切换门禁保持关闭。 */
+  private async release_workspace_instance(workspace_id: string): Promise<WorkspaceRuntime | null> {
     const workspace = this.workspaces_by_id.get(workspace_id) ?? null;
     if (!workspace) return null;
     this.workspaces_by_id.delete(workspace_id);
@@ -551,9 +571,56 @@ export class City implements CityRuntime {
       result.status === "rejected" ? [result.reason] : [],
     );
     if (errors.length > 0) {
+      this.workspaces_by_id.set(workspace_id, workspace);
+      this.blocked_workspaces.add(workspace_id);
       throw new AggregateError(errors, `Workspace cleanup failed: ${workspace_id}`);
     }
     return workspace;
+  }
+
+  /** 配置替换属于 City 资源生命周期，工厂仅在旧实例完整释放后才执行。 */
+  private async replace_workspace(
+    workspace_id_input: string,
+    create: () => Promise<WorkspaceRuntime>,
+  ): Promise<WorkspaceRuntime> {
+    this.assert_active();
+    const workspace_id = String(workspace_id_input || "").trim();
+    if (!workspace_id) throw new Error("Workspace replacement requires an id");
+    this.blocked_workspaces.add(workspace_id);
+    const previous = this.workspace_transitions.get(workspace_id);
+    const transition = Promise.resolve().then(async () => {
+      await previous?.catch(() => undefined);
+      this.assert_active();
+      await this.workspace_resolution_promises.get(workspace_id)?.catch(() => undefined);
+      await this.release_workspace_instance(workspace_id);
+      this.assert_active();
+      const workspace = await create();
+      try {
+        this.assert_active();
+        if (workspace.id !== workspace_id) throw new Error("Replacement Workspace ID mismatch");
+        this.bind_workspace(workspace);
+        this.workspaces_by_id.set(workspace_id, workspace);
+        // 队列中仍有后续切换时不短暂开放旧配置。
+        if (this.workspace_transitions.get(workspace_id) === transition) this.blocked_workspaces.delete(workspace_id);
+        return workspace;
+      } catch (error) {
+        await workspace.dispose().catch(() => undefined);
+        throw error;
+      }
+    });
+    this.workspace_transitions.set(workspace_id, transition);
+    try {
+      return await transition;
+    } finally {
+      if (this.workspace_transitions.get(workspace_id) === transition) this.workspace_transitions.delete(workspace_id);
+    }
+  }
+
+  /** 不将切换失败当成未登记，防止懒加载重新启用旧凭证。 */
+  private require_workspace_available(workspace_id: string): void {
+    if (this.blocked_workspaces.has(workspace_id)) {
+      throw new Error(`Workspace is unavailable after or during configuration change: ${workspace_id}`);
+    }
   }
 
   /**

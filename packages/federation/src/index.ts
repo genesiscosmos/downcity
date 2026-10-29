@@ -54,6 +54,7 @@ export { Bureau, BureauUser } from "./client/bureau.js";
 export { Federation } from "./federation/federation.js";
 export type {
   FederationOptions,
+  FederationStartupTiming,
   FederationHealthStatus,
 } from "./federation/types.js";
 export {

@@ -22,6 +22,12 @@ export {
   normalize_power_id,
 } from "./repositories/AgentRepository.js";
 export { WorkspaceRepository, normalize_workspace_id } from "./repositories/WorkspaceRepository.js";
+export { WorkspaceSshAuthorization, resolve_workspace_ssh_access } from "./runtime/WorkspaceSshAuthorization.js";
+export type {
+  LocalWorkspaceSshAuthorization,
+  LocalWorkspaceSshInput,
+  LocalWorkspaceSshStatus,
+} from "./types/WorkspaceSsh.js";
 export { PowerRepository } from "./repositories/PowerRepository.js";
 export { LocalSettingRepository } from "./repositories/LocalSettingRepository.js";
 export { GroupRepository, normalize_group_id } from "./repositories/GroupRepository.js";

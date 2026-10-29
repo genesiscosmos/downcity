@@ -8,11 +8,12 @@
  */
 
 import { InstallableService, type EnvRequirement, type ServiceInstallContext } from "@downcity/federation";
-import { paymentEvents, paymentPayments } from "./schema.js";
+import { payment_database_schemas } from "./database-schemas.js";
 import { mergeEnvRequirements, normalizeProviders } from "./helpers.js";
 import { installPaymentRoutes, syncPaymentEvent } from "./routes.js";
-import { paymentInbox } from "./inbox-schema.js";
 import { PaymentInbox } from "./PaymentInbox.js";
+import { PaymentWallet } from "./wallet.js";
+import type { PaymentEntitlement } from "./types/Wallet.js";
 import type {
   PaymentProvider,
   PaymentEventRecord,
@@ -40,12 +41,9 @@ export class PaymentService extends InstallableService {
   readonly id = "payment";
   readonly name = "Payment";
   readonly version = "0.2.0";
-  readonly schema = {
-    payments: paymentPayments,
-    events: paymentEvents,
-    inbox: paymentInbox,
-  };
+  readonly database_schemas = payment_database_schemas;
 
+  private wallet?: PaymentWallet;
   /** 数据库支撑的事件执行器，由定期恢复和 Queue 共同唤醒。 */
   inbox!: PaymentInbox;
   private readonly options: PaymentServiceOptions;
@@ -68,6 +66,8 @@ export class PaymentService extends InstallableService {
   }
 
   install(ctx: ServiceInstallContext): void {
+    this.wallet = new PaymentWallet(ctx, this.providers, (record, fulfillment) => this.options.on_paid(record, fulfillment));
+    this.wallet.install();
     const events = ctx.table<PaymentEventRecord>("events");
     this.inbox = new PaymentInbox(ctx.table("inbox"), {
       send: async (message) => {
@@ -79,7 +79,7 @@ export class PaymentService extends InstallableService {
       if (!provider) throw new Error("payment provider unavailable");
       const status = await syncPaymentEvent({ provider, event, payments: ctx.table<PaymentRecord>("payments"), service: this });
       await events.update({ where: { event_id: `${provider_id}:${event.event_id}` },
-        values: { sync_status: status, sync_error: "" } });
+        values: { sync_status: status as PaymentEventRecord["sync_status"], sync_error: "" } });
       return status;
     }, ctx.database);
     this.hook.before(async (context) => {
@@ -88,7 +88,7 @@ export class PaymentService extends InstallableService {
         this._queue.require_available();
       }
     });
-    // 直接 Action 保留抛错语义，让 Queue 重试失败的后台处理。
+    // 直接 Action 保留抛错语义，Queue 不会把处理失败的 Response 当成已完成。
     this.action("events/process", async (context) => {
       await this.inbox.process(String(context.input.event_id ?? ""));
       return { processed: true };
@@ -104,8 +104,8 @@ export class PaymentService extends InstallableService {
     installPaymentRoutes(this, ctx);
   }
 
-  /** 建立恢复索引，使周期扫描只读取待执行状态。 */
-  protected override async on_init(): Promise<void> {
+  /** 部署阶段建立恢复索引，使周期扫描只读取待执行状态。 */
+  protected override async on_prepare_database(): Promise<void> {
     if (!this._database) throw new Error("payment database is not installed");
     await this._database.atomic([
       { sql: "CREATE INDEX IF NOT EXISTS payment_inbox_pending_idx ON service_payment_inbox (status, next_attempt_at)", params: [] },
@@ -113,14 +113,26 @@ export class PaymentService extends InstallableService {
     ]);
   }
 
-  /** 宿主周期调用，恢复消息丢失或执行中断的可信事件。 */
+  /** 宿主必须周期调用；消息丢失和执行中断不依赖支付平台再次投递。 */
   async recover_events(): Promise<{ scheduled: number }> {
     return await this.inbox.recover();
   }
 
   /** 通知接入方处理已确认支付订单。 */
   on_paid(record: PaymentRecord): Promise<void> {
-    return this.options.on_paid(record);
+    if (!this.wallet) throw new Error("payment is not installed");
+    return this.wallet.fulfill(record);
+  }
+
+  /** 只从服务端配置读取卡套餐，已有订单始终沿用权益快照。 */
+  async resolve_plan(plan_id: string, current?: PaymentRecord): Promise<PaymentEntitlement> {
+    if (!this.wallet) throw new Error("payment is not installed");
+    return this.wallet.resolve_plan(plan_id, current);
+  }
+
+  /** 公布宿主已配置的充值规则，不在网站根据主机名推测。 */
+  get_topup_policy(): PaymentServiceOptions["topup_policy"] | null {
+    return this.options.topup_policy ? { ...this.options.topup_policy } : null;
   }
 
   /** 使用 Federation 服务端策略把自由充值金额结算为 Credits。 */

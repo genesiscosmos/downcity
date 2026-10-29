@@ -15,8 +15,8 @@ export interface AccountsRuntimeOptions {
   providers: AccountsProvider[];
   /** 当前 Service 可访问的受限数据库。 */
   database: ServiceDatabaseContext;
-  /** 当前 AccountsService 的安装上下文，用于路由注册和 Token 签发。 */
-  install_context: ServiceInstallContext;
+  /** 延迟读取安装上下文，供安装后的 Token 签发使用；数据库准备阶段不读取。 */
+  read_install_context: () => ServiceInstallContext;
   /** 读取 Federation 运行时环境变量。 */
   read_env: (key: string) => string | undefined;
   /** 读取 Federation 对外基础 URL。 */

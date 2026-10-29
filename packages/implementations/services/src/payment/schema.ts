@@ -34,6 +34,19 @@ export const paymentPayments = sqliteTable("service_payment_payments", {
 /**
  * 统一支付 webhook 事件表。
  */
+/** 持久化套餐，停售不删除历史引用。 */
+export const paymentCardPlans = sqliteTable("service_payment_card_plans", {
+  plan_id: text("plan_id").primaryKey(), name: text("name").notNull(), currency: text("currency").notNull(),
+  amount_minor: integer("amount_minor").notNull(), credits: integer("credits").notNull(), duration_seconds: integer("duration_seconds").notNull(),
+  enabled: integer("enabled").notNull(), version: integer("version").notNull(), created_at: text("created_at").notNull(), updated_at: text("updated_at").notNull(),
+});
+/** 独立支付履约日志，稳定起点与并发租约不依赖 webhook 次数。 */
+export const paymentFulfillments = sqliteTable("service_payment_fulfillments", {
+  payment_id: text("payment_id").primaryKey(), user_id: text("user_id").notNull(), status: text("status").notNull(),
+  started_at: text("started_at").notNull(), expires_at: text("expires_at").notNull(), lease: text("lease").notNull(),
+  lease_until: integer("lease_until").notNull(), fulfilled_at: text("fulfilled_at").notNull(),
+});
+
 export const paymentEvents = sqliteTable("service_payment_events", {
   event_id: text("event_id").primaryKey(),
   provider: text("provider").notNull(),

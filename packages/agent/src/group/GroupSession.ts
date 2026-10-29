@@ -208,6 +208,14 @@ export class GroupSession implements GroupSessionContract {
     this.interaction_sessions.delete(input.interaction_id);
   }
 
+  /** 受信客户端把私密回答直接提交到实际持有 Interaction 的成员 Session。 */
+  async submit_private_question(input: RespondSessionInteractionInput): Promise<void> {
+    const session = this.interaction_sessions.get(input.interaction_id);
+    if (!session) throw new Error(`Group interaction not found: ${input.interaction_id}`);
+    await session.submit_private_question(input);
+    this.interaction_sessions.delete(input.interaction_id);
+  }
+
   /** 读取成员运行态快照。 */
   private member_statuses(): readonly GroupMemberRuntime[] {
     return this.members.map((member) => ({

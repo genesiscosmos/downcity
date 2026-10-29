@@ -94,7 +94,7 @@ function create_worker_entrypoint(): string {
  *
  * 关键说明（中文）
  * - D1、Queue 与 R2 binding 由 fed deploy 根据 federation.json 生成。
- * - Federation 实例在 Worker isolate 内复用，第一次请求时完成初始化。
+ * - 数据库由发布前 prepare_database 准备，Worker isolate 只装配运行时。
  */
 
 import {
@@ -124,12 +124,12 @@ export interface Env {
   DOWNCITY_STORAGE_PUBLIC_URL_PREFIX?: string;
 }
 
-let federation_promise: Promise<Federation> | undefined;
+let federation_instance: Federation | undefined;
 
-/** 创建并初始化当前 Worker isolate 使用的 Federation。 */
-async function create_federation(env: Env): Promise<Federation> {
+/** 为请求或部署准备创建独立实例，共享相同服务声明。 */
+function create_federation(env: Env): Federation {
   const database = new Database({ binding: env.DB });
-  const federation = new Federation({ database });
+  const federation = new Federation({ database, database_initialization: "prepared" });
   federation.queue.use({
     send: (message) => env.DOWNCITY_QUEUE.send(message, message.delay_ms
       ? { delaySeconds: Math.ceil(message.delay_ms / 1000) }
@@ -159,14 +159,19 @@ async function create_federation(env: Env): Promise<Federation> {
     credits_usage_reader: credits_service,
     account_usage_reader: accounts_service,
   }));
-  await federation.health();
   return federation;
 }
 
+/** fed deploy 通过远程 D1 代理调用；始终使用尚未 ready 的新实例。 */
+export async function prepare_database(env: Env): Promise<void> {
+  const federation = create_federation(env);
+  await federation.prepare_database();
+}
+
 /** 读取当前 Worker isolate 的 Federation。 */
-function get_federation(env: Env): Promise<Federation> {
-  federation_promise ??= create_federation(env);
-  return federation_promise;
+function get_federation(env: Env): Federation {
+  federation_instance ??= create_federation(env);
+  return federation_instance;
 }
 
 export default {
