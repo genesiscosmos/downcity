@@ -3,7 +3,7 @@
  *
  * 关键点（中文）
  * - Queue 是 Workers 目标的运行时异步任务资源，由 `fed deploy` 自动准备。
- * - 用户只需要在 `federation.json.resources.queue` 声明稳定资源名。
+ * - 用户只需要在 `federation.toml` 的 `deployment.resources.queue` 声明稳定资源名。
  * - Queue 没有需要写入项目配置的 id，Wrangler 配置只绑定 queue name。
  */
 

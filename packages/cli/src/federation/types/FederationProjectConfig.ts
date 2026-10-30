@@ -2,7 +2,7 @@
  * Federation 项目与部署配置类型。
  *
  * 关键说明（中文）
- * - `federation.json` 只描述项目身份和部署意图，不保存运行中的 PID、凭证或健康状态。
+ * - `federation.toml` 只描述项目身份和部署意图，不保存运行中的 PID、凭证或健康状态。
  * - 本地启动与云端发布都属于 deployment，由 `fed deploy` 统一执行。
  * - 系统级运行状态保存在 Federation registry，不依赖当前工作目录。
  */
@@ -85,7 +85,7 @@ export interface FederationDeploymentConfig {
   target: FederationDeploymentTarget;
   /** 本地部署监听地址，默认 `127.0.0.1`。 */
   host?: string;
-  /** 本地部署固定端口；缺省时从 12314 开始自动分配。 */
+  /** 本地部署固定端口，缺省为 12314；占用时报错，不读取历史端口或自动换端口。 */
   port?: number;
   /** 自定义部署完成后的固定访问 URL。 */
   url?: string;
@@ -101,7 +101,7 @@ export interface FederationDeploymentConfig {
   resources: FederationProjectResourcesConfig;
 }
 
-/** `federation.json` 解析后的项目配置。 */
+/** `federation.toml` 解析后的项目配置。 */
 export interface FederationProjectConfig {
   /** 配置 schema 版本，当前固定为 1。 */
   schema: 1;
@@ -121,7 +121,7 @@ export interface FederationProjectConfig {
 export interface FederationProjectConfigFile {
   /** Federation 项目根目录绝对路径。 */
   project_dir: string;
-  /** `federation.json` 的绝对路径。 */
+  /** `federation.toml` 的绝对路径。 */
   config_path: string;
   /** 经过完整校验和默认值补齐的配置。 */
   config: FederationProjectConfig;

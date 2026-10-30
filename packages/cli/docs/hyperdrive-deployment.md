@@ -1,21 +1,16 @@
 # Hyperdrive deployment contract
 
-The CLI accepts an existing Hyperdrive resource in `federation.json`:
+The CLI accepts an existing Hyperdrive resource in `federation.toml`. Federation project configuration uses TOML only; JSON configuration is not supported:
 
-```json
-{
-  "deployment": {
-    "target": "cloudflare-workers",
-    "resources": {
-      "hyperdrive": {
-        "type": "hyperdrive",
-        "binding": "HYPERDRIVE",
-        "id_env": "DOWNCITY_HYPERDRIVE_ID",
-        "database_url_env": "DOWNCITY_DATABASE_URL"
-      }
-    }
-  }
-}
+```toml
+[deployment]
+target = "cloudflare-workers"
+
+[deployment.resources.hyperdrive]
+type = "hyperdrive"
+binding = "HYPERDRIVE"
+id_env = "DOWNCITY_HYPERDRIVE_ID"
+database_url_env = "DOWNCITY_DATABASE_URL"
 ```
 
 This fragment supplements the normal Federation project fields. Configure exactly one database resource: `d1` or `hyperdrive`. D1 templates still declare D1 explicitly. The CLI no longer synthesizes a D1 database when no database resource is declared. Queue defaults remain unchanged.
@@ -26,7 +21,7 @@ The Worker must export `async prepare_database(env)` and await the existing Fede
 
 Without `database_url_env`, preparation uses Wrangler's remote platform proxy and requires a usable Hyperdrive `connectionString`. Wrangler/platform versions that cannot proxy Hyperdrive require the independent connection mode.
 
-With `database_url_env`, the CLI reads that named variable from its inherited process environment, checks for a PostgreSQL URL, and calls preparation with both `env.HYPERDRIVE.connectionString` (using the configured binding name) and `env.PREPARE_DATABASE_URL` (using the configured variable name). This mode bypasses the entire platform proxy; no Queue, R2 or other platform bindings are supplied to preparation. The CLI supplies `DOWNCITY_STORAGE_PUBLIC_URL_PREFIX` from the configured storage resource so R2Storage can be constructed. Source inspection confirms cloudflareQueue does not dereference its binding until send, and R2Storage does not dereference its bucket until store. Preparation must not send queue messages or store objects. The independent URL must target the same database/schema as production Hyperdrive. Only the variable name is configuration; never put a connection URL or password in federation.json. Connection values are not added to the child command or generated Wrangler file. Preparation output is captured and failure output is suppressed to avoid exposing driver connection diagnostics.
+With `database_url_env`, the CLI reads that named variable from its inherited process environment, checks for a PostgreSQL URL, and calls preparation with both `env.HYPERDRIVE.connectionString` (using the configured binding name) and `env.PREPARE_DATABASE_URL` (using the configured variable name). This mode bypasses the entire platform proxy; no Queue, R2 or other platform bindings are supplied to preparation. The CLI supplies `DOWNCITY_STORAGE_PUBLIC_URL_PREFIX` from the configured storage resource so R2Storage can be constructed. Source inspection confirms cloudflareQueue does not dereference its binding until send, and R2Storage does not dereference its bucket until store. Preparation must not send queue messages or store objects. The independent URL must target the same database/schema as production Hyperdrive. Only the variable name is configuration; never put a connection URL or password in `federation.toml`. Connection values are not added to the child command or generated Wrangler file. Preparation output is captured and failure output is suppressed to avoid exposing driver connection diagnostics.
 
 Dry-run builds and checks the preparation export without reading the connection variable or preparing a database. Verify-only does not prepare the database.
 

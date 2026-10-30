@@ -3,7 +3,7 @@
  *
  * 关键点（中文）
  * - 统一执行本地 shell 命令和 Wrangler 命令，集中处理失败提示。
- * - 使用 shell 执行 `federation.json` 中的命令，允许用户写 pnpm / npm / bash 组合命令。
+ * - 使用 shell 执行 `federation.toml` 中的命令，允许用户写 pnpm / npm / bash 组合命令。
  * - 不在这里解析业务语义，部署步骤由 deployer 组合。
  */
 

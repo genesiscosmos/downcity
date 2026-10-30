@@ -187,6 +187,9 @@ importers:
       ora:
         specifier: ^9.4.0
         version: 9.4.0
+      smol-toml:
+        specifier: ^1.7.1
+        version: 1.7.1
       ws:
         specifier: ^8.21.0
         version: 8.21.0

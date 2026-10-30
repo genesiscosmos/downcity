@@ -3,7 +3,7 @@
  *
  * 关键点（中文）
  * - `fed deploy` 部署 Federation，不要求用户直接维护 Wrangler 工程。
- * - 构建和类型检查从 package.json 自动推断，稳定资源由 `federation.json` 声明。
+ * - 构建和类型检查从 package.json 自动推断，稳定资源由 `federation.toml` 声明。
  * - D1 database id 与 Worker URL 都是部署状态，不写入项目配置。
  */
 
@@ -231,7 +231,7 @@ export async function deploy_cloudflare_workers(
     throw new CliError({
       title: "Unable to read deployed Worker URL",
       note: "Wrangler completed without a detectable workers.dev URL.",
-      fix: "Set deployment.url in federation.json and rerun `fed deploy`.",
+      fix: "Set deployment.url in federation.toml and rerun `fed deploy`.",
     });
   }
 

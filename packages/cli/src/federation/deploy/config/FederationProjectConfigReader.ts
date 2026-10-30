@@ -9,6 +9,7 @@
 
 import { existsSync, readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
+import { parse as parse_toml } from "smol-toml";
 import { CliError } from "@/shared/CliError.js";
 import type {
   FederationDeploymentConfig,
@@ -19,9 +20,12 @@ import type {
   FederationProjectResourcesConfig,
 } from "@/federation/types/FederationProjectConfig.js";
 
-const FEDERATION_CONFIG_FILE_NAME = "federation.json";
+/** 项目声明的唯一文件名；JSON 配置不再作为读取入口。 */
+export const FEDERATION_CONFIG_FILE_NAME = "federation.toml";
+/** 本地目标的固定默认端口；用户只能通过 deployment.port 显式覆盖。 */
+export const DEFAULT_LOCAL_FEDERATION_PORT = 12314;
 
-/** 读取并校验指定目录中的 `federation.json`。 */
+/** 读取并校验指定目录中的 `federation.toml`。 */
 export function read_federation_project_config(dir: string): FederationProjectConfigFile {
   const project_dir = resolve(String(dir || "."));
   const config_path = join(project_dir, FEDERATION_CONFIG_FILE_NAME);
@@ -29,18 +33,18 @@ export function read_federation_project_config(dir: string): FederationProjectCo
     throw new CliError({
       title: "Federation project config not found",
       note: `Expected ${config_path}`,
-      fix: "Run `fed create` or add a valid federation.json to the project.",
+      fix: "Run `fed create` or add a valid federation.toml to the project.",
     });
   }
 
   let raw_config: unknown;
   try {
-    raw_config = JSON.parse(readFileSync(config_path, "utf-8"));
+    raw_config = parse_toml(readFileSync(config_path, "utf-8"));
   } catch (error) {
     throw new CliError({
-      title: "Invalid federation.json",
+      title: "Invalid federation.toml",
       note: error instanceof Error ? error.message : String(error),
-      fix: "Check that federation.json is valid JSON.",
+      fix: "Check that federation.toml is valid TOML.",
     });
   }
 
@@ -51,7 +55,7 @@ export function read_federation_project_config(dir: string): FederationProjectCo
   };
 }
 
-/** 将未知 JSON 严格规范化为 Federation 配置。 */
+/** 将 TOML 解析结果严格规范化为 Federation 配置。 */
 function normalize_federation_project_config(
   input: unknown,
   config_path: string,
@@ -99,8 +103,11 @@ function normalize_deployment(
     throw invalid_config(config_path, `Unsupported deployment target: ${target_input || "(empty)"}`);
   }
   const target: FederationDeploymentTarget = target_input;
-  const port = read_optional_number(input, "port");
-  if (port !== undefined && (!Number.isInteger(port) || port < 1 || port > 65535)) {
+  const port = input.port === undefined
+    ? (target === "local" ? DEFAULT_LOCAL_FEDERATION_PORT : undefined)
+    : read_optional_number(input, "port");
+  if ((input.port !== undefined && port === undefined)
+    || (port !== undefined && (!Number.isInteger(port) || port < 1 || port > 65535))) {
     throw invalid_config(config_path, "deployment.port must be an integer between 1 and 65535.");
   }
 
@@ -236,7 +243,7 @@ function normalize_resources(
 /** 创建带统一修复提示的配置错误。 */
 function invalid_config(config_path: string, note: string): CliError {
   return new CliError({
-    title: "Invalid federation.json",
+    title: "Invalid federation.toml",
     note: `${config_path}: ${note}`,
     fix: "Run `fed create` to generate the current Federation project format.",
   });

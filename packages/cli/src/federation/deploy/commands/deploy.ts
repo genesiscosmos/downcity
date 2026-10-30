@@ -4,7 +4,7 @@
  * 关键点（中文）
  * - 命令层只负责读取目录、解析选项和选择 runtime deployer。
  * - 具体 Cloudflare / D1 / Wrangler 细节放在 runtime 模块中。
- * - `federation.json` 是部署协议入口，避免用户直接记忆底层 Worker 脚本（文件名保持 federation.json）。
+ * - `federation.toml` 是部署协议入口，避免用户直接记忆底层 Worker 脚本。
  */
 
 import { CliError } from "@/shared/CliError.js";

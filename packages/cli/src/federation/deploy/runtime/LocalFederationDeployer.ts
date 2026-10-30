@@ -4,7 +4,7 @@
  * 关键说明（中文）
  * - Local 不是开发捷径，而是 `fed deploy` 的正式部署目标。
  * - 同一 fed_id 重复部署会先构建最新代码，再替换旧的受管实例。
- * - 端口默认从 12314 开始分配，运行状态写入系统级 Federation registry。
+ * - 端口缺省固定为 12314，只接受配置显式覆盖；占用时报错，运行状态写入 registry。
  */
 
 import { randomUUID } from "node:crypto";
@@ -13,6 +13,7 @@ import { spawn, execFileSync } from "node:child_process";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { allocateAvailablePort } from "@/city/process/daemon/PortAllocator.js";
+import { DEFAULT_LOCAL_FEDERATION_PORT } from "@/federation/deploy/config/FederationProjectConfigReader.js";
 import { getPlatformRootDirPath } from "@/city/process/registry/CityPaths.js";
 import { signalDetachedProcess } from "@/city/process/registry/ProcessSweep.js";
 import {
@@ -35,8 +36,6 @@ import {
 import { provision_local_admin_database } from "@/federation/deploy/runtime/AdminDatabaseProvisioner.js";
 import { with_cli_progress } from "@/shared/CliProgress.js";
 
-const LOCAL_PORT_START = 12314;
-const LOCAL_PORT_END = 13313;
 const LOCAL_HEALTH_TIMEOUT_MS = 15_000;
 
 /** 部署并登记一个 Local Federation。 */
@@ -77,7 +76,7 @@ export async function deploy_local_federation(
 
   await stop_previous_local_server(previous);
   const host = deployment.host?.trim() || "127.0.0.1";
-  const port = await resolve_local_port(deployment.port, previous?.port, host);
+  const port = await resolve_local_port(deployment.port, host);
   const base_url = deployment.url?.trim() || `http://${url_host(host)}:${port}`;
   const instance_id = `fed_instance_${randomUUID().replace(/-/gu, "")}`;
   const admin_credentials = options.admin_reset || !previous?.admin_id
@@ -248,23 +247,21 @@ export async function stop_managed_local_server(
   return !is_process_alive(server.pid);
 }
 
-/** 解析显式端口、历史端口或新的可用端口。 */
+/** 只校验用户端口或固定默认端口；端口冲突时不改用其他端口。 */
 async function resolve_local_port(
   configured_port: number | undefined,
-  previous_port: number | undefined,
   host: string,
 ): Promise<number> {
-  if (configured_port !== undefined) {
-    return await allocateAvailablePort({ start: configured_port, end: configured_port, host });
+  const port = configured_port ?? DEFAULT_LOCAL_FEDERATION_PORT;
+  try {
+    return await allocateAvailablePort({ start: port, end: port, host });
+  } catch {
+    throw new CliError({
+      title: "Local Federation port is unavailable",
+      note: `Cannot listen on ${host}:${port}.`,
+      fix: "Check the process using this port or explicitly set deployment.port in federation.toml.",
+    });
   }
-  if (previous_port !== undefined) {
-    try {
-      return await allocateAvailablePort({ start: previous_port, end: previous_port, host });
-    } catch {
-      // 历史端口被其他程序占用时继续从默认范围分配。
-    }
-  }
-  return await allocateAvailablePort({ start: LOCAL_PORT_START, end: LOCAL_PORT_END, host });
 }
 
 /** 启动携带实例身份的后台 launcher。 */

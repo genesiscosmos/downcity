@@ -2,8 +2,8 @@
  * Wrangler 配置写入器。
  *
  * 关键点（中文）
- * - `federation.json` 是简单的 City 项目声明，Wrangler 配置是部署时临时生成物。
- * - Cloudflare 默认值由 CLI 管理，用户不需要在 `federation.json` 里写 worker_name 等细节。
+ * - `federation.toml` 是简单的 City 项目声明，Wrangler 配置是部署时临时生成物。
+ * - Cloudflare 默认值由 CLI 管理，用户不需要在 `federation.toml` 里写 worker_name 等细节。
  * - D1 database id 由 CLI 在部署时解析，不污染用户手写配置。
  */
 

@@ -89,7 +89,7 @@ Payment 的 `paid` 与 wallet 履约状态独立；自由充值发放 Primary Ca
 
 这些规则不提供通用税费、折扣或换汇自动核算；无法确认金额口径的交易须人工核对。
 
-Webhook 验签、规范化后先持久化 inbox，再入队，成功返回 HTTP 200 只代表接收。Queue 执行 `events/process`；宿主须周期调用 `payment.recover_events()` 或管理员 `POST /v1/payment/events/recover`，恢复到期 pending 与过期 processing。当前 Edge 每五分钟扫描，部署计划由 `federation.json` 的 `deployment.crons` 声明。临时失败从 15 秒指数退避至最多一小时，20 次后进入 `review`；金额校验失败（422）直接进入 `review`。管理员通过 `GET /v1/payment/events/inbox` 查看诊断，使用 `POST /v1/payment/events/replay` 携带 `{ "event_id": "provider:event_id" }` 重放；重放仍执行校验与幂等履约。
+Webhook 验签、规范化后先持久化 inbox，再入队，成功返回 HTTP 200 只代表接收。Queue 执行 `events/process`；宿主须周期调用 `payment.recover_events()` 或管理员 `POST /v1/payment/events/recover`，恢复到期 pending 与过期 processing。当前 Edge 每五分钟扫描，部署计划由 `federation.toml` 的 `deployment.crons` 声明。临时失败从 15 秒指数退避至最多一小时，20 次后进入 `review`；金额校验失败（422）直接进入 `review`。管理员通过 `GET /v1/payment/events/inbox` 查看诊断，使用 `POST /v1/payment/events/replay` 携带 `{ "event_id": "provider:event_id" }` 重放；重放仍执行校验与幂等履约。
 
 ## 包含的服务
 

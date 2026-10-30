@@ -2,7 +2,7 @@
  * City 项目 package scripts 执行器。
  *
  * 关键点（中文）
- * - 普通开发者不需要在 `federation.json` 里声明 build/typecheck。
+ * - 普通开发者不需要在 `federation.toml` 里声明 build/typecheck。
  * - 如果项目 package.json 有对应 script，`fed deploy` 自动执行。
  * - 没有 package.json 或没有脚本时安静跳过，保持最小项目可部署。
  */

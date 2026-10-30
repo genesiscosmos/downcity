@@ -9,6 +9,7 @@ import path from "node:path";
 import test from "node:test";
 import { execFileSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
+import { parse as parse_toml, stringify as stringify_toml } from "smol-toml";
 
 /** 创建隔离临时目录。 */
 function create_temp_dir(prefix) {
@@ -116,6 +117,8 @@ test("内置模板生成严格的新 Federation 配置", async () => {
     assert.equal(config_file.config.type, "federation");
     assert.equal(config_file.config.id, "fed_template_test");
     assert.equal(config_file.config.deployment.target, "local");
+    assert.equal(config_file.config.deployment.port, 12314);
+    assert.equal(path.basename(config_file.config_path), "federation.toml");
     assert.deepEqual(config_file.config.deployment.resources, {});
     assert.equal(fs.existsSync(path.join(project_dir, "src/index.ts")), true);
   } finally {
@@ -134,10 +137,10 @@ test("Cloudflare 模板通过统一 deployment 配置生成 Wrangler binding", a
       name: "cloudflare-test",
     }));
 
-    const config_path = path.join(project_dir, "federation.json");
-    const raw_config = JSON.parse(fs.readFileSync(config_path, "utf8"));
+    const config_path = path.join(project_dir, "federation.toml");
+    const raw_config = parse_toml(fs.readFileSync(config_path, "utf8"));
     raw_config.deployment.crons = ["  */5   * * * *  "];
-    fs.writeFileSync(config_path, JSON.stringify(raw_config));
+    fs.writeFileSync(config_path, stringify_toml(raw_config));
     const config_file = reader.read_federation_project_config(project_dir);
     assert.equal(config_file.config.deployment.target, "cloudflare-workers");
     assert.deepEqual(config_file.config.deployment.crons, ["*/5 * * * *"]);
@@ -241,6 +244,8 @@ test("默认 Local 模板创建一次性管理员身份", async () => {
   let server;
   try {
     const config_file = reader.read_federation_project_config(project_dir);
+    // 使用显式隔离端口；默认 12314 属于开发环境，测试不应抢占它。
+    config_file.config.deployment.port = 24000 + (process.pid % 1000);
     const first_output = await capture_console_output(() => deployer.deploy_local_federation(config_file, {
       source: project_dir,
       dry_run: false,
@@ -353,6 +358,8 @@ test("Local deploy 登记全局状态并替换同一 Fed 的旧实例", async ()
   const platform_root = create_temp_dir("downcity-fed-state-");
   const project_dir = create_temp_dir("downcity-fed-project-");
   process.env.DC_PLATFORM_ROOT = platform_root;
+  // 测试显式指定隔离端口，避免触碰开发者正在使用的默认实例。
+  const test_port = 25000 + (process.pid % 1000);
 
   const config = {
     schema: 1,
@@ -362,12 +369,13 @@ test("Local deploy 登记全局状态并替换同一 Fed 的旧实例", async ()
     entry: "server.mjs",
     deployment: {
       target: "local",
+      port: test_port,
       scripts: {
         deploy: "node server.mjs",
       },
     },
   };
-  fs.writeFileSync(path.join(project_dir, "federation.json"), `${JSON.stringify(config, null, 2)}\n`);
+  fs.writeFileSync(path.join(project_dir, "federation.toml"), stringify_toml(config));
   fs.writeFileSync(path.join(project_dir, "server.mjs"), `
 import http from "node:http";
 const port = Number(process.env.PORT);
@@ -410,7 +418,7 @@ http.createServer((request, response) => {
     const first_server = session.read_server_by_fed_id(config.id, "local");
     assert.ok(first_server);
     assert.equal(first_server.status, "running");
-    assert.ok(first_server.port >= 12314);
+    assert.equal(first_server.port, test_port);
     assert.ok(is_process_alive(first_server.pid));
 
     const outside_dir = create_temp_dir("downcity-fed-outside-");

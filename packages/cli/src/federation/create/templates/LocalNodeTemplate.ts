@@ -7,6 +7,8 @@
  * - 只装配本地账号、余额和 usage，保持模板最小且可直接扩展。
  */
 
+import { stringify as stringify_toml } from "smol-toml";
+import { FEDERATION_CONFIG_FILE_NAME } from "@/federation/deploy/config/FederationProjectConfigReader.js";
 import type {
   FederationTemplateFile,
   FederationTemplateInput,
@@ -19,8 +21,8 @@ export function create_local_node_template_files(
   const package_name = normalize_package_name(input.name);
   return [
     {
-      path: "federation.json",
-      content: json_file({
+      path: FEDERATION_CONFIG_FILE_NAME,
+      content: stringify_toml({
         schema: 1,
         type: "federation",
         id: input.fed_id,

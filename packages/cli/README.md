@@ -10,7 +10,7 @@ downcity -v
 安装后会得到 `city` / `downcity` 与 `fed` / `downfed` 两个相互独立的工具：
 
 - `city` 是本机 Agent 宿主。CLI 通过数据库 Adapter 和 Repository 读取配置，显式创建 Agent，再由 City 按 ID 统一转发 HTTP/RPC。
-- `fed` 是 Federation Server Manager；TUI 用于注册和管理 Server，项目命令读取当前目录的 `federation.json`。Local Node.js 和 Cloudflare Workers 都通过 `fed deploy` 部署。
+- `fed` 是 Federation Server Manager；TUI 用于注册和管理 Server，项目命令读取当前目录的 `federation.toml`，项目配置只支持 TOML，不兼容 JSON 配置。Local Node.js 和 Cloudflare Workers 都通过 `fed deploy` 部署。
 - `fed web` 在 `127.0.0.1:43128` 启动当前 Federation 的本地 Web 管理 UI；管理员登录后的 Session 只保留在 CLI 本地 BFF 内存中。
 
 ```bash
@@ -20,6 +20,8 @@ pnpm install
 fed deploy
 fed
 ```
+
+本地部署未设置 `deployment.port` 时固定使用默认端口 `12314`；在 `federation.toml` 的 `[deployment]` 中显式设置 `port` 可覆盖默认值。选定端口被占用时部署直接报错，不扫描其他端口，也不从部署历史推断端口。
 
 `fed create` 默认生成 Local Node.js + SQLite 项目。首次 `fed deploy` 或 `fed deploy --admin-reset` 会交互式要求输入管理员 ID、密码和确认密码；密码至少 12 个字符，CLI 只在内存中使用明文并将摘要写入数据库。遗失密码时，只有拥有目标基础设施部署权限的人可以运行 `fed deploy --admin-reset`，非交互环境还必须显式传入 `--yes`（该参数只确认重置，不跳过凭证输入）。重置会撤销全部现有管理员 Session。CLI 通过本地 SQLite 事务或 Wrangler 远程 D1 权限直接完成管理员恢复，不要求 Worker 读取恢复环境变量；普通 deploy 永远不会修改管理员。部署期间会持续显示当前构建、资源准备、Worker 发布、健康检查与管理员验证阶段。无参数执行 `fed` 会进入系统级 Federation 管理面板，已部署实例不依赖当前工作目录。
 

@@ -3,7 +3,7 @@
  *
  * 关键点（中文）
  * - Storage 是 Workers 目标的默认文件存储资源，由 `fed deploy` 自动准备。
- * - 用户只需要在 `federation.json.resources.storage` 声明稳定资源名和公开 URL。
+ * - 用户只需要在 `federation.toml` 的 `deployment.resources.storage` 声明稳定资源名和公开 URL。
  * - R2 bucket 没有需要写入项目配置的 id，Wrangler 配置只绑定 bucket name。
  */
 

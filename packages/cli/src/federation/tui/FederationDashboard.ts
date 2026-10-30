@@ -92,8 +92,8 @@ function build_federation_dashboard_state(): federation_dashboard_state {
       title: t({ zh: "部署 Federation", en: "Deploy Federation" }),
       subtitle: t({ zh: "部署当前目录的 Federation 项目", en: "Deploy the Federation project in the current directory" }),
       detail: t({
-        zh: "读取 federation.json，在本地或云端部署当前 Federation。",
-        en: "Read federation.json and deploy the current Federation locally or remotely.",
+        zh: "读取 federation.toml，在本地或云端部署当前 Federation。",
+        en: "Read federation.toml and deploy the current Federation locally or remotely.",
       }),
     },
     {

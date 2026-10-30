@@ -17,6 +17,7 @@ import {
   writeFileSync,
 } from "node:fs";
 import { basename, dirname, join, resolve } from "node:path";
+import { parse as parse_toml, stringify as stringify_toml } from "smol-toml";
 import { confirm, isCancel, text } from "@/federation/tui/Prompts.js";
 import { emitCliBlock } from "@/shared/CliReporter.js";
 import { CliError } from "@/shared/CliError.js";
@@ -25,7 +26,10 @@ import {
   DEFAULT_FEDERATION_TEMPLATE_ID,
   read_federation_template,
 } from "@/federation/create/templates/TemplateCatalog.js";
-import { read_federation_project_config } from "@/federation/deploy/config/FederationProjectConfigReader.js";
+import {
+  FEDERATION_CONFIG_FILE_NAME,
+  read_federation_project_config,
+} from "@/federation/deploy/config/FederationProjectConfigReader.js";
 import type { FederationTemplateFile } from "@/federation/types/FederationTemplate.js";
 
 /** Commander 传入的 create 选项。 */
@@ -125,21 +129,21 @@ async function create_from_git_template(input: {
   });
   rmSync(join(input.project_dir, ".git"), { recursive: true, force: true });
 
-  const config_path = join(input.project_dir, "federation.json");
+  const config_path = join(input.project_dir, FEDERATION_CONFIG_FILE_NAME);
   if (!existsSync(config_path)) {
     throw new CliError({
-      title: "Git template is missing federation.json",
+      title: "Git template is missing federation.toml",
       note: input.template_url,
-      fix: "Add a current federation.json to the template repository.",
+      fix: "Add a current federation.toml to the template repository.",
     });
   }
 
   let config: Record<string, unknown>;
   try {
-    config = JSON.parse(readFileSync(config_path, "utf-8")) as Record<string, unknown>;
+    config = parse_toml(readFileSync(config_path, "utf-8"));
   } catch (error) {
     throw new CliError({
-      title: "Git template federation.json is invalid",
+      title: "Git template federation.toml is invalid",
       note: error instanceof Error ? error.message : String(error),
     });
   }
@@ -147,7 +151,7 @@ async function create_from_git_template(input: {
   config.type = "federation";
   config.id = input.fed_id;
   config.name = input.name;
-  writeFileSync(config_path, `${JSON.stringify(config, null, 2)}\n`);
+  writeFileSync(config_path, stringify_toml(config));
 }
 
 /** 确认是否覆盖内置模板涉及的已有文件。 */

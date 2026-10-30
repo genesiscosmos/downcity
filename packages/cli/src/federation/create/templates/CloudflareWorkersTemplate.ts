@@ -4,6 +4,8 @@
  * 模板声明 D1、Queue 和可选 R2，由 `fed deploy` 的 Cloudflare 内置部署器准备资源。
  */
 
+import { stringify as stringify_toml } from "smol-toml";
+import { FEDERATION_CONFIG_FILE_NAME } from "@/federation/deploy/config/FederationProjectConfigReader.js";
 import type {
   FederationTemplateFile,
   FederationTemplateInput,
@@ -16,8 +18,8 @@ export function create_cloudflare_workers_template_files(
   const package_name = normalize_package_name(input.name);
   return [
     {
-      path: "federation.json",
-      content: json_file({
+      path: FEDERATION_CONFIG_FILE_NAME,
+      content: stringify_toml({
         schema: 1,
         type: "federation",
         id: input.fed_id,
@@ -93,7 +95,7 @@ function create_worker_entrypoint(): string {
  * Cloudflare Workers Federation entry.
  *
  * 关键说明（中文）
- * - D1、Queue 与 R2 binding 由 fed deploy 根据 federation.json 生成。
+ * - D1、Queue 与 R2 binding 由 fed deploy 根据 federation.toml 生成。
  * - 数据库由发布前 prepare_database 准备，Worker isolate 只装配运行时。
  */
 

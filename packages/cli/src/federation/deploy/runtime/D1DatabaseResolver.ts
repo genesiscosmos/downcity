@@ -3,7 +3,7 @@
  *
  * 关键点（中文）
  * - D1 是 Workers 目标的运行时资源，由 `fed deploy` 自动准备。
- * - 用户只需要在 `federation.json.resources.d1` 声明稳定资源名。
+ * - 用户只需要在 `federation.toml` 的 `deployment.resources.d1` 声明稳定资源名。
  * - database id 由 CLI 在部署时自动解析，不写入项目配置。
  * - dry-run 不创建远程资源，只使用已有 database name 解析临时 Wrangler 配置。
  */
