@@ -128,7 +128,7 @@ function normalizeOneShotTime(raw: string): { ok: true; value: string } | { ok: 
  *
  * 规则（中文）
  * - `@manual`
- * - cron / alias
+ * - cron / alias；`cron:<expression>` 输入去掉前缀后校验并保存
  * - `time:<ISO8601-with-timezone>`（一次性触发）
  * - 兼容裸 ISO 时间输入，会归一化为 `time:<iso>`
  */
@@ -162,12 +162,14 @@ export function normalizeTaskWhen(
     };
   }
 
-  const cronExpression = normalizeCronExpression(raw);
-  if (!cronExpression) return { ok: false, error: "when cannot be empty" };
-  const canonical = CRON_ALIAS_TO_EXPRESSION[lower] ? lower : raw;
-  if (cronExpression !== "@manual" && !cron.validate(cronExpression)) {
+  // 统一处理显式 cron 前缀，确保保存值可直接用于调度和展示。
+  const cron_input = lower.startsWith("cron:") ? raw.slice("cron:".length).trim() : raw;
+  const cron_expression = normalizeCronExpression(cron_input);
+  if (!cron_expression || !cron.validate(cron_expression)) {
     return { ok: false, error: `Invalid when (cron): "${raw}"` };
   }
+  const cron_alias = cron_input.toLowerCase();
+  const canonical = CRON_ALIAS_TO_EXPRESSION[cron_alias] ? cron_alias : cron_input;
   return { ok: true, value: canonical };
 }
 
