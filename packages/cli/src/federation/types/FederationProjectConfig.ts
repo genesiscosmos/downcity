@@ -4,7 +4,7 @@
  * 关键说明（中文）
  * - `federation.toml` 只描述项目身份和部署意图，不保存运行中的 PID、凭证或健康状态。
  * - 本地启动与云端发布都属于 deployment，由 `fed deploy` 统一执行。
- * - 系统级运行状态保存在 Federation registry，不依赖当前工作目录。
+ * - Federation registry 保存登记记录，本地服务由用户级系统 manager 管理，不依赖当前工作目录。
  */
 
 /** Federation 当前支持的部署目标。 */
@@ -79,6 +79,22 @@ export interface FederationProjectResourcesConfig {
   storage?: FederationProjectStorageResourceConfig;
 }
 
+/** Local Federation 的用户级系统服务策略；Cloudflare Workers 不接受此配置。 */
+export interface FederationProcessConfig {
+  /**
+   * 是否持久启用用户级自动启动，默认 false；只有显式 true 才安装到 macOS LaunchAgents
+   * 或启用 Linux systemd default.target.wants。macOS 在用户登录后启动；Linux 需要用户
+   * manager 可用，CLI 不自动启用 linger。主动 stop 会禁用自动启动，直到 deploy/restart
+   * 显式重新开启；这些操作按配置恢复自动启动策略。
+   */
+  auto_start: boolean;
+  /**
+   * 是否在进程异常退出后自动恢复，默认 true；恢复间隔固定为 10 秒，60 秒内最多 5 次。
+   * 主动 stop 不触发恢复，且停止状态跨系统重启保留，直到用户显式 deploy/restart。
+   */
+  restart_on_failure: boolean;
+}
+
 /** Federation 的统一部署声明。 */
 export interface FederationDeploymentConfig {
   /** 部署目标；本地启动也使用 `local` 目标。 */
@@ -89,6 +105,8 @@ export interface FederationDeploymentConfig {
   port?: number;
   /** 自定义部署完成后的固定访问 URL。 */
   url?: string;
+  /** Local 用户级服务策略；读取器始终补齐默认值，手工构造配置时可以省略。 */
+  process?: FederationProcessConfig;
   /** 对内置构建和部署阶段的脚本覆盖。 */
   scripts?: FederationDeploymentScriptsConfig;
   /**

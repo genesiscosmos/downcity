@@ -16,7 +16,7 @@ import { DEFAULT_LOCAL_FEDERATION_PORT } from "@/federation/deploy/config/Federa
 import { build_node_release, read_node_release } from "@/federation/deploy/release/NodeReleaseBuilder.js";
 import { local_release_paths, ensure_local_release_paths, install_local_release, activate_local_release, read_current_release, with_local_release_lock } from "@/federation/deploy/release/LocalReleaseStore.js";
 import { prepare_local_runtime_config, read_local_runtime_config } from "@/federation/deploy/release/LocalRuntimeConfig.js";
-import { start_release_process, stop_release_process, wait_for_release_ready, is_local_process_alive } from "@/federation/deploy/release/LocalReleaseProcess.js";
+import { start_release_process, stop_release_process, wait_for_release_ready, is_local_process_alive, inspect_release_process, preflight_release_service } from "@/federation/deploy/release/LocalReleaseProcess.js";
 import {
   read_server_by_fed_id,
   register_deployed_server,
@@ -94,6 +94,12 @@ async function install_and_start_release(
 ): Promise<void> {
   const config = config_file.config;
   const previous = read_server_by_fed_id(config.id, "local");
+  await preflight_release_service(config.id);
+  const previous_process = previous ? await inspect_release_process(previous) : undefined;
+  if (previous?.pid && is_local_process_alive(previous.pid) && !previous_process?.active) {
+    throw new CliError({ title: "The registered process is not owned by the system service manager",
+      fix: "Verify and explicitly stop the unmanaged process before deploying this service." });
+  }
   const paths = local_release_paths(config.id);
   await ensure_local_release_paths(paths);
   // 产物先复制到部署文件系统上的 staging，保证最终 rename 原子完成。
@@ -110,8 +116,8 @@ async function install_and_start_release(
   const host = config.deployment.host?.trim() || "127.0.0.1";
   const port = config.deployment.port ?? DEFAULT_LOCAL_FEDERATION_PORT;
   // 改端口时先校验，避免停掉健康旧实例后才发现新端口已被占用。
-  if (!previous?.pid || !is_local_process_alive(previous.pid) || previous.port !== port
-    || (previous.config_snapshot?.deployment.host?.trim() || "127.0.0.1") !== host) {
+  if (!previous_process?.active || previous?.port !== port
+    || (previous?.config_snapshot?.deployment.host?.trim() || "127.0.0.1") !== host) {
     await resolve_local_port(port, host);
   }
   const credentials = admin_reset || !previous?.admin_id
@@ -119,7 +125,7 @@ async function install_and_start_release(
   const admin_result = credentials
     ? provision_local_admin_database(config_file.project_dir, credentials, runtime.database_path) : undefined;
   const admin_id = admin_result?.admin_id ?? previous?.admin_id;
-  if (previous?.pid && previous.instance_id) {
+  if (previous) {
     const stopped = await stop_release_process(previous);
     if (!stopped) throw new CliError({ title: "Unable to stop previous local Federation" });
     updateServer(previous.base_url, { ...previous, status: "stopped" });
@@ -127,9 +133,13 @@ async function install_and_start_release(
   await resolve_local_port(port, host);
   const base_url = config.deployment.url?.trim() || `http://${url_host(host)}:${port}`;
   const instance_id = `fed_instance_${randomUUID().replace(/-/gu, "")}`;
-  const pid = start_release_process({ fed_id: config.id, release_id, instance_id, release_dir,
-    entry: manifest.entry, runtime_env: runtime.runtime_env, host, port, base_url, log_path: paths.log_path });
-  const input = { config, project_dir: config_file.project_dir, base_url, pid, instance_id, port,
+  const identity = await start_release_process({ fed_id: config.id, release_id, instance_id, release_dir,
+    entry: manifest.entry, runtime_config_path: runtime.config_path,
+    auto_start: config.deployment.process?.auto_start ?? false,
+    restart_on_failure: config.deployment.process?.restart_on_failure ?? true,
+    host, port, base_url, log_path: paths.log_path });
+  const pid = identity.pid;
+  const input = { config, project_dir: config_file.project_dir, base_url, pid, instance_id: identity.instance_id, port,
     log_path: paths.log_path, admin_id, release_id, release_dir,
     runtime_config_path: runtime.config_path, data_dir: paths.data_dir };
   const server: ServerProfile = { ...input, name: config.name, fed_id: config.id, target: "local", status: "starting" };
@@ -140,7 +150,7 @@ async function install_and_start_release(
       if (!await verify_admin_deployment_credentials(base_url, credentials)) throw new Error("Administrator verification failed");
       show_admin_credentials_configured();
     }
-    register_deployed_server({ ...input, status: "running" });
+    register_deployed_server({ ...input, pid: server.pid, instance_id: server.instance_id, status: "running" });
     await activate_local_release(paths, release_id);
   } catch (error) {
     const stopped = await stop_release_process(server);
@@ -219,15 +229,19 @@ export async function restart_managed_local_server(server: ServerProfile): Promi
         fix: "Restore the registered database before restarting; no empty replacement will be created." });
     }
     const host = current.config_snapshot?.deployment.host?.trim() || "127.0.0.1";
-    if (!current.pid || !is_local_process_alive(current.pid)) await resolve_local_port(current.port, host);
-    if (current.pid && !await stop_release_process(current)) throw new CliError({ title: "Unable to stop previous instance" });
+    const process_state = await inspect_release_process(current);
+    if (!process_state.active) await resolve_local_port(current.port, host);
+    if (!await stop_release_process(current)) throw new CliError({ title: "Unable to stop previous instance" });
     updateServer(current.base_url, { ...current, status: "stopped" });
     const port = await resolve_local_port(current.port, host);
     const instance_id = `fed_instance_${randomUUID().replace(/-/gu, "")}`;
-    const pid = start_release_process({ fed_id: current.fed_id!, release_id: active_release_id,
-      release_dir, instance_id, entry: manifest.entry, runtime_env,
+    const identity = await start_release_process({ fed_id: current.fed_id!, release_id: active_release_id,
+      release_dir, instance_id, entry: manifest.entry, runtime_config_path: current.runtime_config_path,
+      auto_start: current.config_snapshot?.deployment.process?.auto_start ?? false,
+      restart_on_failure: current.config_snapshot?.deployment.process?.restart_on_failure ?? true,
       host, port, base_url: current.base_url, log_path: current.log_path });
-    const next = { ...current, release_id: active_release_id, release_dir, instance_id, pid, status: "starting" as const };
+    const next = { ...current, release_id: active_release_id, release_dir,
+      instance_id: identity.instance_id, pid: identity.pid, status: "starting" as const };
     try {
       updateServer(current.base_url, next);
       await wait_for_release_ready(next);

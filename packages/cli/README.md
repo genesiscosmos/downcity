@@ -36,15 +36,27 @@ fed server manage --id fed_x
 fed web --id fed_x --no-open
 ```
 
-`status` 可查询任意已保存连接，分别显示登记状态与 `/health` 实时探测结果；登记状态不等于服务健康。本地 release 的健康检查要求响应 `ok: true`，且 `fed_id`、`release_id`、`instance_id` 全部匹配受管实例，HTTP 200 本身不足以确认身份。`logs`、`stop` 和 `restart` 仅支持 CLI 管理的 local 实例。`restart` 只运行已安装的 release，读取持久运行配置，不读取源码或重新构建；原项目目录删除后仍可重启。旧记录缺少 release 时拒绝重启，必须显式执行 `fed deploy --path <path>`。重启还要求 `current.json` 与 registry 的 release 一致；失败候选与 current 不一致时直接报错，不隐式回滚。管理界面的 Remove connection 只移除连接，不停止服务。
+`status` 可查询任意已保存连接，展示 registry record 与 `/health` 实时探测结果；本地实例还单独显示 launchd/systemd manager 状态。登记记录、系统服务状态和健康探测是独立信息。本地 release 的健康检查要求响应 `ok: true`，且 `fed_id`、`release_id`、`instance_id` 全部匹配受管实例，HTTP 200 本身不足以确认身份。`logs`、`stop` 和 `restart` 仅支持 CLI 管理的 local 实例。`logs` 读取现有 `service.log` 的最近日志。`stop` 禁用自动启动并停止服务，停止状态跨系统重启保留，直到用户显式执行 `fed deploy` 或 `fed restart`；这些操作按持久配置恢复自动启动策略。`restart` 只运行已安装的 release，读取持久运行配置，不读取源码或重新构建；原项目目录删除后仍可重启。重启还要求 `current.json` 与 registry 的 release 一致；失败候选与 current 不一致时直接报错，不隐式回滚。管理界面的 Remove connection 只移除连接，不停止服务。
 
 本地独立 Node 发布模型将编译后的入口、完整生产依赖及项目资源安装到 `~/.downcity/federation/deployments/<fed_id>/releases/<release_id>`，同级 `current.json` 记录当前 release。项目资源通过 `package.json.files` 显式声明；生产依赖及其运行资源完整纳入产物，`.env` 不进入产物。`deployment.scripts.build` 保留用于构建，本地目标拒绝 `deployment.scripts.deploy`，Node 直接运行编译后的入口。默认使用系统 Node，运行时必须与构建时的 Node 版本、平台和架构一致，尤其是含原生模块的依赖。
 
-运行配置单独保存在 `~/.downcity/federation/config/<fed_id>/runtime.env.json`，文件权限为 `0600`。默认 SQLite 位于 `~/.downcity/federation/data/<fed_id>/data.sqlite`。显式指定并沿用的旧数据库保持其绝对源路径，不自动复制或迁移；删除源码前需确认数据库不在准备删除的目录内。旧 runtime 登记的数据库文件缺失时直接报错，拒绝创建空库替代；没有显式路径但源码目录中存在 `data.sqlite` 或 `data/local.db` 时，要求在项目 `.env` 中显式声明数据库路径，不猜测或迁移。`fed deploy --dry-run` 在临时目录构建和校验产物并清理，不安装 release、不修改持久运行配置、不启停实例；构建脚本仍可能向项目写入构建输出。
+运行配置单独保存在 `~/.downcity/federation/config/<fed_id>/runtime.env.json`，文件权限为 `0600`。默认 SQLite 位于 `~/.downcity/federation/data/<fed_id>/data.sqlite`。显式指定的数据库保持其绝对路径；删除源码前需确认数据库不在准备删除的目录内。已登记的数据库文件缺失时直接报错，拒绝创建空库替代；没有显式路径但源码目录中存在 `data.sqlite` 或 `data/local.db` 时，要求在项目 `.env` 中显式声明数据库路径，不猜测或迁移。`fed deploy --dry-run` 在临时目录构建和校验产物并清理，不安装 release、不修改持久运行配置、不启停实例；构建脚本仍可能向项目写入构建输出。
 
 操作锁的 owner 已失效或没有 owner 时，CLI 只报告锁路径并要求人工核对，不自动回收锁。
 
-本模型不支持新增 SSH 部署目标、零停机切换、自动回滚或开机自启。本文描述发布约定，不代表这些能力已实现。
+本地部署使用 macOS 用户级 launchd 或 Linux 用户级 systemd。进程策略在 `federation.toml` 中配置，Local 模板显式生成以下默认值：
+
+```toml
+[deployment.process]
+auto_start = false
+restart_on_failure = true
+```
+
+`deployment.process` 只适用于 `local`；省略表或字段时读取器补齐默认值。两个字段只接受布尔值，未知字段报错；Cloudflare Workers 配置此表时报错。修改项目配置后执行 `fed deploy` 应用，`fed restart` 使用持久运行配置。
+
+`restart_on_failure` 默认开启，异常退出后每隔 10 秒尝试恢复，60 秒内最多 5 次；主动停止不触发恢复。`auto_start` 默认关闭，只有显式设为 `true` 才持久安装到 macOS 的 `~/Library/LaunchAgents` 或启用 Linux 用户级 `default.target.wants`。macOS 在用户登录后自动启动；Linux 需要该用户的 systemd user manager 已存在并可用，不能据此保证开机启动。CLI 不自动开启 linger。
+
+系统服务定义只引用启动入口及运行配置路径，不包含 secret；运行配置独立保存于上述 `runtime.env.json`。部署目标为 `local` 或 `cloudflare-workers`；远程主机需在目标机器运行本地部署命令。
 
 本地部署未设置 `deployment.port` 时固定使用默认端口 `12314`；在 `federation.toml` 的 `[deployment]` 中显式设置 `port` 可覆盖默认值。选定端口被占用时部署直接报错，不扫描其他端口，也不从部署历史推断端口。
 
@@ -72,7 +84,7 @@ Agent 定义保存在 `~/.downcity/agents/<agent_id>/agent.json`，主体指令�
 
 CLI City 只维护一个 daemon，并分别监听一个 HTTP 端口和一个原生 TCP RPC 端口。两种协议都按 `agent_id` 路由，不为每个 Agent 分配独立端口。
 
-Federation Admin 配置与 Embassy User Session 同样保存在 `~/.downcity/downcity.db`。升级后，CLI 会把旧 `~/.downcity/federation.db` 中的管理配置一次性迁入统一数据库；旧文件保留用于人工恢复，但后续不再读取。脚本可通过 `DOWNCITY_FEDERATION_URL` 和 `DOWNCITY_USER_TOKEN` 显式覆盖当前 Embassy 用户身份。
+Federation Admin 配置与 Embassy User Session 同样保存在 `~/.downcity/downcity.db`。脚本可通过 `DOWNCITY_FEDERATION_URL` 和 `DOWNCITY_USER_TOKEN` 显式覆盖当前 Embassy 用户身份。
 
 为独立产品后端登记 Bureau：
 

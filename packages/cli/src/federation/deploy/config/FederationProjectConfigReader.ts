@@ -2,9 +2,9 @@
  * Federation 项目配置读取器。
  *
  * 关键说明（中文）
- * - 配置采用严格的新结构，不读取旧的 City / runtime 字段。
+ * - 项目声明使用 TOML，Local 进程策略严格校验并补齐默认值。
  * - 目标默认值集中在这里，模板和部署器消费同一份规范化配置。
- * - 运行状态不写回项目配置，统一进入系统级 Federation registry。
+ * - 项目配置不保存运行状态；registry 保存登记记录，用户级系统 manager 管理本地服务。
  */
 
 import { existsSync, readFileSync } from "node:fs";
@@ -15,6 +15,7 @@ import type {
   FederationDeploymentConfig,
   FederationDeploymentScriptsConfig,
   FederationDeploymentTarget,
+  FederationProcessConfig,
   FederationProjectConfig,
   FederationProjectConfigFile,
   FederationProjectResourcesConfig,
@@ -103,6 +104,9 @@ function normalize_deployment(
     throw invalid_config(config_path, `Unsupported deployment target: ${target_input || "(empty)"}`);
   }
   const target: FederationDeploymentTarget = target_input;
+  if (target !== "local" && input.process !== undefined) {
+    throw invalid_config(config_path, "deployment.process requires local.");
+  }
   const port = input.port === undefined
     ? (target === "local" ? DEFAULT_LOCAL_FEDERATION_PORT : undefined)
     : read_optional_number(input, "port");
@@ -116,9 +120,30 @@ function normalize_deployment(
     host: read_optional_string(input, "host"),
     port,
     url: read_optional_string(input, "url"),
+    process: target === "local" ? normalize_process(input.process, config_path) : undefined,
     scripts: normalize_scripts(read_record(input, "scripts")),
     crons: normalize_crons(input.crons, target, config_path),
     resources: normalize_resources(read_record(input, "resources"), target, project_name),
+  };
+}
+
+/** 严格校验 Local 用户级服务策略，并始终补齐两个布尔默认值。 */
+function normalize_process(input: unknown, config_path: string): FederationProcessConfig {
+  if (input === undefined) return { auto_start: false, restart_on_failure: true };
+  if (!is_record(input) || input instanceof Date) {
+    throw invalid_config(config_path, "deployment.process must be an object.");
+  }
+  for (const key of Object.keys(input)) {
+    if (key !== "auto_start" && key !== "restart_on_failure") {
+      throw invalid_config(config_path, `Unknown deployment.process field: ${key}`);
+    }
+    if (typeof input[key] !== "boolean") {
+      throw invalid_config(config_path, `deployment.process.${key} must be a boolean.`);
+    }
+  }
+  return {
+    auto_start: input.auto_start === true,
+    restart_on_failure: input.restart_on_failure !== false,
   };
 }
 

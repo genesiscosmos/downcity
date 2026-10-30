@@ -1,14 +1,14 @@
 /**
  * 已安装 Node release 的进程控制与身份就绪检查。
  *
- * 启动器只接收 release 内相对入口，用 Node 直接执行；不使用源码启动脚本。
- * 子进程环境由独立运行配置与固定控制字段组成，不继承终端的任意秘密变量。
+ * launchd/systemd 托管专用运行器；运行器读取独立产物与私有配置，不使用源码启动脚本。
+ * 每次自动恢复通过 receipt 与系统主 PID 联合核对，登记时的旧 PID 不作为控制依据。
  */
-import { closeSync, mkdirSync, openSync } from "node:fs";
-import { execFileSync, spawn } from "node:child_process";
-import { dirname } from "node:path";
+import { mkdir, rm } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
-import { signalDetachedProcess } from "@/city/process/registry/ProcessSweep.js";
+import { dirname } from "node:path";
+import { start_system_service, stop_system_service, inspect_system_service, resolve_system_service, type SystemServiceSpec } from "../process/SystemServiceAdapter.js";
+import { service_runtime_paths, read_service_config, read_service_receipt, write_service_json, type ServiceRuntimeConfig } from "../process/ServiceRuntime.js";
 import type { ServerProfile } from "@/federation/core/session.js";
 import { CliError } from "@/shared/CliError.js";
 
@@ -24,8 +24,12 @@ export interface LocalReleaseLaunch {
   release_dir: string;
   /** 产物内相对 JavaScript 入口。 */
   entry: string;
-  /** 显式运行配置，不包含 CLI 控制的身份和端口。 */
-  runtime_env: Record<string, string>;
+  /** 独立私有配置绝对路径；系统服务定义只保存引用，不保存配置内容。 */
+  runtime_config_path: string;
+  /** 是否随用户服务管理器启动，默认关闭。 */
+  auto_start: boolean;
+  /** 是否由系统恢复异常退出，默认开启。 */
+  restart_on_failure: boolean;
   /** 监听地址。 */
   host: string;
   /** 固定监听端口。 */
@@ -36,42 +40,57 @@ export interface LocalReleaseLaunch {
   log_path: string;
 }
 
-/** Node 启动独立 release；launcher 本身由 CLI 提供，不读取源码项目。 */
-export function start_release_process(input: LocalReleaseLaunch): number {
-  mkdirSync(dirname(input.log_path), { recursive: true, mode: 0o700 });
-  const log_fd = openSync(input.log_path, "a", 0o600);
-  const launcher_path = fileURLToPath(new URL("../runtime/LocalProcessLauncher.js", import.meta.url));
-  const base_env: NodeJS.ProcessEnv = {};
-  for (const key of ["PATH", "HOME", "USERPROFILE", "SYSTEMROOT", "WINDIR", "TEMP", "TMP", "TMPDIR", "LANG", "TZ"]) {
-    if (process.env[key]) base_env[key] = process.env[key];
-  }
+/** 构造当前用户服务描述，路径与身份由稳定 Fed ID 导出。 */
+function service_spec(fed_id: string, auto_start: boolean, restart_on_failure: boolean): SystemServiceSpec {
+  const paths = service_runtime_paths(fed_id);
+  return { fed_id, node_path: process.execPath,
+    runner_path: fileURLToPath(new URL("../process/ServiceRunner.js", import.meta.url)),
+    config_path: paths.config_path, service_dir: paths.service_dir,
+    log_path: `${paths.service_dir}/supervisor.log`, auto_start, restart_on_failure };
+}
+
+/** 在切换前只读检查用户级托管器是否可用，不安装或启停服务。 */
+export async function preflight_release_service(fed_id: string): Promise<void> {
+  await inspect_system_service(service_spec(fed_id, false, true));
+}
+
+/** 系统启动已安装版本，返回运行器本次分配的真实身份。 */
+export async function start_release_process(input: LocalReleaseLaunch): Promise<{
+  /** 本次系统托管主进程 PID。 */
+  pid: number;
+  /** 运行器生成的本次实例身份，自动恢复时也会重新生成。 */
+  instance_id: string;
+}> {
+  const paths = service_runtime_paths(input.fed_id);
+  const spec = service_spec(input.fed_id, input.auto_start, input.restart_on_failure);
+  resolve_system_service(spec); // 在写控制文件前拒绝不支持的平台和不可用用户域。
+  const config: ServiceRuntimeConfig = { schema: 1, fed_id: input.fed_id,
+    launch_id: input.instance_id, release_id: input.release_id, release_dir: input.release_dir,
+    entry: input.entry, runtime_config_path: input.runtime_config_path,
+    host: input.host, port: input.port, base_url: input.base_url, log_path: input.log_path,
+    receipt_path: paths.receipt_path, attempts_path: paths.attempts_path,
+    restart_on_failure: input.restart_on_failure };
+  await mkdir(dirname(input.log_path), { recursive: true, mode: 0o700 });
+  await write_service_json(paths.config_path, config);
+  await rm(paths.receipt_path, { force: true });
+  await rm(paths.attempts_path, { force: true });
   try {
-    const child = spawn(process.execPath, [launcher_path,
-      "--fed-id", input.fed_id,
-      "--instance-id", input.instance_id,
-      "--release-dir", input.release_dir,
-      "--entry", input.entry,
-    ], {
-      cwd: input.release_dir,
-      detached: true,
-      env: {
-        ...base_env,
-        ...input.runtime_env,
-        HOST: input.host,
-        PORT: String(input.port),
-        PUBLIC_URL: input.base_url,
-        DOWNCITY_FEDERATION_BASE_URL: input.base_url,
-        DOWNCITY_FED_ID: input.fed_id,
-        DOWNCITY_RELEASE_ID: input.release_id,
-        DOWNCITY_FED_INSTANCE_ID: input.instance_id,
-      },
-      stdio: ["ignore", log_fd, log_fd],
-    });
-    child.once("error", () => { /* 就绪检查结合进程存活与身份响应报告启动失败。 */ });
-    child.unref();
-    if (!child.pid) throw new Error("Unable to obtain release launcher PID");
-    return child.pid;
-  } finally { closeSync(log_fd); }
+    await start_system_service(spec);
+    const deadline = Date.now() + 15_000;
+    while (Date.now() < deadline) {
+      const receipt = await read_service_receipt(config);
+      const state = await inspect_system_service(spec);
+      if (receipt?.state === "rate_limited") throw new Error("System service reached its restart limit");
+      if (receipt && state.active && state.pid === receipt.pid && ["starting", "running"].includes(receipt.state)) {
+        return { pid: receipt.pid, instance_id: receipt.instance_id };
+      }
+      await new Promise((resolve) => setTimeout(resolve, 100));
+    }
+    throw new Error("System service did not produce a matching runtime receipt");
+  } catch (error) {
+    await stop_system_service(spec);
+    throw error;
+  }
 }
 
 /** 判断进程是否存活；权限不足也视为存在，不接管未知进程。 */
@@ -81,41 +100,43 @@ export function is_local_process_alive(pid: number): boolean {
   }
 }
 
-/** 停止已验证 launcher 的整个进程组，并等待退出；不触碰复用 PID 的程序。 */
+/** 从系统服务与私有运行记录读取实时状态，不凭登记 PID 猜测存活情况。 */
+export async function inspect_release_process(server: ServerProfile): Promise<{
+  /** 用户级托管器名称。 */
+  manager: string;
+  /** 托管器的可读状态。 */
+  state: string;
+  /** 是否处于活跃运行或恢复阶段。 */
+  active: boolean;
+  /** 已匹配托管器主 PID 的运行记录，缺失时不宣称实例身份有效。 */
+  identity?: { /** 系统主 PID。 */ pid: number; /** 当前运行器实例身份。 */ instance_id: string };
+}> {
+  if (!server.fed_id || server.target !== "local") throw new CliError({ title: "A managed local Federation is required" });
+  const policy = server.config_snapshot?.deployment.process;
+  const spec = service_spec(server.fed_id, policy?.auto_start ?? false, policy?.restart_on_failure ?? true);
+  const info = resolve_system_service(spec);
+  const state = await inspect_system_service(spec);
+  if (!state.registered) return { manager: info.manager, state: state.state, active: false };
+  const config = await read_service_config(spec.config_path);
+  if (config.fed_id !== server.fed_id || config.release_id !== server.release_id) {
+    throw new CliError({ title: "System service release does not match the selected deployment" });
+  }
+  const receipt = await read_service_receipt(config);
+  return { manager: info.manager, state: receipt?.state === "rate_limited" ? "rate_limited" : state.state,
+    active: state.active,
+    ...(state.active && receipt && state.pid === receipt.pid && ["starting", "running"].includes(receipt.state)
+      ? { identity: { pid: receipt.pid, instance_id: receipt.instance_id } } : {}),
+  };
+}
+
+/** 主动停止交给系统托管器，并移除自动启动关联，防止恢复策略重新拉起。 */
 export async function stop_release_process(server: ServerProfile | undefined): Promise<boolean> {
-  if (!server || server.target !== "local" || !server.pid || !server.instance_id || !server.fed_id) return false;
-  if (!is_local_process_alive(server.pid)) return true;
-  if (!matches_launcher(server.pid, server.fed_id, server.instance_id)) {
-    throw new CliError({ title: "Refusing to stop an unverified local process", note: `PID ${server.pid}` });
-  }
-  signalDetachedProcess(server.pid, "SIGTERM");
-  await wait_for_exit(server.pid, 3_000);
-  if (is_local_process_alive(server.pid)) {
-    if (!matches_launcher(server.pid, server.fed_id, server.instance_id)) throw new Error("Process identity changed during shutdown");
-    signalDetachedProcess(server.pid, "SIGKILL");
-    await wait_for_exit(server.pid, 1_000);
-  }
-  return !is_local_process_alive(server.pid);
-}
-
-/** 只依据命令行中的精确参数匹配启动器身份，避免子串碰撞。 */
-function matches_launcher(pid: number, fed_id: string, instance_id: string): boolean {
-  try {
-    const command = process.platform === "win32"
-      ? execFileSync("powershell.exe", ["-NoProfile", "-NonInteractive", "-Command", `(Get-CimInstance Win32_Process -Filter 'ProcessId = ${pid}').CommandLine`], { encoding: "utf8" })
-      : execFileSync("ps", ["-p", String(pid), "-o", "command="], { encoding: "utf8" });
-    const tokens = command.trim().split(/\s+/u);
-    const fed_index = tokens.indexOf("--fed-id");
-    const instance_index = tokens.indexOf("--instance-id");
-    return command.includes("LocalProcessLauncher") && tokens[fed_index + 1] === fed_id
-      && fed_index >= 0 && instance_index >= 0 && tokens[instance_index + 1] === instance_id;
-  } catch { return false; }
-}
-
-/** 等待 PID 退出，不持有超过十毫秒级的同步阻塞。 */
-async function wait_for_exit(pid: number, timeout_ms: number): Promise<void> {
-  const deadline = Date.now() + timeout_ms;
-  while (is_local_process_alive(pid) && Date.now() < deadline) await new Promise((resolve) => setTimeout(resolve, 100));
+  if (!server?.fed_id || server.target !== "local") return false;
+  const policy = server.config_snapshot?.deployment.process;
+  const spec = service_spec(server.fed_id, policy?.auto_start ?? false, policy?.restart_on_failure ?? true);
+  await stop_system_service(spec);
+  const state = await inspect_system_service(spec);
+  return !state.active;
 }
 
 /** 请求本次启动的就绪身份，拒绝旧服务或其他版本的成功响应。 */
@@ -126,7 +147,15 @@ export async function wait_for_release_ready(server: ServerProfile, timeout_ms =
   const deadline = Date.now() + timeout_ms;
   let detail = "No matching ready response";
   while (Date.now() < deadline) {
-    if (!is_local_process_alive(server.pid)) throw new Error("Release launcher exited before becoming ready");
+    const process_state = await inspect_release_process(server);
+    if (process_state.state === "rate_limited") throw new Error("System service reached its restart limit");
+    if (!process_state.identity) {
+      detail = `System service is ${process_state.state}; no matching live instance`;
+      await new Promise((resolve) => setTimeout(resolve, 250));
+      continue;
+    }
+    server.pid = process_state.identity.pid;
+    server.instance_id = process_state.identity.instance_id;
     try {
       const response = await fetch(`${server.base_url.replace(/\/+$/u, "")}/health`, {
         signal: AbortSignal.timeout(Math.max(1, Math.min(2_000, deadline - Date.now()))), redirect: "manual",

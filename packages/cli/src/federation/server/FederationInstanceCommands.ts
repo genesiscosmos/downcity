@@ -6,6 +6,7 @@
  */
 import { open } from "node:fs/promises";
 import type { ServerProfile } from "@/federation/core/session.js";
+import { inspect_release_process } from "@/federation/deploy/release/LocalReleaseProcess.js";
 import {
   restart_managed_local_server,
   stop_managed_local_server,
@@ -51,8 +52,21 @@ export async function run_federation_instance_command(
   });
 }
 
-/** 显示登记状态和限时 HTTP 探测结果，健康响应不作为实例身份验证。 */
+/** 分别显示登记、系统托管器、实时身份和 HTTP 探测；状态检查不写配置或修复进程。 */
 async function show_instance_status(server: ServerProfile): Promise<void> {
+  let manager = "not applicable";
+  let manager_state = "not applicable";
+  let runtime_pid: number | undefined;
+  let instance_id: string | undefined;
+  if (server.target === "local" && server.fed_id) {
+    try {
+      const process_state = await inspect_release_process(server);
+      manager = process_state.manager;
+      manager_state = process_state.state;
+      runtime_pid = process_state.identity?.pid;
+      instance_id = process_state.identity?.instance_id;
+    } catch (error) { manager_state = error instanceof Error ? error.message : "unavailable"; }
+  }
   let health = "unreachable";
   try {
     const response = await fetch(`${server.base_url.replace(/\/+$/u, "")}/health`, {
@@ -60,7 +74,11 @@ async function show_instance_status(server: ServerProfile): Promise<void> {
       redirect: "manual",
     });
     health = `HTTP ${response.status}`;
-    await response.body?.cancel();
+    if (response.ok && instance_id) {
+      const payload = await response.json() as Record<string, unknown>;
+      health += payload.ok === true && payload.fed_id === server.fed_id && payload.release_id === server.release_id
+        && payload.instance_id === instance_id ? " · identity matched, ready" : " · identity mismatch or not ready";
+    } else { await response.body?.cancel(); }
   } catch {
     // 保留不可达事实，不据此覆盖 registry 或尝试重启服务。
   }
@@ -69,18 +87,23 @@ async function show_instance_status(server: ServerProfile): Promise<void> {
     facts: [
       { label: "registered status", value: server.status ?? "unknown" },
       { label: "target", value: server.target ?? "remote connection" },
-      { label: "pid", value: server.pid ? String(server.pid) : "not registered" },
+      { label: "service manager", value: manager },
+      { label: "manager state", value: manager_state },
+      { label: "runtime pid", value: runtime_pid ? String(runtime_pid) : "not verified" },
+      { label: "instance", value: instance_id ?? "not verified" },
+      { label: "auto start policy", value: String(server.config_snapshot?.deployment.process?.auto_start ?? false) },
+      { label: "restart on failure", value: String(server.config_snapshot?.deployment.process?.restart_on_failure ?? true) },
       { label: "release", value: server.release_id ?? "no independent release" },
       { label: "artifact", value: server.release_dir ?? "not installed" },
       { label: "health endpoint", value: health },
     ],
-    note: "Registry metadata and HTTP reachability are shown separately; instance identity is not verified.",
+    note: "Saved policy, registered state and live service state are separate; an explicit stop keeps the service stopped.",
   });
 }
 
 /** 需要完整的受管本地记录，避免把普通连接当作可控制进程。 */
 function require_local_instance(server: ServerProfile): void {
-  if (server.target !== "local" || !server.pid || !server.instance_id || !server.fed_id) {
+  if (server.target !== "local" || !server.release_id || !server.release_dir || !server.fed_id) {
     throw new CliError({
       title: "This operation requires a managed local Federation instance",
       note: `${server.name} (${server.base_url})`,

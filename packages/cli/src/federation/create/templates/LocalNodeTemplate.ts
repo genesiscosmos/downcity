@@ -30,6 +30,10 @@ export function create_local_node_template_files(
         entry: "src/index.ts",
         deployment: {
           target: "local",
+          process: {
+            auto_start: false,
+            restart_on_failure: true,
+          },
         },
       }),
     },
@@ -80,7 +84,7 @@ export function create_local_node_template_files(
         "# Local Federation runtime settings.",
         "DOWNCITY_FEDERATION_DATABASE_URL=file:./data.sqlite",
         "HOST=127.0.0.1",
-        "# PORT is allocated by fed deploy when omitted.",
+        "# fed deploy uses deployment.port, defaulting to 12314.",
         "",
       ].join("\n"),
     },
