@@ -24,4 +24,7 @@ export interface ExecutionBindingConfig {
    * - 例如：`deepseek-v4-flash`、`fast`、`quality`。
    */
   model_id: string;
+
+  /** 默认模型的思考强度档位；省略时使用模型默认值，执行时可显式覆盖。 */
+  reasoning_effort?: string;
 }

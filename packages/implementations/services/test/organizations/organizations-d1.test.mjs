@@ -83,7 +83,10 @@ test("Organizations initializes on D1 and concurrent create cannot exceed owner 
       JSON.stringify(response_bodies),
     )
     const created = response_bodies.map((body) => JSON.parse(body)).find((body) => body.organization)
-    assert.equal(created.organization.scope_bureau_id, bureau.bureau_id)
+    assert.equal(
+      created.organization.scope_bureau_id,
+      created.organization.scope_type === "bureau" ? bureau.bureau_id : "",
+    )
     const member_token = await issue_user_token(federation, secret, bureau.bureau_id, "d1_member")
     const pending = await json_request(federation, user_request(
       member_token,

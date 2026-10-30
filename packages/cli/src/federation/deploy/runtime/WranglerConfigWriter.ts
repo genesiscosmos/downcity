@@ -61,7 +61,6 @@ export function writeWranglerConfig(
       "[[hyperdrive]]",
       `binding = ${tomlString(hyperdrive.binding)}`,
       `id = ${tomlString(hyperdrive.id)}`,
-      "remote = true",
     );
   }
 

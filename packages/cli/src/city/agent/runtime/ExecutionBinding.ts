@@ -32,6 +32,8 @@ export function read_project_execution_binding(
   return {
     type: "api",
     model_id,
+    ...(typeof execution.reasoning_effort === "string" && execution.reasoning_effort.trim()
+      ? { reasoning_effort: execution.reasoning_effort.trim() } : {}),
   };
 }
 

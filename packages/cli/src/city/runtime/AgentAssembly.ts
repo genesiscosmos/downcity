@@ -17,7 +17,7 @@ import {
   Agent,
   type AgentOptions,
 } from "@downcity/agent";
-import type { ModelClient } from "@downcity/type";
+import type { CityModelDescriptor, ModelClient } from "@downcity/type";
 import { AskQuestionsTool } from "@downcity/agent/tools";
 import { Shell, Workspace } from "@downcity/city";
 import {
@@ -67,7 +67,8 @@ export async function create_cli_agent(input: {
     model,
     tools,
     resolve_work_model: async (model_id, workspace) =>
-      await resolve_cli_agent_model(model_id, workspace?.get_env() ?? process_environment()),
+      await resolve_cli_agent_model(model_id, workspace?.get_env() ?? process_environment(),
+        model_id === input.config.execution?.model_id ? read_reasoning_effort(input.config.execution) : undefined),
   });
 }
 
@@ -111,7 +112,7 @@ export function create_cli_agent_model(
 ): ModelClient | undefined {
   const model_id = read_model_id(config.execution);
   return model_id
-    ? new LazyCliModelClient(model_id, async () => await resolve_cli_agent_model(model_id, env))
+    ? new LazyCliModelClient(model_id, async () => await resolve_cli_agent_model(model_id, env, read_reasoning_effort(config.execution)))
     : undefined;
 }
 
@@ -119,10 +120,22 @@ export function create_cli_agent_model(
 export async function resolve_cli_agent_model(
   model_id_input: string,
   env: Readonly<Record<string, string>>,
+  reasoning_effort?: string,
 ): Promise<ModelClient> {
   const model_id = String(model_id_input || "").trim();
   if (!model_id) throw new Error("model_id is required");
-  return await create_city_ai_model_client({ modelId: model_id, env: { ...env } });
+  const model = await create_city_ai_model_client({ modelId: model_id, env: { ...env } });
+  const reasoning = (model as ModelClient & Pick<CityModelDescriptor, "reasoning">).reasoning;
+  if (!reasoning_effort || !reasoning?.efforts.some((effort) => effort.id === reasoning_effort)) return model;
+  return {
+    id: model.id,
+    name: model.name,
+    context_window: model.context_window,
+    stream: (call, signal) => model.stream({
+      ...call,
+      reasoning: call.reasoning ?? { enabled: true, effort: reasoning_effort },
+    }, signal),
+  };
 }
 
 /** 创建 CLI 默认交互 Tool。 */
@@ -170,6 +183,11 @@ class LazyCliModelClient implements ModelClient {
     });
     return await this.model_promise;
   }
+}
+
+/** 从 Agent execution 读取可选的默认思考强度。 */
+function read_reasoning_effort(execution: LocalAgentConfig["execution"]): string | undefined {
+  return typeof execution?.reasoning_effort === "string" ? execution.reasoning_effort.trim() || undefined : undefined;
 }
 
 /** 从 Agent execution 读取模型 ID。 */
