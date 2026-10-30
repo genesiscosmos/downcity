@@ -2,9 +2,10 @@
  * Agent 完成通知的持久化投递运行时。
  *
  * canonical 终态前先保存模型结果与稳定接收方集合，完成后逐接收方独立确认。
- * 回调失败按退避重试；宿主装配完成后 resume 恢复写前记录和未确认投递。外部副作用
- * 与本地确认之间中断仍可能重放，因此必须按 completion_id 幂等。关闭会取消等待，
- * 忽略取消的业务函数不会阻止资源释放。函数和 ToolCallContext 不参与持久化。
+ * 回调失败按接收方的到期时间重试；只有宿主装配或显式 resume 才扫描历史记录。
+ * 运行期间只索引未完成记录的下一次投递时间，不把已确认的消息正文留在重试队列中。
+ * 外部副作用与本地确认之间中断仍可能重放，因此必须按 completion_id 幂等。
+ * 关闭会取消等待，忽略取消的业务函数不会阻止资源释放。函数和 ToolCallContext 不参与持久化。
  */
 import { createHash } from "node:crypto";
 import type { EffectHook, JsonValue, SessionTurnCommittedHookValue, ToolCallContext } from "@downcity/type";
@@ -23,9 +24,11 @@ export class SessionCompletions {
   private readonly running_handlers = new Set<string>();
   /** 本进程仍在完成 canonical 收口的写前记录，后台扫描不能提前投递。 */
   private readonly preparing = new Set<string>();
-  /** 同一时刻只有一个目录扫描。 */
+  /** 未完成记录的下一次读取时间；Infinity 表示等待处理器恢复或正在退出的业务函数。 */
+  private readonly pending = new Map<string, number>();
+  /** 恢复扫描与到期补读互斥；关闭时等待已经发起的文件操作收口。 */
   private scanning?: Promise<void>;
-  /** 只有待投递记录存在时保留重试定时器。 */
+  /** 只为可推进的未完成记录保留一个最近到期定时器。 */
   private timer?: ReturnType<typeof setTimeout>;
   /** 关闭或解绑后仍可保存终态，但不再调用业务处理器。 */
   private suspended = false;
@@ -49,18 +52,24 @@ export class SessionCompletions {
       recipient_ids.push(`callback:${name}\u0000${message.message_id}`);
     }
     const file_path = this.record_path(event.completion_id);
-    await this.options.files.ensure_directory("completions");
-    await this.options.files.with_file_lock(`${file_path}.lock`, async () => {
-      if (await this.options.files.path_exists(file_path)) return;
-      await this.save({
-        event: structuredClone(event),
-        origin: structuredClone(context.session_origin),
-        ...(context.workspace ? { workspace_id: context.workspace.id } : {}),
-        state: "prepared",
-        deliveries: Object.fromEntries(recipient_ids.map((id) => [id, { delivered: false, attempt_count: 0, retry_at: 0 }])),
-      });
-    });
+    // 在首次异步操作前声明提交所有权，恢复不能接管刚写盘但尚未完成 canonical 收口的记录。
     this.preparing.add(event.completion_id);
+    try {
+      await this.options.files.ensure_directory("completions");
+      await this.options.files.with_file_lock(`${file_path}.lock`, async () => {
+        if (await this.options.files.path_exists(file_path)) return;
+        await this.save({
+          event: structuredClone(event),
+          origin: structuredClone(context.session_origin),
+          ...(context.workspace ? { workspace_id: context.workspace.id } : {}),
+          state: "prepared",
+          deliveries: Object.fromEntries(recipient_ids.map((id) => [id, { delivered: false, attempt_count: 0, retry_at: 0 }])),
+        });
+      });
+    } catch (error) {
+      this.preparing.delete(event.completion_id);
+      throw error;
+    }
   }
 
   /** 写前日志是最终执行结果的恢复点，重复 request_id 不再执行模型。 */
@@ -84,9 +93,10 @@ export class SessionCompletions {
   /** 恢复宿主已装配完成的 Agent；只等待扫描，不等待业务回调。 */
   async resume(): Promise<void> {
     this.suspended = false;
-    // resume 是宿主重启/显式恢复入口；写前记录的结果已确定，可以恢复投递。
-    this.preparing.clear();
-    await this.scan();
+    // 显式恢复会重新发现磁盘记录与最新处理器；本进程尚在提交的记录仍由提交者负责。
+    if (this.timer) clearTimeout(this.timer);
+    this.timer = undefined;
+    await this.recover();
   }
 
   /** 关闭回调入口与 Timer；Turn 收口仍会记录未投递事件。 */
@@ -123,13 +133,17 @@ export class SessionCompletions {
     if (record.state === "pending" && !this.suspended) void this.launch(record, context);
   }
 
-  /** 注册唯一投递操作；失败持久化后由扫描器再次尝试。 */
+  /** 注册唯一投递操作；持久化失败后由未完成索引安排重新读取。 */
   private launch(record: SessionCompletionRecord, context?: ToolCallContext): Promise<void> {
     const key = record.event.completion_id;
     const existing = this.active.get(key);
     if (existing) return existing;
     const operation = this.deliver(record, context)
-      .catch((error: unknown) => { this.options.report_error(error); })
+      .catch((error: unknown) => {
+        // 持久化失败不能使记录从内存重试索引消失，也不能形成零延迟的重试循环。
+        this.pending.set(key, Date.now() + 1_000);
+        this.options.report_error(error);
+      })
       .finally(() => {
         this.active.delete(key);
         this.schedule();
@@ -171,6 +185,8 @@ export class SessionCompletions {
       // 每个接收方完成即落盘，其它处理器失败不重放已确认的接收方。
       await this.save(record);
     }
+    // 缺失处理器或尚未到期时也更新唤醒时间，避免反复读取无法推进的记录。
+    this.track_pending(record);
   }
 
   /** 在超时或关闭时结束运行时等待，向业务函数发送取消，不假定函数必定响应。 */
@@ -188,7 +204,14 @@ export class SessionCompletions {
       const call_context = context ?? await this.options.restore_context(record);
       controller.signal.throwIfAborted();
       await handler(structuredClone(record.event) as unknown as JsonValue, { ...call_context, abort_signal: controller.signal });
-    }).finally(() => { this.running_handlers.delete(key); });
+    }).finally(() => {
+      this.running_handlers.delete(key);
+      // 超时后仍在运行的业务函数退出，才重新允许读取记录；读取后仍遵守持久化 retry_at。
+      const completion_id = record.event.completion_id;
+      const retry_at = this.pending.get(completion_id);
+      if (retry_at !== undefined) this.pending.set(completion_id, Math.min(retry_at, Date.now()));
+      this.schedule();
+    });
     let on_abort: () => void = () => {};
     try {
       await Promise.race([operation, new Promise<never>((_resolve, reject) => {
@@ -215,38 +238,105 @@ export class SessionCompletions {
     return handlers;
   }
 
-  /** 扫描仅启动到期事件；每条记录单独失败，损坏记录不阻塞其它投递。 */
-  private async scan(): Promise<void> {
+  /** 启动或显式恢复时枚举历史；后续 Timer 只访问内存索引中的到期记录。 */
+  private async recover(): Promise<void> {
     if (this.suspended) return;
-    if (this.scanning) return await this.scanning;
+    // 到期补读在途时，显式恢复仍需等它结束后重新发现磁盘与处理器变化。
+    while (this.scanning) await this.scanning;
+    if (this.suspended) return;
     this.scanning = (async () => {
       if (!(await this.options.files.path_exists("completions"))) return;
-      let pending = false;
       for (const entry of await this.options.files.read_directory("completions")) {
+        if (this.suspended) return;
         if (!entry.is_file || !/^[a-f0-9]{64}\.json$/.test(entry.name)) continue;
         try {
-          const record = await this.read_record(`completions/${entry.name}`);
-          if (record.state === "delivered") continue;
-          if (record.state === "prepared" && this.preparing.has(record.event.completion_id)) continue;
-          pending = true;
-          // prepared 表示执行结果已可靠保存；恢复 Session 后可以重放，无需重跑模型。
-          if (!this.suspended && Object.values(record.deliveries).some((delivery) => !delivery.delivered && delivery.retry_at <= Date.now())) {
-            void this.launch(record);
-          }
+          await this.resume_record(`completions/${entry.name}`);
         } catch (error) { this.options.report_error(error); }
       }
-      if (pending) this.schedule();
     })();
-    try { await this.scanning; } finally { this.scanning = undefined; }
+    try { await this.scanning; } finally {
+      this.scanning = undefined;
+      this.schedule();
+    }
   }
 
-  /** 退避扫描不会阻止进程退出；挂起后不会重新创建 Timer。 */
+  /** 恢复一条记录；活动提交与投递保持唯一所有权，不被恢复快照覆盖。 */
+  private async resume_record(file_path: string): Promise<void> {
+    await this.options.files.with_file_lock(`${file_path}.lock`, async () => {
+      // 活动记录不参与补读：否则旧快照可能在投递确认后把它重新加入索引。
+      const is_owned = () => [...this.preparing, ...this.active.keys()]
+        .some((key) => this.record_path(key) === file_path);
+      if (this.suspended || is_owned()) return;
+      const record = await this.read_record(file_path);
+      const key = record.event.completion_id;
+      if (this.suspended || this.preparing.has(key) || this.active.has(key)) return;
+      if (record.state !== "delivered" && Object.values(record.deliveries).every((delivery) => delivery.delivered)) {
+        // 无待确认接收方时直接收口；其余 prepared 保留状态，供恢复上下文修复 canonical 消息。
+        record.state = "delivered";
+        try { await this.save(record); } catch (error) {
+          this.pending.set(key, Date.now() + 1_000);
+          throw error;
+        }
+      }
+      if (this.suspended || this.preparing.has(key) || this.active.has(key)) return;
+      this.track_pending(record);
+      if ((this.pending.get(key) ?? Infinity) <= Date.now()) void this.launch(record);
+    });
+  }
+
+  /** Timer 只补读到期的未完成记录；损坏或暂时不可读的单条记录独立退避。 */
+  private async retry_pending(): Promise<void> {
+    if (this.suspended || this.scanning) return;
+    this.scanning = (async () => {
+      for (const [key, retry_at] of [...this.pending]) {
+        if (this.suspended) return;
+        if (retry_at > Date.now() || this.preparing.has(key) || this.active.has(key)) continue;
+        try {
+          await this.resume_record(this.record_path(key));
+        } catch (error) {
+          this.pending.set(key, Date.now() + 1_000);
+          this.options.report_error(error);
+        }
+      }
+    })();
+    try { await this.scanning; } finally {
+      this.scanning = undefined;
+      this.schedule();
+    }
+  }
+
+  /** 索引仅保存下一次读取时间，不保留消息正文；缺失处理器等待显式恢复。 */
+  private track_pending(record: SessionCompletionRecord): void {
+    const key = record.event.completion_id;
+    if (record.state === "delivered") {
+      this.pending.delete(key);
+      return;
+    }
+    const deliveries = Object.entries(record.deliveries);
+    let retry_at = deliveries.every(([, delivery]) => delivery.delivered) ? 0 : Infinity;
+    const handlers = this.handlers();
+    for (const [id, delivery] of deliveries) {
+      const handler_id = id.split("\u0000")[0]!;
+      if (delivery.delivered || !handlers.has(handler_id) || this.running_handlers.has(`${key}:${id}`)) continue;
+      retry_at = Math.min(retry_at, delivery.retry_at);
+    }
+    this.pending.set(key, retry_at);
+  }
+
+  /** 总是按最近到期记录重排唯一 Timer；空队列、活动提交与投递不产生空转。 */
   private schedule(): void {
-    if (this.suspended || this.timer) return;
+    if (this.timer) clearTimeout(this.timer);
+    this.timer = undefined;
+    if (this.suspended || this.scanning) return;
+    let retry_at = Infinity;
+    for (const [key, next_retry_at] of this.pending) {
+      if (!this.preparing.has(key) && !this.active.has(key)) retry_at = Math.min(retry_at, next_retry_at);
+    }
+    if (!Number.isFinite(retry_at)) return;
     this.timer = setTimeout(() => {
       this.timer = undefined;
-      void this.scan().catch((error: unknown) => { this.options.report_error(error); this.schedule(); });
-    }, 1_000);
+      void this.retry_pending().catch((error: unknown) => { this.options.report_error(error); });
+    }, Math.max(1, Math.min(2_147_483_647, retry_at - Date.now())));
     this.timer.unref?.();
   }
 
@@ -267,5 +357,6 @@ export class SessionCompletions {
   /** 文件替换提交完整状态，崩溃时保留上次可读版本。 */
   private async save(record: SessionCompletionRecord): Promise<void> {
     await this.options.files.write_file_atomically(this.record_path(record.event.completion_id), JSON.stringify(record));
+    this.track_pending(record);
   }
 }
