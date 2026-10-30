@@ -11,22 +11,19 @@ import { isCancel, password, select, text } from "@/federation/tui/Prompts.js";
 import { login_federation_admin } from "@/federation/auth/admin.js";
 import {
   addServer,
-  readActiveServer,
   readConfig,
   readServer,
   removeServer,
-  setActiveServer,
   type ServerProfile,
   updateServer,
 } from "@/federation/core/session.js";
 import { showError, showSuccess } from "@/federation/core/ui.js";
 import { t } from "@/shared/CliLocale.js";
-import { stop_managed_local_server } from "@/federation/deploy/runtime/LocalFederationDeployer.js";
 
 const FEDERATION_URL_EXAMPLE = "https://your-federation.example.com";
 
 /**
- * 添加一个已部署 Federation，并将其设为当前激活项。
+ * 添加一个已部署 Federation 连接记录，并返回该对象。
  */
 export async function prompt_add_federation_server(): Promise<ServerProfile | undefined> {
   const base_url = await text({
@@ -61,44 +58,6 @@ export async function prompt_add_federation_server(): Promise<ServerProfile | un
 }
 
 /**
- * 选择当前激活的 Federation。
- */
-export async function prompt_select_active_federation_server(): Promise<ServerProfile | undefined> {
-  const config = readConfig();
-  if (config.servers.length === 0) {
-    showError(t({
-      zh: "当前没有已配置的 Federation。",
-      en: "No Federations configured.",
-    }));
-    return undefined;
-  }
-
-  const selected = await select({
-    message: t({
-      zh: "选择当前 Federation",
-      en: "Select active Federation",
-    }),
-    options: config.servers.map((server) => ({
-      label: server.base_url === config.active_server_url ? `★ ${server.name}` : `   ${server.name}`,
-      value: server.base_url,
-      hint: server.base_url,
-    })),
-  });
-
-  if (!selected || isCancel(selected)) {
-    return undefined;
-  }
-
-  const selected_base_url = String(selected);
-  setActiveServer(selected_base_url);
-  showSuccess(t({
-    zh: `当前 Federation：${selected_base_url}`,
-    en: `Current Federation: ${selected_base_url}`,
-  }));
-  return readServer(selected_base_url);
-}
-
-/**
  * 编辑已保存的 Federation 连接。
  */
 export async function prompt_edit_federation_server(
@@ -119,7 +78,7 @@ export async function prompt_edit_federation_server(
       en: "Edit Federation",
     }),
     options: config.servers.map((server) => ({
-      label: server.base_url === config.active_server_url ? `★ ${server.name}` : `   ${server.name}`,
+      label: server.name,
       value: server.base_url,
       hint: server.base_url,
     })),
@@ -281,7 +240,7 @@ export async function prompt_remove_federation_server(base_url?: string): Promis
     }),
     options: [
       ...config.servers.map((server) => ({
-        label: `${server.base_url === config.active_server_url ? "★ " : ""}${server.name}`,
+        label: server.name,
         value: server.base_url,
         hint: server.base_url,
       })),
@@ -299,23 +258,11 @@ export async function prompt_remove_federation_server(base_url?: string): Promis
     return false;
   }
 
-  const target_server = readServer(String(selected));
-  if (target_server?.target === "local") {
-    await stop_managed_local_server(target_server);
-  }
   removeServer(String(selected));
-  const next_active = readActiveServer();
-  showSuccess(
-    next_active
-      ? t({
-        zh: `Federation 已移除。当前 Federation：${next_active.name}`,
-        en: `Federation removed. Current Federation: ${next_active.name}`,
-      })
-      : t({
-        zh: "Federation 已移除。当前没有已配置的 Federation。",
-        en: "Federation removed. No Federations configured.",
-      }),
-  );
+  showSuccess(t({
+    zh: "Federation 连接记录已移除。",
+    en: "Federation connection removed.",
+  }));
   return true;
 }
 

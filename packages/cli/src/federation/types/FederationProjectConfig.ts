@@ -17,7 +17,7 @@ export type FederationProjectType = "federation";
 export interface FederationDeploymentScriptsConfig {
   /** 覆盖目标内置构建阶段的 shell 命令。 */
   build?: string;
-  /** 覆盖目标内置部署或本地启动阶段的 shell 命令。 */
+  /** 覆盖 Cloudflare 发布阶段；local 必须执行独立 release 入口，不接受 shell 启动命令。 */
   deploy?: string;
 }
 
@@ -111,7 +111,7 @@ export interface FederationProjectConfig {
   id: string;
   /** Fed 的用户可见名称。 */
   name: string;
-  /** Federation 运行入口，相对项目根目录。 */
+  /** Federation 构建输入入口，相对项目根目录；local 会编译到独立发布产物。 */
   entry: string;
   /** 本地或云端的统一部署声明。 */
   deployment: FederationDeploymentConfig;

@@ -2,14 +2,15 @@
  * Federation query 调试命令。
  *
  * 关键说明（中文）
- * - 该命令直接请求当前 active Federation，便于排查 auth、env、模型解析与上游错误。
+ * - 该命令直接请求本次选定的 Federation，便于排查 auth、env、模型解析与上游错误。
  * - 当前实例存在有效管理员 Session 时自动带 Authorization，否则按公开请求发送。
  * - 非 2xx 响应仍完整打印 status、headers、body，避免吞掉服务端真实错误。
  */
 
 import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
-import { readActiveServer, type ServerProfile } from "@/federation/core/session.js";
+import type { ServerProfile } from "@/federation/core/session.js";
+import { resolve_federation_target } from "@/federation/server/FederationTarget.js";
 import type {
   FederationQueryCommandOptions,
   FederationQueryResolvedRequest,
@@ -35,7 +36,8 @@ export async function run_federation_query_command(
   target_input: string,
   options: FederationQueryCommandOptions,
 ): Promise<void> {
-  const server = resolve_active_query_server();
+  const server = await resolve_federation_target(options);
+  if (!server) return;
   const request = await resolve_query_request({
     server,
     method_input,
@@ -76,21 +78,6 @@ async function send_query_request(
       note: error_message(error),
     });
   }
-}
-
-function resolve_active_query_server(): ServerProfile {
-  const server = readActiveServer();
-  if (!server) {
-    throw new CliError({
-      title: t({
-        zh: "当前没有 active Federation。",
-        en: "No active Federation is configured.",
-      }),
-      fix: "fed server add",
-    });
-  }
-
-  return server;
 }
 
 async function resolve_query_request(params: {
@@ -157,8 +144,8 @@ function resolve_query_url(base_url_input: string, target_input: string): URL {
     if (url.origin !== base_url.origin) {
       throw new CliError({
         title: t({
-          zh: "完整 URL 只能指向当前 active Federation 域名。",
-          en: "Full URLs must use the current active Federation origin.",
+          zh: "完整 URL 只能指向本次选定的 Federation 域名。",
+          en: "Full URLs must use the selected Federation origin.",
         }),
         note: t({
           zh: `允许 origin：${base_url.origin}`,

@@ -4,6 +4,7 @@
  * 关键说明（中文）
  * - 这是 `downfed` / `downfed manage` 的默认交互入口。
  * - 首页直接展示已保存的 Federation 列表，选中后进入对应 admin 工作区。
+ * - 列表选择仅作用于本次工作区，不展示或保存全局操作目标。
  * - 内部使用 shared pi-tui runtime，和其它 CLI TUI 保持同一套框架。
  */
 
@@ -48,7 +49,7 @@ function build_federation_dashboard_state(): federation_dashboard_state {
   const config = readConfig();
   const federation_items = config.servers.map((server) => ({
     id: `open_federation:${server.base_url}`,
-    title: server.base_url === config.active_server_url ? `★ ${server.name}` : server.name,
+    title: server.name,
     subtitle: [
       server.target ?? t({ zh: "手动连接", en: "manual" }),
       server.status ?? "unknown",

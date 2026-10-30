@@ -101,11 +101,12 @@ function create_local_entrypoint(): string {
  * Local Node.js Federation entry.
  *
  * 关键说明（中文）
- * - 本地数据库默认写入项目根目录的 data.sqlite。
+ * - 独立发布优先使用 CLI 提供的数据库绝对路径，开发默认使用 ./data.sqlite。
  * - HOST / PORT 由 fed deploy 注入，也可以在 .env 中显式配置。
  * - local_login 仅适用于本机监听地址，不应直接暴露到公网。
  */
 
+import { join } from "node:path";
 import { serve } from "@hono/node-server";
 import { AIService, Federation } from "@downcity/federation";
 import { Database } from "@downcity/database-sqlite";
@@ -116,14 +117,27 @@ import {
 } from "@downcity/services";
 
 /** 解析本地 SQLite 文件路径。 */
-function resolve_sqlite_path(database_url: string | undefined): string {
-  if (!database_url) return "./data.sqlite";
+function resolve_sqlite_path(): string {
+  const database_url = process.env.DOWNCITY_FEDERATION_DATABASE_URL?.trim();
+  if (!database_url) {
+    return process.env.DATABASE_PATH?.trim().replace(/^file:/u, "")
+      || (process.env.DOWNCITY_DATA_DIR ? join(process.env.DOWNCITY_DATA_DIR, "data.sqlite") : "./data.sqlite");
+  }
   if (!database_url.startsWith("file:")) {
     throw new Error("DOWNCITY_FEDERATION_DATABASE_URL must use a file: SQLite URL.");
   }
   const sqlite_path = database_url.slice("file:".length).trim();
   if (!sqlite_path) throw new Error("SQLite file path is required.");
   return sqlite_path;
+}
+
+/** 健康响应仅在 CLI 注入身份时追加对应字段。 */
+function read_runtime_identity(): Record<string, string> {
+  return Object.fromEntries([
+    ["fed_id", process.env.DOWNCITY_FED_ID],
+    ["release_id", process.env.DOWNCITY_RELEASE_ID],
+    ["instance_id", process.env.DOWNCITY_FED_INSTANCE_ID],
+  ].flatMap(([key, value]) => value?.trim() ? [[key, value.trim()]] : []));
 }
 
 const host = process.env.HOST?.trim() || "127.0.0.1";
@@ -133,7 +147,7 @@ if (!Number.isInteger(port) || port < 1 || port > 65535) {
 }
 
 const database = new Database({
-  filename: resolve_sqlite_path(process.env.DOWNCITY_FEDERATION_DATABASE_URL),
+  filename: resolve_sqlite_path(),
 });
 const federation = new Federation({ database });
 
@@ -153,7 +167,12 @@ await federation.health();
 serve({
   hostname: host,
   port,
-  fetch: (request) => federation.fetch(request),
+  fetch: async (request) => {
+    if (request.method === "GET" && new URL(request.url).pathname === "/health") {
+      return Response.json({ ...await federation.health(), ...read_runtime_identity() });
+    }
+    return federation.fetch(request);
+  },
 });
 
 console.log(\`Federation ready at http://\${host}:\${port}\`);

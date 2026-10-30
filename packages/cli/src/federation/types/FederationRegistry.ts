@@ -37,8 +37,16 @@ export interface ServerProfile {
   fed_id?: string;
   /** 本次实例使用的部署目标。 */
   target?: FederationDeploymentTarget;
-  /** 最近一次部署使用的源码目录，仅用于诊断和重新部署。 */
+  /** 部署来源的源码目录，仅用于源码追溯；运行时不得从该目录加载代码或配置。 */
   project_dir?: string;
+  /** 本次部署的发布版本标识，用于关联当前实例与发布产物；未生成发布版本时可缺省。 */
+  release_id?: string;
+  /** 本次部署的发布产物目录，运行时代码从此目录加载，不依赖来源源码目录。 */
+  release_dir?: string;
+  /** 本次部署实际使用的运行时配置文件路径，用于定位实例加载的配置。 */
+  runtime_config_path?: string;
+  /** 本次部署实际使用的持久化数据目录，独立于源码与发布产物目录保存运行数据。 */
+  data_dir?: string;
   /** 本地实例的主进程 PID。 */
   pid?: number;
   /** 本地实例每次启动生成的唯一 instance ID。 */
@@ -55,10 +63,8 @@ export interface ServerProfile {
   config_snapshot?: FederationProjectConfig;
 }
 
-/** Federation CLI 的系统级持久化状态。 */
+/** Federation CLI 的系统级持久化状态；每次操作的目标由调用方局部持有。 */
 export interface FederationClientConfig {
-  /** 当前 active Federation URL。 */
-  active_server_url?: string;
   /** 所有已登记 Federation 实例。 */
   servers: ServerProfile[];
   /** Cloudflare provider 最近使用的 account id。 */

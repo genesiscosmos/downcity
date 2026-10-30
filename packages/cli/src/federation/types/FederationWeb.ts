@@ -5,16 +5,16 @@
  * Server 的公开协议。
  */
 
-/** 启动 Federation 本地 Web UI 的命令参数。 */
-export interface FederationWebOptions {
+import type { FederationTargetOptions } from "@/federation/server/FederationTarget.js";
+
+/** 启动 Federation 本地 Web UI 的命令参数，目标仅用于本次运行。 */
+export interface FederationWebOptions extends FederationTargetOptions {
   /** 本地 HTTP Server 监听地址；当前只允许 loopback。 */
   host: string;
   /** 本地 HTTP Server 监听端口，传入 0 时由操作系统分配。 */
   port: number;
   /** 启动成功后是否尝试打开系统默认浏览器。 */
   open: boolean;
-  /** 可选的 Federation 本地名称或 URL；未提供时使用 active Federation。 */
-  federation?: string;
 }
 
 /** 已解析的 Federation Web UI 运行上下文。 */

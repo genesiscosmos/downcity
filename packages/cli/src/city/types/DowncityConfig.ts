@@ -14,11 +14,6 @@ import type { CliLocale } from "@/shared/types/CliLocale.js";
  */
 export interface FederationAdminConfig {
   /**
-   * `downfed` admin 当前激活的 Federation URL。
-   */
-  active_server_url?: unknown;
-
-  /**
    * `downfed` admin 保存的 Federation 列表。
    */
   servers?: Array<{

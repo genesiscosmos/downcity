@@ -17,14 +17,12 @@ import { runFederationApp } from "@/federation/app.js";
 import { readPersistedCliLocale } from "@/federation/core/session.js";
 import { createVersionBanner } from "@/shared/IndexSupport.js";
 import { setCliVerbosity } from "@/shared/CliReporter.js";
-import { deploy_federation_project } from "@/federation/deploy/commands/deploy.js";
-import { create_federation_project } from "@/federation/create/commands/create.js";
+import { deploy_federation_project, type FederationDeployCommandOptions } from "@/federation/deploy/commands/deploy.js";
+import { create_federation_project, type FederationCreateCommandOptions } from "@/federation/create/commands/create.js";
 import { run_federation_query_command } from "@/federation/query/commands/query.js";
-import { readActiveServer } from "@/federation/core/session.js";
-import {
-  prompt_add_federation_server,
-  prompt_select_active_federation_server,
-} from "@/federation/server/FederationServerManager.js";
+import { prompt_add_federation_server } from "@/federation/server/FederationServerManager.js";
+import { resolve_federation_target, type FederationTargetOptions } from "@/federation/server/FederationTarget.js";
+import { run_federation_instance_command } from "@/federation/server/FederationInstanceCommands.js";
 import { open_federation_server_workspace } from "@/federation/server/FederationServerWorkspace.js";
 import { CliError } from "@/shared/CliError.js";
 import { helpText, langOptionText, resolveCliLocale, setCliLocale, t } from "@/shared/CliLocale.js";
@@ -35,6 +33,8 @@ import {
 } from "@/federation/bureau/commands/bureau.js";
 import { run_interactive_bureau_token_manager } from "@/federation/bureau/InteractiveBureauTokenManager.js";
 import { run_federation_web } from "@/federation/web/FederationWebCommand.js";
+import type { FederationWebOptions } from "@/federation/types/FederationWeb.js";
+import type { FederationQueryCommandOptions } from "@/federation/types/FederationQuery.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -75,14 +75,16 @@ export async function runDownfedCli(): Promise<void> {
   }));
 
   program
-    .command("manage [action]")
+    .command("manage")
     .description(t({
-      zh: "打开 Federation 交互式管理界面",
-      en: "open the interactive Federation management interface",
+      zh: "选择本次 Federation 并打开管理工作区",
+      en: "select a Federation and open its management workspace",
     }))
+    .option("--id <id>", "Federation ID (exact match)")
+    .option("--name <name>", "Federation name (exact match)")
     .helpOption("--help", helpText())
-    .action(createVersionBanner(packageJson.version, async (action?: string) => {
-      await runFederationApp(action ? [action] : []);
+    .action(createVersionBanner(packageJson.version, async (options: FederationTargetOptions) => {
+      await manage_federation_server(options);
     }));
 
   const server_program = program
@@ -91,20 +93,24 @@ export async function runDownfedCli(): Promise<void> {
       zh: "配置并管理已部署 Federation",
       en: "configure and manage deployed Federations",
     }))
+    .option("--id <id>", "Federation ID (exact match)")
+    .option("--name <name>", "Federation name (exact match)")
     .helpOption("--help", helpText())
-    .action(createVersionBanner(packageJson.version, async () => {
-      await manage_federation_server();
+    .action(createVersionBanner(packageJson.version, async (options: FederationTargetOptions) => {
+      await manage_federation_server(options);
     }));
 
   server_program
     .command("manage")
     .description(t({
-      zh: "进入当前或已选择 Federation 的 admin 管理工作区",
-      en: "open the admin workspace for the current or selected Federation",
+      zh: "选择本次 Federation 并进入 admin 管理工作区",
+      en: "select a Federation and open its admin workspace for this operation",
     }))
+    .option("--id <id>", "Federation ID (exact match)")
+    .option("--name <name>", "Federation name (exact match)")
     .helpOption("--help", helpText())
-    .action(createVersionBanner(packageJson.version, async () => {
-      await manage_federation_server();
+    .action(createVersionBanner(packageJson.version, async (_options: FederationTargetOptions, command: Command) => {
+      await manage_federation_server(command.optsWithGlobals<FederationTargetOptions>());
     }));
 
   register_bureau_commands(program);
@@ -112,19 +118,18 @@ export async function runDownfedCli(): Promise<void> {
   program
     .command("web")
     .description(t({
-      zh: "启动当前 Federation 的本地 Web 管理 UI",
-      en: "start the local Web admin UI for a Federation",
+      zh: "选择本次 Federation 并启动本地 Web 管理 UI",
+      en: "select a Federation and start its local Web admin UI",
     }))
     .option("--host <host>", t({ zh: "本地监听地址（仅 loopback）", en: "local listen host (loopback only)" }), "127.0.0.1")
     .option("--port <port>", t({ zh: "本地监听端口", en: "local listen port" }), "43128")
     .option("--no-open", t({ zh: "不自动打开浏览器", en: "do not open the browser automatically" }))
-    .option("--federation <name-or-url>", t({ zh: "指定 Federation 名称或 URL", en: "select a Federation by name or URL" }))
+    .option("--id <id>", "Federation ID (exact match)")
+    .option("--name <name>", "Federation name (exact match)")
     .helpOption("--help", helpText())
-    .action(createVersionBanner(packageJson.version, async (options: {
-      host: string;
+    .action(createVersionBanner(packageJson.version, async (options: Omit<FederationWebOptions, "port"> & {
+      /** Commander 接收的本地 Web UI 端口字符串，校验后转换为整数。 */
       port: string;
-      open: boolean;
-      federation?: string;
     }) => {
       const port = Number(options.port);
       if (!Number.isInteger(port) || port < 0 || port > 65535) {
@@ -135,7 +140,8 @@ export async function runDownfedCli(): Promise<void> {
           host: options.host.trim(),
           port,
           open: options.open,
-          federation: options.federation,
+          id: options.id,
+          name: options.name,
         });
       } catch (error) {
         if (error instanceof CliError) throw error;
@@ -161,7 +167,8 @@ export async function runDownfedCli(): Promise<void> {
   register_root_federation_query_command(program);
 
   program
-    .command("create [dir]")
+    .command("create")
+    .option("--path <path>", t({ zh: "创建路径，默认当前路径", en: "project path; defaults to the current path" }), ".")
     .description(t({
       zh: "交互式创建 Federation 项目骨架",
       en: "interactively scaffold a Federation project",
@@ -176,14 +183,17 @@ export async function runDownfedCli(): Promise<void> {
     }))
     .helpOption("--help", helpText())
     .action(createVersionBanner(packageJson.version, async (
-      dir: string | undefined,
-      options: { force?: boolean; template?: string },
+      options: FederationCreateCommandOptions & {
+        /** 本次创建目录，缺省为当前路径。 */
+        path: string;
+      },
     ) => {
-      await create_federation_project(dir ?? ".", options);
+      await create_federation_project(options.path, options);
     }));
 
   program
-    .command("deploy [source]")
+    .command("deploy")
+    .option("--path <path>", t({ zh: "项目路径，默认当前路径", en: "project path; defaults to the current path" }), ".")
     .description(t({
       zh: "部署当前目录或本地目录中的 Federation 项目",
       en: "deploy a Federation project from the current directory or a local path",
@@ -222,20 +232,15 @@ export async function runDownfedCli(): Promise<void> {
     }))
     .helpOption("--help", helpText())
     .action(createVersionBanner(packageJson.version, async (
-      source: string | undefined,
-      options: {
-        dryRun?: boolean;
-        verify?: boolean;
-        verifyOnly?: boolean;
-        skipBuild?: boolean;
-        skipTypecheck?: boolean;
-        accountId?: string;
-        adminReset?: boolean;
-        yes?: boolean;
+      options: FederationDeployCommandOptions & {
+        /** 本次部署项目目录，缺省为当前路径。 */
+        path: string;
       },
     ) => {
-      await deploy_federation_project(source ?? ".", options);
+      await deploy_federation_project(options.path, options);
     }, "Downcity CLI"));
+
+  register_instance_commands(program);
 
   program.hook("preAction", (thisCommand) => {
     const opts = thisCommand.optsWithGlobals<{ quiet?: boolean; verbose?: boolean }>();
@@ -247,6 +252,9 @@ export async function runDownfedCli(): Promise<void> {
   program.showSuggestionAfterError();
 
   if (process.argv.length <= 2) {
+    if (!process.stdin.isTTY || !process.stdout.isTTY) {
+      throw new CliError({ title: "Interactive Federation management requires a terminal", fix: "Use fed --help for explicit commands." });
+    }
     await runFederationApp([]);
     process.exit(0);
   }
@@ -254,13 +262,33 @@ export async function runDownfedCli(): Promise<void> {
   await program.parseAsync(process.argv);
 }
 
+/** 为已有实例提供单次定位的基本生命周期与诊断命令。 */
+function register_instance_commands(program: Command): void {
+  for (const action of ["status", "logs", "stop", "restart"] as const) {
+    const descriptions = {
+      status: { zh: "查看本次实例的登记状态与健康情况", en: "inspect an instance record and health" },
+      logs: { zh: "读取本次本地实例的最近日志", en: "read recent logs of a local instance" },
+      stop: { zh: "停止本次本地受管实例", en: "stop a managed local instance" },
+      restart: { zh: "按保存的启动配置重启本次本地实例", en: "restart a local instance using its saved launch configuration" },
+    };
+    program.command(action)
+      .description(t(descriptions[action]))
+      .option("--id <id>", "Federation ID (exact match)")
+      .option("--name <name>", "Federation name (exact match)")
+      .helpOption("--help", helpText())
+      .action(createVersionBanner(packageJson.version, async (options: FederationTargetOptions) => {
+        await run_federation_instance_command(action, options);
+      }));
+  }
+}
+
 /** 注册 Federation Bureau 注册表命令。 */
 function register_bureau_commands(program: Command): void {
   const bureau_program = program
     .command("bureau")
     .description(t({
-      zh: "管理当前 Federation 的 Bureau 注册表",
-      en: "manage the active Federation Bureau registry",
+      zh: "管理本次指定 Federation 的 Bureau 注册表",
+      en: "manage Bureau registrations for this operation's Federation",
     }))
     .helpOption("--help", helpText());
 
@@ -270,35 +298,41 @@ function register_bureau_commands(program: Command): void {
       zh: "交互式管理 Bureau Token",
       en: "interactively manage Bureau tokens",
     }))
+    .option("--id <id>", "Federation ID (exact match)")
+    .option("--name <name>", "Federation name (exact match)")
     .helpOption("--help", helpText())
-    .action(createVersionBanner(packageJson.version, async () => {
-      await run_interactive_bureau_token_manager();
+    .action(createVersionBanner(packageJson.version, async (options: FederationTargetOptions) => {
+      await run_interactive_bureau_token_manager(options);
     }));
 
   token_program
     .command("issue <bureau_id>")
     .description(t({ zh: "签发 Bureau Token", en: "issue a Bureau token" }))
     .helpOption("--help", helpText())
-    .action(createVersionBanner(packageJson.version, issue_federation_bureau_token));
+    .action(createVersionBanner(packageJson.version, async (bureau_id: string, _options: unknown, command: Command) => {
+      await issue_federation_bureau_token(bureau_id, command.optsWithGlobals<FederationTargetOptions>());
+    }));
 
   token_program
     .command("list")
     .description(t({ zh: "列出 Bureau 注册记录", en: "list Bureau registrations" }))
     .helpOption("--help", helpText())
-    .action(createVersionBanner(packageJson.version, list_federation_bureaus));
+    .action(createVersionBanner(packageJson.version, async (_options: unknown, command: Command) => {
+      await list_federation_bureaus(command.optsWithGlobals<FederationTargetOptions>());
+    }));
 
   token_program
     .command("revoke <token_id>")
     .description(t({ zh: "撤销 Bureau Token", en: "revoke a Bureau token" }))
     .helpOption("--help", helpText())
-    .action(createVersionBanner(packageJson.version, revoke_federation_bureau));
+    .action(createVersionBanner(packageJson.version, async (token_id: string, _options: unknown, command: Command) => {
+      await revoke_federation_bureau(token_id, command.optsWithGlobals<FederationTargetOptions>());
+    }));
 }
 
-/** 打开当前或交互选择后的 Federation 管理工作区。 */
-async function manage_federation_server(): Promise<void> {
-  const server = readActiveServer()
-    ?? await prompt_select_active_federation_server()
-    ?? await prompt_add_federation_server();
+/** 打开本次显式指定或交互选择的 Federation 管理工作区。 */
+async function manage_federation_server(options: FederationTargetOptions = {}): Promise<void> {
+  const server = await resolve_federation_target(options);
   if (!server) return;
   await open_federation_server_workspace(server.base_url);
 }
@@ -307,9 +341,11 @@ function register_root_federation_query_command(program: Command): void {
   program
     .command("query <method> <path>")
     .description(t({
-      zh: "请求当前 active Federation 的 HTTP API",
-      en: "query the HTTP API of the active Federation",
+      zh: "请求本次指定的 Federation HTTP API",
+      en: "query the HTTP API of a Federation selected for this operation",
     }))
+    .option("--id <id>", "Federation ID (exact match)")
+    .option("--name <name>", "Federation name (exact match)")
     .option("--raw", t({
       zh: "只输出原始响应 body",
       en: "print the raw response body only",
@@ -330,12 +366,7 @@ function register_root_federation_query_command(program: Command): void {
     .action(async (
       method: string,
       path: string,
-      options: {
-        raw?: boolean;
-        header?: string[];
-        data?: string;
-        file?: string;
-      },
+      options: FederationQueryCommandOptions,
     ) => {
       try {
         await run_federation_query_command(method, path, options);

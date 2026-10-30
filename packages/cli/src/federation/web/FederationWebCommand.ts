@@ -5,21 +5,15 @@
  * 进程信号时关闭本地 HTTP Server。
  */
 
-import {
-  readActiveServer,
-  readConfig,
-  type ServerProfile,
-} from "@/federation/core/session.js";
+import { resolve_federation_target } from "@/federation/server/FederationTarget.js";
 import { open_system_browser } from "@/shared/SystemBrowser.js";
 import { start_federation_web_server } from "@/federation/web/FederationWebServer.js";
 import type { FederationWebOptions } from "@/federation/types/FederationWeb.js";
 
 /** 启动并持续运行 Federation 本地 Web UI。 */
 export async function run_federation_web(options: FederationWebOptions): Promise<void> {
-  const server = resolve_server(options.federation);
-  if (!server) {
-    throw new Error("未找到 Federation。请先运行 `fed server add`，或使用 --federation 指定。");
-  }
+  const server = await resolve_federation_target(options);
+  if (!server) return;
   const binding = await start_federation_web_server({
     federation_name: server.name,
     federation_url: server.base_url,
@@ -35,12 +29,6 @@ export async function run_federation_web(options: FederationWebOptions): Promise
 
   await wait_for_shutdown();
   await binding.close();
-}
-
-function resolve_server(selector: string | undefined): ServerProfile | undefined {
-  if (!selector?.trim()) return readActiveServer();
-  const normalized = selector.trim();
-  return readConfig().servers.find((item) => item.name === normalized || item.base_url === normalized);
 }
 
 function wait_for_shutdown(): Promise<void> {

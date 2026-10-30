@@ -5,9 +5,15 @@
  * - 裸 `fed bureau token` 在一个全屏 TUI 中统一承担签发、查看和撤销。
  * - Token 明文只存在于签发结果页，不会写入列表或再次从 Federation 获取。
  * - 已撤销 Token 仍保留在注册表中，便于管理员审计用途和生命周期。
+ * - 进入界面前仅解析一次目标，所有操作复用本次局部实例配置。
  */
 
 import type { BureauTokenSummary } from "@downcity/federation";
+import type { ServerProfile } from "@/federation/core/session.js";
+import {
+  resolve_federation_target,
+  type FederationTargetOptions,
+} from "@/federation/server/FederationTarget.js";
 import {
   issue_federation_bureau_token_record,
   read_federation_bureau_tokens,
@@ -19,14 +25,18 @@ import type { tui_prompt_option } from "@/shared/types/TuiPrompt.js";
 
 const TOKEN_ACTION_PREFIX = "token:";
 
-/** 打开当前 active Federation 的 Bureau Token 管理界面。 */
-export async function run_interactive_bureau_token_manager(): Promise<void> {
+/** 打开本次选定的 Federation 的 Bureau Token 管理界面。 */
+export async function run_interactive_bureau_token_manager(
+  options: FederationTargetOptions = {},
+): Promise<void> {
+  const server = await resolve_federation_target(options);
+  if (!server) return;
   const runtime = new ManagedTuiRuntime({ title: "Bureau Token" });
   try {
     while (true) {
       const items = await runtime.with_loading(
         t({ zh: "读取 Bureau Token", en: "Loading Bureau tokens" }),
-        read_federation_bureau_tokens,
+        async () => await read_federation_bureau_tokens(server),
       );
       const selected = await runtime.select({
         title: t({ zh: "Bureau Token 管理", en: "Bureau Token management" }),
@@ -42,13 +52,13 @@ export async function run_interactive_bureau_token_manager(): Promise<void> {
       if (!selected || selected === "exit") return;
       if (selected === "refresh") continue;
       if (selected === "issue") {
-        await issue_token_interactively(runtime);
+        await issue_token_interactively(runtime, server);
         continue;
       }
       if (selected.startsWith(TOKEN_ACTION_PREFIX)) {
         const token_id = selected.slice(TOKEN_ACTION_PREFIX.length);
         const token = items.find((item) => item.token_id === token_id);
-        if (token) await manage_token(runtime, token);
+        if (token) await manage_token(runtime, server, token);
       }
     }
   } finally {
@@ -94,7 +104,10 @@ function build_manager_options(items: BureauTokenSummary[]): tui_prompt_option[]
   ];
 }
 
-async function issue_token_interactively(runtime: ManagedTuiRuntime): Promise<void> {
+async function issue_token_interactively(
+  runtime: ManagedTuiRuntime,
+  server: ServerProfile,
+): Promise<void> {
   while (true) {
     const bureau_id_input = await runtime.text({
       title: "Bureau ID",
@@ -131,7 +144,7 @@ async function issue_token_interactively(runtime: ManagedTuiRuntime): Promise<vo
 
     const issued = await runtime.with_loading(
       t({ zh: "签发 Bureau Token", en: "Issuing Bureau token" }),
-      async () => await issue_federation_bureau_token_record(bureau_id, purpose),
+      async () => await issue_federation_bureau_token_record(server, bureau_id, purpose),
     );
     await runtime.show_text(
       t({ zh: "Bureau Token 已签发", en: "Bureau token issued" }),
@@ -154,6 +167,7 @@ async function issue_token_interactively(runtime: ManagedTuiRuntime): Promise<vo
 
 async function manage_token(
   runtime: ManagedTuiRuntime,
+  server: ServerProfile,
   token: BureauTokenSummary,
 ): Promise<void> {
   const options: tui_prompt_option[] = token.status === "active"
@@ -194,7 +208,7 @@ async function manage_token(
 
   await runtime.with_loading(
     t({ zh: "撤销 Bureau Token", en: "Revoking Bureau token" }),
-    async () => await revoke_federation_bureau_token_record(token.token_id),
+    async () => await revoke_federation_bureau_token_record(server, token.token_id),
   );
   await runtime.show_message("success", t({
     zh: `Bureau Token 已撤销：${token.token_id}`,

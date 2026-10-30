@@ -6,10 +6,12 @@
  * - 类型集中放在 types 目录，命令实现只负责解析、请求与输出。
  */
 
+import type { FederationTargetOptions } from "@/federation/server/FederationTarget.js";
+
 /**
- * Federation query 命令行参数。
+ * Federation query 命令行参数，目标选择仅作用于本次请求。
  */
-export interface FederationQueryCommandOptions {
+export interface FederationQueryCommandOptions extends FederationTargetOptions {
   /** 是否输出服务端原始响应 body。 */
   raw?: boolean;
   /** 临时请求头，格式为 `key:value`，可重复传入。 */
@@ -26,7 +28,7 @@ export interface FederationQueryCommandOptions {
 export interface FederationQueryResolvedRequest {
   /** 标准化后的 HTTP method。 */
   method: string;
-  /** 只允许指向当前 active Federation origin 的完整请求 URL。 */
+  /** 只允许指向本次选定的 Federation origin 的完整请求 URL。 */
   url: URL;
   /** 最终请求头集合；已登录管理员时包含 Authorization。 */
   headers: Headers;

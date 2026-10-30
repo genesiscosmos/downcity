@@ -11,15 +11,40 @@ downcity -v
 
 - `city` 是本机 Agent 宿主。CLI 通过数据库 Adapter 和 Repository 读取配置，显式创建 Agent，再由 City 按 ID 统一转发 HTTP/RPC。
 - `fed` 是 Federation Server Manager；TUI 用于注册和管理 Server，项目命令读取当前目录的 `federation.toml`，项目配置只支持 TOML，不兼容 JSON 配置。Local Node.js 和 Cloudflare Workers 都通过 `fed deploy` 部署。
-- `fed web` 在 `127.0.0.1:43128` 启动当前 Federation 的本地 Web 管理 UI；管理员登录后的 Session 只保留在 CLI 本地 BFF 内存中。
+- `fed web --id fed_x` 在 `127.0.0.1:43128` 启动本次指定 Federation 的本地 Web 管理 UI；管理员登录后的 Session 只保留在 CLI 本地 BFF 内存中。
 
 ```bash
-fed create ./my-fed
+fed create --path ./my-fed
 cd my-fed
 pnpm install
 fed deploy
 fed
 ```
+
+`fed create` 和 `fed deploy` 的 `--path` 默认是 `.`；指定其他目录时使用 `--path <path>`，不接受位置路径参数，例如 `fed deploy --path ./my-fed`。
+
+Fed 没有全局 active/default Federation，也不保存 `active_server_url`。`stop`、`restart`、`status`、`logs`、`query`、`web`、`server`、`manage` 与 `server manage` 使用互斥的 `--id <id>` 或 `--name <name>`，ID 和名称均精确匹配。省略选择参数时，TTY 显示列表，选择只用于本次操作；非交互环境缺少参数时报错。名称重名时，TTY 继续选择，非 TTY 报错。列表没有表示全局当前连接的星标。`fed manage --id fed_x` 直接进入目标管理工作区，不接受 action 位置参数；`fed server manage --id fed_x` 也支持同样的选择规则。
+
+```bash
+fed status --id fed_x
+fed logs --id fed_x
+fed stop --id fed_x
+fed restart --id fed_x
+fed query GET /health --name my-fed
+fed manage --id fed_x
+fed server manage --id fed_x
+fed web --id fed_x --no-open
+```
+
+`status` 可查询任意已保存连接，分别显示登记状态与 `/health` 实时探测结果；登记状态不等于服务健康。本地 release 的健康检查要求响应 `ok: true`，且 `fed_id`、`release_id`、`instance_id` 全部匹配受管实例，HTTP 200 本身不足以确认身份。`logs`、`stop` 和 `restart` 仅支持 CLI 管理的 local 实例。`restart` 只运行已安装的 release，读取持久运行配置，不读取源码或重新构建；原项目目录删除后仍可重启。旧记录缺少 release 时拒绝重启，必须显式执行 `fed deploy --path <path>`。重启还要求 `current.json` 与 registry 的 release 一致；失败候选与 current 不一致时直接报错，不隐式回滚。管理界面的 Remove connection 只移除连接，不停止服务。
+
+本地独立 Node 发布模型将编译后的入口、完整生产依赖及项目资源安装到 `~/.downcity/federation/deployments/<fed_id>/releases/<release_id>`，同级 `current.json` 记录当前 release。项目资源通过 `package.json.files` 显式声明；生产依赖及其运行资源完整纳入产物，`.env` 不进入产物。`deployment.scripts.build` 保留用于构建，本地目标拒绝 `deployment.scripts.deploy`，Node 直接运行编译后的入口。默认使用系统 Node，运行时必须与构建时的 Node 版本、平台和架构一致，尤其是含原生模块的依赖。
+
+运行配置单独保存在 `~/.downcity/federation/config/<fed_id>/runtime.env.json`，文件权限为 `0600`。默认 SQLite 位于 `~/.downcity/federation/data/<fed_id>/data.sqlite`。显式指定并沿用的旧数据库保持其绝对源路径，不自动复制或迁移；删除源码前需确认数据库不在准备删除的目录内。旧 runtime 登记的数据库文件缺失时直接报错，拒绝创建空库替代；没有显式路径但源码目录中存在 `data.sqlite` 或 `data/local.db` 时，要求在项目 `.env` 中显式声明数据库路径，不猜测或迁移。`fed deploy --dry-run` 在临时目录构建和校验产物并清理，不安装 release、不修改持久运行配置、不启停实例；构建脚本仍可能向项目写入构建输出。
+
+操作锁的 owner 已失效或没有 owner 时，CLI 只报告锁路径并要求人工核对，不自动回收锁。
+
+本模型不支持新增 SSH 部署目标、零停机切换、自动回滚或开机自启。本文描述发布约定，不代表这些能力已实现。
 
 本地部署未设置 `deployment.port` 时固定使用默认端口 `12314`；在 `federation.toml` 的 `[deployment]` 中显式设置 `port` 可覆盖默认值。选定端口被占用时部署直接报错，不扫描其他端口，也不从部署历史推断端口。
 
@@ -52,7 +77,7 @@ Federation Admin 配置与 Embassy User Session 同样保存在 `~/.downcity/dow
 为独立产品后端登记 Bureau：
 
 ```bash
-fed bureau token
+fed bureau token --id fed_x
 ```
 
-命令打开 Bureau Token 交互式管理界面，可签发、查看和撤销 Token。签发时必须先登录 Federation Admin 并输入用途，也可以直接运行 `fed bureau token issue <bureau_id>`。CLI 不生成凭证；它请求 Federation 生成明文、保存 hash，并将明文返回一次。把明文写入 Bureau 业务服务的 `DOWNCITY_BUREAU_TOKEN` 环境变量。脚本中可用 `fed bureau token list` 查看元数据，使用 `fed bureau token revoke <token_id>` 撤销。Bureau Token 不能签发 User Token。
+Bureau Token 命令同样按本次操作选择 Federation，支持互斥的 `--id` / `--name`，也可把参数放在 `token` 父命令上，例如 `fed bureau token --id fed_x list`；省略参数、重名和非交互报错规则同上。命令打开 Bureau Token 交互式管理界面，可签发、查看和撤销 Token。签发时必须先登录 Federation Admin 并输入用途，也可以直接运行 `fed bureau token --id fed_x issue <bureau_id>`。CLI 不生成凭证；它请求 Federation 生成明文、保存 hash，并将明文返回一次。把明文写入 Bureau 业务服务的 `DOWNCITY_BUREAU_TOKEN` 环境变量。脚本中可用 `fed bureau token --id fed_x list` 查看元数据，使用 `fed bureau token --id fed_x revoke <token_id>` 撤销。Bureau Token 不能签发 User Token。

@@ -5,7 +5,7 @@
  *
  * 关键说明（中文）
  * - `downfed` 只负责 Federation 与 admin 管理。
- * - 无参数时打开 Federation 管理 TUI。
+ * - 无参数时打开 Federation 管理 TUI，所选实例仅传入本次工作区。
  * - user 登录与本机 runtime 统一由 `downcity` 承担。
  */
 
@@ -15,7 +15,7 @@ import { show, showError, showSuccess } from "@/federation/core/ui.js";
 import { updateCli } from "@/federation/core/update.js";
 import { getCliLocale, setCliLocale, t } from "@/shared/CliLocale.js";
 import { type CliLocale } from "@/shared/types/CliLocale.js";
-import { setActiveServer, writePersistedCliLocale } from "@/federation/core/session.js";
+import { writePersistedCliLocale } from "@/federation/core/session.js";
 import { create_federation_project } from "@/federation/create/commands/create.js";
 import { deploy_federation_project } from "@/federation/deploy/commands/deploy.js";
 import { prompt_add_federation_server } from "@/federation/server/FederationServerManager.js";
@@ -50,7 +50,6 @@ async function run_federation_dashboard_action(
 
   if (action.startsWith("open_federation:")) {
     const base_url = action.slice("open_federation:".length);
-    setActiveServer(base_url);
     const result = await open_federation_server_workspace(base_url);
     return result === "quit" ? "quit" : "refresh";
   }

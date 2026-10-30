@@ -1,8 +1,9 @@
 /**
  * Federation Bureau 注册表命令。
  *
- * `token issue` 通过当前 active Federation 的 Admin Session 请求 Federation
- * 签发长期机器凭证。`token list` 与 `token revoke` 管理凭证生命周期。
+ * CLI 入口仅解析一次本次目标，底层 record 函数显式接收实例配置。
+ * `token issue` 通过选定实例的 Admin Session 签发长期机器凭证，
+ * `token list` 与 `token revoke` 管理凭证生命周期。
  */
 
 import {
@@ -11,14 +12,29 @@ import {
   type BureauTokenIssueResult,
   type BureauTokenSummary,
 } from "@downcity/federation";
-import { readActiveServer, type ServerProfile } from "@/federation/core/session.js";
+import type { ServerProfile } from "@/federation/core/session.js";
+import {
+  resolve_federation_target,
+  type FederationTargetOptions,
+} from "@/federation/server/FederationTarget.js";
 import { isCancel, text } from "@/federation/tui/Prompts.js";
 import { CliError } from "@/shared/CliError.js";
 import { emitCliBlock, emitCliList } from "@/shared/CliReporter.js";
 import { t } from "@/shared/CliLocale.js";
 
-/** 为当前 active Federation 签发 Bureau Token。 */
-export async function issue_federation_bureau_token(bureau_id_input: string): Promise<void> {
+/** Bureau Token 签发结果，仅在当前进程保留一次性明文及目标 URL。 */
+export interface FederationBureauTokenIssueRecord extends BureauTokenIssueResult {
+  /** 签发该 Token 的 Federation 基础 URL，用于配置 Bureau 部署环境。 */
+  federation_url: string;
+}
+
+/** 为本次选定的 Federation 签发 Bureau Token；取消目标选择时直接返回。 */
+export async function issue_federation_bureau_token(
+  bureau_id_input: string,
+  options: FederationTargetOptions = {},
+): Promise<void> {
+  const server = await resolve_federation_target(options);
+  if (!server) return;
   const bureau_id = require_bureau_id(bureau_id_input);
   const purpose_input = await text({
     message: t({ zh: "Token 用途", en: "Token purpose" }),
@@ -27,16 +43,16 @@ export async function issue_federation_bureau_token(bureau_id_input: string): Pr
   });
   if (isCancel(purpose_input)) return;
 
-  const issued = await issue_federation_bureau_token_record(bureau_id, String(purpose_input));
+  const issued = await issue_federation_bureau_token_record(server, bureau_id, String(purpose_input));
   render_issued_federation_bureau_token(issued);
 }
 
-/** 请求 Federation 签发 Bureau Token，返回仅供当前进程展示的一次性明文。 */
+/** 使用显式实例签发 Bureau Token，返回仅供当前进程展示的一次性明文。 */
 export async function issue_federation_bureau_token_record(
+  server: ServerProfile,
   bureau_id_input: string,
   purpose_input: string,
-): Promise<BureauTokenIssueResult & { federation_url: string }> {
-  const server = require_active_admin_server();
+): Promise<FederationBureauTokenIssueRecord> {
   const bureau_id = require_bureau_id(bureau_id_input);
   const purpose = require_bureau_token_purpose(purpose_input);
   const admin = create_federation_admin(server);
@@ -53,7 +69,7 @@ export async function issue_federation_bureau_token_record(
 
 /** 输出刚签发的 Bureau Token；明文不会再次从 Federation 读取。 */
 function render_issued_federation_bureau_token(
-  issued: BureauTokenIssueResult & { federation_url: string },
+  issued: FederationBureauTokenIssueRecord,
 ): void {
   emitCliBlock({
     tone: "success",
@@ -72,9 +88,13 @@ function render_issued_federation_bureau_token(
   });
 }
 
-/** 列出当前 active Federation 的 Bureau 注册记录。 */
-export async function list_federation_bureaus(): Promise<void> {
-  const items = await read_federation_bureau_tokens();
+/** 列出本次选定的 Federation 的 Bureau 注册记录。 */
+export async function list_federation_bureaus(
+  options: FederationTargetOptions = {},
+): Promise<void> {
+  const server = await resolve_federation_target(options);
+  if (!server) return;
+  const items = await read_federation_bureau_tokens(server);
   emitCliList({
     title: t({ zh: "Bureau 注册表", en: "Bureau registry" }),
     summary: t({ zh: `${items.length} 条`, en: `${items.length} items` }),
@@ -93,10 +113,15 @@ export async function list_federation_bureaus(): Promise<void> {
   });
 }
 
-/** 撤销当前 active Federation 中的 Bureau 注册记录。 */
-export async function revoke_federation_bureau(token_id_input: string): Promise<void> {
+/** 撤销本次选定的 Federation 中的 Bureau 注册记录。 */
+export async function revoke_federation_bureau(
+  token_id_input: string,
+  options: FederationTargetOptions = {},
+): Promise<void> {
+  const server = await resolve_federation_target(options);
+  if (!server) return;
   const token_id = require_value(token_id_input, "token_id");
-  await revoke_federation_bureau_token_record(token_id);
+  await revoke_federation_bureau_token_record(server, token_id);
   emitCliBlock({
     tone: "success",
     title: t({ zh: "Bureau 已撤销", en: "Bureau revoked" }),
@@ -104,40 +129,35 @@ export async function revoke_federation_bureau(token_id_input: string): Promise<
   });
 }
 
-/** 读取当前 active Federation 的 Bureau Token 元数据。 */
-export async function read_federation_bureau_tokens(): Promise<BureauTokenSummary[]> {
-  const server = require_active_admin_server();
+/** 读取显式实例的 Bureau Token 元数据，不执行目标选择。 */
+export async function read_federation_bureau_tokens(
+  server: ServerProfile,
+): Promise<BureauTokenSummary[]> {
   return await create_federation_admin(server).bureaus.tokens.list();
 }
 
-/** 撤销当前 active Federation 中的 Bureau Token 记录。 */
-export async function revoke_federation_bureau_token_record(token_id_input: string): Promise<void> {
-  const server = require_active_admin_server();
+/** 撤销显式实例中的 Bureau Token 记录，不执行目标选择。 */
+export async function revoke_federation_bureau_token_record(
+  server: ServerProfile,
+  token_id_input: string,
+): Promise<void> {
   const token_id = require_value(token_id_input, "token_id");
   await create_federation_admin(server).bureaus.tokens.revoke(token_id);
 }
 
-function require_active_admin_server(): ServerProfile {
-  const server = readActiveServer();
-  if (!server) {
-    throw new CliError({
-      title: t({ zh: "当前没有 active Federation。", en: "No active Federation is configured." }),
-      fix: "fed server add",
-    });
-  }
+/** 校验显式实例的管理员 Session，并为该实例构造管理客户端。 */
+function create_federation_admin(server: ServerProfile): EmbassyAdmin {
   if (!server.admin_session_token?.trim() || Date.parse(server.admin_session_expires_at ?? "") <= Date.now()) {
     throw new CliError({
       title: t({
-        zh: "当前 Federation 需要管理员登录。",
-        en: "Administrator login is required for the active Federation.",
+        zh: "选定的 Federation 需要管理员登录。",
+        en: "Administrator login is required for the selected Federation.",
       }),
-      fix: "fed server manage",
+      fix: server.fed_id
+        ? `fed server manage --id ${JSON.stringify(server.fed_id)}`
+        : `fed server manage --name ${JSON.stringify(server.name)}`,
     });
   }
-  return server;
-}
-
-function create_federation_admin(server: ServerProfile): EmbassyAdmin {
   return new Embassy({
     federation_url: server.base_url,
     admin_token: server.admin_session_token!,

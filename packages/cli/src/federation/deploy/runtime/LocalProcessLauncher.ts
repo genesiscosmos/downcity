@@ -5,11 +5,12 @@
  *
  * 关键说明（中文）
  * - 启动器命令行显式携带 fed_id 与 instance_id，停止时可校验 PID 是否仍属于目标实例。
- * - 实际项目命令作为同一进程组的子进程运行，CLI 可以统一终止 shell 及其后代。
+ * - Node 直接执行已安装产物入口，子进程属于同一进程组，不读取源码或运行 shell。
  * - stdout / stderr 继承启动器文件描述符，最终统一进入系统级 Federation 日志。
  */
 
 import { spawn } from "node:child_process";
+import { dirname, isAbsolute, relative, resolve } from "node:path";
 
 /** 启动器参数。 */
 interface LocalLauncherArguments {
@@ -17,17 +18,16 @@ interface LocalLauncherArguments {
   fed_id: string;
   /** 本次本地部署唯一 instance ID。 */
   instance_id: string;
-  /** 项目根目录。 */
-  project_dir: string;
-  /** 实际启动 shell 命令。 */
-  command: string;
+  /** 独立安装的 release 根目录。 */
+  release_dir: string;
+  /** release 内相对的 JavaScript 入口。 */
+  entry: string;
 }
 
 const args = parse_arguments(process.argv.slice(2));
-const child = spawn(args.command, {
-  cwd: args.project_dir,
+const child = spawn(process.execPath, [resolve(args.release_dir, args.entry)], {
+  cwd: dirname(resolve(args.release_dir, args.entry)),
   env: process.env,
-  shell: true,
   stdio: "inherit",
 });
 
@@ -61,10 +61,12 @@ function parse_arguments(argv: string[]): LocalLauncherArguments {
   }
   const fed_id = values.get("fed-id")?.trim() ?? "";
   const instance_id = values.get("instance-id")?.trim() ?? "";
-  const project_dir = values.get("project-dir")?.trim() ?? "";
-  const command = values.get("command")?.trim() ?? "";
-  if (!fed_id || !instance_id || !project_dir || !command) {
-    throw new Error("LocalProcessLauncher requires fed-id, instance-id, project-dir and command.");
+  const release_dir = values.get("release-dir")?.trim() ?? "";
+  const entry = values.get("entry")?.trim() ?? "";
+  const entry_relative = relative(resolve(release_dir), resolve(release_dir, entry));
+  if (!fed_id || !instance_id || !isAbsolute(release_dir) || !entry || isAbsolute(entry)
+    || entry_relative === ".." || entry_relative.startsWith("../") || entry_relative.startsWith("..\\")) {
+    throw new Error("LocalProcessLauncher requires a release directory and an entry inside it.");
   }
-  return { fed_id, instance_id, project_dir, command };
+  return { fed_id, instance_id, release_dir, entry };
 }

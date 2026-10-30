@@ -5,23 +5,21 @@
  * - 用户从 downfed 选择一个已部署 Federation 后，直接进入 adminLoop。
  * - 如果本地记录缺少有效管理员 Session，则要求管理员 ID 与密码登录。
  * - 编辑、移除、更新 admin 访问等低频动作挂在 adminLoop 的“更多”里。
+ * - 所选对象仅在本工作区内有效；移除连接只删除记录，不停止实例进程。
  */
 
 import { adminLoop } from "@/federation/admin/loop.js";
 import { adminAuth, login_federation_admin } from "@/federation/auth/admin.js";
 import { isAdminAuthError } from "@/federation/admin/auth-error.js";
 import {
-  readActiveServer,
   readServer,
   removeServer,
-  setActiveServer,
   updateServer,
   type ServerProfile,
 } from "@/federation/core/session.js";
 import { create_admin_tui_runtime } from "@/federation/tui/AdminTuiRuntime.js";
 import type { admin_tui_runtime } from "@/federation/types/AdminTui.js";
 import { t } from "@/shared/CliLocale.js";
-import { stop_managed_local_server } from "@/federation/deploy/runtime/LocalFederationDeployer.js";
 
 /**
  * 打开某个 Federation 的 admin 工作区。
@@ -36,8 +34,6 @@ export async function open_federation_server_workspace(
     if (!server) {
       return "home";
     }
-
-    setActiveServer(server.base_url);
 
     const runtime = create_admin_tui_runtime(`${server.name} - Admin`);
     const session = await resolve_admin_session(server.base_url, runtime);
@@ -321,23 +317,11 @@ async function open_federation_admin_more_actions(
     if (confirmed !== "remove") {
       return { kind: "continue" };
     }
-    if (server.target === "local") {
-      await stop_managed_local_server(server);
-    }
     removeServer(base_url);
-    const next_active = readActiveServer();
-    await runtime.show_message(
-      "success",
-      next_active
-        ? t({
-          zh: `Federation 已移除。当前 Federation：${next_active.name}`,
-          en: `Federation removed. Current Federation: ${next_active.name}`,
-        })
-        : t({
-          zh: "Federation 已移除。当前没有已配置的 Federation。",
-          en: "Federation removed. No Federation configured.",
-        }),
-    );
+    await runtime.show_message("success", t({
+      zh: "Federation 连接记录已移除。",
+      en: "Federation connection removed.",
+    }));
     return { kind: "removed" };
   }
 

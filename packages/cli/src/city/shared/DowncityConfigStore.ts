@@ -245,7 +245,6 @@ function read_federation_admin_config(): FederationAdminConfig {
 function read_federation_admin_profiles(): FederationProfile[] {
   const raw = read_federation_admin_config();
   const servers = Array.isArray(raw.servers) ? raw.servers : [];
-  const active_url = normalize_federation_url(read_downcity_string(raw.active_server_url));
   const out: FederationProfile[] = [];
   const state = read_downcity_config();
   const selected_url = resolve_selected_federation_url(state);
@@ -270,8 +269,7 @@ function read_federation_admin_profiles(): FederationProfile[] {
   }
 
   return out.sort((left, right) =>
-    Number(right.federation_url === active_url) - Number(left.federation_url === active_url)
-    || left.name.localeCompare(right.name)
+    left.name.localeCompare(right.name)
     || left.federation_url.localeCompare(right.federation_url),
   );
 }

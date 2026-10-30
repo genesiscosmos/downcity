@@ -18,13 +18,16 @@ import type {
 
 const OWNER_SLOT = "owner";
 
-/** 直接事务写入 Local Federation 的 SQLite 管理员数据库。 */
+/** 直接事务写入 Local SQLite；database_path 可显式指定发布快照解析出的数据库绝对路径。 */
 export function provision_local_admin_database(
   project_dir: string,
   credentials: FederationAdminDeploymentCredentials,
+  database_path?: string,
 ): FederationAdminDatabaseResult {
-  const database_path = resolve_local_database_path(project_dir);
-  const database = new BetterSqlite3(database_path);
+  const resolved_database_path = database_path === undefined
+    ? resolve_local_database_path(project_dir)
+    : resolve(project_dir, database_path);
+  const database = new BetterSqlite3(resolved_database_path);
   try {
     database.exec(admin_schema_sql());
     const apply_credentials = database.transaction(() => {
@@ -49,7 +52,7 @@ export function provision_local_admin_database(
     throw new CliError({
       title: "Local administrator database update failed",
       note: error instanceof Error ? error.message : String(error),
-      fix: `Check the SQLite database at ${database_path}.`,
+      fix: `Check the SQLite database at ${resolved_database_path}.`,
     });
   } finally {
     database.close();
