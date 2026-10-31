@@ -54,7 +54,7 @@ export async function preflight_release_service(fed_id: string): Promise<void> {
   await inspect_system_service(service_spec(fed_id, false, true));
 }
 
-/** 系统启动已安装版本，返回运行器本次分配的真实身份。 */
+/** 系统启动已安装版本；失败时先清理，清理也失败则同时保留两项错误。 */
 export async function start_release_process(input: LocalReleaseLaunch): Promise<{
   /** 本次系统托管主进程 PID。 */
   pid: number;
@@ -87,9 +87,13 @@ export async function start_release_process(input: LocalReleaseLaunch): Promise<
       await new Promise((resolve) => setTimeout(resolve, 100));
     }
     throw new Error("System service did not produce a matching runtime receipt");
-  } catch (error) {
-    await stop_system_service(spec);
-    throw error;
+  } catch (start_error) {
+    try {
+      await stop_system_service(spec);
+    } catch (cleanup_error) {
+      throw new AggregateError([start_error, cleanup_error], "Local release start and cleanup failed");
+    }
+    throw start_error;
   }
 }
 

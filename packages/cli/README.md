@@ -23,22 +23,57 @@ fed
 
 `fed create` 和 `fed deploy` 的 `--path` 默认是 `.`；指定其他目录时使用 `--path <path>`，不接受位置路径参数，例如 `fed deploy --path ./my-fed`。
 
-Fed 没有全局 active/default Federation，也不保存 `active_server_url`。`stop`、`restart`、`status`、`logs`、`query`、`web`、`server`、`manage` 与 `server manage` 使用互斥的 `--id <id>` 或 `--name <name>`，ID 和名称均精确匹配。省略选择参数时，TTY 显示列表，选择只用于本次操作；非交互环境缺少参数时报错。名称重名时，TTY 继续选择，非 TTY 报错。列表没有表示全局当前连接的星标。`fed manage --id fed_x` 直接进入目标管理工作区，不接受 action 位置参数；`fed server manage --id fed_x` 也支持同样的选择规则。
+Fed 没有全局 active/default Federation，也不保存 `active_server_url`。`stop`、`restart`、`clean`、`status`、`logs`、`query`、`web`、`server`、`manage` 与 `server manage` 使用互斥的 `--id <id>` 或 `--name <name>`，ID 和名称均精确匹配。省略选择参数时，TTY 显示列表，选择只用于本次操作；非交互环境缺少参数时报错。名称重名时，TTY 继续选择，非 TTY 报错。列表没有表示全局当前连接的星标。`fed manage --id fed_x` 直接进入目标管理工作区，不接受 action 位置参数；`fed server manage --id fed_x` 也支持同样的选择规则。
 
 ```bash
 fed status --id fed_x
 fed logs --id fed_x
 fed stop --id fed_x
 fed restart --id fed_x
+fed clean --id fed_x --dry-run
+fed clean --name my-fed --yes
 fed query GET /health --name my-fed
 fed manage --id fed_x
 fed server manage --id fed_x
 fed web --id fed_x --no-open
 ```
 
-`status` 可查询任意已保存连接，展示 registry record 与 `/health` 实时探测结果；本地实例还单独显示 launchd/systemd manager 状态。登记记录、系统服务状态和健康探测是独立信息。本地 release 的健康检查要求响应 `ok: true`，且 `fed_id`、`release_id`、`instance_id` 全部匹配受管实例，HTTP 200 本身不足以确认身份。`logs`、`stop` 和 `restart` 仅支持 CLI 管理的 local 实例。`logs` 读取现有 `service.log` 的最近日志。`stop` 禁用自动启动并停止服务，停止状态跨系统重启保留，直到用户显式执行 `fed deploy` 或 `fed restart`；这些操作按持久配置恢复自动启动策略。`restart` 只运行已安装的 release，读取持久运行配置，不读取源码或重新构建；原项目目录删除后仍可重启。重启还要求 `current.json` 与 registry 的 release 一致；失败候选与 current 不一致时直接报错，不隐式回滚。管理界面的 Remove connection 只移除连接，不停止服务。
+`status` 可查询任意已保存连接，分别展示 registry record、系统 manager 事实与 `/health` 实时探测；本地实例另展示发布历史。登记状态、保存的策略和发布结果都不证明服务已停止或某个 release 正在运行。本地 release 只有在 manager 核对实例身份，且健康响应为 `ok: true`、`fed_id`、`release_id`、`instance_id` 全部匹配时才显示 ready；HTTP 200 本身不足以确认身份。manager 检查异常显示 `unknown`，需要人工检查系统服务与健康端点。
 
-本地独立 Node 发布模型将编译后的入口、完整生产依赖及项目资源安装到 `~/.downcity/federation/deployments/<fed_id>/releases/<release_id>`，同级 `current.json` 记录当前 release。项目资源通过 `package.json.files` 显式声明；生产依赖及其运行资源完整纳入产物，`.env` 不进入产物。`deployment.scripts.build` 保留用于构建，本地目标拒绝 `deployment.scripts.deploy`，Node 直接运行编译后的入口。默认使用系统 Node，运行时必须与构建时的 Node 版本、平台和架构一致，尤其是含原生模块的依赖。
+`logs`、`stop` 和 `restart` 仅支持 CLI 管理的 local 实例。`logs` 读取现有 `service.log` 的最近日志。`stop` 禁用自动启动并停止服务，停止状态跨系统重启保留，直到用户显式执行 `fed deploy` 或符合恢复保护要求的 `fed restart`；这些操作按持久配置恢复自动启动策略。`restart` 只运行已安装 release，读取持久运行配置，不读取源码或重新构建；原项目目录删除后仍可重启。重启还要求 `current.json` 与 registry 的 release 一致。切换前的 build/package/preflight 失败保留旧实例及运行配置；没有待恢复切换时，允许 restart 原成功 release。进入切换后设置 `recovery_required = true`；切换失败或中断时阻断 restart，恢复必须显式执行 `fed deploy` 并成功。此保护持续到发布成功，后续 build/preflight 失败也不会清除。历史 `last_failure` 本身不构成阻断。管理界面的 Remove connection 只移除连接，不停止服务。
+
+本地独立 Node 发布模型将编译后的入口、完整生产依赖及项目资源安装到 `~/.downcity/federation/deployments/<fed_id>/releases/<release_id>`，同级 `current.json` 是成功激活指针，不代表该 release 当前正在运行。项目资源通过 `package.json.files` 显式声明；生产依赖及其运行资源完整纳入产物，`.env` 不进入产物。`deployment.scripts.build` 保留用于构建，本地目标拒绝 `deployment.scripts.deploy`，Node 直接运行编译后的入口。默认使用系统 Node，运行时必须与构建时的 Node 版本、平台和架构一致，尤其是含原生模块的依赖。
+
+本地 Node 发布按阶段处理失败，不自动回滚代码或数据库，也没有 `rollback` 命令。以下规则仅适用于 `local` Node，不适用于 Cloudflare Workers：
+
+| 阶段 | 失败后的处理 |
+| --- | --- |
+| build / package / validate / install / preflight | 保留旧实例及持久运行配置，不进入切换。 |
+| stop | 不启动候选，避免竞争实例；必须检查 manager 与健康端点确认实际状态。 |
+| prepare | 旧服务停止后才提交配置、初始化数据库及迁移；失败不启动候选，不自动回滚代码或数据库。 |
+| start / ready | 停止候选并移除自动启动关联；清理确认成功记为 `stopped`，异常记为 `unknown`。原始发布错误和清理错误都会报告；`unknown` 要求人工检查服务、自启关联和健康端点，不能宣称服务已停止。 |
+
+发布摘要保存在 `~/.downcity/federation/deployments/<fed_id>/deployment.json`。`status` 展示最后成功 release、最近失败 release 和失败阶段，以及 `latest` 的 release、outcome、phase、cutover、candidate、cleanup 与 `recovery required`。未形成候选 release 时显示 `not produced`；没有历史时单独显示未记录。`last_success` 不被失败覆盖，`last_failure` 与 `latest` 分别显示；`cleanup` 是该次尝试的清理结果，不是实时服务状态。记录缺失或损坏也不替代 manager 与健康检查。
+
+`fed clean` 仅清理本地已登记 Fed 的 release。使用互斥且精确匹配的 `--id <id>` 或 `--name <name>`；省略时，TTY 从列表选择一个 Fed，选择仅用于本次操作，非 TTY 直接报错。名称重名时，TTY 继续选择，非 TTY 报错。它不清理远程连接或未登记目录。
+
+```bash
+fed clean                              # TTY 列表选择后预览、确认
+fed clean --id fed_x --dry-run          # 只预览
+fed clean --name my-fed                 # 预览后交互确认
+fed clean --id fed_x --yes              # 显式确认，适用于非交互调用
+```
+
+清理先预览各 release 的 ID、大小及删除或保留原因，再确认删除。`--dry-run` 只预览，不删除；非交互删除必须显式传入 `--yes`，该参数不绕过保护检查。默认始终保留最近 3 个成功 release，不开放 `--keep` 参数。以下 release 同样受保护：
+
+- 成功激活指针 `current.json` 或 registry 引用的 release。
+- 服务 `launch.json` 引用的 release，包括处于恢复待运行状态的引用。
+- 进行中发布尝试引用的 release，以及候选清理结果无法确认的 release。
+- 未知、损坏或没有可信发布记录的 release；预览会解释保留原因。
+
+运行器不可验证或其他保护信息检查出错时，直接拒绝清理。同一 Fed 的操作锁在目标选择后覆盖预览、确认与删除全过程，阻止并发切换改变引用。
+
+发布尝试保存在 `~/.downcity/federation/deployments/<fed_id>/attempts/<operation_id>.json`，用于识别成功与失败历史。失败产物仅由用户手动执行 `fed clean` 删除，仍须通过上述保护检查。CLI 不自动清理 release；`clean` 不删除 data、config、logs、staging 或部署历史，release 删除后发布尝试记录和发布摘要仍保留。
 
 运行配置单独保存在 `~/.downcity/federation/config/<fed_id>/runtime.env.json`，文件权限为 `0600`。默认 SQLite 位于 `~/.downcity/federation/data/<fed_id>/data.sqlite`。显式指定的数据库保持其绝对路径；删除源码前需确认数据库不在准备删除的目录内。已登记的数据库文件缺失时直接报错，拒绝创建空库替代；没有显式路径但源码目录中存在 `data.sqlite` 或 `data/local.db` 时，要求在项目 `.env` 中显式声明数据库路径，不猜测或迁移。`fed deploy --dry-run` 在临时目录构建和校验产物并清理，不安装 release、不修改持久运行配置、不启停实例；构建脚本仍可能向项目写入构建输出。
 

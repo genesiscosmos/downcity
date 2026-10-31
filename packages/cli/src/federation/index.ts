@@ -23,6 +23,7 @@ import { run_federation_query_command } from "@/federation/query/commands/query.
 import { prompt_add_federation_server } from "@/federation/server/FederationServerManager.js";
 import { resolve_federation_target, type FederationTargetOptions } from "@/federation/server/FederationTarget.js";
 import { run_federation_instance_command } from "@/federation/server/FederationInstanceCommands.js";
+import { run_federation_clean, type FederationCleanOptions } from "@/federation/deploy/release/LocalReleaseCleaner.js";
 import { open_federation_server_workspace } from "@/federation/server/FederationServerWorkspace.js";
 import { CliError } from "@/shared/CliError.js";
 import { helpText, langOptionText, resolveCliLocale, setCliLocale, t } from "@/shared/CliLocale.js";
@@ -241,6 +242,22 @@ export async function runDownfedCli(): Promise<void> {
     }, "Downcity CLI"));
 
   register_instance_commands(program);
+  program.command("clean")
+    .description(t({ zh: "预览并清理本地发布产物，保留最近三个成功版本与所有受保护引用", en: "preview and clean local releases, retaining the latest three successful versions and protected references" }))
+    .option("--id <id>", "Federation ID (exact match)")
+    .option("--name <name>", "Federation name (exact match)")
+    .option("--dry-run", t({ zh: "仅展示清理清单", en: "preview the cleanup plan without deleting" }))
+    .option("--yes", t({ zh: "明确确认删除清单中的候选版本", en: "explicitly confirm deletion of listed release candidates" }))
+    .helpOption("--help", helpText())
+    .action(createVersionBanner(packageJson.version, async (options: FederationTargetOptions & {
+      /** Commander 读取的只读预览开关。 */
+      dryRun?: boolean;
+      /** 用户显式确认删除。 */
+      yes?: boolean;
+    }) => {
+      const clean_options: FederationCleanOptions = { id: options.id, name: options.name, dry_run: options.dryRun, yes: options.yes };
+      await run_federation_clean(clean_options);
+    }));
 
   program.hook("preAction", (thisCommand) => {
     const opts = thisCommand.optsWithGlobals<{ quiet?: boolean; verbose?: boolean }>();

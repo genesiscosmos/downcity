@@ -1,9 +1,10 @@
 /**
  * 独立 Local Node 发布的持久运行配置。
  *
- * 仅 prepare 在部署时读取源码 .env；restart 通过 read 读取持久快照。
- * SQLite 只解析现有文件的位置，不复制或迁移数据。配置和数据目录仅限当前用户访问，
- * 配置通过同目录临时文件原子替换，错误信息不包含环境变量值或 JSON 原文。
+ * preview 只读合并源码 .env 与持久快照，供部署预检使用；commit 在切换时持久化，
+ * prepare 组合两者，restart 通过只读的 read 获取快照。SQLite 只解析现有文件位置，
+ * 不复制或迁移数据。commit 将配置和数据目录设为仅限当前用户访问，配置通过同目录
+ * 0600 临时文件原子替换，错误信息不包含环境变量值或 JSON 原文。
  */
 import { randomUUID } from "node:crypto";
 import {
@@ -16,7 +17,7 @@ import {
   statSync,
   writeFileSync,
 } from "node:fs";
-import { join, resolve } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parse as parse_dotenv } from "dotenv";
 import { CliError } from "@/shared/CliError.js";
@@ -29,26 +30,25 @@ const RUNTIME_ENV_KEYS = new Set([
   "DOWNCITY_FEDERATION_BASE_URL", "DOWNCITY_DATA_DIR",
 ]);
 
-/** 部署时合并旧配置和源码 .env，生成不依赖源码目录的运行快照。 */
-export function prepare_local_runtime_config(
-  project_dir: string,
-  config_dir: string,
-  data_dir: string,
-): {
+/** 已完成只读解析的运行快照；commit 直接持久化此结果，不重新读取源码配置。 */
+export interface PreparedLocalRuntimeConfig {
   /** 持久化业务配置；CLI 的监听地址、身份和进程环境由启动者另外注入。 */
   runtime_env: Record<string, string>;
   /** SQLite 文件的绝对路径，可直接传给管理员数据库部署器。 */
   database_path: string;
-  /** 权限为 0600 的 runtime.env.json 绝对路径。 */
+  /** 待提交的 runtime.env.json 绝对路径；commit 使用 0600 权限原子写入。 */
   config_path: string;
-} {
+}
+
+/** 只读合并旧配置和源码 .env，不创建目录、修改权限或写入快照。 */
+export function preview_local_runtime_config(
+  project_dir: string,
+  config_dir: string,
+  data_dir: string,
+): PreparedLocalRuntimeConfig {
   const config_path = resolve(config_dir, "runtime.env.json");
   const absolute_data_dir = resolve(data_dir);
   try {
-    for (const directory of [resolve(config_dir), absolute_data_dir]) {
-      mkdirSync(directory, { recursive: true, mode: 0o700 });
-      chmodSync(directory, 0o700);
-    }
     const previous_env = existsSync(config_path) ? read_local_runtime_config(config_path) : {};
     const source_env_path = resolve(project_dir, ".env");
     const source_env = existsSync(source_env_path)
@@ -74,7 +74,6 @@ export function prepare_local_runtime_config(
       DOWNCITY_FEDERATION_DATABASE_URL: `file:${database_path}`,
       DOWNCITY_DATA_DIR: absolute_data_dir,
     };
-    write_runtime_config(config_path, runtime_env);
     return { runtime_env, database_path, config_path };
   } catch (error) {
     if (error instanceof CliError) throw error;
@@ -82,10 +81,36 @@ export function prepare_local_runtime_config(
   }
 }
 
-/** 仅读取运行快照并校验 string map；绝不读取源码 .env 或当前进程环境。 */
+/** 提交预检后的快照，将配置目录和 runtime_env 指定的数据目录设为 0700。 */
+export function commit_local_runtime_config(prepared: PreparedLocalRuntimeConfig): void {
+  try {
+    const data_dir = prepared.runtime_env.DOWNCITY_DATA_DIR;
+    if (!data_dir) throw new CliError({ title: "Local runtime data directory is missing" });
+    for (const directory of [dirname(prepared.config_path), resolve(data_dir)]) {
+      mkdirSync(directory, { recursive: true, mode: 0o700 });
+      chmodSync(directory, 0o700);
+    }
+    write_runtime_config(prepared.config_path, prepared.runtime_env);
+  } catch (error) {
+    if (error instanceof CliError) throw error;
+    throw new CliError({ title: "Unable to commit Local runtime configuration" });
+  }
+}
+
+/** 组合只读解析与持久化，返回已提交的运行快照。 */
+export function prepare_local_runtime_config(
+  project_dir: string,
+  config_dir: string,
+  data_dir: string,
+): PreparedLocalRuntimeConfig {
+  const prepared = preview_local_runtime_config(project_dir, config_dir, data_dir);
+  commit_local_runtime_config(prepared);
+  return prepared;
+}
+
+/** 仅读取运行快照并校验 string map；不修改权限或读取源码 .env、当前进程环境。 */
 export function read_local_runtime_config(config_path: string): Record<string, string> {
   try {
-    chmodSync(config_path, 0o600);
     const value: unknown = JSON.parse(readFileSync(config_path, "utf8"));
     if (!value || typeof value !== "object" || Array.isArray(value)
       || Object.values(value).some((entry) => typeof entry !== "string")) {

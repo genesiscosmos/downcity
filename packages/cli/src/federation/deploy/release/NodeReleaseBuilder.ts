@@ -404,6 +404,17 @@ export async function build_node_release(
 export async function read_node_release(
   release_dir: string, expected_fed_id?: string, expected_release_id?: string,
 ): Promise<NodeReleaseManifest> {
+  const manifest = await verify_node_release(release_dir, expected_fed_id, expected_release_id);
+  if (manifest.node_version !== process.versions.node || manifest.platform !== process.platform || manifest.arch !== process.arch) {
+    throw new Error(`Release requires Node ${manifest.node_version} ${manifest.platform}/${manifest.arch}; current Node ${process.versions.node} ${process.platform}/${process.arch}`);
+  }
+  return manifest;
+}
+
+/** 仅校验产物身份与完整性；清理旧版本不要求它适配当前 Node 运行环境。 */
+export async function verify_node_release(
+  release_dir: string, expected_fed_id?: string, expected_release_id?: string,
+): Promise<NodeReleaseManifest> {
   if (!(await fs.lstat(release_dir)).isDirectory()) throw new Error("Release root must be a real directory");
   const root_dir = await fs.realpath(release_dir);
   const manifest_path = path.join(root_dir, "release.json");
@@ -431,9 +442,6 @@ export async function read_node_release(
   if (expected_release_id !== undefined && manifest.release_id !== expected_release_id) throw new Error("Release ID mismatch");
   assert_relative_path(manifest.entry);
   if (manifest.entry !== release_entry) throw new Error(`Unsupported Node release entry: ${manifest.entry}`);
-  if (manifest.node_version !== process.versions.node || manifest.platform !== process.platform || manifest.arch !== process.arch) {
-    throw new Error(`Release requires Node ${manifest.node_version} ${manifest.platform}/${manifest.arch}; current Node ${process.versions.node} ${process.platform}/${process.arch}`);
-  }
   const entry_path = path.join(root_dir, manifest.entry);
   const entry_stat = await fs.lstat(entry_path);
   if (!entry_stat.isFile() || entry_stat.size === 0 || !is_within(root_dir, await fs.realpath(entry_path))) {
