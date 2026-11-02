@@ -124,6 +124,8 @@ export interface AgentSession extends AgentSessionActor {
   clear_secrets(): void;
   /** 可信委派运行时向已登记的父 Turn 投递结果；迟到结果返回 false，不启动新 Turn。 */
   accept_delegation_result(turn_id: string, request_id: string, query: AgentSessionPromptInput["query"]): Promise<boolean>;
+  /** 可信后台事实接收；由登记来源的宿主调用，模型不可指定目标或冒用用户身份。 */
+  accept_background_result(input: import("../session/SessionBackgroundInput.js").SessionBackgroundInput): Promise<import("../session/SessionBackgroundInput.js").SessionBackgroundReceipt>;
   /** 通过拥有者归档当前会话；运行或排队中拒绝，成功后原句柄不可再提交输入。 */
   archive(): Promise<AgentArchiveSessionResult>;
   /** 当前 session 所属 agent_id。 */

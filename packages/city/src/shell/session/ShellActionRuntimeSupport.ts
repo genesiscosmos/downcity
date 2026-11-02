@@ -8,6 +8,7 @@
 
 import path from "node:path";
 import fs from "fs-extra";
+import { write_shell_snapshot } from "./ShellSnapshotStorage.js";
 import type { ShellHostContext } from "@downcity/type/shell";
 import type {
   ShellRuntimeState,
@@ -223,8 +224,7 @@ export async function persist_snapshot(session: ShellSessionRuntimeState): Promi
   // Snapshot metadata is redacted before insertion; previews and references
   // derive exclusively from the per-execution redacted output stream. Persist
   // that safe state even after the originating Session has cleared its store.
-  await fs.ensureDir(path.dirname(session.snapshot_file_path));
-  await fs.writeJson(session.snapshot_file_path, session.snapshot, { spaces: 2 });
+  await write_shell_snapshot(session.snapshot_file_path, session.snapshot);
 }
 
 function enqueue_persisted_append(
@@ -434,8 +434,5 @@ export async function finalize_exit(
   session.resolve_completion();
   schedule_cleanup(state, session.snapshot.shell_id);
 
-  if (session.snapshot.auto_notify_on_exit && session.snapshot.notification_sent === false) {
-    session.snapshot.notification_sent = true;
-    await persist_snapshot(session);
-  }
+  state.on_terminal?.(session.snapshot.shell_id);
 }

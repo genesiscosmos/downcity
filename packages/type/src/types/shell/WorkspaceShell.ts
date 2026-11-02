@@ -72,6 +72,9 @@ export interface WorkspaceShell {
     network?: SandboxNetworkMode;
   }): void;
 
+  /** 宿主可接入后台结果回投；Shell只发布进程事实，不直接执行模型。 */
+  set_completion_handler?(handler: import("./ShellRuntime.js").ShellCompletionHandler): void;
+
   /** 更新后续进程使用的 Workspace 环境变量。 */
   set_env(env: Readonly<Record<string, string>>): void;
 

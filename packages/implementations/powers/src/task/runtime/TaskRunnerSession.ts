@@ -47,6 +47,7 @@ export async function createTaskSessionRuntimePort(params: {
       task_id: params.task_id,
       execution_id: params.execution_id,
       role: "executor",
+      delegation_depth: 1,
     },
     ...(inherit_model_from ? { inherit_model_from } : {}),
   });
@@ -57,6 +58,8 @@ export async function createTaskSessionRuntimePort(params: {
       task_id: params.task_id,
       execution_id: params.execution_id,
       role: "user_simulator",
+      // 模拟评审器只有受限执行额度，不继续扩展自主分工。
+      delegation_depth: 2,
     },
     ...(inherit_model_from ? { inherit_model_from } : {}),
   });

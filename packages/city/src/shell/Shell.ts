@@ -8,6 +8,8 @@
  */
 
 import path from "node:path";
+import { ShellCompletionDelivery } from "./session/ShellCompletionDelivery.js";
+import type { ShellCompletionHandler } from "@downcity/type/shell";
 import type {
   ShellActionResponse,
   ShellBinding,
@@ -67,6 +69,8 @@ export class Shell {
   private reset_error?: unknown;
   /** 释放标记，在异步清理开始之前阻止新命令。 */
   private disposed = false;
+  /** Shell快照驱动的结果投递，跟随本实例释放。 */
+  private completions?: ShellCompletionDelivery;
   /** 模型可调用的 Shell tools。 */
   readonly tools: ShellToolSet;
 
@@ -142,6 +146,14 @@ export class Shell {
       ...(sandbox.explain_denial ? { explain_denial: (output: string) => sandbox.explain_denial!(output) } : {}),
     };
     this.binding = next_binding;
+    this.completions = new ShellCompletionDelivery(next_binding.data_path, this.state, this.options.logger);
+    this.state.on_terminal = (shell_id) => this.completions?.notify(shell_id);
+  }
+
+  /** 由宿主接入Session回投，不让Shell依赖Agent或模型。 */
+  set_completion_handler(handler: ShellCompletionHandler): void {
+    if (!this.completions) throw new Error("Bind Shell before its completion handler");
+    this.completions.bind(handler);
   }
 
   /** 关闭全部 Shell Sessions，再停止 Sandbox 计算资源并保留持久文件系统。 */
@@ -149,6 +161,7 @@ export class Shell {
     this.disposed = true;
     this.dispose_promise ??= (async () => {
       const errors: unknown[] = [];
+      await this.completions?.dispose();
       await this.reset_promise?.catch(() => undefined);
       await this.sandbox_ready?.catch(() => undefined);
       await Promise.allSettled([...this.pending_starts]);
@@ -243,14 +256,20 @@ export class Shell {
     if (this.reset_promise && (action === "start" || action === "exec")) {
       throw new Error("Shell Sandbox is resetting");
     }
+    await this.completions?.recover();
     const session_id = execution.session?.session_id;
     const turn_id = execution.session?.turn_id;
+    const agent_id = execution.session?.agent_id;
+    const category = execution.session?.category;
     const context = this.create_host_context(execution);
     const request = {
       ...payload,
       ...(session_id ? { owner_context_id: session_id } : {}),
       ...(turn_id ? { turn_id } : {}),
       ...(execution.tool_call_id ? { tool_call_id: execution.tool_call_id } : {}),
+      ...(agent_id && session_id && category && turn_id ? {
+        completion_target: { agent_id, session_id, category, turn_id },
+      } : { completion_target: undefined }),
     };
     switch (action) {
       case "start":

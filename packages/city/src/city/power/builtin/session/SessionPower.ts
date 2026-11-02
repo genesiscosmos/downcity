@@ -19,13 +19,13 @@ import {
 export class SessionPower extends Power {
   readonly name = "session";
   readonly title = "Session";
-  readonly description = "Read the current agent's sessions with check/messages from every Session type, including Task and archived history. Chat and first-level Work can create multiple Work children without a count or concurrency limit; delegation depth is limited to 2; second-level Work and Task cannot delegate. Send/reply/stop/archive only control directly created Work Sessions. Results return automatically. Other agents' sessions are inaccessible.";
+  readonly description = "Read the current agent's sessions with check/messages, including Task and archived history. Chat can start autonomous Work Main Sessions; a Work Main, including a Task executor, can create multiple Child Sessions. Child Sessions cannot delegate. Send/reply/stop/archive only control directly created Work Sessions. Stopping a Chat reply does not stop its Main Sessions; explicitly stopping a Main also stops its Children. Results and pending questions return automatically. Other agents' sessions are inaccessible.";
   readonly actions: PowerActions;
 
   constructor(private readonly options: CityGroupPowerOptions) {
     super();
     this.actions = {
-      start: this.action(session_start_input, "Create project work with optional model_id. Chat and first-level Work may create multiple children, including concurrently; only delegation depth is limited. Task and second-level Work cannot start. Select workspace_id from context.workspaces.list and write a self-contained query. Returns immediately; results return automatically. Do not poll.", "write", async (args, context) => {
+      start: this.action(session_start_input, "Start project work with optional model_id. Chat starts a Work Main; any Work Main, including a Task executor, can start multiple Children. Children cannot delegate. Select workspace_id from context.workspaces.list and write a self-contained query. Returns immediately; results and questions return automatically. Do not poll.", "write", async (args, context) => {
         const work = this.select_work(context);
         const receipt = await work.spawn(args, session_delegation_caller(context));
         const detail = await work.read({ session_id: receipt.session_id, session_category: "work", limit: 1 });

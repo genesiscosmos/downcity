@@ -26,6 +26,10 @@ import type {
 export interface SessionPort {
   /** 当前 Session 稳定标识。 */
   readonly session_id: string;
+  /** 当前 Session 持久化的真实来源，不由适配层猜测。 */
+  readonly origin: import("@downcity/type").SessionOrigin;
+  /** 当前执行项目标识；切换工作区后读取最新值。 */
+  readonly workspace_id?: string;
 
   /** 获取当前 Session 优先解析后的运行时模型实例。 */
   get_model(): ModelClient | undefined;

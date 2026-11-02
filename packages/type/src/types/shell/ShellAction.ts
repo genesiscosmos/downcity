@@ -57,6 +57,12 @@ export type ShellSessionSnapshot = {
   shell_id: string;
   /** 发起该 shell 的 chat/context 标识；不存在时表示非聊天上下文触发。 */
   owner_context_id?: string;
+  /** 可信宿主登记的回投身份；只作内部路由，不授予额外权限。 */
+  completion_target?: import("./ShellRuntime.js").ShellCompletionTarget;
+  /** 自动投递的确认状态；discarded不等于通知成功。 */
+  notification_state?: "pending" | "delivered" | "discarded";
+  /** 监管中断说明；不代表原进程确定退出。 */
+  interruption_reason?: string;
   /** 原始命令字符串。 */
   cmd: string;
   /** 命令执行工作目录（绝对路径）。 */
@@ -133,6 +139,8 @@ export type ShellStartRequest = {
   owner_context_id?: string;
   /** 显式指定当前 turn id。 */
   turn_id?: string;
+  /** 仅由可信Shell执行上下文填入的完成目标。 */
+  completion_target?: import("./ShellRuntime.js").ShellCompletionTarget;
   /** 是否在 shell 结束后自动回投主 chat agent。 */
   auto_notify_on_exit?: boolean;
   /** 是否使用 PTY 运行；交互式 session 默认 true，一次性 exec 默认 false。 */

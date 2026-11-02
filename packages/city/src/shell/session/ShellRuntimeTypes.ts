@@ -91,6 +91,8 @@ export type ShellSessionRuntimeState = {
  * `Shell` 实例级状态。
  */
 export type ShellRuntimeState = {
+  /** 终态已可靠保存后通知Shell拥有者检查待回投结果，不等待模型执行。 */
+  on_terminal?: (shell_id: string) => void;
   /**
    * 当前 shell 归一化后的运行参数。
    */

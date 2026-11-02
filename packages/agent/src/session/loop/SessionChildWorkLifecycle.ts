@@ -30,7 +30,7 @@ export class SessionChildWorkLifecycle {
   async wait(context: SessionTurnContext, has_pending: () => boolean): Promise<boolean> {
     const origin = context.session.origin;
     const signal = context.lifecycle.abort_signal;
-    if (!this.child_work || origin.category !== "work" || origin.type !== "work"
+    if (!this.child_work || origin.category !== "work"
       || read_session_delegation_depth(origin) !== 1 || signal.aborted) return false;
 
     // 先装监听再检查输入，覆盖子结果在 wait 调用前同步入队的窗口。
@@ -67,7 +67,8 @@ export class SessionChildWorkLifecycle {
    * 清理故障独立记录，不能让父 Turn 的完成句柄永久悬挂。
    */
   async cancel(context: SessionTurnContext): Promise<void> {
-    if (!this.child_work) return;
+    // Chat 的本轮交流结束不撤销自主 Main；只有 Work 执行负责所属 Child。
+    if (!this.child_work || context.session.origin.category !== "work") return;
     let operation = this.cancellations.get(context);
     if (!operation) {
       operation = Promise.resolve().then(async () => {

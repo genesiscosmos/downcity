@@ -182,7 +182,7 @@ export function normalize_session_origin(input?: SessionOrigin): SessionOrigin {
  * 参数用索引签名而不是具体字段：来源在各包里有各自的镜像类型，
  * 它们共有的只是「可携带任意 JSON 字段」这一点。
  *
- * Chat 为 0；无委派关系的普通 Work 为 1，表示用户直接创建的工作。
+ * Chat 为 0；无委派关系的 Work 为 1，表示宿主创建的 Main。
  * 有委派关系却缺少深度，或显式值非法时返回 Infinity；Subwork 的固定深度为 2。
  * 该函数只服务于写操作；读取历史不依赖深度。
  */
@@ -192,7 +192,7 @@ export function read_session_delegation_depth(
   const depth = origin?.delegation_depth;
   if (depth === undefined && origin?.category === SESSION_ORIGIN_CATEGORY_CHAT) return 0;
   if (depth === undefined && origin?.category === SESSION_ORIGIN_CATEGORY_WORK
-    && origin.type === SESSION_ORIGIN_TYPE_WORK && origin.parent_session_id === undefined
+    && origin.parent_session_id === undefined
     && origin.parent_session_category === undefined && origin.parent_agent_id === undefined) return 1;
   return typeof depth === "number" && Number.isInteger(depth) && depth >= 0
     ? depth : Number.POSITIVE_INFINITY;
@@ -201,22 +201,14 @@ export function read_session_delegation_depth(
 /**
  * 解析阻止派发的原因；可以派发时返回 null。
  *
- * 这是「能不能派发」的唯一来源，判据与用户可见原因共用同一条逻辑：
- * - 任务会话已经是自动执行链路的一环，再向外派发会让职责与额度都不可控，
- *   因此一律不允许。
- * - 其余会话按派发层数限制，避免失控嵌套。
+ * 来源 type 只表达业务来源；Chat 创建 Main，Work Main 创建 Child。
+ * 专用执行器的工具由宿主执行配置限制，本规则不按来源名授予或剥夺分工能力。
  */
 export function resolve_delegation_blocked_reason(
   origin: { readonly [key: string]: unknown } | undefined,
 ): string | null {
-  if (String(origin?.type ?? "").trim() === SESSION_ORIGIN_TYPE_TASK) {
-    return "Task sessions cannot delegate work";
-  }
-  const origin_type = String(origin?.type ?? "");
-  const known_chat = origin?.category === SESSION_ORIGIN_CATEGORY_CHAT
-    && ORIGIN_CATEGORY_BY_TYPE[origin_type] === SESSION_ORIGIN_CATEGORY_CHAT;
-  const ordinary_work = origin?.category === SESSION_ORIGIN_CATEGORY_WORK
-    && origin_type === SESSION_ORIGIN_TYPE_WORK;
+  const known_chat = origin?.category === SESSION_ORIGIN_CATEGORY_CHAT;
+  const ordinary_work = origin?.category === SESSION_ORIGIN_CATEGORY_WORK;
   if (!known_chat && !ordinary_work) return "Session role cannot delegate work";
   if (known_chat && read_session_delegation_depth(origin) !== 0) return "Invalid Chat delegation depth";
   const depth = read_session_delegation_depth(origin);
@@ -232,7 +224,7 @@ export function resolve_delegation_blocked_reason(
  * 判断一个来源是否允许派发其他会话。
  *
  * 仅判断创建工作能力；读取历史与控制已有直接子会话分别授权。
- * 任务会话不能派发；Chat 和一级普通 Work 可以创建，二级 Work 达到上限。
+ * Chat 和任意来源的 Work Main 可以创建，Work Child 达到上限。
  */
 export function can_delegate_work(
   origin: { readonly [key: string]: unknown } | undefined,

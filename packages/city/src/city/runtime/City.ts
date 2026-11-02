@@ -8,6 +8,7 @@
 
 import { Agent, Group } from "@downcity/agent";
 import path from "node:path";
+import { create_shell_completion_handler } from "./ShellCompletionBridge.js";
 import { CityPowerRuntime } from "@/city/power/CityPowerRuntime.js";
 import { AiPower } from "@/city/power/builtin/AiPower.js";
 import { AgentPower } from "@/city/power/builtin/AgentPower.js";
@@ -492,6 +493,7 @@ export class City implements CityRuntime {
       throw new Error(`Agent already exists in City: ${agent.id}`);
     }
     agent.bind(this, {
+      list_agents: () => [...this.agents_by_id.values()],
       resolve_agent: (agent_id) => this.require_agent(agent_id),
       resolve_workspace: async (workspace_id) => await this.enter_workspace(agent.id, workspace_id),
     });
@@ -643,6 +645,10 @@ export class City implements CityRuntime {
         },
       ],
     });
+    workspace.shell?.set_completion_handler?.(create_shell_completion_handler(
+      (agent_id) => this.agents_by_id.get(agent_id),
+      async (agent_id, workspace_id) => await this.enter_workspace(agent_id, workspace_id),
+    ));
   }
 
   /** 拒绝在 City 关闭后继续注入运行时资源。 */

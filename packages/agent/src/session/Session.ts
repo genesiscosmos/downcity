@@ -486,6 +486,15 @@ export class Session implements AgentSession {
     return await this.session_loop.accept_delegation_result(turn_id, request_id, query);
   }
 
+  /** 可信宿主的后台结果回投，归档与专用执行权限仍由 Session 校验。 */
+  async accept_background_result(input: import("@/types/session/SessionBackgroundInput.js").SessionBackgroundInput): Promise<import("@/types/session/SessionBackgroundInput.js").SessionBackgroundReceipt> {
+    if (this.archive_state !== "active") return "discarded";
+    this.assert_execution_profile?.();
+    await this.step_input.initialize();
+    if (this.archive_state !== "active" || this.replacing_history) return "discarded";
+    return await this.session_loop.accept_background_result(input);
+  }
+
   /** 归档委托给拥有者，不直接搬动 Session 数据。 */
   async archive(): Promise<import("@/types/agent/SessionTypes.js").AgentArchiveSessionResult> {
     if (!this.archive_session) throw new Error("Session archive requires an owning Agent collection");
@@ -721,6 +730,8 @@ export class Session implements AgentSession {
     if (this.runtime_port) return this.runtime_port;
     this.runtime_port = create_runtime_session_port({
       session_id: this.id,
+      origin: this.origin,
+      get_workspace_id: () => this.workspace_id,
       get_model: () => this.get_model(),
       messages: async () => await this.session_messages.list_history_messages(),
       prompt: async (input) => await this.prompt(input),

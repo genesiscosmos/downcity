@@ -7,7 +7,7 @@
  * - Workspace 由 City 在调用点注入，Power 不自行解析。
  */
 
-import { SESSION_ORIGIN_CATEGORY_WORK, SESSION_ORIGIN_TYPE_WORK } from "@downcity/type";
+import { SESSION_ORIGIN_CATEGORY_WORK } from "@downcity/type";
 import type { AgentSession, AgentSessionCollection, SessionPort } from "@downcity/agent";
 import type { WorkspaceRuntime } from "@/workspace/index.js";
 import type {
@@ -83,8 +83,10 @@ export function create_power_session_collection(input: {
       });
       return to_handle(session.id, session.origin, session.workspace_id);
     },
-    runtime: (session_id, category = SESSION_ORIGIN_CATEGORY_WORK) =>
-      to_handle(session_id, { category, type: SESSION_ORIGIN_TYPE_WORK }, undefined),
+    runtime: (session_id, category = SESSION_ORIGIN_CATEGORY_WORK) => {
+      const runtime = read_sessions().runtime(session_id, category);
+      return to_handle(session_id, runtime.origin, runtime.workspace_id);
+    },
     remove: async (session_id, category) => {
       await read_sessions().get(session_id, category, { workspace: input.workspace });
       return await read_sessions().remove(session_id, category);

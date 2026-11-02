@@ -7,6 +7,7 @@
  */
 
 import fs from "fs-extra";
+import { write_shell_snapshot } from "../ShellSnapshotStorage.js";
 import type { PrivateShellHostContext } from "../ShellPrivateValues.js";
 import { create_shell_output_redactor, SHELL_REDACTION_ERROR } from "../ShellPrivateValues.js";
 import { redact_public_value } from "@/power/core/PowerPrivateValues.js";
@@ -123,6 +124,18 @@ export async function start_shell_session(
     }
   }
 
+  // 启动前保存可信目标。即使随后进程监管中断，也能报告未知状态而不重跑命令。
+  if (request.completion_target) {
+    await write_shell_snapshot(snapshot_file_path, {
+      shell_id, ...(owner_context_id ? { owner_context_id } : {}),
+      completion_target: request.completion_target,
+      cmd: public_metadata.cmd, cwd: public_metadata.cwd, shell_path: public_metadata.shell_path,
+      target, execution_backend: target, status: "starting",
+      started_at: Date.now(), updated_at: Date.now(), version: 1,
+      output_chars: 0, dropped_chars: 0, external_refs: [],
+      auto_notify_on_exit: request.auto_notify_on_exit !== false, notification_sent: false,
+    });
+  }
   const spawn_result = await spawn_shell_process({
     context,
     execution_id: shell_id,
@@ -136,6 +149,21 @@ export async function start_shell_session(
     terminal: request.terminal !== false,
     cols: request.cols,
     rows: request.rows,
+  }).catch(async (error: unknown) => {
+    if (request.completion_target) {
+      await write_shell_snapshot(snapshot_file_path, {
+        shell_id, ...(owner_context_id ? { owner_context_id } : {}),
+        completion_target: request.completion_target,
+        cmd: public_metadata.cmd, cwd: public_metadata.cwd, shell_path: public_metadata.shell_path,
+        target, execution_backend: target, status: "failed",
+        started_at: Date.now(), updated_at: Date.now(), version: 2,
+        output_chars: 0, dropped_chars: 0, external_refs: [],
+        interruption_reason: "Process startup failed; actual process state is unknown. The command was not restarted.",
+        auto_notify_on_exit: request.auto_notify_on_exit !== false, notification_sent: false,
+      });
+      state.on_terminal?.(shell_id);
+    }
+    throw error;
   });
   const child = spawn_result.child;
   let public_cwd: string;
@@ -155,6 +183,7 @@ export async function start_shell_session(
     snapshot: {
       shell_id,
       ...(owner_context_id ? { owner_context_id } : {}),
+      ...(request.completion_target ? { completion_target: request.completion_target } : {}),
       cmd: public_metadata.cmd,
       cwd: public_cwd,
       shell_path: public_metadata.shell_path,
@@ -225,6 +254,7 @@ export async function start_shell_session(
   ) {
     latest.snapshot.auto_notify_on_exit = true;
     await persist_snapshot(latest);
+    state.on_terminal?.(shell_id);
   }
   const chunk = create_output_chunk({
     shell_id,

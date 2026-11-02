@@ -1,8 +1,8 @@
 # Session Power 委派与管理设计
 
-> 状态：已确认，核心代码与用户文档已实施，验证说明见第 13 节。
+> 状态：历史设计记录。当前 Main/Child、Task 分工与后台回传语义以 [Session P0 运行时](session-p0-runtime.md) 及源码为准。
 >
-> 已确认规则：Chat Session 可以创建多个直接子 Work；一级 Work 生命周期内最多绑定一个二级 Work；二级 Work 不再委派。所有类型均可使用 check/messages，Task 不可创建或控制会话。
+> 本文后续的 Task 禁止委派、父 Chat 停止联动、二级 Work 数量限制不代表当前规则。
 
 ## 1. 目标与范围
 

@@ -71,6 +71,8 @@ import { SessionBusyError } from "@/session/SessionBusyError.js";
 import { local_user_prompt_actor, session_prompt_actor_schema, same_session_prompt_actor } from "@/types/sdk/SessionPromptActor.js";
 import type { SessionPromptActor } from "@/types/sdk/SessionPromptActor.js";
 import { CompletionPersistenceError, prepare_session_completion } from "./SessionCompletionJournal.js";
+import { accept_background_input } from "./SessionBackgroundInput.js";
+import type { SessionBackgroundInput, SessionBackgroundReceipt } from "@/types/session/SessionBackgroundInput.js";
 
 const QUEUED_PROMPT_CANCELLED_MESSAGE =
   "Prompt cancelled because session was stopped";
@@ -164,11 +166,7 @@ export class SessionLoop {
     return this.session_executor.is_executing();
   }
 
-  /**
-   * 追加一条新的 prompt。
-   *
-   * 未提供 `actor` 时按本地用户处理；之后所有占用仲裁、幂等归属与恢复都基于归一化结果。
-   */
+  /** 接收普通输入；缺省身份为本地用户，归一化后用于占用、去重与恢复。 */
   async prompt(input: AgentSessionPromptInput): Promise<AgentSessionTurnHandle> {
     input.abort_signal?.throwIfAborted();
     let normalized: NormalizedAgentSessionPromptInput = {
@@ -246,16 +244,7 @@ export class SessionLoop {
   /** 对外提供只读占用快照，运行态判断以同一事实源为准。 */
   occupied_by(): AgentSessionPromptInput["actor"] | null { return this.occupation.occupied_by; }
 
-  /**
-   * 从未终止的 canonical Turn 恢复占用；不可恢复的历史保持可读。
-   *
-   * 关键点（中文）
-   * - 只恢复本 Session 自己产生、且尚未收口的执行。fork 导入的历史带有 `origin`：
-   *   它的 Turn 在源 Session 已经终结，本 Session 从未执行过它；而完成日志按本 Session 的
-   *   turn_id 存取，对它永远查不到记录，因此不能据此判定「还在跑」。
-   * - 缺少 `meta.from` 的输入（旧契约、`external:` 追加）没有可信发起方，构造不出占用者。
-   *   它必须保持可读：`status()` 会 await 本方法，用解析异常阻断等于把读路径一起停掉。
-   */
+  /** 恢复本会话的可信占用；导入历史不恢复执行。后台续轮中断明确收口，避免冒险重放副作用。 */
   async initialize_occupation(): Promise<void> {
     this.occupation_initialized ??= (async () => {
       const history = await this.messages.list_history_messages();
@@ -270,10 +259,32 @@ export class SessionLoop {
       const output = await this.messages.read_latest_agent_message(latest.turn_id);
       if (!this.completions && output && output.state !== "streaming") return;
       const actor = session_prompt_actor_schema.parse(from);
+      if (actor.kind === "runtime" && actor.namespace === "session_background") {
+        const interrupted = create_active_session_turn_state(latest.turn_id);
+        interrupted.turn_context = this.create_turn_context(interrupted);
+        this.active_turn = interrupted;
+        await this.fail_active_turn(interrupted, new Error("Background follow-up was interrupted; its received result is preserved. Review before retrying."));
+        await interrupted.deferred_finished.promise;
+        this.closing = false;
+        return;
+      }
       this.recovered_turn_id = latest.turn_id;
       this.recovered_release = this.occupation.acquire(actor, this.session_id, latest.turn_id);
     })();
-    await this.occupation_initialized;
+    const initialization = this.occupation_initialized;
+    try { await initialization; } catch (error) {
+      if (this.occupation_initialized === initialization) this.occupation_initialized = undefined;
+      throw error;
+    }
+  }
+
+  /** 可信后台接收共用现有 FIFO；跨停止代次的异步检查不得放行。 */
+  async accept_background_result(input: SessionBackgroundInput): Promise<SessionBackgroundReceipt> {
+    const generation = this.stop_generation;
+    await this.initialize_occupation();
+    return await accept_background_input({ session_id: this.session_id, messages: this.messages,
+      completions: this.completions, loop: this,
+      is_current: () => !this.stopping && generation === this.stop_generation }, input);
   }
 
   /** 可信委派结果仅可注入原活动 Turn；调用方必须先验证持久化委派记录。 */
@@ -404,16 +415,12 @@ export class SessionLoop {
     this.ensure_processing();
   }
 
-  /**
-   * 判断是否存在等待并入下一 Session step 的 prompt。
-   */
+  /** 是否存在等待并入下一模型步骤的输入。 */
   has_pending_prompt(): boolean {
     return this.pending_prompt_count > 0;
   }
 
-  /**
-   * 判断是否存在等待在下一 Session step 检查点执行的 command。
-   */
+  /** 是否存在等待检查点执行的命令。 */
   has_pending_command(): boolean {
     return this.queue.has_command();
   }
@@ -428,13 +435,7 @@ export class SessionLoop {
     return this.active_turn?.turn_id ?? this.recovered_turn_id;
   }
 
-  /**
-   * 返回当前 actor prompt 调度器是否仍处于活跃态。
-   *
-   * 说明（中文）
-   * - 只要还有排队 prompt，或处理循环尚未结束，就视为活跃。
-   * - Session 会用它阻止内部 direct execution 与 actor 模式并发混用。
-   */
+  /** 调度循环或排队命令仍活动时，禁止并行绕过输入队列执行。 */
   is_active(): boolean {
     return this.processing || this.has_pending_command();
   }

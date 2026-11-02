@@ -7,6 +7,8 @@ import type { Agent } from "@/agent/Agent.js";
 
 /** 随容器绑定建立、解绑时释放的工作协作能力。 */
 export interface AgentWorkHost {
+  /** 枚举同一容器内持有委派记录的主体，供跨主体子工作等待与取消。 */
+  list_agents: () => readonly Agent[];
   /** 按稳定标识解析同一容器中的目标 Agent；不存在时必须抛出错误。 */
   resolve_agent: (agent_id: string) => Agent;
   /** 为当前绑定的 Agent 解析已登记的项目 Workspace。 */

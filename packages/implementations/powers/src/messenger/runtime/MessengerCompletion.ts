@@ -57,7 +57,7 @@ function resolve_inbound_ids(
         const value = JSON.parse(part.context) as { /** Inbox 中由宿主生成的稳定标识。 */ inbound_id?: string };
         if (value.inbound_id) ids.add(value.inbound_id);
       }
-      if (message.visibility === "internal" && part.tag === "delegation_result") {
+      if (message.visibility === "internal" && (part.tag === "delegation_result" || part.tag === "background_source")) {
         const value = JSON.parse(part.context) as { /** 触发该后台工作的原始 Channel Turn。 */ caller_turn_id?: string };
         if (!value.caller_turn_id) throw new Error("Delegated Channel output is missing its caller Turn route");
         // 结果可能并入仍在执行的调用轮次；本轮直接入站已提供其路由。

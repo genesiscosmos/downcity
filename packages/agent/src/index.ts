@@ -34,6 +34,7 @@ export type { SessionCallback, SessionCallbackInput, SessionCallbackHandler, Ses
 export type { AgentWorkHost } from "./types/agent/AgentWorkHost.js";
 export type { AgentSessionInput } from "./types/agent/AgentSessionInput.js";
 export type { SessionWorkContract } from "./types/agent/SessionWork.js";
+export type { SessionBackgroundInput, SessionBackgroundReceipt } from "./types/session/SessionBackgroundInput.js";
 export type { SessionContextResolution } from "./types/agent/SessionContext.js";
 export type {
   AgentSessionStateKey,

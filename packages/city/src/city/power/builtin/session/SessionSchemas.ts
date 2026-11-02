@@ -74,7 +74,7 @@ export const session_reply_input = z
       "Resolve or deny a question using the user's actual answer. Approval operations must use the user's approval interface.",
     ),
     payload: z.record(z.string(), z.unknown()).optional().describe(
-      "Business response body for this interaction type. Question interactions require answers; approval interactions accept a decision.",
+      "Public question response body with answers from the user. Approval and private-input interactions must use the original Session's trusted interface.",
     ),
     note: z.string().trim().min(1).optional().describe(
       "Optional human-readable explanation passed along with the response.",

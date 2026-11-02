@@ -44,7 +44,9 @@ export interface SessionDelegationRecord {
   work_turn_id?: string;
   /** 工作执行状态；停止在调用 stop 前持久化。 */
   execution_state: "pending" | "running" | "succeeded" | "failed" | "stopped";
-  /** 回传状态；saved 表示父 Turn 已结束，结果已保存且不注入后续 Turn。 */
+  /** 已确认通知发起 Session 的交互标识；内容与待回答状态仍归原 Session。 */
+  reported_interactions?: string[];
+  /** 回传状态；saved 表示原执行不再接收，结果仅保存在委派记录中。 */
   delivery_state: "pending" | "delivered" | "cancelled" | "saved";
   /** 连续失败次数；成功回传后不再重试。 */
   attempt_count: number;
@@ -90,8 +92,8 @@ export interface SessionDelegationOptions {
   ) => Promise<AgentSession>;
   /** 恢复已有工作会话；只允许继续 Work 来源的会话。 */
   get_work_session: (session_id: string) => Promise<AgentSession>;
-  /** 恢复父会话并完成宿主 Workspace、模型及消息订阅装配。 */
-  get_parent_session: (caller: SessionDelegationCaller) => Promise<AgentSession>;
+  /** 恢复父会话及宿主装配；目标已删除或归档返回空，临时故障抛错以便重试。 */
+  get_parent_session: (caller: SessionDelegationCaller) => Promise<AgentSession | undefined>;
   /** 为恢复的子会话完成宿主模型及消息订阅装配。 */
   prepare_session: (session: AgentSession, model_id?: string) => Promise<void>;
   /** 保存委派前验证目标模型；未提供此端口时拒绝显式选择模型。 */

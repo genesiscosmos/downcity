@@ -9,6 +9,7 @@ import os from "node:os";
 import path from "node:path";
 import { Agent, City, Workspace, MemoryStorageProvider, LocalStorageProvider } from "../../city/bin/index.js";
 import { SessionCompletions } from "../bin/agent/SessionCompletions.js";
+import { AskQuestionsTool } from "../bin/tools/ask/AskQuestionsTool.js";
 import { MockModelClient } from "./ModelClientMock.mjs";
 
 /** 稳定注册名，不以函数名或数组位置识别回调。 */
@@ -215,7 +216,7 @@ test("callback 超时保留待投递状态且不会并发重入忽略取消的�
   } finally { queue.suspend(); blocked.resolve(); await queue.settle(); }
 });
 
-test("父 Turn 已结束时迟到结果只保存，临时恢复失败不会重跑子任务", async () => {
+test("Chat Turn 已结束后结果继续交付，临时恢复失败不会重跑子任务", async () => {
   let worker_calls = 0;
   const city = new City({ workspaces: [new Workspace({ id: "project", path: process.cwd() })] });
   const caller = city.agents.add(new Agent({ id: "caller", model: create_model() }));
@@ -224,6 +225,8 @@ test("父 Turn 已结束时迟到结果只保存，临时恢复失败不会重�
   try {
     await city.powers.settled();
     const parent = await caller.session();
+    const caller_turn = await parent.prompt({ request_id: "original", query: "start independent work" });
+    await caller_turn.finished;
     const delegations = worker.resolve_delegations();
     const get_parent = delegations.options.get_parent_session;
     let attempts = 0;
@@ -234,7 +237,7 @@ test("父 Turn 已结束时迟到结果只保存，临时恢复失败不会重�
     parent.subscribe((mutation) => {
       if (mutation.variant === "turn" && mutation.type === "finish") delivered.resolve();
     });
-    const receipt = await delegations.spawn({ workspace_id: "project", query: "review" }, { agent_id: caller.id, session_id: parent.id, origin: parent.origin, turn_id: "caller-turn", tool_call_id: "call" });
+    const receipt = await delegations.spawn({ workspace_id: "project", query: "review" }, { agent_id: caller.id, session_id: parent.id, origin: parent.origin, turn_id: caller_turn.id, tool_call_id: "call" });
     await delegations.settle();
     const before_retry = worker_calls;
     await within((async () => {
@@ -244,6 +247,196 @@ test("父 Turn 已结束时迟到结果只保存，临时恢复失败不会重�
     })());
     assert.equal(attempts, 2);
     assert.equal(worker_calls, before_retry);
-    assert.equal((await delegations.options.store.get(receipt.delegation_id)).delivery_state, "saved");
+    assert.equal((await delegations.options.store.get(receipt.delegation_id)).delivery_state, "delivered");
+    await within(delivered.promise);
   } finally { await city.close(); }
+});
+
+test("停止Chat只结束当前回复，已派Main继续并交付", async () => {
+  const chat_entered = deferred();
+  const release_chat = deferred();
+  const work_entered = deferred();
+  const release_work = deferred();
+  const delivered = deferred();
+  let chat_calls = 0;
+  const city = new City({ workspaces: [new Workspace({ id: "project", path: process.cwd() })] });
+  const caller = city.agents.add(new Agent({ id: "independent-caller", model: new MockModelClient({ id: "chat", generate: async () => {
+    if (++chat_calls === 1) { chat_entered.resolve(); await release_chat.promise; }
+    return { text: "Main result received" };
+  } }) }));
+  const worker = city.agents.add(new Agent({ id: "independent-worker", model: new MockModelClient({ id: "worker", generate: async () => {
+    work_entered.resolve(); await release_work.promise; return { text: "Main completed" };
+  } }) }));
+  try {
+    await city.powers.settled();
+    const chat = await caller.session();
+    chat.dispose_title_generation();
+    chat.subscribe((mutation) => { if (mutation.variant === "turn" && mutation.type === "finish" && mutation.status === "completed") delivered.resolve(); });
+    const turn = await chat.prompt({ query: "start work", request_id: "chat-work" });
+    await within(chat_entered.promise);
+    const delegation = worker.resolve_delegations();
+    const receipt = await delegation.spawn({ workspace_id: "project", query: "independent main" }, { agent_id: caller.id, session_id: chat.id, origin: chat.origin, turn_id: turn.id, tool_call_id: "spawn-main" });
+    await within(work_entered.promise);
+    const stop = chat.stop();
+    release_chat.resolve();
+    await stop;
+    assert.equal((await delegation.options.store.get(receipt.delegation_id)).execution_state, "running");
+    release_work.resolve();
+    await within(delivered.promise);
+    await delegation.settle();
+    assert.equal((await delegation.options.store.get(receipt.delegation_id)).delivery_state, "delivered");
+  } finally { release_chat.resolve(); release_work.resolve(); await city.close(); }
+});
+
+test("Task Main 等待跨Agent Child，并在停止时收口Child", async () => {
+  const main_entered = deferred();
+  const release_main = deferred();
+  const child_entered = deferred();
+  const release_child = deferred();
+  const main_returned = deferred();
+  const city = new City({ workspaces: [new Workspace({ id: "project", path: process.cwd() })] });
+  const owner = city.agents.add(new Agent({ id: "main-owner", model: new MockModelClient({ id: "main", generate: async () => {
+    main_entered.resolve(); await release_main.promise; main_returned.resolve(); return { text: "await child" };
+  } }) }));
+  const executor = city.agents.add(new Agent({ id: "child-owner", model: new MockModelClient({ id: "child", generate: async () => {
+    child_entered.resolve(); await release_child.promise; return { text: "child result" };
+  } }) }));
+  try {
+    await city.powers.settled();
+    const main = await owner.sessions.create({ origin: { category: "work", type: "task", delegation_depth: 1 } });
+    main.dispose_title_generation();
+    const turn = await main.prompt({ query: "task main", request_id: "main-turn" });
+    await within(main_entered.promise);
+    const delegations = executor.resolve_delegations();
+    const receipt = await delegations.spawn({ workspace_id: "project", query: "child work" }, { agent_id: owner.id, session_id: main.id, origin: main.origin, turn_id: turn.id, tool_call_id: "child-start" });
+    await within(child_entered.promise);
+    release_main.resolve();
+    await within(main_returned.promise);
+    // 完成模型输出不等于Main可结束，必须等Child；用下一事件循环观察已触发的收尾。
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.equal((await main.status()).state, "running");
+    const stopping = main.stop();
+    release_child.resolve();
+    await within(stopping);
+    assert.equal((await turn.finished).success, false);
+    const record = await delegations.options.store.get(receipt.delegation_id);
+    assert.equal(record.execution_state, "stopped");
+    assert.equal(record.delivery_state, "cancelled");
+  } finally { release_main.resolve(); release_child.resolve(); await city.close(); }
+});
+
+test("Child公开问题自动通知Main，答案仍提交原Interaction", async () => {
+  const main_entered = deferred();
+  const release_main = deferred();
+  const question_seen = deferred();
+  const city = new City({ workspaces: [new Workspace({ id: "project", path: process.cwd() })] });
+  let main_calls = 0;
+  let child_calls = 0;
+  let child_id;
+  const owner = city.agents.add(new Agent({ id: "question-main", model: new MockModelClient({ id: "main", generate: async () => {
+    if (++main_calls === 1) { main_entered.resolve(); await release_main.promise; }
+    else {
+      const child = await executor.sessions.get(child_id, "work");
+      const question = (await child.interactions())[0];
+      if (question) {
+        question_seen.resolve(question);
+        await child.respond({ interaction_id: question.interaction_id, response: { type: "question", outcome: "resolved", payload: { answers: [{ question_id: question.payload.questions[0].question_id, value: "cn" }] } } });
+      }
+    }
+    return { text: "main" };
+  } }) }));
+  const executor = city.agents.add(new Agent({ id: "question-child", tools: { ask_question: AskQuestionsTool }, model: new MockModelClient({ id: "child", generate: async (call) => {
+    if (!call.tools?.length) return { text: "question child" };
+    if (++child_calls === 1) return { content: [{ type: "tool_call", tool_call_id: "ask", tool_name: "ask_question", input: { title: "Region", questions: [{ question: "Which region?", type: "single_select", options: [{ value: "cn", label: "China" }] }] } }] };
+    return { text: "child answered" };
+  } }) }));
+  try {
+    await city.powers.settled();
+    const main = await owner.sessions.create({ origin: { category: "work", type: "task" } });
+    main.dispose_title_generation();
+    const turn = await main.prompt({ query: "main", request_id: "main" });
+    await within(main_entered.promise);
+    const receipt = await executor.resolve_delegations().spawn({ workspace_id: "project", query: "ask first" }, { agent_id: owner.id, session_id: main.id, origin: main.origin, turn_id: turn.id, tool_call_id: "spawn" });
+    child_id = receipt.session_id;
+    (await executor.sessions.get(child_id, "work")).dispose_title_generation();
+    release_main.resolve();
+    assert.equal((await within(question_seen.promise)).type, "question");
+    assert.equal((await within(turn.finished)).success, true);
+    const messages = await main.messages({ limit: 100, include_internal: true });
+    assert.equal(messages.items.flatMap((message) => message.parts).filter((part) => part.type === "context" && part.tag === "delegation_interaction").length, 1);
+  } finally { release_main.resolve(); await city.close(); }
+});
+
+test("已接收后台续轮重建后明确收口中断，保留结果并释放占用", async () => {
+  let model_calls = 0;
+  const agent = new Agent({ id: "background-recovery", model: create_model(() => { model_calls++; }) });
+  try {
+    const session = await agent.session();
+    const storage = await agent.sessions.read_session_storage(session.id, "chat");
+    const turn_id = "interrupted-background-turn";
+    await storage.create_message(({ message_sequence }) => ({
+      message_id: "received-background", session_id: session.id, turn_id,
+      role: "user", sequence: message_sequence, revision: 1, visibility: "internal", created_at: 1, updated_at: 1,
+      meta: { from: { kind: "runtime", namespace: "session_background", object_id: "received" } },
+      parts: [{ part_id: "received-part", sequence: 1, type: "text", text: "already received Main result" }],
+    }));
+    assert.equal(agent.sessions.release(session.id, "chat"), true);
+    await agent.resume_work();
+    const restored = await agent.sessions.get(session.id, "chat");
+    const status = await restored.status();
+    assert.equal(status.state, "idle");
+    assert.equal(status.occupied_by, null);
+    const result = await agent.resolve_completions().read(restored.id, turn_id);
+    assert.equal(result.status, "failed");
+    assert.match(result.result.error, /interrupted/);
+    assert.equal(model_calls, 0);
+    const history = await restored.messages({ include_internal: true });
+    assert.ok(history.items.some((message) => message.message_id === "received-background"));
+  } finally { await agent.dispose(); }
+});
+
+test("后台完成使用稳定身份接收，并发重投不重复执行模型", async () => {
+  let calls = 0;
+  const agent = new Agent({ id: "background-agent", model: create_model(() => { calls++; }) });
+  try {
+    const session = await agent.session();
+    session.dispose_title_generation();
+    const original = await session.prompt({ query: "start", request_id: "original" });
+    await original.finished;
+    const done = deferred();
+    session.subscribe((mutation) => {
+      if (mutation.variant === "turn" && mutation.type === "finish" && mutation.turn_id !== original.id) done.resolve();
+    });
+    const input = { turn_id: original.id, request_id: "shell-exit:stable", query: "background command completed", resume_after_turn: true };
+    assert.deepEqual(await Promise.all([session.accept_background_result(input), session.accept_background_result(input)]), ["accepted", "accepted"]);
+    await within(done.promise);
+    assert.equal(await session.accept_background_result(input), "accepted");
+    assert.equal(calls, 2);
+  } finally { await agent.dispose(); }
+});
+
+test("停止后的Shell结果不唤醒，独立Main仍可向Chat交付", async () => {
+  const entered = deferred();
+  const blocked = deferred();
+  let calls = 0;
+  const agent = new Agent({ id: "stopped-background", model: new MockModelClient({ id: "stop-model", generate: async () => {
+    if (++calls === 1) { entered.resolve(); await blocked.promise; }
+    return { text: "result" };
+  } }) });
+  try {
+    const session = await agent.session();
+    session.dispose_title_generation();
+    const original = await session.prompt({ query: "start", request_id: "original" });
+    await within(entered.promise);
+    const stopping = session.stop();
+    blocked.resolve();
+    await stopping;
+    await original.finished;
+    assert.equal(await session.accept_background_result({ turn_id: original.id, request_id: "shell-exit:stopped", query: "late shell", resume_after_turn: true }), "discarded");
+    const done = deferred();
+    session.subscribe((mutation) => { if (mutation.variant === "turn" && mutation.type === "finish" && mutation.turn_id !== original.id) done.resolve(); });
+    assert.equal(await session.accept_background_result({ turn_id: original.id, request_id: "main-result:independent", query: "main completed", resume_after_turn: true, allow_stopped_turn: true }), "accepted");
+    await within(done.promise);
+    assert.equal(calls, 2);
+  } finally { blocked.resolve(); await agent.dispose(); }
 });

@@ -23,6 +23,10 @@ export interface CreateRuntimeSessionPortParams {
    * 当前 session_id。
    */
   session_id: string;
+  /** 来源在 Session 创建时固定，保持真实投影。 */
+  origin: SessionPort["origin"];
+  /** 从 Session 读取当前项目，不持有过期目录副本。 */
+  get_workspace_id: () => string | undefined;
   /** 获取当前 Session 优先解析后的运行时模型实例。 */
   get_model: SessionPort["get_model"];
   /** 读取全部 canonical Session Message。 */
@@ -67,6 +71,8 @@ export function create_runtime_session_port(
 ): SessionPort {
   return {
     session_id: params.session_id,
+    origin: params.origin,
+    get workspace_id() { return params.get_workspace_id(); },
     get_model: () => params.get_model(),
     messages: async () => await params.messages(),
     prompt: async (input) => {

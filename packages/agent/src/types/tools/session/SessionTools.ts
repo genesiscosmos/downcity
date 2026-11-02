@@ -112,6 +112,10 @@ export interface SessionCheckDetailToolOutput {
     title?: string;
     /** 面向用户的展示描述。 */
     description?: string;
+    /** 公开问题的只读内容；审批与含私密输入的表单不投影。 */
+    payload?: import("@downcity/type").JsonValue;
+    /** true 表示必须在目标 Session 的受信交互入口处理。 */
+    requires_direct_response?: boolean;
   }>;
   /** 该会话最近一个 Turn 的失败文本；成功时为省略。 */
   failure?: string;

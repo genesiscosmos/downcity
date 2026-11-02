@@ -52,7 +52,14 @@ export function attach_shell_process_event_handlers(params: {
     closing = true;
     const tail = decoder.end();
     if (tail) void append_session_output(state, session, tail).catch(() => undefined);
-    void finalize_exit_after_output_drain(state, session, exit_code).catch(() => undefined);
+    void finalize_exit_after_output_drain(state, session, exit_code).catch((error: unknown) => {
+      state.context?.logger?.warn("Shell exit persistence failed; retained for retry", { error: String(error) });
+      session.snapshot.status = "failed";
+      session.snapshot.exit_code = exit_code;
+      session.snapshot.interruption_reason = "Shell output or exit persistence failed; inspect recorded output before continuing.";
+      session.resolve_completion();
+      state.on_terminal?.(session.snapshot.shell_id);
+    });
   };
   child.on_data((chunk: string | Buffer) => {
     const text = Buffer.isBuffer(chunk) ? decoder.write(chunk) : String(chunk ?? "");

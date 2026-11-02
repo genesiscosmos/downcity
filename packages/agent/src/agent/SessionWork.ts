@@ -18,6 +18,7 @@ import type { SessionDelegationCaller, SessionDelegationInput, SessionDelegation
 import { SESSION_ORIGIN_CATEGORY_WORK } from "@downcity/type";
 import type { SessionStore } from "@/types/store/SessionStore.js";
 import { require_direct_work_child } from "./SessionWorkPolicy.js";
+import { project_session_interaction } from "@/session/messages/SessionInteractionProjection.js";
 import type { SessionWorkContract } from "@/types/agent/SessionWork.js";
 import type {
   SessionCheckDetailToolOutput,
@@ -151,12 +152,7 @@ export class SessionWork implements SessionWorkContract {
       messages: messages.items
         .map((message) => project_message_text(message))
         .filter((entry): entry is { role: "user" | "agent"; text: string } => Boolean(entry)),
-      pending_interactions: pending.map((interaction) => ({
-        interaction_id: interaction.interaction_id,
-        type: interaction.type,
-        ...(interaction.title ? { title: interaction.title } : {}),
-        ...(interaction.description ? { description: interaction.description } : {}),
-      })),
+      pending_interactions: pending.map(project_session_interaction),
       ...(failure ? { failure } : {}),
     };
   }

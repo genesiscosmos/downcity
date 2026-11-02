@@ -13,6 +13,7 @@ import os from "node:os";
 import path from "node:path";
 
 import { Shell } from "@downcity/city";
+import { ShellCompletionDelivery } from "../bin/shell/session/ShellCompletionDelivery.js";
 import {
   create_test_sandbox_provider,
   create_test_workspace_sandbox,
@@ -302,4 +303,70 @@ test("host shell waits for the injected Approval Gateway before execution", asyn
   assert.equal(await fs.readFile(marker_path, "utf8"), "approved");
   await close_all_shell_sessions(state, true);
   await fs.rm(fixture.root_path, { recursive: true, force: true });
+});
+
+/** 等待持久化确认，不依赖模型或外部服务。 */
+async function wait_until(check, timeout_ms = 5000) {
+  const deadline = Date.now() + timeout_ms;
+  while (!await check()) {
+    if (Date.now() >= deadline) throw new Error("Shell completion did not settle");
+    await new Promise((resolve) => setTimeout(resolve, 20));
+  }
+}
+
+test("后台Shell结束后可靠回投，接收确认才标记通知成功", async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "downcity-shell-completion-"));
+  const shell = new Shell({ sandbox_provider: create_test_sandbox_provider() });
+  const data_path = path.join(root, "runtime");
+  shell.bind({ workspace_id: "project", root_path: root, data_path });
+  let calls = 0;
+  shell.set_completion_handler(async (snapshot) => {
+    assert.equal(snapshot.completion_target.agent_id, "owner");
+    assert.equal(snapshot.completion_target.turn_id, "original-turn");
+    calls++;
+    return calls === 1 ? "retry" : "accepted";
+  });
+  try {
+    const result = await shell.run_action("start", { cmd: "sleep 0.05; printf done", shell: "/bin/sh", login: false, inline_wait_ms: 1, auto_notify_on_exit: true, terminal: false }, {
+      session: { agent_id: "owner", category: "work", session_id: "main", turn_id: "original-turn" },
+    });
+    const snapshot_file = path.join(data_path, "shell", result.shell.shell_id, "snapshot.json");
+    await wait_until(async () => JSON.parse(await fs.readFile(snapshot_file, "utf8")).notification_sent);
+    assert.equal(calls, 2);
+    const snapshot = JSON.parse(await fs.readFile(snapshot_file, "utf8"));
+    assert.equal(snapshot.notification_state, "delivered");
+    assert.equal(snapshot.exit_code, 0);
+    shell.state.on_terminal(result.shell.shell_id);
+    await new Promise((resolve) => setTimeout(resolve, 30));
+    assert.equal(calls, 2);
+  } finally { await shell.dispose(); await fs.rm(root, { recursive: true, force: true }); }
+});
+
+test("Shell恢复将失管执行标记未知并交付，丢弃不伪装通知成功", async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "downcity-shell-recovery-"));
+  const snapshot_dir = path.join(root, "shell", "interrupted-shell");
+  await fs.mkdir(snapshot_dir, { recursive: true });
+  const snapshot = {
+    shell_id: "interrupted-shell", cmd: "must not rerun", cwd: root, shell_path: "/bin/sh", target: "sandbox", execution_backend: "test",
+    status: "running", started_at: 1, updated_at: 1, version: 1, output_chars: 0, dropped_chars: 0,
+    auto_notify_on_exit: true, notification_sent: false, external_refs: [],
+    completion_target: { agent_id: "owner", session_id: "main", category: "work", turn_id: "stopped-turn" },
+  };
+  const snapshot_file = path.join(snapshot_dir, "snapshot.json");
+  await fs.writeFile(snapshot_file, JSON.stringify(snapshot));
+  const delivery = new ShellCompletionDelivery(root, create_shell_runtime_state());
+  let calls = 0;
+  try {
+    delivery.bind(async (value) => {
+      calls++;
+      assert.equal(value.status, "failed");
+      assert.equal(value.exit_code, undefined);
+      assert.match(value.interruption_reason, /unknown/);
+      return "discarded";
+    });
+    await delivery.recover();
+    await wait_until(async () => JSON.parse(await fs.readFile(snapshot_file, "utf8")).notification_state === "discarded");
+    assert.equal(calls, 1);
+    assert.equal(JSON.parse(await fs.readFile(snapshot_file, "utf8")).notification_sent, false);
+  } finally { await delivery.dispose(); await fs.rm(root, { recursive: true, force: true }); }
 });

@@ -45,7 +45,8 @@ function resolve_shell_execution_context(
   const turn_id = String(context.turn_id || "").trim();
   return {
     ...(turn_id
-      ? { session: { session_id: context.session_id, turn_id } }
+      ? { session: { session_id: context.session_id, turn_id,
+          agent_id: context.agent_id, category: context.session_origin.category } }
       : {}),
     ...(context.tool_call_id ? { tool_call_id: context.tool_call_id } : {}),
     ...(context.abort_signal ? { abort_signal: context.abort_signal } : {}),

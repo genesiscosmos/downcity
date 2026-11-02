@@ -51,6 +51,7 @@ import { resolve_system_timezone } from "@/session/storage/Metadata.js";
 import { SessionWork } from "@/agent/SessionWork.js";
 import type { SessionWorkContract } from "@/types/agent/SessionWork.js";
 import { SessionDelegations } from "@/agent/SessionDelegations.js";
+import { recover_background_sessions } from "@/agent/SessionBackgroundRecovery.js";
 import { LocalSessionDelegationStore } from "@/agent/LocalSessionDelegationStore.js";
 import { normalize_session_origin_category, SESSION_ORIGIN_CATEGORY_WORK, type SessionOrigin } from "@downcity/type";
 import type { AgentWorkHost } from "@/types/agent/AgentWorkHost.js";
@@ -183,10 +184,15 @@ export class Agent {
       resolve_session_context: (input) => {
         const storage = this.resolve_storage();
         const child_work = {
-          wait: async (parent: SessionChildWorkInput) =>
-            await this.resolve_delegations().wait_for_children(parent),
-          cancel: async (parent: SessionChildWorkInput) =>
-            await this.resolve_delegations().cancel_children(parent),
+          // 委派由执行主体持有；等待与取消必须覆盖同容器中接单的其他主体。
+          wait: async (parent: SessionChildWorkInput) => {
+            await Promise.all((this.work_host?.list_agents() ?? [this])
+              .map(async (agent) => await agent.resolve_delegations().wait_for_children(parent, this.id)));
+          },
+          cancel: async (parent: SessionChildWorkInput) => {
+            await Promise.all((this.work_host?.list_agents() ?? [this])
+              .map(async (agent) => await agent.resolve_delegations().cancel_children(parent, this.id)));
+          },
         };
         // 默认目录只用于新建会话；恢复时目录由宿主在 get() 时注入，
         // 用默认值顶替会变成一次静默换目录。
@@ -337,6 +343,9 @@ export class Agent {
   async resume_work(): Promise<void> {
     if (this.dispose_promise) throw new Error("Agent is disposing");
     await this.resolve_completions().resume();
+    await recover_background_sessions(this.resolve_storage().sessions,
+      async (session_id, category) => await this.restore_work_session(session_id, category),
+      (error) => this.logger.error("Background follow-up recovery failed", { error: String(error) }));
     await this.resolve_delegations().resume();
   }
 
@@ -573,8 +582,11 @@ export class Agent {
         await this.resolve_work_model(model_id, workspace);
       },
       get_work_session: async (session_id) => await this.restore_work_session(session_id, SESSION_ORIGIN_CATEGORY_WORK),
-      get_parent_session: async (caller) => await this.resolve_work_agent(caller.agent_id)
-        .restore_work_session(caller.session_id, caller.origin.category),
+      get_parent_session: async (caller) => {
+        const parent_agent = this.resolve_work_agent(caller.agent_id);
+        if (!await parent_agent.resolve_storage().sessions.has_session(caller.session_id, caller.origin.category)) return undefined;
+        return await parent_agent.restore_work_session(caller.session_id, caller.origin.category);
+      },
       report_error: (delegation_id, error) => {
         this.logger.error("Session delegation failed; retained for retry", {
           delegation_id,

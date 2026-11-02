@@ -6,7 +6,7 @@ import { read_session_delegation_depth, resolve_delegation_blocked_reason } from
 import type { SessionOrigin } from "@downcity/type";
 import type { SessionDelegationCaller } from "@/types/agent/SessionDelegation.js";
 
-/** 创建者可以是 Chat、用户直接创建的 Work，或 Chat 创建的 Work。 */
+/** 创建者可以是 Chat 或任意来源的 Work Main；关系存在时完整校验。 */
 export function require_work_creator(caller: SessionDelegationCaller): void {
   const blocked = resolve_delegation_blocked_reason(caller.origin);
   if (blocked) throw new Error(blocked);
@@ -14,14 +14,14 @@ export function require_work_creator(caller: SessionDelegationCaller): void {
     || caller.origin.parent_session_category !== undefined || caller.origin.parent_agent_id !== undefined;
   if (caller.origin.category === "work" && has_parent
     && (typeof caller.origin.parent_session_id !== "string" || !caller.origin.parent_session_id.trim()
+      || typeof caller.origin.parent_agent_id !== "string" || !caller.origin.parent_agent_id.trim()
       || caller.origin.parent_session_category !== "chat"
-      || caller.origin.root_chat_session_id !== caller.origin.parent_session_id
       || read_session_delegation_depth(caller.origin) !== 1)) {
-    throw new Error("session_relation_invalid: Work creator must be a direct child of Chat");
+    throw new Error("session_relation_invalid: delegated Main must have a complete Chat creator relation");
   }
 }
 
-/** 仅允许创建者控制同一 Agent 的直接普通 Work 子会话。 */
+/** 仅允许创建者控制同一 Agent 的直接 Work；业务来源不改变控制关系。 */
 export function require_direct_work_child(
   agent_id: string,
   caller: SessionDelegationCaller,
@@ -29,7 +29,7 @@ export function require_direct_work_child(
 ): void {
   require_work_creator(caller);
   if (caller.agent_id !== agent_id || target.agent_id !== agent_id
-    || target.origin.category !== "work" || target.origin.type !== "work"
+    || target.origin.category !== "work"
     || target.origin.parent_session_id !== caller.session_id
     || target.origin.parent_session_category !== caller.origin.category
     || target.origin.parent_agent_id !== caller.agent_id
