@@ -81,6 +81,8 @@ export interface SessionStorage {
   read_metadata(): Promise<SessionHistoryMeta>;
   /** 原子覆盖当前 Session configured 状态。 */
   write_metadata(metadata: SessionHistoryMeta): Promise<void>;
+  /** 原子绑定不可变执行配置；已有配置不一致时拒绝，供幂等创建和恢复使用。 */
+  bind_execution_profile(reference: import("@/types/agent/SessionExecutionProfile.js").SessionExecutionProfileReference): Promise<void>;
   /** 判断 Session 是否存在显式 system snapshot。 */
   has_instruction(): Promise<boolean>;
   /** 读取显式 system snapshot。 */

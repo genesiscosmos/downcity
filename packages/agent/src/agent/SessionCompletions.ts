@@ -40,11 +40,20 @@ export class SessionCompletions {
     if (!name.trim() || !this.handlers().has(`callback:${name}`)) throw new Error(`Unknown Session callback: ${name}`);
   }
 
+  /** 专用执行只保存完成结果，不注册普通 Agent/Power 的对外投递接收方。 */
+  result_only_port(): import("@/types/agent/SessionCompletion.js").SessionCompletionPort {
+    return {
+      validate_callback: () => { throw new Error("execution_profile_immutable: ordinary completion callbacks are forbidden"); },
+      prepare: async (event, context) => { await this.prepare(event, context, false); },
+      read: async (session_id, turn_id) => await this.read(session_id, turn_id),
+    };
+  }
+
   /** canonical 终态前保存权威 Turn 结果；即使没有回调，也用于恢复占用与幂等结果。 */
-  async prepare(event: SessionTurnCommittedHookValue, context: ToolCallContext): Promise<void> {
-    const handlers = this.handlers();
+  async prepare(event: SessionTurnCommittedHookValue, context: ToolCallContext, notify = true): Promise<void> {
+    const handlers = notify ? this.handlers() : new Map<string, EffectHook>();
     const recipient_ids = [...handlers.keys()].filter((id) => !id.startsWith("callback:"));
-    for (const message of event.messages) {
+    for (const message of notify ? event.messages : []) {
       if (message.role !== "user") continue;
       const name = (read_session_message_meta(message)?.callback as { /** 业务回调名称。 */ name: string } | undefined)?.name;
       if (!name) continue;
@@ -62,10 +71,11 @@ export class SessionCompletions {
           event: structuredClone(event),
           origin: structuredClone(context.session_origin),
           ...(context.workspace ? { workspace_id: context.workspace.id } : {}),
-          state: "prepared",
+          state: notify ? "prepared" : "delivered",
           deliveries: Object.fromEntries(recipient_ids.map((id) => [id, { delivered: false, attempt_count: 0, retry_at: 0 }])),
         });
       });
+      if (!notify) this.preparing.delete(event.completion_id);
     } catch (error) {
       this.preparing.delete(event.completion_id);
       throw error;

@@ -8,6 +8,7 @@
  */
 
 import type { PowerJsonObject, PowerJsonValue } from "@downcity/city/power";
+import type { MemoryCommitProvider as import_memory_commit_provider } from "./MemoryChangeSet.js";
 import type {
   MemoryAccessContext,
   MemoryOwner,
@@ -38,10 +39,28 @@ export interface MemorySourceReference {
 
   /** 可选的人类可读来源说明。 */
   label?: string;
+  /** 原始证据所属 Agent，不能替代读取授权。 */
+  agent_id?: string;
+  /** 原始 Session 分类。 */
+  category?: string;
+  /** 原始 Session 稳定标识。 */
+  session_id?: string;
+  /** 原始消息稳定标识，避免只按整个 Session 抑制。 */
+  message_id?: string;
+  /** 原始证据角色，区分用户表述、Agent 结论与显式请求。 */
+  role?: "user" | "agent" | "request" | "tool";
+  /** 有界证据摘录；保留及共享权限由应用服务裁决。 */
+  excerpt?: string;
+  /** 可选原始内容内定位，供同一消息中多个事实分别处理。 */
+  locator?: string;
 }
 
 /** Provider 返回的完整记忆记录。 */
 export interface MemoryRecord {
+  /** 记录的乐观并发版本；Builtin Provider 读取始终提供。 */
+  version?: string;
+  /** 记录当前有效状态；普通读取只返回 active。 */
+  validity?: import("./MemoryChangeSet.js").MemoryValidity;
   /** Provider 内稳定且不依赖物理文件名的记忆标识。 */
   memory_id: string;
 
@@ -93,59 +112,12 @@ export interface MemoryProviderCapabilities {
   /** Provider 是否支持按作用域枚举记忆。 */
   list: boolean;
 
-  /** Provider 是否支持修订既有记忆。 */
-  revise: boolean;
-
   /** Provider 是否支持删除或失效记忆。 */
   forget: boolean;
-
-  /** Provider 是否支持 Session 摘要提炼。 */
-  digest: boolean;
 
   /** Provider 是否支持生成受预算约束的稳定上下文。 */
   system_context: boolean;
 
-  /** Provider 是否支持持久化等待 Formation 的 canonical Turn Capture Job。 */
-  capture_turn: boolean;
-}
-
-/** Capture Job 中保存的一条最小 canonical 文本证据。 */
-export interface MemoryCaptureMessage {
-  /** canonical Session Message 的稳定标识。 */
-  message_id: string;
-
-  /** 当前证据的消息角色。 */
-  role: "user" | "agent";
-
-  /** 从允许捕获的 canonical text parts 提取的原始文本。 */
-  text: string;
-}
-
-/** 持久化一个待 Formation Turn 的输入。 */
-export interface MemoryCaptureTurnInput {
-  /** 当前 Capture 使用的可信 Memory 访问上下文。 */
-  access: MemoryAccessContext;
-
-  /** 当前 Turn 所属 Session 的稳定标识。 */
-  session_id: string;
-
-  /** 当前 Turn 的稳定标识。 */
-  turn_id: string;
-
-  /** 通过本地预检的最小 canonical 文本证据。 */
-  messages: MemoryCaptureMessage[];
-}
-
-/** Capture Job 持久化结果。 */
-export interface MemoryCaptureTurnResult {
-  /** Provider 内稳定且可幂等重试的 Job 标识。 */
-  job_id: string;
-
-  /** 本次调用新建了 Job，或命中了已存在的相同 Turn Job。 */
-  mode: "created" | "existing";
-
-  /** Job 当前等待后续 Formation 的状态。 */
-  status: "pending";
 }
 
 /** Provider 状态查询结果。 */
@@ -168,6 +140,9 @@ export interface MemoryStatusResult {
 
 /** 召回长期记忆的输入。 */
 export interface MemoryRecallInput {
+  /** 可选的可信写入目标；指定时在扫描、打分与截断前只查询该范围。 */
+  target?: MemoryWriteTarget;
+
   /** 需要检索的自然语言查询。 */
   query: string;
 
@@ -300,6 +275,11 @@ export interface MemoryListResult {
 
 /** 显式形成长期记忆的输入。 */
 export interface MemoryRememberInput {
+  /** 可选的稳定请求幂等键；应用服务重试时必须复用。 */
+  request_id?: string;
+  /** 可检查的原始依据；省略时生成标记为显式请求的来源，不伪造会话证据。 */
+  source_refs?: MemorySourceReference[];
+
   /** 需要长期保留的原始内容。 */
   content: string;
 
@@ -334,37 +314,16 @@ export interface MemoryRememberResult {
   summary?: string;
 }
 
-/** 把 Session 内容提炼为长期记忆的输入。 */
+/** 请求专用 Session 提炼长期记忆的输入，返回 MemoryJobView。 */
 export interface MemoryDigestInput {
-  /** 需要提炼的 Session 标识。 */
+  /** 原始会话标识。 */
   session_id: string;
-
-  /** 当前提炼请求使用的可信访问上下文。 */
-  access: MemoryAccessContext;
-
-  /** 由 MemoryPower 从 canonical Session 提取的文本。 */
-  transcript: string;
-
-  /** 实际参与提炼的消息条数。 */
-  message_count: number;
-}
-
-/** 把 Session 内容提炼为长期记忆的结果。 */
-export interface MemoryDigestResult {
-  /** 本次形成或更新的稳定记忆标识集合。 */
-  memory_ids: string[];
-
-  /** Provider 可选生成的 Session 证据标识。 */
-  evidence_id?: string;
-
-  /** 实际参与提炼的消息条数。 */
-  message_count: number;
-
-  /** 本次提炼是仅归档还是生成了长期投影。 */
-  mode: "archived" | "projected";
-
-  /** Provider 可选返回的简短结果摘要。 */
-  summary?: string;
+  /** 原始会话物理分类。 */
+  category: "chat" | "work";
+  /** 本次明确允许的唯一写入范围。 */
+  target: MemoryWriteTarget;
+  /** 源消息数量上限，默认 30，最大 100。 */
+  max_messages?: number;
 }
 
 /** 修订既有记忆的输入。 */
@@ -380,21 +339,6 @@ export interface MemoryReviseInput {
 
   /** 可选的新证据内容。 */
   evidence?: string;
-}
-
-/** 修订既有记忆的结果。 */
-export interface MemoryReviseResult {
-  /** 实际被修订的稳定记忆标识。 */
-  memory_id: string;
-
-  /** Provider 可选生成的修订证据标识。 */
-  evidence_id?: string;
-
-  /** Provider 是否完成内容替换或采用追加式降级。 */
-  mode: "revised" | "appended";
-
-  /** Provider 可选返回的简短结果摘要。 */
-  summary?: string;
 }
 
 /** 删除或失效一条记忆的输入。 */
@@ -449,7 +393,7 @@ export interface MemorySystemContextResult {
 }
 
 /** MemoryPower 依赖的最小 Provider 协议。 */
-export interface MemoryProvider {
+export interface MemoryProvider extends import_memory_commit_provider {
   /** Provider 的稳定名称。 */
   readonly name: string;
 
@@ -474,12 +418,6 @@ export interface MemoryProvider {
   /** 显式形成或更新一条长期记忆。 */
   remember(input: MemoryRememberInput): Promise<MemoryRememberResult>;
 
-  /** 把 Session 文本提炼为长期记忆。 */
-  digest(input: MemoryDigestInput): Promise<MemoryDigestResult>;
-
-  /** 基于新证据修订既有记忆。 */
-  revise(input: MemoryReviseInput): Promise<MemoryReviseResult>;
-
   /** 删除或失效一条记忆。 */
   forget(input: MemoryForgetInput): Promise<MemoryForgetResult>;
 
@@ -487,9 +425,6 @@ export interface MemoryProvider {
   system_context(
     input: MemorySystemContextInput,
   ): Promise<MemorySystemContextResult>;
-
-  /** 幂等持久化一个通过预检、等待 Formation 的 canonical Turn。 */
-  capture_turn(input: MemoryCaptureTurnInput): Promise<MemoryCaptureTurnResult>;
 
   /** 释放 Provider 持有的存储、索引和后台任务。 */
   dispose(): Promise<void>;
@@ -499,8 +434,8 @@ export interface MemoryProvider {
 export interface MemoryPowerOptions {
   /** 记忆或 Profile 正文实际提交后的业务回调；不包含 Action 或 UI 概念。 */
   readonly on_changed?: import("./MemoryChange.js").MemoryChangeHandler;
-  /** 每日 Profile 优化使用的文本模型；不配置时仍可读取与追加 Profile。 */
-  profile_model_id?: string;
+  /** 专用 Memory Session 的模型；省略时首次创建使用所属 Agent 默认模型。 */
+  model_id?: string;
   /** 当前启用的 Memory Provider。 */
   provider?: "builtin";
   /** 当前启用的 Memory Storage。 */
@@ -517,7 +452,7 @@ export type MemoryActionPayload =
   | Omit<MemoryReadInput, "access">
   | Omit<MemoryListInput, "access">
   | Omit<MemoryRememberInput, "access">
-  | Omit<MemoryDigestInput, "access" | "transcript" | "message_count">
+  | MemoryDigestInput
   | Omit<MemoryReviseInput, "access">
   | Omit<MemoryForgetInput, "access">
   | Record<string, PowerJsonValue>;

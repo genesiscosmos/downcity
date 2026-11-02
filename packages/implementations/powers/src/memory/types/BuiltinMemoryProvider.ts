@@ -1,9 +1,9 @@
 /**
- * Builtin Memory Provider 的配置与提炼协议。
+ * Builtin Memory Provider 的确定性存储配置与文档类型。
  *
  * 关键点（中文）
  * - Builtin Provider 可以使用任意 MemoryStorageAdapter，不绑定文件系统。
- * - digest/revise handler 只处理 Memory 领域数据，不读取物理路径。
+ * - 语义提炼由 Memory Session 完成，Provider 不接收模型 handler。
  */
 
 import type {
@@ -63,67 +63,6 @@ export interface BuiltinMemoryMetadata {
   source_refs: MemorySourceReference[];
 }
 
-/** Session 提炼处理器输入。 */
-export interface BuiltinMemoryDigestHandlerInput {
-  /** 需要提炼的完整 Session 文本。 */
-  source_text: string;
-
-  /** Provider 已保存的稳定证据标识。 */
-  source_id: string;
-
-  /** 触发提炼的 Session 标识。 */
-  session_id: string;
-
-  /** 当前 Provider 的稳定索引内容。 */
-  current_index: string;
-}
-
-/** Session 提炼处理器输出。 */
-export interface BuiltinMemoryDigestHandlerOutput {
-  /** 本次需要创建或更新的长期记忆投影。 */
-  projections: BuiltinMemoryProjectionDraft[];
-
-  /** 可选的人类可读结果摘要。 */
-  summary?: string;
-}
-
-/** Session 提炼处理器。 */
-export type BuiltinMemoryDigestHandler = (
-  input: BuiltinMemoryDigestHandlerInput,
-) => Promise<BuiltinMemoryDigestHandlerOutput | string>;
-
-/** 既有记忆修订处理器输入。 */
-export interface BuiltinMemoryReviseHandlerInput {
-  /** 需要修订的稳定记忆标识。 */
-  memory_id: string;
-
-  /** 当前记忆的完整内容；不存在时为空字符串。 */
-  current_content: string;
-
-  /** 描述目标变更的明确修订指令。 */
-  instruction: string;
-
-  /** 新增的证据内容。 */
-  evidence: string;
-}
-
-/** 既有记忆修订处理器输出。 */
-export interface BuiltinMemoryReviseHandlerOutput {
-  /** 修订后的稳定记忆标识；省略时沿用原标识。 */
-  memory_id?: string;
-
-  /** 修订后的完整内容。 */
-  content: string;
-
-  /** 可选的人类可读结果摘要。 */
-  summary?: string;
-}
-
-/** 既有记忆修订处理器。 */
-export type BuiltinMemoryReviseHandler = (
-  input: BuiltinMemoryReviseHandlerInput,
-) => Promise<BuiltinMemoryReviseHandlerOutput | string>;
-
 /** 为当前 City Power 实例延迟创建独占 Storage Adapter 的工厂。 */
 export type BuiltinMemoryStorageFactory = () => MemoryStorageAdapter | Promise<MemoryStorageAdapter>;
 
@@ -140,11 +79,6 @@ export interface BuiltinMemoryProviderOptions {
   /** 当前统一 Adapter 是否同时路由 City 共享 Store。 */
   city_memory_available?: boolean;
 
-  /** 可选的 Session 提炼处理器。 */
-  digest?: BuiltinMemoryDigestHandler;
-
-  /** 可选的长期记忆修订处理器。 */
-  revise?: BuiltinMemoryReviseHandler;
 }
 
 /** FileMemoryStorageAdapter constructor 参数。 */

@@ -44,6 +44,8 @@ export interface SessionSystemContextHookValue {
 
 /** `session.turn_context` pipeline 的值。 */
 export interface SessionTurnContextHookValue {
+  /** 当前 Session 已冻结的实际 system 快照；保留块名称与正文，供扩展比较版本标记，不授予修改 system 的权限。 */
+  readonly system_blocks?: readonly Readonly<SessionSystemBlock>[];
   /** 当前 Session 的稳定标识。 */
   session_id: string;
   /** 当前 Turn 的稳定标识。 */

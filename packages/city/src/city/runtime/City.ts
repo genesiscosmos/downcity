@@ -496,6 +496,7 @@ export class City implements CityRuntime {
       resolve_workspace: async (workspace_id) => await this.enter_workspace(agent.id, workspace_id),
     });
     try {
+      this.power_runtime.attach_agent_execution_profiles(agent);
       this.agents_by_id.set(agent.id, agent);
     } catch (error) {
       this.agents_by_id.delete(agent.id);

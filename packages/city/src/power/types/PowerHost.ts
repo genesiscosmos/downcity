@@ -91,6 +91,32 @@ export interface PowerHostAgent {
 
 /** Power 可使用的宿主系统能力。 */
 export interface PowerHostSystem {
+  /** 仅可信 Power 生命周期可注册专用执行资源；返回撤销函数。 */
+  register_execution_profile(profile: import("./PowerExecutionProfile.js").PowerExecutionProfile): () => void;
+  /** 停止后台 Session 的当前工作；等待停止请求完成，用于预算和关闭收口。 */
+  stop_agent_session(input: {
+    /** Session 所属真实 Agent。 */
+    readonly agent_id: string;
+    /** Session 的持久化分区。 */
+    readonly category: string;
+    /** Session 的稳定 ID。 */
+    readonly session_id: string;
+    /** 可选预期 Turn，避免迟到的取消停止后续工作。 */
+    readonly turn_id?: string;
+  }): Promise<void>;
+  /** 读取 Session 和指定 Turn 的真实状态及持久化完成结果。 */
+  read_agent_session(input: {
+    /** Session 所属真实 Agent。 */
+    readonly agent_id: string;
+    /** Session 的持久化分区。 */
+    readonly category: string;
+    /** Session 的稳定 ID。 */
+    readonly session_id: string;
+    /** 指定 Turn；与 request_id 互斥。 */
+    readonly turn_id?: string;
+    /** prompt 时使用的稳定请求键；与 turn_id 互斥。 */
+    readonly request_id?: string;
+  }): Promise<import("./PowerExecutionProfile.js").PowerHostSessionState>;
   /** 列出宿主当前登记的 Agent。 */
   list_agents(): Promise<PowerHostAgent[]>;
   /** 列出宿主当前登记的 Workspace。 */
@@ -112,8 +138,18 @@ export interface PowerHostSystem {
   create_agent_session(input: {
     /** 持有新 Session 的 Agent 稳定 ID。 */
     readonly agent_id: string;
-    /** 新 Session 的初始 Workspace ID；省略时由 Agent 使用默认上下文。 */
+    /** 普通 Session 的初始 Workspace，专用配置仅把它作为范围元数据。 */
     readonly workspace_id?: string;
+    /** 是否明确继承 Agent 默认 Workspace；默认 false，专用配置禁止为 true。 */
+    readonly inherit_workspace?: boolean;
+    /** 宿主注册的专用执行配置标识；memory 来源必填 memory。 */
+    readonly execution_profile_id?: string;
+    /** 专用配置精确版本；选择专用配置时必填。 */
+    readonly execution_profile_version?: number;
+    /** 首次模型选择；恢复时以持久化的实际模型身份为准。 */
+    readonly model_id?: string;
+    /** 稳定 attempt 创建键；同键重试找回原 Session。 */
+    readonly creation_key?: string;
     /** 新 Session 的来源及其业务路由元数据。 */
     readonly origin: { readonly type: string; readonly [key: string]: PowerJsonValue };
   }): Promise<{ readonly session_id: string }>;
@@ -157,14 +193,24 @@ export interface PowerHostSystem {
     readonly category: string;
   }): Promise<PowerHostWorkspace | undefined>;
   /** 读取既有 Session 的 canonical 消息，供后台增量处理；不发起 turn。 */
-  read_agent_session_messages?(input: {
+  read_agent_session_messages(input: {
     /** Session 所属 Agent。 */
     readonly agent_id: string;
     /** Session 稳定标识。 */
     readonly session_id: string;
     /** Session 持久化来源分区。 */
     readonly category: string;
-  }): Promise<PowerJsonObject[]>;
+    /** 返回此 sequence 之前的消息，默认从最新边界开始。 */
+    readonly before_sequence?: number;
+    /** 返回此 sequence 之后的消息，用于固定来源起点。 */
+    readonly after_sequence?: number;
+    /** 固定来源终点，包含该 sequence。 */
+    readonly through_sequence?: number;
+    /** 单页消息数，默认 50，最大 100。 */
+    readonly limit?: number;
+    /** 单页 UTF-8 字节预算，默认 256 KiB，最大 1 MiB。 */
+    readonly max_bytes?: number;
+  }): Promise<import("./PowerExecutionProfile.js").PowerHostSessionMessagePage>;
   /** 使用系统默认应用打开 HTTP 或 HTTPS 地址。 */
   open_external(input: {
     /** 要打开的绝对 URL。 */

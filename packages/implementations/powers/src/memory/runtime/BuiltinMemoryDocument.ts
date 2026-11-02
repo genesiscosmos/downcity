@@ -8,9 +8,7 @@
  */
 
 import type {
-  BuiltinMemoryDigestHandlerOutput,
   BuiltinMemoryMetadata,
-  BuiltinMemoryReviseHandlerOutput,
 } from "@/memory/types/BuiltinMemoryProvider.js";
 import type {
   MemoryListItem,
@@ -338,30 +336,4 @@ export function storage_entry_to_record(
       ...(metadata.applicable_agent_id ? { applicable_agent_id: metadata.applicable_agent_id } : {}),
     },
   };
-}
-
-/** 读取 handler 的 digest 输出。 */
-export function normalize_digest_output(
-  output: BuiltinMemoryDigestHandlerOutput | string,
-): BuiltinMemoryDigestHandlerOutput {
-  return typeof output === "string"
-    ? {
-        projections: [{
-          memory_id: "wiki/session-digests",
-          title: "Session Digests",
-          content: output,
-          tags: ["memory", "digest"],
-        }],
-      }
-    : output;
-}
-
-/** 读取 handler 的 revise 输出。 */
-export function normalize_revise_output(
-  output: BuiltinMemoryReviseHandlerOutput | string,
-  fallback_memory_id: string,
-): BuiltinMemoryReviseHandlerOutput {
-  return typeof output === "string"
-    ? { memory_id: fallback_memory_id, content: output }
-    : output;
 }

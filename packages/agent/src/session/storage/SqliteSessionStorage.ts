@@ -115,7 +115,10 @@ export class SqliteSessionStorage implements SessionStorage {
       FROM session_state WHERE singleton_id = 1
     `).get() as SessionStateRow | undefined;
     if (!row) throw new Error(`Session state does not exist: ${this.session_id}`);
-    return normalize_session_metadata({
+    const profile_row = this.require_database().prepare(
+      "SELECT reference FROM session_execution_profile WHERE singleton_id = 1",
+    ).get() as { reference: string } | undefined;
+    return { ...normalize_session_metadata({
       v: 2,
       session_id: row.session_id,
       agent_id: row.agent_id,
@@ -129,7 +132,24 @@ export class SqliteSessionStorage implements SessionStorage {
       ...(row.preview_text ? { preview_text: row.preview_text } : {}),
       created_at: row.created_at,
       updated_at: row.updated_at,
-    }, this.session_id, this.agent_id, this.origin, row.workspace_id || undefined);
+    }, this.session_id, this.agent_id, this.origin, row.workspace_id || undefined),
+      ...(profile_row ? { execution_profile: JSON.parse(profile_row.reference) as import("@/types/agent/SessionExecutionProfile.js").SessionExecutionProfileReference } : {}),
+    };
+  }
+
+  /** 原子绑定执行身份；重试允许同值，禁止修改已存在的配置。 */
+  async bind_execution_profile(reference: import("@/types/agent/SessionExecutionProfile.js").SessionExecutionProfileReference): Promise<void> {
+    await this.initialize();
+    this.run_transaction(() => {
+      const serialized = JSON.stringify(reference);
+      this.require_database().prepare(
+        "INSERT OR IGNORE INTO session_execution_profile (singleton_id, reference) VALUES (1, ?)",
+      ).run(serialized);
+      const row = this.require_database().prepare(
+        "SELECT reference FROM session_execution_profile WHERE singleton_id = 1",
+      ).get() as { reference: string };
+      if (row.reference !== serialized) throw new Error("execution_profile_conflict: persisted identity is immutable");
+    });
   }
 
   /** 原子覆盖 configured metadata，同时保持数据库身份不变量。 */
@@ -430,7 +450,7 @@ export class SqliteSessionStorage implements SessionStorage {
         database.exec("PRAGMA journal_mode = WAL; PRAGMA synchronous = NORMAL;");
       }
       let version = Number(database.prepare("PRAGMA user_version").get()?.user_version ?? 0);
-      if (version === 3 || version === 4) {
+      if (version === 3 || version === 4 || version === 5) {
         migrate_session_storage(database, version);
         version = SESSION_STORAGE_SCHEMA_VERSION;
       }

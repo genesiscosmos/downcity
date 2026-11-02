@@ -45,6 +45,8 @@ import {
 } from "@/power/core/PowerContext.js";
 import { create_power_session_collection } from "@/city/power/PowerSessionBridge.js";
 import { register_power_http_routes } from "@/power/core/PowerHttpRoutes.js";
+import { CityExecutionProfiles } from "./CityExecutionProfiles.js";
+import { assert_power_session_owner, create_power_session_host } from "./CityPowerSessionHost.js";
 
 /** City 唯一的 Power Runtime。 */
 export class CityPowerRuntime implements PowerRuntimeHost {
@@ -56,6 +58,13 @@ export class CityPowerRuntime implements PowerRuntimeHost {
 
   /** 所有 Agent 共享的唯一执行 Registry。 */
   private readonly registry = new PowerRegistry();
+  /** Power 生命周期持有的可信执行配置注册表。 */
+  private readonly execution_profiles = new CityExecutionProfiles();
+
+  /** 新 Agent 加入时先装配专用执行配置，确保历史可精确恢复。 */
+  attach_agent_execution_profiles(agent: Agent): void {
+    this.execution_profiles.attach_agent(agent);
+  }
 
   /** 按 Power ID 串行化动态添加与移除，避免同一实例生命周期交叉。 */
   private readonly power_lifecycle_chains = new Map<string, Promise<void>>();
@@ -381,6 +390,7 @@ export class CityPowerRuntime implements PowerRuntimeHost {
     try {
       await record.power.dispose?.(record.lifecycle_context);
     } finally {
+      this.execution_profiles.release_power(record.power_id);
       record.updated_at = Date.now();
     }
   }
@@ -728,6 +738,7 @@ export class CityPowerRuntime implements PowerRuntimeHost {
       logger,
       notifications,
       system: Object.freeze({
+        ...create_power_session_host(power_id, this.options.runtime_access, this.execution_profiles),
         list_agents: async () => this.options.runtime_access.list_agents().map((agent) => ({
           agent_id: agent.id,
           name: agent.name,
@@ -755,24 +766,13 @@ export class CityPowerRuntime implements PowerRuntimeHost {
             ...(input.input !== undefined ? { payload: input.input } : {}),
           }) as unknown as PowerJsonValue;
         },
-        create_agent_session: async (input) => {
-          const workspace = input.workspace_id
-            ? await this.options.runtime_access.enter_workspace(input.agent_id, input.workspace_id)
-            : undefined;
-          const agent = this.options.runtime_access.get_agent(input.agent_id);
-          if (!agent) throw new Error(`Agent not found in City: ${input.agent_id}`);
-          const session = await agent.sessions.create({
-            workspace,
-            origin: input.origin,
-          });
-          return { session_id: session.id };
-        },
         prompt_agent_session: async (input) => {
           const workspace = input.workspace_id
             ? await this.options.runtime_access.enter_workspace(input.agent_id, input.workspace_id)
             : undefined;
           const agent = this.options.runtime_access.get_agent(input.agent_id);
           if (!agent) throw new Error(`Agent not found in City: ${input.agent_id}`);
+          await assert_power_session_owner(power_id, agent, this.execution_profiles, input.session_id, input.category);
           await agent.sessions.get(input.session_id, input.category, { workspace });
           const session = agent.sessions.runtime(input.session_id, input.category);
           const turn = await session.prompt({
@@ -802,18 +802,12 @@ export class CityPowerRuntime implements PowerRuntimeHost {
             : undefined;
           const agent = this.options.runtime_access.get_agent(input.agent_id);
           if (!agent) throw new Error(`Agent not found in City: ${input.agent_id}`);
+          await assert_power_session_owner(power_id, agent, this.execution_profiles, input.session_id, input.category);
           await agent.sessions.get(input.session_id, input.category, { workspace });
           await agent.sessions.runtime(
             input.session_id,
             input.category,
           ).append_agent_message({ text: input.text });
-        },
-        read_agent_session_messages: async (input) => {
-          const agent = this.options.runtime_access.get_agent(input.agent_id);
-          if (!agent) throw new Error(`Agent not found in City: ${input.agent_id}`);
-          await agent.sessions.get(input.session_id, input.category);
-          const messages = await agent.sessions.runtime(input.session_id, input.category).messages();
-          return messages as unknown as import("@/power/index.js").PowerJsonObject[];
         },
         get_agent_session_workspace: async (input) => {
           const agent = this.options.runtime_access.get_agent(input.agent_id);

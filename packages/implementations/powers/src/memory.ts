@@ -14,11 +14,7 @@ export {
 export { MemoryStorageRouter } from "./memory/adapters/MemoryStorageRouter.js";
 export type {
   MemoryActionPayload,
-  MemoryCaptureMessage,
-  MemoryCaptureTurnInput,
-  MemoryCaptureTurnResult,
   MemoryDigestInput,
-  MemoryDigestResult,
   MemoryForgetInput,
   MemoryForgetResult,
   MemoryListItem,
@@ -37,7 +33,6 @@ export type {
   MemoryRememberInput,
   MemoryRememberResult,
   MemoryReviseInput,
-  MemoryReviseResult,
   MemorySourceReference,
   MemoryStatusResult,
   MemorySystemContextInput,
@@ -70,18 +65,19 @@ export type {
   MemoryMainviewWorkspace,
 } from "./memory/types/MemoryMainview.js";
 export type {
-  BuiltinMemoryDigestHandler,
-  BuiltinMemoryDigestHandlerInput,
-  BuiltinMemoryDigestHandlerOutput,
   BuiltinMemoryProjectionDraft,
   BuiltinMemoryProviderOptions,
-  BuiltinMemoryReviseHandler,
-  BuiltinMemoryReviseHandlerInput,
-  BuiltinMemoryReviseHandlerOutput,
   BuiltinMemoryStorageFactory,
   DefaultFileMemoryRootInput,
   FileMemoryStorageAdapterOptions,
 } from "./memory/types/BuiltinMemoryProvider.js";
+export type { MemoryJobView } from "./memory/types/MemoryJob.js";
+export type {
+  MemoryChangeSet, MemoryCommitReceipt, MemoryCommitProvider,
+  MemoryVersionInput, MemoryVersionResult, MemoryVersionedRecord, MemoryValidity,
+} from "./memory/types/MemoryChangeSet.js";
+export { MemoryVersionConflictError } from "./memory/types/MemoryChangeSet.js";
+export { create_memory_import_changeset } from "./memory/runtime/MemoryCommit.js";
 export type {
   MemoryStorageAdapter,
   MemoryStorageEntry,

@@ -9,6 +9,8 @@
 import type { SessionOrigin } from "@downcity/type";
 
 export type SessionHistoryMeta = {
+  /** 宿主专用执行配置身份；存在时恢复必须精确匹配注册项。 */
+  execution_profile?: import("@/types/agent/SessionExecutionProfile.js").SessionExecutionProfileReference;
   /** schema 版本。 */
   v: 2;
   /** 当前元信息所属的 session_id。 */

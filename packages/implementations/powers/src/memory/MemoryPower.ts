@@ -25,25 +25,28 @@ import type {
 } from "@downcity/city/power";
 import type {
   SessionSystemContextHookValue,
+  SessionTurnContextHookValue,
 } from "@downcity/agent";
 import { SESSION_HOOK_POINTS } from "@downcity/type";
 import { z } from "zod";
 import {
-  digest_memory_action,
   forget_memory_action,
   list_memory_action,
   read_memory_action,
-  remember_memory_action,
-  revise_memory_action,
   search_memory_action,
   status_memory_action,
 } from "@/memory/Action.js";
 import { build_memory_power_system_text } from "@/memory/runtime/SystemProvider.js";
 import { MemoryProfile } from "@/memory/runtime/MemoryProfile.js";
+import { MemoryJobStore } from "@/memory/storage/MemoryJobStore.js";
+import { MemoryCoordinator } from "@/memory/application/MemoryCoordinator.js";
+import { MemoryService } from "@/memory/application/MemoryService.js";
+import { create_memory_job_actions } from "@/memory/application/MemoryJobActions.js";
+import { mark_profile_snapshot, build_profile_updates } from "@/memory/runtime/MemoryContext.js";
 import { UserRepository, LOCAL_USER_ID } from "@downcity/city/local";
 import type { ProfileScope } from "@/memory/types/Profile.js";
 import { register_profile_host_actions } from "@/memory/host/ProfileHostActions.js";
-import { createHash } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { BuiltinMemoryProvider } from "@/memory/providers/BuiltinMemoryProvider.js";
 import {
   FileMemoryStorageAdapter,
@@ -180,11 +183,28 @@ export class MemoryPower extends Power {
   /** 宿主显式提供的平台数据根目录；用于定位 Agent 私有记忆。 */
   private readonly platform_root_path?: string;
 
-  /** 宿主配置：Profile 每日优化模型，不依赖入口判定模型。 */
+  /** 宿主配置：专用 Session 模型与独立数据根。 */
   private readonly options: MemoryPowerOptions;
 
-  /** User / Agent Profile 文档与每日优化器，内容由 Session system 快照固定。 */
+  /** User / Agent 核心记忆投影与确定性版本化编辑。 */
   private profile_runtime?: MemoryProfile;
+
+  /** 内部请求调度与持久化记忆业务入口。 */
+  private coordinator?: MemoryCoordinator;
+  /** 普通 Action 不直接调用模型，统一由应用服务处理。 */
+  private service_instance?: MemoryService;
+
+  /** 仅在 City 完成初始化后提供业务服务。 */
+  private get service(): MemoryService {
+    if (!this.service_instance) throw new Error("Memory service is not initialized");
+    return this.service_instance;
+  }
+
+  /** 将实际结果和错误映射为 Power 返回值。 */
+  private async run_action(run: () => Promise<unknown>) {
+    try { return { success: true as const, data: await run() as PowerJsonValue }; }
+    catch (error) { return { success: false as const, error: error instanceof Error ? error.message : String(error) }; }
+  }
 
   constructor(options: MemoryPowerOptions = {}) {
     super();
@@ -224,16 +244,23 @@ export class MemoryPower extends Power {
     pipeline: {
       [SESSION_HOOK_POINTS.system_context]: [async ({ context, value }) => {
         const input = value as unknown as SessionSystemContextHookValue;
+        if (context.session?.origin.type === "memory") return value;
         const blocks = [...input.blocks];
         const scopes: ProfileScope[] = [{ target: "user" }, { target: "agent", agent_id: context.agent.id }];
         for (const scope of scopes) {
           try {
             const core = await this.profile_runtime?.context_block(scope);
-            if (core) blocks.push({ source: "power", name: `memory/${core.name}`, content: core.content,
+            if (core) blocks.push({ source: "power", name: `memory/${core.name}`, content: mark_profile_snapshot(core),
               position: scope.target === "agent" ? "after_instruction" : "before_session" });
           } catch (error) { context.logger.warn("[memory] Profile unavailable", { target: scope.target, error: String(error) }); }
         }
         return { ...input, blocks } as unknown as PowerJsonValue;
+      }],
+      [SESSION_HOOK_POINTS.turn_context]: [async ({ context, value }) => {
+        if (!this.profile_runtime || context.session?.origin.type === "memory") return value;
+        const input = value as unknown as SessionTurnContextHookValue;
+        const updates = await build_profile_updates(this.profile_runtime, context.agent.id, input.system_blocks ?? []);
+        return { ...input, blocks: [...input.blocks, ...updates] } as unknown as PowerJsonValue;
       }],
     },
   };
@@ -256,15 +283,23 @@ export class MemoryPower extends Power {
     await this.provider.initialize();
     register_memory_power_host_actions(context);
     const config = context.config.get();
-    this.profile_runtime = new MemoryProfile(context, platform_root,
-      this.options.profile_model_id ?? (typeof config.profile_model_id === "string" ? config.profile_model_id : undefined), this.options.on_changed);
-    this.profile_runtime.initialize();
+    this.profile_runtime = new MemoryProfile(context, platform_root, this.options.on_changed);
+    const jobs = new MemoryJobStore(path.join(context.storage.path, "processing"));
+    this.coordinator = new MemoryCoordinator({ host: context, provider: this.provider,
+      profile: this.profile_runtime, jobs,
+      model_id: this.options.model_id ?? (typeof config.model_id === "string" ? config.model_id : undefined),
+    });
+    this.service_instance = new MemoryService(this.provider, jobs, this.coordinator, context);
+    await this.coordinator.initialize();
     register_profile_host_actions(context, this.profile_runtime);
 
   }
 
   /** 释放当前 City 唯一的 Memory Provider。 */
   async dispose(): Promise<void> {
+    await this.coordinator?.dispose();
+    this.coordinator = undefined;
+    this.service_instance = undefined;
     await this.profile_runtime?.dispose();
     this.profile_runtime = undefined;
     await this.provider_instance?.dispose();
@@ -278,6 +313,10 @@ export class MemoryPower extends Power {
 
   /** Memory 对 Agent 暴露的稳定 Action 集合。 */
   readonly actions: PowerActions = {
+    ...create_memory_job_actions(() => this.service, () => {
+      if (!this.profile_runtime) throw new Error("Memory Profile is unavailable");
+      return this.profile_runtime;
+    }),
     status: create_action({
       description: "Inspect the active Memory Provider and its capabilities.",
       returns: "provider, state, capabilities, details, warnings",
@@ -486,7 +525,7 @@ export class MemoryPower extends Power {
 
     remember: create_action({
       description: "Save memory using target (owner) and mode (usage). Persistent behavior or 'from now on' preferences use mode profile; facts and historical knowledge use mode knowledge. Cross-Agent user preferences target user; Agent-only agreements target agent. Never change target after a failed write without user approval.",
-      returns: "target, mode(profile|knowledge), status(saved|created|updated), profile_id or memory_id, evidence_id?, activation(new_session_or_syncshot|on_recall), location(PROFILE.md|wiki)",
+      returns: "target, mode(profile|knowledge), status(saved|created), profile_id or memory_id, version?, activation, location",
       access: "write",
       input_schema: {
         zod: z.object({
@@ -569,77 +608,79 @@ export class MemoryPower extends Power {
           if (!this.profile_runtime) return { success: false, error: "Memory Profile runtime is unavailable" };
           try {
             const content = read_string(body, "content").trim();
-            const source_key = createHash("sha256").update(JSON.stringify([context.agent.id, context.session?.id, context.turn?.id, content])).digest("hex");
-            await this.profile_runtime.append(scope, content, source_key);
+            const source_key = createHash("sha256").update(JSON.stringify([context.agent.id, context.session?.id, context.call?.tool_call_id ?? context.turn?.id ?? randomUUID(), content])).digest("hex");
+            const current = await this.profile_runtime.read(scope);
+            await this.profile_runtime.append(scope, content, { source_key, source_refs: [
+              `request:${context.agent.id}:${context.session?.origin.category ?? "work"}:${context.session?.id ?? "host"}:${context.turn?.id ?? source_key}`,
+            ] }, current.version);
             const profile_id = target === "user" ? `user/${LOCAL_USER_ID}/profile` : `agent/${context.agent.id}/profile`;
-            return { success: true, data: { target, mode: "profile", status: "saved", profile_id, activation: "new_session_or_syncshot", location: "PROFILE.md" } };
+            return { success: true, data: { target, mode: "profile", status: "saved", profile_id, activation: "next_turn_or_new_session", location: "PROFILE.md" } };
           } catch (error) { return { success: false, error: String(error) }; }
         }
-        return await remember_memory_action(
-          this.provider,
-          await this.resolve_action_access(context),
-          {
-          content: read_string(body, "content"),
-          target: read_memory_write_target(body),
-          topic: read_optional_string(body, "topic"),
-          memory_type: read_optional_memory_type(body),
-          source: read_optional_string(body, "source"),
-          },
-        );
+        return await this.run_action(async () => await this.service.remember(context,
+          await this.resolve_action_access(context), {
+            content: read_string(body, "content"), target: read_memory_write_target(body),
+            topic: read_optional_string(body, "topic"), memory_type: read_optional_memory_type(body),
+            source: read_optional_string(body, "source"),
+          }));
       },
     }),
 
     digest: create_action({
       description: "Digest a canonical Session transcript into long-term memory.",
-      returns: "digested, memory_ids, warnings",
+      returns: "job_id, status(queued|running|succeeded|skipped|failed), session_id?, memory_ids?, detail?; queued is not saved",
       access: "write",
       input_schema: {
         zod: z.object({
           session_id: z.string(),
-          max_messages: z.number().optional(),
+          category: z.enum(["chat", "work"]),
+          target: memory_write_target_schema,
+          max_messages: z.number().int().min(1).max(100).optional(),
         }),
         json_schema: {
           type: "object",
           additionalProperties: false,
-          required: ["session_id"],
+          required: ["session_id", "category", "target"],
           properties: {
             session_id: { type: "string" },
-            max_messages: { type: "number", minimum: 1 },
+            category: { type: "string", enum: ["chat", "work"] },
+            target: { type: "string", enum: ["user", "agent", "current_workspace"] },
+            max_messages: { type: "number", minimum: 1, maximum: 100 },
           },
         },
       },
-      examples: [{ title: "Digest a Session", payload: { session_id: "sess-1" } }],
+      examples: [{ title: "Digest a Session", payload: { session_id: "sess-1", category: "chat", target: "agent" } }],
       command: {
         description: "Digest a canonical Session transcript.",
         configure(command: Command) {
           command
             .requiredOption("--session-id <session_id>", "Session identifier.")
+            .requiredOption("--category <category>", "chat or work.")
+            .requiredOption("--target <target>", "user, agent or current_workspace.")
             .option("--max-messages <number>", "Maximum message count.", parse_positive_integer);
         },
         map_input({ opts }) {
           return {
             session_id: String(opts.sessionId || ""),
+            category: String(opts.category || ""),
+            target: String(opts.target || ""),
             ...(typeof opts.maxMessages === "number" ? { max_messages: opts.maxMessages } : {}),
           };
         },
       },
       execute: async ({ context, input }) => {
         const body = read_body_object(input);
-        return await digest_memory_action(
-          context,
-          this.provider,
-          await this.resolve_action_access(context),
-          {
-          session_id: read_string(body, "session_id"),
-          max_messages: read_optional_number(body, "max_messages"),
-          },
-        );
+        return await this.run_action(async () => await this.service.digest(context,
+          await this.resolve_action_access(context), {
+            session_id: read_string(body, "session_id"), category: read_string(body, "category"),
+            target: read_memory_write_target(body), max_messages: read_optional_number(body, "max_messages") ?? 30,
+          }));
       },
     }),
 
     revise: create_action({
       description: "Revise one memory using new evidence.",
-      returns: "memory_id, status, version",
+      returns: "job_id, status, session_id?, memory_ids?, detail?; queued is not saved",
       access: "write",
       input_schema: {
         zod: z.object({
@@ -683,15 +724,11 @@ export class MemoryPower extends Power {
       },
       execute: async ({ context, input }) => {
         const body = read_body_object(input);
-        return await revise_memory_action(
-          this.provider,
-          await this.resolve_action_access(context),
-          {
-          memory_id: read_string(body, "memory_id"),
-          instruction: read_string(body, "instruction"),
-          evidence: read_optional_string(body, "evidence"),
-          },
-        );
+        return await this.run_action(async () => await this.service.revise(context,
+          await this.resolve_action_access(context), {
+            memory_id: read_string(body, "memory_id"), instruction: read_string(body, "instruction"),
+            evidence: read_optional_string(body, "evidence"),
+          }));
       },
     }),
 

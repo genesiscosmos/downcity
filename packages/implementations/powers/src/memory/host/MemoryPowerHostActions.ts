@@ -18,10 +18,10 @@ import type {
   MemoryReadResult,
   MemoryRememberResult,
   MemoryForgetResult,
-  MemoryReviseResult,
   MemoryStatusResult,
 } from "@/memory/types/Memory.js";
 import type { MemorySubject } from "@/memory/types/MemoryAccess.js";
+import type { MemoryJobView } from "@/memory/types/MemoryJob.js";
 import type {
   MemoryMainviewForgetInput,
   MemoryMainviewListItem,
@@ -42,6 +42,27 @@ const DEFAULT_LIST_LIMIT = 50;
 
 /** 注册 Memory Power 的宿主管理 actions。 */
 export function register_memory_power_host_actions(context: PowerLifecycleContext): void {
+  context.power.action({
+    id: "memory.jobs",
+    run: async (input) => {
+      const source = read_record(input ?? {});
+      return as_json(await invoke_domain_action<{ items: MemoryJobView[]; total: number }>(context, read_scope(source), "jobs", {
+        ...(source.limit === undefined ? {} : { limit: source.limit }),
+        ...(source.offset === undefined ? {} : { offset: source.offset }),
+      }));
+    },
+  });
+  for (const action_id of ["job_status", "retry"] as const) {
+    context.power.action({
+      id: `memory.${action_id}`,
+      run: async (input) => {
+        const source = read_record(input);
+        return as_json(await invoke_domain_action<MemoryJobView>(context, read_scope(source), action_id, {
+          job_id: read_required_string(source, "job_id"),
+        }));
+      },
+    });
+  }
   context.power.action({
     id: "memory.snapshot",
     run: async (input) => as_json(await create_snapshot(context, read_scope(input))),
@@ -233,11 +254,14 @@ async function revise_memory(
   context: PowerLifecycleContext,
   input: MemoryMainviewReviseInput,
 ): Promise<MemoryMainviewMutationResult> {
-  const result = await invoke_domain_action<MemoryReviseResult>(context, input, "revise", {
+  const result = await invoke_domain_action<MemoryJobView>(context, input, "revise", {
     memory_id: input.memory_id,
     instruction: input.instruction,
   });
-  return await mutation_result(context, input, result.memory_id, "记忆已修订。");
+  const committed = result.status === "succeeded";
+  return await mutation_result(context, input, input.memory_id, committed
+    ? "记忆已修订。"
+    : `修订请求状态：${result.status}。请在处理记录中查看结果。Job ID：${result.job_id}`);
 }
 
 /** 删除一条记忆并返回刷新后的列表。 */

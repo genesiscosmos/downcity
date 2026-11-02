@@ -23,6 +23,8 @@ import type {
 export interface AgentCreateSessionOptions extends AgentCreateSessionInput {
   /** 新 Session 的初始目录；省略时使用 Agent 的默认目录，两者都没有则无项目上下文。 */
   workspace?: WorkspaceRuntime;
+  /** 是否继承 Agent 默认目录；普通 SDK 默认 true，后台宿主显式传 false。 */
+  inherit_workspace?: boolean;
 }
 
 /** 恢复 Agent Session 时使用的当前目录。 */
@@ -49,6 +51,28 @@ export interface AgentSessionCollection {
 
   /** 在指定 Workspace 中创建一个属于当前 Agent 的 Session。 */
   create(options?: AgentCreateSessionOptions): Promise<AgentSession>;
+
+  /** 宿主注册专用执行配置；不暴露为模型或远程 Session action。 */
+  register_execution_profile(profile: import("./SessionExecutionProfile.js").SessionExecutionProfile): () => void;
+
+  /** 宿主幂等创建专用 Session；显式配置完整替换 Agent 的默认能力。 */
+  create_execution_session(input: import("./SessionExecutionProfile.js").SessionExecutionProfileSelection & {
+    /** 专用 Session 的业务来源。 */
+    origin: import("@downcity/type").SessionOrigin;
+    /** 只作为范围元数据的 Workspace 标识。 */
+    workspace_id?: string;
+  }): Promise<AgentSession>;
+
+  /** 按持久化请求身份读取完成写前日志，不依赖内存 Promise。 */
+  read_execution_state(session_id: string, category: string, input: {
+    /** 指定 Turn ID，与 request_id 互斥。 */
+    turn_id?: string;
+    /** prompt 使用的业务幂等键。 */
+    request_id?: string;
+  }): Promise<import("@/agent/SessionExecutionRead.js").SessionExecutionReadResult>;
+
+  /** 宿主读取原始持久化视图；读取前仍校验 Session 的执行配置可恢复。 */
+  read_session_storage(session_id: string, category: string): Promise<import("@/types/store/SessionStorage.js").SessionStorage>;
 
   /** 监听本地新会话初始化完成；监听器完成后创建才返回，取消函数释放订阅。 */
   on_created(listener: (session: AgentSession) => void | Promise<void>): () => void;

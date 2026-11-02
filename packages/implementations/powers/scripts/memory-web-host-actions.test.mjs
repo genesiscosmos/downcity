@@ -22,12 +22,17 @@ function create_invocation_log() {
 }
 
 /** 启动 Memory Power，并让宿主 system 记录领域调用。 */
-async function start_memory_power(options = {}) {
+async function start_memory_power(context, options = {}) {
   const actions = new Map();
   const invocations = create_invocation_log();
   const platform_root = fs.mkdtempSync(path.join(os.tmpdir(), "downcity-memory-host-"));
   const storage_root = path.join(platform_root, "powers", "memory");
-  await new MemoryPower({ platform_root_path: platform_root }).initialize({
+  const power = new MemoryPower({ platform_root_path: platform_root });
+  context.after(async () => {
+    try { await power.dispose(); }
+    finally { fs.rmSync(platform_root, { recursive: true, force: true }); }
+  });
+  await power.initialize({
     config: { get: () => ({}), set: async () => {}, path: "" },
     power: {
       id: "memory",
@@ -38,6 +43,7 @@ async function start_memory_power(options = {}) {
     logger: { log: async () => {}, debug() {}, info() {}, warn() {}, error() {} },
     notifications: { publish: async () => {}, dismiss: async () => {} },
     system: {
+      register_execution_profile() { return () => {}; },
       async list_agents() {
         return [
           { agent_id: "agent-a", name: "Agent A" },
@@ -56,7 +62,7 @@ async function start_memory_power(options = {}) {
       async write_clipboard_text() {},
     },
   });
-  return { actions, invocations, storage_root };
+  return { actions, invocations };
 }
 
 /** 启动 Web Power，并让宿主 system 记录领域调用。 */
@@ -98,7 +104,12 @@ async function start_web_power(options = {}) {
 }
 
 test("Memory 界面 action 全部在选定执行范围上调用领域 action", async (context) => {
-  const { actions, invocations, storage_root } = await start_memory_power({
+  const job_view = {
+    job_id: "a".repeat(64), kind: "revise", status: "queued",
+    target: "agent", mode: "knowledge", agent_id: "agent-a", workspace_id: "workspace-a",
+    created_at: "2026-01-01T00:00:00.000Z", updated_at: "2026-01-01T00:00:00.000Z",
+  };
+  const { actions, invocations } = await start_memory_power(context, {
     on_invoke: async (input) => {
       if (input.action_id === "status") {
         return {
@@ -118,15 +129,20 @@ test("Memory 界面 action 全部在选定执行范围上调用领域 action", a
         return { success: true, data: { memory_id: "agent/agent_a/wiki/x", memory: null } };
       }
       if (input.action_id === "remember") {
-        return { success: true, data: { memory_id: "agent/agent_a/wiki/x", mode: "created" } };
+        return { success: true, data: {
+          memory_id: "agent/agent_a/wiki/x", target: "agent", mode: "knowledge",
+          status: "created", version: "1:1", activation: "on_recall", location: "wiki",
+        } };
       }
-      if (input.action_id === "revise") {
-        return { success: true, data: { memory_id: "agent/agent_a/wiki/x", mode: "revised" } };
+      if (["revise", "job_status", "retry"].includes(input.action_id)) {
+        return { success: true, data: job_view };
+      }
+      if (input.action_id === "jobs") {
+        return { success: true, data: { items: [job_view], total: 1 } };
       }
       return { success: true, data: { memory_id: "agent/agent_a/wiki/x", forgotten: true } };
     },
   });
-  context.after(() => fs.rmSync(storage_root, { recursive: true, force: true }));
   const scope = { scope: "agent", agent_id: "agent-a", workspace_id: "workspace-a" };
 
   const snapshot = await actions.get("memory.snapshot").run(scope);
@@ -140,7 +156,15 @@ test("Memory 界面 action 全部在选定执行范围上调用领域 action", a
   await actions.get("memory.list").run({ ...scope, limit: 10 });
   await actions.get("memory.read").run({ ...scope, memory_id: "agent/agent_a/wiki/x" });
   await actions.get("memory.remember").run({ ...scope, content: "x", target: "agent" });
-  await actions.get("memory.revise").run({ ...scope, memory_id: "agent/agent_a/wiki/x", instruction: "y" });
+  const revision = await actions.get("memory.revise").run({ ...scope, memory_id: "agent/agent_a/wiki/x", instruction: "y" });
+  assert.match(revision.message, /queued/);
+  assert.match(revision.message, new RegExp(job_view.job_id));
+  assert.doesNotMatch(revision.message, /记忆已修订/);
+  assert.deepEqual(await actions.get("memory.jobs").run({ ...scope, limit: 10, offset: 0 }), {
+    items: [job_view], total: 1,
+  });
+  assert.deepEqual(await actions.get("memory.job_status").run({ ...scope, job_id: job_view.job_id }), job_view);
+  assert.deepEqual(await actions.get("memory.retry").run({ ...scope, job_id: job_view.job_id }), job_view);
   await actions.get("memory.forget").run({ ...scope, memory_id: "agent/agent_a/wiki/x" });
 
   // 每个领域调用都必须带上界面选定的 Agent 与 Workspace。
@@ -152,15 +176,18 @@ test("Memory 界面 action 全部在选定执行范围上调用领域 action", a
   }
   const remember_call = invocations.find((item) => item.action_id === "remember");
   assert.deepEqual(remember_call.input, { content: "x", target: "agent" });
+  assert.deepEqual(invocations.find((item) => item.action_id === "jobs").input, { limit: 10, offset: 0 });
+  for (const action_id of ["job_status", "retry"]) {
+    assert.deepEqual(invocations.find((item) => item.action_id === action_id).input, { job_id: job_view.job_id });
+  }
 });
 
 test("共享范围借用真实 Agent 执行，agent_id 为空也能读取", async (context) => {
-  const { actions, invocations, storage_root } = await start_memory_power({
+  const { actions, invocations } = await start_memory_power(context, {
     on_invoke: async (input) => input.action_id === "status"
       ? { success: true, data: { provider: "builtin", state: "ready", capabilities: { list: true } } }
       : { success: true, data: { provider: "builtin", items: [], total: 0 } },
   });
-  context.after(() => fs.rmSync(storage_root, { recursive: true, force: true }));
 
   // 选中共享范围时界面不指定 Agent；宿主必须回退到第一个可用 Agent，而不是抛错。
   const snapshot = await actions.get("memory.snapshot").run({
@@ -183,12 +210,11 @@ test("共享范围借用真实 Agent 执行，agent_id 为空也能读取", asyn
 });
 
 test("Memory 领域失败还原为异常，而不是空结果", async (context) => {
-  const { actions, storage_root } = await start_memory_power({
+  const { actions } = await start_memory_power(context, {
     on_invoke: async (input) => input.action_id === "status"
       ? { success: true, data: { provider: "builtin", state: "ready", capabilities: { list: true } } }
       : { success: false, error: "Memory is outside the current access context" },
   });
-  context.after(() => fs.rmSync(storage_root, { recursive: true, force: true }));
   await assert.rejects(
     () => actions.get("memory.read").run({
       agent_id: "agent-a",
@@ -200,12 +226,14 @@ test("Memory 领域失败还原为异常，而不是空结果", async (context) 
 });
 
 test("Memory 写入目标由界面传入，不被宿主 action 改写", async (context) => {
-  const { actions, invocations, storage_root } = await start_memory_power({
+  const { actions, invocations } = await start_memory_power(context, {
     on_invoke: async (input) => input.action_id === "list"
       ? { success: true, data: { provider: "builtin", items: [], total: 0 } }
-      : { success: true, data: { memory_id: "city/wiki/x", mode: "created" } },
+      : { success: true, data: {
+        memory_id: "workspace/workspace-a/wiki/x", target: "current_workspace", mode: "knowledge",
+        status: "created", version: "1:1", activation: "on_recall", location: "wiki",
+      } },
   });
-  context.after(() => fs.rmSync(storage_root, { recursive: true, force: true }));
   await actions.get("memory.remember").run({
     scope: "city",
     agent_id: "agent-a",

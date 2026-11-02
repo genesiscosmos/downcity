@@ -8,16 +8,18 @@
  */
 
 import path from "node:path";
-import { randomUUID } from "node:crypto";
+import { randomUUID, createHash } from "node:crypto";
+import { DatabaseSync } from "node:sqlite";
+import { setTimeout as delay } from "node:timers/promises";
 import {
   access,
   mkdir,
+  open,
   lstat,
   readFile,
   readdir,
   rename,
   rm,
-  writeFile,
 } from "node:fs/promises";
 import type {
   DefaultFileMemoryRootInput,
@@ -130,8 +132,14 @@ export class FileMemoryStorageAdapter implements MemoryStorageAdapter {
     await this.assert_no_symbolic_links(key, true);
     const temporary_path = `${target_path}.${process.pid}.${randomUUID()}.tmp`;
     try {
-      await writeFile(temporary_path, String(content || ""), "utf8");
+      const file = await open(temporary_path, "wx", 0o600);
+      try {
+        await file.writeFile(String(content || ""), "utf8");
+        await file.sync();
+      } finally { await file.close(); }
       await rename(temporary_path, target_path);
+      const directory = await open(path.dirname(target_path), "r");
+      try { await directory.sync(); } finally { await directory.close(); }
     } catch (error) {
       await rm(temporary_path, { force: true }).catch(() => undefined);
       throw error;
@@ -155,6 +163,41 @@ export class FileMemoryStorageAdapter implements MemoryStorageAdapter {
   async delete(key: string): Promise<void> {
     await this.assert_no_symbolic_links(key, true);
     await rm(this.resolve_key(key), { force: true });
+  }
+
+  /**
+   * 以 SQLite 的 OS 文件锁保护同一物理范围。锁跟随实际根目录，跨 Adapter、
+   * 跨进程共享；进程崩溃后由操作系统释放，不能用过期时间抢走活跃写者的锁。
+   * BUSY 使用异步退避，避免同进程竞争者阻塞持锁回调的事件循环。
+   */
+  async with_scope_lock<T>(scope_key: string, operation: () => Promise<T>): Promise<T> {
+    const normalized_key = normalize_storage_key(scope_key);
+    const lock_key = `.locks/${createHash("sha256").update(normalized_key).digest("hex")}.sqlite`;
+    await this.assert_no_symbolic_links(lock_key, true);
+    const lock_path = this.resolve_key(lock_key);
+    await mkdir(path.dirname(lock_path), { recursive: true });
+    await this.assert_no_symbolic_links(lock_key, true);
+    const database = new DatabaseSync(lock_path);
+    database.exec("PRAGMA busy_timeout = 0");
+    const deadline = Date.now() + 30_000;
+    try {
+      for (;;) {
+        try { database.exec("BEGIN IMMEDIATE"); break; }
+        catch (error) {
+          const message = error instanceof Error ? error.message : String(error);
+          if (!/database is (locked|busy)/u.test(message) || Date.now() >= deadline) throw error;
+          await delay(20 + Math.floor(Math.random() * 30));
+        }
+      }
+      try {
+        const result = await operation();
+        database.exec("COMMIT");
+        return result;
+      } catch (error) {
+        database.exec("ROLLBACK");
+        throw error;
+      }
+    } finally { database.close(); }
   }
 
   /** File Adapter 没有长期句柄需要释放。 */

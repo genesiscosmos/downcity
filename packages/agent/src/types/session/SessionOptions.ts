@@ -51,6 +51,8 @@ export interface AgentManagedSession extends AgentSession {
  * 本地 Session 构造参数。
  */
 export interface SessionOptions {
+  /** 专用配置存活校验；存在时禁止修改模型、Workspace、Prompt Powers 和分叉执行。 */
+  assert_execution_profile?: () => void;
   /** Agent 的完成事件写前日志；在 canonical Turn 终态之前必须提交成功。 */
   completions?: SessionCompletionPort;
   /** 父 Turn 收尾前等待或取消子工作，跟随 Agent 持有的委派运行时。 */

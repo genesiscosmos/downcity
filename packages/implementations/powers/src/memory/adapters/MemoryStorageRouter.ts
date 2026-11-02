@@ -101,6 +101,12 @@ export class MemoryStorageRouter implements MemoryStorageAdapter {
     await route.storage.delete(route.inner_key);
   }
 
+  /** 把范围排他锁路由到实际物理存储，所有写者共享同一个锁键。 */
+  async with_scope_lock<T>(scope_key: string, operation: () => Promise<T>): Promise<T> {
+    const route = await this.resolve_route(scope_key);
+    return await route.storage.with_scope_lock(route.inner_key, operation);
+  }
+
   /** 释放共享根与全部已经创建的 Agent 私有根。 */
   async dispose(): Promise<void> {
     await this.shared_storage.dispose();

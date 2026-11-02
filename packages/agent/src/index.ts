@@ -10,6 +10,14 @@
 export { describe_prompt_powers, snapshot_prompt_powers, execute_prompt_power } from "./session/input/PromptPowers.js";
 export type { PromptPower, PromptPowerAction, PromptPowerDescriptor, PromptPowerCallContext } from "@downcity/type";
 
+export type {
+  SessionExecutionProfile,
+  SessionExecutionProfileContext,
+  SessionExecutionProfileReference,
+  SessionExecutionProfileResources,
+  SessionExecutionProfileSelection,
+} from "./types/agent/SessionExecutionProfile.js";
+
 // Agent 入口
 export { Agent } from "./agent/Agent.js";
 export { SessionBusyError } from "./session/SessionBusyError.js";

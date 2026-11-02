@@ -14,6 +14,17 @@ import {
 export function migrate_session_storage(database: DatabaseSync, version: number): void {
   if (version === 3) migrate_v3_to_v4(database);
   if (version === 3 || version === 4) migrate_v4_to_v5(database);
+  if (version >= 3 && version <= 5) {
+    // 新增不可变执行身份表；不推断现有会话的专用配置。
+    database.exec("BEGIN IMMEDIATE");
+    try {
+      database.exec(SESSION_STORAGE_SCHEMA_SQL);
+      database.exec("PRAGMA user_version = 6; COMMIT");
+    } catch (error) {
+      database.exec("ROLLBACK");
+      throw error;
+    }
+  }
 }
 
 /** Session v3 → v4：扩展 Part 类型，保留所有身份、顺序和内容。 */

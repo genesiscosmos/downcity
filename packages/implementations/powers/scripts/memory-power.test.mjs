@@ -3,7 +3,8 @@
  *
  * 关键点（中文）
  * - MemoryPower 只委托 Provider，不读取 Workspace 文件。
- * - Builtin Provider 只公开 memory_id/citation，不泄漏物理路径。
+ * - Builtin Provider 读取 manifest 有效记录，knowledge remember 每次独立提交。
+ * - 只公开 memory_id/citation，不泄漏物理路径。
  * - File Adapter 始终把逻辑 key 限制在独占根目录。
  */
 
@@ -16,6 +17,7 @@ import {
   BuiltinMemoryProvider,
   FileMemoryStorageAdapter,
   MemoryPower,
+  create_memory_import_changeset,
   get_default_file_memory_root_path,
 } from "@downcity/powers/memory";
 import { SESSION_HOOK_POINTS } from "@downcity/agent";
@@ -77,6 +79,7 @@ function create_start_context(storage_path) {
     logger: { log: async () => {}, debug() {}, info() {}, warn() {}, error() {} },
     notifications: { publish: async () => {}, dismiss: async () => {} },
     system: {
+      register_execution_profile: () => () => {},
       list_agents: async () => [],
       list_workspaces: async () => [],
       invoke_agent_power: async () => ({}),
@@ -106,10 +109,11 @@ test("Builtin Provider 把 Memory 数据写入独立 Adapter 根而不是 Worksp
     memory_type: "preference",
     source: "explicit user statement",
   });
-  // Agent 私有记忆使用原始 agent_id 作为逻辑地址段，物理上落在 Agent 私有根。
-  assert.match(remembered.memory_id, /^agent\/memory_test_agent\/wiki\/user-preferences$/);
+  assert.match(remembered.memory_id, /^agent\/memory_test_agent\/wiki\/[a-f0-9]{64}$/);
   assert.equal(remembered.mode, "created");
-  assert.equal(await fs.stat(path.join(memory_root, `${remembered.memory_id}.md`)).then(() => true), true);
+  const manifest_path = path.join(memory_root, "agent", "memory_test_agent", "runtime", "knowledge", "current.json");
+  const manifest = JSON.parse(await fs.readFile(manifest_path, "utf8"));
+  assert.equal(manifest.records[remembered.memory_id].validity, "active");
   assert.equal(await fs.access(path.join(workspace_path, ".downcity", "memory")).then(() => true).catch(() => false), false);
 
   const recalled = await provider.recall({
@@ -139,7 +143,7 @@ test("Builtin Provider 把 Memory 数据写入独立 Adapter 根而不是 Worksp
     agent_id: "memory_test_agent",
   });
 
-  await provider.remember({
+  const second_memory = await provider.remember({
     access: create_access("memory_test_workspace", "session-that-must-not-own-memory"),
     target: "agent",
     content: "The user also prefers structured results.",
@@ -151,35 +155,21 @@ test("Builtin Provider 把 Memory 数据写入独立 Adapter 根而不是 Worksp
     access: create_access("memory_test_workspace"),
     memory_id: remembered.memory_id,
   });
-  assert.equal(updated_read.memory?.source_refs.length, 2);
-  assert.equal(updated_read.memory?.subject.kind, "agent");
+  assert.notEqual(second_memory.memory_id, remembered.memory_id);
+  assert.equal(updated_read.memory?.source_refs.length, 1);
+  assert.equal(updated_read.memory?.content, "The user prefers concise answers.");
+  const second_read = await provider.read({
+    access: create_access("memory_test_workspace"),
+    memory_id: second_memory.memory_id,
+  });
+  assert.equal(second_read.memory?.content, "The user also prefers structured results.");
+  assert.equal(second_read.memory?.subject.kind, "agent");
+  assert.equal(second_read.memory?.source_refs.length, 1);
 
   await assert.rejects(provider.read({
     access: { agent_id: "another_agent", city_memory_available: false },
     memory_id: remembered.memory_id,
   }), /outside the current access context/);
-  await assert.rejects(provider.digest({
-    access: create_access("memory_test_workspace", "empty-session"),
-    session_id: "empty-session",
-    transcript: "",
-    message_count: 0,
-  }), /requires transcript content/);
-
-  const revised = await provider.revise({
-    access: create_access("memory_test_workspace"),
-    memory_id: remembered.memory_id,
-    instruction: "Add the latest preference.",
-    evidence: "The user also prefers structured results.",
-  });
-  assert.equal(revised.mode, "appended");
-  assert.match(revised.evidence_id || "", /\/evidence\/manual\//);
-  const revised_read = await provider.read({
-    access: create_access("memory_test_workspace"),
-    memory_id: remembered.memory_id,
-  });
-  assert.match(revised_read.memory?.content || "", /structured results/);
-  assert.equal(revised_read.memory?.source_refs.length, 3);
-
   const forgotten = await provider.forget({
     access: create_access("memory_test_workspace"),
     memory_id: remembered.memory_id,
@@ -265,19 +255,22 @@ test("MemoryPower 使用显式运行时目录并公开完整 Action", async (con
     action_name: "remember",
   });
   assert.equal(result.success, true);
-  assert.match(result.data.memory_id, /\/wiki\/test$/);
-  // Agent 私有记忆落在 `agents/<agent_id>/memory`，逻辑前缀不进入物理路径。
-  assert.equal(
-    await fs.access(path.join(platform_root, "agents", "memory_test_agent", "memory", "wiki", "test.md")).then(() => true).catch(() => false),
-    true,
-  );
+  assert.match(result.data.memory_id, /\/wiki\/[a-f0-9]{64}$/);
+  // Agent 私有 manifest 落在独立根，逻辑前缀不进入物理路径。
+  const manifest_path = path.join(platform_root, "agents", "memory_test_agent", "memory", "runtime", "knowledge", "current.json");
+  const manifest = JSON.parse(await fs.readFile(manifest_path, "utf8"));
+  assert.equal(manifest.records[result.data.memory_id].memory.content, "Remember this");
   assert.equal("files" in power_context, false);
   assert.deepEqual(Object.keys(power.actions).sort(), [
     "digest",
     "forget",
+    "job_status",
+    "jobs",
     "list",
+    "optimize",
     "read",
     "remember",
+    "retry",
     "revise",
     "search",
     "status",
@@ -285,14 +278,17 @@ test("MemoryPower 使用显式运行时目录并公开完整 Action", async (con
   await power.dispose();
 });
 
-test("Builtin Provider 枚举记忆并区分证据与投影", async (context) => {
+test("Builtin Provider 只枚举 manifest 有效记录，旧 Markdown 需显式导入", async (context) => {
   const memory_root = await fs.mkdtemp(path.join(os.tmpdir(), "downcity-memory-list-"));
   context.after(async () => await fs.rm(memory_root, { recursive: true, force: true }));
-  const provider = new BuiltinMemoryProvider({
-    storage: new FileMemoryStorageAdapter({ root_path: memory_root }),
-  });
+  const storage = new FileMemoryStorageAdapter({ root_path: memory_root });
+  const provider = new BuiltinMemoryProvider({ storage });
   await provider.initialize();
   const access = create_access("memory_list_workspace");
+  const legacy_id = "agent/memory_test_agent/wiki/legacy";
+  await storage.write(`${legacy_id}.md`, "Legacy note awaiting explicit import.");
+  assert.equal((await provider.read({ access, memory_id: legacy_id })).memory, null);
+  assert.equal((await provider.list({ access })).total, 0);
   await provider.remember({
     access,
     target: "agent",
@@ -310,7 +306,7 @@ test("Builtin Provider 枚举记忆并区分证据与投影", async (context) =>
 
   const listed = await provider.list({ access });
   assert.equal(listed.provider, "builtin");
-  // 索引与两条投影都是 wiki 条目；证据条目默认不进入列表。
+  assert.equal(listed.total, 2);
   assert.equal(listed.items.some((item) => item.is_evidence), false);
   assert.equal(listed.items.every((item) => item.subject.kind === "agent"), true);
   assert.equal(listed.subject_counts.agent, listed.total);
@@ -331,13 +327,25 @@ test("Builtin Provider 枚举记忆并区分证据与投影", async (context) =>
   assert.equal(paged.total, listed.total);
   assert.notEqual(paged.items[0].memory_id, listed.items[0].memory_id);
 
+  // 来源保存在记录内；include_evidence 不会把原始 Markdown 加入有效集合。
   const with_evidence = await provider.list({ access, include_evidence: true });
-  assert.equal(with_evidence.items.some((item) => item.is_evidence), true);
-  assert.ok(with_evidence.total > listed.total);
+  assert.equal(with_evidence.total, listed.total);
+  const imported = await provider.commit(create_memory_import_changeset({
+    access, target: "agent", commit_id: "explicit-legacy-import",
+    records: [{
+      memory_id: legacy_id, content: "Legacy note awaiting explicit import.",
+      memory_type: "fact", source_refs: [], metadata: { title: "legacy" },
+    }],
+  }));
+  assert.equal(imported.changes[0].memory_id, legacy_id);
+  const imported_read = await provider.read({ access, memory_id: legacy_id });
+  assert.equal(imported_read.memory.content, "Legacy note awaiting explicit import.");
+  assert.equal(imported_read.memory.source_refs[0].source_type, "legacy_import");
+  assert.equal((await provider.list({ access })).total, 3);
   await provider.dispose();
 });
 
-test("MemoryPower 未启用自动流程时不召回、不采集，system 仅含使用说明", async (context) => {
+test("MemoryPower system 仅含说明，Profile hooks 不自动召回知识", async (context) => {
   const platform_root = await fs.mkdtemp(path.join(os.tmpdir(), "downcity-memory-hooks-"));
   context.after(async () => await fs.rm(platform_root, { recursive: true, force: true }));
   const memory_root = path.join(platform_root, "powers", "memory");
@@ -360,8 +368,6 @@ test("MemoryPower 未启用自动流程时不召回、不采集，system 仅含�
   assert.match(usage, /Memory actions usage|Preferred flow/);
   assert.doesNotMatch(usage, /prefers concise answers/);
 
-  assert.equal(power.hooks.pipeline[SESSION_HOOK_POINTS.turn_context], undefined);
-
   const system_hook = power.hooks.pipeline[SESSION_HOOK_POINTS.system_context][0];
   const turn_value = await system_hook({
     context: power_context,
@@ -373,13 +379,17 @@ test("MemoryPower 未启用自动流程时不召回、不采集，system 仅含�
       blocks: [],
     },
   });
-  // 自动流程未启用，不无条件检索长期记忆。
+  // 核心 Profile 为空时，system 快照不加入 knowledge 正文。
   assert.equal(turn_value.blocks.length, 0);
 
-  // 没有消息入口判定和回复后采集，Profile 参与 system 快照。
-  assert.equal(power.hooks.effect?.[SESSION_HOOK_POINTS.turn_committed], undefined);
-  const capture_root = path.join(platform_root, "agents", "memory_test_agent", "memory", "capture-jobs");
-  assert.equal(await fs.access(capture_root).then(() => true).catch(() => false), false);
+  const turn_hook = power.hooks.pipeline[SESSION_HOOK_POINTS.turn_context][0];
+  const updated_turn = await turn_hook({
+    context: power_context,
+    power: "memory",
+    value: { blocks: [], system_blocks: [] },
+  });
+  // 空快照与空 Profile 相同，无需每轮重复注入空更正。
+  assert.deepEqual(updated_turn.blocks, []);
 
   await power.dispose();
 });
@@ -406,7 +416,7 @@ test("Workspace 记忆在项目内跨 Agent 可见，私有与跨项目记忆隔
     action_name: "remember",
   });
   assert.equal(private_memory.success, true);
-  assert.match(private_memory.data.memory_id, /^agent\/agent_a\/wiki\/project-overview$/);
+  assert.match(private_memory.data.memory_id, /^agent\/agent_a\/wiki\/[a-f0-9]{64}$/);
 
   const shared_memory = await power.actions.remember.execute({
     context: first_context,
@@ -420,7 +430,7 @@ test("Workspace 记忆在项目内跨 Agent 可见，私有与跨项目记忆隔
     action_name: "remember",
   });
   assert.equal(shared_memory.success, true);
-  assert.match(shared_memory.data.memory_id, /^workspace\/[a-f0-9]+\/wiki\/project-overview$/);
+  assert.match(shared_memory.data.memory_id, /^workspace\/[a-f0-9]+\/wiki\/[a-f0-9]{64}$/);
 
   const shared_read = await power.actions.read.execute({
     context: second_context,

@@ -101,6 +101,8 @@ export class Session implements AgentSession {
   private readonly allocate_session_id: () => Promise<string>;
   private readonly register_forked_session: SessionOptions["register_forked_session"];
   private readonly get_tools: SessionOptions["get_tools"];
+  /** 可信配置撤销后同步封闭后续执行和能力变更。 */
+  private readonly assert_execution_profile?: () => void;
   private readonly logger: SessionOptions["logger"];
   private readonly composer: SessionComposer;
   private readonly session_messages: SessionMessages;
@@ -146,6 +148,7 @@ export class Session implements AgentSession {
     this.allocate_session_id = options.allocate_session_id ?? (async () => generate_session_id());
     this.register_forked_session = options.register_forked_session;
     this.get_tools = options.get_tools;
+    this.assert_execution_profile = options.assert_execution_profile;
     this.logger = options.logger;
     this.get_agent_model = options.get_agent_model;
     this.get_hooks = options.get_hooks;
@@ -336,6 +339,7 @@ export class Session implements AgentSession {
     input: AgentSessionSetInput,
     options?: AgentSessionSetOptions,
   ): Promise<void> {
+    if (this.assert_execution_profile) throw new Error("execution_profile_immutable: configuration belongs to the host");
     if (!input.model && !input.security && input.workspace === undefined) {
       throw new Error("session.set requires model, security, or workspace");
     }
@@ -460,6 +464,8 @@ export class Session implements AgentSession {
    * 追加一条新的 Session prompt。
    */
   async prompt(input: AgentSessionPromptInput): Promise<AgentSessionTurnHandle> {
+    this.assert_execution_profile?.();
+    if (this.assert_execution_profile && input.powers?.length) throw new Error("execution_profile_immutable: Prompt Powers are not allowed");
     input.abort_signal?.throwIfAborted();
     if (this.archive_state !== "active") throw new Error(`Session is ${this.archive_state}: ${this.id}`);
     await this.step_input.initialize();
@@ -638,6 +644,7 @@ export class Session implements AgentSession {
    * 时间线末尾，源 Session 不留下任何痕迹；失败时直接抛错，由调用方决定半成品 Session 的去留。
    */
   async fork(input?: AgentSessionForkInput | string): Promise<this> {
+    if (this.assert_execution_profile) throw new Error("execution_profile_immutable: use a new host attempt instead of fork");
     if (this.replacing_history) throw new Error("Session history is being replaced");
     if (typeof input !== "string" && input?.replace === true) {
       return await this.replace_history(input);

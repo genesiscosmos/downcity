@@ -6,7 +6,7 @@
  */
 
 /** 当前 Session SQLite schema 版本。 */
-export const SESSION_STORAGE_SCHEMA_VERSION = 5;
+export const SESSION_STORAGE_SCHEMA_VERSION = 6;
 
 /** messages.meta 的列约束；只允许用户消息携带，且必须是 JSON 对象。 */
 export const SESSION_MESSAGE_META_CHECK_SQL = "meta IS NULL OR (json_valid(meta) AND json_type(meta) = 'object' AND role = 'user')";
@@ -33,6 +33,11 @@ CREATE TABLE IF NOT EXISTS session_state (
   revision INTEGER NOT NULL DEFAULT 1 CHECK (revision >= 1),
   created_at INTEGER NOT NULL,
   updated_at INTEGER NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS session_execution_profile (
+  singleton_id INTEGER PRIMARY KEY CHECK (singleton_id = 1),
+  reference TEXT NOT NULL CHECK (json_valid(reference))
 );
 
 CREATE TABLE IF NOT EXISTS messages (

@@ -95,6 +95,11 @@ export type {
   PowerSelf,
   PowerLifecycleContext,
 } from "./types/PowerHost.js";
+export type {
+  PowerExecutionProfile,
+  PowerHostSessionState,
+  PowerHostSessionMessagePage,
+} from "./types/PowerExecutionProfile.js";
 
 
 export type {

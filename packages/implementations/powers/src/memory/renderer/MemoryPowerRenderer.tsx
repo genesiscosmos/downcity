@@ -2,12 +2,14 @@
  * Memory Power 的功能工作区。
  *
  * Sidebar 只做一件事：平铺列出记忆范围（共享 + 每个 Agent），右侧只显示条目数量。
- * Mainview 有三个视图态：列表、单条详情、以及本 Power 的设置；三者都在工作区内切换，
+ * Mainview 的列表、详情、处理记录和设置都在工作区内切换，
  * 不会跳出到全局 Powers 目录。所有读写都通过宿主 action 执行，Renderer 不接触 Provider。
  */
 
 import { useCallback, useEffect, useState } from "react";
 import { define_power_renderer } from "@downcity/city/power/react";
+import type { PowerMainviewComponentProps } from "@downcity/city/power/react";
+import { MemoryJobs } from "./MemoryJobs.js";
 import type {
   MemoryMainviewListItem,
   MemoryMainviewListResult,
@@ -91,7 +93,19 @@ export const MEMORY_POWER_RENDERER = define_power_renderer({
     </Sidebar>;
   },
 
-  mainview: function MemoryPowerMainview({ power, navigation, ui }) {
+  mainview: function MemoryPowerMainview(props) {
+    const { power, navigation, ui } = props;
+    if (read_view_route(navigation.route) === "jobs") return <MemoryJobs
+      key={`${read_route(navigation.route.agent_id)}:${current_workspace_id(navigation.route)}`}
+      power={power} navigation={navigation} ui={ui}
+      agent_id={read_route(navigation.route.agent_id)} workspace_id={current_workspace_id(navigation.route)}
+    />;
+    return <MemoryMainview {...props} />;
+  },
+});
+
+/** 记忆列表、正文编辑与设置；处理记录独立挂载以隔离分页和迟到响应。 */
+function MemoryMainview({ power, navigation, ui }: PowerMainviewComponentProps) {
     const {
       Button, Callout, EmptyState, Field, Group, Inline, ItemMenu, LoadingState, Markdown,
       Page, Row, Section, Status, Textarea, Toolbar,
@@ -164,7 +178,7 @@ export const MEMORY_POWER_RENDERER = define_power_renderer({
         set_listing(result);
         set_detail_revision((value) => value + 1);
         ui.invalidate();
-        ui.toast({ type: "success", message });
+        ui.toast({ type: "success", message: result.message || message });
         return result;
       } catch (reason) {
         const message_value = to_error_message(reason);
@@ -189,7 +203,7 @@ export const MEMORY_POWER_RENDERER = define_power_renderer({
     const revise = async () => {
       const instruction = draft.trim();
       if (!instruction || !detail) return;
-      const result = await mutate("memory.revise", { memory_id: detail.memory_id, instruction }, "记忆已修订");
+      const result = await mutate("memory.revise", { memory_id: detail.memory_id, instruction }, "修订请求已提交，请查看处理记录");
       if (result) {
         set_draft("");
         set_revising(false);
@@ -251,7 +265,6 @@ export const MEMORY_POWER_RENDERER = define_power_renderer({
         <Row label="存储实现" trailing={<Status>{read_detail_string(snapshot, "storage_adapter")}</Status>} />
         <Row label="Agent 记忆" trailing={<Status>{read_detail_number(snapshot, "agent_memories")}</Status>} />
         <Row label="证据记录" trailing={<Status>{read_detail_number(snapshot, "evidence")}</Status>} />
-        <Row label="待处理捕获" trailing={<Status>{read_detail_number(snapshot, "pending_capture_jobs")}</Status>} />
       </Group>
     </Page>;
 
@@ -264,6 +277,7 @@ export const MEMORY_POWER_RENDERER = define_power_renderer({
         description={detail.found ? detail.memory_id : detail.error}
         actions={<Inline>
           <Button on_click={back_to_list}>返回列表</Button>
+          <Button on_click={() => navigation.navigate({ ...range_route(scope, agent_id, workspace_id), view: "jobs" })}>处理记录</Button>
           {detail.found ? <Button disabled={busy} on_click={() => { set_revising((value) => !value); set_draft(""); }}>{revising ? "取消修订" : "修订"}</Button> : null}
           {detail.found ? <Button variant="destructive" disabled={busy} on_click={() => void forget({ memory_id: detail.memory_id, title: detail.title || detail.memory_id })}>删除</Button> : null}
         </Inline>}
@@ -293,6 +307,7 @@ export const MEMORY_POWER_RENDERER = define_power_renderer({
         description={`${scope_label} · ${snapshot.workspaces.find((item) => item.workspace_id === workspace_id)?.name ?? "未选择 Workspace"}`}
         actions={<Inline>
           <Button disabled={loading} on_click={ui.invalidate}>{loading ? "刷新中…" : "刷新"}</Button>
+          <Button on_click={() => navigation.navigate({ ...range_route(scope, agent_id, workspace_id), view: "jobs" })}>处理记录</Button>
           <Button on_click={() => navigation.navigate({ ...range_route(scope, agent_id, workspace_id), view: "settings" })}>设置</Button>
           <Button variant="primary" disabled={busy} on_click={() => { set_creating((value) => !value); set_draft(""); }}>{creating ? "取消" : "新建记忆"}</Button>
         </Inline>}
@@ -320,11 +335,10 @@ export const MEMORY_POWER_RENDERER = define_power_renderer({
         />)}</Group>
       </Section>}
     </Page>;
-  },
-});
+}
 
 /** Mainview 在工作区内可切换的视图态。 */
-type MemoryMainviewView = "list" | "settings";
+type MemoryMainviewView = "list" | "settings" | "jobs";
 
 /** 创建记忆范围的稳定 Power route。 */
 function range_route(
@@ -346,7 +360,8 @@ function read_scope_route(route: Record<string, unknown>): MemoryMainviewScopeKi
 
 /** 读取 Mainview 当前视图态；未声明时为列表。 */
 function read_view_route(route: Record<string, unknown>): MemoryMainviewView {
-  return read_route(route.view) === "settings" ? "settings" : "list";
+  const view = read_route(route.view);
+  return view === "settings" || view === "jobs" ? view : "list";
 }
 
 /** 读取当前 route 中已经选定的 Workspace ID。 */

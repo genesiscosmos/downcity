@@ -8,6 +8,10 @@
  */
 
 import { SessionLifecycle } from "./SessionLifecycle.js";
+import { createHash } from "node:crypto";
+import { read_session_execution } from "./SessionExecutionRead.js";
+import { SessionExecutionProfiles } from "./SessionExecutionProfiles.js";
+import type { ResolvedSessionExecutionProfile, SessionExecutionProfile, SessionExecutionProfileSelection } from "@/types/agent/SessionExecutionProfile.js";
 import { allocate_session_id, normalize_session_id } from "@/session/SessionIdentity.js";
 import type { ModelClient, AgentTool as Tool } from "@downcity/type";
 import type { SessionCompletionPort } from "@/types/agent/SessionCompletion.js";
@@ -72,6 +76,8 @@ type AgentSessionsOptions = {
   resolve_session_context: (input?: SessionContextResolution) => {
     /** Agent 拥有的可靠完成事件写前端口。 */
     completions?: SessionCompletionPort;
+    /** 只保留写前结果、不向普通业务回调投递的专用端口。 */
+    result_completions?: SessionCompletionPort;
     /** 子 Turn 的等待与失败取消端口。 */
     child_work?: SessionChildWork;
     workspace_path: string;
@@ -119,6 +125,9 @@ export class AgentSessions implements AgentSessionsContract<AgentSession> {
   private readonly session_composer: SessionComposer;
   private readonly get_agent_model: AgentSessionsOptions["get_agent_model"];
   private readonly sessions_by_id = new Map<string, AgentManagedSession>();
+  /** 可信宿主配置及同键创建互斥；业务模型不能注册资源。 */
+  private readonly execution_profiles = new SessionExecutionProfiles();
+  private readonly execution_creations = new Map<string, Promise<AgentSession>>();
   /** 创建、恢复、删除与归档扫描共用的进程内生命周期互斥。 */
   private readonly lifecycle = new SessionLifecycle();
   /** 新会话初始化后的宿主订阅；恢复已有会话时不触发。 */
@@ -316,13 +325,83 @@ export class AgentSessions implements AgentSessionsContract<AgentSession> {
    * 新建一个 session。
    */
   async create(
-    input?: AgentCreateSessionInput & { workspace?: WorkspaceRuntime },
+    input?: AgentCreateSessionInput & { workspace?: WorkspaceRuntime; /** 显式关闭默认 Workspace 继承。 */ inherit_workspace?: boolean },
   ): Promise<AgentSession> {
     return await this.lifecycle.access(async () => {
       const origin = normalize_session_origin(input?.origin);
+      if (origin.type === "memory") throw new Error("execution_profile_required: memory requires a trusted execution profile");
       const session_id = await this.allocate_session_id(origin);
-      return await this.create_with_id(session_id, origin, input?.workspace);
+      return await this.create_with_id(session_id, origin, input?.workspace, input?.inherit_workspace);
     });
+  }
+
+  /** 注册宿主可信配置；撤销后缓存会话也不得继续执行。 */
+  register_execution_profile(profile: SessionExecutionProfile): () => void {
+    return this.execution_profiles.register(profile);
+  }
+
+  /** 专用会话按业务创建键稳定定位；不继承默认 Workspace 或 Agent 业务能力。 */
+  async create_execution_session(input: SessionExecutionProfileSelection & {
+    /** 完整业务来源，由可信宿主提供。 */
+    origin: SessionOrigin;
+    /** 仅用作范围元数据，不授予目录能力。 */
+    workspace_id?: string;
+  }): Promise<AgentSession> {
+    const origin = normalize_session_origin(input.origin);
+    if (origin.type === "memory" && input.execution_profile_id !== "memory") throw new Error("execution_profile_required: memory profile required");
+    const creation_key = input.creation_key?.trim();
+    if (input.creation_key !== undefined && (!creation_key || creation_key.length > 512)) throw new Error("execution_creation_key_invalid");
+    const session_id = creation_key
+      ? createHash("sha256").update(this.agent_id).update("\u0000").update(origin.category).update("\u0000").update(creation_key).digest("hex").slice(0, 32)
+      : await this.allocate_session_id(origin);
+    const key = this.session_cache_key(session_id, origin.category);
+    const pending = this.execution_creations.get(key);
+    if (pending) {
+      await pending;
+      return await this.create_execution_session(input);
+    }
+    const operation = this.lifecycle.access(async () => {
+      const context = this.resolve_session_context({ origin });
+      const exists = await context.store.has_session(session_id, origin.category);
+      const storage = exists ? await context.store.open_session(session_id, origin.category)
+        : context.store.create_session(session_id, origin, input.workspace_id);
+      const metadata = await storage.read_metadata();
+      if (!isDeepStrictEqual(metadata.origin, origin) || metadata.workspace_id !== input.workspace_id) throw new Error("execution_creation_conflict: origin or scope differs");
+      const persisted = metadata.execution_profile;
+      if (persisted && (persisted.id !== input.execution_profile_id || persisted.version !== input.execution_profile_version
+        || persisted.creation_key !== creation_key)) throw new Error("execution_creation_conflict: profile or key differs");
+      if (!persisted && exists && await storage.message_count() > 0) throw new Error("execution_profile_missing: existing history has no profile");
+      const execution_profile = await this.execution_profiles.resolve({ ...input, creation_key }, {
+        agent_id: this.agent_id, session_id, origin, workspace_id: input.workspace_id,
+        default_model: this.get_agent_model(),
+      }, persisted);
+      await storage.bind_execution_profile(execution_profile.reference);
+      const session = this.get_or_create_session({ session_id, origin, storage, execution_profile });
+      await session.initialize();
+      if (!exists) await this.notify_created(session);
+      return session;
+    });
+    this.execution_creations.set(key, operation);
+    try { return await operation; }
+    finally { if (this.execution_creations.get(key) === operation) this.execution_creations.delete(key); }
+  }
+
+  /** 读取写前完成日志与真实运行状态；中断不伪装成模型成功。 */
+  async read_execution_state(session_id: string, category: string, input: {
+    /** 指定 Turn ID。 */
+    turn_id?: string;
+    /** 指定业务请求键。 */
+    request_id?: string;
+  }) {
+    const storage = await this.read_session_storage(session_id, category);
+    return await read_session_execution(storage, this.runtime(session_id, category).is_executing(), input,
+      this.resolve_session_context().completions);
+  }
+
+  /** 读取宿主存储端口；先经过精确配置恢复，避免读取路径意外装配全权限会话。 */
+  async read_session_storage(session_id: string, category: string): Promise<SessionStorage> {
+    await this.get(session_id, category);
+    return await this.resolve_session_context().store.open_session(session_id, category);
   }
 
   /**
@@ -364,10 +443,11 @@ export class AgentSessions implements AgentSessionsContract<AgentSession> {
     session_id: string,
     origin: SessionOrigin,
     workspace?: WorkspaceRuntime,
+    inherit_workspace = true,
   ): Promise<AgentSession> {
     const context = this.resolve_session_context({
       origin,
-      creating: true,
+      creating: inherit_workspace,
       ...(workspace ? { workspace } : {}),
     });
     if (origin.parent_agent_id === this.agent_id && typeof origin.parent_session_id === "string"
@@ -379,6 +459,7 @@ export class AgentSessions implements AgentSessionsContract<AgentSession> {
       session_id,
       workspace,
       origin,
+      inherit_workspace,
       storage: context.store.create_session(
         session_id,
         origin,
@@ -428,6 +509,14 @@ export class AgentSessions implements AgentSessionsContract<AgentSession> {
     }
     const storage = await store.open_session(resolved_session_id, resolved_category);
     const persisted_metadata = await storage.read_metadata();
+    const reference = persisted_metadata.execution_profile;
+    if (persisted_metadata.origin.type === "memory" && reference?.id !== "memory") throw new Error("execution_profile_missing: memory requires its persisted profile");
+    const execution_profile = reference ? await this.execution_profiles.resolve({
+      execution_profile_id: reference.id, execution_profile_version: reference.version,
+      creation_key: reference.creation_key,
+    }, { agent_id: this.agent_id, session_id: resolved_session_id, origin: persisted_metadata.origin,
+      workspace_id: persisted_metadata.workspace_id, default_model: this.get_agent_model() }, reference) : undefined;
+    if (execution_profile && input?.workspace) throw new Error("execution_profile_immutable: Workspace capabilities cannot be attached");
     const persisted_workspace_id = String(persisted_metadata.workspace_id || "").trim() || undefined;
     const requested_workspace_id = String(input?.workspace?.id || "").trim() || undefined;
     // 目录不是身份，也不在 Session 侧还原：
@@ -439,6 +528,7 @@ export class AgentSessions implements AgentSessionsContract<AgentSession> {
       ...(input?.workspace ? { workspace: input.workspace } : {}),
       origin: persisted_metadata.origin,
       storage,
+      execution_profile,
     });
     await session.initialize();
     if (input?.workspace && (
@@ -653,6 +743,10 @@ export class AgentSessions implements AgentSessionsContract<AgentSession> {
     origin?: SessionOrigin;
     /** 已由集合层创建或打开的单 Session Storage。 */
     storage?: SessionStorage;
+    /** 是否允许新会话继承 Agent 默认目录。 */
+    inherit_workspace?: boolean;
+    /** 宿主精确解析的专用执行资源；禁止合并默认能力。 */
+    execution_profile?: ResolvedSessionExecutionProfile;
   }): AgentManagedSession {
     const resolved_session_id = normalize_session_id(
       input?.session_id || input?.storage?.session_id || "",
@@ -662,13 +756,20 @@ export class AgentSessions implements AgentSessionsContract<AgentSession> {
     const cache_key = this.session_cache_key(resolved_session_id, resolved_origin.category);
     const cached = this.sessions_by_id.get(cache_key);
     if (cached) return cached;
+    const profile = input?.execution_profile;
+    if (resolved_origin.type === "memory" && !profile) throw new Error("execution_profile_required: memory cannot use default resources");
+    const assert_profile = () => { if (profile) this.execution_profiles.assert_registered(profile.reference); };
+    const instruction_blocks = () => profile ? create_instruction_system_blocks({
+      agent_id: this.agent_id, agent_name: this.get_agent_name(), instruction: profile.resources.instruction,
+    }) : this.load_instruction_system_blocks();
 
     const context = this.resolve_session_context({
       ...(input?.origin ? { origin: input.origin } : {}),
-      creating: true,
+      creating: !profile && input?.inherit_workspace !== false,
       ...(input?.workspace ? { workspace: input.workspace } : {}),
     });
     const created = new this.session_class({
+      ...(profile ? { assert_execution_profile: assert_profile } : {}),
       agent_id: this.agent_id,
       get_agent_name: this.get_agent_name,
       get_agent_description: this.get_agent_description,
@@ -680,17 +781,17 @@ export class AgentSessions implements AgentSessionsContract<AgentSession> {
       allocate_session_id: () => this.allocate_session_id(resolved_origin),
       register_forked_session: (session) => this.register_forked_session(session),
       session_id: resolved_session_id,
-      get_tools: () => context.get_tools(),
+      get_tools: () => { assert_profile(); return profile ? profile.resources.tools : context.get_tools(); },
       logger: context.logger,
-      instruction_system_blocks: this.load_instruction_system_blocks(),
-      get_instruction_system_blocks: () => this.load_instruction_system_blocks(),
+      instruction_system_blocks: instruction_blocks(),
+      get_instruction_system_blocks: instruction_blocks,
       get_workspace: () => context.get_workspace(),
-      get_agent_model: () => this.get_agent_model(),
-      get_hooks: () => context.get_hooks(),
-      completions: context.completions,
-      child_work: context.child_work,
+      get_agent_model: () => { assert_profile(); return profile ? profile.resources.model : this.get_agent_model(); },
+      get_hooks: () => { assert_profile(); return profile ? profile.resources.hooks : context.get_hooks(); },
+      completions: profile ? context.result_completions : context.completions,
+      child_work: profile ? undefined : context.child_work,
       archive_session: async (session_id) => await this.archive({ id: session_id, category: resolved_origin.category }),
-      composer: this.session_composer,
+      composer: profile ? profile.resources.composer : this.session_composer,
     });
     this.sessions_by_id.set(cache_key, created);
     return created;

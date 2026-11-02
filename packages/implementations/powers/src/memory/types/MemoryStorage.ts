@@ -39,6 +39,9 @@ export interface MemoryStorageAdapter {
   /** 删除指定逻辑 key；不存在时保持幂等。 */
   delete(key: string): Promise<void>;
 
+  /** 在实际存储根的跨进程排他锁内执行范围发布；进程退出必须自动释放锁。 */
+  with_scope_lock<T>(scope_key: string, operation: () => Promise<T>): Promise<T>;
+
   /** 释放 Adapter 持有的资源。 */
   dispose(): Promise<void>;
 }

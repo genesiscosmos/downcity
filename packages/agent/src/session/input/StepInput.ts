@@ -113,6 +113,8 @@ export class StepInput {
     turn_context: SessionTurnContext,
     advance_count: number,
   ): Promise<SessionStepExecutionInput> {
+    // 首轮先冻结真实 system，再运行动态 Turn hook；hook 读到的版本标记与模型相同。
+    if (!this.frozen_blocks) await this.read_system();
     const compose_input = await this.gather(turn_context, advance_count);
     const model = compose_input.state.model;
     if (!model) throw new Error("requires a configured model.");
@@ -258,6 +260,7 @@ export class StepInput {
     const power_context_blocks = turn_context
       ? await turn_context.step.resolve_power_context_blocks(async () => {
           const value: SessionTurnContextHookValue = {
+            system_blocks: Object.freeze((this.frozen_blocks ?? []).map((block) => Object.freeze({ ...block }))),
             session_id: this.options.session_id,
             turn_id: turn_context.session.turn_id,
             user_messages: turn_context.input.user_messages().map((message) => ({
