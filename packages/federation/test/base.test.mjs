@@ -156,10 +156,14 @@ test("Federation instruction endpoint requires admin auth and returns text", asy
       method: "GET",
     }))
     assert.equal(guestResponse.status, 401)
+    const guest_request_id = guestResponse.headers.get("x-request-id")
+    assert.match(guest_request_id, /^req_[a-f0-9-]{36}$/u)
     assert.deepEqual(await guestResponse.json(), {
       error: {
+        code: "UNAUTHENTICATED",
         message: "Authentication required",
-        type: "server_error",
+        type: "authentication_error",
+        request_id: guest_request_id,
       },
     })
 
@@ -954,10 +958,14 @@ test("Federation AI image jobs reject incomplete provider actions", async () => 
     }))
 
     assert.equal(response.status, 422)
+    const request_id = response.headers.get("x-request-id")
+    assert.match(request_id, /^req_[a-f0-9-]{36}$/u)
     assert.deepEqual(await response.json(), {
       error: {
+        code: "REQUEST_REJECTED",
         message: "Model incomplete-image does not support mode: image_create",
-        type: "server_error",
+        type: "invalid_request_error",
+        request_id,
       },
     })
   } finally {

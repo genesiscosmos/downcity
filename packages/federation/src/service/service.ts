@@ -53,6 +53,8 @@ export interface Context {
   input: Record<string, unknown>;
   /** 本次请求在 hook / action 之间共享的临时上下文 */
   locals: Record<string, unknown>;
+  /** 同一次 HTTP 请求共享的关联标识，用于串联路由、hook、Action 与错误响应。 */
+  request_id?: string;
   /** 原始 HTTP Request，服务 webhook 等需要读取 header 时使用 */
   request?: Request;
   /** AI 等执行层组合的取消与期限信号；未提供时使用原始请求信号。 */
@@ -131,8 +133,29 @@ export interface EnvRequirement {
 export interface ActionOptions {
   /** HTTP 方法，默认 POST */
   method?: "GET" | "POST";
+  /**
+   * HTTP 请求体解析模式，默认 `json`。
+   * `json` 将空请求体解析为 `{}`，无效 JSON 或非对象输入返回 400；
+   * `raw` 保留原始文本供 webhook 验签等协议处理，不预先解析 JSON。
+   */
+  body?: "json" | "raw";
   /** 允许访问该 action 的身份集合；默认 `["user"]`，传 `[]` 表示免登录 */
   auth?: RouteAuth;
+}
+
+/** 已注册 Action 及其供 Federation 路由消费的 HTTP 元数据。 */
+export interface ServiceActionDefinition {
+  /** 已注册的 Action 实例，包含业务处理器及 Action hook。 */
+  action: Action;
+  /** Action 接受的 HTTP 方法，注册时默认归一化为 POST。 */
+  method: "GET" | "POST";
+  /**
+   * HTTP 请求体解析模式；未指定时按 `json` 处理，注册时默认归一化为 `json`。
+   * `json` 只接受 JSON 对象（空体为 `{}`），`raw` 保留原始请求体供业务自行处理。
+   */
+  body?: "json" | "raw";
+  /** 已归一化的允许访问身份集合；空数组表示公开访问。 */
+  auth: RouteAuth;
 }
 
 /** Service route 支持的 HTTP 方法。 */
@@ -191,7 +214,7 @@ export class Service {
   instruction?: InstructionDefinition;
 
   /** Action 注册表 */
-  private actionMap = new Map<string, { action: Action; method: "GET" | "POST"; auth: RouteAuth }>();
+  private actionMap = new Map<string, ServiceActionDefinition>();
   /** 原生 HTTP route 注册表 */
   private nativeRouteMap = new Map<string, ServiceNativeRouteDefinition>();
 
@@ -287,7 +310,7 @@ export class Service {
   // ========== Action 注册 ==========
 
   /**
-   * 注册一个 Action（默认 POST，auth=["user"]）。
+   * 注册一个 Action（默认 POST、JSON 对象请求体，auth=["user"]）。
    */
   action(id: string, fn: ActionFn, opts?: ActionOptions): Action {
     if (this.actionMap.has(id)) {
@@ -297,6 +320,7 @@ export class Service {
     this.actionMap.set(id, {
       action,
       method: opts?.method ?? "POST",
+      body: opts?.body ?? "json",
       auth: normalizeRouteAuth(opts?.auth),
     });
     return action;
@@ -313,7 +337,7 @@ export class Service {
   }
 
   /** 列出 Action 及其元数据（Federation 内部使用） */
-  _listActionDefs(): Array<{ action: Action; method: "GET" | "POST"; auth: RouteAuth }> {
+  _listActionDefs(): ServiceActionDefinition[] {
     return [...this.actionMap.values()];
   }
 

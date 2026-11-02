@@ -125,7 +125,9 @@ test("调度能力不可用时 image/create 前置失败，不留孤儿任务", 
     // 关键点（中文）：修复前这里是 502，且上游任务与数据库记录都已产生。
     assert.equal(created.status, 503)
     assert.equal(created.body.error.code, "async_dispatch_unavailable")
-    assert.match(created.body.error.message, /adapter/u)
+    assert.equal(created.body.error.message, "Service temporarily unavailable")
+    assert.equal(created.body.error.type, "server_error")
+    assert.match(created.body.error.request_id, /^req_[a-f0-9-]{36}$/u)
 
     // 副作用必须为零：上游没有被调用，库里没有任务记录。
     assert.equal(counters.create_calls, 0, "能力缺失时不得调用上游")

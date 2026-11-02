@@ -8,6 +8,7 @@
 import { Service, type Context, type EnvRequirement, type ServiceNativeRouteHandler, type ServiceRouteMethod } from "./service.js";
 import type { Action } from "./action.js";
 import { Hook } from "./hook.js";
+import { parse_action_input } from "../federation/http/request-input.js";
 import type { CityTableApi } from "../store/table-api.js";
 import type { Database } from "../database/Database.js";
 import type { ServiceDatabaseContext } from "../types/database/Database.js";
@@ -87,9 +88,19 @@ export interface ServiceDatabaseSchema {
 /** Service 按 Federation 方言提供数据库声明。 */
 export type ServiceDatabaseSchemas = Record<string, ServiceDatabaseSchema | undefined>;
 
+/** 进入 Action 与 hook 管线的 HTTP 路由配置。 */
 export interface ServiceActionRouteConfig {
+  /** 路由接受的 HTTP 方法；POST 按 body 声明解析请求体。 */
   method: "GET" | "POST";
+  /** Service namespace 内的 Action 路径，注册时移除前导斜杠。 */
   path: string;
+  /**
+   * HTTP 请求体解析模式，默认 `json`。
+   * `json` 只接受 JSON 对象，空体为 `{}`，无效 JSON 或非对象输入返回 400；
+   * `raw` 保留原文供 text() 读取与 webhook 验签，json() 调用时才严格解析。
+   */
+  body?: "json" | "raw";
+  /** 允许访问的身份集合；默认要求 user，空数组表示公开访问。 */
   auth?: Array<"user" | "bureau" | "admin">;
   /**
    * 是否公开访问。
@@ -99,6 +110,7 @@ export interface ServiceActionRouteConfig {
    * - 仅影响 Downcity Action 路由的鉴权要求
    */
   public?: boolean;
+  /** 接收桥接后的 Action 请求上下文并生成 HTTP 响应的业务处理器。 */
   handler: (ctx: ServiceRouteContext) => Promise<Response> | Response;
 }
 
@@ -126,6 +138,8 @@ export interface ServiceNativeRouteConfig {
 }
 
 export interface ServiceRouteContext {
+  /** 本次 HTTP 请求的服务端关联 ID；非 HTTP 调用时可能未提供。 */
+  request_id?: string;
   /** 当前 user_token 解析出的用户；免登录或 admin 请求时可能为空 */
   user?: RuntimeUser;
   /** 当前用户或机器凭证所属的 Bureau。 */
@@ -140,7 +154,7 @@ export interface ServiceRouteContext {
   waitUntil?(promise: Promise<unknown>): void;
   /** Federation 级异步 Action Queue。 */
   queue?: FederationQueue;
-  /** 读取已解析 JSON 请求体 */
+  /** 读取 JSON 对象；raw 模式按需严格解析原文，空体为 `{}`，无效 JSON 或非对象输入抛出 400。 */
   json<T extends Record<string, unknown> = Record<string, unknown>>(): Promise<T>;
   /** 读取原始文本请求体 */
   text(): Promise<string>;
@@ -207,23 +221,26 @@ export abstract class InstallableService extends Service {
       }
 
       // 去掉前导 /，与 client ServiceClient.action() 的 normalizeName 对齐
-      const actionId = config.path.replace(/^\/+/, "");
-      return self.action(actionId, async (svcCtx: Context) => {
+      const action_id = config.path.replace(/^\/+/, "");
+      return self.action(action_id, async (svc_ctx: Context) => {
         return await config.handler({
-          user: svcCtx.user,
-          bureau: svcCtx.bureau,
-          bureau_token: svcCtx.bureau_token,
-          request: svcCtx.request ?? new Request("http://local"),
-          transport: svcCtx.transport,
-          waitUntil: svcCtx.waitUntil,
-          queue: svcCtx.queue,
-          json: async <T extends Record<string, unknown> = Record<string, unknown>>() => svcCtx.input as T,
-          text: async () => svcCtx.raw_body ?? JSON.stringify(svcCtx.input),
+          request_id: svc_ctx.request_id,
+          user: svc_ctx.user,
+          bureau: svc_ctx.bureau,
+          bureau_token: svc_ctx.bureau_token,
+          request: svc_ctx.request ?? new Request("http://local"),
+          transport: svc_ctx.transport,
+          waitUntil: svc_ctx.waitUntil,
+          queue: svc_ctx.queue,
+          json: async <T extends Record<string, unknown> = Record<string, unknown>>() => (
+            config.body === "raw" ? parse_action_input(svc_ctx.raw_body ?? "") : svc_ctx.input
+          ) as T,
+          text: async () => svc_ctx.raw_body ?? (config.body === "raw" ? "" : JSON.stringify(svc_ctx.input)),
           jsonResponse: (body, status) => new Response(JSON.stringify(body), {
             status, headers: { "content-type": "application/json" },
           }),
         });
-      }, { method: config.method as "GET" | "POST", auth: resolve_route_auth(config) });
+      }, { method: config.method, body: config.body, auth: resolve_route_auth(config) });
     }
 
     const ctx: ServiceInstallContext = {

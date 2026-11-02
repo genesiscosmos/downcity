@@ -216,6 +216,7 @@ export function installPaymentRoutes(service: PaymentServiceLike, ctx: ServiceIn
   ctx.route({
     method: "POST",
     path: "/webhook",
+    body: "raw",
     auth: [],
     async handler(requestCtx) {
       const raw = await requestCtx.text();

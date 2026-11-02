@@ -25,9 +25,13 @@ import { collect_federation_env_catalog } from "./federation-env-catalog.js";
 import type { FederationRequestTransport, FederationTrustedIdentity } from "./types.js";
 import type { BureauRecord, RuntimeBureauToken } from "../types/Bureau.js";
 import { AIService } from "../service/ai/ai-service.js";
+import { parse_action_input, read_request_text } from "./http/request-input.js";
+import { build_error_response as format_http_error, log_http_failure } from "./http/error-response.js";
 
 declare module "hono" {
   interface ContextVariableMap {
+    /** 服务端为本次 HTTP 请求生成的关联 ID，不能由调用方覆盖。 */
+    federation_request_id: string;
     identity?: { kind: "guest" | "user" | "bureau" | "admin" };
     user?: RuntimeUser;
     bureau?: BureauRecord;
@@ -62,6 +66,15 @@ export function build_federation_router(params: {
 }): Hono {
   const { runtime, services, authenticator, table_map, admin_store } = params;
   const app = new Hono();
+  app.use("*", async (c, next) => {
+    const request_id = `req_${crypto.randomUUID()}`;
+    c.set("federation_request_id", request_id);
+    await next();
+    // Hono 会克隆已完成响应的 headers；不消费正文，也不会被旧响应头反向覆盖。
+    c.header("x-request-id", request_id);
+  });
+  app.onError((error, c) => format_http_error(error, c.get("federation_request_id")));
+  app.notFound((c) => format_http_error(httpError(404, "Route not found"), c.get("federation_request_id")));
 
   app.get("/health", (c) => c.json({
     ok: true,
@@ -84,7 +97,7 @@ export function build_federation_router(params: {
         "cache-control": "public, max-age=300",
       });
     } catch (error) {
-      return build_error_response(error);
+      return format_http_error(error, c.get("federation_request_id"));
     }
   });
 
@@ -104,18 +117,18 @@ export function build_federation_router(params: {
       }, 200, no_store_headers());
     } catch (error) {
       const status_code = (error as { /** 已分类的凭证验证 HTTP 状态。 */ statusCode?: number }).statusCode;
-      return with_no_store(build_error_response(status_code === 401
+      return with_no_store(format_http_error(status_code === 401
         ? httpError(401, "User token is inactive")
-        : httpError(503, "Federation token validity check unavailable")));
+        : httpError(503, "Federation token validity check unavailable"), c.get("federation_request_id")));
     }
   });
 
   app.post("/v1/admin/login", async (c) => {
     try {
-      const input = await c.req.json<FederationAdminLoginInput>();
+      const input = parse_action_input(await read_request_text(c.req.raw)) as unknown as FederationAdminLoginInput;
       return c.json(await admin_store.login(input), 200, no_store_headers());
     } catch (error) {
-      return with_no_store(build_error_response(error));
+      return with_no_store(format_http_error(error, c.get("federation_request_id")));
     }
   });
 
@@ -133,7 +146,7 @@ export function build_federation_router(params: {
         session_id: identity.admin_session_id,
       }, 200, no_store_headers());
     } catch (error) {
-      return with_no_store(build_error_response(error));
+      return with_no_store(format_http_error(error, c.get("federation_request_id")));
     }
   });
 
@@ -144,7 +157,7 @@ export function build_federation_router(params: {
       if (token) await admin_store.logout(token);
       return c.json({ ok: true }, 200, no_store_headers());
     } catch (error) {
-      return with_no_store(build_error_response(error));
+      return with_no_store(format_http_error(error, c.get("federation_request_id")));
     }
   });
 
@@ -173,7 +186,7 @@ export function build_federation_router(params: {
 
       return c.json({ items: collect_federation_env_catalog(services, runtime.env) });
     } catch (error) {
-      return build_error_response(error);
+      return format_http_error(error, c.get("federation_request_id"));
     }
   });
 
@@ -188,7 +201,7 @@ export function build_federation_router(params: {
         },
       });
     } catch (error) {
-      return build_error_response(error);
+      return format_http_error(error, c.get("federation_request_id"));
     }
   });
 
@@ -202,7 +215,7 @@ export function build_federation_router(params: {
           }
           return await def.handler(c.req.raw);
         } catch (error) {
-          return build_error_response(error);
+          return format_http_error(error, c.get("federation_request_id"));
         }
       });
     }
@@ -215,10 +228,16 @@ export function build_federation_router(params: {
       const register = def.method === "GET" ? app.get.bind(app) : app.post.bind(app);
 
       const handler: Handler = async (c) => {
+        const request_id = c.get("federation_request_id");
         let raw_body: string | undefined;
-        const input = def.method === "GET"
-          ? search_params_to_object(new URL(c.req.raw.url).searchParams)
-          : parse_request_input(raw_body = await c.req.text().catch(() => ""));
+        let input: Record<string, unknown>;
+        try {
+          if (def.method === "GET") input = search_params_to_object(new URL(c.req.raw.url).searchParams);
+          else {
+            raw_body = await read_request_text(c.req.raw);
+            input = def.body === "raw" ? {} : parse_action_input(raw_body);
+          }
+        } catch (error) { return format_http_error(error, request_id); }
 
         const db: Record<string, CityTableApi> = {};
         if (service.tables) {
@@ -229,7 +248,8 @@ export function build_federation_router(params: {
 
         const ctx: Context = {
           input,
-          locals: {},
+          locals: { request_id },
+          request_id,
           request: c.req.raw,
           raw_body,
           transport: transport_from_env(c.env),
@@ -251,7 +271,7 @@ export function build_federation_router(params: {
 
         if (service instanceof AIService && service.relay && ["chat/completions", "stream"].includes(action.id)) {
           // 授权或余额检查失败也返回可引用的请求标识，但不生成上游尝试或账单。
-          ctx.locals.relay_request_id = `req_${crypto.randomUUID()}`;
+          ctx.locals.relay_request_id = request_id;
         }
         try {
           const token = bearerToken(c.req.raw);
@@ -284,8 +304,6 @@ export function build_federation_router(params: {
           }
 
           if (output instanceof Response) {
-            const request_id = ctx.locals.relay_request_id;
-            if (typeof request_id === "string") output.headers.set("x-request-id", request_id);
             return output;
           }
           if (service instanceof AIService && action.id === "models" && new URL(c.req.url).pathname === "/v1/models") {
@@ -298,13 +316,13 @@ export function build_federation_router(params: {
         } catch (error) {
           ctx.ended_at = new Date();
           ctx.error = error instanceof Error ? error : new Error(String(error));
-          await service.hook.runOnError(ctx);
-          await action.hook.runOnError(ctx);
-          for (const hook of global_service_hooks(services)) {
-            await hook.runOnError(ctx);
+          // 错误 hook 不能覆盖原始业务或鉴权失败，也不能导致响应漏出内部异常。
+          const error_hooks = [service.hook, action.hook, ...global_service_hooks(services)];
+          for (const hook of error_hooks) {
+            try { await hook.runOnError(ctx); }
+            catch { log_http_failure(request_id, 500, "ERROR_HOOK_FAILED"); }
           }
-          const response = build_error_response(error);
-          if (typeof ctx.locals.relay_request_id === "string") response.headers.set("x-request-id", ctx.locals.relay_request_id);
+          const response = format_http_error(error, request_id);
           return service instanceof AIService && action.id.startsWith("keys/") ? with_no_store(response) : response;
         }
       };
@@ -398,21 +416,6 @@ function sync_request_origin(
 }
 
 /**
- * 解析 POST 请求体。
- */
-function parse_request_input(raw_body: string): Record<string, unknown> {
-  if (!raw_body) return {};
-  try {
-    const parsed = JSON.parse(raw_body);
-    return parsed && typeof parsed === "object" && !Array.isArray(parsed)
-      ? parsed as Record<string, unknown>
-      : {};
-  } catch {
-    return {};
-  }
-}
-
-/**
  * 将 querystring 转成普通对象。
  */
 function search_params_to_object(search_params: URLSearchParams): Record<string, unknown> {
@@ -421,20 +424,6 @@ function search_params_to_object(search_params: URLSearchParams): Record<string,
     result[key] = value;
   });
   return result;
-}
-
-/**
- * 统一错误响应。
- */
-function build_error_response(error: unknown): Response {
-  const message = error instanceof Error ? error.message : String(error);
-  const status = (error as { statusCode?: number }).statusCode ?? 500;
-  const code = (error as { code?: string }).code;
-  return Response.json({ error: {
-    ...(code ? { code } : {}),
-    message,
-    type: "server_error",
-  } }, { status: status as number });
 }
 
 /** 认证与 Token 有效性响应禁止被浏览器或中间代理缓存。 */
