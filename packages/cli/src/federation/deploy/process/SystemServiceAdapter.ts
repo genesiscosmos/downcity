@@ -268,6 +268,31 @@ export async function inspect_system_service(input: SystemServiceSpec): Promise<
   return info.manager === "launchd" ? inspect_launchd(spec, info) : inspect_systemd(spec, info);
 }
 
+/** 恢复数据库前只读核对持久停止意图，inactive 或暂时无 PID 本身不足以证明安全。 */
+export async function assert_system_service_stopped(input: SystemServiceSpec): Promise<void> {
+  const spec = normalize_spec(input);
+  const info = resolve_service_details(spec);
+  await validate_definitions(spec, info);
+  await validate_manager(info);
+  if (await read_definition(info.disabled_path) !== `${info.id}\n`) {
+    throw new Error("Explicitly stop this Federation before restoring its database");
+  }
+  const status = info.manager === "launchd" ? await inspect_launchd(spec, info) : await inspect_systemd(spec, info);
+  if (info.manager === "launchd") {
+    if (status.registered || await read_definition(info.startup_path) !== undefined) {
+      throw new Error("launchd service or login startup remains registered");
+    }
+  } else {
+    if (status.active || status.pid || (status.registered && status.state !== "inactive") || (await default_target_links(info)).length) {
+      throw new Error("systemd user service is not persistently stopped");
+    }
+    const enabled = await run_service_command("systemctl", ["--user", "is-enabled", info.id]);
+    if (!(enabled.code === 1 && enabled.stdout.trim() === "disabled" && !enabled.stderr.trim())) {
+      throw new Error("systemd user service must be disabled before restoring");
+    }
+  }
+}
+
 /** Collect config/runtime default-target links; never remove links to another unit. */
 async function default_target_links(info: SystemServiceDetails): Promise<string[]> {
   const directories = [dirname(info.startup_path)];

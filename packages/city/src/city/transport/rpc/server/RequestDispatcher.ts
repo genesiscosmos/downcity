@@ -16,6 +16,7 @@ import type {
 } from "@/city/transport/rpc/server/ServerTypes.js";
 import { handle_sdk_session_rpc_request } from "@/city/transport/rpc/server/SdkSessionHandlers.js";
 import { handle_internal_rpc_request } from "@/city/transport/rpc/server/InternalHandlers.js";
+import { handle_sdk_interaction_rpc_request } from "@/city/transport/rpc/server/SdkInteractionHandlers.js";
 
 /**
  * 分发并执行单个 RPC 请求。
@@ -44,6 +45,7 @@ export async function dispatch_rpc_request(params: {
   } = params;
 
   try {
+    if (await handle_sdk_interaction_rpc_request({ request, options, subscriptions, write_success, write_event })) return;
     const handled_by_sdk = await handle_sdk_session_rpc_request({
       request,
       options,

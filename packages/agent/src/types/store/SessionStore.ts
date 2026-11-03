@@ -17,6 +17,7 @@ import type {
 import type { SessionReadView } from "./SessionReadView.js";
 import type { SessionStorage } from "@/types/store/SessionStorage.js";
 import type { SessionOrigin } from "@downcity/type";
+import type { AgentInteraction } from "@/types/agent/AgentInteractions.js";
 
 /** 一个 Agent 所属全部 Session 的持久化入口。 */
 export interface SessionStore {
@@ -28,6 +29,9 @@ export interface SessionStore {
 
   /** 读取当前 Agent 的活动或归档历史，不恢复执行器或修改生命周期。 */
   read_session(session_id: string, category: string): Promise<SessionReadView>;
+
+  /** 只读查询所有来源的活动 pending 交互；不恢复 Session 或扫描完整历史。 */
+  list_pending_interactions(): Promise<AgentInteraction[]>;
 
   /** 判断活动 Session 是否存在。 */
   has_session(session_id: string, category?: string): Promise<boolean>;

@@ -10,6 +10,9 @@
 import type { PromptPowerEvent, PromptPowerResult } from "@downcity/type";
 import type { RemotePromptInput } from "@/types/remote/PromptPowerTransport.js";
 import type {
+  AgentInteractionChange,
+  AgentListInteractionsInput,
+  AgentRespondInteractionInput,
   AgentCreateSessionInput,
   AgentListSessionsInput,
   AgentArchiveSessionInput,
@@ -36,6 +39,26 @@ import type {
  * - `internal.*` 面向 downcity 本机管理通道。
  */
 type RpcRequestPayload =
+  | {
+      /** 请求关联标识。 */ id: string;
+      /** 查询绑定 Agent 的待处理交互。 */ method: "sdk.interactions.list";
+      /** 列表上限，不含 Agent 身份。 */ params?: AgentListInteractionsInput;
+    }
+  | {
+      /** 请求关联标识。 */ id: string;
+      /** 注册绑定 Agent 的未来变化订阅。 */ method: "sdk.interactions.subscribe";
+      /** 客户端预登记的标识，避免 ready 前事件丢失。 */ params: { /** 当前 socket 唯一订阅标识。 */ subscription_id: string };
+    }
+  | {
+      /** 请求关联标识。 */ id: string;
+      /** 取消当前 socket 与 Agent 拥有的交互订阅。 */ method: "sdk.interactions.unsubscribe";
+      /** 待取消订阅。 */ params: { /** 当前 socket 唯一订阅标识。 */ subscription_id: string };
+    }
+  | {
+      /** 请求关联标识。 */ id: string;
+      /** 普通响应与专用私密提交使用独立方法。 */ method: "sdk.interactions.respond" | "sdk.interactions.submit_private";
+      /** 原交互引用与响应，不得覆盖绑定 Agent。 */ params: AgentRespondInteractionInput;
+    }
   | {
       /** 请求关联标识。 */ id: string;
       /** 请求级执行通道建立。 */ method: "sdk.powers.open";
@@ -404,7 +427,14 @@ export interface RpcReadyFrame {
 /**
  * RPC 事件帧。
  */
-export type RpcEventFrame = RpcSessionEventFrame | RpcPowerEventFrame;
+export type RpcEventFrame = RpcSessionEventFrame | RpcPowerEventFrame | RpcInteractionEventFrame;
+
+/** 绑定 Agent 的 canonical Interaction 变化，不混入 Session mutation。 */
+export interface RpcInteractionEventFrame {
+  /** 主体交互事件帧标记。 */ type: "interaction-event";
+  /** 当前 socket 拥有的订阅标识。 */ subscription_id: string;
+  /** 原交互变化快照，不含私密答案明文。 */ event: AgentInteractionChange;
+}
 
 /** 只发给提供方 socket 的执行控制帧。 */
 export interface RpcPowerEventFrame {

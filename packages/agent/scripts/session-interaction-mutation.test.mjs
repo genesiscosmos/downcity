@@ -3,6 +3,7 @@
  *
  * Interaction 与 Tool 是归属关系：Tool 在等待响应时阻塞，因此一次 Interaction 的
  * 完整生命周期落在所属 Tool 的执行区间内，归属即结构，需求顺序由数组顺序表达。
+ * 同时验证 Agent 集合在没有 UI 订阅 Session 时观察交互，并复用原 Session 响应及私密入口。
  */
 
 import assert from "node:assert/strict";
@@ -10,6 +11,10 @@ import test from "node:test";
 import { SessionAgentMessageState } from "../bin/session/messages/SessionAgentMessageState.js";
 import { SessionMessageCache } from "../bin/session/messages/SessionMessageCache.js";
 import { SessionMessages } from "../bin/session/messages/SessionMessages.js";
+import { Agent } from "../bin/agent/Agent.js";
+import { AgentInteractions } from "../bin/agent/AgentInteractions.js";
+import { AskQuestionsTool } from "../bin/tools/ask/AskQuestionsTool.js";
+import { MockModelClient } from "./ModelClientMock.mjs";
 
 /** 构造一条含 ready 状态 Tool Part 的流式 Assistant Message fixture。 */
 function create_writer_fixture() {
@@ -199,4 +204,96 @@ test("Message 收口仍然整条发布，消费方才能收敛 state", async () 
     ["message"],
   );
   assert.equal(publications[0].message.state, "done");
+});
+
+/** 提供真实 ask_user Tool Call，回答后结束原 Turn，不调用外部模型。 */
+function create_interaction_model() {
+  return new MockModelClient({
+    id: "agent-interaction-collection",
+    generate: async (call) => {
+      if (call.prompt.some((message) => message.content.some((part) => part.type === "tool-result"))) {
+        return { text: "answered" };
+      }
+      const is_private = call.prompt.some((message) => message.content.some((part) =>
+        part.type === "text" && part.text.includes("private-input")));
+      return {
+        content: [{
+          type: "tool_call", tool_call_id: `call-${crypto.randomUUID()}`, tool_name: "ask_user",
+          input: { title: "input", questions: [{ question: "input", type: is_private ? "secret" : "text",
+            ...(is_private ? { name: "fixture_secret" } : {}) }] },
+        }],
+        finishReason: "tool-calls",
+      };
+    },
+  });
+}
+
+test("Agent 集合无需 UI 即可观察 Chat/Work/task，并经原 Session 响应与私密提交", { timeout: 10000 }, async (t) => {
+  const agent = new Agent({ id: "interaction-owner", model: create_interaction_model(), tools: { ask_user: AskQuestionsTool } });
+  t.after(async () => { await agent.dispose(); });
+  const events = [];
+  const waiters = new Map();
+  const unsubscribe = agent.interactions.subscribe((change) => {
+    events.push(change);
+    if (change.type === "updated" && change.item.interaction.status === "pending") {
+      waiters.get(change.item.reference.session_id)?.(change.item);
+    }
+  });
+  t.after(unsubscribe);
+  // 不打开 UI，不对单个 Session 调用 subscribe；只订阅 Agent 主体。
+  const origins = [{ category: "chat", type: "channel" }, { category: "work", type: "work" }, { category: "work", type: "task" }];
+  for (const origin of origins) {
+    const session = await agent.sessions.create({ origin });
+    const pending = new Promise((resolve) => { waiters.set(session.id, resolve); });
+    const turn = await session.prompt({ actor: { kind: "user", user_id: "local" }, query: origin.type === "task" ? "private-input" : "public-input" });
+    const item = await pending;
+    assert.deepEqual(item.reference, { session_category: origin.category, session_id: session.id,
+      turn_id: turn.id, interaction_id: item.interaction.interaction_id });
+    assert.equal(item.can_respond, true);
+    assert.deepEqual((await agent.interactions.list()).map((entry) => entry.reference), [item.reference]);
+    assert.equal((await agent.interactions.list())[0].can_respond, true);
+    const response = { type: "question", outcome: "resolved", payload: { answers: [{
+      question_id: item.interaction.request.payload.questions[0].question_id,
+      value: origin.type === "task" ? "private-answer-fixture" : "public-answer",
+    }] } };
+    await assert.rejects(agent.interactions.respond({ reference: { ...item.reference, turn_id: "wrong-turn" }, response }), /turn reference mismatch/);
+    if (origin.type === "task") {
+      await assert.rejects(agent.interactions.respond({ reference: item.reference, response }), /private submission endpoint/);
+      const receipt = await agent.interactions.submit_private({ reference: item.reference, response });
+      assert.equal(receipt.response.payload.answers[0].value, "$" + "{secrets.fixture_secret}");
+      assert.deepEqual(await agent.interactions.submit_private({ reference: item.reference, response }), receipt);
+      await assert.rejects(agent.interactions.submit_private({ reference: { ...item.reference, turn_id: "wrong-turn" }, response }), /turn reference mismatch/);
+    } else {
+      const results = await Promise.allSettled([
+        agent.interactions.respond({ reference: item.reference, response }),
+        agent.interactions.respond({ reference: item.reference, response }),
+      ]);
+      assert.equal(results.filter((result) => result.status === "fulfilled").length, 1);
+      assert.equal(results.filter((result) => result.status === "rejected").length, 1);
+    }
+    assert.equal((await turn.finished).success, true);
+    assert.deepEqual(await agent.interactions.list(), []);
+    assert.ok(events.some((event) => event.type === "updated" && event.item.reference.interaction_id === item.reference.interaction_id
+      && event.item.interaction.status === "resolved" && !event.item.can_respond));
+    assert.equal(JSON.stringify(await session.messages({ include_internal: true })).includes("private-answer-fixture"), false);
+  }
+  assert.equal(JSON.stringify(events).includes("private-answer-fixture"), false);
+});
+
+test("历史 pending 没有原运行 waiter 时 can_respond 为 false，读取及回应均不恢复执行器", async () => {
+  const interaction = { interaction_id: "cold", interaction_type: "question", status: "pending", request: create_question_request("cold") };
+  const item = { reference: { session_category: "work", session_id: "cold-session", turn_id: "turn-1", interaction_id: "cold" },
+    interaction, can_respond: true };
+  const collection = new AgentInteractions({
+    sessions: { on_removed: () => () => {}, list_cached_sessions: () => [],
+      get: () => { throw new Error("read must not restore Session"); } },
+    get_store: () => ({ list_pending_interactions: async () => [structuredClone(item)] }),
+    logger: { error: () => {} },
+  });
+  try {
+    assert.equal((await collection.list())[0].can_respond, false);
+    await assert.rejects(collection.respond({ reference: item.reference,
+      response: { type: "question", outcome: "resolved", payload: {} } }), /original Session is not running/);
+    assert.equal(item.interaction.status, "pending");
+  } finally { collection.dispose(); }
 });

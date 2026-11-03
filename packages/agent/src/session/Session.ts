@@ -555,6 +555,10 @@ export class Session implements AgentSession {
     return await this.session_interactions.respond(input);
   }
 
+  /** 集合只读检查原 Turn 的运行 waiter；不创建或恢复执行器。 */
+  can_respond_interaction(interaction_id: string, turn_id: string): boolean {
+    return this.session_interactions.can_respond(interaction_id, turn_id);
+  }
   /** 受信客户端提交私密 Question；普通 respond 不接受私密表单。 */
   async submit_private_question(input: RespondSessionInteractionInput): Promise<SessionInteractionResult> {
     return await this.session_interactions.submit_private_question(input);

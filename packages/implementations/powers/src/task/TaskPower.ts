@@ -18,7 +18,9 @@ import { Power, create_action } from "@downcity/city/power";
 import { z } from "zod";
 import type { PowerJsonValue } from "@downcity/city/power";
 import type { TaskWorkspaceSnapshot } from "@/task/types/TaskWorkflow.js";
-import { readTask } from "@/task/runtime/Store.js";
+import { readTask, inspect_task_definitions } from "@/task/runtime/Store.js";
+import { read_task_facts } from "./runtime/TaskFacts.js";
+import type { TaskFact, TaskFactQuery } from "./types/TaskFact.js";
 import type {
   PowerActions,
   PowerContext,
@@ -258,6 +260,15 @@ export class TaskPower extends Power {
         },
       }),
     };
+  }
+
+  /** 可信组合根的可靠事实读取端口；不向模型注册，停止后拒绝读取。 */
+  async read_facts(query?: TaskFactQuery): Promise<TaskFact[]> {
+    const storage = this.require_definitions().storage;
+    // 只读已发布的命令事实；并发删除先归档，读取中断后下次可重放，不触发变更通知。
+    const inspection = await inspect_task_definitions(storage, false);
+    if (inspection.issues.length) throw new Error(inspection.issues.map((issue) => issue.error).join("\n"));
+    return await read_task_facts(storage, inspection.tasks, query);
   }
 
   /** 应用回调与任务事务隔离，异步失败不影响执行与调度。 */

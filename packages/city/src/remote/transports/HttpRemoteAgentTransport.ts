@@ -7,6 +7,9 @@
  */
 
 import { SESSION_ORIGIN_CATEGORY_WORK } from "@downcity/type";
+import type { AgentInteraction, AgentInteractionChange, AgentListInteractionsInput, AgentRespondInteractionInput } from "@downcity/agent";
+import type { RemoteInteractionSubscriptionInput } from "@/types/remote/RemoteAgentInteractions.js";
+import { validate_interaction_list_input, validate_interaction_response_input } from "@/remote/InteractionValidation.js";
 import type {
   AgentCreateSessionInput,
   AgentListSessionsInput,
@@ -416,6 +419,85 @@ export class HttpRemoteAgentTransport implements RemoteAgentTransport {
     return payload;
   }
 
+  /** 当前连接绑定 Agent 的待处理交互。 */
+  async list_interactions(input?: AgentListInteractionsInput): Promise<AgentInteraction[]> {
+    const query = new URLSearchParams();
+    const { limit } = validate_interaction_list_input(input);
+    if (limit !== undefined) query.set("limit", String(limit));
+    const payload = await read_http_json<{
+      /** 请求成功标记。 */ success?: boolean;
+      /** 静态或领域错误。 */ error?: string;
+      /** canonical 交互快照。 */ interactions?: AgentInteraction[];
+    }>(`${this.base_url}/api/sdk/interactions?${query}`, { headers: this.headers() });
+    if (!payload.success || !Array.isArray(payload.interactions)) {
+      throw new Error(payload.error || "Remote Agent interactions list failed");
+    }
+    return payload.interactions;
+  }
+
+  /** 复用 Session 的 NDJSON ready 握手，连接取消时同步释放读取器。 */
+  async subscribe_interactions(input: RemoteInteractionSubscriptionInput): Promise<TransportSubscription> {
+    const headers = this.headers();
+    const abort_controller = new AbortController();
+    let resolve_ready!: () => void;
+    let reject_ready!: (error: unknown) => void;
+    const ready = new Promise<void>((resolve, reject) => { resolve_ready = resolve; reject_ready = reject; });
+    // fetch 阶段也可能关闭 transport；先登记取消句柄。
+    const close = async () => {
+      this.resources.delete(close_owned);
+      abort_controller.abort();
+      reject_ready(new Error("Remote Agent interaction connection closed"));
+    };
+    const close_owned = async () => { await close(); input.on_close(new Error("Remote City connection closed")); };
+    this.resources.add(close_owned);
+    // fetch 失败前也必须消费 ready 的拒绝，避免关闭期间的未处理 Promise。
+    void ready.catch(() => undefined);
+    try {
+      const response = await fetch(`${this.base_url}/api/sdk/interactions/events`, { headers, signal: abort_controller.signal });
+      if (!response.ok || !response.body) throw new Error(`Remote Agent interaction events failed (${response.status})`);
+      void consume_http_event_stream<AgentInteractionChange>({
+        body: response.body, abort_controller,
+        on_ready: resolve_ready,
+        on_ready_error: reject_ready,
+        on_event: input.on_event,
+      }).then((error) => {
+        this.resources.delete(close_owned);
+        if (!abort_controller.signal.aborted) input.on_close(error);
+      });
+      await ready;
+      if (this.closed || abort_controller.signal.aborted) throw new Error("Remote City connection closed");
+      return { close };
+    } catch (error) {
+      this.resources.delete(close_owned);
+      abort_controller.abort();
+      throw error;
+    }
+  }
+
+  /** 普通响应不进入私密通道。 */
+  async respond_interaction(input: AgentRespondInteractionInput): Promise<SessionInteractionResult> {
+    return await this.send_interaction_response("respond", input);
+  }
+
+  /** 私密响应专用入口；不读取或传播服务端的原始异常正文。 */
+  async submit_private_interaction(input: AgentRespondInteractionInput): Promise<SessionInteractionResult> {
+    try { return await this.send_interaction_response("submit-private", input); }
+    catch { throw new Error("Private Agent interaction submission failed"); }
+  }
+
+  private async send_interaction_response(action: "respond" | "submit-private", input: AgentRespondInteractionInput): Promise<SessionInteractionResult> {
+    const payload = await read_http_json<{
+      /** 请求成功标记。 */ success?: boolean;
+      /** 响应提交结果。 */ result?: SessionInteractionResult;
+      /** 错误文本，不包含私密输入。 */ error?: string;
+    }>(`${this.base_url}/api/sdk/interactions/${action}`, {
+      method: "POST", headers: this.headers({ "Content-Type": "application/json" }),
+      body: JSON.stringify(validate_interaction_response_input(input)),
+    });
+    if (!payload.success || !payload.result) throw new Error(payload.error || "Remote Agent interaction response failed");
+    return payload.result;
+  }
+
   async interactions(session_id: string, category: string): Promise<SessionInteractionRequest[]> {
     const payload = await read_http_json<{
       success?: boolean;
@@ -517,12 +599,13 @@ async function read_http_action_json<T extends { success?: boolean }>(
   return payload;
 }
 
-async function consume_http_event_stream(params: {
+async function consume_http_event_stream<TEvent>(params: {
   body: ReadableStream<Uint8Array>;
   abort_controller: AbortController;
   on_ready: () => void;
   on_ready_error: (error: unknown) => void;
-  on_event: (event: SessionMutation) => void;
+  /** 已解码的事件，由对应订阅入口确定类型。 */
+  on_event: (event: TEvent) => void;
 }): Promise<unknown | undefined> {
   const decoder = new TextDecoder();
   const reader = params.body.getReader();
@@ -545,7 +628,7 @@ async function consume_http_event_stream(params: {
             ready_resolved = true;
             params.on_ready();
           } else {
-            params.on_event(value as SessionMutation);
+            params.on_event(value as TEvent);
           }
         }
         newline_index = buffered.indexOf("\n");
@@ -559,7 +642,7 @@ async function consume_http_event_stream(params: {
         ready_resolved = true;
         params.on_ready();
       } else {
-        params.on_event(value as SessionMutation);
+        params.on_event(value as TEvent);
       }
     }
 

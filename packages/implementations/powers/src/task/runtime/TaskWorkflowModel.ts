@@ -9,6 +9,7 @@
  */
 
 import { z } from "zod";
+import { task_fact_schema } from "./TaskFacts.js";
 import type { ShipTaskDefinitionV1 } from "../types/Task.js";
 import type {
   TaskInboxItem,
@@ -143,6 +144,7 @@ export function normalize_task_state(input: unknown): TaskState {
       : {}),
     occurrences: normalize_task_occurrences(value.occurrences),
     inbox: normalize_task_inbox(value.inbox),
+    facts: z.array(task_fact_schema).parse(value.facts ?? []),
   };
 }
 

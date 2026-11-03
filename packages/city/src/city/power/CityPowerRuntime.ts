@@ -47,6 +47,7 @@ import { create_power_session_collection } from "@/city/power/PowerSessionBridge
 import { register_power_http_routes } from "@/power/core/PowerHttpRoutes.js";
 import { CityExecutionProfiles } from "./CityExecutionProfiles.js";
 import { assert_power_session_owner, create_power_session_host } from "./CityPowerSessionHost.js";
+import { CityNotifications } from "./CityNotifications.js";
 
 /** City 唯一的 Power Runtime。 */
 export class CityPowerRuntime implements PowerRuntimeHost {
@@ -64,6 +65,12 @@ export class CityPowerRuntime implements PowerRuntimeHost {
   /** 新 Agent 加入时先装配专用执行配置，确保历史可精确恢复。 */
   attach_agent_execution_profiles(agent: Agent): void {
     this.execution_profiles.attach_agent(agent);
+    this.notifications.attach_agent(agent);
+  }
+
+  /** 主体移除时释放通知观察，不触碰Session状态。 */
+  detach_agent_notifications(agent: Agent): void {
+    this.notifications.detach_agent(agent);
   }
 
   /** 按 Power ID 串行化动态添加与移除，避免同一实例生命周期交叉。 */
@@ -456,9 +463,7 @@ export class CityPowerRuntime implements PowerRuntimeHost {
       config: freeze_power_config(this.options.host?.config?.(power_id).get() ?? {}),
       logger: agent.get_logger(),
       embassy: this.options.embassy,
-      ...(this.options.host
-        ? { notifications: this.options.host.notifications(power_id, agent_id) }
-        : {}),
+      notifications: this.notifications.publisher({ power_id, agent_id }, this.options.host?.notifications(power_id, agent_id)),
       get_workspace_env: () => workspace?.get_env() ?? {},
       get_instructions: () => agent.get_instructions(),
     });
@@ -688,6 +693,9 @@ export class CityPowerRuntime implements PowerRuntimeHost {
   }
 
   /** 等待 Power 已经开始的宿主管理调用全部收口。 */
+  /** 通知发布只在这里选路，具体未读状态由Notification Power拥有。 */
+  private readonly notifications = new CityNotifications();
+
   private async wait_record_idle(record: CityPowerRecord): Promise<void> {
     if (record.active_host_calls === 0) return;
     record.host_calls_idle ??= new Promise<void>((resolve) => {
@@ -711,10 +719,7 @@ export class CityPowerRuntime implements PowerRuntimeHost {
     host_actions: Map<string, PowerHostAction>,
     config_actions: Map<string, PowerConfigAction>,
   ): PowerLifecycleContext {
-    const notifications = this.options.host?.notifications(power_id) ?? {
-      publish: async () => {},
-      dismiss: async () => {},
-    };
+    const notifications = this.notifications.publisher({ power_id }, this.options.host?.notifications(power_id));
     const hosted_config = this.options.host?.config?.(power_id);
     const config = hosted_config ?? {
       path: "",
@@ -739,6 +744,17 @@ export class CityPowerRuntime implements PowerRuntimeHost {
       notifications,
       system: Object.freeze({
         ...create_power_session_host(power_id, this.options.runtime_access, this.execution_profiles),
+        register_notification_receiver: (receiver) => this.notifications.register(receiver, this.options.runtime_access.list_agents()),
+        list_agent_interactions: async ({ agent_id }) => {
+          const agent = this.options.runtime_access.get_agent(agent_id);
+          if (!agent) throw new Error(`Agent not found: ${agent_id}`);
+          return await agent.interactions.list() as unknown as PowerJsonValue;
+        },
+        respond_agent_interaction: async ({ agent_id, reference, response }) => {
+          const agent = this.options.runtime_access.get_agent(agent_id);
+          if (!agent) throw new Error(`Agent not found: ${agent_id}`);
+          return await agent.interactions.respond({ reference, response }) as unknown as PowerJsonValue;
+        },
         list_agents: async () => this.options.runtime_access.list_agents().map((agent) => ({
           agent_id: agent.id,
           name: agent.name,

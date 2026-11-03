@@ -16,7 +16,6 @@ import type { Command } from "commander";
 import path from "node:path";
 import { Power, create_action } from "@downcity/city/power";
 import type {
-  PowerJsonObject,
   PowerJsonValue,
   PowerHooks,
   PowerActions,
@@ -62,111 +61,18 @@ import { register_memory_power_host_actions } from "@/memory/host/MemoryPowerHos
 import type {
   MemoryPowerOptions,
   MemoryProvider,
-  MemoryType,
 } from "@/memory/types/Memory.js";
-import type {
-  MemorySubjectKind,
-  MemoryWriteTarget,
-} from "@/memory/types/MemoryAccess.js";
 
-const memory_type_schema = z.enum([
-  "fact",
-  "preference",
-  "decision",
-  "episode",
-  "procedure",
-  "document",
-]);
-
-const memory_write_target_schema = z.enum([
-  "current_workspace", "user", "agent",
-]);
-
-const memory_subject_kind_schema = z.enum([
-  "agent", "user", "workspace", "city",
-]);
-
-/** 解析正整数 CLI 参数。 */
-function parse_positive_integer(value: string): number {
-  const text = String(value || "").trim();
-  if (!/^\d+$/u.test(text)) throw new Error(`Invalid positive integer: ${value}`);
-  const number_value = Number(text);
-  if (!Number.isFinite(number_value) || number_value < 1) {
-    throw new Error(`Invalid positive integer: ${value}`);
-  }
-  return number_value;
-}
-
-/** 解析非负整数 CLI 参数。 */
-function parse_non_negative_integer(value: string): number {
-  const text = String(value || "").trim();
-  if (!/^\d+$/u.test(text)) throw new Error(`Invalid non-negative integer: ${value}`);
-  return Number(text);
-}
-
-/** 解析任意有限数值 CLI 参数。 */
-function parse_number(value: string): number {
-  const number_value = Number(String(value || "").trim());
-  if (!Number.isFinite(number_value)) throw new Error(`Invalid number: ${value}`);
-  return number_value;
-}
-
-/** 把 Action JSON 输入归一化为普通对象。 */
-function read_body_object(raw_body: PowerJsonValue): PowerJsonObject {
-  return raw_body && typeof raw_body === "object" && !Array.isArray(raw_body)
-    ? raw_body as PowerJsonObject
-    : {};
-}
-
-/** 读取必填或可选字符串字段。 */
-function read_string(body: PowerJsonObject, key: string): string {
-  return typeof body[key] === "string" ? String(body[key]) : "";
-}
-
-/** 读取可选字符串字段。 */
-function read_optional_string(body: PowerJsonObject, key: string): string | undefined {
-  const value = read_string(body, key).trim();
-  return value || undefined;
-}
-
-/** 读取可选数值字段。 */
-function read_optional_number(body: PowerJsonObject, key: string): number | undefined {
-  return typeof body[key] === "number" ? Number(body[key]) : undefined;
-}
-
-/** 读取可选布尔字段。 */
-function read_optional_boolean(body: PowerJsonObject, key: string): boolean | undefined {
-  return typeof body[key] === "boolean" ? Boolean(body[key]) : undefined;
-}
-
-/** 读取可选 MemoryType 字段。 */
-function read_optional_memory_type(body: PowerJsonObject): MemoryType | undefined {
-  const result = memory_type_schema.safeParse(body.memory_type);
-  return result.success ? result.data : undefined;
-}
-
-/** 读取必填 Memory 写入目标。 */
-function read_memory_write_target(body: PowerJsonObject): MemoryWriteTarget {
-  const result = memory_write_target_schema.safeParse(body.target);
-  if (!result.success) throw new Error("Memory remember requires target");
-  return result.data;
-}
-
-/** 读取可选 MemoryType 列表字段。 */
-function read_optional_memory_type_list(body: PowerJsonObject): MemoryType[] | undefined {
-  if (!Array.isArray(body.memory_types)) return undefined;
-  return body.memory_types
-    .map((value) => memory_type_schema.safeParse(value))
-    .flatMap((result) => (result.success ? [result.data] : []));
-}
-
-/** 读取可选 Subject 类别列表字段。 */
-function read_optional_subject_kind_list(body: PowerJsonObject): MemorySubjectKind[] | undefined {
-  if (!Array.isArray(body.subject_kinds)) return undefined;
-  return body.subject_kinds
-    .map((value) => memory_subject_kind_schema.safeParse(value))
-    .flatMap((result) => (result.success ? [result.data] : []));
-}
+import {
+  memory_type_schema, memory_write_target_schema, memory_subject_kind_schema,
+  parse_positive_integer, parse_non_negative_integer, parse_number,
+  read_body_object, read_string, read_optional_string, read_optional_number,
+  read_optional_boolean, read_optional_memory_type, read_memory_write_target,
+  read_optional_memory_type_list, read_optional_subject_kind_list,
+} from "./runtime/MemoryActionInput.js";
+import { MemorySignalStore } from "./storage/MemorySignalStore.js";
+import { MemoryDreaming } from "./application/MemoryDreaming.js";
+import { register_memory_dream_host_actions } from "./host/MemoryDreamHostActions.js";
 
 /** Agent 长期记忆 Power。 */
 export class MemoryPower extends Power {
@@ -196,6 +102,8 @@ export class MemoryPower extends Power {
   private coordinator?: MemoryCoordinator;
   /** 独立可靠回传，投递失败不影响已提交的记忆。 */
   private delivery?: MemoryDelivery;
+  /** 内部后台整理 Process，只处理可信事实，不占用通用 Agent 生命周期。 */
+  private dreaming?: MemoryDreaming;
   /** 普通 Action 不直接调用模型，统一由应用服务处理。 */
   private service_instance?: MemoryService;
 
@@ -292,6 +200,7 @@ export class MemoryPower extends Power {
     const jobs = new MemoryJobStore(path.join(context.storage.path, "processing"));
     this.coordinator = new MemoryCoordinator({ host: context, provider: this.provider,
       profile: this.profile_runtime, jobs,
+      can_run_background: async (job) => await this.dreaming?.can_run(job) ?? false,
       model_id: this.options.model_id ?? (typeof config.model_id === "string" ? config.model_id : undefined),
     });
     this.delivery = new MemoryDelivery(jobs, new MemoryDeliveryStore(path.join(context.storage.path, "delivery")),
@@ -300,7 +209,13 @@ export class MemoryPower extends Power {
         return result.status;
       }, context.logger);
     this.service_instance = new MemoryService(this.provider, jobs, this.coordinator, context, this.delivery);
+    this.dreaming = new MemoryDreaming(context,
+      new MemorySignalStore(path.join(platform_root, "memory", "dreaming")), jobs, this.coordinator,
+      async (scope) => ({ agent_id: scope.agent_id, workspace_id: scope.workspace_id, city_memory_available: true, exclude_city: true }),
+      this.options.dreaming);
     await this.coordinator.initialize();
+    await this.dreaming.initialize();
+    register_memory_dream_host_actions(context, this.dreaming);
     this.delivery.initialize();
     register_profile_host_actions(context, this.profile_runtime);
 
@@ -308,6 +223,8 @@ export class MemoryPower extends Power {
 
   /** 释放当前 City 唯一的 Memory Provider。 */
   async dispose(): Promise<void> {
+    await this.dreaming?.dispose();
+    this.dreaming = undefined;
     await this.delivery?.dispose();
     this.delivery = undefined;
     await this.coordinator?.dispose();

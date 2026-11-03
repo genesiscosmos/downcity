@@ -18,10 +18,13 @@ export type {
 
 export type {
   PowerNotificationInput,
+  PowerNotificationSource,
+  PowerNotificationReceiver,
   PowerNotificationPublisher,
   PowerNotificationTopicInput,
   PowerRendererNotification,
 } from "./types/PowerNotification.js";
+export type { PowerInteractionHost, PowerInteractionReference, PowerInteractionResponse } from "./types/PowerInteraction.js";
 
 export type {
   PowerAgentHandle,

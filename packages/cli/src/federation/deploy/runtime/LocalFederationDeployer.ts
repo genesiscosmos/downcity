@@ -4,7 +4,7 @@
  * 关键说明（中文）
  * - Local 不是开发捷径，而是 `fed deploy` 的正式部署目标。
  * - 同一 fed_id 重复部署会先构建最新代码，再替换旧的受管实例。
- * - 端口缺省固定为 12314，只接受配置显式覆盖；占用时报错，运行状态写入 registry。
+ * - 端口缺省固定为 12314；预检冲突时交互确认停止占用者，运行状态写入 registry。
  */
 
 import { randomUUID } from "node:crypto";
@@ -12,6 +12,7 @@ import { mkdtemp, rm, stat } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { allocateAvailablePort } from "@/city/process/daemon/PortAllocator.js";
+import { prepare_local_deployment_port } from "./LocalDeploymentPort.js";
 import { DEFAULT_LOCAL_FEDERATION_PORT } from "@/federation/deploy/config/FederationProjectConfigReader.js";
 import { build_node_release, read_node_release } from "@/federation/deploy/release/NodeReleaseBuilder.js";
 import { local_release_paths, ensure_local_release_paths, install_local_release, activate_local_release, read_current_release, with_local_release_lock } from "@/federation/deploy/release/LocalReleaseStore.js";
@@ -138,10 +139,6 @@ async function install_and_start_release(
   await advance_local_deployment(tracker, "preflight");
   await preflight_release_service(config.id);
   const previous_process = previous ? await inspect_release_process(previous) : undefined;
-  if (previous?.pid && is_local_process_alive(previous.pid) && !previous_process?.active) {
-    throw new CliError({ title: "The registered process is not owned by the system service manager",
-      fix: "Verify and explicitly stop the unmanaged process before deploying this service." });
-  }
   const paths = local_release_paths(config.id);
   const runtime = preview_local_runtime_config(config_file.project_dir, paths.config_dir, paths.data_dir);
   const host = config.deployment.host?.trim() || "127.0.0.1";
@@ -149,7 +146,12 @@ async function install_and_start_release(
   const base_url = config.deployment.url?.trim() || `http://${url_host(host)}:${port}`;
   if (!previous_process?.active || previous?.port !== port
     || (previous?.config_snapshot?.deployment.host?.trim() || "127.0.0.1") !== host) {
-    await resolve_local_port(port, host);
+    await prepare_local_deployment_port(port, host, config_file.project_dir);
+  }
+  // 旧源码实例占用目标端口时可由上述确认停止；其他仍存活的非受管进程不能隐式接管。
+  if (previous?.pid && is_local_process_alive(previous.pid) && !previous_process?.active) {
+    throw new CliError({ title: "The registered process is not owned by the system service manager",
+      fix: "Verify and explicitly stop the unmanaged process before deploying this service." });
   }
   // 所有交互输入都在停止旧实例之前完成，取消不会进入数据准备。
   const credentials = admin_reset || !previous?.admin_id

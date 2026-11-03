@@ -7,13 +7,20 @@ import type { AgentArchiveSessionInput, AgentArchiveSessionsInput, AgentArchiveS
 import type { RemoteAgentPowerActionInput, RemoteAgentPowerActionResult } from "@/types/remote/RemoteAgentPowerAction.js";
 import type { RemoteAgentTransport } from "./RemoteTransport.js";
 import { RemoteSession } from "./RemoteSession.js";
+import { RemoteAgentInteractions } from "./RemoteAgentInteractions.js";
+import type { AgentInteractionCollection } from "@downcity/agent";
 
 /** 不依赖本地 Agent 实现的远程 SDK。 */
 export class RemoteAgentCore {
   readonly sessions: AgentSessions<RemoteAgentSession>;
+  /** 与本地 Agent 相同的主体交互集合。 */
+  readonly interactions: AgentInteractionCollection;
+  private readonly interaction_collection: RemoteAgentInteractions;
 
   constructor(private readonly transport: RemoteAgentTransport) {
     this.sessions = new RemoteAgentSessions(transport);
+    this.interaction_collection = new RemoteAgentInteractions(transport);
+    this.interactions = this.interaction_collection;
   }
 
   /** 直接执行远程 runtime 已注册的 Power Action。 */
@@ -26,7 +33,10 @@ export class RemoteAgentCore {
   }
 
   /** 释放 Transport 拥有的连接。 */
-  async close(): Promise<void> { await this.transport.close?.(); }
+  async close(): Promise<void> {
+    this.interaction_collection.close();
+    await this.transport.close?.();
+  }
 }
 
 /** 每个 SDK 实例拥有自己的创建监听器，Session 状态由服务端拥有。 */

@@ -124,6 +124,7 @@ export class MemoryService {
     const job = await this.jobs.read(job_id);
     if (!job) throw new Error("Memory Job not found");
     this.assert_access(job, access);
+    if (job.kind === "dream") throw new Error("Retry automatic batches from Memory background management; scope budget and cooldown apply");
     if (context) await this.delivery.subscribe(job_id, memory_result_recipient(context));
     const updated = await this.coordinator.retry(job);
     return memory_job_view(updated);

@@ -191,6 +191,7 @@ export async function handle_sdk_session_rpc_request(params: {
     case "sdk.sessions.unsubscribe": {
       const subscription = subscriptions.get(request.params.subscription_id);
       if (subscription) {
+        if (subscription.interaction_agent_id !== undefined) throw new Error("Use Agent interactions unsubscribe for this subscription");
         subscription.unsubscribe();
         subscriptions.delete(request.params.subscription_id);
       }

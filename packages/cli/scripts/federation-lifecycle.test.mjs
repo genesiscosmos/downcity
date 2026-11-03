@@ -405,7 +405,11 @@ test("Local deploy 登记全局状态并替换同一 Fed 的旧实例", async ()
       config: { ...config_file.config, deployment: {
         ...config_file.config.deployment, scripts: { deploy: "forbidden-shell-command" },
       } },
-    }, options), /do not support shell deploy scripts/iu);
+    }, options), (error) => {
+      assert.match(error.message, /Local Federation deployment failed/iu);
+      assert.match(error.note, /do not support shell deploy scripts/iu);
+      return true;
+    });
     // 已存在独立数据库和管理员，fixture 部署不进入交互式凭证输入。
     await deployer.deploy_local_federation(config_file, options);
     const first_server = session.read_server_by_fed_id(config.id, "local");

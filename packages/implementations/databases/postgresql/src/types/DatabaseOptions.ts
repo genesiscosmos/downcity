@@ -10,6 +10,6 @@ export interface DatabaseOptions {
   idle_timeout_seconds?: number;
   /** 建立数据库连接的超时时间，单位秒，默认 10。 */
   connect_timeout_seconds?: number;
-  /** 是否使用服务端预处理语句，默认关闭，适配事务连接池与 Hyperdrive。 */
+  /** 是否强制服务端预处理语句，默认关闭；Hyperdrive 必须启用，覆盖 Drizzle 普通查询的禁用选项。 */
   prepare_statements?: boolean;
 }

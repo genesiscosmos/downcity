@@ -12,6 +12,7 @@ import path from "node:path";
 import test from "node:test";
 
 const power_entries = [
+  ["notification", "NotificationPower"],
   ["messenger", "MessengerPower"],
   ["memory", "MemoryPower"],
   ["skill", "SkillPower"],
@@ -81,6 +82,7 @@ test("Renderer 子路径统一导出 React Surface registry", async () => {
   assert.deepEqual(Object.keys(renderers.BUILTIN_POWER_RENDERERS).sort(), [
     "memory",
     "messenger",
+    "notification",
     "presentation",
     "skill",
     "web",

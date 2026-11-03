@@ -185,6 +185,8 @@ export interface RespondSessionInteractionInput {
   interaction_id: string;
   /** 与原请求 type 一致的结构化响应。 */
   response: SessionInteractionResponse;
+  /** 集合响应携带的原 Turn 身份；在 Session 串行提交链内与 pending 请求校验。 */
+  expected_turn_id?: string;
 }
 
 /** Interaction 已成功收到用户响应。 */

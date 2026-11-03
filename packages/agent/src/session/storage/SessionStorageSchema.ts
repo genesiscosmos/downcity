@@ -82,6 +82,9 @@ CREATE TABLE IF NOT EXISTS message_parts (
 CREATE INDEX IF NOT EXISTS messages_turn_sequence_index
 ON messages(turn_id, sequence);
 
+CREATE INDEX IF NOT EXISTS messages_streaming_agent_sequence_index
+ON messages(state, sequence) WHERE role = 'agent' AND state = 'streaming';
+
 CREATE INDEX IF NOT EXISTS messages_visibility_sequence_index
 ON messages(visibility, sequence);
 

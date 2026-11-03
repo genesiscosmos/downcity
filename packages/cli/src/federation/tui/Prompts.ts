@@ -42,6 +42,8 @@ interface prompt_text_input {
 interface prompt_confirm_input {
   /** prompt 标题。 */
   message: string;
+  /** 确认前展示的可滚动详情，避免长命令和多进程信息被标题截断。 */
+  details?: string;
   /** 初始确认值。 */
   initialValue?: boolean;
 }
@@ -103,6 +105,7 @@ export async function confirm(input: prompt_confirm_input): Promise<unknown> {
   }
 
   try {
+    if (input.details) await runtime.show_text(input.message, input.details);
     const selected = await runtime.select({
       title: input.message,
       footer: confirm_footer_text(),

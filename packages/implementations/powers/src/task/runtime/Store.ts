@@ -7,6 +7,7 @@
  */
 
 import path from "node:path";
+import { archive_task_facts } from "./TaskFacts.js";
 import type { PowerStorage } from "@downcity/city/power";
 import type { ShipTaskDefinitionV1 } from "@/task/types/Task.js";
 import type {
@@ -49,9 +50,10 @@ async function read_last_run_at(
     .catch(() => undefined);
 }
 
-/** 扫描全部 Task 聚合目录，同时保留有效定义和可观察的定义错误。 */
+/** 扫描 Task 定义并保留可观察错误；事实重放传 false，避免枚举任何执行历史。 */
 export async function inspect_task_definitions(
   storage: PowerStorage,
+  include_last_run = true,
 ): Promise<TaskStoreInspection> {
   const root = require_storage_root(storage);
   const directory_path = getTaskRootDir(root);
@@ -89,7 +91,7 @@ export async function inspect_task_definitions(
       continue;
     }
 
-    const last_run_at = await read_last_run_at(storage, getTaskDir(root, task_id));
+    const last_run_at = include_last_run ? await read_last_run_at(storage, getTaskDir(root, task_id)) : undefined;
     items.push({
       ...parsed.task,
       ...(last_run_at ? { last_run_at } : {}),
@@ -153,6 +155,8 @@ export async function deleteTask(params: {
   if (!await params.storage.files.path_exists(task_directory)) {
     throw new Error(`Task not found: ${task_id}`);
   }
+  const task = await readTask({ storage: params.storage, taskId: task_id });
+  await archive_task_facts(params.storage, task.workflow.facts ?? []);
   await params.storage.files.remove_path(task_directory);
   return {
     taskId: task_id,

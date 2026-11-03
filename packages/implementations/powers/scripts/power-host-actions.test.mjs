@@ -8,10 +8,15 @@ import test from "node:test";
 import { MessengerPower } from "@downcity/powers/messenger";
 import { SkillPower } from "@downcity/powers/skill";
 import { TaskPower } from "@downcity/powers/task";
+import { NotificationPower } from "../bin/notification.js";
+import { InboxStore } from "../bin/notification/renderer/InboxStore.js";
+import { inbox_entries } from "../bin/notification/renderer/InboxEntries.js";
 import { createTaskDefinition } from "../bin/task/Action.js";
 import { TaskDefinitionRepository } from "../bin/task/runtime/TaskDefinitionRepository.js";
 import { TaskExecutionCoordinator } from "../bin/task/runtime/TaskExecutionCoordinator.js";
-import { LocalStorageProvider } from "@downcity/city";
+import { LocalStorageProvider, City, Agent, Workspace } from "@downcity/city";
+import { AskQuestionsTool } from "@downcity/agent/tools";
+import { MockModelClient } from "../../../agent/scripts/ModelClientMock.mjs";
 
 /** 启动 Messenger Power 并返回按 ID 注册的配置 action。 */
 async function start_messenger_power() {
@@ -444,6 +449,132 @@ test("Task Power 暴露并允许删除损坏定义", async () => {
   } finally {
     await cleanup();
   }
+});
+
+test("Inbox仅管理通知阅读状态，响应回到原Interaction且通知重投幂等", async () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "downcity-notification-"));
+  const scope = new LocalStorageProvider(root).open_scope(["notification"]);
+  const actions = new Map();
+  const power = new NotificationPower();
+  let receiver;
+  let pending = [{ reference: { session_category: "work", session_id: "s", turn_id: "t", interaction_id: "i" }, interaction: { status: "pending" } }];
+  let responded;
+  const context = {
+    storage: { path: scope.root_path, files: scope.files },
+    power: { action: (action) => actions.set(action.id, action) },
+    logger: { warn() {} },
+    system: {
+      register_notification_receiver: (value) => { receiver = value; return () => { receiver = undefined; }; },
+      list_agents: async () => [{ agent_id: "a", name: "Agent" }],
+      list_agent_interactions: async () => pending,
+      respond_agent_interaction: async (input) => { responded = input; pending = []; return { status: "resolved" }; },
+    },
+  };
+  try {
+    power.initialize(context);
+    assert.deepEqual(Object.keys(power.actions), []);
+    const source = { power_id: "task", agent_id: "a" };
+    const input = { topic_key: "run-1", title: "Done", body: "result" };
+    await receiver.publish(source, input);
+    const first = await actions.get("notification.list").run({});
+    assert.equal(first.items.length, 1);
+    assert.equal(first.interactions.length, 1);
+    await actions.get("notification.read").run({ notification_id: first.items[0].notification_id });
+    await receiver.publish(source, input);
+    const read = await actions.get("notification.list").run({});
+    assert.equal(read.items.length, 1);
+    assert.equal(read.items[0].read, true);
+    assert.equal(read.interactions.length, 1);
+    const request = { agent_id: "a", reference: pending[0].reference, response: { type: "question", outcome: "resolved", payload: { answers: [] } } };
+    await actions.get("notification.respond").run(request);
+    assert.deepEqual(responded, request);
+    const resolved = await actions.get("notification.list").run({});
+    assert.equal(resolved.interactions.length, 0);
+    assert.equal(resolved.agent_names.a, "Agent");
+    assert.equal(inbox_entries(resolved, "updates")[0].source, "Agent");
+    power.dispose();
+    power.initialize(context);
+    assert.equal((await actions.get("notification.list").run({})).items[0].read, true);
+  } finally { power.dispose(); await scope.files.dispose?.(); fs.rmSync(root, { recursive: true, force: true }); }
+});
+
+test("Inbox两个插槽共享查询，刷新保留选择并阻止旧快照回退已处理状态", async () => {
+  const pending = (id) => ({ agent_id: "a", agent_name: "Agent", interaction: { can_respond: true,
+    reference: { session_category: "work", session_id: "s", turn_id: "t", interaction_id: id },
+    interaction: { status: "pending", request: { title: id, type: "question", payload: { questions: [] }, created_at: 1 } },
+  } });
+  const snapshot = { interactions: [pending("first"), pending("second")],
+    items: [{ notification_id: "update", title: "完成", power_id: "notification", created_at: 2, read: false }], unavailable_agents: [], agent_names: { a: "程序员" } };
+  let calls = 0;
+  let resolve;
+  const gateway = { invoke: async () => { calls++; return await new Promise((accept) => { resolve = accept; }); } };
+  const store = new InboxStore();
+  const release_sidebar = store.attach(gateway);
+  const release_main = store.attach(gateway);
+  try {
+    assert.equal(calls, 1);
+    resolve(structuredClone(snapshot));
+    await store.refresh();
+    const selected = inbox_entries(store.get_snapshot().data, "pending")[1];
+    store.select(selected);
+    store.dirty(selected.key);
+    const refreshing = store.refresh();
+    store.handled(selected);
+    store.read("update");
+    resolve(structuredClone(snapshot));
+    await refreshing;
+    assert.equal(store.get_snapshot().selected.pending.key, selected.key);
+    assert.equal(store.get_snapshot().handled.has(selected.key), true);
+    assert.equal(store.get_snapshot().data.interactions.length, 1);
+    assert.equal(inbox_entries(store.get_snapshot().data, "pending")[0].source, "程序员");
+    assert.equal(store.get_snapshot().data.items[0].read, true);
+    assert.equal(store.get_snapshot().dirty_key, undefined);
+    const removed_snapshot = { ...snapshot, interactions: [] };
+    const refresh_removed = store.refresh(); resolve(removed_snapshot); await refresh_removed;
+    assert.equal(store.get_snapshot().selected.pending.key, selected.key);
+    release_sidebar();
+    const still_active = store.refresh(); resolve(snapshot); await still_active;
+    release_main();
+    const final_calls = calls;
+    await store.refresh();
+    assert.equal(calls, final_calls);
+  } finally { release_sidebar(); release_main(); }
+});
+
+test("Inbox贯通真实Agent提问、原地回答和Work完成更新", async () => {
+  const notification = new NotificationPower();
+  let calls = 0;
+  const city = new City({ powers: [notification], workspaces: [new Workspace({ id: "project", path: process.cwd() })] });
+  const agent = city.agents.add(new Agent({ id: "inbox-agent", tools: { ask_question: AskQuestionsTool }, model: new MockModelClient({ id: "inbox-model", generate: async (call) => {
+    if (!call.tools?.length) return { text: "Inbox work" };
+    if (++calls === 1) return { content: [{ type: "tool_call", tool_name: "ask_question", tool_call_id: "ask", input: { title: "Audience", questions: [{ question: "Who is the audience?", type: "text" }] } }] };
+    return { text: "Report for engineers" };
+  } }) }));
+  try {
+    await city.powers.settled();
+    let changed;
+    const requested = new Promise((resolve) => { changed = resolve; });
+    const unsubscribe = agent.interactions.subscribe((event) => { if (event.type === "updated" && event.item.interaction.status === "pending") changed(); });
+    const session = await agent.sessions.create({ origin: { category: "work", type: "work" } });
+    session.dispose_title_generation();
+    const turn = await session.prompt({ query: "Write a report" });
+    await requested;
+    const pending = await city.powers.invoke("notification", "notification.list", {});
+    assert.equal(pending.interactions.length, 1);
+    const item = pending.interactions[0];
+    await city.powers.invoke("notification", "notification.respond", {
+      agent_id: item.agent_id, reference: item.interaction.reference,
+      response: { type: "question", outcome: "resolved", payload: { answers: [{ question_id: item.interaction.interaction.request.payload.questions[0].question_id, value: "engineers" }] } },
+    });
+    assert.equal((await turn.finished).success, true);
+    await agent.resolve_completions().settle();
+    const completed = await city.powers.invoke("notification", "notification.list", {});
+    assert.equal(completed.interactions.length, 0);
+    assert.equal(completed.items.length, 1);
+    assert.equal(completed.items[0].body, "Report for engineers");
+    assert.equal(completed.items[0].read, false);
+    unsubscribe();
+  } finally { await city.close(); }
 });
 
 test("Task Host mutation 明确返回定义已提交但 scheduler 同步失败", async () => {

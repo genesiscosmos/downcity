@@ -90,12 +90,18 @@ export interface PowerRendererSidebarProps {
 
   /** 由宿主渲染到 Sidebar Header 右侧的业务操作。 */
   readonly actions?: ReactNode;
+
+  /** 固定在 Header 下方、滚动列表之外的搜索或筛选控件，与列表共用左右对齐线。 */
+  readonly toolbar?: ReactNode;
 }
 
 /** Power Sidebar 分区属性。 */
 export interface PowerRendererSidebarSectionProps {
   /** 分区的用户可见名称。 */
   readonly label?: ReactNode;
+
+  /** 列表密度；默认使用紧凑行距，comfortable 为单行资源列表保留舒适间距。 */
+  readonly spacing?: "compact" | "comfortable";
 
   /** 分区内的导航项。 */
   readonly children: ReactNode;
@@ -125,6 +131,9 @@ export interface PowerRendererSidebarSubTextProps {
 
 /** Power Sidebar 导航项属性。 */
 export interface PowerRendererSidebarItemProps {
+  /** 资源类型；提供时使用宿主单行资源样式与对应单色图标，省略时使用常规导航行。 */
+  readonly resource_kind?: "skill" | "mcp";
+
   /** 导航项名称。 */
   readonly label: ReactNode;
 
@@ -340,6 +349,9 @@ export interface PowerRendererTabsProps {
 
   /** 用户切换 Tab 时的回调。 */
   readonly on_value_change: (value: string) => void;
+
+  /** 导航外观；segmented 使用紧凑胶囊，适合 Sidebar Header 中的资源类型切换。 */
+  readonly variant?: "line" | "segmented";
 }
 
 /** CodeBlock 属性。 */
@@ -393,7 +405,7 @@ export interface PowerRendererInputProps {
   readonly disabled?: boolean;
 
   /** 输入值类型。 */
-  readonly type?: "text" | "password" | "number";
+  readonly type?: "text" | "password" | "number" | "search";
 
   /** 数字输入允许的最小值。 */
   readonly minimum?: number;

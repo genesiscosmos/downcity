@@ -32,6 +32,8 @@ import type {
 } from "@/types/agent/AgentSessionCollection.js";
 import { Logger } from "@/utils/logger/Logger.js";
 import { AgentSessions } from "@/agent/AgentSessions.js";
+import { AgentInteractions } from "@/agent/AgentInteractions.js";
+import type { AgentInteractionCollection } from "@/types/agent/AgentInteractions.js";
 import { AgentMemoryStorageProvider } from "@/agent/AgentMemoryStorage.js";
 import { LocalSessionStore } from "@/session/storage/LocalSessionStore.js";
 import { EMPTY_TOOL_HOOK_SET, SESSION_HOOK_POINTS } from "@downcity/type";
@@ -83,6 +85,11 @@ export class Agent {
 
   /** Agent 面向用户的 Session 创建入口。 */
   readonly sessions: AgentSessionCollection;
+
+  /** 当前 Agent 所有 Session 的交互查询、实时订阅和响应入口。 */
+  readonly interactions: AgentInteractionCollection;
+  /** 交互集合实现；持有 Agent 级观察订阅，不复制 pending 事实。 */
+  private readonly interaction_collection: AgentInteractions;
 
   /** Agent 自定义 Tool；进入每个 Workspace 时与项目 Tool 合并。 */
   readonly custom_tools: Record<string, Tool>;
@@ -179,6 +186,7 @@ export class Agent {
       logger: this.logger,
       get_instruction: () => [...this.get_instructions()],
       get_agent_model: () => this.model,
+      observe_session: (session) => this.interaction_collection.observe_session(session),
       session_class: this.session_class,
       session_composer: this.session_composer,
       resolve_session_context: (input) => {
@@ -227,6 +235,12 @@ export class Agent {
       },
     });
     this.sessions = this.session_manager;
+    this.interaction_collection = new AgentInteractions({
+      sessions: this.session_manager,
+      get_store: () => this.resolve_storage().sessions,
+      logger: this.logger,
+    });
+    this.interactions = this.interaction_collection;
   }
 
   /** 返回 Agent 当前的用户可见名称。 */
@@ -452,6 +466,8 @@ export class Agent {
       await this.delegations?.settle();
       await this.completions?.settle();
       this.session_manager.dispose_title_generation();
+      this.session_manager.dispose_session_observers();
+      this.interaction_collection.dispose();
       results.push(...await Promise.allSettled([
         this.agent_storage?.sessions.dispose() ?? Promise.resolve(),
         this.logger.save_all_logs(),

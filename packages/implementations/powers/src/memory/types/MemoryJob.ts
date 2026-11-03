@@ -16,6 +16,8 @@ export interface MemoryJobSource {
   message_id?: string;
   /** 证据角色，不能将 Agent 建议升级为用户表述。 */
   role: "user" | "agent" | "request";
+  /** 原始事实与固定读取区间的定位说明，自动来源提交后保留以供回查。 */
+  label?: string;
   /** 保存于请求中的有界原文，不作为系统指令。 */
   text: string;
 }
@@ -97,7 +99,7 @@ export interface MemoryJob {
   /** 上层请求去重键，不包含未授权的自由范围。 */
   request_key: string;
   /** 处理类型。 */
-  kind: "digest" | "revise" | "profile_optimize";
+  kind: "digest" | "revise" | "profile_optimize" | "dream";
   /** 用户指定的处理目标，作为数据传给专用 Session。 */
   instruction: string;
   /** 创建时绑定的可信访问上下文。 */

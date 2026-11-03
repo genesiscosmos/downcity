@@ -108,7 +108,7 @@ export type RemoteSessionTransport = {
 /**
  * RemoteAgent 顶层 transport 能力。
  */
-export type RemoteAgentTransport = RemoteSessionTransport & {
+export type RemoteAgentTransport = RemoteSessionTransport & import("@/types/remote/RemoteAgentInteractions.js").RemoteAgentInteractionTransport & {
   /** 新建 session。 */
   create_session(input?: AgentCreateSessionInput): Promise<AgentSessionInfo>;
   /** 列出 sessions。 */

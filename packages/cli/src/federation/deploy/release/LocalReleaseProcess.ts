@@ -7,7 +7,7 @@
 import { mkdir, rm } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { dirname } from "node:path";
-import { start_system_service, stop_system_service, inspect_system_service, resolve_system_service, type SystemServiceSpec } from "../process/SystemServiceAdapter.js";
+import { start_system_service, stop_system_service, inspect_system_service, resolve_system_service, assert_system_service_stopped, type SystemServiceSpec } from "../process/SystemServiceAdapter.js";
 import { service_runtime_paths, read_service_config, read_service_receipt, write_service_json, type ServiceRuntimeConfig } from "../process/ServiceRuntime.js";
 import type { ServerProfile } from "@/federation/core/session.js";
 import { CliError } from "@/shared/CliError.js";
@@ -47,6 +47,13 @@ function service_spec(fed_id: string, auto_start: boolean, restart_on_failure: b
     runner_path: fileURLToPath(new URL("../process/ServiceRunner.js", import.meta.url)),
     config_path: paths.config_path, service_dir: paths.service_dir,
     log_path: `${paths.service_dir}/supervisor.log`, auto_start, restart_on_failure };
+}
+
+/** 数据恢复专用检查：停止标记、系统进程与自动启动关联必须全部证明已停止。 */
+export async function assert_release_service_stopped(server: ServerProfile): Promise<void> {
+  if (!server.fed_id || server.target !== "local") throw new CliError({ title: "A managed local Federation is required" });
+  const policy = server.config_snapshot?.deployment.process;
+  await assert_system_service_stopped(service_spec(server.fed_id, policy?.auto_start ?? false, policy?.restart_on_failure ?? true));
 }
 
 /** 在切换前只读检查用户级托管器是否可用，不安装或启停服务。 */

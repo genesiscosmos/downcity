@@ -288,6 +288,7 @@ export function parseTaskDefinition(
       ...(document.tables.workflow ?? {}),
       occurrences: document.arrays.occurrences ?? [],
       inbox: document.arrays.inbox ?? [],
+      facts: document.arrays.facts ?? [],
     });
   } catch (error) {
     return { ok: false, error: `Invalid workflow: ${String(error)}` };
@@ -340,7 +341,7 @@ export function buildTaskToml(task: ShipTaskDefinitionV1): string {
   if (kind === "script" && !body) throw new Error("script task prompt cannot be empty");
 
   const workflow = normalize_task_state(task.workflow);
-  const { occurrences, inbox, ...workflow_fields } = workflow;
+  const { occurrences, inbox, facts, ...workflow_fields } = workflow;
 
   return build_task_document({
     scalars: {
@@ -368,6 +369,7 @@ export function buildTaskToml(task: ShipTaskDefinitionV1): string {
     arrays: [
       { key: "occurrences", value: occurrences as unknown as Array<Record<string, unknown>> },
       { key: "inbox", value: inbox as unknown as Array<Record<string, unknown>> },
+      { key: "facts", value: (facts ?? []) as unknown as Array<Record<string, unknown>> },
     ],
   });
 }

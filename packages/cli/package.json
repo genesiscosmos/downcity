@@ -24,7 +24,7 @@
     "test:tui": "pnpm build && node --test scripts/agent-tui.test.mjs scripts/agent-tui-subscription.test.mjs",
     "test:config-storage": "pnpm build && node --test scripts/config-storage.test.mjs",
     "test:model-recovery": "pnpm build && node --test scripts/agent-model-recovery.test.mjs",
-    "test:federation": "pnpm build && node --test scripts/federation-lifecycle.test.mjs",
+    "test:federation": "pnpm build && node --test scripts/federation-lifecycle.test.mjs && node --experimental-test-module-mocks --test scripts/federation-port-conflict.test.mjs",
     "test:federation-web": "pnpm build && node --test scripts/federation-web.test.mjs",
     "prepack": "npm run build && node ../../scripts/rewrite-workspace-dependencies.mjs prepare ./package.json",
     "postpack": "node ../../scripts/rewrite-workspace-dependencies.mjs restore ./package.json"

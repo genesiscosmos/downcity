@@ -8,6 +8,7 @@
  */
 
 export * from "./messenger.js";
+export * from "./notification.js";
 export * from "./memory.js";
 export * from "./skill.js";
 export * from "./task.js";

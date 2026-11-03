@@ -225,6 +225,14 @@ export type {
 } from "./types/agent/AgentOptions.js";
 export type { AgentReconfigureInput } from "./types/agent/AgentReconfigureInput.js";
 export type {
+  AgentInteraction,
+  AgentInteractionChange,
+  AgentInteractionCollection,
+  AgentInteractionReference,
+  AgentListInteractionsInput,
+  AgentRespondInteractionInput,
+} from "./types/agent/AgentInteractions.js";
+export type {
   AgentCreateSessionOptions,
   AgentSessionCollection,
 } from "./types/agent/AgentSessionCollection.js";

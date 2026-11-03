@@ -20,6 +20,8 @@ export interface MemoryCoordinatorOptions {
   jobs: MemoryJobStore;
   /** 可选的专用模型选择，创建后由 Session 固定实际身份。 */
   model_id?: string;
+  /** 自动 Job 每次开始前核对持久开关；普通显式请求不受影响。 */
+  can_run_background?: (job: MemoryJob) => Promise<boolean>;
 }
 
 /** 将已绑定的 Job 目标转换为核心记忆范围。 */
@@ -30,8 +32,20 @@ export function memory_job_profile_scope(job: MemoryJob): ProfileScope {
 
 /** 每个 Power 实例单路计算，提交仍由 Provider 检查跨实例并发。 */
 export class MemoryCoordinator {
-  /** 正在执行的队列；失败不会阻塞后续 Job。 */
+  /** 当前单路消费者的生命周期，关闭时等待有界工作收口。 */
   private chain: Promise<void> = Promise.resolve();
+  /** 持久 Job 的待运行集合，值表示是否为低优先级后台工作。 */
+  private readonly pending = new Map<string, boolean>();
+  /** 是否已经安排消费者，防止同一实例并行启动多个模型。 */
+  private draining = false;
+  /** 正在运行的 Job 是否属于显式请求。 */
+  private active_explicit = false;
+
+  /** 后台规划前检查显式请求压力，不从聊天或 CPU 猜测用户是否空闲。 */
+  get has_explicit_work(): boolean { return this.active_explicit || [...this.pending.values()].some((background) => !background); }
+
+  /** 单路模型消费者是否繁忙，避免后台预先积攒多批计算。 */
+  get has_work(): boolean { return this.draining || this.pending.size > 0; }
   /** 已入队标识，防止重复唤醒。 */
   private readonly scheduled = new Set<string>();
   /** 关闭后禁止开始新计算。 */
@@ -49,16 +63,27 @@ export class MemoryCoordinator {
       read_profile: async (job) => await this.options.profile.read(memory_job_profile_scope(job)),
     });
     for (const job of await this.options.jobs.list()) {
-      if (["queued", "running", "committing", "retry_wait"].includes(job.status)) this.schedule(job.job_id);
+      if (job.kind !== "dream" && ["queued", "running", "committing", "retry_wait"].includes(job.status)) this.schedule(job.job_id, false);
     }
   }
 
   /** 先保存请求再调度；调用方得到的是 accepted，而非 saved。 */
   async submit(input: MemoryJobInput): Promise<MemoryJob> {
     if (this.stopped) throw new Error("Memory Coordinator is stopping");
+    if (input.kind === "dream" && (input.mode !== "knowledge" || input.target === "user")) throw new Error("Automatic memory only supports Agent/Workspace knowledge");
     const job = await this.options.jobs.create(input);
-    if (["queued", "retry_wait"].includes(job.status)) this.schedule(job.job_id);
+    if (["queued", "retry_wait", "running", "committing"].includes(job.status)) this.schedule(job.job_id, job.kind === "dream");
     return job;
+  }
+
+  /** 即使自动开关关闭，也可根据已有提交回执补齐终态；此路径绝不发起新提交。 */
+  async reconcile_committed(job: MemoryJob): Promise<MemoryJob> {
+    if (job.mode !== "knowledge" || job.status === "skipped") return job;
+    const receipt = await this.options.provider.read_commit_receipt({ access: job.access, target: job.target, commit_id: `job:${job.job_id}` });
+    if (!receipt && job.status === "succeeded") throw new Error("Memory succeeded Job has no matching commit receipt");
+    if (!receipt || job.status === "succeeded") return job;
+    await this.commit(job);
+    return (await this.options.jobs.read(job.job_id))!;
   }
 
   /** 人工重试失败请求，保留原身份与证据。 */
@@ -72,36 +97,56 @@ export class MemoryCoordinator {
       ...(committed ? {} : { session_id: undefined, turn_id: undefined, changes: undefined, change_details: undefined, scope_version: undefined, profile_edits: undefined, profile_version: undefined }),
       skip_reason: undefined, error: undefined,
     });
-    this.schedule(job.job_id);
+    this.schedule(job.job_id, job.kind === "dream");
     return updated;
   }
 
-  /** 不轮询运行目录；每个请求由串行任务完成或留下明确失败。 */
-  private schedule(job_id: string): void {
+  /** 每个 Job 边界优先取显式请求；已经进入的计算或原子提交保持有界完成。 */
+  private schedule(job_id: string, background: boolean): void {
     if (this.stopped || this.scheduled.has(job_id)) return;
     this.scheduled.add(job_id);
-    this.chain = this.chain.catch((error) => {
-      this.options.host.logger.error("Memory queue recovered after persistence failure", { error: String(error) });
-    }).then(async () => {
-      if (this.stopped) return;
-      try {
-        await this.options.jobs.with_execution(job_id, async () => {
-          try { await this.execute(job_id); }
-          catch (error) {
-            await this.options.jobs.update(job_id, { status: "failed", error: error instanceof Error ? error.message : String(error) });
-            this.options.host.logger.warn("Memory Job failed", { job_id, error: String(error) });
-          }
-        });
-      } catch (error) {
-        this.options.host.logger.warn("Memory Job is owned by another local worker or storage is unavailable", { job_id, error: String(error) });
+    this.pending.set(job_id, background);
+    this.start_queue();
+  }
+
+  /** 合并唤醒，并封闭消费者退出与新请求到达之间的微任务窗口。 */
+  private start_queue(): void {
+    if (this.draining || this.stopped || !this.pending.size) return;
+    this.draining = true;
+    this.chain = Promise.resolve().then(async () => {
+      while (!this.stopped && this.pending.size) {
+        const [next_id, is_background] = [...this.pending.entries()].find(([, value]) => !value) ?? this.pending.entries().next().value!;
+        this.pending.delete(next_id);
+        this.active_explicit = !is_background;
+        try {
+          await this.options.jobs.with_execution(next_id, async () => {
+            const job = await this.options.jobs.read(next_id);
+            if (!job || (is_background && !await this.options.can_run_background?.(job))) return;
+            try { await this.execute(next_id); }
+            catch (error) {
+              await this.options.jobs.update(next_id, { status: "failed", error: error instanceof Error ? error.message : String(error) });
+              this.options.host.logger.warn("Memory Job failed", { job_id: next_id, error: String(error) });
+            }
+          });
+        } catch (error) {
+          this.options.host.logger.warn("Memory Job execution or persistence unavailable", { job_id: next_id, error: String(error) });
+        } finally { this.scheduled.delete(next_id); this.active_explicit = false; }
       }
-    }).finally(() => { this.scheduled.delete(job_id); });
+    }).finally(() => {
+      this.draining = false;
+      if (!this.stopped && this.pending.size) this.start_queue();
+    });
   }
 
   /** 从持久化身份恢复尝试，只有终态和有效暂存结果都齐全才进入提交。 */
   private async execute(job_id: string): Promise<void> {
     let job = await this.options.jobs.read(job_id);
     if (!job || ["succeeded", "skipped"].includes(job.status)) return;
+    // 自动批次可能从已固定输入补回丢失的 Job 文件；先核对原提交，避免再次计算。
+    if (job.kind === "dream") {
+      job = await this.reconcile_committed(job);
+      if (job.status === "succeeded") return;
+    }
     if (job.status === "committing") { await this.commit(job); return; }
     if (job.attempt >= 3 && !job.session_id) throw new Error("Memory Job attempt budget exhausted");
     const { host } = this.options;
@@ -167,6 +212,7 @@ export class MemoryCoordinator {
 
   /** 回执与记忆原子发布；Job 状态丢失时可以用相同键重读。 */
   private async commit(job: MemoryJob): Promise<void> {
+    if (job.kind === "dream" && (job.mode !== "knowledge" || job.target === "user")) throw new Error("Invalid automatic memory target");
     const commit_id = `job:${job.job_id}`;
     if (job.mode === "profile") {
       const scope = memory_job_profile_scope(job);
@@ -191,7 +237,7 @@ export class MemoryCoordinator {
           const source = job.sources.find((item) => item.source_id === source_id);
           if (!source) throw new Error("Staged source is not permitted by this Job");
           const evidence = job.change_details?.[index]?.sources.find((item) => item.source_id === source_id);
-          return { ...source, source_type: source.role === "request" ? "manual" : "session",
+          return { ...source, source_type: source.category === "task" ? "task" : source.role === "request" || source.category === "manual" ? "manual" : "session",
             excerpt: evidence?.excerpt, locator: evidence ? `text-offset:${evidence.excerpt_start}` : undefined };
         }).map(({ text: _text, ...source }) => source),
       })),

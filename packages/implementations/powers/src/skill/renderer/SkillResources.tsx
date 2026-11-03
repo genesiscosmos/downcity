@@ -1,4 +1,8 @@
-/** Unified Skill resource navigation and individual Skill detail, without Agent navigation. */
+/**
+ * Skill Power 资源浏览界面。
+ * Sidebar 用胶囊切换 Skills / MCP，统一展示资源名称，按类型保留搜索和选择。
+ * Mainview 展示选中资源，Skill 正文优先，来源与 Agent 使用信息按需展开。
+ */
 import { useEffect, useState } from "react";
 import type { PowerMainviewComponentProps, PowerSidebarComponentProps } from "@downcity/city/power/react";
 import type { SkillMainviewSnapshot, SkillMainviewReadResult } from "@/skill/types/SkillMainview.js";
@@ -8,7 +12,7 @@ import { collect_skills, find_skill_resource } from "./SkillResourceModel.js";
 
 /** Load each resource family independently so one unavailable source does not hide the other. */
 export function skill_resource_sidebar({ power, navigation, ui }: PowerSidebarComponentProps) {
-  const { Sidebar, SidebarSection, SidebarItem, SidebarSubText, Callout, LoadingState } = ui.components;
+  const { Sidebar, SidebarSection, SidebarItem, SidebarSubText, Tabs, Input, StatusDot, Callout, LoadingState } = ui.components;
   const [snapshot, set_snapshot] = useState<SkillMainviewSnapshot>();
   const [mcp, set_mcp] = useState<McpStatusResult>();
   const [skill_error, set_skill_error] = useState("");
@@ -23,25 +27,45 @@ export function skill_resource_sidebar({ power, navigation, ui }: PowerSidebarCo
     }).catch((reason) => { if (!disposed) set_mcp_error(error_message(reason)); });
     return () => { disposed = true; };
   }, [power, ui.revision]);
-  const resources = collect_skills(snapshot);
-  useEffect(() => {
-    if (navigation.route.resource_id) return;
-    const first = resources[0];
-    if (first) navigation.navigate({ resource_kind: "skill", resource_id: first.route_id });
-    else if (snapshot && mcp?.servers[0]) navigation.navigate({ resource_kind: "mcp", resource_id: mcp.servers[0].id });
-  }, [snapshot, mcp, navigation.route.resource_id, navigation.navigate]);
-  return <Sidebar>
-    <SidebarSection label="Skills">
-      {!snapshot && !skill_error ? <LoadingState label="正在读取 Skills…" /> : null}
-      {skill_error ? <Callout tone="danger">{skill_error}</Callout> : null}
-      {resources.map((item) => <SidebarItem key={item.route_id} label={`${item.name} · ${item.source_label}`} active={navigation.route.resource_kind === "skill" && find_skill_resource(snapshot, String(navigation.route.resource_id))?.resource_id === item.resource_id} on_select={() => navigation.navigate({ resource_kind: "skill", resource_id: item.route_id })} />)}
-      {snapshot && !resources.length ? <SidebarSubText>还没有 Skill</SidebarSubText> : null}
-    </SidebarSection>
-    <SidebarSection label="MCP">
-      {!mcp && !mcp_error ? <LoadingState label="正在读取 MCP…" /> : null}
-      {mcp_error ? <Callout tone="danger">{mcp_error}</Callout> : null}
-      {mcp?.servers.map((server) => <SidebarItem key={server.id} label={server.id} trailing={server.tool_count} active={navigation.route.resource_kind === "mcp" && navigation.route.resource_id === server.id} on_select={() => navigation.navigate({ resource_kind: "mcp", resource_id: server.id })} />)}
-      {mcp && !mcp.servers.length ? <SidebarSubText>还没有 MCP Server</SidebarSubText> : null}
+  const { route, navigate } = navigation;
+  const resource_kind = route.resource_kind === "mcp" ? "mcp" : "skill";
+  const resource_id = typeof route.resource_id === "string" ? route.resource_id : "";
+  const stored_query = route[`${resource_kind}_query`];
+  const query = typeof stored_query === "string" ? stored_query : "";
+  const normalized_query = query.trim().toLowerCase();
+  const resources = collect_skills(snapshot).filter((item) => `${item.name} ${item.skill_id} ${item.description}`.toLowerCase().includes(normalized_query));
+  const servers = (mcp?.servers ?? []).filter((server) => server.id.toLowerCase().includes(normalized_query)).slice().sort((left, right) => left.id.localeCompare(right.id));
+  const selected_skill = find_skill_resource(snapshot, resource_id);
+  const select_resource = (selected_id: string) => navigate({
+    ...route, resource_kind, resource_id: selected_id, [`${resource_kind}_resource_id`]: selected_id,
+  });
+  const switch_kind = (value: string) => {
+    const next_kind = value === "mcp" ? "mcp" : "skill";
+    if (next_kind === resource_kind) return;
+    const stored_id = route[`${next_kind}_resource_id`];
+    navigate({
+      ...route,
+      [`${resource_kind}_resource_id`]: resource_id,
+      resource_kind: next_kind,
+      resource_id: typeof stored_id === "string" ? stored_id : "",
+    });
+  };
+  return <Sidebar
+    actions={<Tabs variant="segmented" label="资源类型" value={resource_kind} items={[{ value: "skill", label: "Skills" }, { value: "mcp", label: "MCP" }]} on_value_change={switch_kind} />}
+    toolbar={<Input type="search" fill value={query} placeholder={resource_kind === "skill" ? "搜索 Skills…" : "搜索 MCP…"} on_value_change={(value) => navigate({ ...route, [`${resource_kind}_query`]: value })} />}
+  >
+    <SidebarSection spacing="comfortable">
+      {resource_kind === "skill" ? <>
+        {!snapshot && !skill_error ? <LoadingState label="正在读取 Skills…" /> : null}
+        {skill_error ? <Callout tone="danger">{skill_error}</Callout> : null}
+        {resources.map((item) => <SidebarItem key={item.route_id} resource_kind="skill" label={item.name} active={selected_skill?.resource_id === item.resource_id} on_select={() => select_resource(item.route_id)} />)}
+        {snapshot && !resources.length ? <SidebarSubText>{normalized_query ? "没有匹配的 Skill" : "还没有 Skill"}</SidebarSubText> : null}
+      </> : <>
+        {!mcp && !mcp_error ? <LoadingState label="正在读取 MCP…" /> : null}
+        {mcp_error ? <Callout tone="danger">{mcp_error}</Callout> : null}
+        {servers.map((server) => <SidebarItem key={server.id} resource_kind="mcp" label={server.id} trailing={<StatusDot tone={server.state === "ready" ? "success" : server.state === "error" ? "danger" : server.state === "idle" || server.state === "disabled" ? "muted" : "warning"} label={server.state} />} active={resource_id === server.id} on_select={() => select_resource(server.id)} />)}
+        {mcp && !servers.length ? <SidebarSubText>{normalized_query ? "没有匹配的 MCP Server" : "还没有 MCP Server"}</SidebarSubText> : null}
+      </>}
     </SidebarSection>
   </Sidebar>;
 }
@@ -50,7 +74,7 @@ export function skill_resource_sidebar({ power, navigation, ui }: PowerSidebarCo
 export function skill_resource_mainview(props: PowerMainviewComponentProps) {
   const { EmptyState, Page } = props.ui.components;
   const resource_id = typeof props.navigation.route.resource_id === "string" ? props.navigation.route.resource_id : "";
-  if (!resource_id) return <Page><EmptyState title="选择一个 Skill 或 MCP Server" description="在左侧浏览资源；在 Agent 设置的 Skills 中分配资源。" /></Page>;
+  if (!resource_id) return <Page><EmptyState title={props.navigation.route.resource_kind === "mcp" ? "选择一个 MCP Server" : "选择一个 Skill"} description={props.navigation.route.resource_kind === "mcp" ? "从左侧列表选择，查看连接状态和工具。" : "从左侧列表选择，阅读技能说明。"} /></Page>;
   if (props.navigation.route.resource_kind === "mcp") return <Mcp_resource_detail key={resource_id} {...props} server_id={resource_id} />;
   return <Skill_resource_detail key={resource_id} {...props} route_id={resource_id} />;
 }
@@ -92,11 +116,11 @@ function Skill_resource_detail({ power, ui, route_id }: SkillResourceDetailProps
   return <Page>
     <Toolbar title={item?.name ?? "Skill"} description={item?.description} />
     {error ? <Callout tone="danger">{error}</Callout> : null}
-    {item ? <Group>
+    {loading ? <LoadingState label="正在读取 Skill…" /> : !item ? <EmptyState title="Skill 已不存在" /> : <Section surface={false}>{content ? <Markdown text={content} /> : !error ? <EmptyState title="Skill 内容为空" size="compact" /> : null}</Section>}
+    {item ? <Group label="详细信息" collapsible default_expanded={false}>
       <Row label="来源" description={`${item.source_label} · ${item.source_path}`} />
       <Row label="使用此 Skill 的 Agent" description={users.map((agent) => agent.name).join("、") || "尚未分配"} />
     </Group> : null}
-    {loading ? <LoadingState label="正在读取 Skill…" /> : !item ? <EmptyState title="Skill 已不存在" /> : <Section title="SKILL.md">{content ? <Markdown text={content} /> : !error ? <EmptyState title="Skill 内容为空" size="compact" /> : null}</Section>}
   </Page>;
 }
 

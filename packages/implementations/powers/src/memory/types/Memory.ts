@@ -434,6 +434,8 @@ export interface MemoryProvider extends import_memory_commit_provider {
 export interface MemoryPowerOptions {
   /** 记忆或 Profile 正文实际提交后的业务回调；不包含 Action 或 UI 概念。 */
   readonly on_changed?: import("./MemoryChange.js").MemoryChangeHandler;
+  /** 可信可重放业务事实接线；自动开关单独按 Agent/Workspace/target 持久化，默认关闭。 */
+  dreaming?: import("./MemoryDream.js").MemoryDreamOptions;
   /** 专用 Memory Session 的模型；省略时首次创建使用所属 Agent 默认模型。 */
   model_id?: string;
   /** 当前启用的 Memory Provider。 */

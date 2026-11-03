@@ -5,6 +5,7 @@
  * 串行提交；真正执行继续委托 City 的 Agent/Workspace 动态范围。
  */
 import { randomUUID } from "node:crypto";
+import { capture_task_fact } from "../runtime/TaskFacts.js";
 import { validate_task_schedule } from "../application/TaskScheduleValidation.js";
 import { getTaskPath } from "../runtime/Paths.js";
 import { z } from "zod";
@@ -352,6 +353,14 @@ export function register_task_workspace_actions(
             });
           }
           break;
+        }
+      }
+      // 只有明确验收或填写反馈的修订才发布事实，执行成功与 complete 均不产生验收事实。
+      if (item && (value.command === "accept" || (value.command === "revise" && value.feedback))) {
+        const fact = await capture_task_fact(storage, task, item,
+          value.command === "accept" ? "task_accepted" : "user_correction", value.feedback);
+        if (fact && !(state.facts ?? []).some((entry) => entry.event_id === fact.event_id)) {
+          state.facts = [...(state.facts ?? []), fact];
         }
       }
       task.workflow = state;

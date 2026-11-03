@@ -8,6 +8,8 @@
  */
 
 import { isDeepStrictEqual } from "node:util";
+import type { AgentInteraction } from "@/types/agent/AgentInteractions.js";
+import { collect_pending_interactions, project_agent_interaction, read_file_pending_interactions } from "./SessionInteractionReader.js";
 import type { SessionReadView } from "@/types/store/SessionReadView.js";
 import { create_session_read_view, read_file_session_history } from "./SessionHistoryReader.js";
 import { normalize_session_id } from "@/session/SessionIdentity.js";
@@ -28,6 +30,7 @@ import {
   get_agent_archived_session_path,
   get_agent_archived_sessions_path,
   get_agent_session_database_path,
+  get_agent_session_categories_path,
   get_agent_session_path,
 } from "@/session/storage/LocalStorePaths.js";
 import {
@@ -210,6 +213,39 @@ export class LocalSessionStore implements SessionStore {
       throw new Error("session_target_forbidden: Session is unavailable to this Agent");
     }
     return read_file_session_history(database_path, this.agent_id, resolved_id, resolved_category, archived);
+  }
+
+  /**
+   * 查询全部活动来源；遍历分类及 Session 目录，只读取非终态 Agent Message。
+   * 读取不迁移旧数据、不初始化 Session，也不登记另一份 pending 事实。
+   */
+  async list_pending_interactions(): Promise<AgentInteraction[]> {
+    const result: AgentInteraction[] = [];
+    if (this.database_location.type === "memory") {
+      for (const storage of this.sessions.values()) {
+        const interactions = collect_pending_interactions(await storage.list_recoverable_agent_messages());
+        result.push(...interactions.map((interaction) => project_agent_interaction(
+          storage.session_id, storage.origin.category, interaction,
+        )));
+      }
+      return result;
+    }
+    const root = get_agent_session_categories_path(this.storage_root_path);
+    if (!(await this.files.path_exists(root))) return result;
+    for (const partition of await this.files.read_directory(root)) {
+      if (!partition.is_directory) continue;
+      const category = decode_session_id(partition.name);
+      const partition_path = `${root}/${partition.name}`;
+      for (const entry of await this.files.read_directory(partition_path)) {
+        if (!entry.is_directory) continue;
+        const session_id = decode_session_id(entry.name);
+        const database_path = get_agent_session_database_path(this.storage_root_path, category, session_id);
+        if (!(await this.files.path_exists(database_path))) continue;
+        const interactions = read_file_pending_interactions(database_path, this.agent_id, session_id, category);
+        result.push(...interactions.map((interaction) => project_agent_interaction(session_id, category, interaction)));
+      }
+    }
+    return result;
   }
 
   /** 判断活动 Session 是否存在。 */

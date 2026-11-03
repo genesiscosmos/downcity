@@ -2,7 +2,7 @@
  * AgentHTTP：把本地 Agent 暴露为最小 SDK HTTP 面的对外类。
  *
  * 关键点（中文）
- * - 仅承载 RemoteAgent 对应的 SDK transport（`/api/sdk/sessions/*`）。
+ * - 承载 RemoteAgent 对应的 Session 与主体 interactions SDK transport。
  * - `router()` 返回一个 `Hono` 子路由，调用方 `app.route("/", agent_http.router())` 即可挂载。
  * - `server()` 返回一个独立 HTTP server 句柄，按需自启、自停。
  * - 同一个实例多次取 router/server 都返回缓存对象，避免重复注册。
@@ -15,6 +15,7 @@ import type { WorkspaceRuntime } from "@/workspace/index.js";
 import type { AgentPowerRuntime } from "@/power/types/PowerExecutionRuntime.js";
 import { register_sdk_session_routes } from "@/city/transport/http/routes/SessionRoutes.js";
 import { register_runtime_routes } from "@/city/transport/http/routes/RuntimeRoutes.js";
+import { register_sdk_interaction_routes } from "@/city/transport/http/routes/InteractionsRoutes.js";
 import { create_node_http_server } from "@/city/transport/http/NodeHttpAdapter.js";
 import { SerializedTransport } from "@/city/transport/SerializedTransport.js";
 import type {
@@ -86,6 +87,7 @@ export class AgentHTTP {
     register_sdk_session_routes(router, this.session_collection, this.workspace, {
       resolve_session_model: this.runtime_options.resolve_session_model,
     });
+    register_sdk_interaction_routes(router, this.agent);
     if (this.powers) register_runtime_routes(router, this.powers);
     this.cached_router = router;
     return router;

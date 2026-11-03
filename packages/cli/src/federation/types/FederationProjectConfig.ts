@@ -53,6 +53,16 @@ export interface FederationProjectQueueResourceConfig {
   binding: string;
   /** Cloudflare Queue 名称。 */
   name: string;
+  /**
+   * 消息耗尽重试次数后转入的现有死信 Queue 名称，必须为非空字符串。
+   * CLI 仅传给 Wrangler consumer，不自动创建该队列；省略时不配置死信队列。
+   */
+  dead_letter_queue?: string;
+  /**
+   * 每条消息首次消费失败后的最大重试次数，取 0–100 的整数；0 表示不重试。
+   * 省略时使用 Cloudflare 默认值；耗尽后按 consumer 的死信队列配置处理。
+   */
+  max_retries?: number;
 }
 
 /** Cloudflare R2 默认存储资源。 */

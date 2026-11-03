@@ -29,11 +29,17 @@ const DEFAULT_RPC_PORT = 15314;
  *
  * 关键点（中文）
  * - 会话列表天然属于 Agent，而不是某一个 Workspace。
- * - 仅放开只读列表，创建、恢复与写入仍然必须携带 workspace_id。
+ * - 交互集合定位的是原Session，不切换目录；其查询和受信响应均为Agent级。
+ * - 普通Session创建和写入仍按既有Workspace规则。
  */
 const AGENT_SCOPED_READ_METHODS: ReadonlySet<string> = new Set([
   "sdk.sessions.list",
   "sdk.sessions.archived.list",
+  "sdk.interactions.list",
+  "sdk.interactions.subscribe",
+  "sdk.interactions.unsubscribe",
+  "sdk.interactions.respond",
+  "sdk.interactions.submit_private",
 ]);
 
 /** 在单一 RPC 端口暴露 City 的多 Agent transport。 */
@@ -97,7 +103,7 @@ export class CityRPC {
             }
             const agent = this.runtime_access.get_agent(agent_id);
             if (!agent) throw new Error(`Agent not found: ${agent_id}`);
-            return { sessions: agent.sessions };
+            return { sessions: agent.sessions, agent };
           }
           const workspace = await this.runtime_access.enter_workspace(agent_id, workspace_id);
           const agent = this.runtime_access.get_agent(agent_id);
@@ -107,6 +113,7 @@ export class CityRPC {
           const resolve_session_model = this.runtime_options.resolve_session_model;
           const reload_workspace_env = this.runtime_options.reload_workspace_env;
           return {
+            agent,
             sessions,
             workspace,
             get_agent_context: () => ({

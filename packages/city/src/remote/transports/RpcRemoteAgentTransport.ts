@@ -6,6 +6,8 @@
  * - 长连接生命周期由 RpcClient 管理。
  */
 
+import type { AgentInteraction, AgentListInteractionsInput, AgentRespondInteractionInput } from "@downcity/agent";
+import type { RemoteInteractionSubscriptionInput } from "@/types/remote/RemoteAgentInteractions.js";
 import type {
   AgentCreateSessionInput,
   AgentListSessionsInput,
@@ -165,6 +167,26 @@ export class RpcRemoteAgentTransport implements RemoteAgentTransport {
       action_name: input.action,
       ...(input.payload !== undefined ? { payload: input.payload } : {}),
     });
+  }
+
+  /** 当前 RPC 连接绑定 Agent 的待处理交互列表。 */
+  async list_interactions(input?: AgentListInteractionsInput): Promise<AgentInteraction[]> {
+    return await this.client.list_interactions(input);
+  }
+
+  /** 独立于 Session mutation 的主体交互事件。 */
+  async subscribe_interactions(input: RemoteInteractionSubscriptionInput): Promise<TransportSubscription> {
+    return await this.client.subscribe_interactions(input);
+  }
+
+  /** 普通响应回到原 Session。 */
+  async respond_interaction(input: AgentRespondInteractionInput): Promise<SessionInteractionResult> {
+    return await this.client.respond_interaction(input);
+  }
+
+  /** 受信原 Session 的私密输入专用协议。 */
+  async submit_private_interaction(input: AgentRespondInteractionInput): Promise<SessionInteractionResult> {
+    return await this.client.submit_private_interaction(input);
   }
 
   async interactions(session_id: string, category: string): Promise<SessionInteractionRequest[]> {

@@ -40,6 +40,9 @@ export interface AgentManagedSession extends AgentSession {
    */
   is_executing(): boolean;
 
+  /** 只读检查原 Turn 的交互运行 waiter 是否仍存在，不恢复执行器。 */
+  can_respond_interaction(interaction_id: string, turn_id: string): boolean;
+
   /** 同步封闭新输入并校验无占用，归档期间不得再次 prompt。 */
   begin_archive(): void;
   /** 归档失败时恢复输入，成功时保持实例不可执行。 */

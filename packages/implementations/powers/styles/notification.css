@@ -1,0 +1,81 @@
+/** Inbox专用布局皮肤：复用宿主语义令牌，Chat表单仅在Inbox范围内调整密度。 */
+.inbox-section-label { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.inbox-section-label > span:last-child { font-variant-numeric: tabular-nums; }
+.inbox-row-meta { display: flex; align-items: center; gap: 8px; min-width: 0; width: 100%; }
+.inbox-row-meta > span { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.inbox-row-meta > time { flex-shrink: 0; }
+.inbox-row-icon { color: var(--muted-foreground); }
+.inbox-row-icon svg { width: 14px; height: 14px; }
+.inbox-row-state { color: var(--muted-foreground); font-size: var(--text-3xs, 11px); }
+.inbox-icon-button { display: inline-flex; padding: 5px; border-radius: var(--radius-control, 6px); color: var(--muted-foreground); cursor: pointer; }
+.inbox-icon-button svg { width: 14px; height: 14px; }
+.inbox-icon-button:hover { background: var(--interaction-hover); }
+.inbox-unread-dot { flex: 0 0 5px; width: 5px; height: 5px; margin-top: 6px; background: var(--foreground); opacity: .65; border-radius: 50%; }
+.inbox-detail-shell { width: 100%; min-width: 0; height: 100%; overflow-y: auto; color: var(--foreground); }
+.inbox-detail { width: min(100%, 740px); margin-inline: auto; padding: 28px clamp(20px, 4vw, 40px) 40px; }
+.inbox-detail-header { display: grid; gap: 10px; padding-bottom: 22px; }
+.inbox-eyebrow { display: flex; align-items: center; gap: 7px; font-size: var(--text-2xs, 12px); color: var(--muted-foreground); }
+.inbox-eyebrow > svg { width: 15px; height: 15px; }
+.inbox-detail h1 { margin: 0; font-size: var(--text-lg, 18px); font-weight: 550; line-height: 1.5; letter-spacing: -.015em; overflow-wrap: anywhere; }
+.inbox-detail-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; font-size: var(--text-2xs, 12px); color: var(--muted-foreground); }
+.inbox-source { color: var(--foreground); }
+.inbox-source-link { margin-left: auto; color: var(--muted-foreground); white-space: nowrap; cursor: pointer; }
+.inbox-source-link:hover { color: var(--foreground); }
+.inbox-source-link:disabled { cursor: progress; opacity: .5; }
+.inbox-form { padding-block: 8px 12px; }
+.inbox-form .interaction-card { gap: 16px; font-size: var(--text-xs, 13px); }
+.inbox-form .question-prompt { font-size: var(--text-sm, 14px); line-height: 1.65; font-weight: 500; }
+.inbox-form[data-question-is-title="true"] .question-prompt, .inbox-form .approval-interaction .interaction-card-title { display: none; }
+.inbox-form[data-question-is-title="true"] .question-interaction > .interaction-card-header:not(:has(nav)) { display: none; }
+.inbox-form .approval-card-message { margin: 0; font-size: var(--text-xs, 13px); line-height: 1.75; }
+.inbox-form .question-options { gap: 6px; }
+.inbox-form .question-option { padding: 11px 12px; gap: 9px; }
+.inbox-form .question-option-label { font-size: var(--text-xs, 13px); }
+.inbox-form .question-option-description { padding-top: 3px; line-height: 1.6; }
+.inbox-form .question-text-input, .inbox-form .interaction-note-input { min-height: 112px; padding: 12px; }
+.inbox-form .interaction-card-actions { justify-content: flex-start; align-items: center; gap: 14px; }
+.inbox-form .interaction-card-actions > .interaction-note { flex: 0 1 auto; order: 2; }
+.inbox-form .interaction-card-actions > .interaction-action { order: 1; }
+.inbox-form .interaction-card-actions:has(.interaction-note[open]) { flex-wrap: wrap; }
+.inbox-form .interaction-card-actions > .interaction-note[open] { flex-basis: 100%; }
+.inbox-form .interaction-card-actions > label { flex: 1 1 100%; order: 0; }
+.inbox-form .interaction-card-actions:has(> label) { flex-wrap: wrap; }
+.inbox-form .interaction-navigation { flex-wrap: wrap; gap: 8px; }
+.inbox-form footer.interaction-navigation { padding-top: 4px; }
+.inbox-form .interaction-action { height: 32px; padding-inline: 14px; border-radius: var(--radius-control, 6px); }
+.inbox-form .interaction-command { padding: 12px 14px; background: var(--surface-subtle); border-radius: var(--radius-control, 6px); }
+.inbox-form .interaction-command > summary { color: var(--foreground); }
+.inbox-form .interaction-command > summary::after { content: "展开完整内容"; display: block; margin-top: 7px; font-family: var(--font-sans); color: var(--muted-foreground); font-size: var(--text-3xs, 11px); }
+.inbox-form .interaction-command[open] > summary::after { content: "收起"; }
+.inbox-form .interaction-command pre { max-height: min(45vh, 360px); line-height: 1.7; }
+.inbox-result { font-size: var(--text-xs, 13px); line-height: 1.8; padding-top: 20px; border-top: 1px solid var(--border-subtle, var(--border)); overflow-wrap: anywhere; }
+.inbox-detail-note { color: var(--muted-foreground); font-size: var(--text-xs, 13px); line-height: 1.7; }
+.inbox-origin { margin-top: 20px; padding-top: 8px; font-size: var(--text-2xs, 12px); color: var(--muted-foreground); }
+.inbox-origin summary { cursor: pointer; width: fit-content; }
+.inbox-origin dl { display: grid; grid-template-columns: 60px minmax(0, 1fr); gap: 8px 12px; margin-top: 14px; }
+.inbox-origin dd { margin: 0; overflow-wrap: anywhere; font-family: var(--font-mono); font-size: var(--text-3xs, 11px); }
+.inbox-resolution { display: flex; gap: 12px; align-items: flex-start; padding-block: 24px; border-top: 1px solid var(--border-subtle, var(--border)); }
+.inbox-resolution > svg { width: 20px; height: 20px; flex-shrink: 0; color: var(--muted-foreground); }
+.inbox-resolution h2 { margin: 0 0 5px; font-size: var(--text-sm, 14px); font-weight: 500; }
+.inbox-resolution p { margin: 0 0 16px; color: var(--muted-foreground); font-size: var(--text-xs, 13px); line-height: 1.7; }
+.inbox-connection { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px; padding: 9px 20px; background: var(--surface-subtle); color: var(--muted-foreground); font-size: var(--text-2xs, 12px); }
+.inbox-connection button, .inbox-inline-error button { text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
+.inbox-inline-error { color: var(--destructive); font-size: var(--text-2xs, 12px); line-height: 1.6; padding-bottom: 12px; }
+.inbox-inline-error button { margin-left: 8px; }
+.inbox-empty { min-height: 65%; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; padding: 40px 24px; text-align: center; }
+.inbox-empty > svg { width: 30px; height: 30px; color: var(--muted-foreground); opacity: .6; margin-bottom: 5px; }
+.inbox-empty h2 { margin: 0; font-size: var(--text-sm, 14px); font-weight: 500; }
+.inbox-empty p { margin: 0; max-width: 310px; font-size: var(--text-2xs, 12px); line-height: 1.7; color: var(--muted-foreground); }
+.inbox-queue-finished { display: flex; align-items: center; justify-content: center; gap: 7px; padding: 0 20px 24px; color: var(--muted-foreground); font-size: var(--text-2xs, 12px); }
+.inbox-queue-finished svg { width: 14px; height: 14px; }
+.inbox-detail-skeleton i { display: block; height: 10px; border-radius: 3px; background: var(--surface-emphasis, var(--interaction-hover)); }
+.inbox-detail-skeleton { margin: 46px auto; padding-inline: 36px; width: min(100%, 640px); display: grid; gap: 18px; }
+.inbox-detail-skeleton i:first-child { width: 62%; height: 20px; }
+.inbox-detail-skeleton i:nth-child(2) { width: 40%; height: 8px; }
+.inbox-detail-skeleton i:last-child { margin-top: 32px; height: 86px; }
+.inbox-detail-shell :is(button, summary):focus-visible, .inbox-icon-button:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
+@media (max-width: 700px) {
+  .inbox-detail { padding: 24px 20px 36px; }
+  .inbox-source-link { margin-left: 0; flex-basis: 100%; text-align: left; padding-top: 4px; }
+  .inbox-form .interaction-navigation { gap: 6px; }
+}

@@ -38,7 +38,7 @@ function encode_category(category: string): string {
 }
 
 /** 返回全部活动 Session 来源分区的根目录。 */
-function get_agent_session_categories_path(storage_root_path: string): string {
+export function get_agent_session_categories_path(storage_root_path: string): string {
   return path.join(path.resolve(storage_root_path), "sessions");
 }
 

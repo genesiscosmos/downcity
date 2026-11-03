@@ -22,6 +22,24 @@ export interface PowerNotificationInput {
   readonly route?: PowerJsonObject;
 }
 
+/** 由宿主绑定发布主体与命名空间，通知接收器不接收模型伪造身份。 */
+export interface PowerNotificationSource {
+  /** 发布通知的Power稳定标识。 */
+  power_id: string;
+  /** 可选的Agent执行范围，未绑定时表示City级业务通知。 */
+  agent_id?: string;
+}
+
+/** Notification Power登记的唯一接收器；不向模型暴露。 */
+export interface PowerNotificationReceiver {
+  /** 原主体交互集合发生变化；仅提示刷新，不复制交互状态。 */
+  interactions_changed?(): void;
+  /** 将来源通知持久化后才确认成功。 */
+  publish(source: PowerNotificationSource, input: PowerNotificationInput): Promise<void>;
+  /** 撤销来源的展示主题，不改变Interaction或业务工作状态。 */
+  dismiss(source: PowerNotificationSource, input: PowerNotificationTopicInput): Promise<void>;
+}
+
 /** Power 要清除的一项本地通知主题。 */
 export interface PowerNotificationTopicInput {
   /** Power 内稳定的聚合键。 */

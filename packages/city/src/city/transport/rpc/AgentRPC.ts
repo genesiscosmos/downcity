@@ -43,15 +43,15 @@ export class AgentRPC {
     runtime_options: AgentRpcRuntimeOptions = {},
   ) {
     if (workspace_or_options && "id" in workspace_or_options && "path" in workspace_or_options) {
-      const agent = agent_or_workspace as Agent;
+      const agent = "agent" in agent_or_workspace ? agent_or_workspace.agent : agent_or_workspace;
       this.agent = agent;
       this.workspace = workspace_or_options;
       this.powers = undefined;
       this.session_collection = agent.sessions;
       this.runtime_options = runtime_options;
     } else {
-      const entry = agent_or_workspace as { agent: Agent; workspace: WorkspaceRuntime; powers: AgentPowerRuntime };
-      const agent = entry.agent;
+      const entry = agent_or_workspace as { agent?: Agent; workspace?: WorkspaceRuntime; powers?: AgentPowerRuntime };
+      const agent = entry.agent ?? agent_or_workspace as Agent;
       this.agent = agent;
       this.workspace = entry.workspace;
       this.powers = entry.powers;
@@ -67,6 +67,7 @@ export class AgentRPC {
         const instance = await start_rpc_server({
           host,
           port,
+          agent: this.agent,
           sessions: this.session_collection,
           workspace: this.workspace,
           get_agent_context: undefined,

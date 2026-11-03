@@ -15,6 +15,7 @@ import {
   type FederationTableSchema,
 } from "@downcity/federation";
 import type { DatabaseOptions } from "./types/DatabaseOptions.js";
+import { prepared_client } from "./prepared-client.js";
 
 /** 使用 postgres-js 的 PostgreSQL Federation Database。 */
 export class Database extends CityDatabase {
@@ -29,7 +30,7 @@ export class Database extends CityDatabase {
     for (const [name, value] of Object.entries({ max_connections, idle_timeout_seconds, connect_timeout_seconds })) {
       if (!Number.isSafeInteger(value) || value <= 0) throw new TypeError(`${name} must be a positive integer`);
     }
-    const client = postgres(url, {
+    const raw_client = postgres(url, {
       max: max_connections,
       idle_timeout: idle_timeout_seconds,
       connect_timeout: connect_timeout_seconds,
@@ -37,6 +38,7 @@ export class Database extends CityDatabase {
       fetch_types: false,
       onnotice: () => {},
     });
+    const client = options.prepare_statements ? prepared_client(raw_client) : raw_client;
     const drizzle_database = drizzle(client) as unknown as DrizzleDatabase;
     super({ schema_id: "postgresql", drizzle: drizzle_database });
     this.client = client;

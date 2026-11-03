@@ -20,6 +20,7 @@
  */
 
 import type { ShipTaskDefinitionV1 } from "./Task.js";
+import type { TaskFact } from "./TaskFact.js";
 import type { TaskDefinitionIssue } from "./TaskPowerTypes.js";
 
 /** 工作的进度状态，与调度启停和单次执行结果独立。 */
@@ -94,6 +95,8 @@ export interface TaskState {
   occurrences: TaskOccurrence[];
   /** 与任务关联的处理事项，包含已处理历史。 */
   inbox: TaskInboxItem[];
+  /** 随命令状态原子发布的明确验收与纠错事实，历史定义缺省为空。 */
+  facts?: TaskFact[];
 }
 
 /** 宿主工作区的一项任务：定义本身即事实源，运行态只补充「此刻是否在跑」。 */

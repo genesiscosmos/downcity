@@ -6,6 +6,7 @@
 
 export { MemoryPower } from "./memory/MemoryPower.js";
 export type { MemoryChange, MemoryChangeHandler } from "./memory/types/MemoryChange.js";
+export type { MemoryDreamOptions, MemoryDreamScope, MemoryDreamView, MemorySignalInput } from "./memory/types/MemoryDream.js";
 export { BuiltinMemoryProvider } from "./memory/providers/BuiltinMemoryProvider.js";
 export {
   FileMemoryStorageAdapter,

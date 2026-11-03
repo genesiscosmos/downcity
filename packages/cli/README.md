@@ -23,7 +23,7 @@ fed
 
 `fed create` 和 `fed deploy` 的 `--path` 默认是 `.`；指定其他目录时使用 `--path <path>`，不接受位置路径参数，例如 `fed deploy --path ./my-fed`。
 
-Fed 没有全局 active/default Federation，也不保存 `active_server_url`。`stop`、`restart`、`clean`、`status`、`logs`、`query`、`web`、`server`、`manage` 与 `server manage` 使用互斥的 `--id <id>` 或 `--name <name>`，ID 和名称均精确匹配。省略选择参数时，TTY 显示列表，选择只用于本次操作；非交互环境缺少参数时报错。名称重名时，TTY 继续选择，非 TTY 报错。列表没有表示全局当前连接的星标。`fed manage --id fed_x` 直接进入目标管理工作区，不接受 action 位置参数；`fed server manage --id fed_x` 也支持同样的选择规则。
+Fed 没有全局 active/default Federation，也不保存 `active_server_url`。`stop`、`restart`、`clean`、`backup`、`restore`、`status`、`logs`、`query`、`web`、`server`、`manage` 与 `server manage` 使用互斥的 `--id <id>` 或 `--name <name>`，ID 和名称均精确匹配。省略选择参数时，TTY 显示列表，选择只用于本次操作；非交互环境缺少参数时报错。名称重名时，TTY 继续选择，非 TTY 报错。列表没有表示全局当前连接的星标。`fed manage --id fed_x` 直接进入目标管理工作区，不接受 action 位置参数；`fed server manage --id fed_x` 也支持同样的选择规则。
 
 ```bash
 fed status --id fed_x
@@ -41,6 +41,23 @@ fed web --id fed_x --no-open
 `status` 可查询任意已保存连接，分别展示 registry record、系统 manager 事实与 `/health` 实时探测；本地实例另展示发布历史。登记状态、保存的策略和发布结果都不证明服务已停止或某个 release 正在运行。本地 release 只有在 manager 核对实例身份，且健康响应为 `ok: true`、`fed_id`、`release_id`、`instance_id` 全部匹配时才显示 ready；HTTP 200 本身不足以确认身份。manager 检查异常显示 `unknown`，需要人工检查系统服务与健康端点。
 
 `logs`、`stop` 和 `restart` 仅支持 CLI 管理的 local 实例。`logs` 显示当前 `service.log` 末尾最多 200 行，不跨文件补足；归档可人工读取。`stop` 禁用自动启动并停止服务，停止状态跨系统重启保留，直到用户显式执行 `fed deploy` 或符合恢复保护要求的 `fed restart`；这些操作按持久配置恢复自动启动策略。`restart` 只运行已安装 release，读取持久运行配置，不读取源码或重新构建；原项目目录删除后仍可重启。重启还要求 `current.json` 与 registry 的 release 一致。切换前的 build/package/preflight 失败保留旧实例及运行配置；没有待恢复切换时，允许 restart 原成功 release。进入切换后设置 `recovery_required = true`；切换失败或中断时阻断 restart，恢复必须显式执行 `fed deploy` 并成功。此保护持续到发布成功，后续 build/preflight 失败也不会清除。历史 `last_failure` 本身不构成阻断。管理界面的 Remove connection 只移除连接，不停止服务。
+
+## 本地 SQLite 备份与恢复
+
+```bash
+fed backup --id fed_x
+fed stop --id fed_x
+fed restore --id fed_x --path /absolute/path/to/backup_id --dry-run
+fed restore --id fed_x --path /absolute/path/to/backup_id
+# 非交互环境明确授权替换
+fed restore --name my-fed --path /absolute/path/to/backup_id --yes
+```
+
+仅支持已登记独立 release 的本地 SQLite 数据库，路径来自持久运行配置的绝对 `DATABASE_PATH`。在线备份使用 SQLite backup API，包含 WAL，完成后校验完整性、大小和 SHA-256；备份目录位于 `~/.downcity/federation/backups/<fed_id>/<backup_id>/`，包含 `database.sqlite` 和完成标记 `backup.json`，权限分别为目录 `0700`、文件 `0600`。
+
+恢复必须先显式 `fed stop`，并核对系统服务已停止、无法自动恢复及自启关联已关闭。先为当前数据库创建安全备份，再预览确认；取消不替换数据库，`--dry-run` 不生成安全备份或改库。确认后再次校验输入和当前库变化，在同目录准备文件、收敛 WAL，再原子替换；服务保持停止，不切换 release、运行配置或 City 连接。同 Fed 锁排除并发部署与启停，不控制绕过 Fed 的外部数据库连接。
+
+备份可能包含用户信息、会话和凭据，不能提交 Git 或打入 release；摘要不等于加密或签名。恢复不保证 schema 跨版本兼容，也不自动回滚或迁移应用，恢复后管理员 Session 与 User Token 可能需重新登录。备份不自动定时或清理，`fed clean` 不删除它们。完整边界见 [SQLite 备份与恢复](https://downcity.ai/zh/city-sdk-docs/packages/cli/backup-and-restore)。
 
 本地受管日志使用固定默认值，无需新增配置：
 
@@ -106,7 +123,7 @@ restart_on_failure = true
 
 系统服务定义只引用启动入口及运行配置路径，不包含 secret；运行配置独立保存于上述 `runtime.env.json`。部署目标为 `local` 或 `cloudflare-workers`；远程主机需在目标机器运行本地部署命令。
 
-本地部署未设置 `deployment.port` 时固定使用默认端口 `12314`；在 `federation.toml` 的 `[deployment]` 中显式设置 `port` 可覆盖默认值。选定端口被占用时部署直接报错，不扫描其他端口，也不从部署历史推断端口。
+本地部署未设置 `deployment.port` 时固定使用默认端口 `12314`；在 `federation.toml` 的 `[deployment]` 中显式设置 `port` 可覆盖默认值。选定端口被占用时，交互终端会展示占用进程的 PID、启动时间、命令和工作目录，并标明是否属于当前项目，询问是否停止后继续部署（默认否）。确认后 CLI 重新核对进程身份，发送 `SIGTERM` 并最多等待 5 秒释放端口，不自动强制终止。非交互终端、无法核实进程身份或端口未释放时部署失败；`--yes` 不跳过停止进程的确认。进程检查需要系统提供 `lsof` 和 `ps`。CLI 不扫描其他端口，也不从部署历史推断端口。
 
 `fed create` 默认生成 Local Node.js + SQLite 项目。首次 `fed deploy` 或 `fed deploy --admin-reset` 会交互式要求输入管理员 ID、密码和确认密码；密码至少 12 个字符，CLI 只在内存中使用明文并将摘要写入数据库。遗失密码时，只有拥有目标基础设施部署权限的人可以运行 `fed deploy --admin-reset`，非交互环境还必须显式传入 `--yes`（该参数只确认重置，不跳过凭证输入）。重置会撤销全部现有管理员 Session。CLI 通过本地 SQLite 事务或 Wrangler 远程 D1 权限直接完成管理员恢复，不要求 Worker 读取恢复环境变量；普通 deploy 永远不会修改管理员。部署期间会持续显示当前构建、资源准备、Worker 发布、健康检查与管理员验证阶段。无参数执行 `fed` 会进入系统级 Federation 管理面板，已部署实例不依赖当前工作目录。
 

@@ -3,7 +3,8 @@
  * 复用 canonical 消息解码与分页语义，不初始化 Session、不迁移 schema、不恢复执行。
  */
 import { DatabaseSync } from "node:sqlite";
-import type { SessionMessage } from "@downcity/type";
+import type { SessionAgentMessage, SessionMessage } from "@downcity/type";
+import { collect_pending_interactions } from "./SessionInteractionReader.js";
 import type { SessionHistoryMeta } from "@/types/store/SessionHistoryMeta.js";
 import type { SessionReadView } from "@/types/store/SessionReadView.js";
 import type { SessionStorage } from "@/types/store/SessionStorage.js";
@@ -14,7 +15,7 @@ import { decode_session_message, type SessionMessageRow, type SessionMessagePart
 export function create_session_read_view(
   metadata: SessionHistoryMeta,
   archived: boolean,
-  source: Pick<SessionStorage, "list_message_page" | "message_count" | "list_messages">,
+  source: Pick<SessionStorage, "list_message_page" | "message_count" | "list_recoverable_agent_messages">,
 ): SessionReadView {
   return {
     metadata: structuredClone(metadata),
@@ -37,10 +38,8 @@ export function create_session_read_view(
         ...(has_more && start_sequence !== undefined ? { next_before_sequence: start_sequence } : {}),
       };
     },
-    interactions: async () => (await source.list_messages()).flatMap((message) => message.role === "agent"
-      ? message.parts.flatMap((part) => part.type === "tool"
-        ? (part.interactions ?? []).filter((entry) => entry.status === "pending").map((entry) => structuredClone(entry.request))
-        : []) : []),
+    interactions: async () => collect_pending_interactions(await source.list_recoverable_agent_messages())
+      .map((entry) => structuredClone(entry.request)),
   };
 }
 
@@ -78,8 +77,10 @@ export function read_file_session_history(
     message_count: async () => with_database((database) => Number(
       database.prepare("SELECT COUNT(*) AS count FROM messages").get()?.count ?? 0,
     )),
-    list_messages: async () => with_database((database) => read_aggregates(database, session_id,
-      database.prepare("SELECT * FROM messages ORDER BY sequence ASC").all() as unknown as SessionMessageRow[])),
+    list_recoverable_agent_messages: async () => with_database((database) => read_aggregates(database, session_id,
+      database.prepare("SELECT * FROM messages WHERE role = 'agent' AND state = 'streaming' ORDER BY sequence ASC")
+        .all() as unknown as SessionMessageRow[])
+      .filter((message): message is SessionAgentMessage => message.role === "agent")),
   });
 }
 

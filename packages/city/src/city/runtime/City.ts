@@ -364,6 +364,7 @@ export class City implements CityRuntime {
     const agent = this.agents_by_id.get(agent_id) ?? null;
     if (!agent) return null;
     this.agents_by_id.delete(agent_id);
+    this.power_runtime.detach_agent_notifications(agent);
     const errors: unknown[] = [];
     try {
       await this.http_transport.detach_agent(agent_id);

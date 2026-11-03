@@ -26,7 +26,7 @@ const STATUS_LABELS: Record<MemoryJobView["status"], string> = {
   succeeded: "已提交", skipped: "无需变更", failed: "失败",
 };
 const KIND_LABELS: Record<MemoryJobView["kind"], string> = {
-  digest: "会话提炼", revise: "记忆修订", profile_optimize: "核心记忆整理",
+  digest: "会话提炼", revise: "记忆修订", profile_optimize: "核心记忆整理", dream: "后台整理",
 };
 
 /** 仅活跃记录参与轮询；卸载、切换页码和刷新时忽略此前请求结果。 */
@@ -131,7 +131,7 @@ export function MemoryJobs({ power, navigation, ui, agent_id, workspace_id }: Me
         {detail.job.detail ? <Row label="说明" description={detail.job.detail} /> : null}
         {detail.job.status === "succeeded" && detail.job.memory_ids?.length ? <Row label="提交结果" description={detail.job.memory_ids.join("、")} /> : null}
         <MemoryJobChanges key={`${detail.job.job_id}:${detail.job.session_id ?? ""}`} detail={detail} ui={ui} />
-        {detail.job.status === "failed" ? <Row label="重新处理" trailing={<Button disabled={busy} on_click={() => void retry(detail.job.job_id)}>{busy ? "提交中…" : "重试"}</Button>} /> : null}
+        {detail.job.status === "failed" && detail.job.kind !== "dream" ? <Row label="重新处理" trailing={<Button disabled={busy} on_click={() => void retry(detail.job.job_id)}>{busy ? "提交中…" : "重试"}</Button>} /> : null}
       </Group>}
     </Section> : null}
   </Page>;

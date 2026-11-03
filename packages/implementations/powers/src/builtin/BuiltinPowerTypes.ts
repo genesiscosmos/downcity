@@ -13,6 +13,8 @@ import { SkillPower } from "@/skill.js";
 import { TaskPower, type TaskAnalyzer } from "@/task.js";
 import { WebPower } from "@/web.js";
 import { PresentationPower } from "@/presentation/Power.js";
+import { NotificationPower } from "@/notification.js";
+import { memory_task_signal } from "@/memory/application/MemoryTaskFacts.js";
 
 /** 官方 Power definition 与 @downcity/city/power 的统一注册协议一致。 */
 export type BuiltinPowerDefinition = CityPowerRegistration;
@@ -30,8 +32,19 @@ export function create_builtin_power_registrations(input: {
   on_memory_changed?: MemoryChangeHandler;
   /** Task 定义或执行状态变化的应用回调，覆盖后台提交。 */
   on_task_changed?: () => void | Promise<void>;
+  /** Inbox更新或原交互变化后，宿主刷新展示与角标。 */
+  on_notification_changed?: () => void | Promise<void>;
 }): BuiltinPowerRegistration[] {
+  // Task 持有可靠事实，Memory 低频重放；组合根只接线，不承载做梦业务。
+  const task_power = new TaskPower({ analyze_task: input.analyze_task, on_changed: input.on_task_changed });
   return [
+    {
+      readme: builtin_readme_path("notification"),
+      has_config: false,
+      has_sidebar: true,
+      has_mainview: true,
+      power: new NotificationPower({ on_changed: input.on_notification_changed }),
+    },
     {
       readme: builtin_readme_path("presentation"),
       has_config: false,
@@ -51,7 +64,7 @@ export function create_builtin_power_registrations(input: {
       has_config: false,
       has_sidebar: false,
       has_mainview: false,
-      power: new TaskPower({ analyze_task: input.analyze_task, on_changed: input.on_task_changed }),
+      power: task_power,
     },
     {
       readme: builtin_readme_path("messenger"),
@@ -65,7 +78,9 @@ export function create_builtin_power_registrations(input: {
       has_config: false,
       has_sidebar: true,
       has_mainview: true,
-      power: new MemoryPower({ platform_root_path: input.platform_root_path, on_changed: input.on_memory_changed }),
+      power: new MemoryPower({ platform_root_path: input.platform_root_path, on_changed: input.on_memory_changed,
+        dreaming: { read_signals: async () => (await task_power.read_facts()).map(memory_task_signal) },
+      }),
     },
     {
       readme: builtin_readme_path("web"),

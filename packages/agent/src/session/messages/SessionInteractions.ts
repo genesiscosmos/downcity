@@ -45,7 +45,12 @@ export class SessionInteractions implements SessionInteractionPort, SessionInter
   /** 提交与取消共用队列，防止两个响应同时改变同一 pending 交互。 */
   private mutation_chain: Promise<unknown> = Promise.resolve();
   /** 受信提交完成后的安全回执，允许网络重试但不再读取已提交明文。 */
-  private readonly private_receipts = new Map<string, SessionInteractionResult>();
+  private readonly private_receipts = new Map<string, {
+    /** 已提交私密响应所属的原 Turn 标识。 */
+    turn_id: string;
+    /** 不含私密明文的幂等回执。 */
+    result: SessionInteractionResult;
+  }>();
 
   constructor(options: {
     /** 当前 Interaction 运行时所属 Session 标识。 */
@@ -124,12 +129,19 @@ export class SessionInteractions implements SessionInteractionPort, SessionInter
     return this.messages.list_pending_interactions().map((interaction) => interaction.request);
   }
 
+  /** 仅检查原运行 waiter 与 canonical pending 状态，读取不会恢复执行。 */
+  can_respond(interaction_id: string, turn_id: string): boolean {
+    const pending = this.pending_by_id.get(interaction_id);
+    return pending?.request.turn_id === turn_id
+      && this.messages.list_pending_interactions().some((interaction) => interaction.interaction_id === interaction_id);
+  }
+
   /** 保存用户响应，并在提交成功后恢复原执行。 */
   async respond(
     input: RespondSessionInteractionInput,
   ): Promise<SessionInteractionResult> {
     return this.serialize(async () => {
-      const pending = this.require_pending(input.interaction_id);
+      const pending = this.require_pending(input.interaction_id, input.expected_turn_id);
       this.validate_response(pending.request, input.response);
       if (interaction_questions(pending.request).some((question) => question.type === "secret")) {
         throw new Error("Private questions require the private submission endpoint");
@@ -142,8 +154,13 @@ export class SessionInteractions implements SessionInteractionPort, SessionInter
   async submit_private_question(input: RespondSessionInteractionInput): Promise<SessionInteractionResult> {
     return this.serialize(async () => {
       const previous = this.private_receipts.get(input.interaction_id);
-      if (previous) return structuredClone(previous);
-      const pending = this.require_pending(input.interaction_id);
+      if (previous) {
+        if (input.expected_turn_id !== undefined && previous.turn_id !== input.expected_turn_id) {
+          throw new Error("Session Interaction turn reference mismatch");
+        }
+        return structuredClone(previous.result);
+      }
+      const pending = this.require_pending(input.interaction_id, input.expected_turn_id);
       this.validate_response(pending.request, input.response);
       const prepared = prepare_private_question_response(pending.request, input.response);
       const staged = this.secrets.with_values(prepared.secrets);
@@ -161,7 +178,10 @@ export class SessionInteractions implements SessionInteractionPort, SessionInter
       await this.messages.resolve_interaction(input.interaction_id, response);
       this.secrets = staged;
       const result: SessionInteractionResult = { status: "resolved", interaction_id: input.interaction_id, response };
-      this.private_receipts.set(input.interaction_id, structuredClone(result));
+      this.private_receipts.set(input.interaction_id, {
+        turn_id: pending.request.turn_id,
+        result: structuredClone(result),
+      });
       this.finish_pending(input.interaction_id, result);
       return result;
     });
@@ -271,9 +291,15 @@ export class SessionInteractions implements SessionInteractionPort, SessionInter
   /** 读取当前 pending Interaction 运行态。 */
   private require_pending(
     interaction_id: string,
+    expected_turn_id?: string,
   ): SessionPendingInteractionRuntime {
     const pending = this.pending_by_id.get(interaction_id);
-    if (pending) return pending;
+    if (pending) {
+      if (expected_turn_id !== undefined && pending.request.turn_id !== expected_turn_id) {
+        throw new Error("Session Interaction turn reference mismatch");
+      }
+      return pending;
+    }
     throw new Error(`Pending Session Interaction not found: ${interaction_id}`);
   }
 

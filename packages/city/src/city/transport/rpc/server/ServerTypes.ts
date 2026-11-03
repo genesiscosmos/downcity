@@ -19,6 +19,8 @@ import type { AgentSessionModelResolver } from "@/city/transport/types/AgentSess
  * RPC server 启动参数。
  */
 export interface RpcServerStartOptions {
+  /** 当前端点明确绑定的 Agent；CityRPC 可通过 get_agent_context 提供。 */
+  agent?: Agent;
   /** RPC 服务监听端口。 */
   port: number;
   /** RPC 服务监听主机。 */
@@ -43,6 +45,8 @@ export interface RpcServerStartOptions {
  * RPC request handler 依赖。
  */
 export interface RpcRequestHandlerOptions {
+  /** 已由宿主路由确定的 Agent，不能由响应引用覆盖。 */
+  agent?: Agent;
   /** Session 集合访问口。 */
   sessions: AgentSessionCollection;
   /** 当前 RPC 请求绑定的 Workspace；独立 Agent 模式允许为空。 */
@@ -89,6 +93,8 @@ export interface RpcAgentContext {
  * 单个 socket 上的 session 订阅。
  */
 export interface RpcSocketSubscription {
+  /** 主体交互订阅的 Agent 所有者；存在时仅允许 interactions.unsubscribe 取消。 */
+  interaction_agent_id?: string;
   /** 请求级 Power 通道，由当前 socket 拥有。 */
   power_channel?: import("@/city/transport/session/PromptPowerChannel.js").ServerPromptPowerChannel;
   /** 被订阅的 session id。 */

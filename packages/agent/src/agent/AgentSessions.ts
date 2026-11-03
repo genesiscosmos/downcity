@@ -109,6 +109,9 @@ type AgentSessionsOptions = {
 
   /** 读取 Agent 当前持有的运行时模型实例。 */
   get_agent_model: () => ModelClient | undefined;
+
+  /** 缓存实例时立即装配 Agent 级观察；返回的订阅在释放实例时一并解除。 */
+  observe_session?: (session: AgentManagedSession) => () => void;
 };
 
 /**
@@ -125,6 +128,10 @@ export class AgentSessions implements AgentSessionsContract<AgentSession> {
   private readonly session_composer: SessionComposer;
   private readonly get_agent_model: AgentSessionsOptions["get_agent_model"];
   private readonly sessions_by_id = new Map<string, AgentManagedSession>();
+  /** Session 实例观察器的生命周期跟随缓存，不另存交互状态。 */
+  private readonly session_observers = new Map<string, () => void>();
+  /** Agent 注入的集合观察装配入口；包含恢复实例和 fork。 */
+  private readonly observe_session?: AgentSessionsOptions["observe_session"];
   /** 可信宿主配置及同键创建互斥；业务模型不能注册资源。 */
   private readonly execution_profiles = new SessionExecutionProfiles();
   private readonly execution_creations = new Map<string, Promise<AgentSession>>();
@@ -147,6 +154,7 @@ export class AgentSessions implements AgentSessionsContract<AgentSession> {
     this.session_class = options.session_class || Session;
     this.session_composer = options.session_composer ?? new DefaultSessionComposer();
     this.get_agent_model = options.get_agent_model;
+    this.observe_session = options.observe_session;
   }
 
   /** 监听新会话；宿主可在任务启动前建立消息和运行态投影。 */
@@ -567,7 +575,7 @@ export class AgentSessions implements AgentSessionsContract<AgentSession> {
       resolved_session_id,
       resolved_category,
     );
-    this.sessions_by_id.delete(cache_key);
+    this.delete_cached_session(cache_key);
     if (existed) await this.notify_removed({
       type: "deleted", session_id: resolved_session_id,
       category: resolved_category, origin_type: cached?.origin.type ?? SESSION_ORIGIN_TYPE_WORK,
@@ -601,7 +609,7 @@ export class AgentSessions implements AgentSessionsContract<AgentSession> {
       resolved_session_id,
       resolved_category,
     );
-    this.sessions_by_id.delete(cache_key);
+    this.delete_cached_session(cache_key);
     return existed;
   }
 
@@ -658,7 +666,7 @@ export class AgentSessions implements AgentSessionsContract<AgentSession> {
         if (cached) locked.delete(cached);
         cached?.dispose_title_generation?.();
         cached?.clear_secrets();
-        this.sessions_by_id.delete(cache_key);
+        this.delete_cached_session(cache_key);
         await this.notify_removed({
           type: "archived", session_id: item.id, category: item_category,
           origin_type: cached?.origin.type ?? SESSION_ORIGIN_TYPE_WORK,
@@ -790,6 +798,7 @@ export class AgentSessions implements AgentSessionsContract<AgentSession> {
       composer: profile ? profile.resources.composer : this.session_composer,
     });
     this.sessions_by_id.set(cache_key, created);
+    this.attach_session_observer(cache_key, created);
     return created;
   }
 
@@ -814,7 +823,7 @@ export class AgentSessions implements AgentSessionsContract<AgentSession> {
     if (!cached || cached.is_executing()) return false;
     cached.dispose_title_generation?.();
     cached.clear_secrets();
-    this.sessions_by_id.delete(cache_key);
+    this.delete_cached_session(cache_key);
     return true;
   }
 
@@ -829,6 +838,26 @@ export class AgentSessions implements AgentSessionsContract<AgentSession> {
       throw new Error(`Session "${session.id}" already has another runtime instance`);
     }
     this.sessions_by_id.set(cache_key, session);
+    this.attach_session_observer(cache_key, session);
+  }
+
+  /** 在任何初始化或执行前建立观察；同一个缓存实例只订阅一次。 */
+  private attach_session_observer(cache_key: string, session: AgentManagedSession): void {
+    if (this.session_observers.has(cache_key) || !this.observe_session) return;
+    this.session_observers.set(cache_key, this.observe_session(session));
+  }
+
+  /** 移出实例时同步解除其观察，避免旧实例向新实例的集合发布变化。 */
+  private delete_cached_session(cache_key: string): void {
+    this.session_observers.get(cache_key)?.();
+    this.session_observers.delete(cache_key);
+    this.sessions_by_id.delete(cache_key);
+  }
+
+  /** Agent 停止全部执行后释放所有实例订阅。 */
+  dispose_session_observers(): void {
+    for (const unsubscribe of this.session_observers.values()) unsubscribe();
+    this.session_observers.clear();
   }
 
   /** 返回来源分类内唯一的 Session 运行时缓存键。 */

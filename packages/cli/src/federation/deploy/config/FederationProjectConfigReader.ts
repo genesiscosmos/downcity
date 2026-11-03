@@ -229,6 +229,18 @@ function normalize_resources(
     throw new CliError({ title: "Hyperdrive requires a 32-character hexadecimal id and valid binding/environment variable names" });
   }
   const queue = read_record(input ?? {}, "queue");
+  if (input?.queue !== undefined && !queue) {
+    throw new CliError({ title: "deployment.resources.queue must be an object" });
+  }
+  const dead_letter_queue = read_optional_string(queue ?? {}, "dead_letter_queue");
+  if (queue?.dead_letter_queue !== undefined && !dead_letter_queue) {
+    throw new CliError({ title: "deployment.resources.queue.dead_letter_queue must be a non-empty string" });
+  }
+  const max_retries = read_optional_number(queue ?? {}, "max_retries");
+  if (queue?.max_retries !== undefined
+    && (max_retries === undefined || !Number.isInteger(max_retries) || max_retries < 0 || max_retries > 100)) {
+    throw new CliError({ title: "deployment.resources.queue.max_retries must be an integer between 0 and 100" });
+  }
   const storage = read_record(input ?? {}, "storage");
   return {
     ...(d1 ? {
@@ -251,6 +263,8 @@ function normalize_resources(
       type: "queue",
       binding: read_string(queue ?? {}, "binding", "DOWNCITY_QUEUE"),
       name: read_string(queue ?? {}, "name", `${project_name}-queue`),
+      ...(dead_letter_queue !== undefined ? { dead_letter_queue } : {}),
+      ...(max_retries !== undefined ? { max_retries } : {}),
     },
     ...(storage
       ? {

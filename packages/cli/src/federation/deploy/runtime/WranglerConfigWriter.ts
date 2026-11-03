@@ -64,16 +64,23 @@ export function writeWranglerConfig(
     );
   }
 
-  if (config.deployment.resources.queue) {
+  const queue = config.deployment.resources.queue;
+  if (queue) {
     lines.push(
       "",
       "[[queues.producers]]",
-      `binding = ${tomlString(config.deployment.resources.queue.binding)}`,
-      `queue = ${tomlString(config.deployment.resources.queue.name)}`,
+      `binding = ${tomlString(queue.binding)}`,
+      `queue = ${tomlString(queue.name)}`,
       "",
       "[[queues.consumers]]",
-      `queue = ${tomlString(config.deployment.resources.queue.name)}`,
+      `queue = ${tomlString(queue.name)}`,
     );
+    if (queue.dead_letter_queue !== undefined) {
+      lines.push(`dead_letter_queue = ${tomlString(queue.dead_letter_queue)}`);
+    }
+    if (queue.max_retries !== undefined) {
+      lines.push(`max_retries = ${queue.max_retries}`);
+    }
   }
 
   if (config.deployment.resources.storage) {

@@ -6,6 +6,7 @@
  */
 
 import type { Embassy } from "@downcity/federation";
+import type { PowerInteractionHost } from "./PowerInteraction.js";
 import type {
   PowerLogger,
   PowerSessionMutation,
@@ -90,7 +91,9 @@ export interface PowerHostAgent {
 }
 
 /** Power 可使用的宿主系统能力。 */
-export interface PowerHostSystem {
+export interface PowerHostSystem extends PowerInteractionHost {
+  /** Notification Power注册持久通知接收器；释放时撤销，避免双重存储。 */
+  register_notification_receiver(receiver: import("./PowerNotification.js").PowerNotificationReceiver): () => void;
   /** 仅可信 Power 生命周期可注册专用执行资源；返回撤销函数。 */
   register_execution_profile(profile: import("./PowerExecutionProfile.js").PowerExecutionProfile): () => void;
   /** 停止后台 Session 的当前工作；等待停止请求完成，用于预算和关闭收口。 */

@@ -10,6 +10,7 @@ import { useCallback, useEffect, useState } from "react";
 import { define_power_renderer } from "@downcity/city/power/react";
 import type { PowerMainviewComponentProps } from "@downcity/city/power/react";
 import { MemoryJobs } from "./MemoryJobs.js";
+import { memory_dreams as MemoryDreams } from "./MemoryDreams.js";
 import type {
   MemoryMainviewListItem,
   MemoryMainviewListResult,
@@ -95,6 +96,9 @@ export const MEMORY_POWER_RENDERER = define_power_renderer({
 
   mainview: function MemoryPowerMainview(props) {
     const { power, navigation, ui } = props;
+    if (read_view_route(navigation.route) === "dreams") return <MemoryDreams
+      key={`${read_route(navigation.route.agent_id)}:${current_workspace_id(navigation.route)}:${read_scope_route(navigation.route)}`}
+      {...props} />;
     if (read_view_route(navigation.route) === "jobs") return <MemoryJobs
       key={`${read_route(navigation.route.agent_id)}:${current_workspace_id(navigation.route)}`}
       power={power} navigation={navigation} ui={ui}
@@ -308,6 +312,7 @@ function MemoryMainview({ power, navigation, ui }: PowerMainviewComponentProps) 
         actions={<Inline>
           <Button disabled={loading} on_click={ui.invalidate}>{loading ? "刷新中…" : "刷新"}</Button>
           <Button on_click={() => navigation.navigate({ ...range_route(scope, agent_id, workspace_id), view: "jobs" })}>处理记录</Button>
+          <Button on_click={() => navigation.navigate({ ...range_route(scope, agent_id, workspace_id), view: "dreams" })}>后台整理</Button>
           <Button on_click={() => navigation.navigate({ ...range_route(scope, agent_id, workspace_id), view: "settings" })}>设置</Button>
           <Button variant="primary" disabled={busy} on_click={() => { set_creating((value) => !value); set_draft(""); }}>{creating ? "取消" : "新建记忆"}</Button>
         </Inline>}
@@ -338,7 +343,7 @@ function MemoryMainview({ power, navigation, ui }: PowerMainviewComponentProps) 
 }
 
 /** Mainview 在工作区内可切换的视图态。 */
-type MemoryMainviewView = "list" | "settings" | "jobs";
+type MemoryMainviewView = "list" | "settings" | "jobs" | "dreams";
 
 /** 创建记忆范围的稳定 Power route。 */
 function range_route(
@@ -361,7 +366,7 @@ function read_scope_route(route: Record<string, unknown>): MemoryMainviewScopeKi
 /** 读取 Mainview 当前视图态；未声明时为列表。 */
 function read_view_route(route: Record<string, unknown>): MemoryMainviewView {
   const view = read_route(route.view);
-  return view === "settings" || view === "jobs" ? view : "list";
+  return view === "settings" || view === "jobs" || view === "dreams" ? view : "list";
 }
 
 /** 读取当前 route 中已经选定的 Workspace ID。 */

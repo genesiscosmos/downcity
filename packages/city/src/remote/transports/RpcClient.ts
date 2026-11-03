@@ -9,6 +9,10 @@
 
 import { SESSION_ORIGIN_CATEGORY_WORK } from "@downcity/type";
 import net from "node:net";
+import type { AgentInteraction, AgentListInteractionsInput, AgentRespondInteractionInput } from "@downcity/agent";
+import type { RemoteInteractionSubscriptionInput } from "@/types/remote/RemoteAgentInteractions.js";
+import type { TransportSubscription } from "@/remote/RemoteTransport.js";
+import { validate_interaction_list_input, validate_interaction_response_input } from "@/remote/InteractionValidation.js";
 import { randomUUID } from "node:crypto";
 import type { RemotePromptInput, OpenPromptPowerChannel, PromptPowerChannel } from "@/types/remote/PromptPowerTransport.js";
 import type {
@@ -83,6 +87,7 @@ export class RpcClient {
   private readonly pending_requests = new Map<string, PendingRequest>();
   private readonly subscriptions = new Map<string, RpcSubscription>();
   private readonly power_subscriptions = new Map<string, OpenPromptPowerChannel>();
+  private readonly interaction_subscriptions = new Map<string, RemoteInteractionSubscriptionInput>();
   private request_sequence = 0;
 
   constructor(endpoint: RpcClientEndpoint) {
@@ -237,6 +242,60 @@ export class RpcClient {
       },
     });
     return data.system;
+  }
+
+  /** 查询绑定 Agent 的 canonical 待处理交互。 */
+  async list_interactions(input?: AgentListInteractionsInput): Promise<AgentInteraction[]> {
+    const data = await this.request<{ /** 待处理交互快照。 */ interactions: AgentInteraction[] }>({
+      method: "sdk.interactions.list", params: validate_interaction_list_input(input),
+    });
+    if (!Array.isArray(data.interactions)) throw new Error("Invalid RPC Agent interactions response");
+    return data.interactions;
+  }
+
+  /** 预登记事件接收器，避免服务端就绪前发出的变化丢失。 */
+  async subscribe_interactions(input: RemoteInteractionSubscriptionInput): Promise<TransportSubscription> {
+    const subscription_id = randomUUID();
+    this.interaction_subscriptions.set(subscription_id, input);
+    try {
+      const data = await this.request<{ /** 当前 socket 的订阅标识。 */ subscription_id: string }>({
+        method: "sdk.interactions.subscribe", params: { subscription_id },
+      });
+      if (data.subscription_id !== subscription_id || !this.interaction_subscriptions.has(subscription_id)) {
+        throw new Error("RPC Agent interaction subscription closed before ready");
+      }
+      let closed = false;
+      return { close: async () => {
+        if (closed) return;
+        closed = true;
+        const registered = this.interaction_subscriptions.delete(subscription_id);
+        // 已丢失的连接不为清理重连；新 socket 不拥有原订阅。
+        if (registered && this.socket && !this.socket.destroyed) {
+          await this.request({ method: "sdk.interactions.unsubscribe", params: { subscription_id } });
+        }
+      } };
+    } catch (error) {
+      this.interaction_subscriptions.delete(subscription_id);
+      throw error;
+    }
+  }
+
+  /** 普通响应只使用普通协议方法。 */
+  async respond_interaction(input: AgentRespondInteractionInput): Promise<SessionInteractionResult> {
+    const data = await this.request<{ /** 原 Session 的提交结果。 */ result: SessionInteractionResult }>({
+      method: "sdk.interactions.respond", params: validate_interaction_response_input(input),
+    });
+    return data.result;
+  }
+
+  /** 私密入口不传播任何可能含输入内容的底层异常。 */
+  async submit_private_interaction(input: AgentRespondInteractionInput): Promise<SessionInteractionResult> {
+    try {
+      const data = await this.request<{ /** 已脱敏的原交互结果。 */ result: SessionInteractionResult }>({
+        method: "sdk.interactions.submit_private", params: validate_interaction_response_input(input),
+      });
+      return data.result;
+    } catch { throw new Error("Private Agent interaction submission failed"); }
   }
 
   async get_session_interactions(session_id: string, category: string): Promise<SessionInteractionRequest[]> {
@@ -619,6 +678,10 @@ export class RpcClient {
       this.power_subscriptions.get(payload.subscription_id)?.on_event(payload.event);
       return;
     }
+    if ("type" in payload && payload.type === "interaction-event") {
+      this.interaction_subscriptions.get(payload.subscription_id)?.on_event(payload.event);
+      return;
+    }
     const pending = this.pending_requests.get(payload.id);
     if (!pending) return;
     this.pending_requests.delete(payload.id);
@@ -639,6 +702,9 @@ export class RpcClient {
   }
 
   private fail_all_subscriptions(message: string): void {
+    const interaction_subscriptions = [...this.interaction_subscriptions.values()];
+    this.interaction_subscriptions.clear();
+    for (const subscription of interaction_subscriptions) subscription.on_close(new Error(message));
     const power_subscriptions = [...this.power_subscriptions.values()];
     this.power_subscriptions.clear();
     for (const subscription of power_subscriptions) subscription.on_close(new Error(message));

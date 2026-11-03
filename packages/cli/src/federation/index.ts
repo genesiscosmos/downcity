@@ -23,6 +23,8 @@ import { run_federation_query_command } from "@/federation/query/commands/query.
 import { prompt_add_federation_server } from "@/federation/server/FederationServerManager.js";
 import { resolve_federation_target, type FederationTargetOptions } from "@/federation/server/FederationTarget.js";
 import { run_federation_instance_command } from "@/federation/server/FederationInstanceCommands.js";
+import { run_federation_backup, run_federation_restore } from "@/federation/server/FederationDatabaseCommands.js";
+import type { FederationBackupOptions } from "@/federation/types/SqliteBackup.js";
 import { run_federation_clean, type FederationCleanOptions } from "@/federation/deploy/release/LocalReleaseCleaner.js";
 import { open_federation_server_workspace } from "@/federation/server/FederationServerWorkspace.js";
 import { CliError } from "@/shared/CliError.js";
@@ -242,6 +244,30 @@ export async function runDownfedCli(): Promise<void> {
     }, "Downcity CLI"));
 
   register_instance_commands(program);
+  program.command("backup")
+    .description(t({ zh: "为本地部署创建一致性 SQLite 在线备份", en: "create a consistent online SQLite backup for a local deployment" }))
+    .option("--id <id>", "Federation ID (exact match)")
+    .option("--name <name>", "Federation name (exact match)")
+    .helpOption("--help", helpText())
+    .action(createVersionBanner(packageJson.version, run_federation_backup));
+  program.command("restore")
+    .description(t({ zh: "保全当前数据库后，恢复已停止本地部署的 SQLite 备份", en: "restore a stopped local SQLite deployment after saving its current database" }))
+    .option("--id <id>", "Federation ID (exact match)")
+    .option("--name <name>", "Federation name (exact match)")
+    .requiredOption("--path <path>", t({ zh: "完整备份目录或其中的 database.sqlite", en: "completed backup directory or its database.sqlite file" }))
+    .option("--dry-run", t({ zh: "只读验证备份与停止状态，不创建安全备份", en: "read-only verification without creating a safety backup" }))
+    .option("--yes", t({ zh: "明确确认替换数据库", en: "explicitly authorize replacing the database" }))
+    .helpOption("--help", helpText())
+    .action(createVersionBanner(packageJson.version, async (options: FederationBackupOptions & {
+      /** 待恢复完整备份的输入路径。 */
+      path: string;
+      /** Commander 读取的只读预检开关。 */
+      dryRun?: boolean;
+      /** 用户显式授权覆盖。 */
+      yes?: boolean;
+    }) => {
+      await run_federation_restore({ id: options.id, name: options.name, path: options.path, dry_run: options.dryRun, yes: options.yes });
+    }));
   program.command("clean")
     .description(t({ zh: "预览并清理本地发布产物，保留最近三个成功版本与所有受保护引用", en: "preview and clean local releases, retaining the latest three successful versions and protected references" }))
     .option("--id <id>", "Federation ID (exact match)")
