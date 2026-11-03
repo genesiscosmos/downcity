@@ -329,7 +329,6 @@ export class AgentSessions implements AgentSessionsContract<AgentSession> {
   ): Promise<AgentSession> {
     return await this.lifecycle.access(async () => {
       const origin = normalize_session_origin(input?.origin);
-      if (origin.type === "memory") throw new Error("execution_profile_required: memory requires a trusted execution profile");
       const session_id = await this.allocate_session_id(origin);
       return await this.create_with_id(session_id, origin, input?.workspace, input?.inherit_workspace);
     });
@@ -348,7 +347,6 @@ export class AgentSessions implements AgentSessionsContract<AgentSession> {
     workspace_id?: string;
   }): Promise<AgentSession> {
     const origin = normalize_session_origin(input.origin);
-    if (origin.type === "memory" && input.execution_profile_id !== "memory") throw new Error("execution_profile_required: memory profile required");
     const creation_key = input.creation_key?.trim();
     if (input.creation_key !== undefined && (!creation_key || creation_key.length > 512)) throw new Error("execution_creation_key_invalid");
     const session_id = creation_key
@@ -510,7 +508,6 @@ export class AgentSessions implements AgentSessionsContract<AgentSession> {
     const storage = await store.open_session(resolved_session_id, resolved_category);
     const persisted_metadata = await storage.read_metadata();
     const reference = persisted_metadata.execution_profile;
-    if (persisted_metadata.origin.type === "memory" && reference?.id !== "memory") throw new Error("execution_profile_missing: memory requires its persisted profile");
     const execution_profile = reference ? await this.execution_profiles.resolve({
       execution_profile_id: reference.id, execution_profile_version: reference.version,
       creation_key: reference.creation_key,
@@ -757,7 +754,6 @@ export class AgentSessions implements AgentSessionsContract<AgentSession> {
     const cached = this.sessions_by_id.get(cache_key);
     if (cached) return cached;
     const profile = input?.execution_profile;
-    if (resolved_origin.type === "memory" && !profile) throw new Error("execution_profile_required: memory cannot use default resources");
     const assert_profile = () => { if (profile) this.execution_profiles.assert_registered(profile.reference); };
     const instruction_blocks = () => profile ? create_instruction_system_blocks({
       agent_id: this.agent_id, agent_name: this.get_agent_name(), instruction: profile.resources.instruction,

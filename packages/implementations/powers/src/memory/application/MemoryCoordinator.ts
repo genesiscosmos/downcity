@@ -2,6 +2,7 @@
 import type { PowerLifecycleContext } from "@downcity/city/power";
 import type { MemoryProvider } from "../types/Memory.js";
 import type { MemoryJob, MemoryJobInput } from "../types/MemoryJob.js";
+import { MEMORY_SESSION_KIND } from "../types/MemorySession.js";
 import { MemoryJobStore } from "../storage/MemoryJobStore.js";
 import { MemoryProfile } from "../runtime/MemoryProfile.js";
 import type { ProfileScope } from "../types/Profile.js";
@@ -110,7 +111,7 @@ export class MemoryCoordinator {
         agent_id: job.access.agent_id, workspace_id: job.access.workspace_id, inherit_workspace: false,
         execution_profile_id: "memory", execution_profile_version: 1, model_id: this.options.model_id,
         creation_key: `memory:${job.job_id}:${attempt}`,
-        origin: { category: "work", type: "memory", memory_job_id: job.job_id, memory_attempt: attempt },
+        origin: { category: "work", type: MEMORY_SESSION_KIND, memory_job_id: job.job_id, memory_attempt: attempt },
       });
       job = await this.options.jobs.update(job.job_id, { status: "running", attempt, session_id: session.session_id });
     }

@@ -5,8 +5,8 @@
  *
  * - `category` 是顶层分类，只有 `chat` 与 `work` 两个值，同时承担物理存储分区
  *   与身份作用域的职责。
- * - `type` 是具体角色，用于能力判定与语义表达；已知角色有七个，调用方也可以
- *   定义自己的稳定角色。
+ * - `type` 表达具体业务用途；通用角色在此登记，Power 自有角色由对应 Power
+ *   定义并显式声明分类。角色名称不授予工具或执行配置。
  *
  * 关键点（中文）
  * - `chat` 类是对话会话：Agent 主对话、外部聊天、群聊、浏览器扩展。
@@ -41,9 +41,6 @@ export const SESSION_ORIGIN_TYPE_WORK = "work";
 /** 任务会话的角色。 */
 export const SESSION_ORIGIN_TYPE_TASK = "task";
 
-/** 专用记忆处理会话；属于工作分区，执行权限必须由宿主配置授予。 */
-export const SESSION_ORIGIN_TYPE_MEMORY = "memory";
-
 /**
  * 派发深度上限。
  *
@@ -70,7 +67,6 @@ const ORIGIN_CATEGORY_BY_TYPE: Readonly<Record<string, SessionOriginCategory>> =
   [SESSION_ORIGIN_TYPE_CHROME]: SESSION_ORIGIN_CATEGORY_CHAT,
   [SESSION_ORIGIN_TYPE_WORK]: SESSION_ORIGIN_CATEGORY_WORK,
   [SESSION_ORIGIN_TYPE_TASK]: SESSION_ORIGIN_CATEGORY_WORK,
-  [SESSION_ORIGIN_TYPE_MEMORY]: SESSION_ORIGIN_CATEGORY_WORK,
 });
 
 /** Session 的创建来源。 */

@@ -39,6 +39,7 @@ import {
 import { build_memory_power_system_text } from "@/memory/runtime/SystemProvider.js";
 import { MemoryProfile } from "@/memory/runtime/MemoryProfile.js";
 import { MemoryJobStore } from "@/memory/storage/MemoryJobStore.js";
+import { MEMORY_SESSION_KIND } from "@/memory/types/MemorySession.js";
 import { MemoryCoordinator } from "@/memory/application/MemoryCoordinator.js";
 import { MemoryService } from "@/memory/application/MemoryService.js";
 import { create_memory_job_actions } from "@/memory/application/MemoryJobActions.js";
@@ -244,7 +245,7 @@ export class MemoryPower extends Power {
     pipeline: {
       [SESSION_HOOK_POINTS.system_context]: [async ({ context, value }) => {
         const input = value as unknown as SessionSystemContextHookValue;
-        if (context.session?.origin.type === "memory") return value;
+        if (context.session?.origin.type === MEMORY_SESSION_KIND) return value;
         const blocks = [...input.blocks];
         const scopes: ProfileScope[] = [{ target: "user" }, { target: "agent", agent_id: context.agent.id }];
         for (const scope of scopes) {
@@ -257,7 +258,7 @@ export class MemoryPower extends Power {
         return { ...input, blocks } as unknown as PowerJsonValue;
       }],
       [SESSION_HOOK_POINTS.turn_context]: [async ({ context, value }) => {
-        if (!this.profile_runtime || context.session?.origin.type === "memory") return value;
+        if (!this.profile_runtime || context.session?.origin.type === MEMORY_SESSION_KIND) return value;
         const input = value as unknown as SessionTurnContextHookValue;
         const updates = await build_profile_updates(this.profile_runtime, context.agent.id, input.system_blocks ?? []);
         return { ...input, blocks: [...input.blocks, ...updates] } as unknown as PowerJsonValue;

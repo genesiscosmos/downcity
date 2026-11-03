@@ -2,6 +2,7 @@
 import { z } from "zod";
 import type { AgentTool, ToolCallContext } from "@downcity/type";
 import type { MemoryProvider } from "../types/Memory.js";
+import { MEMORY_SESSION_KIND } from "../types/MemorySession.js";
 import type { MemoryJob } from "../types/MemoryJob.js";
 import { MemoryJobStore } from "../storage/MemoryJobStore.js";
 import { resolve_writable_memory_address } from "./MemoryAddress.js";
@@ -31,7 +32,7 @@ export function create_memory_session_tools(options: MemorySessionToolOptions): 
   /** 确认当前 Session 确实属于该 Job 的最新计算尝试。 */
   const bind_job = async (context: ToolCallContext): Promise<MemoryJob> => {
     const job_id = context.session_origin.memory_job_id;
-    if (context.session_origin.type !== "memory" || typeof job_id !== "string") throw new Error("Memory tool requires a Memory Session");
+    if (context.session_origin.type !== MEMORY_SESSION_KIND || typeof job_id !== "string") throw new Error("Memory tool requires a Memory Session");
     const job = await options.jobs.read(job_id);
     if (!job || job.access.agent_id !== context.agent_id || job.session_id !== context.session_id || job.status !== "running") {
       throw new Error("Memory Session does not own this active Job");

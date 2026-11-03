@@ -2,6 +2,7 @@
 import { createHash, randomUUID } from "node:crypto";
 import type { PowerContext, PowerJsonObject, PowerLifecycleContext } from "@downcity/city/power";
 import type { MemoryJobSource } from "../types/MemoryJob.js";
+import { MEMORY_SESSION_KIND } from "../types/MemorySession.js";
 
 /** 为内容和来源边界生成稳定幂等标识。 */
 export function memory_request_hash(value: unknown): string {
@@ -28,7 +29,7 @@ export async function read_memory_sources(
   if (!["chat", "work"].includes(category)) throw new Error("Invalid source Session category");
   if (!Number.isInteger(max_messages) || max_messages < 1 || max_messages > 100) throw new Error("max_messages must be between 1 and 100");
   const session = await context.agent.sessions.get(session_id, category);
-  if (session.origin.type === "memory") throw new Error("Memory Session history cannot become a memory source");
+  if (session.origin.type === MEMORY_SESSION_KIND) throw new Error("Memory Session history cannot become a memory source");
   if (session.workspace_id && session.workspace_id !== context.workspace?.id) throw new Error("Source Session belongs to another Workspace");
   const page = await host.system.read_agent_session_messages({
     agent_id: context.agent.id, session_id, category, limit: max_messages, max_bytes: 256_000,
