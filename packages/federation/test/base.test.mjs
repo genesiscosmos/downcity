@@ -323,9 +323,11 @@ test("Federation fetch runs middleware in order and remains bindable", async () 
     const db = createSqliteDb(path.join(tempDir, "test.sqlite"))
     const base = create_test_federation({ database: db })
     const events = []
+    let boundary_request_id
 
     base.middle(async (ctx, next) => {
       events.push("a before")
+      boundary_request_id = ctx.request_id
       ctx.locals.request_id = "req_1"
       const response = await next()
       events.push("a after")
@@ -344,7 +346,8 @@ test("Federation fetch runs middleware in order and remains bindable", async () 
     const response = await fetch(new Request("http://localhost/health"))
 
     assert.equal(response.status, 200)
-    assert.equal(response.headers.get("x-request-id"), "req_1")
+    assert.match(response.headers.get("x-request-id"), /^req_[a-f0-9-]{36}$/u)
+    assert.equal(response.headers.get("x-request-id"), boundary_request_id)
     assert.deepEqual(events, ["a before", "b before", "b after", "a after"])
   } finally {
     process.chdir(cwd)
@@ -432,8 +435,10 @@ test("Federation middleware reports duplicate next calls as middleware errors", 
     assert.equal(response.status, 500)
     assert.deepEqual(await response.json(), {
       error: {
-        message: "next() called multiple times",
-        type: "middleware_error",
+        code: "INTERNAL_ERROR",
+        message: "Internal server error",
+        type: "server_error",
+        request_id: response.headers.get("x-request-id"),
       },
     })
   } finally {

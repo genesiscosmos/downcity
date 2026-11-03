@@ -43,6 +43,10 @@ declare module "hono" {
  * Federation router 在单次请求里接收的进程内变量。
  */
 interface FederationRouterEnv {
+  /** Federation HTTP 执行边界生成的请求 ID，仅来自进程内绑定。 */
+  federation_request_id?: string;
+  /** 前台执行期限与客户端取消组合的信号。 */
+  abort_signal?: AbortSignal;
   /** 由 `Federation.fetch()` 传入的进程内可信身份。 */
   trusted_identity?: FederationTrustedIdentity;
   /** 当前请求来源 transport。 */
@@ -67,7 +71,7 @@ export function build_federation_router(params: {
   const { runtime, services, authenticator, table_map, admin_store } = params;
   const app = new Hono();
   app.use("*", async (c, next) => {
-    const request_id = `req_${crypto.randomUUID()}`;
+    const request_id = (c.env as FederationRouterEnv | undefined)?.federation_request_id ?? `req_${crypto.randomUUID()}`;
     c.set("federation_request_id", request_id);
     await next();
     // Hono 会克隆已完成响应的 headers；不消费正文，也不会被旧响应头反向覆盖。
@@ -213,6 +217,7 @@ export function build_federation_router(params: {
           if (def.auth.length > 0) {
             await authorize_request(authenticator, trusted_identity_from_env(c.env), c.req.raw, def.auth);
           }
+          c.req.raw.signal.throwIfAborted();
           return await def.handler(c.req.raw);
         } catch (error) {
           return format_http_error(error, c.get("federation_request_id"));
@@ -250,6 +255,7 @@ export function build_federation_router(params: {
           input,
           locals: { request_id },
           request_id,
+          abort_signal: (c.env as FederationRouterEnv | undefined)?.abort_signal ?? c.req.raw.signal,
           request: c.req.raw,
           raw_body,
           transport: transport_from_env(c.env),
@@ -288,10 +294,14 @@ export function build_federation_router(params: {
           }
 
           for (const hook of global_service_hooks(services)) {
+            ctx.abort_signal?.throwIfAborted();
             await hook.runBefore(ctx);
           }
+          ctx.abort_signal?.throwIfAborted();
           await action.hook.runBefore(ctx);
+          ctx.abort_signal?.throwIfAborted();
           await service.hook.runBefore(ctx);
+          ctx.abort_signal?.throwIfAborted();
 
           const output = await action.run(ctx);
           ctx.output = output;

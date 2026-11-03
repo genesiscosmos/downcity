@@ -52,6 +52,7 @@ export { Bureau, BureauUser } from "./client/bureau.js";
 // ===========================================================================
 
 export { Federation } from "./federation/federation.js";
+export type { FederationHttpLimits, FederationHttpPolicy, FederationHttpRoutePolicy } from "./types/FederationHttp.js";
 export type {
   FederationOptions,
   FederationStartupTiming,

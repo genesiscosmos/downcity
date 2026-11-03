@@ -5,6 +5,7 @@
  */
 
 import type { Database } from "../database/Database.js";
+import type { FederationHttpPolicy } from "../types/FederationHttp.js";
 import type { FederationStorage } from "./storage.js";
 import type { RuntimeUser } from "./auth/types.js";
 import type { BureauRecord, RuntimeBureauToken } from "../types/Bureau.js";
@@ -69,7 +70,6 @@ export interface FederationFetchOptions {
    * - HTTP 入口不会从请求内容自动生成该身份。
    */
   trusted_identity?: FederationTrustedIdentity;
-  /**
   /** 当前请求来源 transport，默认是 `http`。 */
   transport?: FederationRequestTransport;
 }
@@ -112,6 +112,8 @@ export interface FederationStartupTiming {
 export interface FederationOptions {
   /** Federation 唯一主数据库 Adapter。 */
   database: Database;
+  /** 服务端 HTTP 正文与执行策略，未配置时采用分类默认限额，不影响队列调用。 */
+  http?: FederationHttpPolicy;
   /** 自动准备适合本地开发；prepared 要求部署阶段先调用 prepare_database()。 */
   database_initialization?: "automatic" | "prepared";
   /** 启动阶段观测回调；仅包含阶段、耗时和成功状态，不含业务数据。 */

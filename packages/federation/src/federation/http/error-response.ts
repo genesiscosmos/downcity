@@ -11,6 +11,9 @@ function error_category(status: number): { /** 客户端错误分类。 */ type:
   if (status === 401) return { type: "authentication_error", code: "UNAUTHENTICATED", message: "Authentication required" };
   if (status === 403) return { type: "permission_error", code: "FORBIDDEN", message: "Permission denied" };
   if (status === 404) return { type: "not_found_error", code: "NOT_FOUND", message: "Not found" };
+  if (status === 408) return { type: "invalid_request_error", code: "REQUEST_BODY_TIMEOUT", message: "Request body read timed out" };
+  if (status === 415) return { type: "invalid_request_error", code: "UNSUPPORTED_CONTENT_ENCODING", message: "Unsupported content encoding" };
+  if (status === 499) return { type: "request_cancelled_error", code: "REQUEST_CANCELLED", message: "Request cancelled" };
   if (status === 409) return { type: "conflict_error", code: "CONFLICT", message: "Request conflicts with current state" };
   if (status === 413) return { type: "invalid_request_error", code: "BODY_TOO_LARGE", message: "Request body too large" };
   if (status === 429) return { type: "rate_limit_error", code: "RATE_LIMITED", message: "Too many requests" };

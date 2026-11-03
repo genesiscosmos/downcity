@@ -18,6 +18,21 @@ import { httpError } from "../../utils/helpers.js";
 import { stream_openai_compatible_model } from "../ai/OpenAICompatibleModelAdapter.js";
 import { read_resolved_reasoning } from "../ai/reasoning.js";
 
+/** 优先读取合并信号的中止原因，保留 HTTP 截止状态并区分 provider 超时与客户端取消。 */
+function read_abort_status(ctx: Context): number | undefined {
+  const signal = ctx.abort_signal?.aborted ? ctx.abort_signal : ctx.request?.signal;
+  if (!signal?.aborted) return undefined;
+  const reason: unknown = signal.reason;
+  if (reason && typeof reason === "object") {
+    if ("statusCode" in reason && typeof reason.statusCode === "number"
+      && Number.isInteger(reason.statusCode) && reason.statusCode >= 400 && reason.statusCode <= 599) {
+      return reason.statusCode;
+    }
+    if ("name" in reason && reason.name === "TimeoutError") return 504;
+  }
+  return 499;
+}
+
 /** 在最高优先级候选内进行加权抽样。 */
 function select_deployment(candidates: RelayDeployment[]): RelayDeployment {
   const priority = Math.max(...candidates.map((item) => item.priority));
@@ -110,8 +125,10 @@ export class RelayRouter {
     const cooling = new Set(health.rows.map((row) => row.deployment_id));
     candidates = candidates.filter((item) => !cooling.has(item.id));
     let last_status = 503;
+    // 每次尝试都从入口信号合并，避免把前一次 provider 的截止时间带进下一次尝试。
+    const request_abort_signal = ctx.abort_signal;
     for (let index = 0; index < max_attempts && candidates.length; index += 1) {
-      if (ctx.request?.signal.aborted) break;
+      if (read_abort_status(ctx) !== undefined) break;
       const deployment = select_deployment(candidates);
       candidates = candidates.filter((item) => item.id !== deployment.id);
       const channel = catalog.channels.find((item) => item.id === deployment.channel_id)!;
@@ -133,7 +150,12 @@ export class RelayRouter {
       };
       try {
         const deadline = AbortSignal.timeout(channel.timeout_ms ?? 120_000);
-        ctx.abort_signal = ctx.request?.signal ? AbortSignal.any([ctx.request.signal, deadline]) : deadline;
+        ctx.abort_signal = AbortSignal.any([
+          ...(request_abort_signal ? [request_abort_signal] : []),
+          ...(ctx.request ? [ctx.request.signal] : []),
+          deadline,
+        ]);
+        ctx.abort_signal.throwIfAborted();
         const reasoning = read_resolved_reasoning(ctx);
         const result = channel.adapter === "registered"
           ? await this.dependencies.models.find((item) => item.id === deployment.runtime_model_id)!.runtime.stream!(ctx, call)
@@ -145,28 +167,34 @@ export class RelayRouter {
         return { ...result, stream: this.observe_stream(ctx, result.stream, attempt, started_at) };
       } catch (error) {
         const detail: RelayUpstreamFailure = error && typeof error === "object" ? error : {};
-        const status = detail.statusCode;
-        const safe_retry = detail.upstream_rejected === true && [401, 403, 429].includes(status ?? 0);
-        const cancelled = ctx.request?.signal.aborted === true;
+        const abort_status = read_abort_status(ctx);
+        const status = abort_status ?? detail.statusCode;
+        const safe_retry = abort_status === undefined && detail.upstream_rejected === true
+          && [401, 403, 429].includes(status ?? 0);
+        const cancelled = abort_status === 499;
         await attempts.update({ where: { attempt_id: attempt.attempt_id }, values: {
           completed_at: new Date().toISOString(), http_status: status ?? null,
-          status: cancelled ? "cancelled" : detail.upstream_rejected ? "rejected" : "unknown",
+          status: cancelled ? "cancelled" : abort_status !== undefined ? "unknown" : detail.upstream_rejected ? "rejected" : "unknown",
         } });
         if (status === undefined || [401, 403, 429].includes(status) || status >= 500) {
           const cooldown_ms = status === 429 ? detail.retry_after_ms ?? 30_000 : status && status < 500 ? 60_000 : 15_000;
           await this.cooldown(deployment.id, cooldown_ms);
         }
         last_status = status && status >= 400 && status <= 599 && ![401, 403].includes(status) ? status : 502;
-        if (!safe_retry || cancelled) {
-          await this.finish_request(request_id, cancelled ? "cancelled" : detail.upstream_rejected ? "failed" : "unknown");
-          throw httpError(cancelled ? 499 : last_status, cancelled ? "Request cancelled"
+        if (!safe_retry) {
+          await this.finish_request(request_id, cancelled ? "cancelled" : abort_status !== undefined ? "unknown"
+            : detail.upstream_rejected ? "failed" : "unknown");
+          throw httpError(abort_status ?? last_status, cancelled ? "Request cancelled"
+            : abort_status === 504 ? "Request timed out; result may be unknown"
+            : abort_status !== undefined ? "Request aborted; result may be unknown"
             : detail.upstream_rejected ? "Upstream rejected request" : "Upstream request failed; result may be unknown");
         }
       }
     }
-    const cancelled = ctx.request?.signal.aborted === true;
-    await this.finish_request(request_id, cancelled ? "cancelled" : "failed");
-    throw httpError(cancelled ? 499 : last_status, cancelled ? "Request cancelled" : "No available relay deployment");
+    const abort_status = read_abort_status(ctx);
+    await this.finish_request(request_id, abort_status === 499 ? "cancelled" : "failed");
+    throw httpError(abort_status ?? last_status, abort_status === 499 ? "Request cancelled"
+      : abort_status === 504 ? "Request timed out" : abort_status !== undefined ? "Request aborted" : "No available relay deployment");
   }
 
   /** 流仅观察一次，不缓冲内容，也不在任何流错误后重启上游。 */
@@ -180,13 +208,18 @@ export class RelayRouter {
     const finish = async (final_status: string) => {
       if (finished) return;
       finished = true;
+      const abort_status = read_abort_status(ctx);
+      const settled_status = abort_status === undefined ? final_status : abort_status === 499 ? "cancelled" : "unknown";
       await Promise.all([
         this.dependencies.table<RelayAttemptRecord>("relay_attempts").update({
           where: { attempt_id: attempt.attempt_id },
-          values: { status: final_status, first_output_ms, completed_at: new Date().toISOString(), http_status: 200 },
+          values: {
+            status: settled_status, first_output_ms, completed_at: new Date().toISOString(),
+            http_status: abort_status ?? 200,
+          },
         }),
-        this.finish_request(attempt.request_id, final_status),
-        ...(["unknown", "failed"].includes(final_status) ? [this.cooldown(attempt.deployment_id, 15_000)] : []),
+        this.finish_request(attempt.request_id, settled_status),
+        ...(["unknown", "failed"].includes(settled_status) ? [this.cooldown(attempt.deployment_id, 15_000)] : []),
       ]).catch(() => {
         // 已产生真实用量后，日志故障不能阻断最终事件和既有可靠结算移交。
         console.error("[Relay] stream log finalization failed", {
@@ -217,7 +250,7 @@ export class RelayRouter {
             ? { ...event, request_id: attempt.request_id, model_id: String(ctx.input.model) }
             : event);
         } catch (error) {
-          await finish(ctx.request?.signal.aborted ? "cancelled" : "unknown");
+          await finish("unknown");
           reader.releaseLock();
           controller.error(error);
         }

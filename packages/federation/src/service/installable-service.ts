@@ -148,6 +148,8 @@ export interface ServiceRouteContext {
   bureau_token?: RuntimeBureauToken;
   /** 原始 HTTP 请求 */
   request: Request;
+  /** 合并 HTTP 处理截止时间与客户端取消的信号；业务上游请求应继续传递此信号。 */
+  abort_signal?: AbortSignal;
   /** 当前请求来源 transport。 */
   transport?: FederationRequestTransport;
   /** Worker 等运行时用于延长后台 Promise 生命周期的能力。 */
@@ -223,12 +225,14 @@ export abstract class InstallableService extends Service {
       // 去掉前导 /，与 client ServiceClient.action() 的 normalizeName 对齐
       const action_id = config.path.replace(/^\/+/, "");
       return self.action(action_id, async (svc_ctx: Context) => {
+        const request = svc_ctx.request ?? new Request("http://local");
         return await config.handler({
           request_id: svc_ctx.request_id,
           user: svc_ctx.user,
           bureau: svc_ctx.bureau,
           bureau_token: svc_ctx.bureau_token,
-          request: svc_ctx.request ?? new Request("http://local"),
+          request,
+          abort_signal: svc_ctx.abort_signal ?? request.signal,
           transport: svc_ctx.transport,
           waitUntil: svc_ctx.waitUntil,
           queue: svc_ctx.queue,

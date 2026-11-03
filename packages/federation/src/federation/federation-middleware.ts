@@ -5,6 +5,7 @@
  * 该模块保持纯执行语义，不包含任何具体安全策略。
  */
 
+import { build_error_response } from "./http/error-response.js";
 import type {
   FederationMiddleware,
   FederationMiddlewareContext,
@@ -43,12 +44,6 @@ export async function run_federation_middlewares(
   try {
     return await dispatch(0);
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    return Response.json({
-      error: {
-        message,
-        type: "middleware_error",
-      },
-    }, { status: 500 });
+    return build_error_response(ctx.abort_signal.aborted ? ctx.abort_signal.reason : error, ctx.request_id);
   }
 }

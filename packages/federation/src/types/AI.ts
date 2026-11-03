@@ -90,6 +90,8 @@ export interface AIChannelStreamInput {
 
 /** AIChannel 非语言 action 可读取的显式输入。 */
 export interface AIChannelActionInput {
+  /** 前台 HTTP 执行的组合取消信号；后台队列调用不继承创建或轮询连接的信号。 */
+  readonly abort_signal?: AbortSignal;
   /** 当前 action 的业务输入。 */
   readonly input: Record<string, unknown>;
   /** AIService 已解析完成的最终模型。 */

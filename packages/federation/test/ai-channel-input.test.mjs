@@ -66,8 +66,9 @@ test("AIChannel action receives a scoped input instead of Federation Context", a
   const context = create_context({ model: "image-model", prompt: "draw" })
   await model.runtime.actions.image_create(context)
 
-  assert.deepEqual(Object.keys(received_input).sort(), ["bureau_id", "env", "input", "model", "user_id"])
+  assert.deepEqual(Object.keys(received_input).sort(), ["abort_signal", "bureau_id", "env", "input", "model", "user_id"])
   assert.equal(received_input.input, context.input)
+  assert.equal(received_input.abort_signal, context.request.signal)
   assert.equal("db" in received_input, false)
   assert.equal("locals" in received_input, false)
 })

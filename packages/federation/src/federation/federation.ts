@@ -23,6 +23,8 @@ import { build_federation_router } from "./federation-router.js";
 import { create_federation_runtime } from "./federation-runtime.js";
 import { FederationQueue } from "./queue.js";
 import { run_federation_middlewares } from "./federation-middleware.js";
+import { execute_federation_http } from "./http/http-execution.js";
+import { resolve_http_policy, type ResolvedFederationHttpPolicy } from "./http/http-policy.js";
 import type { FederationOptions, FederationHealthStatus, FederationFetchOptions } from "./types.js";
 import type { FederationStorage } from "./storage.js";
 import type { Authenticator } from "./auth/authenticator.js";
@@ -35,6 +37,8 @@ import type { FederationMiddleware, FederationMiddlewareContext } from "../types
 export class Federation {
   private readonly runtime: Runtime;
   private readonly options: FederationOptions;
+  /** 构造期校验并补齐的服务端 HTTP 策略。 */
+  private readonly http_policy: ResolvedFederationHttpPolicy;
   readonly queue: FederationQueue;
   private readonly services = new Map<string, Service>();
   private readonly middlewares: FederationMiddleware[] = [];
@@ -47,6 +51,7 @@ export class Federation {
 
   constructor(options: FederationOptions) {
     this.options = options;
+    this.http_policy = resolve_http_policy(options.http);
     this.runtime = create_federation_runtime(options);
     this.queue = new FederationQueue({
       ensure_ready: () => this.ensure_ready(),
@@ -133,26 +138,29 @@ export class Federation {
    * 处理 HTTP 请求。
    */
   readonly fetch = async (request: Request, options: FederationFetchOptions = {}): Promise<Response> => {
-    await this.ensure_ready();
-    const ctx: FederationMiddlewareContext = {
-      request,
-      execution: options.execution,
-      runtime: this.runtime,
-      federation: {
-        services: () => this.getServices(),
-      },
-      locals: {},
-    };
-
-    return run_federation_middlewares(this.middlewares, ctx, () =>
-      Promise.resolve(this.hono!.fetch(
-        ctx.request,
-        {
-          trusted_identity: options.trusted_identity,
-          transport: options.transport,
-        },
-        options.execution as HonoExecutionContext | undefined,
-      )));
+    return execute_federation_http(request, this.http_policy, async (prepared_request, request_id) => {
+      // 初始化也受前台执行期限约束；共享初始化不会因单个客户端取消而被撤销。
+      await this.ensure_ready();
+      if (prepared_request.signal.aborted) throw prepared_request.signal.reason;
+      const ctx: FederationMiddlewareContext = {
+        request: prepared_request,
+        request_id,
+        abort_signal: prepared_request.signal,
+        execution: options.execution,
+        runtime: this.runtime,
+        federation: { services: () => this.getServices() },
+        locals: { request_id },
+      };
+      return run_federation_middlewares(this.middlewares, ctx, () => {
+        if (ctx.abort_signal.aborted) throw ctx.abort_signal.reason;
+        return Promise.resolve(this.hono!.fetch(
+          ctx.request,
+          { trusted_identity: options.trusted_identity, transport: options.transport,
+            federation_request_id: request_id, abort_signal: ctx.abort_signal },
+          options.execution as HonoExecutionContext | undefined,
+        ));
+      });
+    });
   };
 
   /**

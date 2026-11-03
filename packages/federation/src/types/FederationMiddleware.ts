@@ -46,6 +46,10 @@ export interface FederationMiddlewareFederationRef {
 export interface FederationMiddlewareContext {
   /** 当前原始 HTTP 请求。 */
   request: Request;
+  /** Federation HTTP 边界生成的请求关联 ID，middleware 短路响应同样使用它。 */
+  request_id: string;
+  /** 当前前台请求的组合取消信号；不能视为数据库事务回滚保证。 */
+  abort_signal: AbortSignal;
   /** 宿主运行时的单次请求执行上下文。 */
   execution?: FederationRequestExecutionContext;
   /** 当前 Federation 的运行时能力集合。 */

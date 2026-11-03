@@ -143,6 +143,7 @@ export abstract class AIChannel {
       input: ctx.input,
       model,
       env: (key) => ctx.env(key),
+      ...((ctx.abort_signal ?? ctx.request?.signal) ? { abort_signal: ctx.abort_signal ?? ctx.request?.signal } : {}),
       ...(ctx.user?.user_id ? { user_id: ctx.user.user_id } : {}),
       ...(ctx.bureau?.bureau_id ? { bureau_id: ctx.bureau.bureau_id } : {}),
       ...(image_job && typeof image_job === "object"
