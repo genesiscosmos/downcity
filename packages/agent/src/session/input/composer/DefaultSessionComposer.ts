@@ -49,19 +49,18 @@ export class DefaultSessionComposer implements SessionComposer {
   async compose(input: SessionComposeInput): Promise<SessionStepInput> {
     const checkpoint = await read_latest_checkpoint(input.derived, this.name);
     const system_blocks = await build_composer_system_blocks(input);
-    if (checkpoint?.summary.trim()) {
-      system_blocks.push({
-        source: "session",
-        name: "context-summary",
-        content: `<session-context-summary>\n${checkpoint.summary}\n</session-context-summary>`,
-      });
-    }
     const tail = checkpoint
       ? slice_messages_after_checkpoint(input.history, checkpoint)
       : input.history;
     return {
       system: to_system_messages(system_blocks),
       system_blocks,
+      // 摘要随 checkpoint 更新，独立于基础 system 快照，不能被冻结或持久固化。
+      context_system_blocks: checkpoint?.summary.trim() ? [{
+        source: "session",
+        name: "context-summary",
+        content: `<session-context-summary>\n${checkpoint.summary}\n</session-context-summary>`,
+      }] : [],
       messages: inject_power_context(
         await session_messages_to_model_messages(tail, input.session.project_root),
         input.state.power_context_blocks ?? [],

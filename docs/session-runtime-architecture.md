@@ -30,7 +30,7 @@ Agent
 - `AgentSessions` 拥有 Session 集合，Workspace 只提供单个 Session 的执行资源。
 - `SessionLoop` 是 Queue 的唯一消费者，也是 Active Turn 的唯一所有者。
 - `session.db` 是 canonical Message 的唯一事实源；`SessionMessages` 只拥有领域规则、非终态恢复与有界运行态投影。
-- `StepInput` 拥有冻结 system 与每步宿主事实；Composer 读取 canonical history，只有 Composer 可写命名空间隔离的派生表。
+- `StepInput` 拥有冻结的基础 system 与每步宿主事实，并在基础快照后组装 Composer 的动态 system 上下文；Composer 读取 canonical history，只有 Composer 可写命名空间隔离的派生表。
 - `SessionExecutor` 只执行一个已经建立的 Turn，输入由 `StepInput` 回调提供；不创建 Session、不持有历史 Store。
 - `SessionInteractions` 只拥有 Promise、Timer 等进程内资源，终态必须先由 `SessionMessages` 提交。
 
@@ -92,15 +92,21 @@ User Message 与 Agent Message 的稳定语义检查点必须先提交 SQLite，
 `build_session_system_blocks()` 是默认 system block 的唯一组装入口，顺序固定为：
 
 ```text
-Agent identity → Agent instruction → Downcity core → Power system → Session context
+Agent（identity + instruction）→ Power（after_instruction）→ Downcity core → Power（默认位置、before_session）→ Session context
 ```
 
-执行路径、`session.system()` 和控制面 system 预览都复用该入口。Power system 必须先经过
-`session.system_context` Hook 检查点；旧的独立 `SessionSystemComposer/SystemDomain` 链路不再存在。
+默认 Composer 通过该入口组装基础 system。Power system 必须先经过
+`session.system_context` Hook 检查点。
 
-Agent 身份（`name` 与 `id`）由 SDK 作为第一个 block 注入。`session` block 只描述 session 自身，使 Agent 身份固定在同一 Agent 所有 Session 的稳定前缀中。
+Agent 身份（`name` 与 `id`）与静态 instruction 合并为第一个 `instruction/agent` block。Power 可通过 `after_instruction` 紧随该块，或通过 `before_session` 放在 Session context 前。`session` block 只描述 session 自身，使 Agent 身份固定在同一 Agent 所有 Session 的稳定前缀中。
 
-Session 首次执行会固定 system snapshot。`snapshot()` 和 `syncshot()` 将完整快照写入 `session.db` 的 `session_state.system_snapshot`；普通运行时变化不得静默重写已有 snapshot。
+`SessionStepInput.system` / `system_blocks` 表达可冻结的基础指令；可选的 `context_system_blocks` 表达每次 `compose()` 重新生成的动态 system 上下文，不参与冻结或持久快照。`DefaultSessionComposer` 将最新 checkpoint 摘要放入动态字段。
+
+`StepInput` 首次组装时捕获基础 blocks。每步请求和 `session.system()` 预览共享组装规则：基础快照在前，本次 Composer 的动态 blocks 在后；模型随后接收 Composer 返回的历史视图与 tools。动态摘要变化不要求刷新基础指令。
+
+`snapshot()` 只把基础 blocks 按顺序合并为文本，写入 `session.db` 的 `session_state.system_snapshot`。`syncshot()` 从当前 Agent 指令与 Power system 重新生成基础快照，已有持久快照时同步覆盖，否则只刷新内存。两者都不固化动态摘要，后续请求继续读取最新 checkpoint。普通运行时变化不得静默重写已有基础 snapshot。
+
+基础快照读取与最终 system 预览各有明确用途；持久化不得反向保存预览中的动态内容。生命周期划分以字段契约为准，不通过 block 名称或摘要标签识别。
 
 ## 5. 持久化与恢复
 
@@ -116,7 +122,11 @@ SessionStorage
 
 核心表保存完整 canonical Message；Composer 的 Summary、索引等只写自己的派生表，不改写原始历史。
 
-默认 `DefaultSessionComposer` 以 Part 而不是 Message/Turn 作为上下文处理边界：reasoning、action 与 interaction 不进入摘要；Tool call/result 作为一个 Part 保持原子；稳定 Part 可以在单个仍然很大的 Agent Message 内形成边界。摘要通过 `<session-context-summary>` 显式 system block 注入，不伪装成普通 assistant 历史。
+默认 `DefaultSessionComposer` 以 Part 而不是 Message/Turn 作为上下文处理边界：reasoning、action 与 interaction 不进入摘要；Tool call/result 作为一个 Part 保持原子；稳定 Part 可以在单个仍然很大的 Agent Message 内形成边界。摘要通过 `context_system_blocks` 中的 `<session-context-summary>` system block 注入；checkpoint 边界之前的内容仅从本次请求历史视图中移除，canonical history 保留。
+
+恢复时，基础快照从 `session_state.system_snapshot` 读取；没有持久快照时从当前 Agent 与 Power 配置生成。动态摘要从 Composer 自己的 checkpoint 派生表读取，历史视图从 canonical Parts 组装。各自事实源独立恢复，摘要不从基础快照反解。
+
+已有显式纯文本快照可能混入旧摘要，无法可靠自动拆分。确认受影响的 Session 后，应由用户决定是否显式执行 `syncshot()`；该操作会采用当前 Agent 与 Power 内容。
 
 Agent Message 只保存 `streaming | done` 两态：前者表示聚合仍可写，后者表示永久收口。成功、停止和失败属于 Turn 结果语义；需要持久化的停止或失败原因由 Error Part 表达。Message 进入 `done` 前，Text/Reasoning 与未完成的 Tool、Interaction、Action 必须在同一事务中收口。运行态缓存因此只保存 `streaming` Agent Message，终态历史始终查询 SQLite。
 

@@ -279,7 +279,7 @@ export interface AgentSessionSystemSessionInfo {
 }
 
 /**
- * 当前 session 首次生成后固定的完整 system prompt 快照。
+ * 当前 Session 的有效 system 预览：冻结的基础快照与本次 Composer 动态上下文。
  */
 export interface AgentSessionSystemSnapshot {
   /** 当前 session_id。 */
@@ -293,7 +293,7 @@ export interface AgentSessionSystemSnapshot {
    * - 每轮动态信息应由调用方放入 user message，避免破坏 instruction 缓存命中。
    */
   session: AgentSessionSystemSessionInfo;
-  /** 首次生成后固定的 system blocks，按进入模型的顺序排列。 */
+  /** 基础快照与当前动态 system blocks，按进入模型的顺序排列；动态内容不参与 snapshot 持久化。 */
   blocks: AgentSessionSystemBlock[];
 }
 

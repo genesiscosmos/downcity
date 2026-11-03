@@ -125,10 +125,12 @@ export interface SessionContextDiagnostics {
 
 /** Composer 为一次模型 Step 生成的完整输入。 */
 export interface SessionStepInput {
-  /** 当前 Step 的 system messages。 */
+  /** 当前 Step 的基础 system messages；首次组装后由 Session 冻结，显式刷新前保持不变。 */
   system: SessionSystemMessage[];
-  /** 当前 Step 的可解释 system blocks。 */
+  /** 与基础 system messages 对应的可解释 blocks；不包含动态摘要。 */
   system_blocks?: AgentSessionSystemBlock[];
+  /** 每次 compose 重新生成的 system 上下文，追加在基础快照之后；不参与冻结或快照持久化。 */
+  context_system_blocks?: AgentSessionSystemBlock[];
   /** 当前 Step 已转换完成的标准模型消息。 */
   messages: ModelMessage[];
   /** 当前 Step 可调用的工具集合；执行前由 StepInput 绑定调用环境。 */

@@ -119,7 +119,7 @@ export interface SessionOptions {
    *
    * 关键点（中文）
    * - Session 创建后不再动态读取 Agent instruction。
-   * - `session.snapshot()` 会把首次生成后固定的完整 system 显式写入本地文件。
+   * - `session.snapshot()` 显式持久化基础 system 快照，Composer 动态摘要不参与保存。
    */
   instruction_system_blocks: AgentSessionSystemBlock[];
 
@@ -128,7 +128,7 @@ export interface SessionOptions {
    *
    * 关键点（中文）
    * - 仅供 `session.syncshot()` 显式重新生成 system 使用。
-   * - 普通 Session 执行仍使用首次生成后固定的 system snapshot。
+   * - 普通 Session 执行沿用基础 system snapshot，动态上下文由 Composer 逐步生成。
    */
   get_instruction_system_blocks: () => AgentSessionSystemBlock[];
 

@@ -101,7 +101,7 @@ export interface AgentSessionActor {
   /** 读取当前 session messages 分页。 */
   messages(input?: ListSessionMessagesInput): Promise<SessionMessagePage>;
 
-  /** 读取当前 session 生效的 system 快照。 */
+  /** 预览当前 Session 的基础 system 快照与本次 Composer 动态上下文。 */
   system(): Promise<AgentSessionSystemSnapshot>;
 
   /** 列出当前 Session 正在等待用户响应的 Interaction。 */
@@ -144,10 +144,10 @@ export interface AgentSession extends AgentSessionActor {
   /** 修改当前 Session 的用户可见标题并发布 canonical mutation。 */
   rename(title: string): Promise<string>;
 
-  /** 把当前 Session 首次生成后固定的完整 system 显式固化到 instruction.md。 */
+  /** 显式持久化当前 Session 的基础 system 快照，不包含 Composer 动态摘要。 */
   snapshot(): Promise<void>;
 
-  /** 使用 Agent 当前 instruction 与 Power 显式重新生成 Session system。 */
+  /** 使用 Agent 当前 instruction 与 Power 显式刷新基础 system，动态摘要独立更新。 */
   syncshot(): Promise<void>;
 
   /** 排队压缩 Session 的稳定历史；运行中也可提交，执行后返回是否产生新摘要，失败时拒绝。 */

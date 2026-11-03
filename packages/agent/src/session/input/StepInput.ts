@@ -2,8 +2,8 @@
  * StepInput：为每个 Step 准备发给模型的输入。
  *
  * 关键点（中文）
- * - 同时拥有「冻结的 system 快照」与「每步宿主事实采集」，因为二者互为前提：首次组装
- *   的结果就是快照，而快照一旦冻结就不再重新采集 Power system。
+ * - 拥有基础 system 快照与每步宿主事实采集；基础快照冻结后不再重新采集 Power system。
+ * - Composer 的动态 system 上下文在基础快照之后逐步组装，不参与冻结或快照持久化。
  * - 只产出输入，不发请求、不判断是否继续；请求与循环归 `SessionExecutor`。
  * - 不拥有 Message、Turn 或 Store 生命周期。
  */
@@ -36,6 +36,7 @@ import { is_action_result } from "@downcity/type";
 import { SESSION_HOOK_POINTS } from "@downcity/type";
 import { run_pipeline_point } from "@/session/input/SessionHookRunner.js";
 import { resolve_session_power_system_blocks } from "@/session/input/SessionSystem.js";
+import { to_system_messages } from "./composer/ComposerAssembly.js";
 
 /** 当前 Session 的每步模型输入装配者。 */
 export class StepInput {
@@ -45,11 +46,11 @@ export class StepInput {
   private readonly workspace_env_by_id = new Map<string, Record<string, string>>();
   /** 当前目录变化时取消的旧订阅。 */
   private workspace_env_unsubscribe?: () => void;
-  /** 当前 Session 首次组装后冻结的完整 system；null 表示尚未冻结。 */
+  /** 当前 Session 冻结的基础 system，不含 Composer 动态上下文；null 表示尚未冻结。 */
   private frozen_blocks: AgentSessionSystemBlock[] | null = null;
   /** 当前 Session 的一次性初始化任务。 */
   private initialize_promise: Promise<void> | null = null;
-  /** 串行化 snapshot / syncshot 对 system 与 instruction.md 的修改。 */
+  /** 串行化 snapshot / syncshot 对基础 system 与持久快照的修改。 */
   private mutation_chain: Promise<void> = Promise.resolve();
 
   constructor(options: StepInputOptions) {
@@ -107,14 +108,14 @@ export class StepInput {
    *
    * 关键点（中文）
    * - 调用方必须先提交 Session 统一输入队列，再调用本方法。
-   * - 首次调用会把组装出的完整 system 冻结为当前 Session 的 system 快照。
+   * - 首次调用冻结基础 system；动态摘要由本次 Composer 结果提供。
    */
   async build(
     turn_context: SessionTurnContext,
     advance_count: number,
   ): Promise<SessionStepExecutionInput> {
-    // 首轮先冻结真实 system，再运行动态 Turn hook；hook 读到的版本标记与模型相同。
-    if (!this.frozen_blocks) await this.read_system();
+    // 首轮先冻结基础 system，再运行动态 Turn hook；hook 读到的版本标记与模型相同。
+    await this.read_frozen_system();
     const compose_input = await this.gather(turn_context, advance_count);
     const model = compose_input.state.model;
     if (!model) throw new Error("requires a configured model.");
@@ -135,14 +136,14 @@ export class StepInput {
     };
   }
 
-  /** 把当前完整 system 显式固化到 instruction.md。 */
-  async snapshot(): Promise<void> {    await this.run_mutation(async () => {
-      const system_snapshot = await this.read_system();
-      await this.write_snapshot(system_snapshot.blocks);
+  /** 只持久化基础 system 快照，动态摘要继续从 Composer 派生状态读取。 */
+  async snapshot(): Promise<void> {
+    await this.run_mutation(async () => {
+      await this.write_snapshot(await this.read_frozen_system());
     });
   }
 
-  /** 使用 Agent 当前 instruction 与 Power 重新生成完整 system。 */
+  /** 使用 Agent 当前 instruction 与 Power 刷新基础 system，不固化动态摘要。 */
   async syncshot(): Promise<void> {
     await this.run_mutation(async () => {
       await this.initialize();
@@ -159,7 +160,7 @@ export class StepInput {
     });
   }
 
-  /** 读取当前 Session 生效的完整 system 快照。 */
+  /** 预览当前模型 system：冻结的基础指令加本次 Composer 动态上下文。 */
   async read_system(): Promise<AgentSessionSystemSnapshot> {
     await this.initialize();
     const composed = await this.options.composer.compose(
@@ -329,23 +330,27 @@ export class StepInput {
     return this.options.store.derived_store(this.options.composer.name);
   }
 
-  /**
-   * 冻结或套用当前 Session 的 system 快照。
-   *
-   * 关键点（中文）：首次调用把组装结果记成快照；之后每次都覆盖为快照，保证同一 Session
-   * 的 system 不再漂移。
-   */
-  private apply_frozen_system(input: SessionStepInput): SessionStepInput {
+  /** 读取或首次捕获基础快照；持久化入口不能从包含动态上下文的预览反推快照。 */
+  private async read_frozen_system(): Promise<AgentSessionSystemBlock[]> {
+    await this.initialize();
     if (!this.frozen_blocks) {
-      this.frozen_blocks = resolve_composed_system_blocks(input);
+      const composed = await this.options.composer.compose(await this.gather(undefined, 0));
+      this.frozen_blocks = resolve_composed_system_blocks(composed);
     }
+    return this.frozen_blocks.map((block) => ({ ...block }));
+  }
+
+  /** 基础 system 保持冻结；当前动态上下文统一追加，供请求和预览共用。 */
+  private apply_frozen_system(input: SessionStepInput): SessionStepInput {
+    this.frozen_blocks ??= resolve_composed_system_blocks(input);
+    const system_blocks = [
+      ...this.frozen_blocks,
+      ...(input.context_system_blocks ?? []),
+    ].map((block) => ({ ...block }));
     return {
       ...input,
-      system: this.frozen_blocks.map((block) => ({
-        role: "system" as const,
-        content: block.content,
-      })),
-      system_blocks: this.frozen_blocks.map((block) => ({ ...block })),
+      system: to_system_messages(system_blocks),
+      system_blocks,
     };
   }
 
@@ -374,7 +379,7 @@ export class StepInput {
     await next;
   }
 
-  /** 把指定完整 system blocks 原子写入 instruction.md。 */
+  /** 把指定基础 system blocks 原子写入持久快照。 */
   private async write_snapshot(
     blocks: readonly AgentSessionSystemBlock[],
   ): Promise<void> {
