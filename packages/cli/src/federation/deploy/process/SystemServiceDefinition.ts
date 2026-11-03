@@ -1,9 +1,9 @@
 /**
  * Render path-only user service definitions. No command execution or environment secrets.
  * systemd arguments use its own C-style quoting, specifier and dollar escaping;
- * launchd arguments remain separate XML strings. Supervisor output goes to the
- * launchd log path or systemd journal, including errors before config is read.
- * The runner owns application logs, working directory and the launchd rate limit.
+ * launchd arguments remain separate XML strings. The runner owns bounded application
+ * and supervisor log files. launchd stdout/stderr use /dev/null to avoid an unmanaged
+ * ever-growing file; systemd keeps early runtime diagnostics in its system-managed journal.
  */
 import type { SystemServiceInfo, SystemServiceSpec } from "./SystemServiceAdapter.js";
 
@@ -46,8 +46,8 @@ export function render_system_service(spec: SystemServiceSpec, info: SystemServi
       : "<key>KeepAlive</key><false/>",
     "<key>ThrottleInterval</key><integer>10</integer>",
     "<key>ExitTimeOut</key><integer>15</integer>",
-    `<key>StandardOutPath</key><string>${escape_xml(spec.log_path)}</string>`,
-    `<key>StandardErrorPath</key><string>${escape_xml(spec.log_path)}</string>`,
+    "<key>StandardOutPath</key><string>/dev/null</string>",
+    "<key>StandardErrorPath</key><string>/dev/null</string>",
     "</dict></plist>", "",
   ].join("\n");
 }

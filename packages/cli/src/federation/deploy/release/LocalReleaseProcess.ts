@@ -112,6 +112,8 @@ export async function inspect_release_process(server: ServerProfile): Promise<{
   state: string;
   /** 是否处于活跃运行或恢复阶段。 */
   active: boolean;
+  /** 最近一次运行器固定故障码，不包含日志正文或配置。 */
+  failure_code?: string;
   /** 已匹配托管器主 PID 的运行记录，缺失时不宣称实例身份有效。 */
   identity?: { /** 系统主 PID。 */ pid: number; /** 当前运行器实例身份。 */ instance_id: string };
 }> {
@@ -128,6 +130,7 @@ export async function inspect_release_process(server: ServerProfile): Promise<{
   const receipt = await read_service_receipt(config);
   return { manager: info.manager, state: receipt?.state === "rate_limited" ? "rate_limited" : state.state,
     active: state.active,
+    ...(receipt?.failure_code ? { failure_code: receipt.failure_code } : {}),
     ...(state.active && receipt && state.pid === receipt.pid && ["starting", "running"].includes(receipt.state)
       ? { identity: { pid: receipt.pid, instance_id: receipt.instance_id } } : {}),
   };

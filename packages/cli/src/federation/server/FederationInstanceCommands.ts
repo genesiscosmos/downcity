@@ -59,6 +59,7 @@ async function show_instance_status(server: ServerProfile): Promise<void> {
   let manager = "not applicable";
   let manager_state = "not applicable";
   let manager_detail: string | undefined;
+  let failure_code: string | undefined;
   let runtime_pid: number | undefined;
   let instance_id: string | undefined;
   if (server.target === "local" && server.fed_id) {
@@ -67,6 +68,7 @@ async function show_instance_status(server: ServerProfile): Promise<void> {
       const process_state = await inspect_release_process(server);
       manager = process_state.manager;
       manager_state = process_state.state;
+      failure_code = process_state.failure_code;
       runtime_pid = process_state.identity?.pid;
       instance_id = process_state.identity?.instance_id;
     } catch (error) {
@@ -109,6 +111,7 @@ async function show_instance_status(server: ServerProfile): Promise<void> {
     facts: [
       { label: "service manager", value: manager },
       { label: "manager state", value: manager_state },
+      { label: "runner failure", value: failure_code ?? "none recorded" },
       { label: "runtime pid", value: runtime_pid ? String(runtime_pid) : "not verified" },
       { label: "instance", value: instance_id ?? "not verified" },
       { label: "health endpoint", value: health },

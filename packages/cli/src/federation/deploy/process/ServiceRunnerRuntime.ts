@@ -5,13 +5,14 @@
  * 并生成新 instance_id。启动次数超限时以成功码退出抑制 launchd 恢复，receipt 明确记录原因。
  */
 import { randomUUID } from "node:crypto";
-import { spawn } from "node:child_process";
-import { closeSync, mkdirSync, openSync } from "node:fs";
+import type { Writable } from "node:stream";
+import { finished } from "node:stream/promises";
 import { readFile, stat } from "node:fs/promises";
-import { dirname, resolve } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import { read_node_release } from "@/federation/deploy/release/NodeReleaseBuilder.js";
 import { read_local_runtime_config } from "@/federation/deploy/release/LocalRuntimeConfig.js";
 import { read_service_config, write_service_json, type ServiceRuntimeReceipt } from "./ServiceRuntime.js";
+import { open_rotating_output, run_logged_application } from "./ManagedServiceOutput.js";
 
 /** 执行一次已登记服务启动；只有显式运行器入口调用，不在模块导入时操作进程。 */
 export async function run_managed_service(config_path: string): Promise<number> {
@@ -37,7 +38,20 @@ export async function run_managed_service(config_path: string): Promise<number> 
   }
   await write_service_json(config.attempts_path, [...attempts, now]);
   await write_service_json(config.receipt_path, receipt);
+  let supervisor: Writable | undefined;
+  let logging_failed = false;
+  let supervisor_failed = false;
+  // 诊断只含固定事件和错误码，不包含业务输出、请求正文或配置值。
+  const diagnostic = async (code: string) => {
+    if (!supervisor || supervisor_failed) return;
+    await new Promise<void>((done, reject) => supervisor!.write(`${JSON.stringify({ event: "federation_service", code })}\n`, (error) => error ? reject(error) : done()));
+  };
   try {
+    try {
+      supervisor = await open_rotating_output(join(dirname(config_path), "supervisor.log"), { max_bytes: 2 * 1024 * 1024, archive_count: 3 });
+    } catch { supervisor_failed = true; throw new Error("Supervisor logging unavailable"); }
+    supervisor.on("error", () => { supervisor_failed = true; });
+    await diagnostic("RUNNER_START");
     const manifest = await read_node_release(config.release_dir, config.fed_id, config.release_id);
     const runtime_env = read_local_runtime_config(config.runtime_config_path);
     if (!runtime_env.DATABASE_PATH || !(await stat(runtime_env.DATABASE_PATH)).isFile()) {
@@ -48,43 +62,29 @@ export async function run_managed_service(config_path: string): Promise<number> 
     for (const key of ["PATH", "HOME", "USERPROFILE", "SYSTEMROOT", "WINDIR", "TEMP", "TMP", "TMPDIR", "LANG", "TZ"]) {
       if (process.env[key]) base_env[key] = process.env[key];
     }
-    mkdirSync(dirname(config.log_path), { recursive: true, mode: 0o700 });
-    const log_fd = openSync(config.log_path, "a", 0o600);
     const entry = resolve(config.release_dir, manifest.entry);
-    const child = (() => {
-      try {
-        return spawn(process.execPath, [entry], {
-          cwd: dirname(entry),
-          env: { ...base_env, ...runtime_env, HOST: config.host, PORT: String(config.port),
-            PUBLIC_URL: config.base_url, DOWNCITY_FEDERATION_BASE_URL: config.base_url,
-            DOWNCITY_FED_ID: config.fed_id, DOWNCITY_RELEASE_ID: config.release_id,
-            DOWNCITY_FED_INSTANCE_ID: receipt.instance_id },
-          stdio: ["ignore", log_fd, log_fd],
-        });
-      } finally { closeSync(log_fd); }
-    })();
-    let stop_requested = false;
-    const stop_child = () => { stop_requested = true; child.kill("SIGTERM"); };
-    process.on("SIGTERM", stop_child);
-    process.on("SIGINT", stop_child);
-    try {
-      const completion = new Promise<number>((done) => {
-        child.once("error", () => done(1));
-        child.once("exit", (code, signal) => done(stop_requested ? 0 : signal ? 1 : (code ?? 1)));
-      });
-      // running 只表示子进程已分配，不表示应用已就绪，CLI 还需健康身份校验。
-      if (child.pid) await write_service_json(config.receipt_path, { ...receipt, state: "running", updated_at: new Date().toISOString() });
-      const code = await completion;
-      await write_service_json(config.receipt_path, { ...receipt, state: code === 0 ? "stopped" : "failed", updated_at: new Date().toISOString() });
-      return code;
-    } finally {
-      process.off("SIGTERM", stop_child);
-      process.off("SIGINT", stop_child);
-      if (child.exitCode === null && child.signalCode === null) child.kill("SIGTERM");
-    }
+    const code = await run_logged_application({ entry, cwd: dirname(entry), log_path: config.log_path,
+      env: { ...base_env, ...runtime_env, HOST: config.host, PORT: String(config.port),
+        PUBLIC_URL: config.base_url, DOWNCITY_FEDERATION_BASE_URL: config.base_url,
+        DOWNCITY_FED_ID: config.fed_id, DOWNCITY_RELEASE_ID: config.release_id,
+        DOWNCITY_FED_INSTANCE_ID: receipt.instance_id },
+      on_started: () => write_service_json(config.receipt_path, { ...receipt, state: "running", updated_at: new Date().toISOString() }),
+      on_log_failure: () => { logging_failed = true; },
+    });
+    await diagnostic(logging_failed ? "APPLICATION_LOG_FAILED" : code === 0 ? "APPLICATION_STOPPED" : "APPLICATION_FAILED");
+    await new Promise<void>((done, reject) => supervisor!.end((error?: Error) => error ? reject(error) : done()));
+    await finished(supervisor);
+    await write_service_json(config.receipt_path, { ...receipt, state: code === 0 ? "stopped" : "failed",
+      ...(logging_failed ? { failure_code: "APPLICATION_LOG_FAILED" as const } : {}), updated_at: new Date().toISOString() });
+    return code;
   } catch {
-    await write_service_json(config.receipt_path, { ...receipt, state: "failed", updated_at: new Date().toISOString() });
-    // 错误仅返回操作状态，避免将配置值或驱动连接诊断输出到系统日志。
+    await diagnostic(logging_failed ? "APPLICATION_LOG_FAILED" : "RUNNER_FAILED").catch(() => {});
+    await write_service_json(config.receipt_path, { ...receipt, state: "failed",
+      failure_code: supervisor_failed ? "SUPERVISOR_LOG_FAILED" : logging_failed ? "APPLICATION_LOG_FAILED" : "RUNNER_FAILED",
+      updated_at: new Date().toISOString() });
     return 1;
+  } finally {
+    if (supervisor && !supervisor.destroyed) supervisor.end();
+    if (supervisor) await finished(supervisor).catch(() => {});
   }
 }

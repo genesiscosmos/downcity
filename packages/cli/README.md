@@ -40,7 +40,20 @@ fed web --id fed_x --no-open
 
 `status` 可查询任意已保存连接，分别展示 registry record、系统 manager 事实与 `/health` 实时探测；本地实例另展示发布历史。登记状态、保存的策略和发布结果都不证明服务已停止或某个 release 正在运行。本地 release 只有在 manager 核对实例身份，且健康响应为 `ok: true`、`fed_id`、`release_id`、`instance_id` 全部匹配时才显示 ready；HTTP 200 本身不足以确认身份。manager 检查异常显示 `unknown`，需要人工检查系统服务与健康端点。
 
-`logs`、`stop` 和 `restart` 仅支持 CLI 管理的 local 实例。`logs` 读取现有 `service.log` 的最近日志。`stop` 禁用自动启动并停止服务，停止状态跨系统重启保留，直到用户显式执行 `fed deploy` 或符合恢复保护要求的 `fed restart`；这些操作按持久配置恢复自动启动策略。`restart` 只运行已安装 release，读取持久运行配置，不读取源码或重新构建；原项目目录删除后仍可重启。重启还要求 `current.json` 与 registry 的 release 一致。切换前的 build/package/preflight 失败保留旧实例及运行配置；没有待恢复切换时，允许 restart 原成功 release。进入切换后设置 `recovery_required = true`；切换失败或中断时阻断 restart，恢复必须显式执行 `fed deploy` 并成功。此保护持续到发布成功，后续 build/preflight 失败也不会清除。历史 `last_failure` 本身不构成阻断。管理界面的 Remove connection 只移除连接，不停止服务。
+`logs`、`stop` 和 `restart` 仅支持 CLI 管理的 local 实例。`logs` 显示当前 `service.log` 末尾最多 200 行，不跨文件补足；归档可人工读取。`stop` 禁用自动启动并停止服务，停止状态跨系统重启保留，直到用户显式执行 `fed deploy` 或符合恢复保护要求的 `fed restart`；这些操作按持久配置恢复自动启动策略。`restart` 只运行已安装 release，读取持久运行配置，不读取源码或重新构建；原项目目录删除后仍可重启。重启还要求 `current.json` 与 registry 的 release 一致。切换前的 build/package/preflight 失败保留旧实例及运行配置；没有待恢复切换时，允许 restart 原成功 release。进入切换后设置 `recovery_required = true`；切换失败或中断时阻断 restart，恢复必须显式执行 `fed deploy` 并成功。此保护持续到发布成功，后续 build/preflight 失败也不会清除。历史 `last_failure` 本身不构成阻断。管理界面的 Remove connection 只移除连接，不停止服务。
+
+本地受管日志使用固定默认值，无需新增配置：
+
+| 文件 | 单份上限 | 归档 | 每个 Fed 的文件总额度 |
+| --- | --- | --- | --- |
+| `service.log` | 20 MiB | 5 份，`.1` 最新、`.5` 最旧 | 约 120 MiB，含当前文件 |
+| `supervisor.log` | 2 MiB | 3 份，`.1` 最新、`.3` 最旧 | 约 8 MiB，含当前文件 |
+
+应用 stdout 和 stderr 经 runner 的 pipe 与背压串行写入 `service.log`，避免无限排队。按实际字节切分，单个巨大 chunk 也不会让任何一份超限；文件边界不保证 UTF-8 字符或行完整。轮转不重启服务。写入失败时 runner 停止应用，将运行 receipt 标记为 `failed`。
+
+`supervisor.log` 由 runner 写入固定、安全的诊断 event/code，不记录正文、Token、密钥或完整环境变量。macOS launchd 的 stdout/stderr 指向 `/dev/null`；Linux 的固定事件同样写入该文件，system journal 另保留 runtime 启动信息，其额度与轮转由操作系统管理，CLI 不修改全局 journal 配置。Node 在进入 runner 前启动失败时，需通过 `launchctl` 或 `systemctl --user` / `journalctl --user` 诊断。
+
+writer 的当前日志和归档路径必须是普通文件；符号链接、目录等非法目标会被拒绝，不跟随链接。已存在且超过对应单份上限的文件会报错，不会截断；用户需先明确归档或清理。应用主动输出不保证自动脱敏，应用开发者不得记录 Token、API key 或完整请求/响应正文。这些规则描述包含该功能的 CLI，文档更新不代表运行实例已经应用。
 
 本地独立 Node 发布模型将编译后的入口、完整生产依赖及项目资源安装到 `~/.downcity/federation/deployments/<fed_id>/releases/<release_id>`，同级 `current.json` 是成功激活指针，不代表该 release 当前正在运行。项目资源通过 `package.json.files` 显式声明；生产依赖及其运行资源完整纳入产物，`.env` 不进入产物。`deployment.scripts.build` 保留用于构建，本地目标拒绝 `deployment.scripts.deploy`，Node 直接运行编译后的入口。默认使用系统 Node，运行时必须与构建时的 Node 版本、平台和架构一致，尤其是含原生模块的依赖。
 

@@ -55,6 +55,8 @@ export interface ServiceRuntimeReceipt {
   pid: number;
   /** 当前运行阶段，不等同于应用就绪。 */
   state: "starting" | "running" | "stopped" | "failed" | "rate_limited";
+  /** 固定运行器故障码，不包含日志内容或配置值；日志不可用时仍可通过 status 诊断。 */
+  failure_code?: "APPLICATION_LOG_FAILED" | "SUPERVISOR_LOG_FAILED" | "RUNNER_FAILED";
   /** 最近一次状态变化时间。 */
   updated_at: string;
 }
@@ -114,6 +116,7 @@ export async function read_service_receipt(config: ServiceRuntimeConfig): Promis
     if (value.fed_id !== config.fed_id || value.release_id !== config.release_id || value.launch_id !== config.launch_id
       || typeof value.instance_id !== "string" || !value.instance_id || !Number.isSafeInteger(value.pid) || value.pid < 1
       || !["starting", "running", "stopped", "failed", "rate_limited"].includes(value.state)
+      || (value.failure_code !== undefined && !["APPLICATION_LOG_FAILED", "SUPERVISOR_LOG_FAILED", "RUNNER_FAILED"].includes(value.failure_code))
       || !Number.isFinite(Date.parse(value.updated_at))) throw new Error("Invalid service receipt");
     return value;
   } catch (error) {

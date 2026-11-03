@@ -6,15 +6,15 @@
  * startup and unloads/stops the job, retaining a template and disabled marker.
  * Only a later explicit start restores startup according to auto_start.
  *
- * Definitions contain paths only. Supervisor diagnostics use launchd's log file
- * or systemd's journal. The runner owns application file logs, working directory
+ * Definitions contain paths only. The runner owns bounded supervisor and application
+ * logs; systemd's journal retains early runtime diagnostics. The runner owns working directory
  * and must enforce an additional crash-rate limit
  * on launchd (ThrottleInterval is only a delay, not a crash-count limit).
  * All manager commands use execFile with a ten-second timeout, never a shell.
  * No commands execute when this module is imported or definitions are resolved.
  */
 import { constants, realpathSync as realpath_sync } from "node:fs";
-import { access, lstat, mkdir, open, readFile as read_file, readlink, rename, rm, writeFile as write_file } from "node:fs/promises";
+import { access, lstat, mkdir, readFile as read_file, readlink, rename, rm, writeFile as write_file } from "node:fs/promises";
 import { createHash as create_hash, randomUUID as random_uuid } from "node:crypto";
 import { homedir } from "node:os";
 import { basename, dirname, isAbsolute as is_absolute, join, normalize, resolve } from "node:path";
@@ -34,7 +34,7 @@ export interface SystemServiceSpec {
   runner_path: string;
   /** Absolute runner configuration path; contents are never copied into definitions. */
   config_path: string;
-  /** Absolute launchd supervisor log path; systemd uses journal, runner owns app logs. */
+  /** Absolute bounded supervisor log path reserved for the runner, never a launchd file descriptor. */
   log_path: string;
   /** Absolute private directory retaining the owned template and disabled marker. */
   service_dir: string;
@@ -176,16 +176,6 @@ async function write_definition(file_path: string, content: string): Promise<voi
     await write_file(temporary_path, content, { flag: "wx", mode: 0o600 });
     await rename(temporary_path, file_path);
   } finally { await rm(temporary_path, { force: true }); }
-}
-
-/** Prepare a private regular log file so launchd can capture even early runner errors. */
-async function prepare_launchd_log(log_path: string): Promise<void> {
-  await mkdir(dirname(log_path), { recursive: true, mode: 0o700 });
-  const log_file = await open(log_path,
-    constants.O_WRONLY | constants.O_APPEND | constants.O_CREAT | constants.O_NOFOLLOW | constants.O_NONBLOCK, 0o600);
-  try {
-    if (!(await log_file.stat()).isFile()) throw new Error(`Supervisor log must be a regular file: ${log_path}`);
-  } finally { await log_file.close(); }
 }
 
 /** Stage only. Loading is intentionally combined with explicit start on both OSes. */
@@ -335,7 +325,6 @@ export async function start_system_service(input: SystemServiceSpec): Promise<vo
     await validate_manager(info, true);
     const previous = info.manager === "launchd" ? await inspect_launchd(spec, info) : await inspect_systemd(spec, info);
     if (info.manager === "systemd") await default_target_links(info);
-    else await prepare_launchd_log(spec.log_path);
     await write_definition(info.disabled_path, `${info.id}\n`);
     if (info.manager === "launchd" && previous.registered) {
       require_service_success(await run_service_command("launchctl", ["bootout", info.service_target]), "Unload previous launchd job");
