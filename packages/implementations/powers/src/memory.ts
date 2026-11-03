@@ -71,7 +71,7 @@ export type {
   DefaultFileMemoryRootInput,
   FileMemoryStorageAdapterOptions,
 } from "./memory/types/BuiltinMemoryProvider.js";
-export type { MemoryJobView } from "./memory/types/MemoryJob.js";
+export type { MemoryJobView, MemoryJobDetail, MemoryJobChangeDetail, MemoryJobSourceExcerpt } from "./memory/types/MemoryJob.js";
 export type {
   MemoryChangeSet, MemoryCommitReceipt, MemoryCommitProvider,
   MemoryVersionInput, MemoryVersionResult, MemoryVersionedRecord, MemoryValidity,

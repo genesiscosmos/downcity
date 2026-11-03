@@ -52,12 +52,12 @@ export function register_memory_power_host_actions(context: PowerLifecycleContex
       }));
     },
   });
-  for (const action_id of ["job_status", "retry"] as const) {
+  for (const action_id of ["job_status", "job_detail", "retry"] as const) {
     context.power.action({
       id: `memory.${action_id}`,
       run: async (input) => {
         const source = read_record(input);
-        return as_json(await invoke_domain_action<MemoryJobView>(context, read_scope(source), action_id, {
+        return as_json(await invoke_domain_action<unknown>(context, read_scope(source), action_id, {
           job_id: read_required_string(source, "job_id"),
         }));
       },

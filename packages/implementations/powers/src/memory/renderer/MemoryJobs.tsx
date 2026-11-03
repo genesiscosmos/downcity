@@ -1,7 +1,8 @@
-/** Memory 处理记录的最小列表：按执行范围分页、读取状态与重试，不展示来源正文。 */
+/** Memory 处理记录：列表只展示状态，独立授权详情接口展示有界的固定差异与证据。 */
 import { useEffect, useState } from "react";
 import type { PowerMainviewComponentProps } from "@downcity/city/power/react";
-import type { MemoryJobView } from "../types/MemoryJob.js";
+import type { MemoryJobDetail, MemoryJobView } from "../types/MemoryJob.js";
+import { memory_job_changes as MemoryJobChanges } from "./MemoryJobDetail.js";
 
 /** 与宿主 jobs action 对齐的分页结果。 */
 interface MemoryJobsPage {
@@ -37,7 +38,7 @@ export function MemoryJobs({ power, navigation, ui, agent_id, workspace_id }: Me
   const [loading, set_loading] = useState(true);
   const [error, set_error] = useState("");
   const [selected_id, set_selected_id] = useState("");
-  const [detail, set_detail] = useState<MemoryJobView>();
+  const [detail, set_detail] = useState<MemoryJobDetail>();
   const [reading, set_reading] = useState(false);
   const [busy, set_busy] = useState(false);
   const input = { agent_id, workspace_id };
@@ -74,10 +75,10 @@ export function MemoryJobs({ power, navigation, ui, agent_id, workspace_id }: Me
     set_reading(true);
     const load = async () => {
       try {
-        const value = await power.invoke<MemoryJobView>("memory.job_status", { agent_id, workspace_id, job_id: selected_id });
+        const value = await power.invoke<MemoryJobDetail>("memory.job_detail", { agent_id, workspace_id, job_id: selected_id });
         if (disposed) return;
         set_detail(value);
-        if (["queued", "running", "committing", "retry_wait"].includes(value.status)) timer = setTimeout(() => void load(), 3000);
+        if (["queued", "running", "committing", "retry_wait"].includes(value.job.status)) timer = setTimeout(() => void load(), 3000);
       } catch (reason) { if (!disposed) set_error(error_message(reason)); }
       finally { if (!disposed) set_reading(false); }
     };
@@ -91,7 +92,8 @@ export function MemoryJobs({ power, navigation, ui, agent_id, workspace_id }: Me
     set_error("");
     try {
       const result = await power.invoke<MemoryJobView>("memory.retry", { ...input, job_id });
-      set_detail(result);
+      set_detail(undefined);
+      set_reading(true);
       set_selected_id(result.job_id);
       set_revision((value) => value + 1);
       ui.toast({ type: "success", message: `处理状态：${STATUS_LABELS[result.status]}` });
@@ -100,7 +102,7 @@ export function MemoryJobs({ power, navigation, ui, agent_id, workspace_id }: Me
   };
 
   return <Page>
-    <Toolbar title="记忆处理记录" description="仅已提交表示保存完成。无需变更和失败均不会产生新的记忆。" actions={<Inline>
+    <Toolbar title="记忆处理记录" description="仅已提交表示保存完成；暂存差异和失败记录不能视为已生效。" actions={<Inline>
       <Button on_click={() => navigation.navigate({ ...navigation.route, view: "list" })}>返回记忆</Button>
       <Button disabled={loading || busy} on_click={() => set_revision((value) => value + 1)}>刷新</Button>
     </Inline>} />
@@ -121,14 +123,15 @@ export function MemoryJobs({ power, navigation, ui, agent_id, workspace_id }: Me
       </Inline>
     </Section> : null}
     {selected_id ? <Section title="处理详情">
-      {!detail ? (reading ? <LoadingState label="正在读取状态…" /> : <EmptyState title="无法读取处理状态" description="请刷新后重试。" size="compact" />) : <Group>
-        <Row label="Job ID" description={detail.job_id} />
-        <Row label="状态" trailing={<Status>{STATUS_LABELS[detail.status]}</Status>} />
-        <Row label="范围" description={`${detail.target} · ${detail.mode} · ${detail.agent_id}${detail.workspace_id ? ` · ${detail.workspace_id}` : ""}`} />
-        {detail.session_id ? <Row label="Memory Session" description={detail.session_id} /> : null}
-        {detail.detail ? <Row label="说明" description={detail.detail} /> : null}
-        {detail.memory_ids?.length ? <Row label="提交结果" description={detail.memory_ids.join("、")} /> : null}
-        {detail.status === "failed" ? <Row label="重新处理" trailing={<Button disabled={busy} on_click={() => void retry(detail.job_id)}>{busy ? "提交中…" : "重试"}</Button>} /> : null}
+      {!detail ? (reading ? <LoadingState label="正在读取详情…" /> : <EmptyState title="无法读取处理详情" description="请刷新后重试。" size="compact" />) : <Group>
+        <Row label="Job ID" description={detail.job.job_id} />
+        <Row label="状态" trailing={<Status>{STATUS_LABELS[detail.job.status]}</Status>} />
+        <Row label="范围" description={`${detail.job.target} · ${detail.job.mode} · ${detail.job.agent_id}${detail.job.workspace_id ? ` · ${detail.job.workspace_id}` : ""}`} />
+        {detail.job.session_id ? <Row label="Memory Session" description={detail.job.session_id} /> : null}
+        {detail.job.detail ? <Row label="说明" description={detail.job.detail} /> : null}
+        {detail.job.status === "succeeded" && detail.job.memory_ids?.length ? <Row label="提交结果" description={detail.job.memory_ids.join("、")} /> : null}
+        <MemoryJobChanges key={`${detail.job.job_id}:${detail.job.session_id ?? ""}`} detail={detail} ui={ui} />
+        {detail.job.status === "failed" ? <Row label="重新处理" trailing={<Button disabled={busy} on_click={() => void retry(detail.job.job_id)}>{busy ? "提交中…" : "重试"}</Button>} /> : null}
       </Group>}
     </Section> : null}
   </Page>;

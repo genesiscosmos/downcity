@@ -5,6 +5,13 @@ import { with_memory_scope_lock } from "./MemoryScopeLock.js";
 import { FileMemoryStorageAdapter } from "../adapters/FileMemoryStorageAdapter.js";
 import type { MemoryJob, MemoryJobInput } from "../types/MemoryJob.js";
 
+/** 在写入之前计算请求身份，允许先持久化完成反馈订阅以封闭崩溃窗口。 */
+export function memory_job_identity(input: MemoryJobInput): string {
+  return createHash("sha256").update(JSON.stringify([
+    input.access.agent_id, input.access.workspace_id, input.target, input.mode, input.kind, input.request_key,
+  ])).digest("hex");
+}
+
 /** 一个 Memory Power 生命周期持有的内部处理账本。 */
 export class MemoryJobStore {
   /** 仅封装本 Power 的处理记录目录。 */
@@ -29,9 +36,7 @@ export class MemoryJobStore {
   async create(input: MemoryJobInput): Promise<MemoryJob> {
     if (!input.sources.length || input.sources.length > 100) throw new Error("Memory Job requires 1–100 sources");
     if (input.sources.reduce((count, source) => count + source.text.length, 0) > 64_000) throw new Error("Memory Job source budget exceeded");
-    const job_id = createHash("sha256").update(JSON.stringify([
-      input.access.agent_id, input.access.workspace_id, input.target, input.mode, input.kind, input.request_key,
-    ])).digest("hex");
+    const job_id = memory_job_identity(input);
     return await this.serial(async () => {
       const existing = await this.read(job_id);
       if (existing) {
@@ -55,7 +60,7 @@ export class MemoryJobStore {
 
   /** 原子替换一个已存在 Job，身份与来源不能经此路径改写。 */
   async update(job_id: string, change: Partial<Pick<MemoryJob,
-    "status" | "attempt" | "session_id" | "turn_id" | "scope_version" | "changes" | "profile_version" | "profile_edits" | "skip_reason" | "memory_ids" | "error"
+    "status" | "attempt" | "session_id" | "turn_id" | "scope_version" | "changes" | "change_details" | "profile_version" | "profile_edits" | "skip_reason" | "memory_ids" | "error"
   >>): Promise<MemoryJob> {
     return await this.serial(async () => {
       const job = await this.read(job_id);
@@ -67,7 +72,7 @@ export class MemoryJobStore {
   }
 
   /** 在同一账本锁内检查执行身份并暂存唯一结果，拒绝并行工具互相覆盖。 */
-  async stage(job_id: string, session_id: string, outcome: Pick<MemoryJob, "changes" | "profile_version" | "profile_edits" | "skip_reason">): Promise<void> {
+  async stage(job_id: string, session_id: string, outcome: Pick<MemoryJob, "changes" | "change_details" | "profile_version" | "profile_edits" | "skip_reason">): Promise<void> {
     await this.serial(async () => {
       const job = await this.read(job_id);
       if (!job || job.session_id !== session_id || job.status !== "running") throw new Error("Memory Job is no longer running in this Session");

@@ -6,7 +6,7 @@ import { MEMORY_SESSION_KIND } from "../types/MemorySession.js";
 import { MemoryJobStore } from "../storage/MemoryJobStore.js";
 import { MemoryProfile } from "../runtime/MemoryProfile.js";
 import type { ProfileScope } from "../types/Profile.js";
-import { register_memory_session_profile } from "../runtime/MemorySession.js";
+import { register_memory_session_profile, MEMORY_SESSION_PROFILE_VERSION } from "../runtime/MemorySession.js";
 
 /** 处理生命周期的受限依赖。 */
 export interface MemoryCoordinatorOptions {
@@ -69,7 +69,7 @@ export class MemoryCoordinator {
       : await this.options.provider.read_commit_receipt({ access: job.access, target: job.target, commit_id: `job:${job.job_id}` });
     const updated = await this.options.jobs.update(job.job_id, {
       status: committed ? "committing" : "queued",
-      ...(committed ? {} : { session_id: undefined, turn_id: undefined, changes: undefined, scope_version: undefined, profile_edits: undefined, profile_version: undefined }),
+      ...(committed ? {} : { session_id: undefined, turn_id: undefined, changes: undefined, change_details: undefined, scope_version: undefined, profile_edits: undefined, profile_version: undefined }),
       skip_reason: undefined, error: undefined,
     });
     this.schedule(job.job_id);
@@ -109,7 +109,7 @@ export class MemoryCoordinator {
       const attempt = job.attempt + 1;
       const session = await host.system.create_agent_session({
         agent_id: job.access.agent_id, workspace_id: job.access.workspace_id, inherit_workspace: false,
-        execution_profile_id: "memory", execution_profile_version: 1, model_id: this.options.model_id,
+        execution_profile_id: "memory", execution_profile_version: MEMORY_SESSION_PROFILE_VERSION, model_id: this.options.model_id,
         creation_key: `memory:${job.job_id}:${attempt}`,
         origin: { category: "work", type: MEMORY_SESSION_KIND, memory_job_id: job.job_id, memory_attempt: attempt },
       });
@@ -184,18 +184,24 @@ export class MemoryCoordinator {
     const existing = await this.options.provider.read_commit_receipt({ ...scope, commit_id });
     const receipt = existing ?? await this.options.provider.commit({
       ...scope, commit_id, expected_scope_version: job.scope_version,
-      changes: (job.changes ?? []).map((change) => ({
+      changes: (job.changes ?? []).map((change, index) => ({
         operation: change.operation, memory_id: change.memory_id, expected_version: change.expected_version,
         content: change.content, topic: change.topic, memory_type: change.memory_type,
         source_refs: change.source_ids.map((source_id) => {
           const source = job.sources.find((item) => item.source_id === source_id);
           if (!source) throw new Error("Staged source is not permitted by this Job");
-          return { ...source, source_type: source.role === "request" ? "manual" : "session", excerpt: undefined };
+          const evidence = job.change_details?.[index]?.sources.find((item) => item.source_id === source_id);
+          return { ...source, source_type: source.role === "request" ? "manual" : "session",
+            excerpt: evidence?.excerpt, locator: evidence ? `text-offset:${evidence.excerpt_start}` : undefined };
         }).map(({ text: _text, ...source }) => source),
       })),
     });
     await this.options.jobs.update(job.job_id, {
       status: "succeeded", memory_ids: receipt.changes.map((change) => change.memory_id), error: undefined,
+      change_details: job.change_details?.map((detail, index) => ({ ...detail,
+        memory_id: receipt.changes[index]?.memory_id ?? detail.memory_id,
+        after: { ...detail.after, version: receipt.changes[index]?.version ?? detail.after.version },
+      })),
     });
   }
 

@@ -66,6 +66,7 @@ import {
 import type { SessionTurnCompletionOptions } from "@/types/session/SessionTurnCompletion.js";
 
 import { SessionOccupation } from "./SessionOccupation.js";
+import { SessionResultAcceptance } from "./SessionResultAcceptance.js";
 import { SessionChildWorkLifecycle } from "./SessionChildWorkLifecycle.js";
 import { SessionBusyError } from "@/session/SessionBusyError.js";
 import { local_user_prompt_actor, session_prompt_actor_schema, same_session_prompt_actor } from "@/types/sdk/SessionPromptActor.js";
@@ -94,6 +95,8 @@ export class SessionLoop {
   private readonly maintain_context: SessionLoopOptions["maintain_context"];
   private readonly state: SessionState;
   private readonly messages: SessionMessages;
+  /** 可信结果共用 canonical 去重与并发接收屏障。 */
+  private readonly result_acceptance: SessionResultAcceptance;
   private readonly events: SessionEventHub;
   private readonly logger: SessionLoopOptions["logger"];
   /** 读取当前生效的扩展处理器集合。 */
@@ -137,6 +140,7 @@ export class SessionLoop {
     this.maintain_context = options.maintain_context;
     this.state = options.state;
     this.messages = options.messages;
+    this.result_acceptance = new SessionResultAcceptance(this.session_id, this.messages);
     this.events = options.events;
     this.logger = options.logger;
     this.get_hooks = options.get_hooks;
@@ -289,18 +293,13 @@ export class SessionLoop {
 
   /** 可信委派结果仅可注入原活动 Turn；调用方必须先验证持久化委派记录。 */
   async accept_delegation_result(turn_id: string, request_id: string, query: AgentSessionPromptInput["query"]): Promise<boolean> {
-    const identity = resolve_prompt_request_identity(this.session_id, request_id);
-    if (!identity) throw new Error("Delegation result requires request_id");
-    const existing = await this.messages.read_message(identity.message_id);
-    if (existing) {
-      if (existing.role !== "user" || existing.turn_id !== turn_id) throw new Error("Delegation result belongs to another Turn");
+    return await this.result_acceptance.accept(turn_id, request_id, query, async (identity, parts) => {
+      const actor = this.occupation.occupied_by;
+      if (!actor || this.stopping || this.closing || this.active_turn?.turn_id !== turn_id) return false;
+      // 检查目标后同步入队，不允许迟到结果漂移到下一 Turn。
+      await this.enqueue_prompt({ actor, request_id, query: parts, visibility: "internal" }, identity);
       return true;
-    }
-    const actor = this.occupation.occupied_by;
-    if (!actor || this.stopping || this.closing || this.active_turn?.turn_id !== turn_id) return false;
-    // 检查目标后同步入队，不允许迟到结果漂移到下一 Turn。
-    await this.enqueue_prompt({ actor, request_id, query, visibility: "internal" }, identity);
-    return true;
+    });
   }
 
   /** 已通过占用校验的请求沿用幂等接收和 Session 队列。 */

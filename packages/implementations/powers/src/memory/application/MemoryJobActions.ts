@@ -42,11 +42,17 @@ export function create_memory_job_actions(get_service: () => MemoryService, get_
       input_schema: { zod: id_schema, json_schema: { type: "object", additionalProperties: false, required: ["job_id"], properties: { job_id: { type: "string" } } } },
       execute: async ({ context, input }) => run(context, async (service) => service.job_status(await resolve_memory_access(context), id_schema.parse(input).job_id)),
     }),
+    job_detail: create_action({
+      description: "Inspect a memory job's captured before/after changes and original source excerpts. Pending or failed changes are not saved.",
+      access: "read", returns: "job, changes; source content is restricted to the current execution scope",
+      input_schema: { zod: id_schema, json_schema: { type: "object", additionalProperties: false, required: ["job_id"], properties: { job_id: { type: "string" } } } },
+      execute: async ({ context, input }) => run(context, async (service) => service.job_detail(await resolve_memory_access(context), id_schema.parse(input).job_id)),
+    }),
     retry: create_action({
       description: "Retry a failed memory job using its original scope and sources. Does not alter business Task state.",
       access: "write", returns: "job_id, status",
       input_schema: { zod: id_schema, json_schema: { type: "object", additionalProperties: false, required: ["job_id"], properties: { job_id: { type: "string" } } } },
-      execute: async ({ context, input }) => run(context, async (service) => service.retry(await resolve_memory_access(context), id_schema.parse(input).job_id)),
+      execute: async ({ context, input }) => run(context, async (service) => service.retry(await resolve_memory_access(context), id_schema.parse(input).job_id, context)),
     }),
   };
 }

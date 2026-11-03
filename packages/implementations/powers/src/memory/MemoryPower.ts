@@ -40,6 +40,8 @@ import { build_memory_power_system_text } from "@/memory/runtime/SystemProvider.
 import { MemoryProfile } from "@/memory/runtime/MemoryProfile.js";
 import { MemoryJobStore } from "@/memory/storage/MemoryJobStore.js";
 import { MEMORY_SESSION_KIND } from "@/memory/types/MemorySession.js";
+import { MemoryDeliveryStore } from "@/memory/storage/MemoryDeliveryStore.js";
+import { MemoryDelivery } from "@/memory/application/MemoryDelivery.js";
 import { MemoryCoordinator } from "@/memory/application/MemoryCoordinator.js";
 import { MemoryService } from "@/memory/application/MemoryService.js";
 import { create_memory_job_actions } from "@/memory/application/MemoryJobActions.js";
@@ -192,6 +194,8 @@ export class MemoryPower extends Power {
 
   /** 内部请求调度与持久化记忆业务入口。 */
   private coordinator?: MemoryCoordinator;
+  /** 独立可靠回传，投递失败不影响已提交的记忆。 */
+  private delivery?: MemoryDelivery;
   /** 普通 Action 不直接调用模型，统一由应用服务处理。 */
   private service_instance?: MemoryService;
 
@@ -290,14 +294,22 @@ export class MemoryPower extends Power {
       profile: this.profile_runtime, jobs,
       model_id: this.options.model_id ?? (typeof config.model_id === "string" ? config.model_id : undefined),
     });
-    this.service_instance = new MemoryService(this.provider, jobs, this.coordinator, context);
+    this.delivery = new MemoryDelivery(jobs, new MemoryDeliveryStore(path.join(context.storage.path, "delivery")),
+      async (recipient, delivery_id, text) => {
+        const result = await context.system.deliver_agent_session_result({ ...recipient, delivery_id, text });
+        return result.status;
+      }, context.logger);
+    this.service_instance = new MemoryService(this.provider, jobs, this.coordinator, context, this.delivery);
     await this.coordinator.initialize();
+    this.delivery.initialize();
     register_profile_host_actions(context, this.profile_runtime);
 
   }
 
   /** 释放当前 City 唯一的 Memory Provider。 */
   async dispose(): Promise<void> {
+    await this.delivery?.dispose();
+    this.delivery = undefined;
     await this.coordinator?.dispose();
     this.coordinator = undefined;
     this.service_instance = undefined;

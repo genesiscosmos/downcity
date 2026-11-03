@@ -264,6 +264,7 @@ test("MemoryPower 使用显式运行时目录并公开完整 Action", async (con
   assert.deepEqual(Object.keys(power.actions).sort(), [
     "digest",
     "forget",
+    "job_detail",
     "job_status",
     "jobs",
     "list",

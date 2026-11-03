@@ -170,6 +170,29 @@ export interface PowerHostSystem {
     /** 提交给 Session 的文本或结构化内容。 */
     readonly query: string | PowerSessionPromptContent[];
   }): Promise<PowerHostSessionTurn>;
+  /**
+   * 向原 Turn 投递可信后台结果；Power 身份由宿主绑定，不授予专用执行 Session 的控制权。
+   * 同一 Power、Session 与 delivery_id 共用持久化幂等身份；失败可用原参数重试。
+   */
+  deliver_agent_session_result(input: {
+    /** 原 Session 所属的真实 Agent 稳定标识。 */
+    readonly agent_id: string;
+    /** 原 Session 的持久化分区。 */
+    readonly category: string;
+    /** 原 Session 的稳定标识；必须已经存在。 */
+    readonly session_id: string;
+    /** 发起后台工作的原始 Turn；结果不能漂移到后续 Turn。 */
+    readonly caller_turn_id: string;
+    /** 当前 Power 在目标 Session 内唯一的稳定投递键，重试必须保持不变。 */
+    readonly delivery_id: string;
+    /** 要投递的非空文本摘要；与 context 二选一，正文由宿主封装为后台结果上下文。 */
+    readonly text?: string;
+    /** 要投递的结构化 JSON 上下文；与 text 二选一，由宿主序列化并标记来源 Power。 */
+    readonly context?: PowerJsonObject;
+  }): Promise<{
+    /** delivered 表示原 Turn 已持久化接收（含幂等重试）；saved 表示未注入，结果仍须由调用方保存。 */
+    readonly status: "delivered" | "saved";
+  }>;
   /** 向指定 Agent 持有的既有 Session 追加一条外部 Assistant 消息。 */
   append_agent_session_message(input: {
     /** 持有目标 Session 的 Agent 稳定 ID。 */

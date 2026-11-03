@@ -38,6 +38,58 @@ export interface MemoryPlannedChange {
   source_ids: string[];
 }
 
+/** 暂存时固定的正文快照；详情展示不得用当前正文替代。 */
+export interface MemoryJobContentSnapshot {
+  /** 当时读取或计划写入的原文；Profile 为精确编辑区域。 */
+  content: string;
+  /** 已读取正文的真实版本；尚未提交的新正文没有版本。 */
+  version?: string;
+  /** 知识记录当时或计划的有效状态；Profile 不使用此字段。 */
+  validity?: "active" | "invalidated" | "deleted";
+}
+
+/** 从 Job 已授权输入包中截取的原文证据，不重新读取来源。 */
+export interface MemoryJobSourceExcerpt {
+  /** 输入包内稳定的来源编号。 */
+  source_id: string;
+  /** 原始来源所属 Agent。 */
+  agent_id: string;
+  /** 原始 Session 的物理分类。 */
+  category: string;
+  /** 原始 Session 标识；显式请求可省略。 */
+  session_id?: string;
+  /** 原始消息标识；非消息输入可省略。 */
+  message_id?: string;
+  /** 原始证据角色，保留用户、Agent 与显式请求的区别。 */
+  role: MemoryJobSource["role"];
+  /** 在已授权 source.text 中精确匹配的有界原文摘录。 */
+  excerpt: string;
+  /** 摘录在 source.text 内的 UTF-16 起始偏移。 */
+  excerpt_start: number;
+  /** 来源是否还有未展示的原文，避免把摘录误认为完整内容。 */
+  truncated: boolean;
+}
+
+/** 一条暂存变更的可审计差异；是否生效必须结合所属 Job 状态判断。 */
+export interface MemoryJobChangeDetail {
+  /** 知识操作或 Profile 的精确区域替换。 */
+  operation: MemoryPlannedChange["operation"] | "profile_edit";
+  /** 知识目标标识；新建待宿主提交后补齐，Profile 不提供。 */
+  memory_id?: string;
+  /** 当前变更的人类可读主题。 */
+  topic: string;
+  /** 此变更基于的真实读取版本；新建不提供。 */
+  expected_version?: string;
+  /** 暂存前的固定原文；新建使用 null，不从当前版本回填。 */
+  before: MemoryJobContentSnapshot | null;
+  /** 计划写入的固定原文；失效操作保留正文并标记 invalidated。 */
+  after: MemoryJobContentSnapshot;
+  /** 宿主读取并固定差异内容的 ISO 8601 时间。 */
+  captured_at: string;
+  /** 仅来自当前 Job 授权输入包的具体来源摘录。 */
+  sources: MemoryJobSourceExcerpt[];
+}
+
 /** 一次有界的记忆处理请求。 */
 export interface MemoryJob {
   /** Job 稳定标识。 */
@@ -70,6 +122,8 @@ export interface MemoryJob {
   scope_version?: string;
   /** 模型通过受限工具暂存的变更。 */
   changes?: MemoryPlannedChange[];
+  /** 与 changes 或 Profile edits 同批暂存的固定差异；不表示已提交。 */
+  change_details?: MemoryJobChangeDetail[];
   /** Profile 精确编辑基于的完整原始正文版本；提交前必须再次校验。 */
   profile_version?: string;
   /** Profile 暂存结果及输入包来源，只供 Coordinator 校验后提交。 */
@@ -125,6 +179,14 @@ export interface MemoryJobView {
   created_at: string;
   /** 状态最后变化时间。 */
   updated_at: string;
+}
+
+/** 经宿主按 Job 访问范围校验后返回的详情；列表接口不包含来源正文。 */
+export interface MemoryJobDetail {
+  /** 不含来源正文的 Job 状态和范围，用于判断差异是否已提交。 */
+  job: MemoryJobView;
+  /** 暂存时固定的知识或 Profile 差异；缺失历史快照时返回空数组。 */
+  changes: MemoryJobChangeDetail[];
 }
 
 /** 从内部 Job 导出不含证据内容的展示对象。 */
