@@ -137,11 +137,14 @@ export async function run_model_step(input: RunModelStepInput): Promise<{
   };
 }
 
-/** 模型事件聚合器。 */
+/**
+ * 模型事件聚合器。
+ *
+ * 内容块在 start 时按 content_id 登记并固定顺序；delta 与 finish 只更新原块。
+ * 多个内容块允许交错结束，最终快照仍须与 canonical Writer 的开始顺序一致。
+ */
 class StepEventCollector {
-  private readonly assistant_parts: SessionAgentMessagePart[] = [];
-  private readonly text_by_id = new Map<string, string>();
-  private readonly reasoning_by_id = new Map<string, string>();
+  private readonly parts_by_content_id = new Map<string, SessionAgentMessagePart>();
   private readonly tool_by_content_id = new Map<string, ModelStepToolCall>();
   private usage?: ModelUsage;
   private finish_reason?: ModelFinishReason;
@@ -150,67 +153,56 @@ class StepEventCollector {
   /** 当前调用是否已经产生不可安全重复的模型输出。 */
   has_partial_output(): boolean {
     return this.text.length > 0 ||
-      this.reasoning_by_id.size > 0 ||
-      this.tool_by_content_id.size > 0;
+      [...this.parts_by_content_id.values()].some((part) => part.type !== "text");
   }
 
   /** 消费单个标准模型事件。 */
   accept(event: ModelStreamEvent): void {
-    if (event.type === "text_start") {
-      this.text_by_id.set(event.content_id, "");
-    } else if (event.type === "text_delta") {
-      this.text_by_id.set(
-        event.content_id,
-        (this.text_by_id.get(event.content_id) ?? "") + event.delta,
-      );
-      this.text += event.delta;
-    } else if (event.type === "text_finish") {
-      const text = this.text_by_id.get(event.content_id) ?? "";
-      this.assistant_parts.push({
-        part_id: `text:${event.content_id}`,
-        sequence: this.assistant_parts.length + 1,
-        type: "text",
-        text,
-        state: "done",
+    if (event.type === "text_start" || event.type === "reasoning_start") {
+      const type = event.type === "text_start" ? "text" : "reasoning";
+      this.parts_by_content_id.set(event.content_id, {
+        part_id: `${type}:${event.content_id}`,
+        sequence: this.parts_by_content_id.size + 1,
+        type,
+        text: "",
+        state: "streaming",
       });
-    } else if (event.type === "reasoning_start") {
-      this.reasoning_by_id.set(event.content_id, "");
-    } else if (event.type === "reasoning_delta") {
-      this.reasoning_by_id.set(
-        event.content_id,
-        (this.reasoning_by_id.get(event.content_id) ?? "") + event.delta,
-      );
-    } else if (event.type === "reasoning_finish") {
-      const text = this.reasoning_by_id.get(event.content_id) ?? "";
-      this.assistant_parts.push({
-        part_id: `reasoning:${event.content_id}`,
-        sequence: this.assistant_parts.length + 1,
-        type: "reasoning",
-        text,
-        state: "done",
-        ...(event.signature ? { reasoning_signature: event.signature } : {}),
-      });
+    } else if (event.type === "text_delta" || event.type === "reasoning_delta") {
+      const type = event.type === "text_delta" ? "text" : "reasoning";
+      const part = this.require_text_part(event.content_id, type);
+      part.text += event.delta;
+      if (event.type === "text_delta") this.text += event.delta;
+    } else if (event.type === "text_finish" || event.type === "reasoning_finish") {
+      const type = event.type === "text_finish" ? "text" : "reasoning";
+      const part = this.require_text_part(event.content_id, type);
+      part.state = "done";
+      if (event.type === "reasoning_finish" && part.type === "reasoning" && event.signature) {
+        part.reasoning_signature = event.signature;
+      }
     } else if (event.type === "tool_call_start") {
       this.tool_by_content_id.set(event.content_id, {
         tool_call_id: event.tool_call_id,
         tool_name: event.tool_name,
         input: {},
       });
+      this.parts_by_content_id.set(event.content_id, {
+        part_id: `tool:${event.tool_call_id}`,
+        sequence: this.parts_by_content_id.size + 1,
+        type: "tool",
+        tool_call_id: event.tool_call_id,
+        tool_name: event.tool_name,
+        state: "input-streaming",
+      });
     } else if (event.type === "tool_call_finish") {
       const tool = this.tool_by_content_id.get(event.content_id);
-      if (tool) {
-        tool.input = event.input;
-        if (event.input_error) tool.input_error = event.input_error;
-        this.assistant_parts.push({
-          part_id: `tool:${tool.tool_call_id}`,
-          sequence: this.assistant_parts.length + 1,
-          type: "tool",
-          tool_call_id: tool.tool_call_id,
-          tool_name: tool.tool_name,
-          state: "ready",
-          input: tool.input,
-        });
+      const part = this.parts_by_content_id.get(event.content_id);
+      if (!tool || part?.type !== "tool") {
+        throw new Error(`Model Step Tool Part not found: ${event.content_id}`);
       }
+      tool.input = event.input;
+      if (event.input_error) tool.input_error = event.input_error;
+      part.input = event.input;
+      part.state = "ready";
     } else if (event.type === "model_usage") {
       this.usage = event.usage;
     } else if (event.type === "model_finish") {
@@ -228,12 +220,24 @@ class StepEventCollector {
   } {
     if (!this.finish_reason) throw new Error("Model stream ended without model_finish");
     return {
-      assistant_parts: this.assistant_parts,
+      assistant_parts: [...this.parts_by_content_id.values()],
       finish_reason: this.finish_reason,
       ...(this.usage ? { usage: this.usage } : {}),
       text: this.text,
       tool_calls: [...this.tool_by_content_id.values()],
     };
+  }
+
+  /** 读取由 start 创建的正文或推理块，后续事件不得改变类型与位置。 */
+  private require_text_part(
+    content_id: string,
+    type: "text" | "reasoning",
+  ): Extract<SessionAgentMessagePart, { type: "text" | "reasoning" }> {
+    const part = this.parts_by_content_id.get(content_id);
+    if (!part || (part.type !== "text" && part.type !== "reasoning") || part.type !== type) {
+      throw new Error(`Model Step ${type} Part not found: ${content_id}`);
+    }
+    return part;
   }
 }
 
