@@ -18,7 +18,15 @@ import type {
   ModelUsage,
 } from "@downcity/type";
 import type { AIChannelStreamResult } from "../../types/AI.js";
+import {
+  cancel_model_stream_reader,
+  create_model_cancel_error,
+  create_model_finish_error,
+  create_model_stream_execution_error,
+  ModelStreamExecutionError,
+} from "./language-model-stream.js";
 import type {
+  AIStreamCompletion,
   ModelCompletionResult,
   OpenAIChatCompletionExecution,
   OpenAIChatCompletionRequest,
@@ -113,7 +121,7 @@ async function create_json_response(
     }],
     ...(completion.usage ? { usage: to_openai_usage(completion.usage) } : {}),
   };
-  return { response: Response.json(body), completion: Promise.resolve(completion) };
+  return { response: Response.json(body), completion: Promise.resolve({ outcome: "succeeded", result: completion }) };
 }
 
 /** 增量转换 Downcity 事件并生成 OpenAI SSE。 */
@@ -126,39 +134,82 @@ function create_stream_response(
   const collector = new ModelEventCollector();
   const validator = new ModelStreamValidator();
   const completion_id = `chatcmpl_${crypto.randomUUID().replaceAll("-", "")}`;
-  let resolve_completion: (value: ModelCompletionResult | undefined) => void = () => undefined;
-  const completion = new Promise<ModelCompletionResult | undefined>((resolve) => {
+  let completed = false;
+  let resolve_completion: (value: AIStreamCompletion<ModelCompletionResult>) => void = () => undefined;
+  const completion = new Promise<AIStreamCompletion<ModelCompletionResult>>((resolve) => {
     resolve_completion = resolve;
   });
   const response_stream = new ReadableStream<Uint8Array>({
     async pull(controller) {
       try {
-        const next = await reader.read();
-        if (next.done) {
-          validator.finish();
-          resolve_completion(collector.result_or_undefined());
-          controller.enqueue(encoder.encode("data: [DONE]\n\n"));
-          controller.close();
-          return;
+        while (!completed) {
+          const next = await reader.read();
+          if (completed) return;
+          if (next.done) {
+            validator.finish();
+            throw new Error("Model stream ended without model_finish");
+          }
+          validator.accept(next.value);
+          collector.accept(next.value);
+          if (next.value.type === "model_error") {
+            fail(controller, new ModelStreamExecutionError(next.value.error, collector.result_or_undefined()?.usage));
+            return;
+          }
+          if (next.value.type === "model_finish") {
+            const error = create_model_finish_error(next.value.finish_reason, collector.result_or_undefined()?.usage);
+            if (error) {
+              fail(controller, error);
+              return;
+            }
+          }
+          const chunk = to_openai_stream_chunk(completion_id, model_id, next.value);
+          if (chunk) controller.enqueue(encoder.encode(`data: ${JSON.stringify(chunk)}\n\n`));
+          if (next.value.type === "model_finish") {
+            const result = collector.result_or_undefined();
+            if (!result) throw new Error("Model stream ended without model_finish");
+            complete({ outcome: "succeeded", result });
+            controller.enqueue(encoder.encode("data: [DONE]\n\n"));
+            controller.close();
+            return;
+          }
+          // 部分事件不投影成 OpenAI chunk；同一次下游 read 继续等待可输出事件。
+          if (chunk) return;
         }
-        validator.accept(next.value);
-        collector.accept(next.value);
-        const chunk = to_openai_stream_chunk(completion_id, model_id, next.value);
-        if (chunk) controller.enqueue(encoder.encode(`data: ${JSON.stringify(chunk)}\n\n`));
-      } catch {
-        resolve_completion(undefined);
-        controller.close();
+      } catch (error) {
+        if (!completed) fail(controller, create_model_stream_execution_error(error, collector.result_or_undefined()?.usage));
       }
     },
-    async cancel(reason) {
-      await reader.cancel(reason);
-      resolve_completion(undefined);
+    cancel(reason) {
+      if (completed) return;
+      const error = create_model_cancel_error(reason, collector.result_or_undefined()?.usage);
+      const result = collector.result_or_undefined(error.code === "cancelled" ? "cancelled" : "error");
+      complete(error.code === "cancelled"
+        ? { outcome: "cancelled", ...(result ? { result } : {}) }
+        : { outcome: "failed", ...(result ? { result } : {}), error }, reason);
     },
-  });
+  }, { highWaterMark: 0 });
   return {
     response: new Response(response_stream, { status: 200, headers: OPENAI_SSE_HEADERS }),
     completion,
   };
+
+  /** 发送单个公开错误帧；失败流不追加表示成功完成的 DONE。 */
+  function fail(controller: ReadableStreamDefaultController<Uint8Array>, error: ModelStreamExecutionError): void {
+    const result = collector.result_or_undefined(error.code === "cancelled" ? "cancelled" : "error");
+    controller.enqueue(encoder.encode(`data: ${JSON.stringify({ error: { ...error.model_error, type: "server_error" } })}\n\n`));
+    complete(error.code === "cancelled"
+      ? { outcome: "cancelled", ...(result ? { result } : {}) }
+      : { outcome: "failed", ...(result ? { result } : {}), error }, error);
+    controller.close();
+  }
+
+  /** 单次完成通知与 reader 清理均不等待 Provider 的取消钩子。 */
+  function complete(value: AIStreamCompletion<ModelCompletionResult>, reason?: unknown): void {
+    if (completed) return;
+    completed = true;
+    resolve_completion(value);
+    cancel_model_stream_reader(reader, reason);
+  }
 }
 
 /** 将单个 Downcity 事件投影为 OpenAI chunk。 */
@@ -190,14 +241,32 @@ function to_openai_stream_chunk(id: string, model: string, event: ModelStreamEve
 async function collect_model_stream(stream: ReadableStream<ModelStreamEvent>): Promise<ModelCompletionResult> {
   const collector = new ModelEventCollector();
   const validator = new ModelStreamValidator();
-  for await (const event of stream) {
-    validator.accept(event);
-    collector.accept(event);
+  const reader = stream.getReader();
+  try {
+    while (true) {
+      const next = await reader.read();
+      if (next.done) {
+        validator.finish();
+        throw new Error("Model stream ended without model_finish");
+      }
+      validator.accept(next.value);
+      collector.accept(next.value);
+      if (next.value.type === "model_error") {
+        throw new ModelStreamExecutionError(next.value.error, collector.result_or_undefined()?.usage);
+      }
+      if (next.value.type === "model_finish") {
+        const result = collector.result_or_undefined();
+        if (!result) throw new Error("Model stream ended without model_finish");
+        const error = create_model_finish_error(next.value.finish_reason, result.usage);
+        if (error) throw error;
+        return result;
+      }
+    }
+  } catch (error) {
+    throw create_model_stream_execution_error(error, collector.result_or_undefined()?.usage);
+  } finally {
+    cancel_model_stream_reader(reader);
   }
-  validator.finish();
-  const result = collector.result_or_undefined();
-  if (!result) throw new Error("Model stream ended without model_finish");
-  return result;
 }
 
 /** 将事件状态聚合为单个 assistant ModelMessage。 */
@@ -223,13 +292,12 @@ class ModelEventCollector {
       if (tool) this.content.push({ type: "tool_call", ...tool, input: event.input });
     } else if (event.type === "model_usage") this.usage = event.usage;
     else if (event.type === "model_finish") this.finish_reason = event.finish_reason;
-    else if (event.type === "model_error") throw new Error(event.error.message);
   }
 
-  /** 仅在收到完成事件后返回聚合结果。 */
-  result_or_undefined(): ModelCompletionResult | undefined {
-    return this.finish_reason
-      ? { message: { role: "assistant", content: this.content }, finish_reason: this.finish_reason, ...(this.usage ? { usage: this.usage } : {}) }
+  /** 保留真实 finish 或 usage 事实；失败原因不冒充 Provider 的成功终态。 */
+  result_or_undefined(fallback_reason: "error" | "cancelled" = "error"): ModelCompletionResult | undefined {
+    return this.finish_reason || this.usage
+      ? { message: { role: "assistant", content: this.content }, finish_reason: this.finish_reason ?? fallback_reason, ...(this.usage ? { usage: this.usage } : {}) }
       : undefined;
   }
 }

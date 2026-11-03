@@ -202,15 +202,22 @@ export class RelayRouter {
     ctx: Context, stream: ReadableStream<ModelStreamEvent>, attempt: RelayAttemptRecord, started_at: number,
   ): ReadableStream<ModelStreamEvent> {
     const reader = stream.getReader();
-    let status = "unknown";
+    /** 首个 terminal 的完成事实；后续 wrapper cancel 不再改写该状态。 */
+    let terminal_status: string | undefined;
+    /** 收到 terminal 时已发生的中止；terminal 之后的中止不覆盖合法完成。 */
+    let terminal_abort_status: number | undefined;
+    /** 首个实际输出相对于请求开始的耗时，未输出时保持 null。 */
     let first_output_ms: number | null = null;
-    let finished = false;
-    const finish = async (final_status: string) => {
-      if (finished) return;
-      finished = true;
-      const abort_status = read_abort_status(ctx);
-      const settled_status = abort_status === undefined ? final_status : abort_status === 499 ? "cancelled" : "unknown";
-      await Promise.all([
+    /** 所有结束路径共享同一次日志收尾，避免重复写入或提前返回。 */
+    let finish_promise: Promise<void> | undefined;
+    /** 下游取消后，正在读取的 pull 不再向已关闭的 controller 写入。 */
+    let cancelled = false;
+    const finish = (final_status: string): Promise<void> => {
+      if (finish_promise) return finish_promise;
+      const abort_status = terminal_status === undefined ? read_abort_status(ctx) : terminal_abort_status;
+      const settled_status = abort_status === undefined ? terminal_status ?? final_status
+        : abort_status === 499 ? "cancelled" : "unknown";
+      finish_promise = Promise.all([
         this.dependencies.table<RelayAttemptRecord>("relay_attempts").update({
           where: { attempt_id: attempt.attempt_id },
           values: {
@@ -225,43 +232,55 @@ export class RelayRouter {
         console.error("[Relay] stream log finalization failed", {
           request_id: attempt.request_id, attempt_id: attempt.attempt_id,
         });
-      });
+      }).then(() => undefined);
+      return finish_promise;
     };
     return new ReadableStream<ModelStreamEvent>({
       async pull(controller) {
+        /** 只有结束、异常或取消才释放 reader，正常背压期间继续持有。 */
+        let release_reader = false;
         try {
           const item = await reader.read();
+          if (cancelled) return;
           if (item.done) {
-            await finish(status);
-            reader.releaseLock();
-            controller.close();
+            release_reader = true;
+            await finish("unknown");
+            if (!cancelled) controller.close();
             return;
           }
           const event = item.value;
           if (first_output_ms === null && ["text_delta", "reasoning_delta", "tool_call_start"].includes(event.type)) {
             first_output_ms = Date.now() - started_at;
           }
-          if (event.type === "model_error") status = "failed";
-          if (event.type === "model_finish" && status !== "failed") {
-            status = event.finish_reason === "cancelled" ? "cancelled"
+          if (terminal_status === undefined && (event.type === "model_error" || event.type === "model_finish")) {
+            terminal_abort_status = read_abort_status(ctx);
+            terminal_status = event.type === "model_error" ? "failed"
+              : event.finish_reason === "cancelled" ? "cancelled"
               : ["error", "unknown"].includes(event.finish_reason) ? "unknown" : "succeeded";
           }
           controller.enqueue(event.type === "model_start"
             ? { ...event, request_id: attempt.request_id, model_id: String(ctx.input.model) }
             : event);
         } catch (error) {
+          release_reader = true;
           await finish("unknown");
-          reader.releaseLock();
-          controller.error(error);
+          if (!cancelled) controller.error(error);
+        } finally {
+          if (release_reader || cancelled) reader.releaseLock();
         }
       },
       async cancel(reason) {
-        try { await reader.cancel(reason); } finally {
-          await finish("cancelled");
+        cancelled = true;
+        const completion = finish("cancelled");
+        try {
+          // provider 的 cancel 可以永不完成；收尾只等待真实日志写入。
+          void reader.cancel(reason).catch(() => undefined);
+        } finally {
           reader.releaseLock();
         }
+        await completion;
       },
-    });
+    }, { highWaterMark: 0 });
   }
 
   private async finish_request(request_id: string, status: string): Promise<void> {

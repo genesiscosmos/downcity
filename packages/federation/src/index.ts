@@ -155,6 +155,7 @@ export type {
   AIModelDefinition,
   AIModelFallbackRule,
   AIServiceOptions,
+  AIModelStreamPolicy,
   AIChannelStreamResult,
   AIProviderRequestMetadata,
   AIResolvedReasoning,

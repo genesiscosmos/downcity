@@ -114,11 +114,38 @@ Federation 负责账户、Token、Admin Session、Service、BureauRecord、可�
 
 正文按每个实际 `Uint8Array` chunk 的 `byteLength` 累计；无 `Content-Length` 或伪造较小长度都不能绕过上限。声明长度超限可提前拒绝；无效长度返回 `400 INVALID_CONTENT_LENGTH`。`Content-Encoding` 只能省略或为 `identity`，其他编码返回 `415 UNSUPPORTED_CONTENT_ENCODING`。正文读取总期限不因收到新 chunk 而延长。正文超时返回 `408 REQUEST_BODY_TIMEOUT`，超限返回 `413 BODY_TOO_LARGE`，读取失败返回 `400 INVALID_BODY`。
 
-执行期限从请求正文读完开始，涵盖 middleware 和业务处理。非 SSE 的 timer 持续到响应正文读完或取消才释放；响应头发送前到期返回 `504 REQUEST_TIMEOUT`，响应头已发送后只结束流，不改 HTTP 状态。无正文的 OPTIONS 请求也使用普通执行期限。模型及媒体入口默认等待响应头最多 180 秒，这不代表首有效输出期限。收到 SSE `Response` 后，timer 切换为 `http.stream_lifetime_ms` 总期限，默认 `900_000`（15 分钟），仍从请求正文读完起算，包含等待响应头的时间；边界不缓冲 SSE。期限或取消会 abort 下游并取消 reader、结束流，不构造通用 SSE 错误帧。目前未实现首有效输出 120 秒或 idle 120 秒策略。
+执行期限从请求正文读完开始，涵盖 middleware 和业务处理。非 SSE 的 timer 持续到响应正文读完或取消才释放；响应头发送前到期返回 `504 REQUEST_TIMEOUT`，响应头已发送后只结束流，不改 HTTP 状态。无正文的 OPTIONS 请求也使用普通执行期限。模型及媒体入口默认等待响应头最多 180 秒，这不代表首有效输出期限。收到 SSE `Response` 后，timer 切换为 `http.stream_lifetime_ms` 总期限，默认 `900_000`（15 分钟），仍从请求正文读完起算，包含等待响应头的时间；边界不缓冲 SSE。期限或取消会 abort 下游并取消 reader、结束流，不构造通用 SSE 错误帧。HTTP SSE 总期限与从 provider 执行开始计时的模型总期限独立生效，先到期的一层终止执行；同步 JSON 仍受 HTTP 默认 180 秒执行期限约束。结束或取消会释放 timer、listener 和 reader，不等待可能无限挂起的上游 cancel。
 
 客户端取消对应 `499 REQUEST_CANCELLED`；连接断开后不能保证客户端收到响应。`ServiceRouteContext.abort_signal` 和 Action `Context.abort_signal` 可读，原生 Request 使用 `request.signal`。Adapter 应合并请求信号与自身 deadline；上游较短期限仍会先到期。取消为协作式中断，数据库操作可能继续执行，不表示事务撤销，也不触发自动重试。已入队的图片 task 独立执行，不继承前台创建或结果查询请求的取消。
 
 Edge / local-node 通过 workspace 链接 SDK，开发构建会使用该默认策略。生产部署需构建包含该功能的 SDK 和服务产物；运行实例不会因源码或文档更新而自动更新。
+
+## 语言模型执行期限与终态
+
+原生 `/v1/ai/stream`、OpenAI-compatible SSE 与 JSON、Relay 的所有语言模型执行共用 `execute_model_stream`。服务端通过 `AIServiceOptions.model_stream?: Partial<AIModelStreamPolicy>` 配置策略；省略字段使用默认值，客户端不能通过单次请求抬高策略。
+
+~~~ts
+/** 配置语言模型执行期限，单位为毫秒。 */
+import { AIService } from "@downcity/federation";
+
+const ai = new AIService({
+  model_stream: {
+    first_output_timeout_ms: 120_000,
+    idle_timeout_ms: 120_000,
+    total_timeout_ms: 900_000,
+  },
+});
+~~~
+
+首输出 120 秒预算包含等待 provider open 与首个有效输出前实际等待 read 的累计时间。idle 120 秒预算累计有效输出之间实际等待 read 的时间，每次有效输出重置预算。消费方背压不累计首输出或 idle，但从 provider 执行开始的总墙钟 15 分钟一直计时。配置值必须是 1–2,147,483,647 的安全整数，未知字段或无效值在构造时拒绝。
+
+`model_start`、`text_start`、`reasoning_start`、空 delta 和 usage 不算有效输出，也不续期；非空 `text_delta` / `reasoning_delta`、`tool_call_start`、非空 `tool_call_delta.input_delta`、`tool_call_finish` 算有效输出。Provider 更短的期限和 HTTP 期限仍生效，取先到期的一层。超时 abort 同一次前台执行，不透明重试。
+
+Provider open 未返回时抛出 504，如 `MODEL_FIRST_OUTPUT_TIMEOUT` 或 `MODEL_EXECUTION_TIMEOUT`；idle 到期使用 `MODEL_IDLE_TIMEOUT`。Router 保留合法领域码并返回安全 message `Request timed out`。响应已开始时，原生流补发 `model_error`：`code: "provider_timeout"`、`status_code: 504`、`retryable: false`，message 分别为 `Model first output timed out`、`Model output stalled` 或 `Model execution timed out`。尚无 provider `model_start` 时，transport 可补框架 `model_start` 以满足失败终态协议，不代表有效输出，也不伪造 usage。OpenAI SSE 发 error 帧，失败不发送成功 `[DONE]`；OpenAI JSON 聚合超时返回 504。已开始的 SSE 保持 HTTP 状态。
+
+已收到的可信 usage 事实会保留；没有返回 usage 时不估算 token 或费用。既有 `bill` 按实际 facts 执行，业务自行决定收费，缺少 usage 不代表任何情况下都零收费。`completion.outcome` 明确为 `succeeded`、`failed`、`cancelled`；终态后的 cancel 不会误记为取消或超时，也不会重复结算或扣费。取消不能保证底层 SQL 副作用回滚。
+
+完整策略见 [调用模型](https://downcity.ai/zh/city-sdk-docs/service/ai/calling#模型执行期限)。
 
 ## Action 请求体
 

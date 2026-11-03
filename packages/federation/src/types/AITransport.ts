@@ -41,6 +41,10 @@ export type RawCityLanguageModelRequest =
 export interface CreateCityLanguageModelStreamInput {
   /** 最终 AIChannel 返回的标准 Downcity 模型事件流。 */
   stream: ReadableStream<ModelStreamEvent>;
+  /** 框架请求 ID；上游尚未发送 model_start 就失败时用于构造协议起始事件。 */
+  request_id?: string;
+  /** Federation 模型 ID；上游尚未发送 model_start 就失败时用于构造协议起始事件。 */
+  model_id?: string;
 }
 
 /** Federation SSE 响应及其最终完成事件。 */
@@ -70,7 +74,7 @@ export type AIStreamCompletion<TResult> =
   | {
       /** 上游执行或传输失败。 */
       outcome: "failed";
-      /** finish 后失败时仍可携带可信最终结果。 */
+      /** 已观测到可信 usage 或真实完成事件时保留的结果。 */
       result?: TResult;
       /** 原始错误，仅供运行时判断和日志使用。 */
       error: unknown;
@@ -264,15 +268,15 @@ export interface OpenAIChatUsage {
 export interface OpenAIChatCompletionExecution {
   /** 返回给 OpenAI-compatible 客户端的响应。 */
   response: Response;
-  /** Downcity 模型聚合结果；异常或取消时为空。 */
-  completion: Promise<ModelCompletionResult | undefined>;
+  /** 明确区分完成、失败和取消；异常时仍保留已经观测到的可信用量。 */
+  completion: Promise<AIStreamCompletion<ModelCompletionResult>>;
 }
 
 /** 单个模型 step 的标准聚合结果。 */
 export interface ModelCompletionResult {
   /** 聚合后的 assistant 模型消息。 */
   message: ModelMessage;
-  /** 标准完成原因。 */
+  /** 真实 model_finish 的原因；缺少完成事件的失败或取消分别使用 error、cancelled。 */
   finish_reason: ModelFinishReason;
   /** Provider 返回的最终可信 usage。 */
   usage?: ModelUsage;

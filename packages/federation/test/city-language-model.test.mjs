@@ -155,7 +155,7 @@ test("Federation SSE encoder exposes only versioned ModelStreamEvent envelopes",
   })
 })
 
-test("Federation rejects invalid ModelStreamEvent state transitions", async () => {
+test("Federation rejects invalid transitions before terminal and treats a valid terminal as final", async () => {
   const cases = [
     [
       { type: "text_delta", content_id: "text_1", delta: "invalid" },
@@ -183,6 +183,8 @@ test("Federation rejects invalid ModelStreamEvent state transitions", async () =
       } }),
     })
     await execution.response.text()
-    assert.equal((await execution.completion).outcome, "failed")
+    // 合法终态是执行边界：不为检查其后事件等待无界 EOF，不覆盖已确认终态。
+    const has_valid_terminal = events.length === 4
+    assert.equal((await execution.completion).outcome, has_valid_terminal ? "succeeded" : "failed")
   }
 })

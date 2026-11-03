@@ -30,6 +30,7 @@ import type {
   AIResolvedRoutingPlan,
   AIRoutingFallbackReason,
   AIServiceOptions,
+  AIModelStreamPolicy,
 } from "../../types/AI.js";
 import type {
   OpenAIChatCompletionRequest,
@@ -59,6 +60,7 @@ import {
   create_city_language_model_stream,
   decode_city_language_model_request,
   prepare_city_language_model_call,
+  ModelStreamExecutionError,
 } from "./language-model-stream.js";
 import {
   create_openai_chat_completion_response,
@@ -76,6 +78,8 @@ import {
 import { AISettlementRuntime } from "./AISettlementRuntime.js";
 import { validate_ai_decision_request, validate_ai_decision_result } from "./decision-validation.js";
 import { RelayRuntime } from "../relay/runtime.js";
+import { execute_model_stream, resolve_model_stream_policy } from "./model-stream-policy.js";
+import { build_error_response } from "../../federation/http/error-response.js";
 import type { RelayCatalogRecord } from "../../types/Relay.js";
 import { relay_tables } from "../relay/schema.js";
 import { pg_relay_tables } from "../relay/schema.pg.js";
@@ -108,6 +112,8 @@ export class AIService extends Service {
   private readonly settlement_runtime: AISettlementRuntime;
   /** AI 图片异步任务运行时。 */
   private readonly image_runtime: AIImageJobRuntime;
+  /** 所有语言模型入口共享的事件层期限。 */
+  private readonly model_stream_policy: AIModelStreamPolicy;
   /** 可选模型中转控制与执行层。 */
   readonly relay?: RelayRuntime;
 
@@ -116,6 +122,7 @@ export class AIService extends Service {
       id: "ai",
       name: "AI",
     });
+    this.model_stream_policy = resolve_model_stream_policy(options.model_stream);
     this.database_schemas = {
       sqlite: {
         tables: {
@@ -426,12 +433,12 @@ export class AIService extends Service {
 
     let output: unknown;
     try {
-      output = await resolved.action(ctx);
+      output = await execute_model_stream(ctx, () => Promise.resolve(resolved.action(ctx)), this.model_stream_policy);
     } catch (error) {
       await this.settlement_runtime.settle_execution({
         ctx,
         output: undefined,
-        outcome: "failed",
+        outcome: (error as { statusCode?: number })?.statusCode === 499 ? "cancelled" : "failed",
         started_at,
       });
       throw error;
@@ -448,6 +455,8 @@ export class AIService extends Service {
     }
     const execution = create_city_language_model_stream({
       stream: output.stream,
+      request_id: ctx.request_id,
+      model_id: resolved.model?.id ?? request.model_id,
     });
     const settlement = execution.completion.then(async (completion) => {
       const part = completion.result;
@@ -478,6 +487,7 @@ export class AIService extends Service {
   // ========== OpenAI 兼容通路 ==========
 
   private async handleChatCompletions(ctx: Context): Promise<Response> {
+    let execution_model: AIModelDefinition | undefined;
     try {
       const body = ctx.input as unknown as OpenAIChatCompletionRequest;
       const model_id = this.normalizeModelId(body.model);
@@ -492,6 +502,7 @@ export class AIService extends Service {
         : this.resolve({ model: model_id, mode: LANGUAGE_MODEL_MODE }, ctx.env);
       const routing = this.relay ? { resolved: initial_resolved } : this.plan_text_execution(initial_resolved, ctx, call, LANGUAGE_MODEL_MODE);
       const resolved = routing.resolved;
+      execution_model = resolved.model;
       if (resolved.model) {
         ctx.input.call = project_model_call_for_execution(call, resolved.model);
       }
@@ -503,7 +514,7 @@ export class AIService extends Service {
       const started_at = Date.now();
       this.settlement_runtime.ensure_usage_id(ctx);
 
-      const output = await resolved.action(ctx);
+      const output = await execute_model_stream(ctx, () => Promise.resolve(resolved.action(ctx)), this.model_stream_policy);
       if (!is_language_model_stream_result(output)) {
         throw httpError(500, "AIChannel stream did not return a Downcity model stream result");
       }
@@ -513,18 +524,15 @@ export class AIService extends Service {
         result: output,
       });
       const settlement = execution.completion.then(async (completion) => {
-        if (completion) {
-          this.settlement_runtime.attach_output_metering(ctx, completion, "openai", started_at);
-        }
-        const charge = completion && resolved.model?.bill
-          ? resolved.model.bill(
-              this.settlement_runtime.build_bill_input(ctx, resolved.model, completion),
-            )
+        const part = completion.result;
+        if (part) this.settlement_runtime.attach_output_metering(ctx, part, "openai", started_at);
+        const charge = part && resolved.model?.bill
+          ? resolved.model.bill(this.settlement_runtime.build_bill_input(ctx, resolved.model, part))
           : undefined;
         await this.settlement_runtime.settle_execution({
           ctx,
-          output: completion,
-          outcome: completion ? "succeeded" : "failed",
+          output: part,
+          outcome: completion.outcome,
           started_at,
           charge,
         });
@@ -536,16 +544,18 @@ export class AIService extends Service {
       );
     } catch (error) {
       if (ctx.locals.ai_usage_id) {
+        const started_at = ctx.started_at?.getTime() ?? Date.now();
+        const output = error instanceof ModelStreamExecutionError && error.usage ? { usage: error.usage } : undefined;
+        if (output) this.settlement_runtime.attach_output_metering(ctx, output, "openai", started_at);
+        const charge = output && execution_model?.bill
+          ? execution_model.bill(this.settlement_runtime.build_bill_input(ctx, execution_model, output)) : undefined;
         await this.settlement_runtime.settle_execution({
-          ctx,
-          output: undefined,
-          outcome: "failed",
-          started_at: ctx.started_at?.getTime() ?? Date.now(),
+          ctx, output,
+          outcome: (error as { statusCode?: number })?.statusCode === 499 ? "cancelled" : "failed",
+          started_at, charge,
         });
       }
-      const message = error instanceof Error ? error.message : String(error);
-      const status = (error as { statusCode?: number }).statusCode ?? 500;
-      return new Response(JSON.stringify({ error: { message, type: "server_error" } }), { status, headers: { "content-type": "application/json" } });
+      return build_error_response(error, ctx.request_id ?? `req_${crypto.randomUUID()}`);
     }
   }
 

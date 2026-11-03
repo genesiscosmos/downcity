@@ -9,6 +9,8 @@ import {
   ModelStreamValidator,
   type ModelCall,
   type ModelContent,
+  type ModelError,
+  type ModelFinishReason,
   type ModelMessage,
   type ModelStreamEnvelope,
   type ModelStreamEvent,
@@ -62,6 +64,7 @@ export function create_city_language_model_stream(
   const validator = new ModelStreamValidator();
   let terminal_event: Extract<ModelStreamEvent, { type: "model_finish" | "model_error" }> | undefined;
   let final_usage: ModelUsage | undefined;
+  let started = false;
   let completed = false;
   let resolve_completion: (
     result: AIStreamCompletion<ModelStreamCompletionResult>,
@@ -73,59 +76,161 @@ export function create_city_language_model_stream(
   const body = new ReadableStream<Uint8Array>({
     async pull(controller) {
       try {
+        if (completed) return;
         const chunk = await reader.read();
+        if (completed) return;
         if (chunk.done) {
           validator.finish();
-          if (!terminal_event || !final_usage) {
-            throw new Error("Model stream ended without final usage and terminal event");
-          }
-          const result = { usage: final_usage, terminal_event };
-          complete(terminal_event.type === "model_finish"
-            ? { outcome: "succeeded", result }
-            : {
-                outcome: "failed",
-                result,
-                error: new Error(terminal_event.error.message),
-              });
+          settle_terminal();
           controller.close();
           return;
         }
         validator.accept(chunk.value);
+        if (chunk.value.type === "model_start") started = true;
         if (chunk.value.type === "model_usage") final_usage = chunk.value.usage;
         if (is_terminal_event(chunk.value)) terminal_event = chunk.value;
         controller.enqueue(encoder.encode(serialize_stream_event(chunk.value)));
+        if (terminal_event) {
+          settle_terminal();
+          controller.close();
+        }
       } catch (error) {
-        await reader.cancel(error).catch(() => undefined);
-        const result = terminal_event && final_usage
-          ? { usage: final_usage, terminal_event }
-          : undefined;
-        complete({ outcome: "failed", ...(result ? { result } : {}), error });
+        if (completed) return;
+        const safe_error = create_model_stream_execution_error(error, final_usage);
+        if (!terminal_event) {
+          if (!started) {
+            controller.enqueue(encoder.encode(serialize_stream_event({
+              type: "model_start",
+              request_id: input.request_id || crypto.randomUUID(),
+              model_id: input.model_id || "unknown",
+            })));
+            started = true;
+          }
+          terminal_event = { type: "model_error", error: safe_error.model_error };
+          controller.enqueue(encoder.encode(serialize_stream_event(terminal_event)));
+        }
+        settle_terminal();
         controller.close();
       }
     },
-    async cancel(reason) {
-      try {
-        await reader.cancel(reason);
-      } finally {
-        const result = terminal_event && final_usage
-          ? { usage: final_usage, terminal_event }
-          : undefined;
-        complete({ outcome: "cancelled", ...(result ? { result } : {}) });
-      }
+    cancel(reason) {
+      if (completed) return;
+      const error = create_model_cancel_error(reason, final_usage);
+      terminal_event ??= { type: "model_error", error: error.model_error };
+      const result = final_usage ? { usage: final_usage, terminal_event } : undefined;
+      complete(error.code === "cancelled"
+        ? { outcome: "cancelled", ...(result ? { result } : {}) }
+        : { outcome: "failed", ...(result ? { result } : {}), error });
+      cancel_model_stream_reader(reader, reason);
     },
-  });
+  }, { highWaterMark: 0 });
 
   return {
     response: new Response(body, { status: 200, headers: SSE_HEADERS }),
     completion,
   };
 
-  function complete(
-    result: AIStreamCompletion<ModelStreamCompletionResult>,
-  ): void {
+  /** 按唯一终态结算；只有实际收到的 usage 才进入 result。 */
+  function settle_terminal(): void {
+    if (!terminal_event || completed) return;
+    const result = final_usage ? { usage: final_usage, terminal_event } : undefined;
+    if (terminal_event.type === "model_finish" && result) {
+      const error = create_model_finish_error(terminal_event.finish_reason, final_usage);
+      complete(error
+        ? error.code === "cancelled"
+          ? { outcome: "cancelled", result }
+          : { outcome: "failed", result, error }
+        : { outcome: "succeeded", result });
+    } else if (terminal_event.type === "model_error") {
+      const error = new ModelStreamExecutionError(terminal_event.error, final_usage);
+      complete(error.code === "cancelled"
+        ? { outcome: "cancelled", ...(result ? { result } : {}) }
+        : { outcome: "failed", ...(result ? { result } : {}), error });
+    }
+    cancel_model_stream_reader(reader);
+  }
+
+  /** 单次完成通知不依赖上游 cancel Promise 是否结束。 */
+  function complete(result: AIStreamCompletion<ModelStreamCompletionResult>): void {
     if (completed) return;
     completed = true;
     resolve_completion(result);
+  }
+}
+
+/**
+ * 安全的模型执行错误，同时保留已观测的用量供失败计量。
+ * 原始 Provider 异常不进入消息或 cause，避免跨 HTTP 边界泄漏。
+ */
+export class ModelStreamExecutionError extends Error {
+  /** 标准安全模型错误，可直接序列化到 Downcity 或 OpenAI 错误帧。 */
+  readonly model_error: ModelError;
+  /** HTTP 错误处理器使用的状态码，保留现有框架约定的字段名。 */
+  readonly statusCode: number;
+  /** 稳定的 Downcity 错误代码。 */
+  readonly code: ModelError["code"];
+  /** 实际收到的 Provider 累计 usage；没有用量事实时为空。 */
+  readonly usage?: ModelUsage;
+
+  constructor(model_error: ModelError, usage?: ModelUsage) {
+    super(model_error.message);
+    this.name = "ModelStreamExecutionError";
+    this.model_error = model_error;
+    this.statusCode = model_error.status_code ?? 502;
+    this.code = model_error.code;
+    this.usage = usage;
+  }
+}
+
+/** 仅将明确的超时和取消代码映射为公开信息，其余执行异常统一脱敏。 */
+export function create_model_stream_execution_error(error: unknown, usage?: ModelUsage): ModelStreamExecutionError {
+  if (error instanceof ModelStreamExecutionError) {
+    return usage ? new ModelStreamExecutionError(error.model_error, usage) : error;
+  }
+  const code = error && typeof error === "object" && "code" in error ? error.code : undefined;
+  const status_code = error && typeof error === "object" && "statusCode" in error ? error.statusCode : undefined;
+  if (status_code === 499 || code === "cancelled") {
+    return new ModelStreamExecutionError({
+      code: "cancelled", status_code: 499, retryable: false, message: "Model execution cancelled",
+    }, usage);
+  }
+  if (status_code === 504 || code === "MODEL_FIRST_OUTPUT_TIMEOUT" || code === "MODEL_IDLE_TIMEOUT" || code === "MODEL_EXECUTION_TIMEOUT") {
+    const message = code === "MODEL_FIRST_OUTPUT_TIMEOUT" ? "Model first output timed out"
+      : code === "MODEL_IDLE_TIMEOUT" ? "Model output stalled" : "Model execution timed out";
+    return new ModelStreamExecutionError({ code: "provider_timeout", status_code: 504, retryable: false, message }, usage);
+  }
+  return new ModelStreamExecutionError({
+    code: "provider_error", status_code: 502, retryable: false, message: "Model execution failed",
+  }, usage);
+}
+
+/** 将非成功的真实 model_finish 原因映射为安全错误，并保留实际用量。 */
+export function create_model_finish_error(finish_reason: ModelFinishReason, usage?: ModelUsage): ModelStreamExecutionError | undefined {
+  if (finish_reason === "cancelled") return create_model_stream_execution_error({ code: "cancelled" }, usage);
+  if (finish_reason === "error") return create_model_stream_execution_error(undefined, usage);
+  return undefined;
+}
+
+/** 取消回调中保留已知期限失败，其余主动取消不冒充 provider 故障。 */
+export function create_model_cancel_error(reason: unknown, usage?: ModelUsage): ModelStreamExecutionError {
+  const timeout = reason && typeof reason === "object" && (("statusCode" in reason && reason.statusCode === 504)
+    || ("name" in reason && reason.name === "TimeoutError"));
+  return timeout ? create_model_stream_execution_error(reason, usage)
+    : new ModelStreamExecutionError({ code: "cancelled", status_code: 499, retryable: false, message: "Model execution cancelled" }, usage);
+}
+
+/** 发起取消并立即释放 reader；Provider 的取消钩子可以永远不完成。 */
+export function cancel_model_stream_reader(reader: ReadableStreamDefaultReader<ModelStreamEvent>, reason?: unknown): void {
+  try {
+    void reader.cancel(reason).catch(() => undefined);
+  } catch {
+    // 已释放的 reader 无需重复取消。
+  } finally {
+    try {
+      reader.releaseLock();
+    } catch {
+      // 清理失败不得遮蔽已经确定的执行结果或原始异常。
+    }
   }
 }
 
