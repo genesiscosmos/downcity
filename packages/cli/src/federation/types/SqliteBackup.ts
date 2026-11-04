@@ -81,7 +81,7 @@ export interface SqliteRestorePreview {
 
 /** Restore completion facts; cancellation retains the safety backup without replacing data. */
 export interface SqliteRestoreResult extends SqliteRestorePreview {
-  /** True only after atomic replacement and the registry's stopped status were saved. */
+  /** True only after atomic replacement and its directory sync succeed; the CLI saves registry status afterward. */
   restored: boolean;
 }
 

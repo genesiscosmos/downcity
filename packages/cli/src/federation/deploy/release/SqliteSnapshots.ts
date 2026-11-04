@@ -5,7 +5,7 @@
 import Database from "better-sqlite3";
 import { createHash, randomUUID } from "node:crypto";
 import { createReadStream } from "node:fs";
-import { chmod, lstat, mkdir, readFile, realpath, rename, rm, writeFile } from "node:fs/promises";
+import { chmod, lstat, mkdir, open, readFile, realpath, rename, rm, writeFile } from "node:fs/promises";
 import { basename, dirname, isAbsolute, join, resolve } from "node:path";
 import { getPlatformRootDirPath } from "@/city/process/registry/CityPaths.js";
 import type { SqliteBackup, SqliteBackupMetadata, SqliteBackupSource } from "../../types/SqliteBackup.js";
@@ -23,6 +23,12 @@ export async function snapshot_digest(file_path: string): Promise<string> {
   const digest = createHash("sha256");
   for await (const chunk of createReadStream(file_path)) digest.update(chunk);
   return digest.digest("hex");
+}
+
+/** 在报告快照完成或替换成功前同步文件与目录，避免仅依赖内核写入缓存。 */
+export async function sync_snapshot_path(file_path: string): Promise<void> {
+  const handle = await open(file_path, "r");
+  try { await handle.sync(); } finally { await handle.close(); }
 }
 
 /** 完整检查结果必须唯一为 ok；不将内部页或表诊断输出到 CLI。 */
@@ -79,8 +85,13 @@ export async function create_sqlite_snapshot(source: SqliteBackupSource,
       app_version: source.app_version, release_id: source.release_id, purpose,
       database_file: "database.sqlite", size_bytes: (await lstat(staging_database)).size,
       sha256: await snapshot_digest(staging_database), integrity_check: "ok" };
-    await writeFile(join(staging, "backup.json"), `${JSON.stringify(metadata, null, 2)}\n`, { flag: "wx", mode: 0o600 });
+    const metadata_path = join(staging, "backup.json");
+    await writeFile(metadata_path, `${JSON.stringify(metadata, null, 2)}\n`, { flag: "wx", mode: 0o600 });
+    await sync_snapshot_path(staging_database);
+    await sync_snapshot_path(metadata_path);
+    await sync_snapshot_path(staging);
     await rename(staging, backup_dir);
+    await sync_snapshot_path(backup_root);
     return { backup_dir, database_path: join(backup_dir, "database.sqlite"), metadata };
   } catch (error) {
     await rm(staging, { recursive: true, force: true });
@@ -96,15 +107,20 @@ export async function verify_sqlite_snapshot(input_path: string, fed_id: string)
   const backup_dir = input_stat.isDirectory() ? absolute_path : basename(absolute_path) === "database.sqlite" ? dirname(absolute_path) : "";
   if (!backup_dir || !(await lstat(backup_dir)).isDirectory()) throw new Error("Select a completed SQLite backup directory");
   const metadata_path = join(backup_dir, "backup.json");
-  if (!(await lstat(metadata_path)).isFile()) throw new Error("Backup completion metadata is missing or unsafe");
-  const value = JSON.parse(await readFile(metadata_path, "utf8")) as SqliteBackupMetadata;
+  const metadata_stat = await lstat(metadata_path);
+  if (!metadata_stat.isFile() || metadata_stat.size > 64 * 1024) throw new Error("Backup completion metadata is missing or unsafe");
+  let value: SqliteBackupMetadata;
+  try { value = JSON.parse(await readFile(metadata_path, "utf8")) as SqliteBackupMetadata; }
+  catch { throw new Error("Backup completion metadata is not valid JSON"); }
   if (!value || typeof value !== "object" || value.schema !== 1 || value.fed_id !== fed_id
     || typeof value.backup_id !== "string" || !/^backup_[A-Za-z0-9_-]+$/u.test(value.backup_id)
     || basename(backup_dir) !== value.backup_id
     || value.database_file !== "database.sqlite" || value.integrity_check !== "ok"
-    || !["explicit", "before_restore"].includes(value.purpose) || !Number.isFinite(Date.parse(value.created_at))
+    || !["explicit", "before_restore"].includes(value.purpose)
+    || typeof value.created_at !== "string" || !Number.isFinite(Date.parse(value.created_at))
     || typeof value.release_id !== "string" || !value.release_id || typeof value.app_version !== "string" || !value.app_version
-    || !Number.isSafeInteger(value.size_bytes) || value.size_bytes < 1 || !/^[a-f0-9]{64}$/u.test(value.sha256)) {
+    || !Number.isSafeInteger(value.size_bytes) || value.size_bytes < 1
+    || typeof value.sha256 !== "string" || !/^[a-f0-9]{64}$/u.test(value.sha256)) {
     throw new Error("Backup metadata or Federation ownership is invalid");
   }
   const database_path = await require_sqlite_file(join(backup_dir, "database.sqlite"));

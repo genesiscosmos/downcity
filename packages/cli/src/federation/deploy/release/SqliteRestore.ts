@@ -5,10 +5,10 @@
  */
 import Database from "better-sqlite3";
 import { randomUUID } from "node:crypto";
-import { chmod, lstat, rename, rm, open, writeFile } from "node:fs/promises";
+import { chmod, lstat, rename, rm, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { assert_release_service_stopped } from "./LocalReleaseProcess.js";
-import { assert_no_sqlite_sidecars, assert_sqlite_integrity, create_sqlite_snapshot, require_sqlite_file, snapshot_digest, verify_sqlite_snapshot } from "./SqliteSnapshots.js";
+import { assert_no_sqlite_sidecars, assert_sqlite_integrity, create_sqlite_snapshot, require_sqlite_file, snapshot_digest, sync_snapshot_path, verify_sqlite_snapshot } from "./SqliteSnapshots.js";
 import type { ServerProfile } from "../../core/session.js";
 import type { SqliteBackupSource, SqliteRestoreInteraction, SqliteRestorePreview, SqliteRestoreResult } from "../../types/SqliteBackup.js";
 
@@ -45,8 +45,11 @@ export async function restore_sqlite_snapshot(server: ServerProfile, source: Sql
   const before_safety = await database_fingerprint(target);
   const safety_backup = await create_sqlite_snapshot(source, "before_restore");
   const before_confirmation = await database_fingerprint(target);
-  // SQLite 可能为只读连接创建空 SHM。以在线备份后的事实为准，但主库/WAL不得有内容变化。
-  const primary_facts = (value: string) => (JSON.parse(value) as unknown[][]).filter((entry) => entry[0] !== "-shm");
+  // 只读 WAL 连接可能创建空 WAL 和 SHM；忽略本次安全备份产生的空 sidecar，主库与非空 WAL 仍须一致。
+  // 确认后的检查继续使用完整 fingerprint，不能把后续写入或文件替换也忽略。
+  const primary_facts = (value: string) => (JSON.parse(value) as unknown[][])
+    .filter((entry) => entry[0] !== "-shm")
+    .map((entry) => entry[0] === "-wal" && (entry[1] === "absent" || entry[3] === 0) ? ["-wal", "empty"] : entry);
   if (JSON.stringify(primary_facts(before_safety)) !== JSON.stringify(primary_facts(before_confirmation))) {
     throw new Error(`Database changed during safety backup; no restore performed. Safety backup: ${safety_backup.backup_dir}`);
   }
@@ -59,6 +62,7 @@ export async function restore_sqlite_snapshot(server: ServerProfile, source: Sql
   }
   const staging = join(dirname(target), `.downcity-restore-${randomUUID()}.sqlite`);
   let replaced = false;
+  let restore_error: Error | undefined;
   try {
     await writeFile(staging, Buffer.alloc(0), { flag: "wx", mode: 0o600 });
     const input = new Database(backup.database_path, { readonly: true, fileMustExist: true });
@@ -82,16 +86,21 @@ export async function restore_sqlite_snapshot(server: ServerProfile, source: Sql
       try { assert_sqlite_integrity(current); } finally { current.exec("ROLLBACK"); }
     } finally { current.close(); }
     await assert_no_sqlite_sidecars(target);
-    const staged_handle = await open(staging, "r+");
-    try { await staged_handle.sync(); } finally { await staged_handle.close(); }
+    await sync_snapshot_path(staging);
     await rename(staging, target);
     replaced = true;
-    const parent = await open(dirname(target), "r");
-    try { await parent.sync(); } finally { await parent.close(); }
+    await sync_snapshot_path(dirname(target));
     return { backup, database_path: target, safety_backup, restored: true };
   } catch (error) {
-    throw new Error(`${replaced ? "Database replacement completed; final durability confirmation failed" : "Database restore did not replace the database"}. Safety backup: ${safety_backup.backup_dir}`, { cause: error });
+    restore_error = new Error(`${replaced ? "Database replacement completed; final durability confirmation failed" : "Database restore did not replace the database"}. Safety backup: ${safety_backup.backup_dir}`, { cause: error });
+    throw restore_error;
   } finally {
-    for (const suffix of ["", "-wal", "-shm", "-journal"]) await rm(`${staging}${suffix}`, { force: true });
+    // 清理全部候选文件；清理失败也必须保留替换事实、安全备份位置及原始失败。
+    const cleanup_results = await Promise.allSettled(["", "-wal", "-shm", "-journal"].map((suffix) => rm(`${staging}${suffix}`, { force: true })));
+    const cleanup_errors = cleanup_results.flatMap((result) => result.status === "rejected" ? [result.reason] : []);
+    if (cleanup_errors.length) {
+      throw new AggregateError([...(restore_error ? [restore_error] : []), ...cleanup_errors],
+        `${replaced ? "Database replacement completed" : "Database restore did not replace the database"}; restore staging cleanup failed${restore_error ? " after a restore failure" : ""}. Safety backup: ${safety_backup.backup_dir}`);
+    }
   }
 }
