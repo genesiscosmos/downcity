@@ -5,7 +5,7 @@ import type { AccountsRuntime } from "./AccountsRuntime.js";
 import type { AccountsLoginContinueRequest, AccountsLoginStartRequest, AccountsLoginExchangeRequest } from "./types.js";
 import { toRecord } from "./utils.js";
 
-/** Register login and browser consent routes separately from administrative/token routes. */
+/** 注册登录、状态查询、授权码交换及 Provider 浏览器入口。 */
 export function register_login_routes(runtime: AccountsRuntime, ctx: ServiceInstallContext): void {
   ctx.route({
     method: "POST", path: "/login/start", public: true,
@@ -16,7 +16,9 @@ export function register_login_routes(runtime: AccountsRuntime, ctx: ServiceInst
       await runtime.require_active_bureau(bureau_id);
       const provider = runtime.login_provider(provider_id);
       if (!provider) throw httpError(400, "login provider is not enabled");
-      const { cookie, ...proof } = await runtime.flow.start(bureau_id, provider_id, body.client_type, request_ctx.request);
+      const server_url = body.client_type === "web" && provider.type === "oauth"
+        ? await runtime.read_bureau_server_url(bureau_id) : "";
+      const { cookie, ...proof } = await runtime.flow.start(bureau_id, provider_id, body.client_type, request_ctx.request, body, server_url);
       const headers = new Headers({ "cache-control": "no-store" });
       if (cookie) headers.set("set-cookie", cookie);
       if (provider_id === "local") {
@@ -55,7 +57,7 @@ export function register_login_routes(runtime: AccountsRuntime, ctx: ServiceInst
     handler: async (request_ctx) => {
       const body = await request_ctx.json<AccountsLoginContinueRequest>();
       const row = await runtime.flow.claim(String(body.login_id ?? ""), String(body.login_secret ?? ""), request_ctx.request);
-      return Response.json({ status: row.phase === "done" || row.phase === "exchanged" ? "done" : "pending",
+      return Response.json({ status: row.phase === "exchanged" || (row.phase === "done" && !row.redirect_uri) ? "done" : "pending",
         login_id: row.login_id, provider: row.provider }, { headers: { "cache-control": "no-store" } });
     },
   });
@@ -65,13 +67,10 @@ export function register_login_routes(runtime: AccountsRuntime, ctx: ServiceInst
       const body = await request_ctx.json<AccountsLoginExchangeRequest>();
       const row = await runtime.flow.claim(String(body.login_id ?? ""), String(body.login_secret ?? ""), request_ctx.request);
       await runtime.require_active_bureau(row.bureau_id);
-      return Response.json(await runtime.flow.exchange(row, String(body.exchange_id ?? "")), { headers: { "cache-control": "no-store" } });
+      return Response.json(await runtime.exchange_login(row, body), { headers: { "cache-control": "no-store" } });
     },
   });
   ctx.route({ method: "GET", path: "/oauth/authorize", public: true, handler: {
     request: async (request) => await runtime.authorize_oauth(new URL(request.url).searchParams.get("login_id") ?? "", request),
-  } });
-  ctx.route({ method: "POST", path: "/oauth/confirm", public: true, handler: {
-    request: async (request) => await runtime.confirm_oauth(request),
   } });
 }

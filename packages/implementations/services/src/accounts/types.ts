@@ -243,12 +243,21 @@ export interface AccountsOAuthProvider extends AccountsProvider {
  * Accounts 登录启动请求。
  */
 export interface AccountsLoginStartRequest extends Record<string, unknown> {
-  /** Explicit surface; web binds a same-origin browser, device supports BFF clients using human code confirmation. */
-  client_type: "web" | "cli" | "desktop" | "device";
+  /** 客户端交互方式；全部 OAuth 使用产品回调、随机 state 与 S256 PKCE。 */
+  client_type: "web" | "cli" | "desktop";
   /**
    * 目标登录 provider ID，例如 `github`、`email` 或 `local`。
    */
   provider?: string;
+
+  /** OAuth 回调：网站为 Bureau server_url 下 /api/auth/callback，CLI/Desktop 为 127.0.0.1 临时端口。 */
+  redirect_uri?: string;
+  /** 产品回调 state，与 Provider OAuth state 独立，至少 32 个 URL-safe 字符。 */
+  state?: string;
+  /** OAuth 的 S256 PKCE challenge，43 个 base64url 字符。 */
+  code_challenge?: string;
+  /** OAuth 必须明确指定 S256。 */
+  code_challenge_method?: "S256";
 
   /**
    * 需要签发 `user_token` 的稳定 Bureau ID。
@@ -295,6 +304,10 @@ export interface AccountsLoginStartProof {
 export interface AccountsLoginExchangeRequest extends AccountsLoginResultRequest {
   /** Client-generated random URL-safe identifier, 20-128 characters; persist across transport retries. */
   exchange_id: string;
+  /** 浏览器通过产品回调交付的单次授权码，全部 OAuth 交换均必需。 */
+  authorization_code?: string;
+  /** 发起产品保管的 PKCE verifier，不能通过授权 URL 或产品回调交付。 */
+  code_verifier?: string;
 }
 
 /**
@@ -351,8 +364,6 @@ export interface AccountsLoginRedirectRequiredResult extends AccountsLoginStartP
    */
   url: string;
 
-  /** Code displayed by the initiating CLI/Desktop before opening url; never include it in url. */
-  user_code?: string;
 }
 
 /**

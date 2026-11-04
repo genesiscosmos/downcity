@@ -1,12 +1,14 @@
 /**
- * Login delivery state machine: independent claim proof, browser binding, explicit device
- * approval and atomic exchange with a bounded idempotent retry window. Secrets never enter URLs.
+ * OAuth 授权码交付状态机：发起端私密证明、Provider 浏览器绑定、产品回调与 PKCE，
+ * 以及有界幂等交换。状态查询只返回进度，永远不能交付授权码或 Token。
  */
 import { httpError } from "@downcity/federation";
 import type { ServiceDatabaseContext } from "@downcity/federation";
 import { service_sql_database } from "../shared/database-sql.js";
 import { LOGIN_FLOW_TABLE, type LoginFlowRow } from "./login-schema.js";
 import { randomToken } from "./utils.js";
+import { oauth_code_challenge, oauth_login_parameters } from "./oauth-login-proof.js";
+import type { AccountsLoginStartRequest } from "./types.js";
 
 /** SHA-256 digest for random bearer credentials. */
 async function digest_secret(value: string): Promise<string> {
@@ -31,29 +33,28 @@ export class LoginFlow {
     });
   }
 
-  /** Create a new flow; only the JSON response exposes the claim secret and device code. */
-  async start(bureau_id: string, provider: string, client_type: unknown, request: Request) {
-    if (client_type !== "web" && client_type !== "cli" && client_type !== "desktop" && client_type !== "device") {
-      throw httpError(400, "explicit client_type web, cli, desktop or device required");
+  /** 创建短期事务；网站可信地址由 Bureau 注册表提供，秘密只通过 JSON 返回。 */
+  async start(bureau_id: string, provider: string, client_type: unknown, request: Request, input: Partial<AccountsLoginStartRequest> = {}, server_url = "") {
+    if (client_type !== "web" && client_type !== "cli" && client_type !== "desktop") {
+      throw httpError(400, "explicit client_type web, cli or desktop required");
     }
-    if (client_type === "web") this.require_same_origin(request);
+    const oauth = provider !== "email" && provider !== "local";
+    if (client_type === "web" && !oauth) this.require_same_origin(request);
     await this.cleanup();
     const login_id = randomToken(24);
     const login_secret = randomToken(32);
     const browser_secret = randomToken(32);
-    const needs_code = client_type !== "web" && provider !== "email" && provider !== "local";
-    const code_bytes = crypto.getRandomValues(new Uint8Array(8));
-    const user_code = Array.from(code_bytes, (byte) => "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"[byte % 32]).join("");
+    const callback = oauth ? oauth_login_parameters({ ...input, client_type }, server_url)
+      : { redirect_uri: "", callback_state: "", code_challenge: "" };
     await this.database.query({
-      sql: `INSERT INTO ${LOGIN_FLOW_TABLE} (login_id, secret_hash, bureau_id, provider, client_type, oauth_state, browser_hash, code_hash, csrf_hash, phase, user_id, user_token, exchange_hash, retry_until, attempts, expires_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, '', 'created', '', '', '', 0, 0, ?)`,
+      sql: `INSERT INTO ${LOGIN_FLOW_TABLE} (login_id, secret_hash, bureau_id, provider, client_type, oauth_state, browser_hash, redirect_uri, callback_state, code_challenge, authorization_code_hash, phase, user_id, user_token, exchange_hash, retry_until, expires_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '', 'created', '', '', '', 0, ?)`,
       params: [login_id, await digest_secret(login_secret), bureau_id, provider, client_type,
-        randomToken(32), client_type === "web" ? await digest_secret(browser_secret) : "",
-        needs_code ? await digest_secret(user_code) : "", Date.now() + 300_000],
+        randomToken(32), client_type === "web" && !oauth ? await digest_secret(browser_secret) : "",
+        callback.redirect_uri, callback.callback_state, callback.code_challenge, Date.now() + 300_000],
     });
     return {
       login_id, login_secret,
-      ...(needs_code ? { user_code } : {}),
-      cookie: client_type === "web" ? this.cookie(login_id, browser_secret, request) : undefined,
+      cookie: client_type === "web" && !oauth ? this.cookie(login_id, browser_secret, request) : undefined,
     };
   }
 
@@ -66,13 +67,13 @@ export class LoginFlow {
     return row;
   }
 
-  /** Authenticate the initiating client; web flows additionally require their browser cookie. */
+  /** 验证发起证明；Email/local web 还要求同源 Cookie，OAuth 交付由回调码与 PKCE 绑定。 */
   async claim(login_id: string, login_secret: string, request: Request): Promise<LoginFlowRow> {
     const row = await this.read(login_id);
     if (!login_secret || await digest_secret(login_secret) !== row.secret_hash) {
       throw httpError(403, "invalid login proof");
     }
-    if (row.client_type === "web") {
+    if (row.client_type === "web" && !row.redirect_uri) {
       this.require_same_origin(request);
       await this.require_browser(row, request);
     }
@@ -91,7 +92,7 @@ export class LoginFlow {
   /** Save a result without exposing it through status queries. */
   async ready(login_id: string, phase: string, user_token: string): Promise<void> {
     const result = await this.database.query({
-      sql: `UPDATE ${LOGIN_FLOW_TABLE} SET phase = 'done', user_token = ?, oauth_state = ?, csrf_hash = '', code_hash = '' WHERE login_id = ? AND phase = ? AND expires_at > ? RETURNING login_id`,
+      sql: `UPDATE ${LOGIN_FLOW_TABLE} SET phase = 'done', user_token = ?, oauth_state = ? WHERE login_id = ? AND phase = ? AND expires_at > ? RETURNING login_id`,
       params: [user_token, randomToken(32), login_id, phase, Date.now()],
     });
     if (!result.rows.length) throw httpError(409, "login state changed; restart login");
@@ -102,8 +103,8 @@ export class LoginFlow {
     if (!/^[A-Za-z0-9_-]{20,128}$/.test(exchange_id)) throw httpError(400, "random exchange_id required (20-128 URL-safe characters)");
     const exchange_hash = await digest_secret(exchange_id);
     await this.database.query({
-      sql: `UPDATE ${LOGIN_FLOW_TABLE} SET phase = 'exchanged', exchange_hash = ?, retry_until = ?, expires_at = ?, user_id = '' WHERE login_id = ? AND phase = 'done' AND expires_at > ?`,
-      params: [exchange_hash, Date.now() + 60_000, Date.now() + 60_000, row.login_id, Date.now()],
+      sql: `UPDATE ${LOGIN_FLOW_TABLE} SET phase = 'exchanged', exchange_hash = ?, retry_until = ?, expires_at = ?, user_id = '' WHERE login_id = ? AND phase = 'done' AND expires_at > ? AND (exchange_hash = '' OR exchange_hash = ?)`,
+      params: [exchange_hash, Date.now() + 60_000, Date.now() + 60_000, row.login_id, Date.now(), exchange_hash],
     });
     const current = await this.read(row.login_id);
     if (current.phase !== "exchanged" || current.exchange_hash !== exchange_hash) {
@@ -115,16 +116,14 @@ export class LoginFlow {
   /** Open an authorization landing page, bind this browser, then redirect to the provider. */
   async authorize(login_id: string, request: Request, build_url: (state: string) => string): Promise<Response> {
     const row = await this.read(login_id);
-    let browser_secret = "";
-    if (row.client_type === "web") await this.require_browser(row, request);
-    else browser_secret = randomToken(32);
+    const browser_secret = randomToken(32);
     const result = await this.database.query({
       sql: `UPDATE ${LOGIN_FLOW_TABLE} SET phase = 'authorizing', browser_hash = ? WHERE login_id = ? AND phase = 'created' AND expires_at > ? RETURNING login_id`,
-      params: [browser_secret ? await digest_secret(browser_secret) : row.browser_hash, login_id, Date.now()],
+      params: [await digest_secret(browser_secret), login_id, Date.now()],
     });
     if (!result.rows.length) throw httpError(409, "authorization already started; restart login");
     const headers = new Headers({ location: build_url(row.oauth_state), "cache-control": "no-store", "referrer-policy": "no-referrer" });
-    if (browser_secret) headers.set("set-cookie", this.cookie(login_id, browser_secret, request));
+    headers.set("set-cookie", this.cookie(login_id, browser_secret, request));
     return new Response(null, { status: 303, headers });
   }
 
@@ -139,36 +138,41 @@ export class LoginFlow {
     return row;
   }
 
-  /** Store identity pending consent; a CSRF nonce is delivered only in the bound browser form. */
-  async authenticated(row: LoginFlowRow, user_id: string): Promise<string> {
-    const csrf = randomToken(32);
-    await this.database.query({
-      sql: `UPDATE ${LOGIN_FLOW_TABLE} SET phase = 'confirming', user_id = ?, csrf_hash = ? WHERE login_id = ? AND phase = 'authenticating' AND expires_at > ?`,
-      params: [user_id, await digest_secret(csrf), row.login_id, Date.now()],
+  /** 浏览器将一次性授权码交付原产品回调；状态查询不暴露授权码或 Token。 */
+  async oauth_callback(row: LoginFlowRow, user_id: string): Promise<Response> {
+    const authorization_code = randomToken(32);
+    const result = await this.database.query({
+      sql: `UPDATE ${LOGIN_FLOW_TABLE} SET phase = 'callback_ready', user_id = ?, authorization_code_hash = ?, oauth_state = ? WHERE login_id = ? AND phase = 'authenticating' AND expires_at > ? RETURNING login_id`,
+      params: [user_id, await digest_secret(authorization_code), randomToken(32), row.login_id, Date.now()],
     });
-    return csrf;
+    if (!result.rows.length) throw httpError(409, "OAuth login state changed; restart login");
+    const url = new URL(row.redirect_uri);
+    url.searchParams.set("code", authorization_code);
+    url.searchParams.set("state", row.callback_state);
+    return new Response(null, { status: 303, headers: { location: url.href, "cache-control": "no-store", "referrer-policy": "no-referrer" } });
   }
 
-  /** Validate origin, browser, CSRF and the external device code before issuing any token. */
-  async confirm(request: Request): Promise<LoginFlowRow> {
-    this.require_same_origin(request);
-    const form = await request.formData();
-    const row = await this.read(String(form.get("login_id") ?? ""));
-    await this.require_browser(row, request);
-    if (row.phase !== "confirming" || row.attempts >= 5
-      || await digest_secret(String(form.get("csrf") ?? "")) !== row.csrf_hash) {
-      throw httpError(403, "invalid or expired authorization confirmation");
-    }
-    const attempt = await this.database.query({
-      sql: `UPDATE ${LOGIN_FLOW_TABLE} SET attempts = attempts + 1 WHERE login_id = ? AND phase = 'confirming' AND attempts < 5 RETURNING login_id`, params: [row.login_id],
+  /** 授权码与 PKCE 均匹配才允许签发；已完成流程只能进入原 exchange_id 的幂等交换。 */
+  async begin_oauth_exchange(row: LoginFlowRow, authorization_code: string, code_verifier: string, exchange_id: string): Promise<boolean> {
+    if (!authorization_code || await digest_secret(authorization_code) !== row.authorization_code_hash
+      || await oauth_code_challenge(code_verifier) !== row.code_challenge) throw httpError(403, "invalid OAuth login proof");
+    const exchange_hash = await digest_secret(exchange_id);
+    if (row.exchange_hash && row.exchange_hash !== exchange_hash) throw httpError(409, "reuse the original OAuth exchange_id");
+    if (row.phase === "done" || row.phase === "exchanged") return false;
+    const result = await this.database.query({
+      sql: `UPDATE ${LOGIN_FLOW_TABLE} SET phase = 'issuing', exchange_hash = ? WHERE login_id = ? AND phase = 'callback_ready' AND expires_at > ? AND (exchange_hash = '' OR exchange_hash = ?) RETURNING login_id`,
+      params: [exchange_hash, row.login_id, Date.now(), exchange_hash],
     });
-    if (!attempt.rows.length) throw httpError(403, "confirmation attempts exceeded");
-    const code = String(form.get("user_code") ?? "").replace(/[\s-]/g, "").toUpperCase();
-    if (row.client_type !== "web" && await digest_secret(code) !== row.code_hash) {
-      throw httpError(403, "device code does not match; return to the original client and restart login");
-    }
-    if (!await this.advance(row.login_id, "confirming", "issuing")) throw httpError(409, "authorization already confirmed");
-    return row;
+    if (!result.rows.length) throw httpError(409, "OAuth login not ready or exchange in progress");
+    return true;
+  }
+
+  /** 签发或保存失败可用原交换 ID 重试；已写入 done/exchanged 的结果不会被回退。 */
+  async retry_oauth_exchange(login_id: string, exchange_id: string): Promise<void> {
+    await this.database.query({
+      sql: `UPDATE ${LOGIN_FLOW_TABLE} SET phase = 'callback_ready' WHERE login_id = ? AND phase = 'issuing' AND exchange_hash = ?`,
+      params: [login_id, await digest_secret(exchange_id)],
+    });
   }
 
   /** Require a same-origin browser mutation; non-browser clients never use cookie-only proofs. */

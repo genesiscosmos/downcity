@@ -1,6 +1,6 @@
-/** accounts PostgreSQL 表声明；认证日期为 timestamptz，其他整数使用 bigint。 */
-import { USER_PROFILE_TABLE, ACCOUNTS_LOGIN_STATE_TABLE, AUTH_USER_TABLE, AUTH_ACCOUNT_TABLE, AUTH_SESSION_TABLE, AUTH_VERIFICATION_TABLE } from "./schema.js";
-import { bigint, boolean, timestamp, pgTable, text } from "drizzle-orm/pg-core";
+/** Accounts PostgreSQL 用户资料与认证表声明；认证日期使用 timestamptz。 */
+import { USER_PROFILE_TABLE, AUTH_USER_TABLE, AUTH_ACCOUNT_TABLE, AUTH_SESSION_TABLE, AUTH_VERIFICATION_TABLE } from "./schema.js";
+import { boolean, timestamp, pgTable, text } from "drizzle-orm/pg-core";
 export const pg_user_profiles = pgTable(USER_PROFILE_TABLE, {
   /** user_id 持久化字段；与同名 SQLite 字段具有相同业务含义。 */
   user_id: text("user_id").primaryKey(),
@@ -16,18 +16,6 @@ export const pg_user_profiles = pgTable(USER_PROFILE_TABLE, {
   created_at: text("created_at").notNull(),
   /** updated_at 持久化字段；与同名 SQLite 字段具有相同业务含义。 */
   updated_at: text("updated_at").notNull(),
-});
-export const pg_accounts_login_states = pgTable(ACCOUNTS_LOGIN_STATE_TABLE, {
-  /** state 持久化字段；与同名 SQLite 字段具有相同业务含义。 */
-  state: text("state").primaryKey(),
-  /** bureau_id 持久化字段；与同名 SQLite 字段具有相同业务含义。 */
-  bureau_id: text("bureau_id").notNull(),
-  /** provider 持久化字段；与同名 SQLite 字段具有相同业务含义。 */
-  provider: text("provider").notNull(),
-  /** user_token 持久化字段；与同名 SQLite 字段具有相同业务含义。 */
-  user_token: text("user_token").notNull(),
-  /** created_at 持久化字段；与同名 SQLite 字段具有相同业务含义。 */
-  created_at: bigint("created_at", { mode: "number" }).notNull(),
 });
 export const pg_auth_users = pgTable(AUTH_USER_TABLE, {
   /** id 持久化字段；与同名 SQLite 字段具有相同业务含义。 */

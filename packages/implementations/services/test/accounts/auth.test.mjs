@@ -1,5 +1,6 @@
-/** Existing Accounts integration cases exercise verified login and explicit OAuth delivery authorization. */
+/** Accounts 集成用例验证邮箱认证，以及 OAuth 产品回调、PKCE 和有界单次交换。 */
 import assert from "node:assert/strict"
+import { createHash, randomBytes } from "node:crypto"
 import fs from "node:fs/promises"
 import os from "node:os"
 import path from "node:path"
@@ -351,7 +352,7 @@ test("accountsService does not expose email login without an email provider", as
   }
 })
 
-test("accountsService delivers Google OAuth login only after browser confirmation and exchange", async () => {
+for (const client_type of ["desktop", "cli", "web"]) test(`accountsService delivers ${client_type} Google OAuth through callback code and S256 PKCE`, async () => {
   const cwd = process.cwd()
   const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "downcity-accounts-service-"))
   const originalFetch = globalThis.fetch
@@ -368,10 +369,24 @@ test("accountsService delivers Google OAuth login only after browser confirmatio
       body: { name: "Demo", server_url: "https://bureau.example.com" },
     }))).json()
 
+    const code_verifier = randomBytes(32).toString("base64url")
+    const callback_state = randomBytes(32).toString("base64url")
+    const redirect_uri = client_type === "web" ? "https://bureau.example.com/api/auth/callback" : "http://127.0.0.1:43123/oauth/callback/test"
+    const callback_input = { redirect_uri, state: callback_state,
+      code_challenge: createHash("sha256").update(code_verifier).digest("base64url"), code_challenge_method: "S256" }
+    for (const invalid_uri of ["https://attacker.example/api/auth/callback", "https://bureau.example.com/wrong", "http://localhost:43123/oauth/callback/test", `${redirect_uri}?extra=1`, `${redirect_uri}#fragment`]) {
+      assert.equal((await base.fetch(jsonRequest("/v1/accounts/login/start", {
+        provider: "google", client_type, bureau_id: city.bureau_id, ...callback_input, redirect_uri: invalid_uri,
+      }))).status, 400)
+    }
+    assert.equal((await base.fetch(jsonRequest("/v1/accounts/login/start", {
+      provider: "google", client_type: "device", bureau_id: city.bureau_id, ...callback_input,
+    }))).status, 400)
     const startResponse = await base.fetch(jsonRequest("/v1/accounts/login/start", {
       provider: "google",
-      client_type: "cli",
+      client_type,
       bureau_id: city.bureau_id,
+      ...callback_input,
     }))
     assert.equal(startResponse.status, 200)
     const start = await startResponse.json()
@@ -380,8 +395,13 @@ test("accountsService delivers Google OAuth login only after browser confirmatio
     assert.equal(start.state, undefined)
     assert.equal(typeof start.login_secret, "string")
     assert.equal(start.provider, "google")
-    const authorization = await begin_oauth_authorization(base, start)
-    assert.match(authorization.provider_url, /^https:\/\/accounts\.google\.com\/o\/oauth2\/v2\/auth\?/)
+    assert.equal(start.user_code, undefined)
+    assert.equal((await base.fetch(jsonRequest("/v1/accounts/oauth/confirm", {}))).status, 404)
+    const landing = await base.fetch(new Request(start.url))
+    assert.equal(landing.status, 303)
+    const provider_url = landing.headers.get("location")
+    assert.match(provider_url, /^https:\/\/accounts\.google\.com\/o\/oauth2\/v2\/auth\?/)
+    const authorization = { state: new URL(provider_url).searchParams.get("state"), cookie: landing.headers.get("set-cookie")?.split(";")[0] }
 
     globalThis.fetch = async (input, init) => {
       const url = typeof input === "string" ? input : input.url
@@ -406,8 +426,31 @@ test("accountsService delivers Google OAuth login only after browser confirmatio
       throw new Error(`Unexpected fetch URL: ${url}`)
     }
 
-    await confirm_oauth_authorization(base, start, authorization, "test-google-code")
-    const loginResult = await exchange_completed_login(base, start)
+    const callback_url = `http://localhost/v1/accounts/oauth/callback?state=${authorization.state}&code=test-google-code`
+    assert.equal((await base.fetch(new Request(callback_url))).status, 400)
+    assert.equal((await base.fetch(new Request(`${callback_url}&state=${authorization.state}`, { headers: { cookie: authorization.cookie } }))).status, 400)
+    const callback = await base.fetch(new Request(callback_url, { headers: { cookie: authorization.cookie } }))
+    assert.equal(callback.status, 303)
+    const delivered = new URL(callback.headers.get("location"))
+    assert.equal(delivered.origin + delivered.pathname, redirect_uri)
+    assert.equal(delivered.searchParams.get("state"), callback_state)
+    assert.ok(delivered.searchParams.get("code"))
+    const proof = { login_id: start.login_id, login_secret: start.login_secret, exchange_id: crypto.randomUUID() }
+    const pending = await (await base.fetch(jsonRequest("/v1/accounts/login/result", proof))).json()
+    assert.equal(pending.status, "pending")
+    assert.equal(pending.user_token, undefined)
+    assert.equal((await base.fetch(jsonRequest("/v1/accounts/login/exchange", proof))).status, 403)
+    const exchange_input = { ...proof, authorization_code: delivered.searchParams.get("code"), code_verifier }
+    assert.equal((await base.fetch(jsonRequest("/v1/accounts/login/exchange", { ...exchange_input, code_verifier: "x".repeat(43) }))).status, 403)
+    assert.equal((await base.fetch(jsonRequest("/v1/accounts/login/exchange", { ...exchange_input, exchange_id: "invalid" }))).status, 400)
+    const exchanged = await base.fetch(jsonRequest("/v1/accounts/login/exchange", exchange_input))
+    assert.equal(exchanged.status, 200)
+    const loginResult = await exchanged.json()
+    const retry = await base.fetch(jsonRequest("/v1/accounts/login/exchange", exchange_input))
+    assert.equal(retry.status, 200)
+    assert.equal((await retry.json()).user_token, loginResult.user_token)
+    assert.equal((await base.fetch(jsonRequest("/v1/accounts/login/exchange", { ...exchange_input, exchange_id: crypto.randomUUID() }))).status, 409)
+    assert.equal((await base.fetch(new Request(callback_url, { headers: { cookie: authorization.cookie } }))).status, 400)
     assert.equal(loginResult.provider, "google")
 
     const meResponse = await base.fetch(new Request("http://localhost/v1/accounts/me", {
@@ -427,7 +470,7 @@ test("accountsService delivers Google OAuth login only after browser confirmatio
   }
 })
 
-test("accountsService delivers WeChat OAuth login only after browser confirmation and exchange", async () => {
+test("accountsService automatically returns WeChat OAuth to CLI and requires callback proof for exchange", async () => {
   const cwd = process.cwd()
   const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "downcity-accounts-service-"))
   const originalFetch = globalThis.fetch
@@ -444,10 +487,12 @@ test("accountsService delivers WeChat OAuth login only after browser confirmatio
       body: { name: "Demo", server_url: "https://bureau.example.com" },
     }))).json()
 
+    const code_verifier = randomBytes(32).toString("base64url")
+    const state = randomBytes(32).toString("base64url")
+    const redirect_uri = "http://127.0.0.1:43123/oauth/callback/wechat"
     const startResponse = await base.fetch(jsonRequest("/v1/accounts/login/start", {
-      provider: "wechat",
-      client_type: "cli",
-      bureau_id: city.bureau_id,
+      provider: "wechat", client_type: "cli", bureau_id: city.bureau_id,
+      redirect_uri, state, code_challenge: createHash("sha256").update(code_verifier).digest("base64url"), code_challenge_method: "S256",
     }))
     assert.equal(startResponse.status, 200)
     const start = await startResponse.json()
@@ -494,8 +539,12 @@ test("accountsService delivers WeChat OAuth login only after browser confirmatio
       throw new Error(`Unexpected fetch URL: ${url}`)
     }
 
-    await confirm_oauth_authorization(base, start, authorization, "test-wechat-code")
-    const loginResult = await exchange_completed_login(base, start)
+    const callback = await base.fetch(new Request(`http://localhost/v1/accounts/oauth/callback?state=${authorization.state}&code=test-wechat-code`, { headers: { cookie: authorization.cookie } }))
+    assert.equal(callback.status, 303)
+    const delivered = new URL(callback.headers.get("location"))
+    assert.equal(delivered.origin + delivered.pathname, redirect_uri)
+    assert.equal(delivered.searchParams.get("state"), state)
+    const loginResult = await exchange_completed_login(base, start, { authorization_code: delivered.searchParams.get("code"), code_verifier })
     assert.equal(loginResult.provider, "wechat")
 
     const meResponse = await base.fetch(new Request("http://localhost/v1/accounts/me", {
@@ -520,7 +569,7 @@ test("accountsService delivers WeChat OAuth login only after browser confirmatio
 async function begin_oauth_authorization(base, start) {
   assert.equal(new URL(start.url).pathname, "/v1/accounts/oauth/authorize")
   assert.equal(new URL(start.url).searchParams.get("login_secret"), null)
-  assert.equal(typeof start.user_code, "string")
+  assert.equal(start.user_code, undefined)
   const response = await base.fetch(new Request(start.url))
   assert.equal(response.status, 303)
   const provider_url = response.headers.get("location")
@@ -532,49 +581,13 @@ async function begin_oauth_authorization(base, start) {
   return { provider_url, state, cookie }
 }
 
-/** Authentication alone remains pending; explicit browser consent plus the original code allows exchange. */
-async function confirm_oauth_authorization(base, start, authorization, code) {
-  const callback_response = await base.fetch(new Request(
-    `http://localhost/v1/accounts/oauth/callback?state=${authorization.state}&code=${code}`,
-    { headers: { cookie: authorization.cookie } },
-  ))
-  assert.equal(callback_response.status, 200)
-  const html = await callback_response.text()
-  assert.match(html, /Authorize this login/)
-  const csrf = /name="csrf" value="([^"]+)"/.exec(html)?.[1]
-  assert.ok(csrf)
-  const pending_response = await base.fetch(jsonRequest("/v1/accounts/login/result", {
-    login_id: start.login_id, login_secret: start.login_secret,
-  }))
-  assert.equal(pending_response.status, 200)
-  const pending = await pending_response.json()
-  assert.equal(pending.status, "pending")
-  assert.equal(pending.user_token, undefined)
-  const premature = await base.fetch(jsonRequest("/v1/accounts/login/exchange", {
-    login_id: start.login_id, login_secret: start.login_secret, exchange_id: crypto.randomUUID(),
-  }))
-  assert.equal(premature.status, 409)
-  const wrong_code = await base.fetch(new Request("http://localhost/v1/accounts/oauth/confirm", {
-    method: "POST", headers: { cookie: authorization.cookie, origin: "http://localhost" },
-    body: new URLSearchParams({ login_id: start.login_id, csrf, user_code: "NOT-THE-CODE" }),
-  }))
-  assert.equal(wrong_code.status, 403)
-  const confirmation = await base.fetch(new Request("http://localhost/v1/accounts/oauth/confirm", {
-    method: "POST",
-    headers: { cookie: authorization.cookie, origin: "http://localhost" },
-    body: new URLSearchParams({ login_id: start.login_id, csrf, user_code: start.user_code }),
-  }))
-  assert.equal(confirmation.status, 200)
-  assert.match(await confirmation.text(), /Login Successful/)
-}
-
 /** Query completion without token delivery, then explicitly exchange the initiating client's proof. */
-async function exchange_completed_login(base, start) {
-  const proof = { login_id: start.login_id, login_secret: start.login_secret }
+async function exchange_completed_login(base, start, callback_proof = {}) {
+  const proof = { login_id: start.login_id, login_secret: start.login_secret, ...callback_proof }
   const status_response = await base.fetch(jsonRequest("/v1/accounts/login/result", proof))
   assert.equal(status_response.status, 200)
   const status = await status_response.json()
-  assert.equal(status.status, "done")
+  assert.equal(status.status, callback_proof.authorization_code ? "pending" : "done")
   assert.equal(status.user_token, undefined)
   const missing_proof = await base.fetch(jsonRequest("/v1/accounts/login/result", { login_id: start.login_id }))
   assert.equal(missing_proof.status, 403)

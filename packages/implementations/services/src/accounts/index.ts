@@ -57,7 +57,7 @@ export class AccountsService extends InstallableService {
     this.instruction = ({ actions }) => [
       "提供 Downcity 的统一账号服务容器，具体登录方式由 email / phone / OAuth 等 provider 决定。",
       "provider 满足 required env 或 runtime 配置后，才会出现在 /providers 中供客户端使用。",
-      "登录开始时传入 bureau_id 和 client_type，保存 login_secret；POST login/result 只查状态，完成后 POST login/exchange 一次性交换 Token。CLI/Desktop 必须展示 user_code 并在浏览器确认授权。",
+      "登录开始传 bureau_id 和 client_type。OAuth 必须绑定产品 redirect_uri、随机 state 与 S256 PKCE；网站回调是 Bureau server_url 下 /api/auth/callback，CLI/Desktop 使用本机 loopback。Provider 认证后自动回到产品，使用 authorization_code、code_verifier、login_secret 与 exchange_id 一次性交换 Token。状态查询不能交付 Token。",
       "OAuth 回调地址固定为 /v1/accounts/oauth/callback，服务会根据 Federation 公网地址生成完整回调 URL。",
       `当前暴露 ${actions.length} 个动作，常用流程由 /providers 返回的 provider 决定。`,
     ].join("\n");
@@ -122,6 +122,11 @@ export class AccountsService extends InstallableService {
       read_env: (key) => this._env?.get(key),
       read_base_url: () => this._baseURL,
       require_active_bureau: (bureau_id) => this.require_active_bureau(bureau_id),
+      read_bureau_server_url: async (bureau_id) => {
+        await this.require_active_bureau(bureau_id);
+        const bureau = await this._bureauStore!.get(bureau_id);
+        return bureau!.server.server_url;
+      },
     });
     return this.runtime;
   }

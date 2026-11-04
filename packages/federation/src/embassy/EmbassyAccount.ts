@@ -7,6 +7,7 @@
 
 import type {
   EmbassyAccountContinueInput,
+  EmbassyAccountExchangeInput,
   EmbassyAccountDoneResult,
   EmbassyAccountLoginOptions,
   EmbassyAccountLoginResult,
@@ -14,9 +15,6 @@ import type {
   EmbassyAccountProvider,
 } from "./types/EmbassyAccount.js";
 import type { EmbassyAccountOptions } from "./types/EmbassyInternal.js";
-
-const DEFAULT_POLL_INTERVAL_MS = 1_000;
-const DEFAULT_MAX_POLL_ATTEMPTS = 180;
 
 /** Federation Accounts Service 访问器。 */
 export class EmbassyAccount {
@@ -90,7 +88,8 @@ export class EmbassyAccount {
   }
 
   /** Exchange once; retry this method after transport failure to reuse the same exchange_id. */
-  async exchange(exchange_id?: string): Promise<EmbassyAccountDoneResult> {
+  async exchange(input: EmbassyAccountExchangeInput = {}): Promise<EmbassyAccountDoneResult> {
+    const { exchange_id } = input;
     const login_id = read_required_login_id(this.login_id);
     const login_secret = read_required_login_id(this.login_secret);
     if (exchange_id && this.exchange_id && exchange_id !== this.exchange_id) {
@@ -98,7 +97,7 @@ export class EmbassyAccount {
     }
     this.exchange_id ??= exchange_id ?? crypto.randomUUID();
     const result = await this.options.accounts().action("login/exchange").invoke<EmbassyAccountDoneResult>({
-      login_id, login_secret, exchange_id: this.exchange_id,
+      ...input, login_id, login_secret, exchange_id: this.exchange_id,
     });
     if (!result.user_token) throw new Error("login exchange returned no token");
     this.accept_user_token(result);
@@ -121,11 +120,9 @@ export class EmbassyAccount {
     }
     if (result.status === "redirect_required") {
       if (!options.on_authorize) return result;
-      await options.on_authorize(result.url, result.user_code);
-      return await this.poll_until_complete(options);
-    }
-    if (result.status === "pending") {
-      return await this.poll_until_complete(options);
+      const proof = await options.on_authorize(result.url);
+      if (!proof.authorization_code || !proof.code_verifier) throw new TypeError("OAuth callback authorization_code and code_verifier required");
+      return await this.exchange(proof);
     }
     if (result.status === "done" && !result.user_token) {
       return await this.exchange();
@@ -154,28 +151,6 @@ export class EmbassyAccount {
     this.options.update_user_token(undefined);
   }
 
-  private async poll_until_complete(
-    options: EmbassyAccountLoginOptions,
-  ): Promise<EmbassyAccountLoginResult> {
-    const interval_ms = read_positive_integer(
-      options.poll_interval_ms,
-      DEFAULT_POLL_INTERVAL_MS,
-      "poll_interval_ms",
-    );
-    const max_attempts = read_positive_integer(
-      options.max_poll_attempts,
-      DEFAULT_MAX_POLL_ATTEMPTS,
-      "max_poll_attempts",
-    );
-    let result: EmbassyAccountLoginResult | undefined;
-    for (let attempt = 0; attempt < max_attempts; attempt += 1) {
-      result = await this.status();
-      if (result.status === "done") return await this.exchange();
-      await new Promise<void>((resolve) => setTimeout(resolve, interval_ms));
-    }
-    throw new Error("Federation account login timed out");
-  }
-
   private accept_user_token(result: EmbassyAccountLoginResult): void {
     if (result.status !== "done") return;
     const done = result as EmbassyAccountDoneResult;
@@ -194,16 +169,4 @@ function read_required_login_id(value: unknown): string {
     throw new TypeError("login_id is required");
   }
   return value.trim();
-}
-
-function read_positive_integer(
-  value: number | undefined,
-  fallback: number,
-  field: string,
-): number {
-  if (value === undefined) return fallback;
-  if (!Number.isInteger(value) || value <= 0) {
-    throw new TypeError(field + " must be a positive integer");
-  }
-  return value;
 }

@@ -11,7 +11,6 @@ import { listAccountUsageRegistrations } from "./admin-queries.js";
 import { readPreparedFirst, runPrepared } from "./db.js";
 import type { AuthAccountRow, AuthUserRow } from "./rows.js";
 import {
-  ACCOUNTS_LOGIN_STATE_TABLE,
   AUTH_ACCOUNT_TABLE,
   AUTH_USER_TABLE,
   USER_PROFILE_TABLE,
@@ -44,7 +43,10 @@ export class AccountsStore {
 
   /** Explicitly invalidate legacy public-state login flows without touching account history. */
   async invalidate_legacy_logins(): Promise<void> {
-    await this.database.query({ sql: `DELETE FROM ${ACCOUNTS_LOGIN_STATE_TABLE}`, params: [] });
+    await this.database.query({ sql: "DROP TABLE IF EXISTS service_accounts_login_states", params: [] });
+    // 登录凭据只短期有效；升级协议时丢弃旧事务，不迁移账号或历史 Session。
+    await this.database.query({ sql: "DROP TABLE IF EXISTS service_accounts_login_flows_v2", params: [] });
+    await this.database.query({ sql: "DROP TABLE IF EXISTS service_accounts_login_flows_v3", params: [] });
     try {
       await this.database.atomic([
         { sql: `CREATE UNIQUE INDEX IF NOT EXISTS auth_users_email_unique ON ${AUTH_USER_TABLE} (email)`, params: [] },

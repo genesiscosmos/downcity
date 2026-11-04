@@ -67,7 +67,7 @@ test("Embassy account 查询状态不交付 Token，显式交换后更新当前 
   })
 })
 
-test("Embassy user current 使用登录后写入的 User Token", async () => {
+test("Embassy OAuth 通过宿主回调交换 Token 后供 user current 使用，不轮询领取", async () => {
   const requests = []
   const embassy = new Embassy({
     federation_url: "https://fed.example.com",
@@ -75,9 +75,8 @@ test("Embassy user current 使用登录后写入的 User Token", async () => {
       requests.push({ url, init })
       if (url.endsWith("/login/start")) {
         return json({
-          status: "done",
-          login_id: "login_1",
-          login_secret: "private_login_proof",
+          status: "redirect_required", url: "https://fed.example.com/v1/accounts/oauth/authorize?login_id=login_1",
+          login_id: "login_1", login_secret: "private_login_proof",
         })
       }
       if (url.endsWith("/login/exchange")) {
@@ -94,10 +93,19 @@ test("Embassy user current 使用登录后写入的 User Token", async () => {
   })
 
   await embassy.user.account.login({
-    provider: "local",
-    client_type: "cli",
-    bureau_id: "bureau_product",
+    provider: "google", client_type: "cli", bureau_id: "bureau_product",
+    redirect_uri: "http://127.0.0.1:45000/oauth/callback/test", state: "s".repeat(43),
+    code_challenge: "c".repeat(43), code_challenge_method: "S256",
+    on_authorize: async (url) => {
+      assert.equal(url, "https://fed.example.com/v1/accounts/oauth/authorize?login_id=login_1")
+      return { authorization_code: "browser_callback_code", code_verifier: "v".repeat(43) }
+    },
   })
+  const exchange_input = JSON.parse(requests[1].init.body)
+  assert.equal(exchange_input.authorization_code, "browser_callback_code")
+  assert.equal(exchange_input.code_verifier, "v".repeat(43))
+  assert.equal(exchange_input.login_secret, "private_login_proof")
+  assert.equal(requests.some((item) => item.url.endsWith("/login/result")), false)
   const current_user = await embassy.user.current()
 
   assert.equal(current_user.user.user_id, "user_1")

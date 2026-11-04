@@ -6,13 +6,15 @@
  * 认证配置。数据库事实统一通过 AccountsStore 访问，HTTP 路由由 routes 模块注册。
  */
 
-import type { ServiceInstallContext } from "@downcity/federation";
+import { httpError, type ServiceInstallContext } from "@downcity/federation";
 import { betterAuth } from "better-auth/minimal";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { listAccountSessions, listAccountUsers } from "./admin-queries.js";
 import { AccountsStore } from "./AccountsStore.js";
-import { oauthErrorResponse, oauthSuccessResponse, oauth_confirmation_response } from "./oauth-pages.js";
+import { oauthErrorResponse } from "./oauth-pages.js";
 import { LoginFlow } from "./LoginFlow.js";
+import type { LoginFlowRow } from "./login-schema.js";
+import type { AccountsLoginExchangeRequest } from "./types.js";
 import {
   buildOAuthAuthorizeURL,
   readOAuthProviderId,
@@ -59,7 +61,7 @@ export class AccountsRuntime {
   /** Accounts 数据库事实访问器。 */
   private readonly store: AccountsStore;
 
-  /** Login proof, browser consent and result exchange boundary. */
+  /** 发起证明、Provider 浏览器绑定及授权码交换边界。 */
   readonly flow: LoginFlow;
 
   constructor(private readonly options: AccountsRuntimeOptions) {
@@ -117,7 +119,7 @@ export class AccountsRuntime {
           });
         },
       },
-      // OAuth uses the explicit Accounts consent flow, never native sign-in/linking endpoints.
+      // OAuth 使用带浏览器绑定和 PKCE 的 Accounts 流程。
       socialProviders: {},
     } as any);
   }
@@ -159,12 +161,17 @@ export class AccountsRuntime {
     await this.options.require_active_bureau(bureau_id);
   }
 
+  /** 读取 Bureau 注册的可信产品 URL，供 OAuth 网站回调校验。 */
+  async read_bureau_server_url(bureau_id: string): Promise<string> {
+    return await this.options.read_bureau_server_url(bureau_id);
+  }
+
   /** Select a configured provider before allocating any login flow. */
   login_provider(provider_id: string): AccountsProviderItem | undefined {
     return this.list_visible_providers().find((provider) => provider.id === provider_id && provider.enabled);
   }
 
-  /** Start browser authorization through a server-side landing route, not a bare provider URL. */
+  /** 浏览器入口先绑定当前浏览器，再跳转 Provider。 */
   async authorize_oauth(login_id: string, request: Request): Promise<Response> {
     const row = await this.flow.read(login_id);
     const provider = readOAuthProviderId(row.provider);
@@ -339,7 +346,8 @@ export class AccountsRuntime {
     if (error) return oauthErrorResponse(url.searchParams.get("error_description") ?? error);
 
     try {
-      if (!state || !code) throw new Error("Missing state or code");
+      if (!state || !code || url.searchParams.getAll("state").length !== 1
+        || url.searchParams.getAll("code").length !== 1) throw new Error("Single OAuth state and code required");
       const entry = await this.flow.callback(state, request);
       const provider = readOAuthProviderId(String(entry.provider));
       if (!provider) throw new Error("Invalid OAuth provider");
@@ -350,28 +358,28 @@ export class AccountsRuntime {
         this.get_oauth_callback_url(),
       );
       const user_id = await this.store.ensure_oauth_user(profile, request);
-      const csrf = await this.flow.authenticated(entry, user_id);
-      return oauth_confirmation_response(entry.login_id, csrf, provider,
-        `${profile.display_name || profile.login} (${profile.provider_user_id})`,
-        entry.bureau_id, entry.client_type);
+      await this.require_active_bureau(entry.bureau_id);
+      return await this.flow.oauth_callback(entry, user_id);
     } catch (caught) {
       return oauthErrorResponse(readErrorMessage(caught));
     }
   }
 
-  /** Issue a token only after browser-bound explicit authorization has passed. */
-  async confirm_oauth(request: Request): Promise<Response> {
-    try {
-      const entry = await this.flow.confirm(request);
-      await this.require_active_bureau(entry.bureau_id);
-      if (!entry.user_id) throw new Error("authenticated identity missing");
-      const result = await this.create_user_token(entry.bureau_id, entry.user_id);
-      await this.flow.ready(entry.login_id, "issuing", result.user_token);
-      return oauthSuccessResponse();
-    } catch (error) {
-      const status_code = (error as { /** 安全确认失败的 HTTP 状态。 */ statusCode?: number }).statusCode;
-      return oauthErrorResponse(readErrorMessage(error), status_code && status_code >= 400 && status_code < 600 ? status_code : 500);
+  /** OAuth 必须通过产品回调授权码与 PKCE 校验，才签发 Token 并进入一次性交换。 */
+  async exchange_login(row: LoginFlowRow, input: AccountsLoginExchangeRequest) {
+    if (!/^[A-Za-z0-9_-]{20,128}$/.test(String(input.exchange_id ?? ""))) throw httpError(400, "random exchange_id required (20-128 URL-safe characters)");
+    const oauth = row.provider !== "email" && row.provider !== "local";
+    if (oauth && await this.flow.begin_oauth_exchange(row, String(input.authorization_code ?? ""), String(input.code_verifier ?? ""), input.exchange_id)) {
+      try {
+        if (!row.user_id) throw new Error("authenticated identity missing");
+        const result = await this.create_user_token(row.bureau_id, row.user_id);
+        await this.flow.ready(row.login_id, "issuing", result.user_token);
+      } catch (reason) {
+        await this.flow.retry_oauth_exchange(row.login_id, input.exchange_id);
+        throw reason;
+      }
     }
+    return await this.flow.exchange(row, String(input.exchange_id ?? ""));
   }
 
   /** 返回产品侧当前可见的登录方式。 */

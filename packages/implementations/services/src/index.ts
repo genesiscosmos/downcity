@@ -9,7 +9,7 @@
  * - 业务侧只需要从一个包完成导入
  */
 
-export { accountsLoginStates, userProfiles } from "./accounts/schema.js";
+export { userProfiles } from "./accounts/schema.js";
 export {
   AccountsService,
   emailAccountsProvider,

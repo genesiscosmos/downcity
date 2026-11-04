@@ -45,14 +45,33 @@ export interface EmbassyAccountProvider extends Record<string, unknown> {
 
 /** 开始登录流程的输入。 */
 export interface EmbassyAccountLoginStartInput extends Record<string, unknown> {
-  /** Explicit surface: web requires same-origin cookies; device is for BFF clients with human code confirmation. */
-  client_type: "web" | "cli" | "desktop" | "device";
+  /** 产品交互方式；OAuth 均要求产品回调、随机 state 与 S256 PKCE。 */
+  client_type: "web" | "cli" | "desktop";
 
   /** 登录 Provider ID。 */
   provider: string;
 
   /** 需要签发 User Token 的 Bureau ID。 */
   bureau_id?: string;
+
+  /** 网站为 Bureau server_url 下 /api/auth/callback，CLI/Desktop 为临时 127.0.0.1 回调。 */
+  redirect_uri?: string;
+  /** 产品回调随机 state，独立于 Provider OAuth state。 */
+  state?: string;
+  /** S256 PKCE challenge，verifier 仅由发起产品保管。 */
+  code_challenge?: string;
+  /** OAuth 只接受 S256。 */
+  code_challenge_method?: "S256";
+}
+
+/** Token 交换参数；全部 OAuth 必须提交产品回调收到的授权码和 PKCE verifier。 */
+export interface EmbassyAccountExchangeInput {
+  /** 随机幂等标识；省略时自动生成，并在同一事务的传输重试间复用。 */
+  exchange_id?: string;
+  /** 浏览器通过已绑定产品回调交付的一次性授权码。 */
+  authorization_code?: string;
+  /** 发起产品生成并保管的 PKCE verifier，不能通过回调 URL 交付。 */
+  code_verifier?: string;
 }
 
 /** 继续登录流程的输入。 */
@@ -100,8 +119,6 @@ export interface EmbassyAccountRedirectResult extends EmbassyAccountLoginBaseRes
   /** 宿主需要打开的授权 URL。 */
   url: string;
 
-  /** Display this code in the originating CLI/Desktop before opening url; browser requires it to approve delivery. */
-  user_code?: string;
 }
 
 /** 登录流程仍在等待。 */
@@ -137,12 +154,6 @@ export interface EmbassyAccountLoginOptions extends EmbassyAccountLoginStartInpu
   /** 输入型 Provider 需要提交的字段。 */
   input?: Record<string, unknown>;
 
-  /** Publish authorization URL and optional device code. Display the code before opening the browser. */
-  on_authorize?: (url: string, user_code?: string) => void | Promise<void>;
-
-  /** OAuth 或异步 Provider 的轮询间隔，单位毫秒。 */
-  poll_interval_ms?: number;
-
-  /** OAuth 或异步 Provider 的最大轮询次数。 */
-  max_poll_attempts?: number;
+  /** 宿主打开浏览器，验证产品回调 state 后返回授权码与 verifier；跨页面网站使用 login_start/exchange。 */
+  on_authorize?: (url: string) => Promise<EmbassyAccountExchangeInput>;
 }

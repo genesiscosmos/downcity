@@ -14,7 +14,8 @@ import {
   type EmbassyAccountProvider,
 } from "@downcity/federation";
 import { emitCliBlock } from "@/shared/CliReporter.js";
-import { open_system_browser } from "@/shared/SystemBrowser.js";
+import { can_open_system_browser, open_system_browser } from "@/shared/SystemBrowser.js";
+import { create_loopback_login_callback } from "@downcity/federation/node";
 import type {
   EmbassyLoginInput,
   EmbassyUserSession,
@@ -193,37 +194,43 @@ async function oauth_auth(
   input: EmbassyLoginInput,
   provider: string,
 ): Promise<EmbassyUserSession | null> {
+  if (!can_open_system_browser()) throw new Error("OAuth sign-in requires a local system browser. Remote or headless CLI sessions are not supported.");
   const embassy = new Embassy({ federation_url: input.federation_url });
-  const result = await embassy.user.account.login({
-    provider,
-    client_type: "cli",
-    bureau_id: input.bureau_id,
-    on_authorize: (authorization_url, user_code) => {
-      if (!user_code) throw new Error("Authorization code was not provided");
-      emitCliBlock({ tone: "info", title: "Confirm this sign-in", facts: [{ label: "authorization_code", value: user_code }],
-        note: "Enter this terminal’s code in the authorization page. Never use a code sent by another person." });
-      const opened = open_system_browser(authorization_url);
-      emitCliBlock({
-        tone: opened ? "info" : "warning",
-        title: `OAuth: ${format_provider_label(provider)}`,
-        summary: opened
-          ? "Browser opened. Complete authorization to continue."
-          : "Open the authorization URL in a browser to continue.",
-        facts: [
-          { label: "authorization_url", value: authorization_url },
-          { label: "browser", value: opened ? "opened" : "not opened" },
-        ],
-        note: "Waiting for browser authorization...",
-      });
-    },
-  });
-  const done = read_done_login_result(result, "OAuth");
-  return await build_verified_user_session({
-    ...input,
-    user_token: done.user_token,
-    user_id: done.user_id,
-    user_label: done.email || `${provider}:${done.user_id || ""}`,
-  });
+  const callback = await create_loopback_login_callback(180_000);
+  let cancelled = false;
+  const cancel = () => { cancelled = true; callback.close(); };
+  process.once("SIGINT", cancel);
+  process.once("SIGTERM", cancel);
+  try {
+    const result = await embassy.user.account.login({
+      provider, client_type: "cli", bureau_id: input.bureau_id,
+      redirect_uri: callback.redirect_uri, state: callback.state,
+      code_challenge: callback.code_challenge, code_challenge_method: "S256",
+      on_authorize: async (authorization_url) => {
+        if (!open_system_browser(authorization_url)) throw new Error("Unable to open the local system browser for OAuth sign-in.");
+        emitCliBlock({ tone: "info", title: `OAuth: ${format_provider_label(provider)}`,
+          summary: "Complete sign-in in your browser. This terminal will sign in automatically." });
+        // 这里只等待本机接收器；远端 status 不能替代浏览器返回授权码。
+        while (!callback.authorization_code) {
+          if (cancelled) throw new Error("Sign-in cancelled");
+          if (callback.error) throw callback.error;
+          await new Promise<void>((resolve) => setTimeout(resolve, 100));
+        }
+        if (cancelled) throw new Error("Sign-in cancelled");
+        return { authorization_code: callback.authorization_code, code_verifier: callback.code_verifier };
+      },
+    });
+    if (cancelled) throw new Error("Sign-in cancelled");
+    const done = read_done_login_result(result, "OAuth");
+    const session = await build_verified_user_session({ ...input, user_token: done.user_token,
+      user_id: done.user_id, user_label: done.email || `${provider}:${done.user_id || ""}` });
+    if (cancelled) throw new Error("Sign-in cancelled");
+    return session;
+  } finally {
+    callback.close();
+    process.off("SIGINT", cancel);
+    process.off("SIGTERM", cancel);
+  }
 }
 
 async function input_auth(

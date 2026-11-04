@@ -25,6 +25,7 @@ export {
 export type { EmbassyOptions } from "./embassy/types/EmbassyOptions.js";
 export type {
   EmbassyAccountContinueInput,
+  EmbassyAccountExchangeInput,
   EmbassyAccountDoneResult,
   EmbassyAccountInputField,
   EmbassyAccountInputRequiredResult,
