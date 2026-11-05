@@ -137,6 +137,15 @@ export class AgentSessions implements AgentSessionsContract<AgentSession> {
   private readonly execution_creations = new Map<string, Promise<AgentSession>>();
   /** 创建、恢复、删除与归档扫描共用的进程内生命周期互斥。 */
   private readonly lifecycle = new SessionLifecycle();
+  /** 当前活动目录元数据变化；只提供事实失效信号。 */
+  private readonly directory_listeners = new Set<() => void>();
+
+  /** 订阅 Workspace 绑定等目录变化，不复制 Session 状态。 */
+  on_directory_changed(listener: () => void): () => void {
+    this.directory_listeners.add(listener);
+    return () => { this.directory_listeners.delete(listener); };
+  }
+
   /** 新会话初始化后的宿主订阅；恢复已有会话时不触发。 */
   private readonly creation_listeners = new Set<(session: AgentSession) => void | Promise<void>>();
   /** 会话成功离开活动集合后的宿主订阅。 */
@@ -727,7 +736,9 @@ export class AgentSessions implements AgentSessionsContract<AgentSession> {
    * 永久清空已归档 session。
    */
   async clean_archive(): Promise<AgentCleanArchiveResult> {
-    return await this.lifecycle.access(() => this.resolve_session_context().store.clean_archive());
+    const result = await this.lifecycle.access(() => this.resolve_session_context().store.clean_archive());
+    this.notify_directory_changed();
+    return result;
   }
 
   /**
@@ -843,8 +854,20 @@ export class AgentSessions implements AgentSessionsContract<AgentSession> {
 
   /** 在任何初始化或执行前建立观察；同一个缓存实例只订阅一次。 */
   private attach_session_observer(cache_key: string, session: AgentManagedSession): void {
-    if (this.session_observers.has(cache_key) || !this.observe_session) return;
-    this.session_observers.set(cache_key, this.observe_session(session));
+    if (this.session_observers.has(cache_key)) return;
+    const release_subject = this.observe_session?.(session);
+    const release_directory = session.subscribe((mutation) => {
+      if (mutation.variant !== "session" || mutation.type !== "workspace") return;
+      this.notify_directory_changed();
+    });
+    this.session_observers.set(cache_key, () => { release_subject?.(); release_directory(); });
+  }
+
+  /** Workspace 换绑和归档清空只发目录事实，不改变通知记录。 */
+  private notify_directory_changed(): void {
+    for (const listener of this.directory_listeners) {
+      try { listener(); } catch (error) { this.logger.warn("Session directory observer failed", { error: String(error) }); }
+    }
   }
 
   /** 移出实例时同步解除其观察，避免旧实例向新实例的集合发布变化。 */

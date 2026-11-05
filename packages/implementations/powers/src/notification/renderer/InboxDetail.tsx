@@ -17,9 +17,10 @@ export function InboxDetail({ store, options, ...props }: PowerMainviewComponent
   const { state, view, choose } = use_inbox(store, props);
   const selected = state.selected[view];
   const entries = inbox_entries(state.data, view);
-  const error = state.error || (state.data?.unavailable_agents.length ? "部分 Agent 暂时不可达，已保留当前内容。" : "");
+  const error = state.error || (state.data && (state.data.unavailable_agents.length || state.data.unavailable_groups.length)
+    ? "部分来源暂时不可达，已保留当前内容。" : "");
   return <div className="inbox-detail-shell">
-    {error ? <div className="inbox-connection" role="status"><span>{error}</span><button type="button" onClick={() => void store.refresh()}>重试</button></div> : null}
+    {error ? <div className="inbox-connection" role="status"><span>{error}</span><button type="button" onClick={() => void store.refresh_sources()}>重试</button></div> : null}
     {state.loading ? <div className="inbox-detail-skeleton" role="status" aria-label="正在读取详情"><i /><i /><i /></div> : !selected ? <div className="inbox-empty">
       <InboxIcon kind="inbox" /><h2>{error ? "暂时无法读取收件箱" : view === "pending" ? "暂时没有需要你处理的事" : "工作更新会显示在这里"}</h2>
       <p>{error ? "恢复连接后重试，原请求不会因此结束。" : view === "pending" ? "Agent 需要你的回答或授权时，会出现在左侧。" : "选中一条更新，查看结果和来源。"}</p>
@@ -47,25 +48,34 @@ function InboxEntryDetail({ entry, current, handled, store, options, props, next
   const [error, set_error] = useState("");
   const [opening, set_opening] = useState(false);
   const [read_error, set_read_error] = useState(false);
-  const reading = useRef(false);
+  const reading = useRef(new Set<number>());
   const active = current ?? entry;
   const item = active.pending;
   const invalid = entry.view === "pending" && (!current || !item?.interaction.can_respond);
   const read = async () => {
-    if (!entry.update || reading.current) return;
-    reading.current = true;
+    const update = active.update;
+    if (!update || reading.current.has(update.created_at)) return;
+    reading.current.add(update.created_at);
     try {
-      await props.power.invoke("notification.read", { notification_id: entry.update.notification_id });
-      store.read(entry.key);
+      await store.mark_read(update.notification_id, update.created_at);
       set_read_error(false);
       props.ui.invalidate();
     } catch { set_read_error(true); }
-    finally { reading.current = false; }
+    finally { reading.current.delete(update.created_at); }
   };
   useEffect(() => {
-    // 只有成功挂载的具体更新详情才已读，不在列表查询或切换视图时批量确认。
-    if (entry.update && current?.unread) void read();
-  }, [entry.key]);
+    // 只有聚焦且实际展示的具体详情才已读；后台挂载不消费未读。
+    const read_visible = () => {
+      if (!document.hidden && document.hasFocus() && active.update && current?.unread) void read();
+    };
+    read_visible();
+    window.addEventListener("focus", read_visible);
+    document.addEventListener("visibilitychange", read_visible);
+    return () => {
+      window.removeEventListener("focus", read_visible);
+      document.removeEventListener("visibilitychange", read_visible);
+    };
+  }, [entry.key, active.update?.created_at, current?.unread]);
   const submit = async (input: RespondSessionInteractionInput, private_question = false) => {
     if (!item || invalid || handled || unavailable) throw new Error("这个请求已失效，请刷新后查看原会话。");
     if (input.interaction_id !== item.interaction.reference.interaction_id) throw new Error("交互来源不匹配");
@@ -100,7 +110,11 @@ function InboxEntryDetail({ entry, current, handled, store, options, props, next
   const questions = payload && typeof payload === "object" && !Array.isArray(payload) && Array.isArray(payload.questions) ? payload.questions : [];
   const first_question = questions[0];
   const same_title = questions.length === 1 && first_question && typeof first_question === "object" && !Array.isArray(first_question) && first_question.question === entry.title;
-  const can_open = entry.pending ? !!options.open_interaction : !!entry.update?.route && !!options.open_notification;
+  const availability = active.pending?.availability ?? active.update?.availability;
+  const source_notice = availability === "archived" ? "来源已归档，通知摘要仍然保留。"
+    : availability === "removed" ? "来源已移除，通知记录仍然保留。"
+      : availability === "unknown" ? "来源身份未知或暂时不可达；已保留内容，无法确认是否可打开。" : "";
+  const can_open = availability === "available" && (entry.pending ? !!options.open_interaction : !!entry.update?.target && !!options.open_notification);
   return <article className="inbox-detail" aria-labelledby="inbox-detail-title">
     <header className="inbox-detail-header">
       <div className="inbox-eyebrow"><InboxIcon kind={entry.kind} /><span>{kind_label(entry.kind)}</span></div>
@@ -109,9 +123,11 @@ function InboxEntryDetail({ entry, current, handled, store, options, props, next
         {can_open ? <button type="button" className="inbox-source-link" disabled={opening} onClick={() => void open()}>{opening ? "正在打开…" : entry.pending ? "查看原会话 ↗" : "查看结果 ↗"}</button> : null}
       </div>
     </header>
+    {source_notice ? <p className="inbox-detail-note" role="status">{source_notice}</p> : null}
+    {active.update ? <p className="inbox-detail-note">{active.update.outcome === "failure" ? "执行失败" : active.update.outcome === "success" ? "执行成功" : "状态更新"}</p> : null}
     {error ? <div className="inbox-inline-error" role="alert">{error}</div> : null}
     {handled ? <div className="inbox-resolution" role="status"><InboxIcon kind="check" /><div><h2>已处理</h2><p>你的回应已送回原会话。</p>{next ? <Button on_click={() => void choose(next)}>处理下一项</Button> : null}</div></div>
-      : unavailable && !current ? <div className="inbox-resolution" role="status"><InboxIcon kind="inbox" /><div><h2>暂时无法连接原会话</h2><p>请求状态尚未确认，请重试连接后继续处理。</p></div></div>
+      : unavailable ? <div className="inbox-resolution" role="status"><InboxIcon kind="inbox" /><div><h2>暂时无法连接原会话</h2><p>请求状态尚未确认，请重试连接后继续处理。</p></div></div>
       : invalid ? <div className="inbox-resolution" role="status"><InboxIcon kind="inbox" /><div><h2>{current ? "原执行已不可响应" : "这个请求已结束"}</h2><p>{current ? "已保留请求内容，请查看原会话了解执行状态。" : "它已在其他入口处理或随原执行取消。"}</p>{next ? <Button on_click={() => void choose(next)}>查看下一项</Button> : null}</div></div>
         : item ? <div className="inbox-form" data-question-is-title={!!same_title}
           onChange={() => store.dirty(entry.key)}>

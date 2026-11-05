@@ -1,22 +1,20 @@
 /**
- * 单个Inbox工作区的临时UI状态。两个插槽共用一次轮询，引用计数在离开页面时释放。
+ * 单个 Inbox 工作区的临时 UI 状态。两个插槽共用事件驱动读取，在途失效合并重读。
  * 不保存交互答案，选择保留失效项让用户了解变化，不在刷新中自动跳往另一张表单。
  */
 import type { PowerActionGateway } from "@downcity/city/power/react";
-import type { InboxEntry, InboxState, InboxView } from "../types/Inbox.js";
-import type { NotificationListResult } from "../types/NotificationRenderer.js";
-import { inbox_entries, interaction_key } from "./InboxEntries.js";
+import type { InboxEntry, InboxState } from "../types/Inbox.js";
+import type { NotificationListResult, NotificationUpdateResult } from "../types/NotificationRenderer.js";
+import { inbox_entries } from "./InboxEntries.js";
 
 /** 只缓存公开快照和界面状态，不拥有业务状态与执行生命周期。 */
 export class InboxStore {
   private state: InboxState = { loading: true, error: "", selected: {}, handled: new Set() };
   private readonly listeners = new Set<() => void>();
   private readonly gateways = new Map<symbol, PowerActionGateway>();
-  private timer?: ReturnType<typeof setInterval>;
+  private refresh_pending = false;
   private in_flight?: Promise<void>;
   private generation = 0;
-  /** 本地已确认操作用于阻止在途旧查询回退UI，真实状态仍由服务器持有。 */
-  private readonly read_keys = new Map<string, number>();
 
   readonly get_snapshot = (): InboxState => this.state;
   readonly subscribe = (listener: () => void): (() => void) => {
@@ -28,24 +26,30 @@ export class InboxStore {
   attach(gateway: PowerActionGateway): () => void {
     const key = Symbol();
     this.gateways.set(key, gateway);
-    if (!this.timer) {
-      void this.refresh();
-      this.timer = setInterval(() => { void this.refresh(); }, 2000);
-    }
+    if (this.gateways.size === 1) void this.refresh();
     return () => {
       this.gateways.delete(key);
       if (!this.gateways.size) {
-        if (this.timer) clearInterval(this.timer);
-        this.timer = undefined;
+        this.refresh_pending = false;
         this.generation += 1;
         this.patch({ dirty_key: undefined, busy_key: undefined });
       }
     };
   }
 
+  /** 用户主动重试是明确的来源对账入口；自动快照刷新始终只读。 */
+  refresh_sources = async (): Promise<void> => {
+    const gateway = this.gateways.values().next().value;
+    if (!gateway) return;
+    try {
+      await gateway.invoke("notification.refresh_sources", {});
+      await this.refresh();
+    } catch (error) { this.patch({ error: error instanceof Error ? error.message : String(error) }); }
+  };
+
   /** 请求不重叠；后台失败保留当前内容，首次失败也结束占位。 */
   refresh = async (): Promise<void> => {
-    if (this.in_flight) return await this.in_flight;
+    if (this.in_flight) { this.refresh_pending = true; return await this.in_flight; }
     const gateway = this.gateways.values().next().value;
     if (!gateway) return;
     const generation = this.generation;
@@ -53,24 +57,16 @@ export class InboxStore {
       try {
         const received = await gateway.invoke<NotificationListResult>("notification.list", {});
         if (generation !== this.generation) return;
-        const data: NotificationListResult = { ...received,
-          interactions: received.interactions.filter((item) => !this.state.handled.has(interaction_key(item))),
-          items: received.items.map((item) => this.read_keys.get(item.notification_id) === item.created_at ? { ...item, read: true } : item),
-        };
-        const selected = { ...this.state.selected };
-        for (const view of ["pending", "updates"] as const) {
-          const entries = inbox_entries(data, view);
-          const previous = selected[view];
-          selected[view] = previous ? entries.find((item) => item.key === previous.key) ?? previous
-            : view === "updates" ? entries.find((item) => item.unread) ?? entries[0] : entries[0];
-        }
-        this.patch({ data, selected, loading: false, error: "" });
+        this.receive(received);
       } catch (error) {
         if (generation === this.generation) this.patch({ loading: false, error: error instanceof Error ? error.message : String(error) });
       }
     })();
     this.in_flight = operation;
-    try { await operation; } finally { if (this.in_flight === operation) this.in_flight = undefined; }
+    try { await operation; } finally {
+      if (this.in_flight === operation) this.in_flight = undefined;
+      if (this.refresh_pending && this.gateways.size) { this.refresh_pending = false; void this.refresh(); }
+    }
   };
 
   select(entry: InboxEntry): void {
@@ -84,18 +80,47 @@ export class InboxStore {
   /** 提交确认保留原项，不把用户瞬间切换到下一项。 */
   handled(entry: InboxEntry): void {
     const handled = new Set(this.state.handled).add(entry.key);
-    const data = this.state.data;
-    this.patch({ handled, dirty_key: undefined, data: data ? { ...data,
-      interactions: data.interactions.filter((item) => interaction_key(item) !== entry.key) } : data });
+    this.patch({ handled, dirty_key: undefined });
   }
 
-  /** 只更新当前可见快照，服务器仍是已读事实源。 */
-  read(key: string): void {
-    const data = this.state.data;
-    if (!data) return;
-    const item = data.items.find((item) => item.notification_id === key);
-    if (item) this.read_keys.set(key, item.created_at);
-    this.patch({ data: { ...data, items: data.items.map((item) => item.notification_id === key ? { ...item, read: true } : item) } });
+  /** 详情自动阅读复用 Power 的版本检查和完整快照，不在 UI 重算计数。 */
+  async mark_read(notification_id: string, created_at: number): Promise<void> {
+    const gateway = this.gateways.values().next().value;
+    if (!gateway) return;
+    const result = await gateway.invoke<NotificationUpdateResult>("notification.read", { notification_id, created_at });
+    this.receive(result.snapshot);
+  }
+
+  /** 点击时固定当前 Inbox 普通更新快照；返回 Power 的最终快照，迟到查询不能回退它。 */
+  async update_notifications(operation: "read" | "clear" | "clear_read", entry?: InboxEntry): Promise<void> {
+    if (this.state.update_action) return;
+    const gateway = this.gateways.values().next().value;
+    if (!gateway || !this.state.data) return;
+    const items = entry?.update ? [entry.update] : this.state.data.items;
+    const updates = items.filter((item) => item.scope === "inbox" && (operation !== "clear_read" || item.read))
+      .map(({ notification_id, created_at }) => ({ notification_id, created_at }));
+    if (!updates.length || (operation === "clear" && !entry?.update)) return;
+    const action = operation === "read" ? "notification.read_updates" : operation === "clear" ? "notification.clear_update" : "notification.clear_read_updates";
+    this.patch({ update_action: entry?.key ?? operation, update_error: "" });
+    try {
+      const result = await gateway.invoke<NotificationUpdateResult>(action, operation === "clear" ? updates[0] : { updates });
+      this.receive(result.snapshot);
+    } catch (error) {
+      this.patch({ update_error: error instanceof Error ? error.message : String(error) });
+    } finally { this.patch({ update_action: undefined }); }
+  }
+
+  /** 整体接收 Power 快照，列表、组成和数字始终来自同一版本。 */
+  private receive(data: NotificationListResult): void {
+    if (this.state.data && data.revision < this.state.data.revision) return;
+    const selected = { ...this.state.selected };
+    for (const view of ["pending", "updates"] as const) {
+      const entries = inbox_entries(data, view);
+      const previous = selected[view];
+      selected[view] = previous ? entries.find((item) => item.key === previous.key) ?? (view === "pending" ? previous : undefined)
+        : view === "pending" ? entries[0] : undefined;
+    }
+    this.patch({ data, selected, loading: false, error: "" });
   }
 
   private patch(change: Partial<InboxState>): void {

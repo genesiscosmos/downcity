@@ -15,6 +15,9 @@ export const SESSION_HOOK_POINTS = Object.freeze({
   /** 当前 Turn 首次组装模型输入时允许 Hook 追加低权限参考 blocks。 */
   turn_context: "session.turn_context",
 
+  /** 模型与工具执行开始或暂停时通知 Hook；不持久化、不重放。 */
+  execution_state: "session.execution_state",
+
   /** canonical Turn 完成提交后通知 Hook 执行副作用。 */
   turn_committed: "session.turn_committed",
 } as const);

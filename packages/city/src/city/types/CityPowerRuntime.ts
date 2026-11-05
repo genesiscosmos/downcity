@@ -29,7 +29,9 @@ export interface CityPowerRuntimeOptions {
     CityRuntimeAccess,
     | "get_agent"
     | "list_agents"
+    | "list_groups"
     | "list_workspaces"
+    | "list_notification_workspace_ids"
     | "require_workspace"
     | "enter_workspace"
   >;

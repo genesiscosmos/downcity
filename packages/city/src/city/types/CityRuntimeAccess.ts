@@ -18,11 +18,17 @@ export interface CityRuntimeAccess {
   /** 返回当前 City 中全部可见 Agent 的稳定快照。 */
   readonly list_agents: () => readonly Agent[];
 
+  /** 当前 City 的群组目录，用于通知目标核对。 */
+  readonly list_groups: () => readonly import("@downcity/agent").Group[];
+
   /** 按稳定 ID 返回当前可见的 Workspace；不存在或正在移除时返回 null。 */
   readonly get_workspace: (workspace_id: string) => WorkspaceRuntime | null;
 
   /** 返回当前 City 中全部可见 Workspace 的稳定快照。 */
   readonly list_workspaces: () => readonly WorkspaceRuntime[];
+
+  /** 已登记或正在切换的 Workspace 身份；临时不可用不意味着通知目标消失。 */
+  readonly list_notification_workspace_ids: () => string[];
 
   /** 校验 Agent 与 Workspace 均属于当前 City，并返回 Workspace。 */
   readonly require_workspace: (

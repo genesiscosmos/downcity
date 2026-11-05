@@ -3,6 +3,8 @@
 import path from "node:path";
 import { SESSION_ORIGIN_CATEGORY_CHAT, SESSION_ORIGIN_TYPE_CHANNEL, type SessionTurnCommittedHookValue } from "@downcity/type";
 import { commit_messenger_completion } from "./MessengerCompletion.js";
+import { MessengerTyping } from "./MessengerTyping.js";
+import type { SessionExecutionStateHookValue } from "@downcity/type";
 import fs from "fs-extra";
 import { createHash } from "node:crypto";
 import type {
@@ -80,6 +82,8 @@ export interface MessengerRuntimeAccountState {
 export class MessengerRuntime {
   /** 当前 Power 的唯一可靠状态 Store。 */
   readonly store: MessengerStore;
+  /** 实际执行期间的临时 typing 租约；不持久化到 Outbox。 */
+  private readonly typing: MessengerTyping;
 
   /** Account ID 到 Connector Runtime 的唯一映射。 */
   private readonly accounts = new Map<string, MessengerAccountRuntime>();
@@ -107,6 +111,32 @@ export class MessengerRuntime {
   /** 创建 Runtime 并打开生命周期 Store。 */
   constructor(private readonly context: PowerLifecycleContext) {
     this.store = new MessengerStore(context.storage.path);
+    this.typing = new MessengerTyping(async (route) => {
+      const connector = this.accounts.get(route.account_id)?.connector;
+      if (!connector) return { success: false };
+      return await connector.sendToolAction({
+        chatId: route.chat_id,
+        messageThreadId: route.thread_id,
+        action: "typing",
+      });
+    }, () => { this.context.logger.warn("Telegram typing heartbeat failed; reply execution continues"); });
+  }
+
+  /** 统一响应直接入站和后台续轮的实际执行状态，空档立即释放租约。 */
+  sync_execution(agent_id: string, event: SessionExecutionStateHookValue, abort_signal: AbortSignal): void {
+    const source_key = JSON.stringify([agent_id, event.session_id, event.turn_id]);
+    if (event.state === "idle") { this.typing.stop(source_key); return; }
+    if (this.disposed) return;
+    const conversation = this.store.get_conversation_by_session(event.session_id);
+    if (!conversation || conversation.agent_id !== agent_id || conversation.status !== "active" || conversation.chat_type === "channel") return;
+    const runtime = this.accounts.get(conversation.account_id);
+    if (runtime?.account.provider !== "telegram" || !runtime.connector) return;
+    const thread_id = Number(conversation.thread_id);
+    this.typing.start(source_key, {
+      account_id: conversation.account_id,
+      chat_id: conversation.external_chat_id,
+      ...(Number.isSafeInteger(thread_id) && thread_id > 0 ? { thread_id } : {}),
+    }, abort_signal);
   }
 
   /** 恢复可靠任务并启动全部 enabled Account。 */
@@ -277,6 +307,7 @@ export class MessengerRuntime {
     if (!account_id) return;
     const runtime = this.accounts.get(account_id);
     if (!runtime) return;
+    this.typing.stop_account(account_id);
     this.accounts.delete(account_id);
     if (runtime.connector) await runtime.connector.stop();
     this.store.append_activity({ account_id, type: "account_stopped" });
@@ -286,6 +317,7 @@ export class MessengerRuntime {
   async dispose(): Promise<void> {
     if (this.disposed) return;
     this.disposed = true;
+    this.typing.dispose();
     if (this.inbox_timer) clearInterval(this.inbox_timer);
     if (this.outbox_timer) clearInterval(this.outbox_timer);
     if (this.health_timer) clearInterval(this.health_timer);

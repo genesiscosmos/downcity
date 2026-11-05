@@ -34,6 +34,8 @@ export async function publish_task_run_notification(params: {
   try {
     await params.notifications.publish({
       topic_key: `task:${params.task.taskId}`,
+      event_id: params.timestamp,
+      kind: "update", scope: "inbox", outcome: params.status === "failure" ? "failure" : "success",
       title: params.status === "success" ? `${title} 执行结束` : `${title} 执行失败`,
       ...(params.status === "failure" && failure_body ? { body: failure_body } : {}),
       route: {

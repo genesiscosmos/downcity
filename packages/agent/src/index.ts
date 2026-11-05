@@ -110,6 +110,7 @@ export type { SessionOrigin } from "@downcity/type";
 export { SESSION_HOOK_POINTS } from "@downcity/type";
 export type {
   SessionCommittedTurnStatus,
+  SessionExecutionStateHookValue,
   SessionHookContextBlock,
   SessionHookUserMessage,
   SessionSystemContextHookValue,

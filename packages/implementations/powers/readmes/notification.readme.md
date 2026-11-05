@@ -1,7 +1,21 @@
 # Inbox
 
-在一个页面查看 Agent 各 Session 等待你回答的问题、授权请求，以及工作完成和失败更新。
+Notification 是 Desktop 默认内置的 City 级统一通知事实源。一个 City 持有一个实例，Inbox、会话列表提示、导航红点和应用图标角标读取同一快照，并通过 Power 数据变更事件刷新。
 
-“待处理”展示原 Interaction。回答后只继续原 Session；标为已读不会解决问题或批准操作。“更新”用于阅读结果，无需确认才能结束普通 Work。
+“待处理”引用原 Session 的 Interaction。查看、阅读和进入会话不会结束请求；只有原主体确认响应或请求失效才离开队列。私密问题使用原 Session 专用提交入口，明文不进入通知存储。暂时不可达的来源保留最后已知请求并显示未知状态。
 
-私密问题使用原 Session 的专用提交入口，明文不保存在通知中。原执行停止或请求已处理时，表单会失效。禁用 Notification Power 不影响原 Session 的问答和审批。
+“更新”保存普通结果及已读历史。具体详情实际可见时确认该条更新；有焦点且实际可见的原会话可将该目标的普通更新标为已读。可响应待处理请求加 `scope=inbox` 的未读失败事项构成统一角标；成功和信息更新只显示未读点，仅会话回复未读不计入。进入业务 Power 工作区不批量清除未读；通知已读、撤回均不改变 Task、验收或审批状态。
+
+列表行可直接“标为已读”；顶部菜单“全部更新已读”确认点击时 Inbox 普通更新的快照，保留记录。行菜单“清除此更新”和顶部“清除已读更新”只移除普通通知，不删除原会话、Task、Group 历史，同一事项后续新事件可再通知。所有动作均核对通知 ID 和 `created_at`，清除已读还要求该版本当前仍为已读；在途新事项和新版本不受迟到操作影响。原问答、审批、私密输入 Interaction 不会被这些操作清除或结束。进行中的操作禁用重复提交，失败保留内容并显示错误。
+
+Power 快照明确提供 `pending_request_count`（可响应请求）、`unread_update_count`（Inbox 全部普通未读更新）、`unread_failure_count`（其中失败）和 `badge_count = pending_request_count + unread_failure_count`。侧栏及导航提示显示“待处理 X · 未读失败 Y”；更新分区单独显示全部更新未读数，Desktop 直接消费最终角标值。
+
+宿主动作：`notification.read` 与 `notification.clear_update` 接收 `{ notification_id, created_at }`；`notification.read_updates` 与 `notification.clear_read_updates` 接收 `{ updates: [{ notification_id, created_at }] }`。动作返回状态及完整 `snapshot`，Renderer 按 `revision` 拒绝迟到快照。
+
+普通 Agent 回复只产生会话未读，不进入 Inbox。Agent 对话失败、后台 Work Main 的结果与失败进入 Inbox，Child 结果由 Main 汇总；业务 Power 按各自交付边界发布。群聊失败进入 Inbox，待处理引用成员原 Interaction。每个会话或群聊更新同一事项，每个 Task 的多次 Run 更新同一任务事项，执行历史留在来源。原事件重投保持阅读状态，新事件或摘要变化恢复未读。来源类别、目标、展示范围和成功／失败结果由独立字段表达，界面不解析标题。
+
+Session、Group 目标使用稳定身份，与 Workspace 绑定无关。归档、删除、Agent 或 Group 移除均保留摘要与阅读状态，并明确显示来源已归档、已移除或未知。目录核对只在启动、生命周期变化和明确刷新入口执行；查询不写入、迁移或删除通知。Interaction 的准确 origin 由原主体提供，未知来源请求仍然保留，不根据分类猜测身份。Desktop 仅适配当前平台的应用图标角标能力。
+
+Notification is Desktop's built-in City-level source of truth for Inbox, conversation indicators, navigation dots, and the application badge. All consumers use one event-driven snapshot. Pending requests retain their original Session identity and remain pending when viewed. Private answers use the original dedicated submission channel. Unreachable sources remain unknown rather than being treated as resolved.
+
+Ordinary updates retain read history. List rows offer Mark as read and Clear this update; the header menu offers Mark all updates as read and Clear read updates. Snapshot actions only apply to ordinary Inbox versions present when clicked, matching notification IDs and content timestamps. Clearing read updates also requires the stored version to remain read. New events remain eligible to notify, and clearing never changes conversation, Task, or Group history or original question, approval, or private input Interactions. In-progress actions disable repeat submission and report errors without removing content. Power provides `pending_request_count`, `unread_update_count`, `unread_failure_count`, and final `badge_count` in one snapshot; the sidebar and navigation explain the count components, and Desktop consumes the final badge value. Host actions `notification.read` and `notification.clear_update` accept `{ notification_id, created_at }`; `notification.read_updates` and `notification.clear_read_updates` accept `{ updates: [{ notification_id, created_at }] }`. They return status and a complete `snapshot`, whose `revision` prevents stale UI rollback. Displaying a specific update's details or viewing its original conversation in a focused, visible window marks ordinary updates as read. The badge and Inbox navigation number count respondable pending requests plus unread Inbox failure matters. Success and informational updates retain unread dots without increasing this number. Ordinary replies remain conversation unread indicators and do not enter Inbox. Background Work Main results, failures, and original requests needing a response enter Inbox. One conversation, group conversation, or Task updates one matter; execution history stays with its source. Original event redelivery preserves read state; new events or changed summaries become unread. Source kind, target, scope, and outcome are explicit fields. Reading or withdrawing a notification never completes tasks, accepts results, or approves operations. Archived or removed Sessions, Agents, and Groups retain notification summaries and read state with explicit source availability. Reconciliation runs at startup, on lifecycle facts, or on explicit refresh. Queries never write or delete notifications. Original Sessions supply accurate Interaction origins; unknown sources remain visible. The Power owns all policies and lifecycle state; Desktop supplies application icon badge integration.

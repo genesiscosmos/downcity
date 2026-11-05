@@ -41,6 +41,10 @@ export interface InboxState {
   handled: ReadonlySet<string>;
   /** 当前表单存在未提交修改的项目，不保存输入内容。 */
   dirty_key?: string;
+  /** 正在执行的普通更新动作；禁用重复提交，独立于原 Interaction 表单。 */
+  update_action?: string;
+  /** 普通更新动作失败的可读说明；不替换已有快照。 */
+  update_error?: string;
   /** 正在提交回答或打开来源的项目。 */
   busy_key?: string;
 }

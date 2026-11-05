@@ -5,7 +5,7 @@
  * 初始化 schema 或加载完整历史。内存模式复用已有 Storage 的非终态查询。
  */
 import { DatabaseSync } from "node:sqlite";
-import type { SessionAgentInteraction, SessionMessage } from "@downcity/type";
+import type { SessionAgentInteraction, SessionMessage, SessionOrigin } from "@downcity/type";
 import type { AgentInteraction } from "@/types/agent/AgentInteractions.js";
 import { decode_session_message, type SessionMessageRow, type SessionMessagePartRow } from "./SessionStorageCodec.js";
 
@@ -15,8 +15,10 @@ export function project_agent_interaction(
   session_category: string,
   interaction: SessionAgentInteraction,
   can_respond = false,
+  origin?: SessionOrigin,
 ): AgentInteraction {
   return {
+    origin: origin ? structuredClone(origin) : undefined,
     reference: {
       session_category,
       session_id,
@@ -44,12 +46,12 @@ export function read_file_pending_interactions(
   agent_id: string,
   session_id: string,
   session_category: string,
-): SessionAgentInteraction[] {
+): AgentInteraction[] {
   const database = new DatabaseSync(database_path, { readOnly: true });
   try {
     database.exec("BEGIN");
     const identity = database.prepare(`
-      SELECT agent_id, session_id, json_extract(origin, '$.category') AS category
+      SELECT agent_id, session_id, origin, json_extract(origin, '$.category') AS category
       FROM session_state WHERE singleton_id = 1
     `).get();
     if (identity?.agent_id !== agent_id || identity.session_id !== session_id
@@ -67,7 +69,9 @@ export function read_file_pending_interactions(
     `);
     const messages = rows.map((row) => decode_session_message(row,
       parts.all(row.message_id) as unknown as SessionMessagePartRow[], session_id));
-    return collect_pending_interactions(messages);
+    const origin = JSON.parse(String(identity.origin)) as SessionOrigin;
+    return collect_pending_interactions(messages).map((interaction) =>
+      project_agent_interaction(session_id, session_category, interaction, false, origin));
   } finally {
     database.close();
   }

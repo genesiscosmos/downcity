@@ -73,6 +73,7 @@ import { local_user_prompt_actor, session_prompt_actor_schema, same_session_prom
 import type { SessionPromptActor } from "@/types/sdk/SessionPromptActor.js";
 import { CompletionPersistenceError, prepare_session_completion } from "./SessionCompletionJournal.js";
 import { accept_background_input } from "./SessionBackgroundInput.js";
+import { with_session_execution_state } from "./SessionExecutionState.js";
 import type { SessionBackgroundInput, SessionBackgroundReceipt } from "@/types/session/SessionBackgroundInput.js";
 
 const QUEUED_PROMPT_CANCELLED_MESSAGE =
@@ -848,14 +849,14 @@ export class SessionLoop {
     abort_signal?: AbortSignal,
   ): Promise<SessionTurnExecutionResult> {
     abort_signal?.throwIfAborted();
-    return await this.session_executor.execute({
+    return await with_session_execution_state(this.turn_completion_options(), turn_context, () => this.session_executor.execute({
       turn_context,
       resolve_step_input: async (advance_count) => {
         const input = await this.require_step_input(turn_context, advance_count);
         abort_signal?.throwIfAborted();
         return input;
       },
-    });
+    }));
   }
 
   /**

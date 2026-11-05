@@ -17,6 +17,16 @@ export type {
 } from "./types/Json.js";
 
 export type {
+  PowerNotificationTarget,
+  PowerNotificationSessionTarget,
+  PowerNotificationGroupTarget,
+  PowerNotificationPowerTarget,
+  PowerNotificationKind,
+  PowerNotificationScope,
+  PowerNotificationOutcome,
+  PowerNotificationAvailability,
+  PowerNotificationFact,
+  PowerNotificationTargets,
   PowerNotificationInput,
   PowerNotificationSource,
   PowerNotificationReceiver,

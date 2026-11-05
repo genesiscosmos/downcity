@@ -11,7 +11,6 @@ import type {
   PowerDefinition,
   PowerJsonObject,
   PowerJsonValue,
-  PowerNotificationPublisher,
   PowerConfigStore,
   PowerSnapshot,
 } from "@/power/index.js";
@@ -101,8 +100,6 @@ export interface CityPowers {
 export interface CityPowerHost {
   /** 返回指定 Power 的唯一配置存储端口。 */
   config?(power_id: string): PowerConfigStore;
-  /** 返回绑定当前 Power 身份的通知发布端口。 */
-  notifications(power_id: string, agent_id?: string): PowerNotificationPublisher;
   /** 使用系统默认应用打开 HTTP(S) URL。 */
   open_external?(url: string): Promise<void>;
   /** 在平台文件管理器中显示绝对路径。 */

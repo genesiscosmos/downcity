@@ -100,8 +100,10 @@ export class City implements CityRuntime {
     this.runtime_access = Object.freeze({
       get_agent: (agent_id) => this.get_agent(agent_id),
       list_agents: () => this.list_agents(),
+      list_groups: () => this.list_groups(),
       get_workspace: (workspace_id) => this.get_workspace(workspace_id),
       list_workspaces: () => this.list_workspaces(),
+      list_notification_workspace_ids: () => [...new Set([...this.workspaces_by_id.keys(), ...this.workspace_transitions.keys(), ...this.blocked_workspaces])],
       require_workspace: (agent_id, workspace_id) =>
         this.require_workspace(agent_id, workspace_id),
       enter_workspace: async (agent_id, workspace_id) =>
@@ -249,6 +251,7 @@ export class City implements CityRuntime {
     }
     group.bind(this);
     this.groups_by_id.set(group.id, group);
+    this.power_runtime.attach_group_notifications(group);
     return group;
   }
 
@@ -517,6 +520,7 @@ export class City implements CityRuntime {
    */
   private async release_group(group: Group): Promise<void> {
     this.groups_by_id.delete(group.id);
+    this.power_runtime.detach_group_notifications(group);
     const errors: unknown[] = [];
     try {
       await group.unbind();
@@ -546,6 +550,7 @@ export class City implements CityRuntime {
     if (existing) return existing;
     this.bind_workspace(workspace);
     this.workspaces_by_id.set(workspace_id, workspace);
+    this.power_runtime.notification_targets_changed();
     return workspace;
   }
 
@@ -558,7 +563,9 @@ export class City implements CityRuntime {
   private async remove_workspace(workspace_id_input: string): Promise<WorkspaceRuntime | null> {
     const workspace_id = String(workspace_id_input || "").trim();
     this.require_workspace_available(workspace_id);
-    return await this.release_workspace_instance(workspace_id);
+    const removed = await this.release_workspace_instance(workspace_id);
+    if (removed) this.power_runtime.notification_targets_changed();
+    return removed;
   }
 
   /** 回收旧实例；失败时保留资源索引以便诊断，切换门禁保持关闭。 */

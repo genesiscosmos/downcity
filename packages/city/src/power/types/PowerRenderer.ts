@@ -146,6 +146,12 @@ export interface PowerRendererSidebarItemProps {
   /** 可选的右侧状态或数量。 */
   readonly trailing?: ReactNode;
 
+  /** 常规导航行独立于选择按钮的快捷操作槽，内部控件不会嵌套在选择按钮中。 */
+  readonly actions?: ReactNode;
+
+  /** 常规导航行独立的菜单槽，通常使用 ItemMenu。 */
+  readonly menu?: ReactNode;
+
   /** 当前导航项是否被选中。 */
   readonly active?: boolean;
 

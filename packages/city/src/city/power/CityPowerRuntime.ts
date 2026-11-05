@@ -11,7 +11,7 @@
  */
 
 import type { Hono } from "hono";
-import type { Agent, Logger } from "@downcity/agent";
+import type { Agent, Group, Logger } from "@downcity/agent";
 import { get_logger } from "@downcity/agent";
 import { EMPTY_TOOL_HOOK_SET, normalize_session_origin, SESSION_ORIGIN_CATEGORY_WORK, SESSION_ORIGIN_TYPE_WORK } from "@downcity/type";
 import type { PowerSurface } from "@downcity/type";
@@ -48,6 +48,7 @@ import { register_power_http_routes } from "@/power/core/PowerHttpRoutes.js";
 import { CityExecutionProfiles } from "./CityExecutionProfiles.js";
 import { assert_power_session_owner, create_power_session_host } from "./CityPowerSessionHost.js";
 import { CityNotifications } from "./CityNotifications.js";
+import { list_notification_targets } from "./CityNotificationTargets.js";
 
 /** City 唯一的 Power Runtime。 */
 export class CityPowerRuntime implements PowerRuntimeHost {
@@ -72,6 +73,14 @@ export class CityPowerRuntime implements PowerRuntimeHost {
   detach_agent_notifications(agent: Agent): void {
     this.notifications.detach_agent(agent);
   }
+
+  /** Workspace 集合事实改变时使通知目录失效。 */
+  notification_targets_changed(): void { this.notifications.targets_changed(); }
+
+  /** Group 集合装配只传事实，不持有通知规则。 */
+  attach_group_notifications(group: Group): void { this.notifications.attach_group(group); }
+  /** Group 离开 City 时释放观察。 */
+  detach_group_notifications(group: Group): void { this.notifications.detach_group(group); }
 
   /** 按 Power ID 串行化动态添加与移除，避免同一实例生命周期交叉。 */
   private readonly power_lifecycle_chains = new Map<string, Promise<void>>();
@@ -334,6 +343,7 @@ export class CityPowerRuntime implements PowerRuntimeHost {
   begin_shutdown(): void {
     if (this.runtime_status === "active") {
       this.runtime_status = "disposing";
+      this.notifications.begin_shutdown();
     }
   }
 
@@ -463,7 +473,7 @@ export class CityPowerRuntime implements PowerRuntimeHost {
       config: freeze_power_config(this.options.host?.config?.(power_id).get() ?? {}),
       logger: agent.get_logger(),
       embassy: this.options.embassy,
-      notifications: this.notifications.publisher({ power_id, agent_id }, this.options.host?.notifications(power_id, agent_id)),
+      notifications: this.notifications.publisher({ source_kind: "power", power_id, agent_id }),
       get_workspace_env: () => workspace?.get_env() ?? {},
       get_instructions: () => agent.get_instructions(),
     });
@@ -719,7 +729,7 @@ export class CityPowerRuntime implements PowerRuntimeHost {
     host_actions: Map<string, PowerHostAction>,
     config_actions: Map<string, PowerConfigAction>,
   ): PowerLifecycleContext {
-    const notifications = this.notifications.publisher({ power_id }, this.options.host?.notifications(power_id));
+    const notifications = this.notifications.publisher({ source_kind: "power", power_id });
     const hosted_config = this.options.host?.config?.(power_id);
     const config = hosted_config ?? {
       path: "",
@@ -744,7 +754,8 @@ export class CityPowerRuntime implements PowerRuntimeHost {
       notifications,
       system: Object.freeze({
         ...create_power_session_host(power_id, this.options.runtime_access, this.execution_profiles),
-        register_notification_receiver: (receiver) => this.notifications.register(receiver, this.options.runtime_access.list_agents()),
+        register_notification_receiver: (receiver) => this.notifications.register(receiver, this.options.runtime_access.list_agents(), this.options.runtime_access.list_groups()),
+        list_notification_targets: async () => await list_notification_targets(this.options.runtime_access.list_agents(), this.options.runtime_access.list_groups(), this.options.runtime_access.list_notification_workspace_ids()),
         list_agent_interactions: async ({ agent_id }) => {
           const agent = this.options.runtime_access.get_agent(agent_id);
           if (!agent) throw new Error(`Agent not found: ${agent_id}`);

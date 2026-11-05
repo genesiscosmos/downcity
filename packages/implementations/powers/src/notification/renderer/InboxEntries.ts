@@ -31,7 +31,7 @@ export function inbox_entries(data: NotificationListResult | undefined, view: In
       return { key: interaction_key(item), view, title: request.title || question || kind_label(kind),
         source: agent_names.get(item.agent_id)?.trim() || item.agent_name?.trim() || "未命名 Agent", created_at: request.created_at,
         kind, unread: true, pending: item };
-    }) : data.items.map((item) => ({ key: item.notification_id, view,
+    }) : data.items.filter((item) => item.scope === "inbox").map((item) => ({ key: item.notification_id, view,
       title: item.title, source: item.agent_id ? agent_names.get(item.agent_id)?.trim() || "Agent 不可用" : source_label(item.power_id),
       created_at: item.created_at, kind: "update", unread: !item.read, update: item }));
   return [...new Map(entries.map((entry) => [entry.key, entry])).values()]

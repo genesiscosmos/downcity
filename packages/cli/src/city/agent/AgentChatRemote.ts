@@ -185,10 +185,6 @@ function create_local_power_host(data: CliLocalData): CityPowerHost {
         data.powers.set_config(power_id, structuredClone(config));
       },
     }),
-    notifications: () => ({
-      publish: async () => {},
-      dismiss: async () => {},
-    }),
   };
 }
 

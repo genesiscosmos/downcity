@@ -12,6 +12,7 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
+import { GroupSessions } from "../bin/group/GroupSessions.js";
 import { LocalGroupSessionStore } from "../bin/group/storage/LocalGroupSessionStore.js";
 
 /** 创建测试用文件系统协议；只需 Store 用到的那几个能力。 */
@@ -82,16 +83,24 @@ test("归档把群聊从活动区搬到归档区", async () => {
 });
 
 test("归档后活动列表不含它、归档列表含它", async () => {
-  const { store } = await create_store();
+  const { store, root_path } = await create_store();
   const session_id = await create_session(store, "group-session-1");
-
-  assert.deepEqual((await store.list_session_metadata()).map((item) => item.session_id), [session_id]);
-  assert.deepEqual(await store.list_archived_session_metadata(), []);
-
-  await store.archive_session(session_id);
-
-  assert.deepEqual(await store.list_session_metadata(), [], "活动列表仍含已归档的群聊");
-  assert.deepEqual((await store.list_archived_session_metadata()).map((item) => item.session_id), [session_id]);
+  const sessions = new GroupSessions({ get_session_store: () => store });
+  const removals = [];
+  let directory_changes = 0;
+  const release_removed = sessions.on_removed((id, reason) => { removals.push({ id, reason }); });
+  const release_directory = sessions.on_directory_changed(() => { directory_changes++; });
+  try {
+    assert.deepEqual((await sessions.list()).map((item) => item.id), [session_id]);
+    assert.deepEqual(await sessions.archived(), []);
+    await sessions.archive(session_id);
+    assert.deepEqual(removals, [{ id: session_id, reason: "archived" }]);
+    assert.deepEqual(await sessions.list(), [], "活动列表仍含已归档的群聊");
+    assert.deepEqual((await sessions.archived()).map((item) => item.id), [session_id]);
+    await sessions.clean_archive();
+    assert.equal(directory_changes, 1);
+    assert.deepEqual(await sessions.archived(), []);
+  } finally { release_removed(); release_directory(); await fs.rm(root_path, { recursive: true, force: true }); }
 });
 
 test("归档不改 metadata 内容，只改位置", async () => {

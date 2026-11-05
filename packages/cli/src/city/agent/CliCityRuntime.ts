@@ -101,10 +101,6 @@ export class CliCityRuntime {
             data.powers.set_config(power_id, structuredClone(config));
           },
         }),
-        notifications: () => ({
-          publish: async () => {},
-          dismiss: async () => {},
-        }),
       },
       runtime: {
         create_agent: async (input) => await create_cli_persistent_agent(input, data, city),

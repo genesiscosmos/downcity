@@ -77,6 +77,9 @@ export interface AgentSessionCollection {
   /** 监听本地新会话初始化完成；监听器完成后创建才返回，取消函数释放订阅。 */
   on_created(listener: (session: AgentSession) => void | Promise<void>): () => void;
 
+  /** 监听 Session Workspace 等目录元数据变化，仅传递事实失效信号。 */
+  on_directory_changed(listener: () => void): () => void;
+
   /** 监听成功归档或删除活动会话；监听器失败不回滚领域提交。 */
   on_removed(listener: (event: SessionRemovalEvent) => void | Promise<void>): () => void;
 

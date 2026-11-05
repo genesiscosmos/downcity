@@ -125,7 +125,7 @@ export class AgentInteractions implements AgentInteractionCollection {
       for (const interaction of part.interactions ?? []) {
         const can_respond = interaction.status === "pending"
           && session.can_respond_interaction(interaction.interaction_id, interaction.request.turn_id);
-        this.emit({ type: "updated", item: project_agent_interaction(session.id, session.origin.category, interaction, can_respond) });
+        this.emit({ type: "updated", item: project_agent_interaction(session.id, session.origin.category, interaction, can_respond, session.origin) });
       }
     }
   }

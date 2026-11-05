@@ -11,6 +11,8 @@ import { TaskPower } from "@downcity/powers/task";
 import { NotificationPower } from "../bin/notification.js";
 import { InboxStore } from "../bin/notification/renderer/InboxStore.js";
 import { inbox_entries } from "../bin/notification/renderer/InboxEntries.js";
+import { source_availability } from "../bin/notification/NotificationPolicy.js";
+import { list_notification_targets } from "../../../city/bin/city/power/CityNotificationTargets.js";
 import { createTaskDefinition } from "../bin/task/Action.js";
 import { TaskDefinitionRepository } from "../bin/task/runtime/TaskDefinitionRepository.js";
 import { TaskExecutionCoordinator } from "../bin/task/runtime/TaskExecutionCoordinator.js";
@@ -457,7 +459,12 @@ test("Inbox仅管理通知阅读状态，响应回到原Interaction且通知重�
   const actions = new Map();
   const power = new NotificationPower();
   let receiver;
-  let pending = [{ reference: { session_category: "work", session_id: "s", turn_id: "t", interaction_id: "i" }, interaction: { status: "pending" } }];
+  let pending = [{ origin: { category: "work", type: "task" }, reference: { session_category: "work", session_id: "s", turn_id: "t", interaction_id: "i" },
+    can_respond: true, interaction: { status: "pending", request: { title: "Question", created_at: 1 } } }];
+  const target = { kind: "agent_session", agent_id: "a", category: "work", session_id: "s", origin_type: "work" };
+  const group_target = { kind: "group_session", group_id: "g", session_id: "gs" };
+  let offline = false;
+  let targets = [target, group_target];
   let responded;
   const context = {
     storage: { path: scope.root_path, files: scope.files },
@@ -466,25 +473,67 @@ test("Inbox仅管理通知阅读状态，响应回到原Interaction且通知重�
     system: {
       register_notification_receiver: (value) => { receiver = value; return () => { receiver = undefined; }; },
       list_agents: async () => [{ agent_id: "a", name: "Agent" }],
-      list_agent_interactions: async () => pending,
+      list_notification_targets: async () => ({ targets, archived_targets: [], agent_ids: ["a"], group_ids: ["g"], workspace_ids: ["workspace"], target_workspaces: {},
+        unavailable_agents: offline ? ["a"] : [], unavailable_groups: [] }),
+      list_agent_interactions: async () => { if (offline) throw new Error("offline"); return pending; },
       respond_agent_interaction: async (input) => { responded = input; pending = []; return { status: "resolved" }; },
     },
   };
   try {
-    power.initialize(context);
+    await power.initialize(context);
     assert.deepEqual(Object.keys(power.actions), []);
-    const source = { power_id: "task", agent_id: "a" };
-    const input = { topic_key: "run-1", title: "Done", body: "result" };
+    const source = { source_kind: "power", power_id: "task", agent_id: "a" };
+    const input = { topic_key: "task:one", kind: "update", scope: "inbox", outcome: "success", title: "Done", body: "result" };
     await receiver.publish(source, input);
     const first = await actions.get("notification.list").run({});
     assert.equal(first.items.length, 1);
     assert.equal(first.interactions.length, 1);
-    await actions.get("notification.read").run({ notification_id: first.items[0].notification_id });
+    assert.equal(first.badge_count, 1);
+    assert.equal(first.pending_request_count, 1);
+    assert.equal(first.unread_update_count, 1);
+    assert.equal(first.unread_failure_count, 0);
+    assert.equal(first.notifications.length, 2);
+    assert.equal(first.interactions[0].target.origin_type, "task");
+    assert.equal(source_availability(target, "a", { ...await context.system.list_notification_targets(), archived_targets: [target] }), "available");
+    const archived_group_directory = await list_notification_targets([], [{ id: "g", sessions: {
+      list: async () => [], archived: async () => [{ id: "gs" }],
+    } }], []);
+    assert.deepEqual(archived_group_directory.archived_targets, [group_target]);
+    assert.equal(source_availability(group_target, undefined, archived_group_directory), "archived");
+    const saved_path = path.join(scope.root_path, "notifications.json");
+    const before_query = fs.readFileSync(saved_path, "utf8");
+    const query_mtime = fs.statSync(saved_path).mtimeMs;
+    await actions.get("notification.list").run({});
+    assert.equal(fs.readFileSync(saved_path, "utf8"), before_query);
+    assert.equal(fs.statSync(saved_path).mtimeMs, query_mtime);
+    pending = [{ ...pending[0], origin: undefined }];
+    receiver.interactions_changed();
+    const unidentified = await actions.get("notification.list").run({});
+    assert.equal(unidentified.interactions.length, 1);
+    assert.equal(unidentified.interactions[0].availability, "unknown");
+    assert.equal(unidentified.interactions[0].target, undefined);
+    assert.equal(unidentified.badge_count, 1);
+    await actions.get("notification.view").run({ view_id: "window", target, visible: true });
+    assert.equal((await actions.get("notification.list").run({})).interactions.length, 1);
+    await actions.get("notification.read").run({ notification_id: first.items[0].notification_id, created_at: first.items[0].created_at });
     await receiver.publish(source, input);
     const read = await actions.get("notification.list").run({});
     assert.equal(read.items.length, 1);
     assert.equal(read.items[0].read, true);
     assert.equal(read.interactions.length, 1);
+    assert.equal(read.badge_count, 1);
+    assert.equal(read.unread_update_count, 0);
+    offline = true;
+    await receiver.fact_changed({ type: "targets_changed" });
+    const unknown = await actions.get("notification.list").run({});
+    assert.deepEqual(unknown.unavailable_agents, ["a"]);
+    assert.equal(unknown.badge_count, 0);
+    assert.equal(unknown.interactions.length, 1);
+    offline = false;
+    await actions.get("notification.refresh_sources").run({});
+    const recovered = await actions.get("notification.list").run({});
+    assert.deepEqual(recovered.unavailable_agents, []);
+    assert.ok(recovered.revision > unknown.revision);
     const request = { agent_id: "a", reference: pending[0].reference, response: { type: "question", outcome: "resolved", payload: { answers: [] } } };
     await actions.get("notification.respond").run(request);
     assert.deepEqual(responded, request);
@@ -493,8 +542,133 @@ test("Inbox仅管理通知阅读状态，响应回到原Interaction且通知重�
     assert.equal(resolved.agent_names.a, "Agent");
     assert.equal(inbox_entries(resolved, "updates")[0].source, "Agent");
     power.dispose();
-    power.initialize(context);
+    await power.initialize(context);
     assert.equal((await actions.get("notification.list").run({})).items[0].read, true);
+    await receiver.publish(source, { ...input, body: "changed", outcome: "failure", event_id: "run-2" });
+    const changed = await actions.get("notification.list").run({});
+    assert.equal(changed.badge_count, 1);
+    assert.equal(changed.unread_failure_count, 1);
+    assert.equal(changed.items[0].notification_id, first.items[0].notification_id);
+    assert.equal(changed.items[0].outcome, "failure");
+    assert.equal(changed.items[0].title, "Done");
+    await actions.get("notification.read").run({ notification_id: first.items[0].notification_id, created_at: first.items[0].created_at });
+    assert.equal((await actions.get("notification.list").run({})).badge_count, 1);
+    await receiver.dismiss(source, { topic_key: input.topic_key });
+    assert.equal((await actions.get("notification.list").run({})).items.length, 0);
+    const commit = async (origin, id = "done") => await power.hooks.effect["session.turn_committed"][0]({
+      context: { agent: { id: "a" }, snapshot: { session_origin: origin } },
+      value: { completion_id: id, session_id: "s", status: "completed", result: { text: "Result" } },
+    });
+    for (const type of ["task", "memory", "channel", "group"]) await commit({ category: "work", type });
+    await commit({ category: "work", type: "work", delegation_depth: 2 });
+    assert.equal((await actions.get("notification.list").run({})).items.length, 0);
+    await commit({ category: "work", type: "work", delegation_depth: 1 });
+    await commit({ category: "work", type: "work", delegation_depth: 1 });
+    assert.equal((await actions.get("notification.list").run({})).unread_update_count, 1);
+    await power.observe_view("window", target);
+    assert.equal((await actions.get("notification.list").run({})).unread_update_count, 0);
+    await power.observe_view("window");
+    await commit({ category: "work", type: "work", delegation_depth: 1 }, "another-turn-same-result");
+    const renewed = await actions.get("notification.list").run({});
+    assert.equal(renewed.items.length, 1);
+    assert.equal(renewed.unread_update_count, 1);
+    assert.equal(renewed.badge_count, 0);
+    await power.observe_view("window", target);
+    const chat_target = { ...target, category: "chat", origin_type: "agent" };
+    targets.push(chat_target);
+    await receiver.fact_changed({ type: "targets_changed" });
+    await commit({ category: "chat", type: "agent" }, "agent-complete");
+    const chat_reply = await actions.get("notification.list").run({});
+    assert.equal(chat_reply.items.length, 2);
+    assert.equal(chat_reply.badge_count, 0);
+    assert.equal(chat_reply.unread_update_count, 0);
+    assert.equal(inbox_entries(chat_reply, "updates").length, 1);
+    assert.equal(chat_reply.notifications[0].scope, "session");
+    await commit({ category: "chat", type: "agent" }, "next-turn");
+    assert.equal((await actions.get("notification.list").run({})).items.length, 2);
+    await power.observe_view("window", chat_target);
+    const failure = { type: "group_event", group_id: "g", session_id: "gs", event: { type: "status", phase: "failed", turn_id: "gt", members: [] } };
+    await receiver.fact_changed(failure);
+    await receiver.fact_changed(failure);
+    assert.equal((await actions.get("notification.list").run({})).badge_count, 1);
+    await receiver.fact_changed({ ...failure, event: { ...failure.event, phase: "idle" } });
+    assert.equal((await actions.get("notification.list").run({})).badge_count, 1);
+    await receiver.fact_changed({ type: "group_removed", group_id: "g" });
+    const removed_group = await actions.get("notification.list").run({});
+    assert.equal(removed_group.badge_count, 1);
+    assert.equal(removed_group.items.find((item) => item.source_kind === "group").availability, "removed");
+    await receiver.fact_changed({ type: "target_removed", target, reason: "archived" });
+    const archived = await actions.get("notification.list").run({});
+    assert.equal(archived.items.find((item) => item.target.kind === "agent_session" && item.target.category === "work").availability, "archived");
+    const archived_bytes = fs.readFileSync(saved_path, "utf8");
+    targets = [];
+    await actions.get("notification.list").run({});
+    assert.equal(fs.readFileSync(saved_path, "utf8"), archived_bytes);
+    await receiver.fact_changed({ type: "targets_changed" });
+    assert.equal((await actions.get("notification.list").run({})).items.length, 3);
+
+    // 用户操作只针对点击时的普通 Inbox 更新版本；恶意传入 Interaction 或 session 也无效。
+    pending = ["question", "approval", "private"].map((type) => ({
+      origin: { category: "work", type: "work" }, can_respond: true,
+      reference: { session_category: "work", session_id: "s", turn_id: "t", interaction_id: type },
+      interaction: { status: "pending", request: { type, title: type, created_at: 1 } },
+    }));
+    receiver.interactions_changed();
+    await power.observe_view("window");
+    await commit({ category: "chat", type: "agent" }, "unread-session-reply");
+    await receiver.publish(source, { ...input, event_id: "run-3" });
+    await receiver.publish(source, { ...input, topic_key: "info", outcome: "info", event_id: "info-1" });
+    const visible = await actions.get("notification.list").run({});
+    assert.equal(visible.pending_request_count, 3);
+    assert.equal(visible.unread_update_count, 3);
+    assert.equal(visible.unread_failure_count, 1);
+    assert.equal(visible.badge_count, 4);
+    const references = visible.items.map(({ notification_id, created_at }) => ({ notification_id, created_at }));
+    const request_references = visible.notifications.filter((item) => item.kind === "request")
+      .map(({ notification_id, created_at }) => ({ notification_id, created_at }));
+    const task_version = visible.items.find((item) => item.topic_key === input.topic_key);
+    await receiver.publish(source, { ...input, outcome: "failure", event_id: "run-4" });
+    await receiver.publish(source, { ...input, topic_key: "late", event_id: "late-1" });
+    const read_result = await actions.get("notification.read_updates").run({ updates: [...references, ...request_references] });
+    assert.equal(read_result.snapshot.unread_update_count, 2);
+    assert.equal(read_result.snapshot.unread_failure_count, 1);
+    assert.equal(read_result.snapshot.badge_count, 4);
+    assert.equal(read_result.snapshot.items.find((item) => item.scope === "session").read, false);
+    await actions.get("notification.clear_update").run({ notification_id: task_version.notification_id, created_at: task_version.created_at });
+    await actions.get("notification.clear_read_updates").run({ updates: [...references, ...request_references] });
+    const remaining = await actions.get("notification.list").run({});
+    assert.equal(remaining.items.length, 3); // session 回复、新 Task 版本、点击后出现的事项。
+    assert.equal(remaining.interactions.length, 3);
+    assert.deepEqual(pending.map((item) => item.interaction.status), ["pending", "pending", "pending"]);
+    assert.deepEqual(responded, request);
+    const current_task = remaining.items.find((item) => item.topic_key === input.topic_key);
+    const current_reference = { notification_id: current_task.notification_id, created_at: current_task.created_at };
+    await actions.get("notification.clear_read_updates").run({ updates: [current_reference] });
+    assert.equal((await actions.get("notification.list").run({})).items.length, 3); // 仍未读，不能被清除已读吞掉。
+    await actions.get("notification.read_updates").run({ updates: [current_reference] });
+    await receiver.publish(source, { ...input, outcome: "failure", event_id: "run-5" });
+    await actions.get("notification.clear_read_updates").run({ updates: [current_reference] });
+    const next_task = (await actions.get("notification.list").run({})).items.find((item) => item.topic_key === input.topic_key);
+    assert.equal(next_task.read, false);
+    const next_reference = { notification_id: next_task.notification_id, created_at: next_task.created_at };
+    await actions.get("notification.clear_update").run(next_reference);
+    assert.equal((await actions.get("notification.list").run({})).items.length, 2);
+    const original_now = Date.now;
+    try {
+      Date.now = () => next_task.created_at; // 清除后同一毫秒重发仍不能复用旧版本。
+      await receiver.publish(source, { ...input, outcome: "failure", event_id: "run-6" });
+    } finally { Date.now = original_now; }
+    await actions.get("notification.clear_update").run(next_reference);
+    const reappeared = await actions.get("notification.list").run({});
+    assert.equal(reappeared.items.length, 3);
+    assert.ok(reappeared.items.find((item) => item.topic_key === input.topic_key).created_at > next_task.created_at);
+    assert.equal(reappeared.pending_request_count, 3);
+    assert.equal(reappeared.unread_failure_count, 1);
+    // 单条清除 session 和原 Interaction 引用同样无效。
+    for (const update of [references.find((item) => item.notification_id === chat_reply.items.find((item) => item.scope === "session").notification_id), ...request_references]) {
+      await actions.get("notification.clear_update").run(update);
+    }
+    assert.equal((await actions.get("notification.list").run({})).items.length, 3);
   } finally { power.dispose(); await scope.files.dispose?.(); fs.rmSync(root, { recursive: true, force: true }); }
 });
 
@@ -503,24 +677,41 @@ test("Inbox两个插槽共享查询，刷新保留选择并阻止旧快照回退
     reference: { session_category: "work", session_id: "s", turn_id: "t", interaction_id: id },
     interaction: { status: "pending", request: { title: id, type: "question", payload: { questions: [] }, created_at: 1 } },
   } });
-  const snapshot = { interactions: [pending("first"), pending("second")],
-    items: [{ notification_id: "update", title: "完成", power_id: "notification", created_at: 2, read: false }], unavailable_agents: [], agent_names: { a: "程序员" } };
+  const snapshot = { revision: 1, pending_request_count: 2, unread_update_count: 1, unread_failure_count: 0, badge_count: 2,
+    interactions: [pending("first"), pending("second")], notifications: [],
+    items: [{ notification_id: "update", title: "完成", scope: "inbox", power_id: "notification", created_at: 2, read: false }],
+    unavailable_agents: [], unavailable_groups: [], agent_names: { a: "程序员" } };
+  const read_snapshot = { ...snapshot, revision: 2, pending_request_count: 1, unread_update_count: 0, badge_count: 1,
+    interactions: [pending("first")], items: [{ ...snapshot.items[0], read: true }] };
   let calls = 0;
   let resolve;
-  const gateway = { invoke: async () => { calls++; return await new Promise((accept) => { resolve = accept; }); } };
+  let resolve_action;
+  let fail_action = false;
+  const invoked = [];
+  const gateway = { invoke: async (action, input) => {
+    invoked.push({ action, input });
+    if (action !== "notification.list") {
+      if (fail_action) throw new Error("write failed");
+      return await new Promise((accept) => { resolve_action = accept; });
+    }
+    calls++;
+    return await new Promise((accept) => { resolve = accept; });
+  } };
   const store = new InboxStore();
   const release_sidebar = store.attach(gateway);
   const release_main = store.attach(gateway);
   try {
     assert.equal(calls, 1);
     resolve(structuredClone(snapshot));
-    await store.refresh();
+    await new Promise((accept) => setImmediate(accept));
     const selected = inbox_entries(store.get_snapshot().data, "pending")[1];
     store.select(selected);
     store.dirty(selected.key);
     const refreshing = store.refresh();
     store.handled(selected);
-    store.read("update");
+    const reading = store.mark_read("update", 2);
+    resolve_action({ snapshot: read_snapshot });
+    await reading;
     resolve(structuredClone(snapshot));
     await refreshing;
     assert.equal(store.get_snapshot().selected.pending.key, selected.key);
@@ -529,7 +720,25 @@ test("Inbox两个插槽共享查询，刷新保留选择并阻止旧快照回退
     assert.equal(inbox_entries(store.get_snapshot().data, "pending")[0].source, "程序员");
     assert.equal(store.get_snapshot().data.items[0].read, true);
     assert.equal(store.get_snapshot().dirty_key, undefined);
-    const removed_snapshot = { ...snapshot, interactions: [] };
+    assert.equal(store.get_snapshot().data.badge_count, 1);
+    assert.equal(store.get_snapshot().data.unread_update_count, 0);
+    const clearing = store.update_notifications("clear_read");
+    assert.ok(store.get_snapshot().update_action);
+    const action_count = invoked.length;
+    await store.update_notifications("clear_read");
+    assert.equal(invoked.length, action_count);
+    assert.equal(store.get_snapshot().selected.updates, undefined);
+    assert.deepEqual(invoked.at(-1), { action: "notification.clear_read_updates", input: { updates: [{ notification_id: "update", created_at: 2 }] } });
+    const cleared_snapshot = { ...read_snapshot, revision: 3, items: [] };
+    resolve_action({ snapshot: cleared_snapshot });
+    await clearing;
+    assert.equal(store.get_snapshot().update_action, undefined);
+    assert.equal(store.get_snapshot().data.items.length, 0);
+    fail_action = true;
+    await store.update_notifications("clear", { key: "old", update: snapshot.items[0] });
+    assert.equal(store.get_snapshot().update_error, "write failed");
+    assert.equal(store.get_snapshot().data, cleared_snapshot);
+    const removed_snapshot = { ...cleared_snapshot, revision: 4, interactions: [] };
     const refresh_removed = store.refresh(); resolve(removed_snapshot); await refresh_removed;
     assert.equal(store.get_snapshot().selected.pending.key, selected.key);
     release_sidebar();
@@ -542,9 +751,10 @@ test("Inbox两个插槽共享查询，刷新保留选择并阻止旧快照回退
 });
 
 test("Inbox贯通真实Agent提问、原地回答和Work完成更新", async () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "downcity-notification-lifecycle-"));
   const notification = new NotificationPower();
   let calls = 0;
-  const city = new City({ powers: [notification], workspaces: [new Workspace({ id: "project", path: process.cwd() })] });
+  const city = new City({ storage: new LocalStorageProvider(root), powers: [notification], workspaces: [new Workspace({ id: "project", path: process.cwd() })] });
   const agent = city.agents.add(new Agent({ id: "inbox-agent", tools: { ask_question: AskQuestionsTool }, model: new MockModelClient({ id: "inbox-model", generate: async (call) => {
     if (!call.tools?.length) return { text: "Inbox work" };
     if (++calls === 1) return { content: [{ type: "tool_call", tool_name: "ask_question", tool_call_id: "ask", input: { title: "Audience", questions: [{ question: "Who is the audience?", type: "text" }] } }] };
@@ -562,6 +772,8 @@ test("Inbox贯通真实Agent提问、原地回答和Work完成更新", async () 
     const pending = await city.powers.invoke("notification", "notification.list", {});
     assert.equal(pending.interactions.length, 1);
     const item = pending.interactions[0];
+    assert.equal(item.interaction.origin.type, "work");
+    assert.equal(item.target.origin_type, "work");
     await city.powers.invoke("notification", "notification.respond", {
       agent_id: item.agent_id, reference: item.interaction.reference,
       response: { type: "question", outcome: "resolved", payload: { answers: [{ question_id: item.interaction.interaction.request.payload.questions[0].question_id, value: "engineers" }] } },
@@ -573,8 +785,20 @@ test("Inbox贯通真实Agent提问、原地回答和Work完成更新", async () 
     assert.equal(completed.items.length, 1);
     assert.equal(completed.items[0].body, "Report for engineers");
     assert.equal(completed.items[0].read, false);
+    assert.equal(completed.items[0].outcome, "success");
+    await agent.sessions.archive({ id: session.id, category: "work" });
+    const archived = await city.powers.invoke("notification", "notification.list", {});
+    assert.equal(archived.items.length, 1);
+    assert.equal(archived.items[0].availability, "archived");
+    assert.equal(archived.items[0].body, "Report for engineers");
+    assert.equal(archived.unread_update_count, 1);
+    assert.equal(archived.badge_count, 0);
     unsubscribe();
-  } finally { await city.close(); }
+    await city.close();
+    const saved = JSON.parse(fs.readFileSync(path.join(root, "powers", "notification", "notifications.json"), "utf8"));
+    assert.equal(saved.length, 1);
+    assert.equal(saved[0].read, false);
+  } finally { await city.close(); fs.rmSync(root, { recursive: true, force: true }); }
 });
 
 test("Task Host mutation 明确返回定义已提交但 scheduler 同步失败", async () => {

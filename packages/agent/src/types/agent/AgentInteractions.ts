@@ -6,6 +6,7 @@
  */
 import type {
   SessionAgentInteraction,
+  SessionOrigin,
   SessionInteractionResponse,
   SessionInteractionResult,
 } from "@downcity/type";
@@ -27,6 +28,8 @@ export interface AgentInteractionReference {
 
 /** 原 Session Interaction 的只读快照，不另行持久化处理状态。 */
 export interface AgentInteraction {
+  /** 原主体读取的准确 Session 来源；无法读取时明确缺失，不根据存储分类推断角色。 */
+  origin?: SessionOrigin;
   /** 当前 Agent 内定位原请求的完整引用。 */
   reference: AgentInteractionReference;
   /** 原 Session 保存的 canonical Interaction 快照，包含请求与当前状态。 */

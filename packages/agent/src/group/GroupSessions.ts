@@ -14,6 +14,7 @@ import type {
   GroupSessionGetInput,
   GroupSessionListInput,
   GroupSessionSummary,
+  GroupEvent,
   GroupSessions as GroupSessionsContract,
 } from "@/types/group/GroupSession.js";
 
@@ -23,6 +24,50 @@ export class GroupSessions implements GroupSessionsContract {
   private readonly sessions_by_id = new Map<string, GroupSession>();
   /** 合并并发自身会话打开，防止重复初始化同一份存储。 */
   private self_pending?: Promise<GroupSessionContract>;
+
+  /** 集合事实观察器覆盖已恢复和未来加载的实例，不依赖页面订阅。 */
+  private readonly event_listeners = new Set<(session_id: string, event: GroupEvent) => void | Promise<void>>();
+  private readonly removal_listeners = new Set<(session_id: string, reason: "archived" | "removed") => void | Promise<void>>();
+  /** 活动和归档目录发生变化的事实，不携带通知策略。 */
+  private readonly directory_listeners = new Set<() => void | Promise<void>>();
+  private readonly event_releases = new Map<string, () => void>();
+
+  /** 订阅集合中的原始运行事件；不在 Agent 层解释通知业务规则。 */
+  on_event(listener: (session_id: string, event: GroupEvent) => void | Promise<void>): () => void {
+    this.event_listeners.add(listener);
+    return () => { this.event_listeners.delete(listener); };
+  }
+
+  /** 成功归档或删除后通知 City，供其维护目标生命周期。 */
+  on_removed(listener: (session_id: string, reason: "archived" | "removed") => void | Promise<void>): () => void {
+    this.removal_listeners.add(listener);
+    return () => { this.removal_listeners.delete(listener); };
+  }
+
+  /** 观察创建和归档清空等目录变化；返回精确释放函数。 */
+  on_directory_changed(listener: () => void | Promise<void>): () => void {
+    this.directory_listeners.add(listener);
+    return () => { this.directory_listeners.delete(listener); };
+  }
+
+  private async notify_directory_changed(): Promise<void> {
+    await Promise.allSettled([...this.directory_listeners].map((listener) => listener()));
+  }
+
+  private cache_session(session: GroupSession): void {
+    this.sessions_by_id.set(session.id, session);
+    this.event_releases.get(session.id)?.();
+    this.event_releases.set(session.id, session.subscribe(async (event) => {
+      await Promise.all([...this.event_listeners].map((listener) => listener(session.id, event)));
+    }));
+  }
+
+  private async release_session(session_id: string, reason: "archived" | "removed"): Promise<void> {
+    this.event_releases.get(session_id)?.();
+    this.event_releases.delete(session_id);
+    this.sessions_by_id.delete(session_id);
+    await Promise.all([...this.removal_listeners].map((listener) => listener(session_id, reason)));
+  }
 
   constructor(group: Group) {
     this.group = group;
@@ -51,7 +96,8 @@ export class GroupSessions implements GroupSessionsContract {
     if (existing) return existing;
     const session = this.create_runtime_session(this.group.id, input?.workspace);
     await session.initialize(this.group.get_session_store().session(session.id));
-    this.sessions_by_id.set(session.id, session);
+    this.cache_session(session);
+    await this.notify_directory_changed();
     return session;
   }
 
@@ -60,7 +106,8 @@ export class GroupSessions implements GroupSessionsContract {
     const session = this.create_runtime_session(`group-session-${Date.now()}-${nanoid(8)}`, input?.workspace);
     const store = this.group.get_session_store();
     await session.initialize(store.session(session.id));
-    this.sessions_by_id.set(session.id, session);
+    this.cache_session(session);
+    await this.notify_directory_changed();
     return session;
   }
 
@@ -78,7 +125,7 @@ export class GroupSessions implements GroupSessionsContract {
     if (!(await store.has_session(resolved_session_id))) return null;
     const session = this.create_runtime_session(resolved_session_id, input?.workspace);
     await session.initialize(store.session(resolved_session_id));
-    this.sessions_by_id.set(session.id, session);
+    this.cache_session(session);
     return session;
   }
 
@@ -95,7 +142,7 @@ export class GroupSessions implements GroupSessionsContract {
     if (!session) return null;
     await session.dispose();
     await this.group.get_session_store().remove_session(resolved_session_id);
-    this.sessions_by_id.delete(resolved_session_id);
+    await this.release_session(resolved_session_id, "removed");
     return session;
   }
 
@@ -117,7 +164,9 @@ export class GroupSessions implements GroupSessionsContract {
       await cached.dispose();
       this.sessions_by_id.delete(resolved_session_id);
     }
-    return await this.group.get_session_store().archive_session(resolved_session_id);
+    const result = await this.group.get_session_store().archive_session(resolved_session_id);
+    await this.release_session(resolved_session_id, "archived");
+    return result;
   }
 
   /** 列出已归档的群聊上下文摘要。 */
@@ -128,7 +177,9 @@ export class GroupSessions implements GroupSessionsContract {
 
   /** 永久清空当前 Group 的全部归档。 */
   async clean_archive(): Promise<GroupSessionCleanArchiveResult> {
-    return await this.group.get_session_store().clean_archive();
+    const result = await this.group.get_session_store().clean_archive();
+    await this.notify_directory_changed();
+    return result;
   }
 
   /**
@@ -149,6 +200,8 @@ export class GroupSessions implements GroupSessionsContract {
   /** 释放 Group 所有群聊上下文。 */
   async dispose(): Promise<void> {
     await Promise.allSettled([...this.sessions_by_id.values()].map((session) => session.dispose()));
+    for (const release of this.event_releases.values()) release();
+    this.event_releases.clear();
     this.sessions_by_id.clear();
     await this.group.dispose_session_store();
   }

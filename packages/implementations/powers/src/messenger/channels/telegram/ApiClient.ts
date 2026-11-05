@@ -1,3 +1,4 @@
+/** Telegram Bot API 传输：规范化请求、附件和短生命周期聊天动作。 */
 import path from "path";
 import fs from "fs-extra";
 import type { PowerLogger } from "@downcity/city/power";
@@ -335,7 +336,8 @@ export class TelegramApiClient {
    *
    * 关键点（中文）
    * - Telegram 的 typing 指示器会在数秒后自动消失，因此需要周期性发送
-   * - 这里仅做一次发送；“心跳 / 周期”由上层（scheduler）控制
+   * - 这里只发送一次；周期与取消由 MessengerTyping 的执行租约控制
+   * - 动作采用四秒超时，避免临时状态请求长时间占用发送窗口
    */
   async sendMessengerAction(
     chatId: string,
@@ -346,11 +348,11 @@ export class TelegramApiClient {
       typeof opts?.messageThreadId === "number"
         ? opts.messageThreadId
         : undefined;
-    await this.requestJson("sendMessengerAction", {
+    await this.requestJson("sendChatAction", {
       chat_id: chatId,
       action,
       ...(message_thread_id ? { message_thread_id } : {}),
-    });
+    }, { timeout_ms: 4_000 });
   }
 
   /**

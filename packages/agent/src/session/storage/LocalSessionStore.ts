@@ -225,7 +225,7 @@ export class LocalSessionStore implements SessionStore {
       for (const storage of this.sessions.values()) {
         const interactions = collect_pending_interactions(await storage.list_recoverable_agent_messages());
         result.push(...interactions.map((interaction) => project_agent_interaction(
-          storage.session_id, storage.origin.category, interaction,
+          storage.session_id, storage.origin.category, interaction, false, storage.origin,
         )));
       }
       return result;
@@ -242,7 +242,7 @@ export class LocalSessionStore implements SessionStore {
         const database_path = get_agent_session_database_path(this.storage_root_path, category, session_id);
         if (!(await this.files.path_exists(database_path))) continue;
         const interactions = read_file_pending_interactions(database_path, this.agent_id, session_id, category);
-        result.push(...interactions.map((interaction) => project_agent_interaction(session_id, category, interaction)));
+        result.push(...interactions);
       }
     }
     return result;
