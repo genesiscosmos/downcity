@@ -49,6 +49,8 @@ type Deferred<T> = {
   promise: Promise<T>;
   /** 兑现当前 Promise。 */
   resolve: (value: T) => void;
+  /** 连接失败只拒绝客户端等待，不伪造服务端 Turn 终态。 */
+  reject: (error: Error) => void;
 };
 
 type RemoteTurnLifecycle = {
@@ -277,15 +279,8 @@ export class RemoteSession implements RemoteAgentSession {
   private fail_pending_turns(message: string): void {
     for (const lifecycle of this.turns_by_id.values()) {
       if (lifecycle.result) continue;
-      const result: AgentSessionTurnResult = {
-        turn_id: lifecycle.turn_id,
-        text: "",
-        success: false,
-        error: message,
-      };
-      lifecycle.result = result;
-      lifecycle.deferred_finished.resolve(result);
-      this.remember_completed_turn(lifecycle.turn_id);
+      lifecycle.deferred_finished.reject(Object.assign(new Error(message), { code: "transport_lost", turn_id: lifecycle.turn_id }));
+      this.turns_by_id.delete(lifecycle.turn_id);
     }
   }
 
@@ -313,10 +308,13 @@ export class RemoteSession implements RemoteAgentSession {
 
 function create_deferred<T>(): Deferred<T> {
   let resolve!: (value: T) => void;
-  const promise = new Promise<T>((inner_resolve) => {
-    resolve = inner_resolve;
+  let reject!: (error: Error) => void;
+  const promise = new Promise<T>((inner_resolve, inner_reject) => {
+    resolve = inner_resolve; reject = inner_reject;
   });
-  return { promise, resolve };
+  // 订阅可能早于消费者拿到 handle；仍保留原 Promise 的拒绝语义。
+  void promise.catch(() => {});
+  return { promise, resolve, reject };
 }
 
 /**

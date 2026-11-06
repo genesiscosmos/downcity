@@ -35,6 +35,11 @@ CREATE TABLE IF NOT EXISTS session_state (
   updated_at INTEGER NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS session_model_binding (
+  singleton_id INTEGER PRIMARY KEY CHECK (singleton_id = 1),
+  binding TEXT NOT NULL CHECK (json_valid(binding))
+);
+
 CREATE TABLE IF NOT EXISTS session_execution_profile (
   singleton_id INTEGER PRIMARY KEY CHECK (singleton_id = 1),
   reference TEXT NOT NULL CHECK (json_valid(reference))

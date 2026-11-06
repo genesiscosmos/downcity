@@ -129,7 +129,8 @@ export class AgentResources {
 
   private project(agent_id: string, config?: LocalAgentConfig) {
     const runtime = this.dependencies.host?.city.agents.get(agent_id);
-    return { agent_id, name: config?.name ?? runtime?.name ?? agent_id, description: config?.description ?? runtime?.description ?? "", version: config?.version ?? null, model_id: config?.execution?.model_id ?? null, registered: !!config, runtime_state: this.dependencies.host ? runtime ? "loaded" : "unloaded" : "unknown", revision: config ? resource_revision(config) : null, created_at: config?.created_at ?? null, updated_at: config?.updated_at ?? null };
+    const runtime_state: "loaded" | "unloaded" | "unknown" = this.dependencies.host ? runtime ? "loaded" : "unloaded" : "unknown";
+    return { agent_id, name: config?.name ?? runtime?.name ?? agent_id, description: config?.description ?? runtime?.description ?? "", version: config?.version ?? null, model_id: typeof config?.execution?.model_id === "string" ? config.execution.model_id : null, registered: !!config, runtime_state, revision: config ? resource_revision(config) : null, created_at: config?.created_at ?? null, updated_at: config?.updated_at ?? null };
   }
 
   private require_registered(agent_id: string): LocalAgentConfig {

@@ -11,6 +11,7 @@ import { createConnection, createServer, type Server, type Socket } from "node:n
 import { randomUUID } from "node:crypto";
 import type { CityHostState } from "../../city/host/CityHostRegistry.js";
 import { as_resource_error, ResourceError } from "./ResourceError.js";
+import { create_windows_management_key, read_windows_management_key, encode_management_frame, decode_management_frame } from "./WindowsManagementAuth.js";
 import { get_root_identity } from "./RootLease.js";
 
 /** 本机管理协议版本；不兼容的客户端拒绝执行。 */
@@ -39,6 +40,8 @@ interface ManagementRequest {
   method: string;
   /** 业务参数，不含 transport 身份。 */
   input: Record<string, unknown>;
+  /** 短时请求 nonce 的创建时间，用于认证通道防重放。 */
+  issued_at: number;
 }
 
 /** 独立管理监听的生命周期；不拥有 City 或业务数据库。 */
@@ -48,7 +51,7 @@ export class ManagementChannel {
   /** 已连接客户端，关闭时只断连接，不停止它们已提交的 Turn。 */
   private readonly sockets = new Set<Socket>();
 
-  private constructor(private readonly server: Server, endpoint: string) { this.endpoint = endpoint; }
+  private constructor(private readonly server: Server, endpoint: string, private readonly credential_path?: string) { this.endpoint = endpoint; }
 
   /** 只在宿主持有 root 独占租约后调用。 */
   static async listen(root_path: string, state: CityHostState, dispatcher: ResourceDispatcher): Promise<ManagementChannel> {
@@ -56,8 +59,10 @@ export class ManagementChannel {
     const user_id = process.getuid?.() ?? os.userInfo().username;
     const directory = path.join(os.tmpdir(), `downcity-management-${user_id}`);
     let endpoint: string;
+    const auth_key = process.platform === "win32" ? await create_windows_management_key(root_path, state.instance_id) : undefined;
+    const seen_requests = new Map<string, number>();
     if (process.platform === "win32") {
-      endpoint = `\\\\.\\pipe\\downcity-${user_id}-${identity.slice(0, 24)}-${state.instance_id}`;
+      endpoint = `\\\\.\\pipe\\downcity-${identity.slice(0, 24)}-${state.instance_id}`;
     } else {
       await fs.mkdir(directory, { recursive: true, mode: 0o700 });
       const stat = await fs.lstat(directory);
@@ -68,7 +73,7 @@ export class ManagementChannel {
       endpoint = path.join(directory, `${identity.slice(0, 16)}-${state.instance_id.slice(0, 8)}.sock`);
     }
     const server = createServer();
-    const channel = new ManagementChannel(server, endpoint);
+    const channel = new ManagementChannel(server, endpoint, auth_key ? path.join(root_path, "runtimes", "city", "management-auth", `${state.instance_id}.key`) : undefined);
     server.on("connection", (socket) => {
       channel.sockets.add(socket);
       socket.once("close", () => channel.sockets.delete(socket));
@@ -87,8 +92,14 @@ export class ManagementChannel {
         void (async () => {
           let id: unknown = null;
           try {
-            const request = JSON.parse(buffer.slice(0, newline)) as ManagementRequest;
+            const request = decode_management_frame(buffer.slice(0, newline), auth_key) as ManagementRequest;
             id = request.id;
+            if (auth_key) {
+              const now = Date.now();
+              for (const [key, time] of seen_requests) if (now - time > 60_000) seen_requests.delete(key);
+              if (typeof request.id !== "string" || !Number.isFinite(request.issued_at) || Math.abs(now - request.issued_at) > 30_000 || seen_requests.has(request.id) || seen_requests.size >= 10_000) throw new ResourceError("unauthorized", "Expired or replayed management request", 6);
+              seen_requests.set(request.id, now);
+            }
             if (request.version !== MANAGEMENT_VERSION) throw new ResourceError("capability_missing", "Management protocol version is incompatible", 5);
             if (request.instance_id !== state.instance_id || request.root_identity !== identity) {
               throw new ResourceError("host_identity_mismatch", "City instance or root changed; discover the host again", 5);
@@ -98,10 +109,10 @@ export class ManagementChannel {
               : dispatcher.capabilities.includes(request.method)
                 ? await dispatcher.dispatch(request.method, request.input)
                 : await Promise.reject(new ResourceError("capability_missing", `Unsupported resource method: ${request.method}`, 5));
-            socket.end(`${JSON.stringify({ id, success: true, data })}\n`);
+            socket.end(`${encode_management_frame({ id, success: true, data }, auth_key)}\n`);
           } catch (error) {
             const failure = as_resource_error(error);
-            socket.end(`${JSON.stringify({ id, success: false, error: { code: failure.code, message: failure.message, exit_code: failure.exit_code, retryable: failure.retryable, details: failure.details } })}\n`);
+            socket.end(`${encode_management_frame({ id, success: false, error: { code: failure.code, message: failure.message, exit_code: failure.exit_code, retryable: failure.retryable, details: failure.details } }, auth_key)}\n`);
           }
         })();
       });
@@ -119,6 +130,7 @@ export class ManagementChannel {
     for (const socket of this.sockets) socket.destroy();
     await new Promise<void>((resolve, reject) => this.server.close((error) => error ? reject(error) : resolve()));
     if (process.platform !== "win32") await fs.rm(this.endpoint, { force: true });
+    if (this.credential_path) await fs.rm(this.credential_path, { force: true });
   }
 }
 
@@ -135,6 +147,7 @@ export async function request_management(
     throw new ResourceError("capability_missing", "Current City host does not expose a ready management channel", 5);
   }
   if (state.root_identity !== get_root_identity(root_path)) throw new ResourceError("host_identity_mismatch", "Discovered host belongs to another root", 5);
+  const auth_key = process.platform === "win32" ? await read_windows_management_key(root_path, state.instance_id) : undefined;
   return await new Promise((resolve, reject) => {
     const socket = createConnection(state.management_endpoint!);
     const id = randomUUID();
@@ -151,14 +164,23 @@ export async function request_management(
     abort_signal?.addEventListener("abort", abort, { once: true });
     if (abort_signal?.aborted) { abort(); return; }
     socket.setTimeout(timeout_ms, () => finish(new ResourceError("operation_timeout", "Management request timed out; an accepted operation may continue", 7, false, { outcome: "unknown" })));
-    socket.once("connect", () => socket.write(`${JSON.stringify({ id, version: MANAGEMENT_VERSION, instance_id: state.instance_id, root_identity: state.root_identity, method, input })}\n`));
+    socket.once("connect", () => socket.write(`${encode_management_frame({ id, issued_at: Date.now(), version: MANAGEMENT_VERSION, instance_id: state.instance_id, root_identity: state.root_identity, method, input }, auth_key)}\n`));
     socket.on("data", (chunk) => {
       buffer += chunk.toString("utf8");
       if (Buffer.byteLength(buffer) > MAX_FRAME_BYTES) { finish(new ResourceError("internal_error", "Management response exceeds frame limit", 1)); return; }
       const newline = buffer.indexOf("\n");
       if (newline < 0) return;
       try {
-        const frame = JSON.parse(buffer.slice(0, newline));
+        const frame = decode_management_frame(buffer.slice(0, newline), auth_key) as {
+          /** 呼应随机请求 ID，拒绝伪造或交叉响应。 */
+          id: string;
+          /** 本次业务语义是否成功。 */
+          success: boolean;
+          /** 成功业务对象。 */
+          data?: unknown;
+          /** 已认证的失败对象，保持错误协议。 */
+          error?: { /** 机器错误码。 */ code?: string; /** 可展示文案。 */ message?: string; /** 退出码。 */ exit_code?: number; /** 可否原输入重试。 */ retryable?: boolean; /** 已提交事实。 */ details?: Record<string, unknown> };
+        };
         if (frame.id !== id) throw new ResourceError("host_identity_mismatch", "Management response identity mismatch", 5);
         if (frame.success !== true) {
           const error = frame.error;

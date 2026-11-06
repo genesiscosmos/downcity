@@ -3,7 +3,7 @@ import { ResourceService, ResourceCoordinator, ResourceError, GroupRepository } 
 import { read_power_agent_references } from "@downcity/powers";
 import type { City } from "@downcity/city";
 import type { CliLocalData } from "../runtime/LocalData.js";
-import { create_cli_agent, create_cli_workspace, resolve_cli_agent_model } from "../runtime/AgentAssembly.js";
+import { create_cli_agent, create_cli_workspace, resolve_cli_agent_model, reload_cli_workspace_env } from "../runtime/AgentAssembly.js";
 
 /** 将产品装配能力注入共用用例，门禁由宿主懒解析同时使用。 */
 export function create_cli_resources(data: CliLocalData, city: City, coordinator: ResourceCoordinator): ResourceService {
@@ -30,6 +30,9 @@ export function create_cli_resources(data: CliLocalData, city: City, coordinator
         if (shell && (!shell.has_active_sessions || shell.has_active_sessions())) throw new ResourceError("resource_busy", "Workspace has active Shell processes or does not expose process status", 4);
       },
       release_agent: async () => {},
+      refresh_env: async (workspace_id) => {
+        for (const workspace of city.workspaces.list()) if (!workspace_id || workspace.id === workspace_id) workspace.set_env(reload_cli_workspace_env(workspace.path, data.root_path));
+      },
       invalidate: () => {},
     },
   });

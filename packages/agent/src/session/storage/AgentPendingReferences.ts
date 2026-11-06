@@ -1,5 +1,6 @@
 /** Agent scope 中未完成委派与完成通知的只读引用投影；不恢复投递或创建文件。 */
 import fs from "node:fs/promises";
+import { createHash } from "node:crypto";
 import path from "node:path";
 import type { SessionDelegationRecord } from "../../types/agent/SessionDelegation.js";
 import type { SessionCompletionRecord } from "../../types/agent/SessionCompletion.js";
@@ -35,6 +36,27 @@ export async function read_agent_pending_references(storage_root_path: string, a
     for (const referenced_agent_id of ids) result.push({ kind: "pending_completion", owner_agent_id: agent_id, referenced_agent_id, record_id: record.event.completion_id });
   }
   return result;
+}
+
+/** 以权威完成日志证明历史 prompt 已终结；缺失不能被解释成空闲。 */
+export async function has_delivered_session_turn(storage_root_path: string, session_id: string, turn_id: string): Promise<boolean> {
+  const key = createHash("sha256").update(`completion:${session_id}:${turn_id}`).digest("hex");
+  let text: string;
+  try { text = await fs.readFile(path.join(storage_root_path, "completions", `${key}.json`), "utf8"); }
+  catch (error) { if (error instanceof Error && "code" in error && error.code === "ENOENT") return false; throw error; }
+  const record = JSON.parse(text) as SessionCompletionRecord;
+  if (record.event?.session_id !== session_id || record.event.turn_id !== turn_id) throw new Error("Invalid Session completion identity");
+  return record.state === "delivered";
+}
+
+/** 读取已提交的权威 Turn 完成结果，不恢复执行/投递。 */
+export async function read_session_completion(storage_root_path: string, session_id: string, turn_id: string): Promise<SessionCompletionRecord | undefined> {
+  const key = createHash("sha256").update(`completion:${session_id}:${turn_id}`).digest("hex");
+  try {
+    const record = JSON.parse(await fs.readFile(path.join(storage_root_path, "completions", `${key}.json`), "utf8")) as SessionCompletionRecord;
+    if (record.event?.session_id !== session_id || record.event.turn_id !== turn_id) throw new Error("Invalid Session completion identity");
+    return record;
+  } catch (error) { if (error instanceof Error && "code" in error && error.code === "ENOENT") return undefined; throw error; }
 }
 
 /** 顺序读取记录，权限、损坏和 I/O 错误必须阻止破坏性操作。 */

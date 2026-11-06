@@ -3,6 +3,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import type { LocalWorkspaceConfig } from "../types/LocalConfig.js";
 import type { ResourceDependencies } from "./types.js";
+import { count_workspace_sessions, read_session_agent_references } from "./SessionReferences.js";
 import { assert_resource_revision, resource_revision } from "./ResourceCoordinator.js";
 import { require_resource_value, require_workspace_id, ResourceError, is_missing_file } from "./ResourceError.js";
 
@@ -29,7 +30,7 @@ export class WorkspaceResources {
     require_workspace_id(workspace_id, true);
     const config = this.dependencies.workspaces?.get(workspace_id);
     if (!config && !this.dependencies.host?.city.workspaces.get(workspace_id)) throw new ResourceError("resource_not_found", `Workspace not found: ${workspace_id}`, 3);
-    return { workspace: await this.project(workspace_id, config ?? undefined) };
+    return { workspace: await this.project(workspace_id, config ?? undefined), session_count: await this.session_count(workspace_id) };
   }
 
   /** register 只验证/规范化现有目录，不创建项目资产。 */
@@ -77,6 +78,16 @@ export class WorkspaceResources {
     return await this.dependencies.coordinator.mutate(async () => {
       const current = this.require_registered(workspace_id);
       assert_resource_revision(current, if_revision);
+      const agent_ids = this.dependencies.agents.list().map((agent) => agent.agent_id);
+      for (const agent_id of agent_ids) {
+        const unsettled = (await read_session_agent_references(this.dependencies.root_path, [agent_id], agent_id, this.dependencies.immutable)).filter((reference) => reference.kind === "unsettled_prompt" || reference.kind === "pending_execution");
+        for (const reference of unsettled) {
+          const browser = new (await import("@downcity/agent")).AgentSessionBrowser({ agent_id, storage_root_path: path.join(this.dependencies.root_path, "agents", agent_id), immutable: this.dependencies.immutable });
+          try { if ((await browser.get(String(reference.session_id), String(reference.category))).metadata.workspace_id === workspace_id) throw new ResourceError("resource_busy", "Workspace has unsettled persisted execution", 4); }
+          finally { browser.dispose(); }
+        }
+      }
+      const retained_session_count = await this.session_count(workspace_id);
       const { host, coordinator } = this.dependencies;
       const releases: (() => void)[] = [];
       try {
@@ -91,12 +102,16 @@ export class WorkspaceResources {
         if (host?.city.workspaces.get(workspace_id)) await host.city.workspaces.remove(workspace_id);
         this.dependencies.workspaces!.remove(workspace_id);
         host?.invalidate();
-        return { workspace_id, removed: true, retained_project_path: current.workspace_path, retained_history: true };
+        return { workspace_id, removed: true, retained_project_path: current.workspace_path, retained_session_count, retained_history: true };
       } catch (error) {
         if (!releasing) { coordinator.blocked_workspaces.delete(workspace_id); throw error; }
         throw new ResourceError("partial_failure", error instanceof Error ? error.message : "Workspace release failed", 9, false, { committed: false, blocked: true, retained_project_path: current.workspace_path });
       } finally { for (const release of releases) release(); }
     });
+  }
+
+  private async session_count(workspace_id: string): Promise<number> {
+    return await count_workspace_sessions(this.dependencies.root_path, this.dependencies.agents.list().map((agent) => agent.agent_id), workspace_id, this.dependencies.immutable);
   }
 
   private require_registered(workspace_id: string): LocalWorkspaceConfig {

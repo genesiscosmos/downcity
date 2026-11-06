@@ -81,6 +81,10 @@ export interface SessionStorage {
   read_metadata(): Promise<SessionHistoryMeta>;
   /** 原子覆盖当前 Session configured 状态。 */
   write_metadata(metadata: SessionHistoryMeta): Promise<void>;
+  /** 读取默认模型快照及显式覆盖；旧历史无可靠 ID 返回 undefined。 */
+  read_model_binding(): Promise<import("./SessionModelBinding.js").SessionModelBinding | undefined>;
+  /** 原子保存会话模型事实；只由创建入口及显式模型修改调用。 */
+  write_model_binding(binding: import("./SessionModelBinding.js").SessionModelBinding): Promise<void>;
   /** 原子绑定不可变执行配置；已有配置不一致时拒绝，供幂等创建和恢复使用。 */
   bind_execution_profile(reference: import("@/types/agent/SessionExecutionProfile.js").SessionExecutionProfileReference): Promise<void>;
   /** 判断 Session 是否存在显式 system snapshot。 */

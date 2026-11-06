@@ -1,9 +1,11 @@
 /** 白名单资源用例组合；命令、TUI、管理通道和 Desktop IPC 不重复实现业务。 */
+import { ConfigResources } from "./ConfigResources.js";
 import { AgentResources } from "./AgentResources.js";
 import { WorkspaceResources } from "./WorkspaceResources.js";
 import { SessionResources } from "./SessionResources.js";
 import type { ResourceDependencies } from "./types.js";
 import type { ResourceDispatcher } from "./ManagementChannel.js";
+import { validate_resource_input } from "./ResourceInput.js";
 import { ResourceError, require_resource_value } from "./ResourceError.js";
 
 /** 三类资源共享业务服务，不持有租约/DB 的释放权。 */
@@ -14,18 +16,23 @@ export class ResourceService implements ResourceDispatcher {
   readonly workspaces: WorkspaceResources;
   /** 会话浏览与执行用例。 */
   readonly sessions: SessionResources;
+  /** 既有共享配置写入口，与资源删除共用协调器。 */
+  readonly config: ConfigResources;
   /** 支持的完整操作名，不允许任意函数路径访问。 */
-  readonly capabilities = ["agent.list", "agent.get", "agent.create", "agent.update", "agent.delete", "workspace.register", "workspace.list", "workspace.get", "workspace.update", "workspace.remove", "session.create", "session.list", "session.get", "session.history", "session.send", "session.stop", "session.archive"];
+  readonly capabilities = ["agent.list", "agent.get", "agent.create", "agent.update", "agent.delete", "workspace.register", "workspace.list", "workspace.get", "workspace.update", "workspace.remove", "session.create", "session.list", "session.get", "session.history", "session.receipt", "session.send", "session.stop", "session.archive", "config.token.list", "config.token.get", "config.token.create", "config.token.update", "config.token.remove", "config.power.get", "config.power.set", "config.env.get", "config.env.set", "config.env.delete"];
 
   constructor(dependencies: ResourceDependencies) {
     this.agents = new AgentResources(dependencies);
     this.workspaces = new WorkspaceResources(dependencies);
     this.sessions = new SessionResources(dependencies);
+    this.config = new ConfigResources(dependencies);
   }
 
   /** input 只能为普通记录；每个领域用例继续检查实际字段。 */
   async dispatch(method: string, input: Record<string, unknown>): Promise<unknown> {
     require_resource_value(input && typeof input === "object" && !Array.isArray(input), "Resource input must be an object");
+    validate_resource_input(method, input);
+    if (method.startsWith("config.")) return await this.config.call(method, input);
     const target = (): string => { require_resource_value(typeof input.id === "string", "A complete resource ID is required"); return input.id; };
     const revision = typeof input.if_revision === "string" ? input.if_revision : undefined;
     try {
@@ -44,6 +51,7 @@ export class ResourceService implements ResourceDispatcher {
         case "session.list": return await this.sessions.list(input);
         case "session.get": return await this.sessions.get(input);
         case "session.history": return await this.sessions.history(input);
+        case "session.receipt": return await this.sessions.receipt(input);
         case "session.send": return await this.sessions.send(input);
         case "session.stop": return await this.sessions.stop(input);
         case "session.archive": return await this.sessions.archive(input);

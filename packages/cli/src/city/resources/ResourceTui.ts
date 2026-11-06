@@ -1,6 +1,7 @@
 /** TUI 资源表单与导航；只收集稳定 ID 和输入，全部业务调用 ResourceClient。 */
 import prompts from "../tui/Prompts.js";
 import { ResourceClient } from "./ResourceClient.js";
+import type { AgentListData, WorkspaceListData, SessionListData } from "./ResourceResults.js";
 import { inspect } from "node:util";
 
 /** 创建独立 Agent 身份，不登记 cwd 或安装项目资产。 */
@@ -25,8 +26,8 @@ export async function manage_resources_tui(): Promise<void> {
         if (input.path) await client.call("workspace.register", { path: input.path, ...(input.name ? { name: input.name } : {}) });
       } else if (selection.action === "workspaces") {
         const result = await client.call("workspace.list");
-        const items = (result.data as { items: { workspace_id: string; name: string; workspace_path: string }[] }).items;
-        const choice = await prompts({ type: "select", name: "id", message: "Workspace", choices: items.map((item) => ({ title: `${item.name} · ${item.workspace_id}`, description: item.workspace_path, value: item.workspace_id })) });
+        const items = (result.data as WorkspaceListData).items;
+        const choice = await prompts({ type: "select", name: "id", message: "Workspace", choices: items.map((item) => ({ title: `${item.name} · ${item.workspace_id}`, description: item.workspace_path ?? "", value: item.workspace_id })) });
         if (!choice.id) continue;
         const action = await prompts({ type: "select", name: "value", message: String(choice.id), choices: [{ title: "Details", value: "get" }, { title: "Rename", value: "update" }, { title: "Remove registration (retain project and history)", value: "remove" }] });
         if (action.value === "get") await show_result((await client.call("workspace.get", { id: choice.id })).data);
@@ -34,7 +35,7 @@ export async function manage_resources_tui(): Promise<void> {
         if (action.value === "remove" && await confirm_action("Remove registration and release idle resources? Project files and history are retained.")) await client.call("workspace.remove", { id: choice.id });
       } else {
         const result = await client.call("agent.list");
-        const items = (result.data as { items: { agent_id: string; name: string }[] }).items;
+        const items = (result.data as AgentListData).items;
         const choice = await prompts({ type: "select", name: "id", message: "Agent", choices: items.map((item) => ({ title: `${item.name} · ${item.agent_id}`, value: item.agent_id })) });
         if (!choice.id) continue;
         if (selection.action === "agents") {
@@ -52,13 +53,33 @@ export async function manage_resources_tui(): Promise<void> {
 async function sessions_tui(client: ResourceClient, agent: string): Promise<void> {
   const scope = await prompts([{ type: "select", name: "category", message: "Category", choices: [{ title: "Work", value: "work" }, { title: "Chat", value: "chat" }] }, { type: "confirm", name: "archived", message: "Archived history?", initial: false }]);
   if (!scope.category) return;
-  const result = await client.call("session.list", { agent, ...scope });
-  const page = result.data as { items: { session_id: string; title: string | null }[]; next_cursor: string | null };
-  const selected = await prompts({ type: "select", name: "id", message: "Session", choices: page.items.map((item) => ({ title: `${item.title ?? item.session_id} · ${item.session_id}`, value: item.session_id })) });
-  if (!selected.id) return;
-  const input = { agent, category: scope.category, session_id: selected.id };
-  const action = await prompts({ type: "select", name: "value", message: String(selected.id), choices: [{ title: "Details", value: "get" }, { title: "History", value: "history" }, { title: "Stop current Turn", value: "stop" }, { title: "Archive", value: "archive" }] });
-  if (action.value) await show_result((await client.call(`session.${action.value}`, input)).data);
+  const cursors: (string | undefined)[] = [undefined];
+  const pages: SessionListData[] = [];
+  let page_index = 0;
+  while (true) {
+    let page: SessionListData;
+    try { page = pages[page_index] ?? (await client.call("session.list", { agent, ...scope, cursor: cursors[page_index] })).data as SessionListData; pages[page_index] = page; }
+    catch (error) {
+      if (error instanceof Error && "code" in error && error.code === "cursor_expired") { cursors.splice(1); pages.length = 0; page_index = 0; await show_result("Session snapshot expired; reloading the first page."); continue; }
+      throw error;
+    }
+    const choices = [
+      ...page.items.map((item) => ({ title: `${item.title ?? item.session_id} · ${item.session_id}`, value: `session:${item.session_id}` })),
+      ...(page_index > 0 ? [{ title: "Previous page", value: "previous" }] : []),
+      ...(page.pagination_available && page.next_cursor ? [{ title: "Next page", value: "next" }] : []),
+      { title: "Refresh first page", value: "refresh" }, { title: "Back", value: "back" },
+    ];
+    const selected = await prompts({ type: "select", name: "id", message: `Sessions · page ${page_index + 1} · ${page.total} total`, choices });
+    if (!selected.id || selected.id === "back") return;
+    if (selected.id === "next") { cursors[page_index + 1] = page.next_cursor!; page_index += 1; continue; }
+    if (selected.id === "previous") { page_index -= 1; continue; }
+    if (selected.id === "refresh") { cursors.splice(1); pages.length = 0; page_index = 0; continue; }
+    const session_id = String(selected.id).slice("session:".length);
+    const input = { agent, category: scope.category, session_id };
+    const action = await prompts({ type: "select", name: "value", message: session_id, choices: [{ title: "Details", value: "get" }, { title: "History", value: "history" }, { title: "Stop current Turn", value: "stop" }, { title: "Archive", value: "archive" }] });
+    if (action.value) await show_result((await client.call(`session.${action.value}`, input)).data);
+    if (action.value === "archive") { cursors.splice(1); pages.length = 0; page_index = 0; }
+  }
 }
 
 /** 确认属于展示层，用例不读取终端。 */

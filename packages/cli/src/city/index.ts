@@ -122,7 +122,7 @@ export async function runDowncityCli(): Promise<void> {
   const cli_locale = resolveCliLocale({
     argv,
     // 资源命令在发现/租约前不能打开会初始化 DB 的全局配置读取。
-    persisted_locale: argv.some((item) => ["agent", "workspace", "session", "--help", "--version"].includes(item)) ? undefined : read_persisted_downcity_cli_locale(),
+    persisted_locale: argv.some((item) => ["agent", "workspace", "session", "token", "env", "power", "on", "off", "restart", "status", "--help", "--version"].includes(item)) ? undefined : read_persisted_downcity_cli_locale(),
   });
   setCliLocale(cli_locale);
 
@@ -180,9 +180,13 @@ export async function runDowncityCli(): Promise<void> {
 
   const resource_json = argv.includes("--json") && argv.some((item) => ["agent", "workspace", "session"].includes(item));
   if (resource_json) {
-    program.exitOverride();
-    program.configureOutput({ writeErr: () => {} });
-    program.showHelpAfterError(false);
+    const configure_json_errors = (command: Command): void => {
+      command.exitOverride();
+      command.configureOutput({ writeErr: () => {} });
+      command.showHelpAfterError(false);
+      for (const child of command.commands) configure_json_errors(child);
+    };
+    configure_json_errors(program);
   }
   try { await program.parseAsync(); }
   catch (error) {

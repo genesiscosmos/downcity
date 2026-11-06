@@ -9,8 +9,7 @@ import path from "node:path";
 import { createHash, randomUUID } from "node:crypto";
 import fs from "fs-extra";
 import { execa } from "execa";
-import { get_local_power_path } from "@downcity/city/local";
-import { create_cli_local_data } from "@/city/runtime/LocalData.js";
+import { get_local_power_path, RootLease, resolve_resource_root } from "@downcity/city/local";
 import {
   get_installed_power,
   is_builtin_power,
@@ -33,10 +32,15 @@ export async function install_power(
   expected_power_id?: string,
 ): Promise<InstalledPower> {
   const source = await resolve_power_source(source_input);
-  const data = create_cli_local_data();
-  const root_path = data.root_path;
+  const root_path = resolve_resource_root();
+  const lease = RootLease.acquire_write(root_path);
+  try { return await install_owned_power(source, root_path, expected_power_id); }
+  finally { lease.release(); }
+}
+
+/** 安装/更新在离线写租约内替换完整制品，不能与运行 Power 或配置写入交错。 */
+async function install_owned_power(source: ResolvedPowerSource, root_path: string, expected_power_id?: string): Promise<InstalledPower> {
   const powers_root = path.join(root_path, "powers");
-  data.database.close();
   await fs.ensureDir(powers_root, { mode: 0o700 });
   const source_dir = path.join(powers_root, `.source-${randomUUID()}`);
   const staging_dir = path.join(powers_root, `.install-${randomUUID()}`);

@@ -1,6 +1,6 @@
 /** City 级 Token 命令及交互式管理；列表不展示凭据，签发时只展示一次明文。 */
 import type { Command } from "commander";
-import { with_cli_local_data } from "@/city/runtime/LocalData.js";
+import { ResourceClient } from "../resources/ResourceClient.js";
 import { collect_token_config, confirm_token_config, select_token, token_question } from "./TokenInteraction.js";
 import type { CityTokenCommandOptions } from "@/city/types/auth/CityTokenCommand.js";
 import type { CityTokenSummary, IssuedCityToken } from "@downcity/city/local";
@@ -15,20 +15,20 @@ async function create_token(options: CityTokenCommandOptions): Promise<void> {
   const complete = Boolean(options.name && (options.allAgents || options.agents !== undefined) && (options.neverExpires || options.expiresAt !== undefined));
   const config = await collect_token_config(options);
   if (!complete) await confirm_token_config(config);
-  display(with_cli_local_data((data) => data.city_tokens.create(config)), options.json);
+  display((await new ResourceClient().call("config.token.create", { config })).data as IssuedCityToken, options.json);
 }
 
 async function update_token(id: string | undefined, options: CityTokenCommandOptions): Promise<void> {
   const previous = await select_token(id);
   const config = await collect_token_config(options, previous);
   if (!id || (!options.name && options.agents === undefined && !options.allAgents && !options.expiresAt && !options.neverExpires)) await confirm_token_config(config);
-  display(with_cli_local_data((data) => data.city_tokens.update(previous.token_id, config)), options.json);
+  display((await new ResourceClient().call("config.token.update", { token_id: previous.token_id, config })).data as CityTokenSummary, options.json);
 }
 
 async function delete_token(id?: string, json = false): Promise<void> {
   const previous = await select_token(id);
   if (!id && !await token_question({ type: "confirm", name: "value", message: `撤销 ${previous.name}？连接将失去授权。`, initial: false })) return;
-  with_cli_local_data((data) => data.city_tokens.remove(previous.token_id));
+  await new ResourceClient().call("config.token.remove", { token_id: previous.token_id });
   display({ deleted: previous.token_id }, json);
 }
 
@@ -42,7 +42,7 @@ async function manage_tokens(): Promise<void> {
     if (action === "exit") return;
     // 输出后退出全屏交互，避免下一次菜单清屏吞掉唯一一次明文或操作结果。
     if (action === "create") { await create_token({}); return; }
-    if (action === "list") { display(with_cli_local_data((data) => data.city_tokens.list())); return; }
+    if (action === "list") { display((await new ResourceClient().call("config.token.list")).data as CityTokenSummary[]); return; }
     if (action === "update") { await update_token(undefined, {}); return; }
     if (action === "delete") { await delete_token(); return; }
   }
@@ -59,7 +59,7 @@ export function register_city_token_command(program: Command): void {
     .option("--never-expires", "永不过期")
     .option("--json", "JSON 输出");
   configure(token.command("create").description("创建 City Token，缺少参数时交互补齐")).action(create_token);
-  token.command("list").option("--json", "JSON 输出").action((options: CityTokenCommandOptions) => display(with_cli_local_data((data) => data.city_tokens.list()), options.json));
+  token.command("list").option("--json", "JSON 输出").action(async (options: CityTokenCommandOptions) => display((await new ResourceClient().call("config.token.list")).data as CityTokenSummary[], options.json));
   configure(token.command("update [token_id]").description("修改授权或有效期")).action(update_token);
   token.command("delete [token_id]").description("撤销 City Token").option("--json", "JSON 输出").action((id: string | undefined, options: CityTokenCommandOptions) => delete_token(id, options.json));
 }

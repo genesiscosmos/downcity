@@ -1,4 +1,5 @@
 /** 宿主资源变更串行化、内容 revision 与输入检查；不持有交互或展示逻辑。 */
+import { AsyncLocalStorage } from "node:async_hooks";
 import { createHash } from "node:crypto";
 import { ResourceError } from "./ResourceError.js";
 
@@ -24,6 +25,8 @@ export function assert_resource_revision(current: unknown, expected?: string): v
 export class ResourceCoordinator {
   /** 以 root 内全部配置写串行为起点，避免跨资源引用检查的锁顺序问题。 */
   private tail: Promise<unknown> = Promise.resolve();
+  /** 同一配置 action 的下层 config.set 可重入；操作结束后继承上下文也失效。 */
+  private readonly ownership = new AsyncLocalStorage<{ /** 当前短事务尚未结束，不能把权限传给后续后台 Timer。 */ active: boolean }>();
   /** 已保存但尚未成功应用的 Agent，禁止新执行。 */
   readonly blocked_agents = new Set<string>();
   /** 正在释放或释放失败的 Workspace，懒解析也必须拒绝进入。 */
@@ -31,7 +34,14 @@ export class ResourceCoordinator {
 
   /** 调用方必须已经持有进程级 root 写租约。 */
   async mutate<T>(operation: () => Promise<T> | T): Promise<T> {
-    const result = this.tail.then(operation, operation);
+    if (this.ownership.getStore()?.active) return await operation();
+    const run = async (): Promise<T> => {
+      const scope = { active: true };
+      return await this.ownership.run(scope, async () => {
+        try { return await operation(); } finally { scope.active = false; }
+      });
+    };
+    const result = this.tail.then(run, run);
     this.tail = result.then(() => undefined, () => undefined);
     return await result;
   }

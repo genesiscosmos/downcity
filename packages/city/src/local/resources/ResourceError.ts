@@ -21,6 +21,11 @@ export class ResourceError extends Error {
 /** 保留稳定业务失败；未知异常不猜测其业务语义。 */
 export function as_resource_error(error: unknown): ResourceError {
   if (error instanceof ResourceError) return error;
+  if (error instanceof Error && "code" in error) {
+    if (error.code === "EACCES" || error.code === "EPERM") return new ResourceError("permission_denied", "Resource access was denied", 6);
+    if (error.code === "ENOENT") return new ResourceError("resource_not_found", "Requested resource or input file does not exist", 3);
+    if (error.code === "host_identity_mismatch") return new ResourceError("host_identity_mismatch", error.message, 5);
+  }
   return new ResourceError("internal_error", error instanceof Error ? error.message : "Resource operation failed", 1);
 }
 

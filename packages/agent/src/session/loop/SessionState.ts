@@ -175,7 +175,7 @@ export class SessionState {
   async ensure_runnable(): Promise<void> {
     await this.ensure_ready_for_execution();
     if (!this.get_model()) {
-      throw new Error("requires a configured model.");
+      throw Object.assign(new Error("Session requires an explicit model selection; historical labels cannot reconstruct a model ID. Select a Session model before execution."), { code: "session_model_required" });
     }
   }
 
@@ -184,13 +184,16 @@ export class SessionState {
    */
   async set_model(model: ModelClient): Promise<SessionModelSetResult> {
     const next_model_label = read_model_label(model);
-    const changed = next_model_label !== this.state.session_config.model_label;
+    const binding = await this.store.read_model_binding();
+    const changed = next_model_label !== this.state.session_config.model_label || binding?.override_model_id !== model.id;
     const next_config: AgentSessionConfigSnapshot = {
       ...this.state.session_config,
       model,
       model_label: next_model_label,
       model_context_window: read_model_context_window(model),
     };
+    // 即使展示名未变化，也必须保存稳定 ID；旧历史明确选择后才获得可恢复模型。
+    await this.store.write_model_binding({ default_model_id: binding?.default_model_id ?? null, override_model_id: model.id });
     if (changed) {
       await this.run_metadata_mutation(async () => {
         const metadata = await this.store.read_metadata();

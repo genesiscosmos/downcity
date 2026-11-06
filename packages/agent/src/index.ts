@@ -18,10 +18,11 @@ export type {
   SessionExecutionProfileSelection,
 } from "./types/agent/SessionExecutionProfile.js";
 
-export { read_agent_pending_references } from "./session/storage/AgentPendingReferences.js";
+export { read_agent_pending_references, has_delivered_session_turn } from "./session/storage/AgentPendingReferences.js";
 export type { AgentPendingReference } from "./session/storage/AgentPendingReferences.js";
 export { AgentSessionBrowser } from "./session/storage/AgentSessionBrowser.js";
 export type { AgentSessionBrowserOptions } from "./session/storage/AgentSessionBrowser.js";
+export type { SessionModelBinding } from "./types/store/SessionModelBinding.js";
 export type { SessionReadView } from "./types/store/SessionReadView.js";
 
 // Agent 入口

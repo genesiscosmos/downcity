@@ -59,24 +59,18 @@ export function create_city_host_instance_id(): string {
 /** 只读探测宿主登记；损坏内容和权限错误不伪装成离线，也不清理文件。 */
 export async function read_city_host_state(root_path_input?: string): Promise<CityHostState | null> {
   const file_path = get_city_host_state_path(root_path_input);
-  let file_identity: { dev: number; ino: number } | undefined;
   try {
     const file_handle = await fs.open(file_path, "r");
     let content: string;
     try {
-      const [raw, stat] = await Promise.all([
-        file_handle.readFile("utf8"),
-        file_handle.stat(),
-      ]);
-      content = raw;
-      file_identity = { dev: stat.dev, ino: stat.ino };
+      content = await file_handle.readFile("utf8");
     } finally {
       await file_handle.close();
     }
     const value = JSON.parse(content) as Partial<CityHostState>;
-    if (value.owner !== "cli" && value.owner !== "desktop") throw new Error(`Invalid City host owner: ${file_path}`);
-    if (!Number.isInteger(value.pid) || Number(value.pid) <= 0) throw new Error(`Invalid City host PID: ${file_path}`);
-    if (!String(value.instance_id || "").trim() || !String(value.started_at || "").trim()) throw new Error(`Invalid City host identity: ${file_path}`);
+    if (!value || (value.owner !== "cli" && value.owner !== "desktop") || !Number.isInteger(value.pid) || Number(value.pid) <= 0 || !String(value.instance_id || "").trim() || !String(value.started_at || "").trim()) {
+      throw Object.assign(new Error(`Invalid City host descriptor: ${file_path}`), { code: "host_identity_mismatch" });
+    }
     if (!is_process_alive(Number(value.pid))) return null;
     return {
       owner: value.owner,
@@ -95,6 +89,7 @@ export async function read_city_host_state(root_path_input?: string): Promise<Ci
     };
   } catch (error) {
     if (has_error_code(error, "ENOENT")) return null;
+    if (error instanceof SyntaxError) throw Object.assign(new Error(`Invalid City host JSON: ${file_path}`), { code: "host_identity_mismatch" });
     throw error;
   }
 }

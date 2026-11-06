@@ -2,7 +2,7 @@
  * @file 验证 RemoteSession 在事件连接断开后能够重新建立订阅。
  *
  * 关键点（中文）
- * - 断流必须结束当前 pending turn，避免 finished 永久等待。
+ * - 断流拒绝客户端等待，不能伪造服务端 Turn 终态，也不能永久挂起。
  * - 下一次 prompt 必须重新调用 transport.subscribe。
  */
 
@@ -76,12 +76,8 @@ test("RemoteSession reconnects the event pump after transport close", async () =
 
   const first_turn = await session.prompt({ actor: { kind: "user", user_id: "local" }, query: "first" });
   subscriptions[0].on_close(new Error("stream dropped"));
-  assert.deepEqual(await first_turn.finished, {
-    turn_id: "turn_1",
-    text: "",
-    success: false,
-    error: "stream dropped",
-  });
+  await assert.rejects(first_turn.finished, (error) => error.code === "transport_lost" && error.turn_id === "turn_1" && error.message === "stream dropped");
+  assert.equal(first_turn.result, null, "transport loss is not a server Turn result");
 
   const second_turn = await session.prompt({ actor: { kind: "user", user_id: "local" }, query: "second" });
   assert.equal(subscriptions.length, 2);

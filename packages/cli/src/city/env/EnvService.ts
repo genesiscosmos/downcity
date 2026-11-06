@@ -5,18 +5,13 @@
  */
 
 import path from "node:path";
+import { ResourceClient } from "../resources/ResourceClient.js";
 import { get_platform_env_file_path } from "@/city/process/registry/CityPaths.js";
 import { resolve_cli_agent_target } from "@/city/agent/AgentSelection.js";
 import {
-  delete_env_file_value,
   normalize_env_key,
   read_env_file,
-  set_env_file_value,
 } from "@/city/env/EnvFileStore.js";
-import {
-  broadcast_global_env_reload,
-  broadcast_workspace_env_reload,
-} from "@/city/env/EnvBroadcast.js";
 import type { EnvMutationResult, EnvTarget } from "@/city/types/env/EnvTarget.js";
 
 /** 解析平台 Global Env 目标。 */
@@ -51,17 +46,13 @@ export async function set_env_target_value(
   value: string,
 ): Promise<EnvMutationResult> {
   const key = normalize_env_key(key_input);
-  await set_env_file_value({
-    file_path: target.file_path,
-    key,
-    value,
-    mode: target.mode,
-  });
+  const result = await new ResourceClient().call("config.env.set", { ...await coordinated_target(target), key, value });
+  const applied = result.data as Pick<EnvMutationResult, "changed" | "broadcast">;
   return {
     target,
     key,
-    changed: true,
-    broadcast: await broadcast_target(target),
+    changed: applied.changed,
+    broadcast: applied.broadcast,
   };
 }
 
@@ -71,30 +62,23 @@ export async function delete_env_target_value(
   key_input: string,
 ): Promise<EnvMutationResult> {
   const key = normalize_env_key(key_input);
-  const changed = await delete_env_file_value({
-    file_path: target.file_path,
-    key,
-    mode: target.mode,
-  });
+  const result = await new ResourceClient().call("config.env.delete", { ...await coordinated_target(target), key });
+  const applied = result.data as Pick<EnvMutationResult, "changed" | "broadcast">;
+  const changed = applied.changed;
   return {
     target,
     key,
     changed,
-    broadcast: changed ? await broadcast_target(target) : empty_broadcast(),
+    broadcast: applied.broadcast,
   };
 }
 
-/** 按目标作用域通知受影响 Agent。 */
-async function broadcast_target(target: EnvTarget) {
-  if (target.scope === "global") return await broadcast_global_env_reload();
-  if (!target.workspace_path) throw new Error("Workspace Env target is missing workspace_path");
-  return await broadcast_workspace_env_reload(target.workspace_path);
-}
-
-/** 构造未发生修改时的空广播结果。 */
-function empty_broadcast() {
-  return {
-    updated_agent_ids: [],
-    failed_agents: [],
-  };
+/** 只把稳定 Workspace ID 交给宿主，不接受任意文件写入路径。 */
+async function coordinated_target(target: EnvTarget): Promise<Record<string, unknown>> {
+  if (target.scope === "global") return {};
+  const result = await new ResourceClient().call("workspace.list");
+  const items = (result.data as import("../resources/ResourceResults.js").WorkspaceListData).items;
+  const workspace = items.find((item) => item.workspace_path === target.workspace_path && item.registered);
+  if (!workspace) throw new Error("Env Workspace is no longer registered");
+  return { workspace_id: workspace.workspace_id };
 }

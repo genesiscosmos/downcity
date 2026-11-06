@@ -11,10 +11,8 @@ import prompts from "@/city/tui/Prompts.js";
 import { t } from "@/shared/CliLocale.js";
 import { CliError } from "@/shared/CliError.js";
 import { listPlatformModelChoices } from "@/city/runtime/city-model/ExecutionModelBinding.js";
-import {
-  get_agent_config,
-  update_agent_config,
-} from "@/city/process/registry/AgentConfigRepository.js";
+import { ResourceClient } from "../resources/ResourceClient.js";
+import type { AgentGetData } from "../resources/ResourceResults.js";
 import type { AgentModelSelectionResponse } from "@/city/types/AgentModel.js";
 import type {
   AgentExecutionModelRecoveryDecision,
@@ -54,7 +52,7 @@ function build_model_recovery_command(
   agent_id: string,
   model_id: string,
 ): string {
-  return `city agent model ${JSON.stringify(agent_id)} --set ${JSON.stringify(model_id)}`;
+  return `city agent update ${JSON.stringify(agent_id)} --model ${JSON.stringify(model_id)}`;
 }
 
 /** 确保 Agent 配置的默认模型可以在当前 Federation 中解析。 */
@@ -62,7 +60,8 @@ export async function ensure_agent_execution_model_ready(
   agent_id_input: string,
 ): Promise<void> {
   const agent_id = String(agent_id_input || "").trim();
-  const config = get_agent_config(agent_id);
+  const client = new ResourceClient();
+  const config = ((await client.call("agent.get", { id: agent_id })).data as AgentGetData).agent;
   if (!config) {
     throw new CliError({
       title: "Agent config not found",
@@ -71,9 +70,7 @@ export async function ensure_agent_execution_model_ready(
     });
   }
 
-  const configured_model_id = String(
-    config.execution?.type === "api" ? config.execution.model_id || "" : "",
-  ).trim();
+  const configured_model_id = config.model_id ?? "";
   const choices = await listPlatformModelChoices();
   const decision = resolve_agent_execution_model_recovery({
     configured_model_id,
@@ -124,11 +121,5 @@ export async function ensure_agent_execution_model_ready(
     });
   }
 
-  update_agent_config({
-    agent_id: config.agent_id,
-    execution: {
-      type: "api",
-      model_id: selected_model_id,
-    },
-  });
+  await client.call("agent.update", { id: config.agent_id, model: selected_model_id });
 }

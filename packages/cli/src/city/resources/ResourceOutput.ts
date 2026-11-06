@@ -1,5 +1,6 @@
 /** 新资源命令的单对象 JSON/退出码协议；不复用面向展示的 CliOutput envelope。 */
 import { inspect } from "node:util";
+import { randomUUID } from "node:crypto";
 import type { Command } from "commander";
 import fs from "node:fs/promises";
 import { as_resource_error, ResourceError } from "@downcity/city/local";
@@ -41,6 +42,7 @@ export async function execute_resource_command(command: string, options: Record<
   process.once("SIGINT", interrupt);
   const client = new ResourceClient({ abort_signal: controller.signal, root: typeof normalized.root === "string" ? normalized.root : undefined, ...(normalized.timeout !== undefined ? { timeout_ms: Number(normalized.timeout) * 1000 } : {}) });
   const json = normalized.json === true;
+  let request_id: string | undefined;
   let meta: unknown = { root_path: client.root_path, host: null, source: "local", observed_at: new Date().toISOString() };
   try {
     if (normalized.timeout !== undefined && !(Number.isFinite(Number(normalized.timeout)) && Number(normalized.timeout) > 0)) throw new ResourceError("usage_error", "timeout must be a positive finite number", 2);
@@ -51,7 +53,11 @@ export async function execute_resource_command(command: string, options: Record<
       const answer = await prompts({ type: "confirm", name: "confirmed", message: command === "agent.delete" ? `Permanently delete Agent ${parameters.id}, including Sessions, archives, attachments, skills, logs and owned Power data?` : `Remove Workspace ${parameters.id} registration and release idle resources? Project files and history are retained.`, initial: false });
       if (answer.confirmed !== true) throw new ResourceError("cancelled", "Cancelled", 130);
     }
-    if (command === "session.send" && normalized.timeout !== undefined) parameters.wait_timeout_ms = Number(normalized.timeout) * 1000;
+    if (command === "session.send") {
+      request_id = typeof parameters.request_id === "string" ? parameters.request_id : randomUUID();
+      parameters.request_id = request_id;
+      if (normalized.timeout !== undefined) parameters.wait_timeout_ms = Number(normalized.timeout) * 1000;
+    }
     const result = await client.call(command, parameters);
     meta = result.meta;
     if (json) process.stdout.write(`${JSON.stringify({ schema_version: 1, success: true, command, data: result.data, error: null, meta })}\n`);
@@ -60,7 +66,7 @@ export async function execute_resource_command(command: string, options: Record<
     const failure = as_resource_error(error);
     meta = client.get_meta();
     process.exitCode = failure.exit_code;
-    const envelope = { schema_version: 1, success: false, command, data: null, error: { code: failure.code, message: failure.message, retryable: failure.retryable, details: failure.details }, meta };
+    const envelope = { schema_version: 1, success: false, command, data: null, error: { code: failure.code, message: failure.message, retryable: failure.retryable, details: { ...(request_id ? { request_id } : {}), ...failure.details } }, meta };
     if (json) process.stdout.write(`${JSON.stringify(envelope)}\n`);
     else process.stderr.write(`${failure.code}: ${failure.message}\n`);
   } finally { process.off("SIGINT", interrupt); }

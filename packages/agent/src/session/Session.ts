@@ -677,6 +677,8 @@ export class Session implements AgentSession {
       : messages;
     const forked = this.create_fork_session(await this.allocate_session_id());
     await forked.initialize();
+    const model_binding = await this.store.read_model_binding();
+    if (model_binding) await forked.store.write_model_binding(model_binding);
     const session_config = this.state.get_config();
     if (session_config.model) {
       const forked_model = await forked.state.set_model(session_config.model);
@@ -697,7 +699,6 @@ export class Session implements AgentSession {
     this.register_forked_session(forked);
     return forked;
   }
-
   /** 保留当前 Session 身份、消息身份和配置，原子删除锚点之后的历史。 */
   private async replace_history(input: AgentSessionForkInput): Promise<this> {
     if (this.is_executing() || this.session_queue.has_command()) {

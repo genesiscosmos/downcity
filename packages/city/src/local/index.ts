@@ -37,6 +37,7 @@ export { RootLease, resolve_resource_root, get_root_identity, resource_root_exis
 export { ResourceError, as_resource_error } from "./resources/ResourceError.js";
 export { ManagementChannel, request_management, MANAGEMENT_VERSION } from "./resources/ManagementChannel.js";
 export type { ResourceDispatcher } from "./resources/ManagementChannel.js";
+export { validate_resource_input } from "./resources/ResourceInput.js";
 export { ResourceService } from "./resources/ResourceService.js";
 export { ResourceStore } from "./resources/ResourceStore.js";
 export { ResourceCoordinator } from "./resources/ResourceCoordinator.js";

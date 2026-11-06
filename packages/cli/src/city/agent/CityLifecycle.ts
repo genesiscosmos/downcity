@@ -19,32 +19,16 @@ import {
   stop_daemon_process,
 } from "@/city/process/daemon/Manager.js";
 import type { CityDaemonOptions } from "@/city/process/daemon/Types.js";
-import { list_agent_configs } from "@/city/process/registry/AgentConfigRepository.js";
 import { emitCliBlock } from "@/shared/CliReporter.js";
 import { CliError } from "@/shared/CliError.js";
 import { run_city_foreground } from "@/city/agent/Run.js";
-import { read_city_host_state, request_city_host_shutdown } from "@downcity/city";
-import prompts from "@/city/tui/Prompts.js";
+import { read_city_host_state } from "@downcity/city";
 
 /** 启动 City；foreground=true 时由当前进程直接持有。 */
 export async function city_on(options: CityDaemonOptions): Promise<void> {
   const existing_host = await read_city_host_state();
   if (existing_host) {
-    const answer = await prompts({
-      type: "select",
-      name: "replace",
-      message: `City is hosted by ${existing_host.owner} (pid ${existing_host.pid}).`,
-      subtitle: existing_host.owner === "desktop" ? "For Chrome connections, enable Settings → General → City Remote in Desktop. Switching hosts closes Desktop and interrupts active work." : "Switching hosts interrupts active work.",
-      choices: [
-        { title: `Keep ${existing_host.owner} running`, value: false },
-        { title: `Close ${existing_host.owner} and start CLI City`, value: true },
-      ],
-      initial: 0,
-    });
-    if (answer.replace !== true) {
-      throw new CliError({ title: "City start cancelled", note: "The existing City was left running." });
-    }
-    await request_city_host_shutdown(existing_host);
+    throw new CliError({ title: "City is already running", note: `Current host: ${existing_host.owner} (pid ${existing_host.pid}). Resource commands connect to this host. Stop it explicitly before switching hosts.` });
   }
   if (options.foreground) {
     await run_city_foreground(options);
@@ -53,7 +37,8 @@ export async function city_on(options: CityDaemonOptions): Promise<void> {
   const host = String(options.host || "127.0.0.1").trim() || "127.0.0.1";
   const http_port = options.http_port ?? 5314;
   const rpc_port = options.rpc_port ?? 15314;
-  const agent_ids = list_agent_configs().map((agent) => agent.agent_id);
+  // daemon meta 不作为资源索引；装配后的实时列表由宿主管理通道读取。
+  const agent_ids: string[] = [];
   const args = build_city_run_args({ host, http_port, rpc_port });
   const current_file = fileURLToPath(import.meta.url);
   const cli_path = path.resolve(path.dirname(current_file), "../../index.js");
@@ -71,7 +56,6 @@ export async function city_on(options: CityDaemonOptions): Promise<void> {
       title: "City started",
       facts: [
         { label: "PID", value: String(result.pid) },
-        { label: "Agents", value: String(agent_ids.length) },
         { label: "HTTP", value: `http://${host}:${http_port}` },
         { label: "RPC", value: `rpc://127.0.0.1:${rpc_port}/<agent_id>` },
       ],

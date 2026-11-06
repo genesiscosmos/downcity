@@ -65,6 +65,8 @@ export class Shell {
   private reset_promise?: Promise<void>;
   /** 已进入门禁或启动器的任务；reset/dispose 等待其收口后清理进程。 */
   private readonly pending_starts = new Set<Promise<unknown>>();
+  /** SDK 短命令执行数，Workspace 移除同样必须拒绝这些进程。 */
+  private active_commands = 0;
   /** reset 失败后保持拒绝，只有成功 reset 才能恢复。 */
   private reset_error?: unknown;
   /** 释放标记，在异步清理开始之前阻止新命令。 */
@@ -225,7 +227,7 @@ export class Shell {
 
   /** 不初始化资源的活跃进程观察，供 Workspace 生命周期预检。 */
   has_active_sessions(): boolean {
-    return this.pending_starts.size > 0 || [...this.state.sessions.values()].some((session) => session.snapshot.status === "running");
+    return this.active_commands > 0 || this.pending_starts.size > 0 || [...this.state.sessions.values()].some((session) => session.snapshot.status === "running");
   }
 
   /** 在当前 Workspace 的持久 Sandbox 中执行一次短命令。 */
@@ -236,7 +238,8 @@ export class Shell {
       "commands",
       input.execution_id,
     );
-    return await run_sandbox_command({
+    this.active_commands += 1;
+    try { return await run_sandbox_command({
       context,
       execution_id: input.execution_id,
       execution_dir,
@@ -248,7 +251,7 @@ export class Shell {
       terminal: input.terminal,
       cols: input.cols,
       rows: input.rows,
-    });
+    }); } finally { this.active_commands -= 1; }
   }
 
   /** 将模型 Tool action 路由到当前 Shell 实例。 */

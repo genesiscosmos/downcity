@@ -2,6 +2,7 @@
 import fs from "node:fs/promises";
 import prompts from "../tui/Prompts.js";
 import { ResourceClient } from "./ResourceClient.js";
+import type { WorkspaceListData, SessionListData, SessionGetData, SessionCreateData } from "./ResourceResults.js";
 import { ResourceError } from "@downcity/city/local";
 
 /** 共用 create/resolve 输入，命令和 TUI 均保持完整资源地址。 */
@@ -29,7 +30,7 @@ export async function resolve_chat_entry(client: ResourceClient, input: ChatEntr
   if (input.session_id && input.new_session) throw new ResourceError("usage_error", "session-id and new-session are mutually exclusive", 2);
   if (input.workspace && input.workspace_path) throw new ResourceError("usage_error", "workspace and workspace-path are mutually exclusive", 2);
   const result = await client.call("workspace.list");
-  const workspaces = (result.data as { items: { workspace_id: string; workspace_path: string; name: string; registered: boolean }[] }).items.filter((item) => item.registered);
+  const workspaces = (result.data as WorkspaceListData).items.filter((item) => item.registered);
   let workspace_id = input.workspace;
   if (input.workspace_path) {
     const real_path = await fs.realpath(input.workspace_path);
@@ -40,11 +41,11 @@ export async function resolve_chat_entry(client: ResourceClient, input: ChatEntr
   if (!session_id && !input.new_session) {
     if (!input.interactive) throw new ResourceError("usage_error", "Non-interactive chat requires session-id or new-session with an explicit Workspace", 2);
     const page = await client.call("session.list", { agent: input.agent, category, ...(workspace_id ? { workspace: workspace_id } : {}), limit: 1 });
-    session_id = (page.data as { items: { session_id: string }[] }).items[0]?.session_id;
+    session_id = (page.data as SessionListData).items[0]?.session_id;
   }
   if (session_id) {
     const result = await client.call("session.get", { agent: input.agent, category, session_id });
-    const session = (result.data as { session: { workspace_id: string | null; archived: boolean } }).session;
+    const session = (result.data as SessionGetData).session;
     if (session.archived) throw new ResourceError("dependency_conflict", "Archived history cannot execute", 4);
     if (workspace_id && workspace_id !== session.workspace_id) throw new ResourceError("dependency_conflict", "Workspace does not match the persisted Session directory", 4);
     workspace_id = session.workspace_id ?? undefined;
@@ -57,9 +58,9 @@ export async function resolve_chat_entry(client: ResourceClient, input: ChatEntr
     }
     if (!workspace_id) throw new ResourceError("usage_error", "An explicit registered Workspace is required", 2);
     const created = await client.call("session.create", { agent: input.agent, workspace: workspace_id });
-    session_id = (created.data as { session: { session_id: string } }).session.session_id;
+    session_id = (created.data as SessionCreateData).session.session_id;
   }
   const workspace = workspaces.find((item) => item.workspace_id === workspace_id);
   if (!workspace) throw new ResourceError("workspace_missing", "Session Workspace is not registered; history remains available", 4);
-  return { agent_id: input.agent, category, session_id, workspace_id: workspace.workspace_id, project_root: workspace.workspace_path };
+  return { agent_id: input.agent, category, session_id, workspace_id: workspace.workspace_id, project_root: workspace.workspace_path! };
 }

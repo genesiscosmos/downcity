@@ -20,6 +20,8 @@ import {
   type AgentChatTransportOptions,
 } from "@/city/agent/AgentChatTypes.js";
 import { listPlatformModelChoices } from "@/city/runtime/city-model/ExecutionModelBinding.js";
+import { ResourceClient } from "../resources/ResourceClient.js";
+import { resource_chat_sessions } from "../resources/ChatSessions.js";
 import type { AgentChatModelChoice } from "@/city/types/AgentChatModel.js";
 
 /**
@@ -88,9 +90,8 @@ export async function createRemoteAgent(params: {
     ...params,
     workspace_id: params.workspace,
   });
-  return new RemoteAgent({
-    url: target.url,
-  });
+  const remote_agent = new RemoteAgent({ url: target.url });
+  return { sessions: resource_chat_sessions(new ResourceClient({ root: params.root }), params.agent_id, remote_agent.sessions, params.workspace), close: async () => await remote_agent.close() };
 }
 
 /**
@@ -98,7 +99,7 @@ export async function createRemoteAgent(params: {
  *
  * 关键点（中文）
  * - 只用于跨 Workspace 发现最近会话，不进入任何 Workspace。
- * - daemon 持有该 Agent 时走 Agent 级 RPC；否则走不绑定 Workspace 的本地装配。
+ * - 目录和历史通过共用资源服务，流式执行只连接当前宿主。
  * - 读写、创建与恢复 Session 仍然必须携带 Workspace，由 `createRemoteAgent` 负责。
  */
 export async function createAgentSessionReader(params: {
@@ -108,7 +109,9 @@ export async function createAgentSessionReader(params: {
   const agent_id = String(params.agent_id || "").trim();
   if (!agent_id) throw new Error("Agent id is required");
   const target = await resolveAgentChatRemoteTarget({ agent_id, transport: params.transport });
-  return new RemoteAgent({ url: target.url });
+  const remote_agent = new RemoteAgent({ url: target.url });
+  const sessions = resource_chat_sessions(new ResourceClient(), agent_id, remote_agent.sessions);
+  return { sessions, close: async () => await remote_agent.close() };
 }
 
 /** 读取当前用户可用于 Chat Session 的模型目录。 */

@@ -6,16 +6,7 @@
 
 import path from "node:path";
 import prompts from "@/city/tui/Prompts.js";
-import {
-  get_agent_config,
-} from "@/city/process/registry/AgentConfigRepository.js";
-import {
-  get_workspace,
-  get_workspace_by_path,
-  list_workspaces,
-  type WorkspaceRegistryRecord,
-} from "@/city/process/registry/WorkspaceRepository.js";
-import type { AgentConfig } from "@/city/types/agent/AgentConfig.js";
+import type { WorkspaceRegistryRecord } from "@/city/process/registry/WorkspaceRepository.js";
 import type {
   CliAgentPromptChoice,
   CliAgentView,
@@ -23,6 +14,7 @@ import type {
 import { emitCliBlock, emitCliList } from "@/shared/CliReporter.js";
 import { printResult } from "@/city/utils/cli/CliOutput.js";
 import { CliError } from "@/shared/CliError.js";
+import type { AgentListData, WorkspaceListData } from "../resources/ResourceResults.js";
 import { ResourceClient } from "../resources/ResourceClient.js";
 
 /** 一次执行所选的 Agent 与 Workspace 目标。 */
@@ -66,7 +58,7 @@ export function format_agent_display_label(agent: {
 /** 读取全部已登记 Agent 的 CLI 视图。 */
 export async function list_registered_agents_for_cli(): Promise<CliAgentView[]> {
   const result = await new ResourceClient().call("agent.list");
-  const agents: CliAgentView[] = (result.data as { items: { agent_id: string; name: string; runtime_state: "loaded" | "unloaded" | "unknown" }[] }).items.map((item) => ({ agent_id: item.agent_id, name: item.name, status: item.runtime_state }));
+  const agents: CliAgentView[] = (result.data as AgentListData).items.map((item) => ({ agent_id: item.agent_id, name: item.name, status: item.runtime_state }));
   return agents.sort((left, right) => {
     const status_priority = Number(right.status === "loaded") - Number(left.status === "loaded");
     return status_priority || left.agent_id.localeCompare(right.agent_id);
@@ -164,12 +156,11 @@ export async function resolve_cli_agent_target(
 }
 
 /** 解析 Agent，省略 ID 时只允许 TTY 选择。 */
-async function resolve_agent(agent_id_input?: string): Promise<AgentConfig> {
+async function resolve_agent(agent_id_input?: string): Promise<Pick<AgentExecutionTarget, "agent_id">> {
   const explicit_agent_id = String(agent_id_input || "").trim();
   if (explicit_agent_id) {
-    const agent = get_agent_config(explicit_agent_id);
-    if (!agent) throw new CliError({ title: `Agent not found: ${explicit_agent_id}`, fix: "city agent list" });
-    return agent;
+    await new ResourceClient().call("agent.get", { id: explicit_agent_id });
+    return { agent_id: explicit_agent_id };
   }
   const agents = await list_registered_agents_for_cli();
   if (agents.length === 0) {
@@ -180,9 +171,8 @@ async function resolve_agent(agent_id_input?: string): Promise<AgentConfig> {
   }
   const selected_agent_id = await prompt_agent_id(agents);
   if (!selected_agent_id) throw new CliError({ title: "Agent selection cancelled", exitCode: 0 });
-  const selected_agent = get_agent_config(selected_agent_id);
-  if (!selected_agent) throw new Error(`Agent not found: ${selected_agent_id}`);
-  return selected_agent;
+  await new ResourceClient().call("agent.get", { id: selected_agent_id });
+  return { agent_id: selected_agent_id };
 }
 
 /** 解析显式 Workspace ID/路径，省略时优先使用当前目录。 */
@@ -190,14 +180,11 @@ export async function resolve_cli_workspace(
   workspace_input?: string,
 ): Promise<WorkspaceRegistryRecord> {
   const explicit = String(workspace_input || "").trim();
-  const current_workspace = get_workspace_by_path(path.resolve(explicit || process.cwd()));
-  const resolved = explicit
-    ? get_workspace(explicit) ?? current_workspace
-    : current_workspace;
+  const result = await new ResourceClient().call("workspace.list");
+  const workspaces: WorkspaceRegistryRecord[] = (result.data as WorkspaceListData).items.filter((item) => item.registered && item.workspace_path).map((item) => ({ workspace_id: item.workspace_id, workspace_path: item.workspace_path!, name: item.name, created_at: item.created_at ?? "", updated_at: item.updated_at ?? "" }));
+  const current_workspace = workspaces.find((item) => item.workspace_path === path.resolve(explicit || process.cwd()));
+  const resolved = explicit ? workspaces.find((item) => item.workspace_id === explicit) ?? current_workspace : current_workspace;
   if (resolved) return resolved;
-
-  const workspaces = list_workspaces();
-  if (!explicit && workspaces.length === 1) return workspaces[0];
   if (!explicit && process.stdin.isTTY && process.stdout.isTTY && workspaces.length > 1) {
     const response = await prompts({
       type: "select",
@@ -210,7 +197,7 @@ export async function resolve_cli_workspace(
       })),
       initial: 0,
     }) as { workspace_id?: string };
-    const selected = get_workspace(String(response.workspace_id || ""));
+    const selected = workspaces.find((item) => item.workspace_id === response.workspace_id);
     if (selected) return selected;
   }
   if (explicit) {

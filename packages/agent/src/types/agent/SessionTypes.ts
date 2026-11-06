@@ -456,8 +456,10 @@ export interface AgentArchiveSessionsInput {
 export interface AgentArchiveSessionResult {
   /** 被归档的 session id。 */
   session_id: string;
-  /** 归档时间戳（ms）。 */
-  archived_at: number;
+  /** 本次实际移动根节点的归档时间戳（ms）；根已归档的幂等重试省略，不伪造原始时间。 */
+  archived_at?: number;
+  /** SDK 子树操作实际移动了节点；单 Store 归档结果可省略。 */
+  changed?: boolean;
 }
 
 /**

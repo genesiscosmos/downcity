@@ -51,6 +51,8 @@ import { normalize_session_origin, normalize_session_origin_category, SESSION_OR
 import type { SessionContextResolution } from "@/types/agent/SessionContext.js";
 import { create_agent_session_origin, resolve_agent_session_id } from "@/agent/AgentSessionIdentity.js";
 
+import { resolve_session_snapshot } from "./SessionModelSnapshot.js";
+
 type AgentSessionsOptions = {
   /**
    * 当前 agent 稳定标识。
@@ -109,6 +111,8 @@ type AgentSessionsOptions = {
 
   /** 读取 Agent 当前持有的运行时模型实例。 */
   get_agent_model: () => ModelClient | undefined;
+  /** 按持久化稳定模型 ID 恢复，不从 label 或新 Agent 默认值推断。 */
+  resolve_model?: (model_id: string, workspace?: WorkspaceRuntime) => Promise<ModelClient>;
 
   /** 缓存实例时立即装配 Agent 级观察；返回的订阅在释放实例时一并解除。 */
   observe_session?: (session: AgentManagedSession) => () => void;
@@ -127,6 +131,8 @@ export class AgentSessions implements AgentSessionsContract<AgentSession> {
   private readonly session_class: AgentSessionConstructor;
   private readonly session_composer: SessionComposer;
   private readonly get_agent_model: AgentSessionsOptions["get_agent_model"];
+  /** 宿主提供的稳定模型解析器，仅执行时调用。 */
+  private readonly resolve_model?: AgentSessionsOptions["resolve_model"];
   private readonly sessions_by_id = new Map<string, AgentManagedSession>();
   /** Session 实例观察器的生命周期跟随缓存，不另存交互状态。 */
   private readonly session_observers = new Map<string, () => void>();
@@ -163,6 +169,7 @@ export class AgentSessions implements AgentSessionsContract<AgentSession> {
     this.session_class = options.session_class || Session;
     this.session_composer = options.session_composer ?? new DefaultSessionComposer();
     this.get_agent_model = options.get_agent_model;
+    this.resolve_model = options.resolve_model;
     this.observe_session = options.observe_session;
   }
 
@@ -210,8 +217,17 @@ export class AgentSessions implements AgentSessionsContract<AgentSession> {
     return [...this.sessions_by_id.values()];
   }
 
+  /** 宿主资源释放期间关闭新建/恢复入口，键 * 表示整个 Agent。 */
+  private readonly resource_guards = new Map<string, number>();
+
   /** 同步关闭已有空闲节点的输入；任一忙碌立即拒绝，释放函数恢复尚存活节点。 */
   guard_idle(workspace_id?: string): () => void {
+    const key = workspace_id ?? "*";
+    this.resource_guards.set(key, (this.resource_guards.get(key) ?? 0) + 1);
+    const unlock = () => {
+      const count = (this.resource_guards.get(key) ?? 1) - 1;
+      if (count > 0) this.resource_guards.set(key, count); else this.resource_guards.delete(key);
+    };
     const guarded: AgentManagedSession[] = [];
     try {
       for (const session of this.sessions_by_id.values()) {
@@ -221,9 +237,16 @@ export class AgentSessions implements AgentSessionsContract<AgentSession> {
       }
     } catch (error) {
       for (const session of guarded) session.finish_archive(false);
+      unlock();
       throw error;
     }
-    return () => { for (const session of guarded) session.finish_archive(false); };
+    let released = false;
+    return () => { if (released) return; released = true; for (const session of guarded) session.finish_archive(false); unlock(); };
+  }
+
+  /** 释放门禁同时覆盖未缓存 Session 的并发创建/恢复。 */
+  private assert_resource_available(workspace_id?: string): void {
+    if (this.resource_guards.has("*") || (workspace_id && this.resource_guards.has(workspace_id))) throw Object.assign(new Error("Session resource is being released"), { code: "session_busy" });
   }
 
   /** 观察已有内存实例；不打开存储、不恢复 Workspace 或 executor。 */
@@ -315,12 +338,9 @@ export class AgentSessions implements AgentSessionsContract<AgentSession> {
         ...(input?.workspace ? { workspace: input.workspace } : {}),
       });
       const session_id = resolve_agent_session_id(this.agent_id);
-      const session = this.get_or_create_session({
-        session_id,
-        origin,
-        ...(input?.workspace ? { workspace: input.workspace } : {}),
-        storage: context.store.create_session(session_id, origin, context.workspace_id),
-      });
+      const storage = context.store.create_session(session_id, origin, context.workspace_id);
+      const restored_model = await resolve_session_snapshot(storage, this.get_agent_model(), true);
+      const session = this.get_or_create_session({ session_id, origin, ...(input?.workspace ? { workspace: input.workspace } : {}), storage, restored_model });
       await session.initialize();
       await this.notify_created(session);
       return session;
@@ -491,17 +511,9 @@ export class AgentSessions implements AgentSessionsContract<AgentSession> {
       && !await context.store.has_session(origin.parent_session_id, origin.parent_session_category)) {
       throw new Error("session_parent_unavailable: parent Session is missing or archived");
     }
-    const session = this.get_or_create_session({
-      session_id,
-      workspace,
-      origin,
-      inherit_workspace,
-      storage: context.store.create_session(
-        session_id,
-        origin,
-        context.workspace_id,
-      ),
-    });
+    const storage = context.store.create_session(session_id, origin, context.workspace_id);
+    const restored_model = await resolve_session_snapshot(storage, this.get_agent_model(), true);
+    const session = this.get_or_create_session({ session_id, workspace, origin, inherit_workspace, storage, restored_model });
     await session.initialize();
     await this.notify_created(session);
     return session;
@@ -553,6 +565,7 @@ export class AgentSessions implements AgentSessionsContract<AgentSession> {
       workspace_id: persisted_metadata.workspace_id, default_model: this.get_agent_model() }, reference) : undefined;
     if (execution_profile && input?.workspace) throw new Error("execution_profile_immutable: Workspace capabilities cannot be attached");
     const persisted_workspace_id = String(persisted_metadata.workspace_id || "").trim() || undefined;
+    this.assert_resource_available(persisted_workspace_id);
     const requested_workspace_id = String(input?.workspace?.id || "").trim() || undefined;
     // 目录不是身份，也不在 Session 侧还原：
     // - 宿主传了实例 → 用它；
@@ -564,6 +577,7 @@ export class AgentSessions implements AgentSessionsContract<AgentSession> {
       origin: persisted_metadata.origin,
       storage,
       execution_profile,
+      restored_model: await resolve_session_snapshot(storage, this.get_agent_model(), false, this.resolve_model, input?.workspace),
     });
     await session.initialize();
     if (input?.workspace && (
@@ -707,7 +721,7 @@ export class AgentSessions implements AgentSessionsContract<AgentSession> {
         });
         root_result = result;
       }
-      return root_view.archived ? { session_id, archived_at: Date.now() } : root_result!;
+      return { ...(root_view.archived ? { session_id } : root_result!), changed: plan.length > 0 };
     } finally {
       for (const cached of locked) cached.finish_archive(false);
     }
@@ -787,6 +801,8 @@ export class AgentSessions implements AgentSessionsContract<AgentSession> {
     inherit_workspace?: boolean;
     /** 宿主精确解析的专用执行资源；禁止合并默认能力。 */
     execution_profile?: ResolvedSessionExecutionProfile;
+    /** 恢复时已有默认/覆盖的精确模型；显式 undefined 表示旧历史无可靠身份。 */
+    restored_model?: ModelClient;
   }): AgentManagedSession {
     const resolved_session_id = normalize_session_id(
       input?.session_id || input?.storage?.session_id || "",
@@ -807,8 +823,9 @@ export class AgentSessions implements AgentSessionsContract<AgentSession> {
       creating: !profile && input?.inherit_workspace !== false,
       ...(input?.workspace ? { workspace: input.workspace } : {}),
     });
+    this.assert_resource_available(context.workspace_id);
     // 默认模型是本实例创建时的快照，Agent.reconfigure 不改变已打开 Session。
-    const default_model = this.get_agent_model();
+    const default_model = input && Object.hasOwn(input, "restored_model") ? input.restored_model : this.get_agent_model();
     const created = new this.session_class({
       ...(profile ? { assert_execution_profile: assert_profile } : {}),
       agent_id: this.agent_id,

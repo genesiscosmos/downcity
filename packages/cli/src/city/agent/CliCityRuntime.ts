@@ -102,19 +102,22 @@ export class CliCityRuntime {
     const root_path = resolve_resource_root();
     if (await read_city_host_state(root_path)) throw new Error("A City host already owns this root");
     const lease = RootLease.acquire_write(root_path);
-    try { return await CliCityRuntime.start_owned(options, root_path, lease); }
-    catch (error) { lease.release(); throw error; }
+    let data: CliLocalData | undefined;
+    try {
+      data = create_cli_local_data(root_path);
+      data.agents.recover_pending_commits();
+      return await CliCityRuntime.start_owned(options, data, lease);
+    } catch (error) { data?.database.close(); lease.release(); throw error; }
   }
 
   /** root 已互斥，才允许打开 DB、装配/迁移以及恢复工作。 */
-  private static async start_owned(options: CityDaemonOptions, root_path: string, lease: RootLease): Promise<CliCityRuntime> {
+  private static async start_owned(options: CityDaemonOptions, data: CliLocalData, lease: RootLease): Promise<CliCityRuntime> {
     const host = String(options.host || "127.0.0.1").trim() || "127.0.0.1";
     const http_port = options.http_port ?? 5314;
     const rpc_port = options.rpc_port ?? 15314;
     if (http_port === rpc_port) throw new Error("City HTTP and RPC ports must be different");
 
-    const data = create_cli_local_data(root_path);
-    data.agents.recover_pending_commits();
+    const root_path = data.root_path;
     const coordinator = new ResourceCoordinator();
     let resources: ResourceService;
     const host_instance_id = String(process.env.DOWNCITY_DAEMON_INSTANCE_ID || "").trim() || create_city_host_instance_id();
@@ -132,7 +135,7 @@ export class CliCityRuntime {
           path: data.powers.config_path(power_id),
           get: () => structuredClone(data.powers.get_config(power_id)),
           set: async (config) => {
-            data.powers.set_config(power_id, structuredClone(config));
+            await coordinator.mutate(() => data.powers.set_config(power_id, structuredClone(config)));
           },
         }),
       },

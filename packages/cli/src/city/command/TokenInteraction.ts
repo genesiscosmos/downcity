@@ -1,6 +1,7 @@
 /** City Token 交互输入；数据库操作前收集完整配置，取消不会产生写入。 */
 import prompts from "@/city/tui/Prompts.js";
-import { with_cli_local_data } from "@/city/runtime/LocalData.js";
+import { ResourceClient } from "../resources/ResourceClient.js";
+import type { AgentListData } from "../resources/ResourceResults.js";
 import type { CityTokenConfig, CityTokenSummary } from "@downcity/city/local";
 import type { CityTokenCommandOptions } from "@/city/types/auth/CityTokenCommand.js";
 
@@ -19,8 +20,8 @@ export async function token_question(question: Parameters<typeof prompts>[0]): P
 
 /** 指定记录 ID 或在摘要列表选择，不加载明文。 */
 export async function select_token(token_id?: string): Promise<CityTokenSummary> {
-  if (token_id) return with_cli_local_data((data) => data.city_tokens.get(token_id));
-  const tokens = with_cli_local_data((data) => data.city_tokens.list());
+  if (token_id) return (await new ResourceClient().call("config.token.get", { token_id })).data as CityTokenSummary;
+  const tokens = (await new ResourceClient().call("config.token.list")).data as CityTokenSummary[];
   if (!tokens.length) throw new Error("No City Tokens; run city token create");
   const selected = await token_question({ type: "select", name: "value", message: "选择 City Token", choices: tokens.map((item) => ({ title: item.name, description: `${item.token_id} · ${item.all_agents ? "全部 Agents（含未来）" : item.agent_ids.join(", ")} · ${item.expires_at ?? "永不过期"}`, value: item.token_id })) });
   return tokens.find((item) => item.token_id === selected)!;
@@ -40,7 +41,7 @@ export async function collect_token_config(options: CityTokenCommandOptions, pre
   if (all_agents === undefined && agent_ids === undefined) {
     all_agents = await token_question({ type: "select", name: "value", message: "授权范围", choices: [{ title: "指定 Agents", value: false }, { title: "全部 Agents（包含未来创建的 Agent）", value: true }] }) === true;
     if (!all_agents) {
-      const agents = with_cli_local_data((data) => data.agents.list());
+      const agents = ((await new ResourceClient().call("agent.list")).data as AgentListData).items;
       const known = new Set(agents.map((agent) => agent.agent_id));
       agent_ids = await token_question({ type: "multiselect", name: "value", message: "选择允许访问的 Agents", choices: [
         ...agents.map((agent) => ({ title: agent.name || agent.agent_id, description: `${agent.agent_id} · ${agent.description ?? ""}`, value: agent.agent_id })),
@@ -49,7 +50,7 @@ export async function collect_token_config(options: CityTokenCommandOptions, pre
     }
   }
   if (!all_agents && !agent_ids?.length) throw new Error("必须至少选择一个 Agent");
-  const registered = with_cli_local_data((data) => new Set(data.agents.list().map((agent) => agent.agent_id)));
+  const registered = new Set(((await new ResourceClient().call("agent.list")).data as AgentListData).items.map((agent) => agent.agent_id));
   for (const id of agent_ids ?? []) if (!registered.has(id) && !previous?.agent_ids.includes(id)) throw new Error(`Agent not found: ${id}`);
   let expires_at: string | null | undefined = options.neverExpires ? null : options.expiresAt;
   if (expires_at === undefined && previous && !interactive_edit) expires_at = previous.expires_at;

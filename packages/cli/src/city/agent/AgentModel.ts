@@ -9,6 +9,7 @@
 
 import prompts from "@/city/tui/Prompts.js";
 import { listPlatformModelChoices } from "@/city/runtime/city-model/ExecutionModelBinding.js";
+import type { AgentGetData } from "../resources/ResourceResults.js";
 import { ResourceClient } from "../resources/ResourceClient.js";
 import { emitCliBlock } from "@/shared/CliReporter.js";
 import { CliError } from "@/shared/CliError.js";
@@ -42,7 +43,7 @@ async function resolve_model_id(params: {
       throw new CliError({
         title: `Model not available: ${requested_model_id}`,
         note: "目标模型不在当前 Federation User City 返回的对话模型中。",
-        fix: `city agent model ${params.agent_id} --set <model-id>`,
+        fix: `city agent update ${params.agent_id} --model <model-id>`,
       });
     }
     return requested_model_id;
@@ -50,7 +51,7 @@ async function resolve_model_id(params: {
   if (process.stdin.isTTY !== true || process.stdout.isTTY !== true) {
     throw new CliError({
       title: "Model id is required in non-interactive mode",
-      fix: `city agent model ${params.agent_id} --set <model-id>`,
+      fix: `city agent update ${params.agent_id} --model <model-id>`,
     });
   }
 
@@ -75,7 +76,7 @@ export async function configure_agent_model(
 ): Promise<AgentModelConfigurationResult | null> {
   const client = new ResourceClient();
   const detail = await client.call("agent.get", { id: agent_id_input });
-  const agent = (detail.data as { agent: { agent_id: string; model_id: string | null } }).agent;
+  const agent = (detail.data as AgentGetData).agent;
   const previous_model_id = agent.model_id ?? "";
   const selected_model_id = await resolve_model_id({
     current_model_id: previous_model_id,

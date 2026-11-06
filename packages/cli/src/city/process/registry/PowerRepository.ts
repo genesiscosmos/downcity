@@ -6,10 +6,13 @@
 
 import {
   normalize_power_id as normalize_local_power_id,
+  PowerRepository as LocalPowerRepository,
+  RootLease,
+  resolve_resource_root,
   type LocalInstalledPowerDefinition,
 } from "@downcity/city/local";
 import type { JsonObject } from "@downcity/agent";
-import { with_cli_local_data } from "@/city/runtime/LocalData.js";
+import { ResourceClient } from "../../resources/ResourceClient.js";
 import { create_cli_builtin_power_registrations } from "@/city/runtime/AgentAssembly.js";
 import { resolve_power_catalog_item } from "@/city/process/power/PowerCatalog.js";
 
@@ -30,29 +33,33 @@ export function is_builtin_power(power_id_input: string): boolean {
 
 /** 列出全部第三方 Power。 */
 export function list_installed_powers(): LocalInstalledPowerDefinition[] {
-  return with_cli_local_data((data) => data.powers.list_installed());
+  return new LocalPowerRepository(resolve_resource_root()).list_installed();
 }
 
 /** 读取指定第三方 Power。 */
 export function get_installed_power(power_id_input: string): LocalInstalledPowerDefinition | null {
   const power_id = normalize_power_id(power_id_input);
-  return with_cli_local_data((data) => data.powers.get_installed(power_id));
+  return new LocalPowerRepository(resolve_resource_root()).get_installed(power_id);
 }
 
 /** 删除一个第三方 Power 目录。 */
 export function remove_installed_power(power_id_input: string): LocalInstalledPowerDefinition {
   const power_id = normalize_power_id(power_id_input);
   if (is_builtin_power(power_id)) throw new Error("Builtin Powers cannot be uninstalled");
-  const installed = get_installed_power(power_id);
-  if (!installed) throw new Error(`Power is not installed: ${power_id}`);
-  with_cli_local_data((data) => data.powers.remove_installed(power_id));
-  return installed;
+  const lease = RootLease.acquire_write(resolve_resource_root());
+  try {
+    const repository = new LocalPowerRepository(resolve_resource_root());
+    const installed = repository.get_installed(power_id);
+    if (!installed) throw new Error(`Power is not installed: ${power_id}`);
+    repository.remove_installed(power_id);
+    return installed;
+  } finally { lease.release(); }
 }
 
 /** 读取一个 Power 的唯一配置。 */
 export function get_power_config(power_id_input: string): JsonObject {
   const power_id = normalize_power_id(power_id_input);
-  return with_cli_local_data((data) => data.powers.get_config(power_id));
+  return new LocalPowerRepository(resolve_resource_root()).get_config(power_id);
 }
 
 /** 保存一个由 Power 自己负责校验的唯一配置。 */
@@ -63,5 +70,5 @@ export async function save_power_config(
   const power_id = normalize_power_id(power_id_input);
   const power = await resolve_power_catalog_item(power_id);
   if (!power) throw new Error(`Power not found: ${power_id}`);
-  return with_cli_local_data((data) => data.powers.set_config(power_id, config));
+  return (await new ResourceClient().call("config.power.set", { power_id, config })).data as JsonObject;
 }

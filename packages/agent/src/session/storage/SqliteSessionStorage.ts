@@ -7,6 +7,7 @@
 
 import path from "node:path";
 import { migrate_session_storage } from "./SessionStorageMigration.js";
+import { decode_model_binding } from "./ModelBindingCodec.js";
 import { DatabaseSync, type SQLInputValue } from "node:sqlite";
 import { normalize_session_id } from "@/session/SessionIdentity.js";
 import type {
@@ -135,6 +136,19 @@ export class SqliteSessionStorage implements SessionStorage {
     }, this.session_id, this.agent_id, this.origin, row.workspace_id || undefined),
       ...(profile_row ? { execution_profile: JSON.parse(profile_row.reference) as import("@/types/agent/SessionExecutionProfile.js").SessionExecutionProfileReference } : {}),
     };
+  }
+
+  /** 模型 ID 与展示 label 分离，缺失记录不猜测旧默认值。 */
+  async read_model_binding(): Promise<import("../../types/store/SessionModelBinding.js").SessionModelBinding | undefined> {
+    await this.initialize();
+    const row = this.require_database().prepare("SELECT binding FROM session_model_binding WHERE singleton_id = 1").get();
+    return row ? decode_model_binding(String(row.binding)) : undefined;
+  }
+
+  /** 模型事实在一个 SQLite 事务中替换，覆盖独立于默认快照。 */
+  async write_model_binding(binding: import("../../types/store/SessionModelBinding.js").SessionModelBinding): Promise<void> {
+    await this.initialize();
+    this.require_database().prepare("INSERT INTO session_model_binding (singleton_id, binding) VALUES (1, ?) ON CONFLICT(singleton_id) DO UPDATE SET binding = excluded.binding").run(JSON.stringify(binding));
   }
 
   /** 原子绑定执行身份；重试允许同值，禁止修改已存在的配置。 */

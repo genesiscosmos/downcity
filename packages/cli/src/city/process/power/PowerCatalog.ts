@@ -2,8 +2,7 @@
 
 import { list_installed_powers } from "@/city/process/registry/PowerRepository.js";
 import { create_cli_builtin_power_registrations } from "@/city/runtime/AgentAssembly.js";
-import { create_cli_local_data } from "@/city/runtime/LocalData.js";
-import { verify_local_installed_power_integrity } from "@downcity/city/local";
+import { PowerRepository, resolve_resource_root, verify_local_installed_power_integrity } from "@downcity/city/local";
 import type { PowerCatalogItem } from "@/city/types/power/PowerCatalog.js";
 
 /** 列出全部内置与第三方 Power。 */
@@ -47,13 +46,9 @@ export async function resolve_power_catalog_item(
 ): Promise<PowerCatalogItem | null> {
   const item = list_power_catalog().find((candidate) => candidate.power_id === power_id) ?? null;
   if (!item || item.source === "builtin") return item;
-  const data = create_cli_local_data();
-  try {
-    const installed = data.powers.get_installed(power_id);
-    if (!installed) return null;
-    await verify_local_installed_power_integrity(data.powers.power_path(power_id), installed);
-    return item;
-  } finally {
-    data.database.close();
-  }
+  const repository = new PowerRepository(resolve_resource_root());
+  const installed = repository.get_installed(power_id);
+  if (!installed) return null;
+  await verify_local_installed_power_integrity(repository.power_path(power_id), installed);
+  return item;
 }

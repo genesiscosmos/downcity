@@ -10,9 +10,10 @@ import { Command } from "commander";
 import { registerEnvCommand } from "@/city/command/EnvCommand.js";
 import { register_federation_command } from "@/city/command/FederationCommand.js";
 import { city_reset } from "@/city/command/CityResetCommand.js";
-import { city_off, city_on, city_restart, city_status } from "@/city/agent/CityLifecycle.js";
+import { city_off, city_on, city_restart } from "@/city/agent/CityLifecycle.js";
 import { parseBoolean, parsePort } from "@/shared/IndexSupport.js";
 import { createVersionBanner } from "@/shared/IndexSupport.js";
+import { run_root_lifecycle, show_host_status } from "../resources/HostCommands.js";
 import type { CityDaemonOptions } from "@/city/process/daemon/Types.js";
 
 /**
@@ -35,7 +36,7 @@ export function registerGatewayCommands(
   program: Command,
   context: GatewayCommandRegistrationContext,
 ): void {
-  const add_city_options = (command: Command): Command => command
+  const add_city_options = (command: Command): Command => command.option("--root <path>", "City data root")
     .option("--host <host>", "City HTTP listen host", "127.0.0.1")
     .option("--port <port>", "City HTTP port", parsePort, 5314)
     .option("--rpc-port <port>", "City RPC port", parsePort, 15314);
@@ -46,18 +47,23 @@ export function registerGatewayCommands(
       port?: number;
       rpcPort?: number;
       foreground?: boolean;
-    }) => await city_on(to_city_options(options))));
+      /** 显式生命周期数据根。 */
+      root?: string;
+    }) => await run_root_lifecycle(options.root, async () => await city_on(to_city_options(options)))));
   program.command("off").description("停止 CLI City 宿主")
-    .action(createVersionBanner(context.version, city_off));
+    .option("--root <path>", "City data root")
+    .action(createVersionBanner(context.version, async (options: { /** 显式生命周期数据根。 */ root?: string }) => await run_root_lifecycle(options.root, city_off)));
   add_city_options(program.command("restart").description("重启 CLI City 宿主"))
     .action(createVersionBanner(context.version, async (options: {
       host?: string;
       port?: number;
       rpcPort?: number;
-    }) => await city_restart(to_city_options(options))));
-  program.command("status").description("查看 CLI City 宿主状态")
-    .option("--fix [enabled]", "清理过期的 daemon 状态文件", parseBoolean)
-    .action(createVersionBanner(context.version, city_status));
+      /** 显式生命周期数据根。 */
+      root?: string;
+    }) => await run_root_lifecycle(options.root, async () => await city_restart(to_city_options(options)))));
+  program.command("status").description("查看当前 CLI 或 Desktop City 宿主")
+    .option("--root <path>", "City data root")
+    .action(createVersionBanner(context.version, async (options: { /** 显式查询数据根。 */ root?: string }) => await show_host_status(options.root)));
   program.command("reset").description("重置 Downcity 本地配置数据库")
     .option("-y, --yes", "跳过重置确认")
     .action(createVersionBanner(context.version, async (options: { yes?: boolean }) => {

@@ -3,6 +3,7 @@ import path from "node:path";
 import fs from "node:fs/promises";
 import { randomUUID } from "node:crypto";
 import { AgentSessionBrowser, type AgentSession, type AgentSessionInfo } from "@downcity/agent";
+import { read_saved_session_model } from "./SavedSessionModel.js";
 import type { ResourceDependencies } from "./types.js";
 import { require_agent_id, require_resource_value, require_workspace_id, ResourceError } from "./ResourceError.js";
 
@@ -50,7 +51,9 @@ export class SessionResources {
     const view = await this.browser(agent_id).get(session_id, category);
     const metadata = view.metadata;
     const cached = this.dependencies.host?.city.agents.get(agent_id)?.sessions.peek(session_id, category);
-    return { session: project_session(metadata, view.archived), runtime: await this.observe(cached), pending_interaction_count: (await view.interactions()).length };
+    const model_binding = await this.browser(agent_id).model_binding(session_id, category);
+    const saved_model_id = this.dependencies.workspaces ? read_saved_session_model(this.dependencies.root_path, metadata, this.dependencies.immutable) : undefined;
+    return { session: { ...project_session(metadata, view.archived), model_binding: model_binding ?? null, saved_model_override: saved_model_id ?? null, model_selection_required: !(model_binding?.override_model_id ?? saved_model_id ?? model_binding?.default_model_id) }, runtime: await this.observe(cached), pending_interaction_count: (await view.interactions()).length };
   }
 
   /** canonical Message 页；include_internal 直接贯通 SDK 解码，不展开附件。 */
@@ -80,7 +83,14 @@ export class SessionResources {
       const workspace_config = this.dependencies.workspaces!.get(workspace_id)!;
       const workspace = await host.resolve_workspace(workspace_config);
       const session = await agent.sessions.get(session_id, category, { workspace });
-      if (!session.get("model_label") && !this.dependencies.agents.get(agent_id)?.execution?.model_id) throw new ResourceError("validation_error", "Configure an Agent or Session model before sending", 2);
+      await host.prepare_session?.(agent_id, session);
+      const model_binding = await this.browser(agent_id).model_binding(session_id, category);
+      const saved_model_id = !model_binding?.override_model_id ? read_saved_session_model(this.dependencies.root_path, view.metadata, false) : undefined;
+      if (saved_model_id && session.get("model")?.id !== saved_model_id) {
+        const model = await host.resolve_model(saved_model_id);
+        if (model) await session.set({ model }, { persist_action: false });
+      }
+      if (!session.get("model")) throw new ResourceError("validation_error", "Select a Session model explicitly before sending; historical model labels cannot reconstruct its original default", 2);
       const handle = await session.prompt({ query: input.message as string, request_id });
       this.invalidate(agent_id);
       return { session, handle };
@@ -107,6 +117,20 @@ export class SessionResources {
       if (!result.success) throw new ResourceError("turn_failed", result.error ?? "Turn failed or was stopped", 8, false, completed);
       return completed;
     } finally { clearTimeout(timer); clearInterval(interval); }
+  }
+
+  /** 断线恢复只读事实；与输入接收串行，避免把尚在接收中的请求误判未接收。 */
+  async receipt(input: Record<string, unknown>) {
+    const agent_id = this.agent_id(input);
+    const category = this.category(input);
+    const session_id = this.session_id(input);
+    require_resource_value(typeof input.request_id === "string" && input.request_id.trim(), "request_id is required");
+    return await this.dependencies.coordinator.mutate(async () => {
+      const receipt = await this.browser(agent_id).receipt(session_id, category, input.request_id as string);
+      const cached = this.dependencies.host?.city.agents.get(agent_id)?.sessions.peek(session_id, category);
+      const status = await cached?.status();
+      return { ...receipt, session_address: { agent_id, category, session_id }, request_id: input.request_id, execution_state: receipt.completed ? "completed" : receipt.accepted ? status?.state === "running" ? "running" : "interrupted" : "not_found" };
+    });
   }
 
   /** 默认先读取当前 Turn，再条件停止；从未加载的空闲历史无需恢复。 */
@@ -137,7 +161,7 @@ export class SessionResources {
       if (!agent) throw new ResourceError("resource_not_found", `Agent not loaded: ${agent_id}`, 3);
       try {
         const root_result = await agent.sessions.archive({ id: session_id, category });
-        return { session_address: { agent_id, category, session_id }, root_result: view.archived ? null : root_result, changed: !view.archived };
+        return { session_address: { agent_id, category, session_id }, root_result: view.archived ? null : root_result, changed: root_result.changed ?? !view.archived };
       } catch (error) {
         if (error instanceof Error && "code" in error && error.code === "session_busy") throw new ResourceError("resource_busy", error.message, 4);
         throw new ResourceError("partial_failure", "Session archive failed; reread the subtree before retrying", 9, false, { partial_state: "unknown", session_address: { agent_id, category, session_id } });

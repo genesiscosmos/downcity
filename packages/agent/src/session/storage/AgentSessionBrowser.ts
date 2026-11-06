@@ -11,6 +11,10 @@ import type { SessionReadView } from "../../types/store/SessionReadView.js";
 import type { SessionBrowseQuery } from "../../types/store/SessionBrowse.js";
 import { SessionBrowseSnapshots } from "./SessionBrowseSnapshots.js";
 import { read_session_metadata_from_database } from "./Browse.js";
+import { resolve_prompt_request_identity } from "../loop/SessionTurnHandles.js";
+import { read_session_completion } from "./AgentPendingReferences.js";
+import { decode_model_binding } from "./ModelBindingCodec.js";
+import { open_session_read_database } from "./SessionReadDatabase.js";
 import { read_file_session_history } from "./SessionHistoryReader.js";
 import { get_agent_session_database_path, get_agent_archived_session_database_path, get_agent_sessions_path, get_agent_archived_sessions_path, get_agent_session_categories_path, get_agent_archived_session_categories_path } from "./LocalStorePaths.js";
 
@@ -58,6 +62,37 @@ export class AgentSessionBrowser {
     if (active && archived) throw new Error("session_address_conflict: Session exists in both active and archived storage");
     if (!active && !archived) throw new Error("session_not_found: Session does not exist");
     return read_file_session_history(active ? active_path : archived_path, this.options.agent_id, session_id, resolved_category, archived, this.options.immutable);
+  }
+
+  /** 不迁移旧数据库的模型事实读取；缺表/缺行代表无法重建的旧默认模型。 */
+  async model_binding(session_id: string, category: string): Promise<import("../../types/store/SessionModelBinding.js").SessionModelBinding | undefined> {
+    const view = await this.get(session_id, category);
+    const database_path = view.archived ? get_agent_archived_session_database_path(this.options.storage_root_path, category, session_id) : get_agent_session_database_path(this.options.storage_root_path, category, session_id);
+    const database = open_session_read_database(database_path, this.options.immutable);
+    try {
+      if (!database.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'session_model_binding'").get()) return undefined;
+      const row = database.prepare("SELECT binding FROM session_model_binding WHERE singleton_id = 1").get();
+      return row ? decode_model_binding(String(row.binding)) : undefined;
+    } finally { database.close(); }
+  }
+
+  /** request_id 核对 canonical 接收事实与权威完成日志；不依赖远程 pending handle。 */
+  async receipt(session_id: string, category: string, request_id: string) {
+    const view = await this.get(session_id, category);
+    const identity = resolve_prompt_request_identity(session_id, request_id);
+    if (!identity) throw new Error("session_validation_error: request_id is required");
+    const database_path = view.archived ? get_agent_archived_session_database_path(this.options.storage_root_path, category, session_id) : get_agent_session_database_path(this.options.storage_root_path, category, session_id);
+    const database = open_session_read_database(database_path, this.options.immutable);
+    let turn_id: string | undefined;
+    try {
+      const row = database.prepare("SELECT turn_id, meta FROM messages WHERE message_id = ? AND role = 'user'").get(identity.message_id);
+      if (!row) return { accepted: false, completed: false, turn_id: null, result: null, execution_state: "not_found" };
+      const meta = row.meta ? JSON.parse(String(row.meta)) : null;
+      if (meta?.from?.kind !== "user" || meta.from.user_id !== "local") throw new Error("session_request_forbidden: request_id belongs to another actor");
+      turn_id = typeof row.turn_id === "string" ? row.turn_id : undefined;
+    } finally { database.close(); }
+    const completion = turn_id ? await read_session_completion(this.options.storage_root_path, session_id, turn_id) : undefined;
+    return { accepted: true, completed: !!completion, turn_id: turn_id ?? null, result: completion ? { turn_id, ...completion.event.result } : null, execution_state: completion ? "completed" : "accepted" };
   }
 
   /** 列表复用 SDK 的过滤、排序、预算和签名游标，不截页后再过滤。 */
