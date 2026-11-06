@@ -11,6 +11,8 @@ import type { WorkspaceRuntime } from "@/workspace/index.js";
 
 /** City RPC transport 所需的宿主能力。 */
 export interface CityRpcRuntimeOptions {
+  /** 与 root 宿主描述一致的实例身份，不依赖 daemon 环境变量。 */
+  instance_id?: string;
   /** 处理宿主关闭请求；调用方负责安排实际进程退出。 */
   shutdown?: () => void | Promise<void>;
 

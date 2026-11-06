@@ -38,7 +38,7 @@ export async function handle_internal_rpc_request(params: {
         status: "ok",
         pid: process.pid,
         agent_ids: options.get_city_status().agent_ids,
-        instance_id: String(process.env.DOWNCITY_DAEMON_INSTANCE_ID || "").trim(),
+        instance_id: options.instance_id ?? "",
       });
       return true;
     }
@@ -56,7 +56,7 @@ export async function handle_internal_rpc_request(params: {
         agent_id: context.agent.id,
         workspace_id: context.workspace.id,
         workspace_path: context.workspace.path,
-        instance_id: String(process.env.DOWNCITY_DAEMON_INSTANCE_ID || "").trim(),
+        instance_id: options.instance_id ?? "",
       });
       return true;
     }

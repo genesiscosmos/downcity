@@ -43,6 +43,8 @@ export interface CityOptions {
 
 /** City 构造时可注入的 transport 扩展能力。 */
 export interface CityRuntimeOptions {
+  /** 宿主生命周期门禁；任何 transport 进入已有或懒装配 Workspace 前调用。 */
+  assert_resource_access?: (agent_id: string, workspace_id: string) => void;
   /** 创建持久 Agent 并注册到当前 City；宿主负责配置落盘、模型装配与失败回滚。 */
   create_agent?: CityCreateAgent;
   /** 按需为 Agent 创建指定 Workspace；City 不读取任何持久化配置。 */

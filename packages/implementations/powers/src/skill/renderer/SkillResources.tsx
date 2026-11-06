@@ -9,6 +9,7 @@ import type { SkillMainviewSnapshot, SkillMainviewReadResult } from "@/skill/typ
 import type { McpStatusResult } from "@/mcp/types/Mcp.js";
 import { mcp_resource_detail as Mcp_resource_detail } from "@/mcp/renderer/McpResources.js";
 import { collect_skills, find_skill_resource } from "./SkillResourceModel.js";
+import { Skill_document } from "./SkillDocument.js";
 
 /** Load each resource family independently so one unavailable source does not hide the other. */
 export function skill_resource_sidebar({ power, navigation, ui }: PowerSidebarComponentProps) {
@@ -87,7 +88,7 @@ interface SkillResourceDetailProps extends PowerMainviewComponentProps {
 
 /** Show installed Skill content together with its source and current Agent usage. */
 function Skill_resource_detail({ power, ui, route_id }: SkillResourceDetailProps) {
-  const { Page, Toolbar, Section, Group, Row, Markdown, LoadingState, Callout, EmptyState } = ui.components;
+  const { Page, Toolbar, Group, Row, LoadingState, Callout, EmptyState } = ui.components;
   const [snapshot, set_snapshot] = useState<SkillMainviewSnapshot>();
   const [content, set_content] = useState("");
   const [error, set_error] = useState("");
@@ -114,9 +115,9 @@ function Skill_resource_detail({ power, ui, route_id }: SkillResourceDetailProps
   const item = find_skill_resource(snapshot, route_id);
   const users = snapshot?.agents.filter((agent) => agent.skills.some((skill) => skill.resource_id === item?.resource_id)) ?? [];
   return <Page>
-    <Toolbar title={item?.name ?? "Skill"} description={item?.description} />
+    {loading || !item || error ? <Toolbar title={item?.name ?? "Skill"} /> : null}
     {error ? <Callout tone="danger">{error}</Callout> : null}
-    {loading ? <LoadingState label="正在读取 Skill…" /> : !item ? <EmptyState title="Skill 已不存在" /> : <Section surface={false}>{content ? <Markdown text={content} /> : !error ? <EmptyState title="Skill 内容为空" size="compact" /> : null}</Section>}
+    {loading ? <LoadingState label="正在读取 Skill…" /> : !item ? <EmptyState title="Skill 已不存在" /> : !error ? <Skill_document ui={ui} content={content} fallback_name={item.name} fallback_description={item.description} /> : null}
     {item ? <Group label="详细信息" collapsible default_expanded={false}>
       <Row label="来源" description={`${item.source_label} · ${item.source_path}`} />
       <Row label="使用此 Skill 的 Agent" description={users.map((agent) => agent.name).join("、") || "尚未分配"} />

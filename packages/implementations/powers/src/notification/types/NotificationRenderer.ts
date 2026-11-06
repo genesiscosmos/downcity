@@ -82,14 +82,38 @@ export interface NotificationUpdateResult {
   snapshot: NotificationListResult;
 }
 
-/** 宿主可选注入现有 Interaction 控件及专用私密传输。 */
+/** 宿主表单与详情共享的标题，避免在独立处理页重复显示同一问题。 */
+export interface NotificationInteractionDisplay {
+  /** 详情标题元素的 DOM 标识；省略相同表单标题时用于可访问名称。 */
+  title_id: string;
+  /** 详情已经展示的完整标题；多问题仍保留不同的当前问题提示。 */
+  title: string;
+}
+
+/** 宿主用同一套导航注意力规则展示 Inbox 状态，不接收业务修改权限。 */
+export interface NotificationAttentionDisplay {
+  /** 可响应请求为 request，普通通知为 update；已中断请求不会调用此端口。 */
+  kind: "request" | "update";
+  /** 原始业务结果；阅读操作不改变此值。 */
+  outcome: PowerNotificationOutcome;
+  /** dot 表示仍需注意，status 表示业务状态文字。 */
+  presentation: "dot" | "status";
+  /** 由 Inbox 提供的可读状态，同时作为圆点的辅助技术名称。 */
+  label: string;
+}
+
+/** 宿主可选注入现有 Interaction 控件、Agent 头像及专用私密传输。 */
 export interface NotificationRendererOptions {
   /** 用户明确查看时打开原Session；只传引用，不提供新执行权限。 */
   open_interaction?: (item: NotificationInteractionItem) => Promise<void>;
   /** 用户明确查看时打开通知关联的结果或业务页面。 */
   open_notification?: (item: NotificationItem) => Promise<void>;
   /** 仅为 can_respond 为 true 的原请求挂载表单；控件提交时须标明是否包含私密问题。 */
-  render_interaction?: (item: NotificationInteractionItem, respond: (input: RespondSessionInteractionInput, private_question?: boolean) => Promise<void>) => ReactNode;
+  render_interaction?: (item: NotificationInteractionItem, respond: (input: RespondSessionInteractionInput, private_question?: boolean) => Promise<void>, display: NotificationInteractionDisplay) => ReactNode;
+  /** 由受信宿主解析真实 Agent 头像；list 为 32px 独立头像列，detail 为 18px 来源行；不暴露本地路径或加载策略。 */
+  render_agent_avatar?: (agent_id: string, size: "list" | "detail") => ReactNode;
+  /** 复用宿主 Rail 的状态映射与语义配色；未提供时使用中性展示。 */
+  render_attention?: (display: NotificationAttentionDisplay) => ReactNode;
   /** 受信宿主直接提交到原 Session，禁止转发到普通 Power action。 */
   submit_private?: (item: NotificationInteractionItem, input: RespondSessionInteractionInput) => Promise<void>;
 }

@@ -33,3 +33,11 @@ export {
 } from "./runtime/LocalPaths.js";
 
 export * from "./product.js";
+export { RootLease, resolve_resource_root, get_root_identity, resource_root_exists } from "./resources/RootLease.js";
+export { ResourceError, as_resource_error } from "./resources/ResourceError.js";
+export { ManagementChannel, request_management, MANAGEMENT_VERSION } from "./resources/ManagementChannel.js";
+export type { ResourceDispatcher } from "./resources/ManagementChannel.js";
+export { ResourceService } from "./resources/ResourceService.js";
+export { ResourceStore } from "./resources/ResourceStore.js";
+export { ResourceCoordinator } from "./resources/ResourceCoordinator.js";
+export type { ResourceDependencies, ResourceHost } from "./resources/types.js";

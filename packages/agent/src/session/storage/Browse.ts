@@ -5,7 +5,8 @@
  * SessionStorage 聚合读取。浏览逻辑不创建 schema，也不尝试迁移旧文件格式。
  */
 
-import { DatabaseSync } from "node:sqlite";
+import type { DatabaseSync } from "node:sqlite";
+import { open_session_read_database } from "./SessionReadDatabase.js";
 import type { AgentSessionInfo } from "@/types/agent/SessionTypes.js";
 import type { SessionBrowseBaseInput, SessionBrowseStateRow } from "@/types/store/SessionBrowse.js";
 import type { SessionHistoryMeta } from "@/types/store/SessionHistoryMeta.js";
@@ -49,10 +50,16 @@ export function build_session_info(input: SessionBrowseBaseInput): AgentSessionI
 export function read_session_metadata_from_database(
   database_path: string,
   fallback_category: string,
+  read_options?: {
+    /** 调用方持有离线读取租约，拒绝待恢复 WAL 并避免创建 sidecar。 */
+    immutable?: boolean;
+    /** 新公开浏览接口需要报告权限/schema/I/O 错误；兼容内部列表的可选投影。 */
+    strict?: boolean;
+  },
 ): SessionHistoryMeta | null {
   let database: DatabaseSync | null = null;
   try {
-    database = new DatabaseSync(database_path, { readOnly: true });
+    database = open_session_read_database(database_path, read_options?.immutable);
     const row = database.prepare(`
       SELECT session_id, agent_id, workspace_id, origin, timezone, title,
              model_label, approval_mode, message_count, preview_text,
@@ -75,7 +82,8 @@ export function read_session_metadata_from_database(
       created_at: row.created_at,
       updated_at: row.updated_at,
     };
-  } catch {
+  } catch (error) {
+    if (read_options?.strict) throw error;
     return null;
   } finally {
     database?.close();

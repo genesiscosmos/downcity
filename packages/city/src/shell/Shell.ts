@@ -223,6 +223,11 @@ export class Shell {
     return this.sandbox.describe();
   }
 
+  /** 不初始化资源的活跃进程观察，供 Workspace 生命周期预检。 */
+  has_active_sessions(): boolean {
+    return this.pending_starts.size > 0 || [...this.state.sessions.values()].some((session) => session.snapshot.status === "running");
+  }
+
   /** 在当前 Workspace 的持久 Sandbox 中执行一次短命令。 */
   async run_sandbox_command(input: WorkspaceShellSandboxCommandInput) {
     const context = this.create_host_context();

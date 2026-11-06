@@ -504,7 +504,7 @@ export class Session implements AgentSession {
   /** 在任何存储 await 前同步关闭输入，拒绝正在运行或排队的工作。 */
   begin_archive(): void {
     if (this.archive_state !== "active") throw new Error(`Session is ${this.archive_state}: ${this.id}`);
-    if (this.session_loop.is_busy()) throw new Error(`Session "${this.id}" is currently executing or queued`);
+    if (this.session_loop.is_busy()) throw Object.assign(new Error(`Session "${this.id}" is currently executing or queued`), { code: "session_busy" });
     this.archive_state = "archiving";
   }
 

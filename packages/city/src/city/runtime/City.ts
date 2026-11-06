@@ -75,6 +75,8 @@ export class City implements CityRuntime {
 
   /** 宿主提供的按需 Workspace 创建能力。 */
   private readonly resolve_workspace?: CityRuntimeOptions["resolve_workspace"];
+  /** 产品资源生命周期门禁，不属于底层持久化。 */
+  private readonly assert_resource_access?: CityRuntimeOptions["assert_resource_access"];
 
   /** 相同 Workspace 目标当前唯一的按需解析流程。 */
   private readonly workspace_resolution_promises = new Map<string, Promise<WorkspaceRuntime>>();
@@ -151,6 +153,7 @@ export class City implements CityRuntime {
     }
     const runtime_options = options.runtime ?? {};
     this.resolve_workspace = runtime_options.resolve_workspace;
+    this.assert_resource_access = runtime_options.assert_resource_access;
     this.http_transport = new CityHTTP(this.runtime_access, runtime_options.http);
     this.rpc_transport = new CityRPC(this.runtime_access, runtime_options.rpc);
     this.agents = Object.freeze({
@@ -323,6 +326,7 @@ export class City implements CityRuntime {
     const agent = this.require_agent(agent_id_input);
     const workspace_id = String(workspace_id_input || "").trim();
     if (!workspace_id) throw new Error("City request requires workspace_id");
+    this.assert_resource_access?.(agent.id, workspace_id);
     const city_workspace = this.get_workspace(workspace_id);
     if (city_workspace) return city_workspace;
     if (!this.resolve_workspace) {
@@ -332,6 +336,8 @@ export class City implements CityRuntime {
     if (current) return await current;
     const resolution_promise = (async () => {
       const workspace = await this.resolve_workspace!(agent, workspace_id);
+      try { this.assert_resource_access?.(agent.id, workspace_id); }
+      catch (error) { await workspace.dispose(); throw error; }
       if (workspace.id !== workspace_id) {
         await workspace.dispose().catch(() => undefined);
         throw new Error(

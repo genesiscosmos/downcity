@@ -11,9 +11,11 @@
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { Command, Option } from "commander";
+import { Command, Option, CommanderError } from "commander";
+import { resolve_resource_root } from "@downcity/city/local";
 import { register_city_token_command } from "@/city/command/TokenCommand.js";
 import { registerAgentCommands } from "@/city/command/AgentCommand.js";
+import { register_workspace_commands, register_session_commands } from "./command/ResourceCommands.js";
 import { registerGatewayCommands } from "@/city/command/GatewayCommand.js";
 import { registerPowersCommand } from "@/city/command/PowerCommand.js";
 import { runInteractiveCityManager } from "@/city/shared/CityManager.js";
@@ -92,6 +94,8 @@ export function registerCityCommands(program: Command): void {
     version: packageJson.version,
     cliPath: cli_path,
   });
+  register_workspace_commands(program);
+  register_session_commands(program);
   registerAgentCommands(program, {
     version: packageJson.version,
     agentVersion: installedAgentVersion,
@@ -117,7 +121,8 @@ export async function runDowncityCli(): Promise<void> {
   const invoked_name = resolveInvokedName();
   const cli_locale = resolveCliLocale({
     argv,
-    persisted_locale: read_persisted_downcity_cli_locale(),
+    // 资源命令在发现/租约前不能打开会初始化 DB 的全局配置读取。
+    persisted_locale: argv.some((item) => ["agent", "workspace", "session", "--help", "--version"].includes(item)) ? undefined : read_persisted_downcity_cli_locale(),
   });
   setCliLocale(cli_locale);
 
@@ -173,5 +178,18 @@ export async function runDowncityCli(): Promise<void> {
     else if (opts.verbose) setCliVerbosity("verbose");
   });
 
-  await program.parseAsync();
+  const resource_json = argv.includes("--json") && argv.some((item) => ["agent", "workspace", "session"].includes(item));
+  if (resource_json) {
+    program.exitOverride();
+    program.configureOutput({ writeErr: () => {} });
+    program.showHelpAfterError(false);
+  }
+  try { await program.parseAsync(); }
+  catch (error) {
+    if (!resource_json || !(error instanceof CommanderError)) throw error;
+    if (error.exitCode === 0) return;
+    const root_index = argv.indexOf("--root");
+    process.exitCode = 2;
+    process.stdout.write(`${JSON.stringify({ schema_version: 1, success: false, command: argv.filter((item) => !item.startsWith("-")).slice(0, 2).join("."), data: null, error: { code: "usage_error", message: error.message, retryable: false, details: {} }, meta: { root_path: resolve_resource_root(root_index >= 0 ? argv[root_index + 1] : undefined), host: null, source: "local", observed_at: new Date().toISOString() } })}\n`);
+  }
 }

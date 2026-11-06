@@ -1,39 +1,20 @@
 /** Inbox单项详情：问题原地处理、更新阅读、完成确认和来源展开；不复制交互业务状态。 */
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useRef, useState } from "react";
 import type { PowerMainviewComponentProps } from "@downcity/city/power/react";
 import type { RespondSessionInteractionInput } from "@downcity/type";
 import type { InboxEntry } from "../types/Inbox.js";
 import type { NotificationRendererOptions } from "../types/NotificationRenderer.js";
 import { InboxStore } from "./InboxStore.js";
-import { use_inbox } from "./InboxContext.js";
-import { full_time, has_private_questions, inbox_entries, kind_label } from "./InboxEntries.js";
+import { full_time, has_private_questions } from "./InboxEntries.js";
 import { InboxIcon } from "./InboxIcon.js";
+import { InboxAvatar } from "./InboxAvatar.js";
+import { InboxAttention } from "./InboxAttention.js";
 
-/** 每张详情按稳定来源挂载，刷新不重建表单，切换时清除临时输入。 */
-export function InboxDetail({ store, options, ...props }: PowerMainviewComponentProps & {
-  /** Sidebar与Mainview共用的UI状态。 */ store: InboxStore;
-  /** 宿主原交互表单与来源导航能力。 */ options: NotificationRendererOptions;
-}) {
-  const { state, view, choose } = use_inbox(store, props);
-  const selected = state.selected[view];
-  const entries = inbox_entries(state.data, view);
-  const error = state.error || (state.data && (state.data.unavailable_agents.length || state.data.unavailable_groups.length)
-    ? "部分来源暂时不可达，已保留当前内容。" : "");
-  return <div className="inbox-detail-shell">
-    {error ? <div className="inbox-connection" role="status"><span>{error}</span><button type="button" onClick={() => void store.refresh_sources()}>重试</button></div> : null}
-    {state.loading ? <div className="inbox-detail-skeleton" role="status" aria-label="正在读取详情"><i /><i /><i /></div> : !selected ? <div className="inbox-empty">
-      <InboxIcon kind="inbox" /><h2>{error ? "暂时无法读取收件箱" : view === "pending" ? "暂时没有需要你处理的事" : "工作更新会显示在这里"}</h2>
-      <p>{error ? "恢复连接后重试，原请求不会因此结束。" : view === "pending" ? "Agent 需要你的回答或授权时，会出现在左侧。" : "选中一条更新，查看结果和来源。"}</p>
-    </div> : <InboxEntryDetail key={selected.key} entry={selected} current={entries.find((item) => item.key === selected.key)}
-      handled={state.handled.has(selected.key)} store={store} options={options} props={props}
-      unavailable={!!state.error || !!state.data?.unavailable_agents.includes(selected.pending?.agent_id ?? "")}
-      next={entries.find((item) => item.key !== selected.key)} choose={choose} />}
-    {!state.loading && selected && !entries.length && state.handled.has(selected.key) ? <div className="inbox-queue-finished"><InboxIcon kind="check" />当前待处理事项已清空</div> : null}
-  </div>;
-}
-
-/** 单个请求的草稿仅由原表单保存，Store只知道是否修改。 */
-function InboxEntryDetail({ entry, current, handled, store, options, props, next, choose, unavailable }: {
+/**
+ * 单项详情按稳定来源挂载，刷新保留原表单草稿；列表选择、返回确认和可见性由父级控制。
+ * 交互仍复用宿主表单与提交入口，Store仅记录草稿和忙碌状态，不保存回答内容。
+ */
+export function InboxEntryDetail({ entry, current, handled, store, options, props, next, choose, unavailable, on_close, can_read }: {
   /** 来源暂时不可达时不将缺失请求误判为已解决。 */ unavailable: boolean;
   /** 稳定选择项；请求失效后也可继续说明原因。 */ entry: InboxEntry;
   /** 最新列表中仍存在的原项，缺失表示已在其他入口处理。 */ current?: InboxEntry;
@@ -43,30 +24,40 @@ function InboxEntryDetail({ entry, current, handled, store, options, props, next
   /** 当前宿主接口，仍由原Session验证提交。 */ props: PowerMainviewComponentProps;
   /** 用户确认后选择的下一项。 */ next?: InboxEntry;
   /** 带草稿确认的选择动作。 */ choose: (entry: InboxEntry) => Promise<void>;
+  /** 返回列表/关闭详情，由父级提供现有草稿确认。 */ on_close: () => Promise<void>;
+  /** 只有实际可见的详情允许自动已读，由主视图控制。 */ can_read: boolean;
 }) {
   const { Markdown, Button } = props.ui.components;
+  const title_id = useId();
   const [error, set_error] = useState("");
   const [opening, set_opening] = useState(false);
   const [read_error, set_read_error] = useState(false);
-  const reading = useRef(new Set<number>());
+  const reading = useRef(new Set<string>());
+  const read_attempts = useRef(new Set<string>());
+  const submitting = useRef(false);
   const active = current ?? entry;
   const item = active.pending;
   const invalid = entry.view === "pending" && (!current || !item?.interaction.can_respond);
-  const read = async () => {
-    const update = active.update;
-    if (!update || reading.current.has(update.created_at)) return;
-    reading.current.add(update.created_at);
+  const notification_id = active.update?.notification_id;
+  const update_created_at = active.update?.created_at;
+  const read = useCallback(async (retry = false) => {
+    if (!can_read || notification_id === undefined || update_created_at === undefined) return;
+    const read_key = JSON.stringify([notification_id, update_created_at]);
+    if (reading.current.has(read_key) || (!retry && read_attempts.current.has(read_key))) return;
+    // 每个通知版本仅自动尝试一次；失败保留手动重试，避免刷新或焦点事件反复请求。
+    read_attempts.current.add(read_key);
+    reading.current.add(read_key);
     try {
-      await store.mark_read(update.notification_id, update.created_at);
+      await store.mark_read(notification_id, update_created_at);
       set_read_error(false);
       props.ui.invalidate();
     } catch { set_read_error(true); }
-    finally { reading.current.delete(update.created_at); }
-  };
+    finally { reading.current.delete(read_key); }
+  }, [can_read, notification_id, update_created_at, store, props.ui]);
   useEffect(() => {
     // 只有聚焦且实际展示的具体详情才已读；后台挂载不消费未读。
     const read_visible = () => {
-      if (!document.hidden && document.hasFocus() && active.update && current?.unread) void read();
+      if (can_read && !document.hidden && document.hasFocus() && current?.unread) void read();
     };
     read_visible();
     window.addEventListener("focus", read_visible);
@@ -75,10 +66,12 @@ function InboxEntryDetail({ entry, current, handled, store, options, props, next
       window.removeEventListener("focus", read_visible);
       document.removeEventListener("visibilitychange", read_visible);
     };
-  }, [entry.key, active.update?.created_at, current?.unread]);
+  }, [can_read, current?.unread, read]);
   const submit = async (input: RespondSessionInteractionInput, private_question = false) => {
     if (!item || invalid || handled || unavailable) throw new Error("这个请求已失效，请刷新后查看原会话。");
     if (input.interaction_id !== item.interaction.reference.interaction_id) throw new Error("交互来源不匹配");
+    if (submitting.current || store.get_snapshot().busy_key) throw new Error("正在提交，请稍候。");
+    submitting.current = true;
     store.busy(entry.key);
     try {
       if (private_question || has_private_questions(item)) {
@@ -91,7 +84,10 @@ function InboxEntryDetail({ entry, current, handled, store, options, props, next
       store.handled(entry);
       void store.refresh();
       props.ui.invalidate();
-    } finally { store.busy(undefined); }
+    } finally {
+      submitting.current = false;
+      store.busy(undefined);
+    }
   };
   const open = async () => {
     if (opening) return;
@@ -105,36 +101,34 @@ function InboxEntryDetail({ entry, current, handled, store, options, props, next
     } catch (reason) { set_error(reason instanceof Error ? reason.message : String(reason)); }
     finally { set_opening(false); }
   };
-  const request = item?.interaction.interaction.request;
-  const payload = request?.payload;
-  const questions = payload && typeof payload === "object" && !Array.isArray(payload) && Array.isArray(payload.questions) ? payload.questions : [];
-  const first_question = questions[0];
-  const same_title = questions.length === 1 && first_question && typeof first_question === "object" && !Array.isArray(first_question) && first_question.question === entry.title;
   const availability = active.pending?.availability ?? active.update?.availability;
   const source_notice = availability === "archived" ? "来源已归档，通知摘要仍然保留。"
     : availability === "removed" ? "来源已移除，通知记录仍然保留。"
       : availability === "unknown" ? "来源身份未知或暂时不可达；已保留内容，无法确认是否可打开。" : "";
   const can_open = availability === "available" && (entry.pending ? !!options.open_interaction : !!entry.update?.target && !!options.open_notification);
-  return <article className="inbox-detail" aria-labelledby="inbox-detail-title">
+  return <article className="inbox-detail" aria-labelledby={title_id}>
+    <div className="inbox-detail-toolbar">
+      <button type="button" className="inbox-detail-back" onClick={() => void on_close()}>返回列表</button>
+      {can_open ? <button type="button" className="inbox-source-link" disabled={opening} onClick={() => void open()}>{opening ? "正在打开…" : entry.pending ? "查看原会话 ↗" : "查看结果 ↗"}</button> : null}
+    </div>
     <header className="inbox-detail-header">
-      <div className="inbox-eyebrow"><InboxIcon kind={entry.kind} /><span>{kind_label(entry.kind)}</span></div>
-      <h1 id="inbox-detail-title">{entry.title}</h1>
-      <div className="inbox-detail-meta"><span className="inbox-source">{entry.source}</span><span aria-hidden="true">·</span><time dateTime={new Date(entry.created_at).toISOString()}>{full_time(entry.created_at)}</time>
-        {can_open ? <button type="button" className="inbox-source-link" disabled={opening} onClick={() => void open()}>{opening ? "正在打开…" : entry.pending ? "查看原会话 ↗" : "查看结果 ↗"}</button> : null}
+      <div className="inbox-detail-meta">
+        <span className="inbox-source"><InboxAvatar entry={active} size="detail" options={options} />{active.source}</span>
+        <time dateTime={new Date(active.created_at).toISOString()}>{full_time(active.created_at)}</time>
+        {!handled ? <span className="inbox-detail-status">{item && unavailable ? "暂不可响应" : invalid ? current ? "已中断" : "已结束" : <InboxAttention entry={active} options={options} presentation="status" />}</span> : null}
       </div>
+      <h2 id={title_id} className="inbox-detail-title">{active.title}</h2>
     </header>
     {source_notice ? <p className="inbox-detail-note" role="status">{source_notice}</p> : null}
-    {active.update ? <p className="inbox-detail-note">{active.update.outcome === "failure" ? "执行失败" : active.update.outcome === "success" ? "执行成功" : "状态更新"}</p> : null}
     {error ? <div className="inbox-inline-error" role="alert">{error}</div> : null}
     {handled ? <div className="inbox-resolution" role="status"><InboxIcon kind="check" /><div><h2>已处理</h2><p>你的回应已送回原会话。</p>{next ? <Button on_click={() => void choose(next)}>处理下一项</Button> : null}</div></div>
-      : unavailable ? <div className="inbox-resolution" role="status"><InboxIcon kind="inbox" /><div><h2>暂时无法连接原会话</h2><p>请求状态尚未确认，请重试连接后继续处理。</p></div></div>
+      : item && unavailable ? <div className="inbox-resolution" role="status"><InboxIcon kind="inbox" /><div><h2>暂时无法连接原会话</h2><p>请求状态尚未确认，请重试连接后继续处理。</p></div></div>
       : invalid ? <div className="inbox-resolution" role="status"><InboxIcon kind="inbox" /><div><h2>{current ? "原执行已不可响应" : "这个请求已结束"}</h2><p>{current ? "已保留请求内容，请查看原会话了解执行状态。" : "它已在其他入口处理或随原执行取消。"}</p>{next ? <Button on_click={() => void choose(next)}>查看下一项</Button> : null}</div></div>
-        : item ? <div className="inbox-form" data-question-is-title={!!same_title}
-          onChange={() => store.dirty(entry.key)}>
-          {options.render_interaction ? options.render_interaction(item, submit) : <p className="inbox-detail-note">请在支持交互表单的宿主中回应此请求。</p>}
+        : item ? <div className="inbox-form" onChange={() => store.dirty(entry.key)}>
+          {options.render_interaction ? options.render_interaction(item, submit, { title_id, title: active.title }) : <p className="inbox-detail-note">请在支持交互表单的宿主中回应此请求。</p>}
         </div> : <div className="inbox-result">
-          {active.update?.body ? <Markdown text={active.update.body} /> : <p className="inbox-detail-note">工作状态已更新，可打开来源查看详情。</p>}
-          {read_error ? <p className="inbox-inline-error" role="status">暂未标为已读。<button type="button" onClick={() => void read()}>重试</button></p> : null}
+          {active.update?.body?.trim() ? <Markdown text={active.update.body} /> : null}
+          {read_error ? <p className="inbox-inline-error" role="status">暂未标为已读。<button type="button" onClick={() => void read(true)}>重试</button></p> : null}
         </div>}
     {entry.pending ? <details className="inbox-origin"><summary>来源详情</summary><dl><dt>Agent</dt><dd>{active.source}</dd><dt>Session</dt><dd>{entry.pending.interaction.reference.session_id}</dd><dt>执行</dt><dd>{entry.pending.interaction.reference.turn_id}</dd></dl></details> : null}
   </article>;

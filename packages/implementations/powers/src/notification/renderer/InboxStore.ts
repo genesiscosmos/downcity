@@ -3,7 +3,7 @@
  * 不保存交互答案，选择保留失效项让用户了解变化，不在刷新中自动跳往另一张表单。
  */
 import type { PowerActionGateway } from "@downcity/city/power/react";
-import type { InboxEntry, InboxState } from "../types/Inbox.js";
+import type { InboxEntry, InboxState, InboxView } from "../types/Inbox.js";
 import type { NotificationListResult, NotificationUpdateResult } from "../types/NotificationRenderer.js";
 import { inbox_entries } from "./InboxEntries.js";
 
@@ -69,8 +69,13 @@ export class InboxStore {
     }
   };
 
-  select(entry: InboxEntry): void {
-    this.patch({ selected: { ...this.state.selected, [entry.view]: entry }, dirty_key: undefined });
+  select(entry: InboxEntry, view: InboxView = entry.view): void {
+    this.patch({ selected: { ...this.state.selected, [view]: entry }, dirty_key: undefined });
+  }
+
+  /** 关闭详情后保留筛选与列表位置，不自动选择下一项。 */
+  close(view: InboxView): void {
+    this.patch({ selected: { ...this.state.selected, [view]: undefined }, dirty_key: undefined });
   }
 
   dirty(key: string): void { if (this.state.dirty_key !== key) this.patch({ dirty_key: key }); }
@@ -114,11 +119,10 @@ export class InboxStore {
   private receive(data: NotificationListResult): void {
     if (this.state.data && data.revision < this.state.data.revision) return;
     const selected = { ...this.state.selected };
-    for (const view of ["pending", "updates"] as const) {
-      const entries = inbox_entries(data, view);
+    const entries = inbox_entries(data, "all");
+    for (const view of ["pending", "updates", "all"] as const) {
       const previous = selected[view];
-      selected[view] = previous ? entries.find((item) => item.key === previous.key) ?? (view === "pending" ? previous : undefined)
-        : view === "pending" ? entries[0] : undefined;
+      selected[view] = previous ? entries.find((item) => item.key === previous.key) ?? (previous.pending ? previous : undefined) : undefined;
     }
     this.patch({ data, selected, loading: false, error: "" });
   }

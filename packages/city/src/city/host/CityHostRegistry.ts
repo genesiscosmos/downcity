@@ -32,11 +32,21 @@ export interface CityHostState {
   rpc_host?: string;
   /** 可选 RPC 端口。 */
   rpc_port?: number;
+  /** 本机管理协议版本；资源客户端必须验证。 */
+  management_version?: number;
+  /** root 规范路径的身份摘要。 */
+  root_identity?: string;
+  /** 受当前用户权限保护的本机管理地址。 */
+  management_endpoint?: string;
+  /** 宿主当前生命周期阶段。 */
+  state?: "starting" | "ready" | "stopping" | "failed";
+  /** 管理用例能力列表。 */
+  capabilities?: string[];
 }
 
 /** 当前宿主状态文件路径。 */
-export function get_city_host_state_path(): string {
-  const root_path = String(process.env.DC_PLATFORM_ROOT || "").trim()
+export function get_city_host_state_path(root_path_input?: string): string {
+  const root_path = String(root_path_input || process.env.DC_PLATFORM_ROOT || "").trim()
     || path.join(os.homedir(), ".downcity");
   return path.join(path.resolve(root_path), "runtimes", "city", "host.json");
 }
@@ -46,9 +56,9 @@ export function create_city_host_instance_id(): string {
   return randomUUID();
 }
 
-/** 读取当前 City 宿主状态。无效或已退出的状态返回 null。 */
-export async function read_city_host_state(): Promise<CityHostState | null> {
-  const file_path = get_city_host_state_path();
+/** 只读探测宿主登记；损坏内容和权限错误不伪装成离线，也不清理文件。 */
+export async function read_city_host_state(root_path_input?: string): Promise<CityHostState | null> {
+  const file_path = get_city_host_state_path(root_path_input);
   let file_identity: { dev: number; ino: number } | undefined;
   try {
     const file_handle = await fs.open(file_path, "r");
@@ -64,22 +74,10 @@ export async function read_city_host_state(): Promise<CityHostState | null> {
       await file_handle.close();
     }
     const value = JSON.parse(content) as Partial<CityHostState>;
-    if (value.owner !== "cli" && value.owner !== "desktop") {
-      await remove_city_host_state_if_same(file_path, file_identity);
-      return null;
-    }
-    if (!Number.isInteger(value.pid) || Number(value.pid) <= 0) {
-      await remove_city_host_state_if_same(file_path, file_identity);
-      return null;
-    }
-    if (!String(value.instance_id || "").trim() || !String(value.started_at || "").trim()) {
-      await remove_city_host_state_if_same(file_path, file_identity);
-      return null;
-    }
-    if (!is_process_alive(Number(value.pid))) {
-      await remove_city_host_state_if_same(file_path, file_identity);
-      return null;
-    }
+    if (value.owner !== "cli" && value.owner !== "desktop") throw new Error(`Invalid City host owner: ${file_path}`);
+    if (!Number.isInteger(value.pid) || Number(value.pid) <= 0) throw new Error(`Invalid City host PID: ${file_path}`);
+    if (!String(value.instance_id || "").trim() || !String(value.started_at || "").trim()) throw new Error(`Invalid City host identity: ${file_path}`);
+    if (!is_process_alive(Number(value.pid))) return null;
     return {
       owner: value.owner,
       pid: Number(value.pid),
@@ -89,27 +87,40 @@ export async function read_city_host_state(): Promise<CityHostState | null> {
       ...(valid_port(value.http_port) ? { http_port: Number(value.http_port) } : {}),
       ...(typeof value.rpc_host === "string" ? { rpc_host: value.rpc_host } : {}),
       ...(valid_port(value.rpc_port) ? { rpc_port: Number(value.rpc_port) } : {}),
+      ...(typeof value.management_version === "number" ? { management_version: value.management_version } : {}),
+      ...(typeof value.root_identity === "string" ? { root_identity: value.root_identity } : {}),
+      ...(typeof value.management_endpoint === "string" ? { management_endpoint: value.management_endpoint } : {}),
+      ...(value.state ? { state: value.state } : {}),
+      ...(Array.isArray(value.capabilities) ? { capabilities: value.capabilities.filter((entry): entry is string => typeof entry === "string") } : {}),
     };
-  } catch {
-    if (file_identity) await remove_city_host_state_if_same(file_path, file_identity);
-    return null;
+  } catch (error) {
+    if (has_error_code(error, "ENOENT")) return null;
+    throw error;
   }
 }
 
 /** 登记当前 City 宿主。 */
-export async function register_city_host(state: CityHostState): Promise<void> {
-  const file_path = get_city_host_state_path();
+export async function register_city_host(state: CityHostState, root_path_input?: string): Promise<void> {
+  const file_path = get_city_host_state_path(root_path_input);
   await fs.mkdir(path.dirname(file_path), { recursive: true });
   if (await claim_city_host_state(file_path, state)) return;
 
-  const current = await read_city_host_state();
+  const current = await read_city_host_state(root_path_input);
   if (current) {
     throw new Error(
       `City is already owned by ${current.owner} (pid: ${current.pid})`,
     );
   }
+  // 登记是显式写操作，可清理已退出实例的描述；纯查询从不清理。
+  const stale_stat = await fs.stat(file_path).catch((error: unknown) => {
+    if (has_error_code(error, "ENOENT")) return null;
+    throw error;
+  });
+  if (stale_stat && !await read_city_host_state(root_path_input)) {
+    await remove_city_host_state_if_same(file_path, stale_stat);
+  }
   if (!await claim_city_host_state(file_path, state)) {
-    const owner = await read_city_host_state();
+    const owner = await read_city_host_state(root_path_input);
     throw new Error(owner
       ? `City is already owned by ${owner.owner} (pid: ${owner.pid})`
       : "City host ownership could not be acquired");
@@ -117,8 +128,8 @@ export async function register_city_host(state: CityHostState): Promise<void> {
 }
 
 /** 只删除仍属于当前实例的宿主状态。 */
-export async function unregister_city_host(instance_id: string): Promise<void> {
-  const file_path = get_city_host_state_path();
+export async function unregister_city_host(instance_id: string, root_path_input?: string): Promise<void> {
+  const file_path = get_city_host_state_path(root_path_input);
   try {
     const file_handle = await fs.open(file_path, "r");
     let current: Partial<CityHostState>;

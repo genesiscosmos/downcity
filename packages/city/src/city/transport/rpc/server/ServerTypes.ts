@@ -45,6 +45,8 @@ export interface RpcServerStartOptions {
  * RPC request handler 依赖。
  */
 export interface RpcRequestHandlerOptions {
+  /** 当前宿主显式注入的实例身份，用于 RPC 健康检查。 */
+  instance_id?: string;
   /** 已由宿主路由确定的 Agent，不能由响应引用覆盖。 */
   agent?: Agent;
   /** Session 集合访问口。 */

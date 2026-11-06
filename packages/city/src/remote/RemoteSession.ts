@@ -99,7 +99,7 @@ export class RemoteSession implements RemoteAgentSession {
 
   /** 读取当前远程 Session 详情。 */
   async get_info(): Promise<AgentSessionInfo> {
-    const info = await this.transport.get_info(this.id, this.origin.type);
+    const info = await this.transport.get_info(this.id, this.origin.category);
     this.state = build_remote_state(info);
     return info;
   }
@@ -116,14 +116,14 @@ export class RemoteSession implements RemoteAgentSession {
       let channel_id: string | undefined;
       if (execution) {
         const channel = await this.transport.open_power_channel({
-          session_id: this.id, category: this.origin.type,
+          session_id: this.id, category: this.origin.category,
           on_event: (event) => execution.on_event(event),
           on_close: () => { void execution.close().catch(() => {}); },
         });
         execution.attach(channel);
         channel_id = channel.id;
       }
-      const turn = await this.transport.prompt(this.id, this.origin.type, {
+      const turn = await this.transport.prompt(this.id, this.origin.category, {
         ...wire_input,
         ...(execution ? { powers: execution.descriptors, execution_channel_id: channel_id } : {}),
       });
@@ -140,7 +140,7 @@ export class RemoteSession implements RemoteAgentSession {
   /** 停止当前远程 Session Turn。 */
   async stop(expected_turn_id?: string): Promise<AgentSessionStopResult> {
     await this.ensure_event_pump();
-    return await this.transport.stop(this.id, this.origin.type, expected_turn_id);
+    return await this.transport.stop(this.id, this.origin.category, expected_turn_id);
   }
 
   /** 订阅当前 Session 的全部未来 Mutation。 */
@@ -168,22 +168,22 @@ export class RemoteSession implements RemoteAgentSession {
 
   /** 读取远程 Message 快照。 */
   async messages(input?: ListSessionMessagesInput): Promise<SessionMessagePage> {
-    return await this.transport.messages(this.id, this.origin.type, input);
+    return await this.transport.messages(this.id, this.origin.category, input);
   }
 
   /** 读取远程 Session 的 System 快照。 */
   async system(): Promise<AgentSessionSystemSnapshot> {
-    return await this.transport.system(this.id, this.origin.type);
+    return await this.transport.system(this.id, this.origin.category);
   }
 
   /** 列出当前远程 Session 正在等待用户响应的 Interaction。 */
   async interactions(): Promise<SessionInteractionRequest[]> {
-    return await this.transport.interactions(this.id, this.origin.type);
+    return await this.transport.interactions(this.id, this.origin.category);
   }
 
   /** 读取当前远程 Session 的运行与安全状态。 */
   async status(): Promise<AgentSessionStatus> {
-    return await this.transport.status(this.id, this.origin.type);
+    return await this.transport.status(this.id, this.origin.category);
   }
 
   /** 更新当前远程 Session 的可序列化动态配置。 */
@@ -191,17 +191,17 @@ export class RemoteSession implements RemoteAgentSession {
     input: RemoteSessionSetInput,
     options?: AgentSessionSetOptions,
   ): Promise<void> {
-    await this.transport.set(this.id, this.origin.type, input, options);
+    await this.transport.set(this.id, this.origin.category, input, options);
   }
 
   /** 提交当前远程 Session 的 Interaction 用户响应。 */
   async respond(input: RespondSessionInteractionInput): Promise<SessionInteractionResult> {
-    return await this.transport.respond(this.id, this.origin.type, input);
+    return await this.transport.respond(this.id, this.origin.category, input);
   }
 
   /** 创建远程分支；原地替换时返回当前远程 Session 实例。 */
   async fork(input?: AgentSessionForkInput | string): Promise<RemoteAgentSession> {
-    const info = await this.transport.fork(this.id, this.origin.type, input);
+    const info = await this.transport.fork(this.id, this.origin.category, input);
     if (typeof input !== "string" && input?.replace === true) {
       this.state = build_remote_state(info);
       return this;
@@ -216,7 +216,7 @@ export class RemoteSession implements RemoteAgentSession {
       let resolved_ready = false;
       this.event_subscription = await this.transport.subscribe({
         session_id: this.id,
-        category: this.origin.type,
+        category: this.origin.category,
         on_ready: () => {
           resolved_ready = true;
         },

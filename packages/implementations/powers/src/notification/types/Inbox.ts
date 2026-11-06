@@ -3,18 +3,22 @@ import type { NotificationItem } from "./Notification.js";
 import type { NotificationInteractionItem, NotificationListResult } from "./NotificationRenderer.js";
 
 /** 当前列表视图。 */
-export type InboxView = "pending" | "updates";
+export type InboxView = "pending" | "updates" | "all";
 
 /** 统一的列表与详情投影，不保存用户输入或私密值。 */
 export interface InboxEntry {
   /** 完整来源生成的稳定选择标识。 */
   key: string;
-  /** 列表所属视图。 */
-  view: InboxView;
+  /** 项目的原始类别；筛选视图可同时展示请求和更新。 */
+  view: "pending" | "updates";
+  /** 安全的纯文本摘要，只投影问题文字或公开通知正文。 */
+  summary: string;
   /** 用户可读标题。 */
   title: string;
   /** 主体名称或业务来源。 */
   source: string;
+  /** 原请求或通知的真实 Agent 标识，供宿主解析头像；纯 Power 更新不设置此字段。 */
+  agent_id?: string;
   /** 交互或通知产生的时间。 */
   created_at: number;
   /** 列表展示的语义类别。 */
@@ -35,7 +39,7 @@ export interface InboxState {
   loading: boolean;
   /** 读取失败的安全说明，失败不清除已有内容。 */
   error: string;
-  /** 两个列表当前选中项，保留已处理项目以便原位确认。 */
+  /** 各筛选当前选中项，保留已处理请求以便原位确认；首次进入不自动选择。 */
   selected: Partial<Record<InboxView, InboxEntry>>;
   /** 已在本页面成功回应的项目标识。 */
   handled: ReadonlySet<string>;

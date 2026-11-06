@@ -105,6 +105,12 @@ export interface AgentSessionCollection {
   /** 获取 Session runtime port。 */
   runtime(session_id: string, category?: string): SessionPort;
 
+  /** 宿主移除资源前同步关闭空闲缓存会话输入，忙碌拒绝；返回显式解锁函数。 */
+  guard_idle(workspace_id?: string): () => void;
+
+  /** 只观察已缓存实例；不存在时返回 undefined，不触发恢复执行或目录注入。 */
+  peek(session_id: string, category?: string): AgentSession | undefined;
+
   /** 返回当前 Agent 正在执行的 Session 标识。 */
   list_executing_session_ids(): string[];
 

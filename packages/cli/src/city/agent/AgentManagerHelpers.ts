@@ -6,9 +6,9 @@
  * - City 生命周期属于根命令，不在 Agent 管理面板中重复表达。
  */
 
-import { run_agent_create_command } from "@/city/agent/Init.js";
+import { ResourceClient } from "../resources/ResourceClient.js";
+import { create_agent_tui } from "../resources/ResourceTui.js";
 import { t } from "@/shared/CliLocale.js";
-import { list_agent_configs } from "@/city/process/registry/AgentConfigRepository.js";
 import { format_agent_display_label } from "@/city/agent/AgentSelection.js";
 import type { AgentManagerAgentSummary } from "@/city/agent/AgentManagerTypes.js";
 
@@ -17,13 +17,12 @@ export function isInteractiveTerminal(): boolean {
 }
 
 export async function loadAgentSummaries(): Promise<AgentManagerAgentSummary[]> {
-  return list_agent_configs().map((config) => {
+  const result = await new ResourceClient().call("agent.list");
+  return (result.data as { items: { agent_id: string; name: string; model_id: string | null }[] }).items.map((config) => {
     return {
       id: config.agent_id,
       name: config.name,
-      execution_binding: String(
-        config?.execution?.type === "api" ? config.execution.model_id || "" : "",
-      ).trim(),
+      execution_binding: config.model_id ?? "",
     };
   });
 }
@@ -62,5 +61,5 @@ export function formatAgentConfigPanelDescription(agent: AgentManagerAgentSummar
 }
 
 export async function runCreateFlow(): Promise<void> {
-  await run_agent_create_command(undefined, {});
+  await create_agent_tui();
 }

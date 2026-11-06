@@ -8,6 +8,8 @@
 import fs from "fs-extra";
 import path from "node:path";
 import { DatabaseSync } from "node:sqlite";
+import { pathToFileURL } from "node:url";
+import { ResourceError } from "../resources/ResourceError.js";
 import type {
   LocalDatabaseMutationResult,
   LocalDatabaseOptions,
@@ -29,8 +31,18 @@ export class LocalDatabase implements LocalDatabaseTransaction {
     const filename_input = String(options?.filename || "").trim();
     if (!filename_input) throw new TypeError("LocalDatabase filename is required");
     const filename = path.resolve(filename_input);
-    fs.ensureDirSync(path.dirname(filename));
-    this.sqlite = new DatabaseSync(filename);
+    if (options.immutable && !options.read_only) throw new TypeError("immutable requires read_only");
+    if (options.immutable) {
+      for (const suffix of ["-wal", "-journal"]) {
+        const sidecar = `${filename}${suffix}`;
+        if (fs.existsSync(sidecar) && fs.statSync(sidecar).size > 0) {
+          throw new ResourceError("migration_required", "Database recovery is required; start a supported host explicitly before browsing", 5);
+        }
+      }
+    }
+    if (!options.read_only) fs.ensureDirSync(path.dirname(filename));
+    this.sqlite = new DatabaseSync(options.immutable ? `${pathToFileURL(filename).href}?immutable=1` : filename, { readOnly: options.read_only === true });
+    if (options.read_only) return;
     // 本地配置为明文数据，数据库文件只允许当前用户读写。
     fs.chmodSync(filename, 0o600);
     this.sqlite.exec("PRAGMA busy_timeout = 5000;");

@@ -1,0 +1,44 @@
+/** 宿主资源变更串行化、内容 revision 与输入检查；不持有交互或展示逻辑。 */
+import { createHash } from "node:crypto";
+import { ResourceError } from "./ResourceError.js";
+
+/** 规范化 JSON 字段顺序，revision 不依赖文件空白或对象插入顺序。 */
+function canonical_json(value: unknown): string {
+  if (Array.isArray(value)) return `[${value.map(canonical_json).join(",")}]`;
+  if (value && typeof value === "object") return `{${Object.entries(value).filter(([, item]) => item !== undefined).sort(([left], [right]) => left.localeCompare(right)).map(([key, item]) => `${JSON.stringify(key)}:${canonical_json(item)}`).join(",")}}`;
+  return JSON.stringify(value) ?? "null";
+}
+
+/** 配置内容摘要；时间戳不作为版本判据。 */
+export function resource_revision(value: unknown): string {
+  const { created_at: _created, updated_at: _updated, ...content } = value as Record<string, unknown>;
+  return `sha256:${createHash("sha256").update(canonical_json(content)).digest("hex")}`;
+}
+
+/** 在变更锁内进行条件提交检查。 */
+export function assert_resource_revision(current: unknown, expected?: string): void {
+  if (expected !== undefined && expected !== resource_revision(current)) throw new ResourceError("revision_conflict", "Resource changed; read its current revision before retrying", 4);
+}
+
+/** 单一宿主的短事务协调器；等待 Turn 或用户输入不能占用该锁。 */
+export class ResourceCoordinator {
+  /** 以 root 内全部配置写串行为起点，避免跨资源引用检查的锁顺序问题。 */
+  private tail: Promise<unknown> = Promise.resolve();
+  /** 已保存但尚未成功应用的 Agent，禁止新执行。 */
+  readonly blocked_agents = new Set<string>();
+  /** 正在释放或释放失败的 Workspace，懒解析也必须拒绝进入。 */
+  readonly blocked_workspaces = new Set<string>();
+
+  /** 调用方必须已经持有进程级 root 写租约。 */
+  async mutate<T>(operation: () => Promise<T> | T): Promise<T> {
+    const result = this.tail.then(operation, operation);
+    this.tail = result.then(() => undefined, () => undefined);
+    return await result;
+  }
+
+  /** 在宿主懒解析/执行入口共享同一门禁。 */
+  assert_available(agent_id?: string, workspace_id?: string): void {
+    if (agent_id && this.blocked_agents.has(agent_id)) throw new ResourceError("resource_busy", "Agent configuration must be applied successfully before new execution", 4);
+    if (workspace_id && this.blocked_workspaces.has(workspace_id)) throw new ResourceError("resource_busy", "Workspace is being released or its release failed", 4);
+  }
+}

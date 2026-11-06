@@ -142,10 +142,12 @@ export async function start_rpc_server(
     });
   });
 
+  const address = server.address();
+  const bound_port = address && typeof address !== "string" ? address.port : options.port;
   return {
     host: options.host,
-    port: options.port,
-    url: `rpc://${options.host}:${options.port}`,
+    port: bound_port,
+    url: `rpc://${options.host}:${bound_port}`,
     server,
     async stop(): Promise<void> {
       // 关键点（中文）：RPC 是长连接；停止 server 时必须主动关闭现有 socket。

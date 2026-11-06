@@ -88,6 +88,7 @@ export class CityRPC {
           ) {
             return {
               sessions: unavailable_sessions,
+              instance_id: this.runtime_options.instance_id,
               get_city_status: () => ({
                 agent_ids: this.runtime_access.list_agents().map((agent) => agent.id),
               }),
@@ -103,7 +104,7 @@ export class CityRPC {
             }
             const agent = this.runtime_access.get_agent(agent_id);
             if (!agent) throw new Error(`Agent not found: ${agent_id}`);
-            return { sessions: agent.sessions, agent };
+            return { sessions: agent.sessions, agent, instance_id: this.runtime_options.instance_id };
           }
           const workspace = await this.runtime_access.enter_workspace(agent_id, workspace_id);
           const agent = this.runtime_access.get_agent(agent_id);
@@ -113,6 +114,7 @@ export class CityRPC {
           const resolve_session_model = this.runtime_options.resolve_session_model;
           const reload_workspace_env = this.runtime_options.reload_workspace_env;
           return {
+            instance_id: this.runtime_options.instance_id,
             agent,
             sessions,
             workspace,

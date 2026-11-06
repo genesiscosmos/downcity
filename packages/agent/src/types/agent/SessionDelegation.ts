@@ -44,8 +44,6 @@ export interface SessionDelegationRecord {
   work_turn_id?: string;
   /** 工作执行状态；停止在调用 stop 前持久化。 */
   execution_state: "pending" | "running" | "succeeded" | "failed" | "stopped";
-  /** 已确认通知发起 Session 的交互标识；内容与待回答状态仍归原 Session。 */
-  reported_interactions?: string[];
   /** 回传状态；saved 表示原执行不再接收，结果仅保存在委派记录中。 */
   delivery_state: "pending" | "delivered" | "cancelled" | "saved";
   /** 连续失败次数；成功回传后不再重试。 */

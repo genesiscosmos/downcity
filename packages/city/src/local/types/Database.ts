@@ -66,4 +66,10 @@ export interface LocalDatabaseOptions {
 
   /** 是否启用 WAL；默认启用。 */
   wal?: boolean;
+
+  /** 纯只读打开，不创建目录、改权限、启用 WAL 或初始化 schema。 */
+  read_only?: boolean;
+
+  /** 已持离线共享租约的稳定快照；拒绝未 checkpoint 的 WAL，使用 immutable URI 避免创建 sidecar。 */
+  immutable?: boolean;
 }

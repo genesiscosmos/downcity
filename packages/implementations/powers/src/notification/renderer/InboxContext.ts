@@ -10,18 +10,31 @@ export function use_inbox(store: InboxStore, props: PowerSidebarComponentProps) 
   const { power, navigation, ui } = props;
   useEffect(() => store.attach(power), [store, power]);
   useEffect(() => { void store.refresh(); }, [store, ui.revision]);
-  const view: InboxView = navigation.route.view === "updates" ? "updates"
-    : navigation.route.view === "pending" || state.selected.pending ? "pending" : state.selected.updates ? "updates" : "pending";
+  const route_view = navigation.route.view;
+  const view: InboxView = route_view === "updates" || route_view === "pending" || route_view === "all"
+    ? route_view : state.data?.badge_count ? "pending" : "updates";
+  // 首次成功读取后固定默认筛选，后续计数变化不会把用户切到另一个列表。
+  useEffect(() => {
+    if (state.data && route_view !== "pending" && route_view !== "updates" && route_view !== "all") navigation.navigate({ view });
+  }, [state.data, route_view, view, navigation]);
   const can_leave = async (): Promise<boolean> => {
     if (store.get_snapshot().busy_key) return false;
     if (!store.get_snapshot().dirty_key) return true;
     return await ui.confirm({ title: "离开未提交的回答？", description: "当前填写的内容会清除。", action: "清除并切换" });
   };
   const choose = async (entry: InboxEntry) => {
-    if (state.selected[view]?.key === entry.key && view === entry.view) return;
+    if (store.get_snapshot().selected[view]?.key === entry.key) return;
     if (!await can_leave()) return;
-    store.select(entry);
-    navigation.navigate({ view: entry.view });
+    store.select(entry, view);
   };
-  return { state, view, choose };
+  const close = async () => {
+    if (await can_leave()) store.close(view);
+  };
+  const change_view = async (next_view: InboxView) => {
+    if (next_view === view || !await can_leave()) return;
+    store.clear_dirty();
+    store.close(view);
+    navigation.navigate({ view: next_view });
+  };
+  return { state, view, choose, close, change_view };
 }

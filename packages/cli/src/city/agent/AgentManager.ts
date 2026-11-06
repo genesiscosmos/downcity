@@ -17,6 +17,7 @@ import { resolveAgentChatEntry } from "@/city/agent/AgentChatHelpers.js";
 import { format_agent_display_label } from "@/city/agent/AgentSelection.js";
 import { run_agent_chat_navigation } from "@/city/agent/AgentChatNavigation.js";
 import { run_agent_configuration } from "@/city/agent/AgentConfiguration.js";
+import { manage_resources_tui } from "../resources/ResourceTui.js";
 import type { tui_prompt_option } from "@/shared/types/TuiPrompt.js";
 
 /** Agents 首页中的 City 级动作。 */
@@ -49,6 +50,7 @@ export async function runInteractiveAgentManager(
       await runCreateFlow();
       continue;
     }
+    if (selection === "resources") { await manage_resources_tui(); continue; }
     if (is_city_action(selection) && options.run_city_action) {
       try {
         await options.run_city_action(selection);
@@ -104,8 +106,9 @@ async function build_agent_options(
     {
       label: t({ zh: "创建 Agent", en: "Create Agent" }),
       value: "create",
-      hint: t({ zh: "创建 Agent 配置并登记当前 Workspace", en: "Create an Agent and register the current Workspace" }),
+      hint: t({ zh: "创建独立 Agent 身份配置", en: "Create an independent Agent identity" }),
     },
+    { label: t({ zh: "资源管理", en: "Resource management" }), value: "resources", hint: "Agent · Workspace · Session" },
     ...(include_settings
       ? [
           {

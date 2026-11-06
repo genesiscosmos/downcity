@@ -10,6 +10,8 @@
  */
 
 import prompts from "@/city/tui/Prompts.js";
+import { ResourceClient } from "../resources/ResourceClient.js";
+import { resolve_chat_entry } from "../resources/ChatEntry.js";
 import {
   type RemoteAgentSession,
   type SessionMutation,
@@ -19,23 +21,16 @@ import { printResult } from "@/city/utils/cli/CliOutput.js";
 import {
   format_agent_display_label,
   list_registered_agents_for_cli,
-  resolve_cli_agent_target,
-  resolve_cli_workspace,
-  type AgentExecutionTarget,
 } from "@/city/agent/AgentSelection.js";
 import {
   buildAgentChatFailureText,
-  createAgentSessionReader,
   createRemoteAgent,
-  createRemoteChatSession,
-  listRemoteChatSessions,
   type AgentChatClient,
 } from "@/city/agent/AgentChatRemote.js";
 import type {
   AgentChatCliOptions,
   AgentChatExecutionOutcome,
   AgentChatSessionOptions,
-  AgentChatSessionSummaryView,
 } from "@/city/agent/AgentChatTypes.js";
 
 /**
@@ -112,7 +107,7 @@ export async function resolveChatTargetAgentId(inputId?: string): Promise<string
     emitCliBlock({
       tone: "error",
       title: "No registered agents",
-      note: "Run `city agent create <workspace_path>` first.",
+      note: "Run `city agent create --name <name>` first.",
     });
     return null;
   }
@@ -203,195 +198,20 @@ export async function resolveAgentChatEntry(params: {
   if (!selected.success) return { success: false, error: selected.error };
 
   try {
-    return await open_agent_chat_entry({
-      agent_id: agent_id,
-      selected: selected,
-      options: params.options,
-      transport: params.transport,
-    });
+    const client = new ResourceClient({ root: params.options.root });
+    const target = await resolve_chat_entry(client, { agent: agent_id, category: params.options.category, session_id: selected.explicit_session_id || undefined, new_session: selected.create_new_session, workspace: params.options.workspace, workspace_path: params.options.workspace_path, interactive: process.stdin.isTTY === true && process.stdout.isTTY === true });
+    const remote_agent = await createRemoteAgent({ agent_id, workspace: target.workspace_id, root: params.options.root });
+    const original_get = remote_agent.sessions.get.bind(remote_agent.sessions);
+    const original_list = remote_agent.sessions.list.bind(remote_agent.sessions);
+    remote_agent.sessions.get = async (id, category) => await original_get(id, category ?? target.category);
+    remote_agent.sessions.list = async (input) => await original_list({ ...input, category: input?.category ?? target.category });
+    return { success: true, target, remote_agent };
   } catch (error) {
     return {
       success: false,
       error: error instanceof Error ? error.message : String(error),
     };
   }
-}
-
-/** 打开 chat 入口；失败时抛出，由公开入口统一转为结果。 */
-async function open_agent_chat_entry(params: {
-  agent_id: string;
-  selected: { explicit_session_id: string; create_new_session: boolean };
-  options: AgentChatCliOptions;
-  transport?: { host?: string; port?: number };
-}): Promise<
-  | {
-      success: true;
-      target: ResolvedAgentChatTarget;
-      remote_agent: AgentChatClient;
-    }
-  | {
-      success: false;
-      error?: string;
-    }
-> {
-  const agent_id = params.agent_id;
-  const explicit_workspace = String(params.options.workspace || "").trim();
-  const discovery = { agent_id: agent_id, transport: params.transport };
-
-  let session_id = "";
-  let workspace_id = "";
-  let create_new_session = params.selected.create_new_session;
-
-  if (!create_new_session && params.selected.explicit_session_id) {
-    const session = await find_chat_session({
-      ...discovery,
-      session_id: params.selected.explicit_session_id,
-    });
-    if (!session) {
-      return { success: false, error: `Session not found: ${params.selected.explicit_session_id}` };
-    }
-    if (explicit_workspace && session.workspace_id && session.workspace_id !== explicit_workspace) {
-      return {
-        success: false,
-        error: `Session "${session.session_id}" belongs to Workspace "${session.workspace_id}", which does not match --workspace "${explicit_workspace}".`,
-      };
-    }
-    if (!session.workspace_id) {
-      return {
-        success: false,
-        error: `Session "${session.session_id}" is not bound to a Workspace.`,
-      };
-    }
-    session_id = session.session_id;
-    workspace_id = session.workspace_id;
-  } else if (!create_new_session) {
-    // 未指定 `--workspace` 时跟随最近会话所属 Workspace；显式指定时只在该 Workspace 内查找。
-    const scoped_workspace_id = explicit_workspace
-      ? (await resolve_cli_workspace(explicit_workspace)).workspace_id
-      : undefined;
-    const latest = await find_latest_chat_session({
-      ...discovery,
-      ...(scoped_workspace_id ? { workspace_id: scoped_workspace_id } : {}),
-    });
-    if (latest?.workspace_id) {
-      session_id = latest.session_id;
-      workspace_id = latest.workspace_id;
-    } else {
-      create_new_session = true;
-    }
-  }
-
-  const target = await resolve_chat_entry_target({
-    agent_id: agent_id,
-    workspace_id: workspace_id,
-    fallback_workspace_input: explicit_workspace,
-  });
-  const remote_agent = await createRemoteAgent({
-    agent_id: target.agent_id,
-    workspace: target.workspace_id,
-    transport: params.transport,
-  });
-
-  if (create_new_session) {
-    try {
-      session_id = (await createRemoteChatSession({ remote_agent })).session_id;
-    } catch (error) {
-      await remote_agent.close().catch(() => undefined);
-      throw error;
-    }
-  }
-
-  return {
-    success: true,
-    target: {
-      agent_id: target.agent_id,
-      workspace_id: target.workspace_id,
-      project_root: target.workspace_path,
-      session_id: session_id,
-    },
-    remote_agent,
-  };
-}
-
-/**
- * 解析本次 chat 要进入的 Workspace。
- *
- * 说明（中文）
- * - 优先使用 Session 绑定的 Workspace；该 Workspace 已注销时回落到入口 Workspace。
- * - 入口 Workspace 由 `--workspace`、当前目录或唯一已登记 Workspace 决定。
- */
-async function resolve_chat_entry_target(params: {
-  agent_id: string;
-  workspace_id: string;
-  fallback_workspace_input: string;
-}): Promise<AgentExecutionTarget> {
-  const preferred = String(params.workspace_id || "").trim();
-  if (preferred) {
-    try {
-      return await resolve_cli_agent_target(params.agent_id, preferred);
-    } catch {
-      // Session 绑定的 Workspace 已注销：回落到入口 Workspace。
-    }
-  }
-  return await resolve_cli_agent_target(params.agent_id, params.fallback_workspace_input);
-}
-
-/** 读取指定 Agent 的 chat Session；省略 `workspace_id` 时不限定 Workspace。 */
-async function read_agent_chat_sessions(params: {
-  agent_id: string;
-  session_id?: string;
-  workspace_id?: string;
-  transport?: { host?: string; port?: number };
-}): Promise<AgentChatSessionSummaryView[]> {
-  const reader = await createAgentSessionReader({
-    agent_id: params.agent_id,
-    transport: params.transport,
-  });
-  try {
-    return await listRemoteChatSessions({
-      remote_agent: reader,
-      input: {
-        ...(params.workspace_id ? { workspace_id: params.workspace_id } : {}),
-        ...(params.session_id ? { query: params.session_id } : {}),
-      },
-    });
-  } finally {
-    await reader.close().catch(() => undefined);
-  }
-}
-
-/**
- * 在全部 Workspace 中查找最近一次 chat Session。
- *
- * 说明（中文）
- * - Session 列表已按 `updated_at` 倒序，首项即最近会话。
- * - 发现失败时返回 null，由调用方回落到入口 Workspace 新建会话。
- */
-async function find_latest_chat_session(params: {
-  agent_id: string;
-  workspace_id?: string;
-  transport?: { host?: string; port?: number };
-}): Promise<AgentChatSessionSummaryView | null> {
-  try {
-    const sessions = await read_agent_chat_sessions(params);
-    return sessions[0] ?? null;
-  } catch {
-    return null;
-  }
-}
-
-/** 在全部 Workspace 中按 session_id 查找 chat Session。 */
-async function find_chat_session(params: {
-  agent_id: string;
-  session_id: string;
-  transport?: { host?: string; port?: number };
-}): Promise<AgentChatSessionSummaryView | null> {
-  const sessions = await read_agent_chat_sessions({
-    agent_id: params.agent_id,
-    session_id: params.session_id,
-    transport: params.transport,
-  });
-  return sessions.find((item) => item.session_id === params.session_id) ?? null;
 }
 
 export async function runSdkPromptTurn(params: {

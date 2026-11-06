@@ -91,7 +91,7 @@ export class AgentRepository {
     const agent_id = normalize_agent_id(input.agent_id);
     if (this.get(agent_id)) throw new Error(`Agent already exists: ${agent_id}`);
     const current_time = new Date().toISOString();
-    this.write_definition({
+    this.commit_definition({
       schema_version: 2,
       id: agent_id,
       name: normalize_agent_name(input.name || agent_id),
@@ -101,8 +101,7 @@ export class AgentRepository {
       ...(input.llm ? { llm: structuredClone(input.llm) } : {}),
       created_at: current_time,
       updated_at: current_time,
-    });
-    this.write_soul(agent_id, String(input.instruction || ""));
+    }, String(input.instruction || ""));
     return this.get(agent_id)!;
   }
 
@@ -111,7 +110,7 @@ export class AgentRepository {
     const agent_id = normalize_agent_id(input.agent_id);
     const existing = this.get(agent_id);
     if (!existing) return this.create(input);
-    this.write_definition({
+    this.commit_definition({
       schema_version: 2,
       id: agent_id,
       name: normalize_agent_name(input.name),
@@ -121,8 +120,7 @@ export class AgentRepository {
       ...(input.llm ? { llm: structuredClone(input.llm) } : {}),
       created_at: existing.created_at,
       updated_at: new Date().toISOString(),
-    });
-    this.write_soul(agent_id, input.instruction);
+    }, input.instruction);
     return this.get(agent_id)!;
   }
 
@@ -130,6 +128,7 @@ export class AgentRepository {
   get(agent_id_input: string): LocalAgentConfig | null {
     const agent_id = normalize_agent_id(agent_id_input);
     const file_path = this.definition_path(agent_id);
+    if (fs.pathExistsSync(`${file_path}.commit`)) throw new Error(`Agent configuration recovery required: ${agent_id}`);
     if (!fs.pathExistsSync(file_path)) return null;
     const definition = this.read_json<AgentDefinitionFile>(file_path);
     if (
@@ -209,7 +208,7 @@ export class AgentRepository {
     }
   }
 
-  /** 删除 Agent 定义目录；Session 与 Workspace 数据不在这里。 */
+  /** 永久删除 Agent 自有目录，包含 Session、归档、附件、skills、日志及 scope 内 Power 数据。 */
   remove(agent_id_input: string): void {
     fs.removeSync(get_local_agent_path(this.root_path, normalize_agent_id(agent_id_input)));
   }
@@ -220,17 +219,44 @@ export class AgentRepository {
     return fs.pathExistsSync(file_path) ? fs.readFileSync(file_path, "utf8") : "";
   }
 
-  /** 原子写入 Agent 主体文件。 */
-  private write_soul(agent_id: string, instruction: string): void {
-    this.write_atomic(this.soul_path(agent_id), String(instruction || ""));
+  /** 在 root 写租约内恢复未完成双文件提交；纯读取绝不调用。 */
+  recover_pending_commits(): void {
+    // 隔离目录仅用于永久删除失败收敛；下次显式写操作完成清理后才允许复用 ID。
+    const deletions_path = path.join(this.root_path, "runtimes", "city", "deletions");
+    if (fs.pathExistsSync(deletions_path)) {
+      for (const entry of fs.readdirSync(deletions_path, { withFileTypes: true })) {
+        if (!entry.isDirectory() || !/^[a-z0-9]+(?:_[a-z0-9]+)*-[a-f0-9-]{36}$/u.test(entry.name)) throw new Error("Invalid pending Agent deletion record");
+        fs.removeSync(path.join(deletions_path, entry.name));
+      }
+    }
+    const agents_path = get_local_agents_path(this.root_path);
+    if (!fs.pathExistsSync(agents_path)) return;
+    for (const entry of fs.readdirSync(agents_path, { withFileTypes: true })) {
+      if (!entry.isDirectory()) continue;
+      const commit_path = `${this.definition_path(entry.name)}.commit`;
+      if (!fs.pathExistsSync(commit_path)) continue;
+      const pending = this.read_json<{
+        /** 待恢复的结构化身份配置。 */
+        definition: AgentDefinitionFile;
+        /** 与该配置一同提交的完整主体指令。 */
+        instruction: string;
+      }>(commit_path);
+      if (pending.definition.id !== entry.name || pending.definition.schema_version !== 2 || typeof pending.instruction !== "string") throw new Error(`Invalid Agent commit record: ${entry.name}`);
+      this.finish_commit(pending.definition, pending.instruction);
+    }
   }
 
-  /** 原子写入 Agent 结构化定义。 */
-  private write_definition(definition: AgentDefinitionFile): void {
-    this.write_atomic(
-      this.definition_path(definition.id),
-      `${JSON.stringify(definition, null, 2)}\n`,
-    );
+  /** 提交记录先落盘，失败后保持可重试状态，不对读取暴露两份不一致配置。 */
+  private commit_definition(definition: AgentDefinitionFile, instruction: string): void {
+    this.write_atomic(`${this.definition_path(definition.id)}.commit`, JSON.stringify({ definition, instruction }));
+    this.finish_commit(definition, instruction);
+  }
+
+  /** 在已持写租约的进程内完成或重放提交。 */
+  private finish_commit(definition: AgentDefinitionFile, instruction: string): void {
+    this.write_atomic(this.soul_path(definition.id), instruction);
+    this.write_atomic(this.definition_path(definition.id), `${JSON.stringify(definition, null, 2)}\n`);
+    fs.unlinkSync(`${this.definition_path(definition.id)}.commit`);
   }
 
   /** 使用同目录临时文件提交完整内容。 */
@@ -238,7 +264,7 @@ export class AgentRepository {
     fs.ensureDirSync(path.dirname(file_path), { mode: 0o700 });
     fs.chmodSync(path.dirname(file_path), 0o700);
     const temp_path = `${file_path}.${process.pid}.${Date.now()}.tmp`;
-    fs.writeFileSync(temp_path, content, { mode: 0o600 });
+    fs.writeFileSync(temp_path, content, { mode: 0o600, flush: true });
     fs.renameSync(temp_path, file_path);
     fs.chmodSync(file_path, 0o600);
   }

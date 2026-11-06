@@ -36,9 +36,9 @@ flowchart LR
 | Child 对 Main，原执行已收口 | 返回 discarded，仅保存结果 |
 | 目标已删除或归档 | 结束自动交付，保留来源结果 |
 
-公开问题回传只读投影与原 Interaction 引用；问题状态由 Child canonical Message 唯一持有。公开答案可通过既有 reply/respond 转交，模型不得杜撰用户回答。审批与私密问题仅使用原 Session 受信入口。
+委派只回传执行结果。问题、审批和私密输入由原 Session 的 canonical Interaction 唯一持有，通过统一交互入口由用户处理，不注入父 Session，也不触发父 Session 的后台续轮。用户回答后，Child 在原执行中继续，完成后再向 Main 回传结果；Main 仍等待其 Child 完成。
 
-交互通知各自等待接收，不串行阻塞整个委派恢复扫描。
+用户明确要求转交公开问题的真实回答时，仍可使用既有 reply/respond；模型不得杜撰用户回答。审批与私密输入仅使用原 Session 受信入口。委派恢复扫描只协调执行与结果投递。
 
 Main 后续 Chat 回复与 Shell 唤醒携带原 Turn 的受信背景引用。Messenger 从原完成路由恢复收件目标，不使用最新入站消息猜测。
 
@@ -60,7 +60,7 @@ canonical 输入写入即代表接收成功，后续模型执行可以仍未完�
 
 - type SessionOrigin：分层判据与来源。
 - agent SessionWorkPolicy / SessionChildWorkLifecycle：关系与收尾。
-- agent SessionDelegations：执行、问题引用与结果可靠回传。
+- agent SessionDelegations：执行与结果可靠回传。
 - agent SessionBackgroundInput / SessionBackgroundRecovery：接收与中断收口。
 - city ShellCompletionBridge：Shell到Agent的可信桥接。
 - city ShellCompletionDelivery / ShellSnapshotStorage：Shell结果投递、原子快照与恢复。

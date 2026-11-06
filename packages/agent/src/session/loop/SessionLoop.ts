@@ -445,7 +445,7 @@ export class SessionLoop {
    */
   async stop(expected_turn_id?: string): Promise<AgentSessionStopResult> {
     await this.initialize_occupation();
-    if (expected_turn_id && expected_turn_id !== (this.current_turn_id() ?? this.recovered_turn_id)) throw new Error("Session Turn changed before stop");
+    if (expected_turn_id && expected_turn_id !== (this.current_turn_id() ?? this.recovered_turn_id)) throw Object.assign(new Error("Session Turn changed before stop"), { code: "turn_changed" });
     this.stopping = true;
     const stop_generation = ++this.stop_generation;
     if (!this.active_turn && this.recovered_turn_id) {

@@ -7,17 +7,11 @@
  */
 
 import type { Command, Option } from "commander";
-import {
-  emit_registered_agent_list_with_options,
-  resolve_cli_agent_id,
-} from "@/city/agent/AgentSelection.js";
+import { register_agent_resource_commands } from "./ResourceCommands.js";
 import { runInteractiveCityManager } from "@/city/shared/CityManager.js";
-import { run_agent_create_command } from "@/city/agent/Init.js";
-import { configure_agent_model } from "@/city/agent/AgentModel.js";
-import { chatCommand } from "@/city/agent/AgentChat.js";
-import type { AgentChatCliOptions } from "@/city/agent/AgentChatTypes.js";
-import type { AgentModelCommandOptions } from "@/city/types/AgentModel.js";
-import { createVersionBanner, parseBoolean } from "@/shared/IndexSupport.js";
+
+import { run_resource_chat } from "../resources/ChatCommand.js";
+import { createVersionBanner } from "@/shared/IndexSupport.js";
 import { helpText, t } from "@/shared/CliLocale.js";
 
 /**
@@ -55,66 +49,10 @@ export function registerAgentCommands(
       agent.outputHelp();
     }));
 
-  agent
-    .command("create [path]")
-    .description(t({
-      zh: "创建 Agent 并初始化 Workspace 资产",
-      en: "create an Agent and initialize its Workspace assets",
-    }))
-    .option("-f, --force [enabled]", t({
-      zh: "允许覆盖已有 Agent 配置（危险操作）",
-      en: "allow overwriting existing Agent config (dangerous)",
-    }), parseBoolean)
-    .helpOption("--help", helpText())
-    .action(createVersionBanner(context.version, async (workspace_path: string | undefined, options: { force?: boolean }) => {
-      await run_agent_create_command(workspace_path, options);
-    }));
+  register_agent_resource_commands(agent);
 
   agent
-    .command("list")
-    .description(t({
-      zh: "列出已登记的 Agent",
-      en: "list registered Agents",
-    }))
-    .option("--running [enabled]", t({
-      zh: "仅列出当前 CLI City 持有的 Agent",
-      en: "list only Agents currently held by the CLI City",
-    }), parseBoolean)
-    .option("--json [enabled]", t({
-      zh: "以 JSON 输出",
-      en: "output as JSON",
-    }), parseBoolean)
-    .helpOption("--help", helpText())
-    .action(createVersionBanner(
-      context.version,
-      async (options: { running?: boolean; json?: boolean }) => {
-        await emit_registered_agent_list_with_options({
-          running_only: options.running === true,
-          as_json: options.json === true,
-        });
-      },
-    ));
-
-  agent
-    .command("model [agent_id]")
-    .description(t({
-      zh: "配置 Agent 默认模型",
-      en: "configure the Agent default model",
-    }))
-    .option("--set <model-id>", t({
-      zh: "直接设置 Federation model id",
-      en: "set a Federation model id",
-    }))
-    .helpOption("--help", helpText())
-    .action(createVersionBanner(
-      context.version,
-      async (agent_id: string | undefined, options: AgentModelCommandOptions) => {
-        await configure_agent_model(await resolve_cli_agent_id(agent_id), options);
-      },
-    ));
-
-  agent
-    .command("chat [agent_id]")
+    .command("chat <agent_id>")
     .description(t({
       zh: "进入 Agent 的 Session 对话",
       en: "open an Agent Session for chat",
@@ -127,21 +65,17 @@ export function registerAgentCommands(
       zh: "进入指定 Session",
       en: "use a specific Session",
     }))
-    .option("--new-session [enabled]", t({
-      zh: "创建新 Session",
-      en: "create a new Session",
-    }), parseBoolean)
-    .option("--workspace <id-or-path>", t({
-      zh: "指定本次对话使用的 Workspace ID 或路径",
-      en: "select the Workspace ID or path for this chat",
-    }))
-    .option("--json [enabled]", t({ zh: "输出 JSON", en: "output JSON" }), parseBoolean)
+    .option("--new-session", "Create a new ordinary work Session")
+    .option("--workspace <id>", "Registered Workspace ID")
+    .option("--workspace-path <path>", "Registered Workspace path")
+    .option("--category <category>", "chat or work", "work")
+    .option("--message-file <path-or-dash>", "Read message from a UTF-8 file or stdin")
+    .option("--request-id <id>", "Stable input idempotency key")
+    .option("--no-wait", "Return after the host accepts the input")
+    .option("--root <path>", "City data root")
+    .option("--timeout <seconds>", "Operation timeout")
+    .option("--json", t({ zh: "输出 JSON", en: "output JSON" }))
     .helpOption("--help", helpText())
-    .action(createVersionBanner(
-      context.version,
-      async (agent_id: string | undefined, options: AgentChatCliOptions) => {
-        await chatCommand({ ...options, to: agent_id });
-      },
-    ));
+    .action(async (agent_id: string, options: Record<string, unknown>) => await run_resource_chat(agent_id, options));
 
 }

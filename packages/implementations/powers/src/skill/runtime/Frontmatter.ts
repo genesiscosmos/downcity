@@ -24,11 +24,11 @@ export interface FrontMatterParseResult {
  * 切分 Markdown front matter。
  */
 export function parse_front_matter(markdown: string): FrontMatterParseResult {
-  const text = String(markdown ?? "");
+  const text = String(markdown ?? "").replace(/^\uFEFF/, "");
   if (!text.startsWith("---")) return { front_matter_yaml: null, body: text };
 
-  const match = text.match(/^---\r?\n([\s\S]*?)\r?\n---\r?\n?/);
-  if (!match) return { front_matter_yaml: null, body: text };
+  const match = text.match(/^---[ \t]*\r?\n([\s\S]*?)^---[ \t]*(?:\r?\n|$)/m);
+  if (!match || match.index !== 0) return { front_matter_yaml: null, body: text };
 
   return {
     front_matter_yaml: match[1] ?? "",

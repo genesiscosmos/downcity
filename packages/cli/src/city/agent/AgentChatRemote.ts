@@ -3,45 +3,24 @@
  *
  * 关键点（中文）
  * - 封装 `RemoteAgent` 创建、session 列表、session 创建/获取等远程操作。
- * - City daemon 在线时通过 RPC 访问宿主；离线时保留本地装配路径供一次性 CLI 调用。
- * - 不处理命令行交互，只负责选择远程或本地访问路径。
+ * - 握手当前 City 宿主后通过已登记的 RPC 访问，不自动离线装配。
+ * - 不处理命令行交互，资源浏览使用共用 ResourceClient。
  */
 
 import {
-  Agent,
   type AgentSessions,
-  type AgentSession,
-  type AgentSessionCollection,
-  type AgentSessionSetOptions,
-  type RemoteSessionSetInput,
-  type RemoteSessionStateKey,
   type AgentListSessionsInput,
   type AgentSessionSummary,
   type RemoteAgentSession,
 } from "@downcity/agent";
-import { City, LocalStorageProvider, RemoteAgent, type CityPowerHost } from "@downcity/city";
-import type { ModelClient } from "@downcity/type";
-import type { WorkspaceRuntime } from "@downcity/type/workspace";
-import { resolveDaemonRpcEndpoint } from "@/city/process/daemon/Client.js";
-import {
-  is_process_alive,
-  read_daemon_meta,
-  read_daemon_pid,
-} from "@/city/process/daemon/Manager.js";
+import { RemoteAgent, read_city_host_state } from "@downcity/city";
+import { request_management, resolve_resource_root, ResourceError } from "@downcity/city/local";
 import {
   type AgentChatSessionSummaryView,
   type AgentChatTransportOptions,
 } from "@/city/agent/AgentChatTypes.js";
 import { listPlatformModelChoices } from "@/city/runtime/city-model/ExecutionModelBinding.js";
 import type { AgentChatModelChoice } from "@/city/types/AgentChatModel.js";
-import {
-  create_cli_agent,
-  create_cli_workspace,
-  create_cli_power_loader,
-  resolve_cli_agent_model,
-} from "@/city/runtime/AgentAssembly.js";
-import { create_cli_local_data, type CliLocalData } from "@/city/runtime/LocalData.js";
-import { resolve_cli_agent_target } from "@/city/agent/AgentSelection.js";
 
 /**
  * 远端访问目标。
@@ -67,16 +46,21 @@ export interface AgentChatClient {
  * - 带 `workspace_id` 时地址与请求都固定进入该 Workspace。
  */
 export async function resolveAgentChatRemoteTarget(params: {
+  /** 完整 Agent ID。 */
   agent_id: string;
+  /** 已登记 Workspace ID。 */
   workspace_id?: string;
+  /** 显式数据根。 */
+  root?: string;
+  /** 由宿主发现取代的调用方 transport 提示。 */
   transport?: AgentChatTransportOptions;
 }): Promise<AgentChatRemoteTarget> {
-  // 关键点（中文）：chat 固定走 Agent 本机 RPC，由 City 负责对外暴露。
-  const endpoint = resolveDaemonRpcEndpoint({
-    agent_id: params.agent_id,
-    host: params.transport?.host,
-    port: params.transport?.port,
-  });
+  const root_path = resolve_resource_root(params.root);
+  const state = await read_city_host_state(root_path);
+  if (!state) throw new ResourceError("host_offline", "Start City explicitly before chat", 5);
+  await request_management(state, root_path, "handshake");
+  if (!state.rpc_host || !state.rpc_port) throw new ResourceError("capability_missing", "Current host does not expose a Session transport", 5);
+  const endpoint = { host: state.rpc_host, port: state.rpc_port };
   const workspace_segment = String(params.workspace_id || "").trim()
     ? `/${encodeURIComponent(String(params.workspace_id).trim())}`
     : "";
@@ -85,66 +69,24 @@ export async function resolveAgentChatRemoteTarget(params: {
   };
 }
 
-/** 判断当前 CLI City daemon 是否已持有指定 Agent。 */
-async function is_agent_held_by_daemon(agent_id: string): Promise<boolean> {
-  const pid = await read_daemon_pid();
-  const meta = pid && is_process_alive(pid) ? await read_daemon_meta() : null;
-  return meta?.agent_ids.includes(agent_id) === true;
-}
+
 
 /**
  * 创建 RemoteAgent 实例。
  */
 export async function createRemoteAgent(params: {
+  /** 完整 Agent ID。 */
   agent_id: string;
+  /** 由共用用例解析的稳定 Workspace ID。 */
   workspace?: string;
+  /** 显式数据根。 */
+  root?: string;
+  /** 可选 transport 提示。 */
   transport?: AgentChatTransportOptions;
 }): Promise<AgentChatClient> {
-  const target_config = await resolve_cli_agent_target(params.agent_id, params.workspace);
-  if (!(await is_agent_held_by_daemon(params.agent_id))) {
-    const data = create_cli_local_data();
-    const power_loader = create_cli_power_loader({ power_repository: data.powers });
-    let agent: Agent | undefined;
-    let city: City | undefined;
-    try {
-      const config = data.agents.get(params.agent_id);
-      if (!config) throw new Error(`Agent not found: ${params.agent_id}`);
-      const workspace_config = data.workspaces.get(target_config.workspace_id);
-      if (!workspace_config) throw new Error(`Workspace not found: ${target_config.workspace_id}`);
-      agent = await create_cli_agent({
-        config,
-      });
-      const workspace = await create_cli_workspace(workspace_config, data.root_path);
-      const current_city = new City({
-        storage: new LocalStorageProvider(data.root_path),
-        workspaces: [workspace],
-        powers: await power_loader.list_registrations(),
-        power_host: create_local_power_host(data),
-      });
-      city = current_city;
-      current_city.agents.add(agent);
-      return {
-        sessions: create_local_chat_sessions(
-          agent.sessions,
-          workspace,
-          async (model_id) => await resolve_cli_agent_model(model_id, workspace.get_env()),
-        ),
-        close: async () => {
-          await current_city.close();
-          data.database.close();
-        },
-      };
-    } catch (error) {
-      // 关键点（中文）：add 成功后失败也要走容器入口，主体在绑定期不能自行释放。
-      if (city && agent) await city.agents.remove(agent.id).catch(() => null);
-      await agent?.dispose().catch(() => undefined);
-      data.database.close();
-      throw error;
-    }
-  }
   const target = await resolveAgentChatRemoteTarget({
     ...params,
-    workspace_id: target_config.workspace_id,
+    workspace_id: params.workspace,
   });
   return new RemoteAgent({
     url: target.url,
@@ -165,135 +107,8 @@ export async function createAgentSessionReader(params: {
 }): Promise<AgentChatClient> {
   const agent_id = String(params.agent_id || "").trim();
   if (!agent_id) throw new Error("Agent id is required");
-  if (await is_agent_held_by_daemon(agent_id)) {
-    const target = await resolveAgentChatRemoteTarget({
-      agent_id,
-      transport: params.transport,
-    });
-    return new RemoteAgent({ url: target.url });
-  }
-  return await create_local_agent_session_reader(agent_id);
-}
-
-/** 构造 CLI 本地 Power 宿主回调。 */
-function create_local_power_host(data: CliLocalData): CityPowerHost {
-  return {
-    config: (power_id) => ({
-      path: data.powers.config_path(power_id),
-      get: () => structuredClone(data.powers.get_config(power_id)),
-      set: async (config) => {
-        data.powers.set_config(power_id, structuredClone(config));
-      },
-    }),
-  };
-}
-
-/** 在不绑定 Workspace 的本地装配中打开 Agent 级 Session 读取器。 */
-async function create_local_agent_session_reader(agent_id: string): Promise<AgentChatClient> {
-  const data = create_cli_local_data();
-  const power_loader = create_cli_power_loader({ power_repository: data.powers });
-  let agent: Agent | undefined;
-  let city: City | undefined;
-  try {
-    const config = data.agents.get(agent_id);
-    if (!config) throw new Error(`Agent not found: ${agent_id}`);
-    agent = await create_cli_agent({ config });
-    const current_city = new City({
-      storage: new LocalStorageProvider(data.root_path),
-      workspaces: [],
-      powers: await power_loader.list_registrations(),
-      power_host: create_local_power_host(data),
-    });
-    city = current_city;
-    current_city.agents.add(agent);
-    return {
-      sessions: create_local_session_reader(agent.sessions),
-      close: async () => {
-        await current_city.close();
-        data.database.close();
-      },
-    };
-  } catch (error) {
-    if (city && agent) await city.agents.remove(agent.id).catch(() => null);
-    await agent?.dispose().catch(() => undefined);
-    data.database.close();
-    throw error;
-  }
-}
-
-/**
- * 把本地 Session 集合包装为只读发现视图。
- *
- * 说明（中文）
- * - `list` / `archived` 不绑定 Workspace，用于跨 Workspace 发现。
- * - `create` / `get` 依赖 Workspace 执行上下文，这里显式拒绝。
- */
-function create_local_session_reader(
-  sessions: AgentSessionCollection,
-): AgentSessions<RemoteAgentSession> {
-  const requires_workspace = async (): Promise<never> => {
-    throw new Error("Opening a Session requires a Workspace; this reader only lists Sessions");
-  };
-  return {
-    create: requires_workspace,
-    get: requires_workspace,
-    list: async (input) => await sessions.list(input),
-    archive: async (input) => await sessions.archive(input),
-    archived: async (input) => await sessions.archived(input),
-    clean_archive: async () => await sessions.clean_archive(),
-  };
-}
-
-/** 把本地 Session 的模型实例输入适配为 RemoteSession 的 model_id 输入。 */
-function create_local_chat_sessions(
-  sessions: AgentSessionCollection,
-  workspace: WorkspaceRuntime,
-  resolve_model: (model_id: string) => Promise<ModelClient>,
-): AgentSessions<RemoteAgentSession> {
-  const wrap = (session: AgentSession): RemoteAgentSession => {
-    return Object.assign({
-      /** Dedicated local private transport; remote clients must expose their own secure implementation. */
-      submit_private_question: (input: Parameters<AgentSession["submit_private_question"]>[0]) => session.submit_private_question(input),
-    }, {
-      id: session.id,
-      workspace_id: session.get("workspace_id"),
-      origin: session.origin,
-      // 远程接口只暴露可序列化状态，本地包装直接转发同名键，不重新定义语义。
-      get: <K extends RemoteSessionStateKey>(key: K) => session.get(key),
-      get_info: async () => await session.get_info(),
-      prompt: async (input) => await session.prompt(input),
-      stop: async () => await session.stop(),
-      subscribe: (subscriber) => session.subscribe(subscriber),
-      watch: async (subscriber) => session.subscribe(subscriber),
-      messages: async (input) => await session.messages(input),
-      system: async () => await session.system(),
-      interactions: async () => await session.interactions(),
-      status: async () => await session.status(),
-      respond: async (input) => await session.respond(input),
-      set: async (
-        input: RemoteSessionSetInput,
-        options?: AgentSessionSetOptions,
-      ) => await session.set({
-        ...(input.model_id ? {
-          model: await resolve_model(input.model_id),
-        } : {}),
-        ...(input.security ? { security: input.security } : {}),
-      }, options),
-      fork: async (input) => wrap(await session.fork(input)),
-    } satisfies RemoteAgentSession);
-  };
-  return {
-    create: async () => wrap(await sessions.create({ workspace })),
-    get: async (session_id, category) => wrap(await sessions.get(
-      session_id,
-      category,
-      { workspace },
-    )),
-    list: async (input) => await sessions.list({ ...input, workspace_id: workspace.id }),
-    archive: async (input) => await sessions.archive(input),
-    archived: async (input) => await sessions.archived({ ...input, workspace_id: workspace.id }),
-    clean_archive: async () => await sessions.clean_archive(),
-  };
+  const target = await resolveAgentChatRemoteTarget({ agent_id, transport: params.transport });
+  return new RemoteAgent({ url: target.url });
 }
 
 /** 读取当前用户可用于 Chat Session 的模型目录。 */

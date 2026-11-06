@@ -284,7 +284,7 @@ export class Agent {
     if (input.instruction !== undefined) {
       this.set_instruction(input.instruction);
     }
-    if (input.model !== undefined) {
+    if (Object.hasOwn(input, "model")) {
       this.agent_model = input.model;
     }
   }

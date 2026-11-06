@@ -2,7 +2,8 @@
  * Session 历史只读投影：文件使用短生命周期 SQLite 只读连接，内存复用已有存储。
  * 复用 canonical 消息解码与分页语义，不初始化 Session、不迁移 schema、不恢复执行。
  */
-import { DatabaseSync } from "node:sqlite";
+import type { DatabaseSync } from "node:sqlite";
+import { open_session_read_database } from "./SessionReadDatabase.js";
 import type { SessionAgentMessage, SessionMessage } from "@downcity/type";
 import { collect_pending_interactions } from "./SessionInteractionReader.js";
 import type { SessionHistoryMeta } from "@/types/store/SessionHistoryMeta.js";
@@ -50,13 +51,14 @@ export function read_file_session_history(
   session_id: string,
   category: string,
   archived: boolean,
+  immutable = false,
 ): SessionReadView {
-  const metadata = read_session_metadata_from_database(database_path, category);
+  const metadata = read_session_metadata_from_database(database_path, category, { immutable, strict: true });
   if (!metadata || metadata.agent_id !== agent_id || metadata.session_id !== session_id) {
     throw new Error("session_target_forbidden: Session is unavailable to this Agent");
   }
   const with_database = <T>(read: (database: DatabaseSync) => T): T => {
-    const database = new DatabaseSync(database_path, { readOnly: true });
+    const database = open_session_read_database(database_path, immutable);
     try {
       const identity = database.prepare("SELECT agent_id, session_id FROM session_state WHERE singleton_id = 1").get();
       if (identity?.agent_id !== agent_id || identity.session_id !== session_id) {

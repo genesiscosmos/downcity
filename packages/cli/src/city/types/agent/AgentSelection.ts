@@ -14,8 +14,8 @@ export interface CliAgentView {
   /** Agent 的用户可见名称；未自定义时与 `agent_id` 相同。 */
   name: string;
 
-  /** 当前 CLI City daemon 是否已加载该 Agent。 */
-  status: "loaded" | "unloaded";
+  /** 当前已握手宿主的加载状态；离线不推断为 unloaded。 */
+  status: "loaded" | "unloaded" | "unknown";
 }
 
 /** 交互选择器中的 Agent 选项。 */

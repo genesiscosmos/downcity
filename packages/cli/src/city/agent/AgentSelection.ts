@@ -8,7 +8,6 @@ import path from "node:path";
 import prompts from "@/city/tui/Prompts.js";
 import {
   get_agent_config,
-  list_agent_configs,
 } from "@/city/process/registry/AgentConfigRepository.js";
 import {
   get_workspace,
@@ -24,11 +23,7 @@ import type {
 import { emitCliBlock, emitCliList } from "@/shared/CliReporter.js";
 import { printResult } from "@/city/utils/cli/CliOutput.js";
 import { CliError } from "@/shared/CliError.js";
-import {
-  is_process_alive,
-  read_daemon_meta,
-  read_daemon_pid,
-} from "@/city/process/daemon/Manager.js";
+import { ResourceClient } from "../resources/ResourceClient.js";
 
 /** 一次执行所选的 Agent 与 Workspace 目标。 */
 export interface AgentExecutionTarget {
@@ -47,18 +42,6 @@ export interface AgentExecutionTarget {
  */
 export async function resolve_cli_agent_id(agent_id_input?: string): Promise<string> {
   return (await resolve_agent(agent_id_input)).agent_id;
-}
-
-/** 将 Agent 配置与当前 City runtime 投影成 CLI 视图。 */
-async function to_cli_agent_view(agent: AgentConfig): Promise<CliAgentView> {
-  const daemon_pid = await read_daemon_pid();
-  const meta = daemon_pid && is_process_alive(daemon_pid) ? await read_daemon_meta() : null;
-  const active = meta?.pid === daemon_pid && meta.agent_ids.includes(agent.agent_id);
-  return {
-    agent_id: agent.agent_id,
-    name: agent.name,
-    status: active ? "loaded" : "unloaded",
-  };
 }
 
 /**
@@ -82,9 +65,8 @@ export function format_agent_display_label(agent: {
 
 /** 读取全部已登记 Agent 的 CLI 视图。 */
 export async function list_registered_agents_for_cli(): Promise<CliAgentView[]> {
-  const agents = await Promise.all(
-    list_agent_configs().map(to_cli_agent_view),
-  );
+  const result = await new ResourceClient().call("agent.list");
+  const agents: CliAgentView[] = (result.data as { items: { agent_id: string; name: string; runtime_state: "loaded" | "unloaded" | "unknown" }[] }).items.map((item) => ({ agent_id: item.agent_id, name: item.name, status: item.runtime_state }));
   return agents.sort((left, right) => {
     const status_priority = Number(right.status === "loaded") - Number(left.status === "loaded");
     return status_priority || left.agent_id.localeCompare(right.agent_id);

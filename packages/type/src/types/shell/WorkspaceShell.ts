@@ -89,6 +89,9 @@ export interface WorkspaceShell {
   /** 关闭全部 Shell Sessions，并删除、重建当前 Shell 的持久 Sandbox。 */
   reset_sandbox(): Promise<void>;
 
+  /** 只观察活跃/启动中的进程；不创建 Sandbox。宿主移除项目必须先检查。 */
+  has_active_sessions?(): boolean;
+
   /** 释放当前 Shell 的进程、PTY 与 Sandbox 资源。 */
   dispose(): Promise<void>;
 }

@@ -24,7 +24,9 @@ import {
   reload_cli_workspace_env,
   resolve_cli_agent_model,
 } from "@/city/runtime/AgentAssembly.js";
-import { create_cli_persistent_agent } from "@/city/runtime/CreateAgent.js";
+import { RootLease, resolve_resource_root, ResourceCoordinator, ManagementChannel, MANAGEMENT_VERSION, get_root_identity, type ResourceService } from "@downcity/city/local";
+import { read_city_host_state } from "@downcity/city";
+import { create_cli_resources } from "../resources/CliResources.js";
 import { create_cli_local_data, type CliLocalData } from "@/city/runtime/LocalData.js";
 
 /** 已启动的 CLI City Runtime。 */
@@ -39,6 +41,12 @@ export class CliCityRuntime {
   /** CLI 宿主拥有的本地数据库和 Repository。 */
   private readonly data: CliLocalData;
   private readonly host_instance_id: string;
+  /** 从打开业务 DB 之前持有，最后一个业务连接关闭之后释放。 */
+  private readonly lease: RootLease;
+  /** 本机用户管理监听；与公开 HTTP 独立。 */
+  private readonly management: ManagementChannel;
+  /** CLI/TUI/Desktop 共用业务服务的本宿主实例。 */
+  private readonly resources: ResourceService;
 
   private stopped = false;
 
@@ -51,13 +59,23 @@ export class CliCityRuntime {
     rpc_port: number;
     /** CLI 宿主使用的本地产品数据。 */
     data: CliLocalData;
+    /** 宿主唯一实例身份。 */
     host_instance_id: string;
+    /** root 独占租约。 */
+    lease: RootLease;
+    /** 管理通道监听。 */
+    management: ManagementChannel;
+    /** 资源业务服务。 */
+    resources: ResourceService;
   }) {
     this.city = input.city;
     this.http_port = input.http_port;
     this.rpc_port = input.rpc_port;
     this.data = input.data;
     this.host_instance_id = input.host_instance_id;
+    this.lease = input.lease;
+    this.management = input.management;
+    this.resources = input.resources;
   }
 
   /** 按依赖逆序幂等释放全部宿主资源。 */
@@ -65,25 +83,41 @@ export class CliCityRuntime {
     if (this.stopped) return;
     this.stopped = true;
     const results: PromiseSettledResult<unknown>[] = [];
+    results.push(...await Promise.allSettled([this.management.close()]));
+    this.resources.dispose();
     results.push(...await Promise.allSettled([this.city.close()]));
     results.push(...await Promise.allSettled([
       Promise.resolve().then(() => this.data.database.close()),
-      unregister_city_host(this.host_instance_id),
+      unregister_city_host(this.host_instance_id, this.data.root_path),
     ]));
     const errors = results.flatMap((result) =>
       result.status === "rejected" ? [result.reason] : [],
     );
     if (errors.length > 0) throw new AggregateError(errors, "CLI City stop failed");
+    this.lease.release();
   }
 
   /** 从本地产品配置创建并启动完整 CLI City Runtime。 */
   static async start(options: CityDaemonOptions): Promise<CliCityRuntime> {
+    const root_path = resolve_resource_root();
+    if (await read_city_host_state(root_path)) throw new Error("A City host already owns this root");
+    const lease = RootLease.acquire_write(root_path);
+    try { return await CliCityRuntime.start_owned(options, root_path, lease); }
+    catch (error) { lease.release(); throw error; }
+  }
+
+  /** root 已互斥，才允许打开 DB、装配/迁移以及恢复工作。 */
+  private static async start_owned(options: CityDaemonOptions, root_path: string, lease: RootLease): Promise<CliCityRuntime> {
     const host = String(options.host || "127.0.0.1").trim() || "127.0.0.1";
     const http_port = options.http_port ?? 5314;
     const rpc_port = options.rpc_port ?? 15314;
     if (http_port === rpc_port) throw new Error("City HTTP and RPC ports must be different");
 
-    const data = create_cli_local_data();
+    const data = create_cli_local_data(root_path);
+    data.agents.recover_pending_commits();
+    const coordinator = new ResourceCoordinator();
+    let resources: ResourceService;
+    const host_instance_id = String(process.env.DOWNCITY_DAEMON_INSTANCE_ID || "").trim() || create_city_host_instance_id();
     const power_loader = create_cli_power_loader({
       power_repository: data.powers,
     });
@@ -103,8 +137,13 @@ export class CliCityRuntime {
         }),
       },
       runtime: {
-        create_agent: async (input) => await create_cli_persistent_agent(input, data, city),
+        assert_resource_access: (agent_id, workspace_id) => coordinator.assert_available(agent_id, workspace_id),
+        create_agent: async (input) => {
+          const result = await resources.agents.create({ name: input.name, description: input.description, instruction: input.instruction, model: input.model_id });
+          return city.agents.get(result.agent.agent_id)!;
+        },
         resolve_workspace: async (_agent, workspace_id) => {
+        coordinator.assert_available(_agent.id, workspace_id);
         const workspace_config = data.workspaces.get(workspace_id);
         if (!workspace_config) throw new Error(`Workspace not found: ${workspace_id}`);
         return await create_cli_workspace(workspace_config, data.root_path);
@@ -157,6 +196,7 @@ export class CliCityRuntime {
         },
       },
       rpc: {
+        instance_id: host_instance_id,
         shutdown: () => { process.kill(process.pid, "SIGTERM"); },
         resolve_session_model: async ({ workspace, model_id }) =>
           await resolve_cli_agent_model(
@@ -171,6 +211,7 @@ export class CliCityRuntime {
       },
       },
     });
+    resources = create_cli_resources(data, city, coordinator);
     const agents: Agent[] = [];
     try {
       for (const config of data.agents.list()) {
@@ -191,15 +232,14 @@ export class CliCityRuntime {
     process.env.DC_CITY_RPC_HOST = "127.0.0.1";
     process.env.DC_CITY_RPC_PORT = String(rpc_port);
 
+    let management: ManagementChannel | undefined;
     try {
       await city.listen({
         rpc: { host: "127.0.0.1", port: rpc_port },
         http: { host, port: http_port },
       });
-      const host_instance_id = String(process.env.DOWNCITY_DAEMON_INSTANCE_ID || "").trim()
-        || create_city_host_instance_id();
-      await register_city_host({
-        owner: "cli",
+      const state = {
+        owner: "cli" as const,
         pid: process.pid,
         instance_id: host_instance_id,
         started_at: new Date().toISOString(),
@@ -207,9 +247,17 @@ export class CliCityRuntime {
         http_port,
         rpc_host: "127.0.0.1",
         rpc_port,
-      });
-      return new CliCityRuntime({ city, http_port, rpc_port, data, host_instance_id });
+        management_version: MANAGEMENT_VERSION,
+        root_identity: get_root_identity(root_path),
+        state: "ready" as const,
+        capabilities: resources.capabilities,
+      };
+      management = await ManagementChannel.listen(root_path, state, resources);
+      await register_city_host({ ...state, management_endpoint: management.endpoint }, root_path);
+      return new CliCityRuntime({ city, http_port, rpc_port, data, host_instance_id, lease, management, resources });
     } catch (error) {
+      await management?.close().catch(() => undefined);
+      resources.dispose();
       await city.close().catch(() => undefined);
       data.database.close();
       throw error;

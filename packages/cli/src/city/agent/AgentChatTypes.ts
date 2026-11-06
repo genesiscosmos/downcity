@@ -12,9 +12,15 @@ import type { SessionInteractionRequest } from "@downcity/agent";
  * `city agent chat` 命令选项。
  */
 export interface AgentChatCliOptions {
+  /** 显式 City 数据根，不改进程环境。 */
+  root?: string;
+  /** 已登记 Workspace 的路径，与 workspace 互斥。 */
+  workspace_path?: string;
+  /** 完整会话来源分类。 */
+  category?: string;
   /** 目标 agent id。 */
   to?: string;
-  /** 本次对话使用的 Workspace ID 或路径。 */
+  /** 本次对话使用的完整 Workspace ID。 */
   workspace?: string;
   /** 一次性发送的消息文本。 */
   message?: string;

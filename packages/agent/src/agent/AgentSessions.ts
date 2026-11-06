@@ -210,6 +210,27 @@ export class AgentSessions implements AgentSessionsContract<AgentSession> {
     return [...this.sessions_by_id.values()];
   }
 
+  /** 同步关闭已有空闲节点的输入；任一忙碌立即拒绝，释放函数恢复尚存活节点。 */
+  guard_idle(workspace_id?: string): () => void {
+    const guarded: AgentManagedSession[] = [];
+    try {
+      for (const session of this.sessions_by_id.values()) {
+        if (workspace_id && session.workspace_id !== workspace_id) continue;
+        session.begin_archive();
+        guarded.push(session);
+      }
+    } catch (error) {
+      for (const session of guarded) session.finish_archive(false);
+      throw error;
+    }
+    return () => { for (const session of guarded) session.finish_archive(false); };
+  }
+
+  /** 观察已有内存实例；不打开存储、不恢复 Workspace 或 executor。 */
+  peek(session_id: string, category = SESSION_ORIGIN_CATEGORY_WORK): AgentSession | undefined {
+    return this.sessions_by_id.get(this.session_cache_key(session_id, category));
+  }
+
   /** 返回当前所有执行中的 Session 标识；可按 Workspace 与来源分类限定。 */
   list_executing_session_ids(workspace_id?: string, category?: string): string[] {
     const resolved_category = category
@@ -655,7 +676,10 @@ export class AgentSessions implements AgentSessionsContract<AgentSession> {
       throw new Error("sessions.archive requires a non-empty id");
     }
     const category = normalize_session_origin_category(input.category ?? SESSION_ORIGIN_CATEGORY_WORK);
-    const plan = await this.collect_archive_plan(session_id, category);
+    const root_view = await this.resolve_session_context().store.read_session(session_id, category);
+    const complete_plan = await this.collect_archive_plan(session_id, category);
+    // 已归档根仍扫描并处理活动后代，保证部分归档后的重试能收敛。
+    const plan = root_view.archived ? complete_plan.filter((item) => item.id !== session_id || item.category !== category) : complete_plan;
     const locked = new Set<AgentManagedSession>();
     try {
       // 此循环没有 await：所有节点预检成功前，不移动任何 Session 数据。
@@ -683,7 +707,7 @@ export class AgentSessions implements AgentSessionsContract<AgentSession> {
         });
         root_result = result;
       }
-      return root_result!;
+      return root_view.archived ? { session_id, archived_at: Date.now() } : root_result!;
     } finally {
       for (const cached of locked) cached.finish_archive(false);
     }
@@ -783,6 +807,8 @@ export class AgentSessions implements AgentSessionsContract<AgentSession> {
       creating: !profile && input?.inherit_workspace !== false,
       ...(input?.workspace ? { workspace: input.workspace } : {}),
     });
+    // 默认模型是本实例创建时的快照，Agent.reconfigure 不改变已打开 Session。
+    const default_model = this.get_agent_model();
     const created = new this.session_class({
       ...(profile ? { assert_execution_profile: assert_profile } : {}),
       agent_id: this.agent_id,
@@ -801,7 +827,7 @@ export class AgentSessions implements AgentSessionsContract<AgentSession> {
       instruction_system_blocks: instruction_blocks(),
       get_instruction_system_blocks: instruction_blocks,
       get_workspace: () => context.get_workspace(),
-      get_agent_model: () => { assert_profile(); return profile ? profile.resources.model : this.get_agent_model(); },
+      get_agent_model: () => { assert_profile(); return profile ? profile.resources.model : default_model; },
       get_hooks: () => { assert_profile(); return profile ? profile.resources.hooks : context.get_hooks(); },
       completions: profile ? context.result_completions : context.completions,
       child_work: profile ? undefined : context.child_work,

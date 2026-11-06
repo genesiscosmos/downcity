@@ -19,10 +19,13 @@ export function session_notification(agent_id: string, origin: SessionOrigin | u
   const failed = event.status === "failed";
   const reply = origin.type === "agent" && !failed;
   const target: PowerNotificationTarget = { kind: "agent_session", agent_id, session_id: event.session_id, category: origin.category, origin_type: origin.type };
+  const body = event.result.text.trim() || event.result.error?.trim() || "";
+  // 用交付内容的首个非空行命名通知；业务成败由 outcome 单独表达。
+  const title = body.split(/\r?\n/).find((line) => line.trim())?.replace(/^\s{0,3}#{1,6}\s+/, "").trim().slice(0, 120);
   return { topic_key: notification_target_key(target), event_id: event.completion_id, target,
     kind: reply ? "reply" : "update", scope: reply ? "session" : "inbox", outcome: failed ? "failure" : "success",
-    title: failed ? "执行失败" : reply ? "收到新回复" : "工作已完成",
-    body: (event.result.text || event.result.error || "").slice(0, 1600) };
+    title: title || (reply ? "会话回复" : "工作结果"),
+    body: body.slice(0, 1600) };
 }
 
 /** 原 Interaction 的准确来源直接决定导航，不从 chat/work 分区猜业务角色。 */

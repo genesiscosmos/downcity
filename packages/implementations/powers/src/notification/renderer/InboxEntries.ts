@@ -20,7 +20,7 @@ export function has_private_questions(item: NotificationInteractionItem): boolea
 export function inbox_entries(data: NotificationListResult | undefined, view: InboxView): InboxEntry[] {
   if (!data) return [];
   const agent_names = new Map(Object.entries(data.agent_names));
-  const entries: InboxEntry[] = view === "pending" ? data.interactions
+  const requests: InboxEntry[] = data.interactions
     .filter((item) => item.interaction.interaction.status === "pending")
     .map((item) => {
       const request = item.interaction.interaction.request;
@@ -28,19 +28,37 @@ export function inbox_entries(data: NotificationListResult | undefined, view: In
       const payload = request.payload;
       const first = payload && typeof payload === "object" && !Array.isArray(payload) && Array.isArray(payload.questions) ? payload.questions[0] : undefined;
       const question = first && typeof first === "object" && !Array.isArray(first) && typeof first.question === "string" ? first.question : undefined;
-      return { key: interaction_key(item), view, title: request.title || question || kind_label(kind),
-        source: agent_names.get(item.agent_id)?.trim() || item.agent_name?.trim() || "未命名 Agent", created_at: request.created_at,
+      const title = request.title?.trim() || question?.trim() || kind_label(kind);
+      // 公开摘要只读取请求说明或题面，绝不展开审批 payload 或私密回答。
+      const summary = [request.description, question].find((text) => text?.trim() && text.trim() !== title);
+      return { key: interaction_key(item), view: "pending", title,
+        summary: plain_summary(summary || ""),
+        source: agent_names.get(item.agent_id)?.trim() || item.agent_name?.trim() || "未命名 Agent", agent_id: item.agent_id, created_at: request.created_at,
         kind, unread: true, pending: item };
-    }) : data.items.filter((item) => item.scope === "inbox").map((item) => ({ key: item.notification_id, view,
-      title: item.title, source: item.agent_id ? agent_names.get(item.agent_id)?.trim() || "Agent 不可用" : source_label(item.power_id),
-      created_at: item.created_at, kind: "update", unread: !item.read, update: item }));
+    });
+  const updates: InboxEntry[] = data.items.filter((item) => item.scope === "inbox").map((item) => ({
+    key: item.notification_id, view: "updates", title: item.title.trim() || source_label(item.power_id),
+    summary: plain_summary(item.body || ""),
+    source: item.agent_id ? agent_names.get(item.agent_id)?.trim() || "Agent 不可用" : source_label(item.power_id),
+    agent_id: item.agent_id, created_at: item.created_at, kind: "update", unread: !item.read, update: item,
+  }));
+  const entries = view === "updates" ? updates : view === "all" ? [...requests, ...updates]
+    : [...requests.filter((entry) => entry.pending?.interaction.can_respond), ...updates.filter((entry) => entry.unread && entry.update?.outcome === "failure")];
   return [...new Map(entries.map((entry) => [entry.key, entry])).values()]
-    .sort((left, right) => view === "pending" ? left.created_at - right.created_at : right.created_at - left.created_at);
+    .sort((left, right) => view === "pending"
+      ? Number(!!right.pending) - Number(!!left.pending) || (left.pending ? left.created_at - right.created_at : right.created_at - left.created_at)
+      : right.created_at - left.created_at);
+}
+
+/** 只保留摘要文字，列表不渲染 Markdown、图片或可执行链接。 */
+function plain_summary(text: string): string {
+  return text.replace(/```[^\n]*\n([\s\S]*?)```/g, "$1 ").replace(/!\[([^\]]*)\]\([^)]*\)/g, "$1")
+    .replace(/\[([^\]]+)\]\([^)]*\)/g, "$1").replace(/[#>*_`~]/g, "").replace(/\s+/g, " ").trim().slice(0, 240);
 }
 
 /** 用户可见的类别，不暴露Session类别与内部标识。 */
 export function kind_label(kind: InboxEntry["kind"]): string {
-  return { question: "需要回答", approval: "需要授权", secret: "私密输入", update: "工作更新" }[kind];
+  return { question: "需要回答", approval: "需要授权", secret: "私密输入", update: "通知" }[kind];
 }
 
 /** 标准业务来源名称。 */

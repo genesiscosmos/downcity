@@ -4,18 +4,23 @@ import type { PowerAgentConfigComponentProps } from "@downcity/city/power/react"
 import type { PowerJsonObject } from "@downcity/city/power";
 import type { SkillMainviewSnapshot, SkillMainviewMutationResult, SkillMainviewReadResult, SkillMainviewItem } from "@/skill/types/SkillMainview.js";
 import { error_message } from "./SkillResources.js";
+import { Skill_document } from "./SkillDocument.js";
 
 /** Installed Skill reader with state retained while the same resource refreshes. */
 interface SkillReaderProps extends PowerAgentConfigComponentProps {
   /** Exact installed directory ID to read within the current Agent. */
   readonly skill_id: string;
+  /** Discovered display name used when the document has no valid name field. */
+  readonly skill_name: string;
+  /** Discovered description used when the document has no description field. */
+  readonly skill_description: string;
   /** Close the current reader without changing installed resources. */
   readonly on_close: () => void;
 }
 
 /** Refresh content in place; failures retain the last successful body and expose an error. */
-function Skill_reader({ agent_id, skill_id, power, ui, on_close }: SkillReaderProps) {
-  const { Section, Button, Markdown, Callout, LoadingState, EmptyState } = ui.components;
+function Skill_reader({ agent_id, skill_id, skill_name, skill_description, power, ui, on_close }: SkillReaderProps) {
+  const { Section, Toolbar, Button, Callout, LoadingState } = ui.components;
   const [content, set_content] = useState<string>();
   const [error, set_error] = useState("");
   const [reading, set_reading] = useState(true);
@@ -29,9 +34,11 @@ function Skill_reader({ agent_id, skill_id, power, ui, on_close }: SkillReaderPr
       .finally(() => { if (!disposed) set_reading(false); });
     return () => { disposed = true; };
   }, [agent_id, skill_id, power, ui.revision]);
-  return <Section title={`${skill_id} · SKILL.md`} action={<Button on_click={on_close}>关闭</Button>}>
+  const close_action = <Button on_click={on_close}>关闭</Button>;
+  return <Section surface={false}>
+    {content === undefined ? <Toolbar title={skill_name} actions={close_action} /> : null}
     {error ? <Callout tone="danger">{error}</Callout> : null}
-    {content !== undefined ? content ? <Markdown text={content} /> : <EmptyState title="Skill 内容为空" size="compact" /> : reading ? <LoadingState label="正在读取 Skill…" /> : null}
+    {content !== undefined ? <Skill_document ui={ui} content={content} fallback_name={skill_name} fallback_description={skill_description} actions={close_action} /> : reading ? <LoadingState label="正在读取 Skill…" /> : null}
   </Section>;
 }
 
@@ -98,7 +105,7 @@ function Skill_agent_editor({ agent_id, power, ui }: PowerAgentConfigComponentPr
     <Section title="已安装 Skills">
       {!agent.skills.length ? <EmptyState title="还没有 Skill" size="compact" /> : <Group>{agent.skills.filter((item) => matches(item.name, `${item.id} ${item.description}`)).map((item) => <Row key={item.id} label={item.name} description={item.description || item.id} on_click={() => set_selected_id(item.id)} trailing={<Button disabled={busy} variant="destructive" on_click={() => void remove_skill(item)}>移除</Button>} />)}</Group>}
     </Section>
-    {selected_skill ? <Skill_reader key={selected_skill.resource_id} agent_id={agent_id} skill_id={selected_skill.id} power={power} ui={ui} on_close={() => set_selected_id("")} /> : null}
+    {selected_skill ? <Skill_reader key={selected_skill.resource_id} agent_id={agent_id} skill_id={selected_skill.id} skill_name={selected_skill.name} skill_description={selected_skill.description} power={power} ui={ui} on_close={() => set_selected_id("")} /> : null}
     <Section title="全局 Skills">
       {!snapshot.available.length ? <EmptyState title="全局目录里没有 Skill" description="把 Skill 放进 ~/.agents/skills 后即可分配。" size="compact" /> : <Group>{snapshot.available.filter((item) => matches(item.name, `${item.id} ${item.description}`)).map((item) => {
         const installed = agent.skills.some((skill) => skill.resource_id === item.resource_id);

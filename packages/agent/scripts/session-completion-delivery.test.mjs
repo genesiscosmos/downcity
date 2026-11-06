@@ -325,29 +325,25 @@ test("Task Main 等待跨Agent Child，并在停止时收口Child", async () => 
   } finally { release_main.resolve(); release_child.resolve(); await city.close(); }
 });
 
-test("Child公开问题自动通知Main，答案仍提交原Interaction", async () => {
+test("Child问题留在原Session，用户回答后仅将执行结果回传Main", async () => {
   const main_entered = deferred();
   const release_main = deferred();
+  const main_returned = deferred();
+  const release_question = deferred();
   const question_seen = deferred();
   const city = new City({ workspaces: [new Workspace({ id: "project", path: process.cwd() })] });
   let main_calls = 0;
   let child_calls = 0;
-  let child_id;
   const owner = city.agents.add(new Agent({ id: "question-main", model: new MockModelClient({ id: "main", generate: async () => {
-    if (++main_calls === 1) { main_entered.resolve(); await release_main.promise; }
-    else {
-      const child = await executor.sessions.get(child_id, "work");
-      const question = (await child.interactions())[0];
-      if (question) {
-        question_seen.resolve(question);
-        await child.respond({ interaction_id: question.interaction_id, response: { type: "question", outcome: "resolved", payload: { answers: [{ question_id: question.payload.questions[0].question_id, value: "cn" }] } } });
-      }
-    }
+    if (++main_calls === 1) { main_entered.resolve(); await release_main.promise; main_returned.resolve(); }
     return { text: "main" };
   } }) }));
   const executor = city.agents.add(new Agent({ id: "question-child", tools: { ask_question: AskQuestionsTool }, model: new MockModelClient({ id: "child", generate: async (call) => {
     if (!call.tools?.length) return { text: "question child" };
-    if (++child_calls === 1) return { content: [{ type: "tool_call", tool_call_id: "ask", tool_name: "ask_question", input: { title: "Region", questions: [{ question: "Which region?", type: "single_select", options: [{ value: "cn", label: "China" }] }] } }] };
+    if (++child_calls === 1) {
+      await release_question.promise;
+      return { content: [{ type: "tool_call", tool_call_id: "ask", tool_name: "ask_question", input: { title: "Region", questions: [{ question: "Which region?", type: "single_select", options: [{ value: "cn", label: "China" }] }] } }] };
+    }
     return { text: "child answered" };
   } }) }));
   try {
@@ -356,15 +352,39 @@ test("Child公开问题自动通知Main，答案仍提交原Interaction", async 
     main.dispose_title_generation();
     const turn = await main.prompt({ query: "main", request_id: "main" });
     await within(main_entered.promise);
-    const receipt = await executor.resolve_delegations().spawn({ workspace_id: "project", query: "ask first" }, { agent_id: owner.id, session_id: main.id, origin: main.origin, turn_id: turn.id, tool_call_id: "spawn" });
-    child_id = receipt.session_id;
-    (await executor.sessions.get(child_id, "work")).dispose_title_generation();
+    const delegations = executor.resolve_delegations();
+    const receipt = await delegations.spawn({ workspace_id: "project", query: "ask first" }, { agent_id: owner.id, session_id: main.id, origin: main.origin, turn_id: turn.id, tool_call_id: "spawn" });
+    const child = await executor.sessions.get(receipt.session_id, "work");
+    child.dispose_title_generation();
+    child.subscribe((mutation) => {
+      if (mutation.variant === "part" && mutation.type === "tool") {
+        const question = mutation.part.interactions?.find((item) => item.request.type === "question");
+        if (question) question_seen.resolve(question.request);
+      }
+    });
+    release_question.resolve();
+    const question = await within(question_seen.promise);
     release_main.resolve();
-    assert.equal((await within(question_seen.promise)).type, "question");
+    await within(main_returned.promise);
+    await delegations.resume();
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.equal((await main.status()).state, "running");
+    assert.equal(main_calls, 1);
+    assert.equal((await child.interactions())[0].interaction_id, question.interaction_id);
+    assert.deepEqual(await main.interactions(), []);
+    const pending_messages = await main.messages({ limit: 100, include_internal: true });
+    assert.equal(pending_messages.items.flatMap((message) => message.parts).filter((part) => part.type === "context" && part.tag === "delegation_interaction").length, 0);
+
+    await child.respond({ interaction_id: question.interaction_id, response: { type: "question", outcome: "resolved", payload: { answers: [{ question_id: question.payload.questions[0].question_id, value: "cn" }] } } });
     assert.equal((await within(turn.finished)).success, true);
+    assert.deepEqual(await child.interactions(), []);
     const messages = await main.messages({ limit: 100, include_internal: true });
-    assert.equal(messages.items.flatMap((message) => message.parts).filter((part) => part.type === "context" && part.tag === "delegation_interaction").length, 1);
-  } finally { release_main.resolve(); await city.close(); }
+    const contexts = messages.items.flatMap((message) => message.parts).filter((part) => part.type === "context");
+    assert.equal(contexts.filter((part) => part.tag === "delegation_interaction").length, 0);
+    const results = contexts.filter((part) => part.tag === "delegation_result");
+    assert.equal(results.length, 1);
+    assert.equal(JSON.parse(results[0].context).text, "child answered");
+  } finally { release_main.resolve(); release_question.resolve(); await city.close(); }
 });
 
 test("已接收后台续轮重建后明确收口中断，保留结果并释放占用", async () => {
