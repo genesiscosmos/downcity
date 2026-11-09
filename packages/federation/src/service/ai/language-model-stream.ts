@@ -6,6 +6,7 @@
 
 import {
   MODEL_PROTOCOL_VERSION,
+  read_model_error,
   ModelStreamValidator,
   type ModelCall,
   type ModelContent,
@@ -187,6 +188,8 @@ export function create_model_stream_execution_error(error: unknown, usage?: Mode
   if (error instanceof ModelStreamExecutionError) {
     return usage ? new ModelStreamExecutionError(error.model_error, usage) : error;
   }
+  const classified = error && typeof error === "object" && "model_error" in error ? read_model_error(error.model_error) : undefined;
+  if (classified) return new ModelStreamExecutionError(classified, usage);
   const code = error && typeof error === "object" && "code" in error ? error.code : undefined;
   const status_code = error && typeof error === "object" && "statusCode" in error ? error.statusCode : undefined;
   if (status_code === 499 || code === "cancelled") {

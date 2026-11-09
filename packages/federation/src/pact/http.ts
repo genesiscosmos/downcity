@@ -5,6 +5,9 @@
  * 同时包含 HTTP 层的公共类型。
  */
 
+import { read_model_error } from "@downcity/type";
+import { read_bounded_error_text } from "../shared/BoundedResponseText.js";
+
 // ===========================================================================
 // 公共类型
 // ===========================================================================
@@ -122,14 +125,14 @@ export function servicePath(prefix: string, serviceId: string, path: string): st
 // ===========================================================================
 
 async function httpError(response: FetchResponseLike): Promise<Error> {
-  const body = await response.text();
-  const error = new Error(`Downcity request failed with ${response.status}: ${body}`) as Error & {
-    status?: number;
-    body?: string;
-  };
-  error.status = response.status;
-  error.body = body;
-  return error;
+  const body = await read_bounded_error_text(response.body);
+  let parsed: unknown;
+  try { parsed = JSON.parse(body); } catch { /* 未识别 HTTP 错误保留状态，不能猜测上下文超限。 */ }
+  const record = parsed && typeof parsed === "object" && "error" in parsed ? parsed.error : undefined;
+  const model_error = read_model_error(record);
+  if (model_error) return Object.assign(new Error(model_error.message), { ...model_error, model_error, status: response.status });
+  // 未分类正文也不跨客户端边界返回，避免供应商或代理错误带出敏感内容。
+  return Object.assign(new Error(`Downcity request failed with ${response.status}`), { status: response.status });
 }
 
 /**

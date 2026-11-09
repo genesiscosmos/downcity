@@ -26,6 +26,7 @@ export type {
   ModelToolResultPart,
 } from "./ModelContent.js";
 export type { ModelError, ModelErrorCode } from "./ModelError.js";
+export { read_model_error } from "./ModelError.js";
 export type {
   ModelRequestFailureNotice,
   ModelRequestKind,

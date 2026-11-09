@@ -5,6 +5,8 @@
  * 服务端生成的请求 ID、分类状态和稳定错误码，不记录正文、Token、异常消息或堆栈。
  */
 
+import { read_model_error } from "@downcity/type";
+
 /** 按状态选择稳定的默认分类，不信任异常中任意 type/status 字段。 */
 function error_category(status: number): { /** 客户端错误分类。 */ type: string; /** 稳定错误码。 */ code: string; /** 默认可公开说明。 */ message: string } {
   if (status === 400) return { type: "invalid_request_error", code: "INVALID_REQUEST", message: "Invalid request" };
@@ -29,6 +31,10 @@ export function build_error_response(error: unknown, request_id: string): Respon
   const status = Number.isInteger(candidate.statusCode) && Number(candidate.statusCode) >= 400 && Number(candidate.statusCode) <= 599
     ? Number(candidate.statusCode) : 500;
   const category = error_category(status);
+  const model_error = read_model_error(candidate.model_error);
+  if (model_error) return Response.json({ error: { ...model_error, type: category.type, request_id } }, {
+    status, headers: { "x-request-id": request_id, "cache-control": "no-store" },
+  });
   const code = candidate.statusCode === status && typeof candidate.code === "string" && /^[A-Za-z][A-Za-z0-9_]{0,63}$/u.test(candidate.code)
     ? candidate.code : category.code;
   const message = status < 500 && typeof candidate.message === "string" && candidate.message

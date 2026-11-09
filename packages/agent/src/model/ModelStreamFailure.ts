@@ -5,7 +5,7 @@
  * 判断是否可以重试。它只描述一次模型流失败，不负责决定恢复策略。
  */
 
-import type { ModelError } from "@downcity/type";
+import { read_model_error, type ModelError } from "@downcity/type";
 
 /** 一次具有稳定协议语义的模型流失败。 */
 export class ModelStreamFailure extends Error {
@@ -21,12 +21,16 @@ export class ModelStreamFailure extends Error {
   /** Provider 返回的可观测请求标识。 */
   readonly provider_request_id?: string;
 
+  /** 保留 HTTP 拒绝状态供诊断；恢复策略优先使用 code。 */
+  readonly status_code?: number;
+
   constructor(error: ModelError, has_partial_output: boolean) {
     super(error.message);
     this.name = "ModelStreamFailure";
     this.code = error.code;
     this.retryable = error.retryable;
     this.has_partial_output = has_partial_output;
+    this.status_code = error.status_code;
     if (error.provider_request_id) {
       this.provider_request_id = error.provider_request_id;
     }
@@ -41,6 +45,15 @@ export function normalize_model_invocation_failure(
 ): ModelStreamFailure {
   if (error instanceof ModelStreamFailure) return error;
   const cancelled = abort_signal?.aborted === true;
+  const classified = error && typeof error === "object"
+    ? read_model_error("model_error" in error ? error.model_error : error) : undefined;
+  if (!cancelled && classified) return new ModelStreamFailure(classified, has_partial_output);
+  const record = error && typeof error === "object" ? error as Record<string, unknown> : {};
+  const status = Number(record.status_code ?? record.statusCode ?? record.status);
+  if (!cancelled && status && status >= 400 && status < 500) return new ModelStreamFailure({
+    code: "invalid_request", status_code: status, retryable: false,
+    message: "Model request rejected; the rejection is not classified as a context limit",
+  }, has_partial_output);
   return new ModelStreamFailure({
     code: cancelled ? "cancelled" : "transport_error",
     message: error instanceof Error ? error.message : String(error),

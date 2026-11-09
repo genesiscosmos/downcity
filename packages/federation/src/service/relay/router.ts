@@ -5,7 +5,7 @@
  * 返回、可确认未生成的拒绝响应允许切换；网络异常、5xx 和流中断保持未知，
  * 绝不透明重新生成。每次尝试在发起上游请求前落库。
  */
-import type { ModelCall, ModelStreamEvent } from "@downcity/type";
+import { read_model_error, type ModelCall, type ModelStreamEvent } from "@downcity/type";
 import { query_service_database } from "../ai/database-sql.js";
 import type { Context } from "../service.js";
 import type { AIChannelStreamResult, AIModelDefinition } from "../../types/AI.js";
@@ -184,6 +184,9 @@ export class RelayRouter {
         if (!safe_retry) {
           await this.finish_request(request_id, cancelled ? "cancelled" : abort_status !== undefined ? "unknown"
             : detail.upstream_rejected ? "failed" : "unknown");
+          const model_error = abort_status === undefined && error && typeof error === "object" && "model_error" in error
+            ? read_model_error(error.model_error) : undefined;
+          if (model_error) throw Object.assign(httpError(last_status, model_error.message), { model_error, code: model_error.code });
           throw httpError(abort_status ?? last_status, cancelled ? "Request cancelled"
             : abort_status === 504 ? "Request timed out; result may be unknown"
             : abort_status !== undefined ? "Request aborted; result may be unknown"

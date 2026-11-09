@@ -32,6 +32,7 @@ export {
   ModelStreamValidator,
   read_model_context_window,
   read_model_label,
+  read_model_error,
 } from "./types/model/index.js";
 export type {
   ModelCall,

@@ -5,7 +5,7 @@
  * 并把上游 SSE 规范化为 ModelStreamEvent。路由、fallback、计费和工具执行不属于本模块。
  */
 
-import { create_upstream_model_error } from "./UpstreamModelError.js";
+import { create_upstream_model_error, is_upstream_context_limit } from "./UpstreamModelError.js";
 import type {
   ModelContent,
   ModelFileContent,
@@ -269,9 +269,9 @@ function create_event_stream(
 /** Provider 流在协议或传输边界产生的稳定内部错误。 */
 class OpenAIStreamError extends Error {
   /** 映射到 Downcity Model Protocol 的错误码。 */
-  readonly code: "provider_error" | "transport_error";
+  readonly code: "provider_error" | "transport_error" | "context_length_exceeded" | "invalid_request";
 
-  constructor(code: "provider_error" | "transport_error", message: string) {
+  constructor(code: OpenAIStreamError["code"], message: string) {
     super(message);
     this.name = "OpenAIStreamError";
     this.code = code;
@@ -310,6 +310,12 @@ class OpenAIStreamState {
   /** 消费一个上游 JSON chunk。 */
   accept(value: unknown): void {
     const record = as_record(value);
+    if (record.error) {
+      const detail = as_record(record.error);
+      const context_limit = is_upstream_context_limit(detail);
+      throw new OpenAIStreamError(context_limit ? "context_length_exceeded" : "invalid_request",
+        context_limit ? "Model context length exceeded" : "Model provider rejected the request");
+    }
     const usage = read_usage(record.usage);
     if (usage) {
       this.usage_received = true;
@@ -491,7 +497,7 @@ function input_cancelled(error: unknown): boolean {
 }
 
 /** 根据失败边界确定稳定的模型错误类别。 */
-function classify_stream_error(error: unknown): "cancelled" | "provider_error" | "transport_error" {
+function classify_stream_error(error: unknown): "cancelled" | OpenAIStreamError["code"] {
   if (input_cancelled(error)) return "cancelled";
   if (error instanceof OpenAIStreamError) return error.code;
   const message = error instanceof Error ? error.message : String(error);

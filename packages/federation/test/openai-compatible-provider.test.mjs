@@ -143,7 +143,7 @@ test("Provider Adapter normalizes upstream HTTP errors without exposing the body
   })
   await assert.rejects(
     model.stream({ messages: [{ role: "user", content: [{ type: "text", text: "hello" }] }] }),
-    (error) => error.message === "Service Unavailable" && error.statusCode === 503,
+    (error) => error.code === "provider_error" && error.message === "Model provider failed" && error.statusCode === 503,
   )
 })
 
