@@ -96,6 +96,8 @@ export interface SessionStorage {
 
   /** 读取全部 canonical Message 聚合。 */
   list_messages(): Promise<SessionMessage[]>;
+  /** 检查当前 canonical 用户消息是否登记了该精确附件路径，不读取消息正文。 */
+  has_attachment(file_path: string): Promise<boolean>;
   /** 读取指定 Message。 */
   read_message(message_id: string): Promise<SessionMessage | null>;
   /** 通过 canonical Part 主键读取所属消息，供分支中保留的结果引用精确定位。 */

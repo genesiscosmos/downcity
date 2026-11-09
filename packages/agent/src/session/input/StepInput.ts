@@ -35,6 +35,8 @@ import type { StepInputOptions } from "@/types/session/StepInput.js";
 import type { SessionTurnContext } from "@/types/turn/SessionTurnContext.js";
 import type { SessionDerivedStore } from "@/types/store/SessionStorage.js";
 import { is_action_result } from "@downcity/type";
+import { max_request_media_bytes } from "@downcity/type/workspace";
+import { measure_request } from "@/session/runner/RequestBudget.js";
 import { SESSION_HOOK_POINTS } from "@downcity/type";
 import { run_pipeline_point } from "@/session/input/SessionHookRunner.js";
 import { resolve_session_power_system_blocks } from "@/session/input/SessionSystem.js";
@@ -127,15 +129,19 @@ export class StepInput {
     });
     const composed = await this.options.composer.compose(compose_input);
     const frozen = this.apply_frozen_system(composed);
-    return {
+    const request: SessionStepExecutionInput = {
       model,
       system: frozen.system,
       messages: frozen.messages,
-      tools: this.bind_turn_context_to_tools(frozen.tools, turn_context),
+      tools: frozen.tools as unknown as Record<string, BoundAgentTool>,
       ...(compose_input.state.model_context_window !== undefined
         ? { context_window: compose_input.state.model_context_window }
         : {}),
     };
+    const budget = measure_request(request);
+    // 留出后续工具结果与引用协议开销；拒绝不能容纳的显式读取，避免成功回执后才超限。
+    const media_tokens = Math.max(0, (budget.input_budget ?? 0) - budget.estimated_input_tokens - 8192);
+    return { ...request, tools: this.bind_turn_context_to_tools(frozen.tools, turn_context, media_tokens) };
   }
 
   /** 只持久化基础 system 快照，动态摘要继续从 Composer 派生状态读取。 */
@@ -401,9 +407,18 @@ export class StepInput {
   private bind_turn_context_to_tools(
     tools: Record<string, Tool>,
     turn_context: SessionTurnContext,
+    media_tokens: number,
   ): Record<string, BoundAgentTool> {
     if (Object.hasOwn(tools, "lookup")) throw new Error("Tool name is reserved by the result reader: lookup");
     const wrapped: Record<string, BoundAgentTool> = {};
+    // 每个 Step 独立预留；并发工具不能分别通过总量校验后一起突破上限。
+    let reserved_media_bytes = 0;
+    const reserve_media = (bytes: number, existing_bytes: number): boolean => {
+      if (!Number.isSafeInteger(bytes) || bytes < 0 || existing_bytes + reserved_media_bytes + bytes > max_request_media_bytes
+        || Math.ceil((reserved_media_bytes + bytes) / 3) * 4 > media_tokens) return false;
+      reserved_media_bytes += bytes;
+      return true;
+    };
     for (const [name, tool] of Object.entries(tools)) {
       const original_execute = tool.execute;
       if (typeof original_execute !== "function") {
@@ -433,11 +448,11 @@ export class StepInput {
           if (!tool_call_id) {
             throw new Error(`Tool execution requires toolCallId: ${name}`);
           }
-          const context = this.create_tool_call_context(turn_context, {
+          const context = Object.freeze({ ...this.create_tool_call_context(turn_context, {
             tool_call_id,
             abort_signal: site.abort_signal || turn_context.lifecycle.abort_signal,
             messages: site.messages,
-          });
+          }), reserve_media });
           let output: unknown;
           try {
             output = await original_execute(args, context);
@@ -512,6 +527,15 @@ export class StepInput {
       session_id: this.options.session_id,
       session_origin: this.options.session_origin,
       ...(workspace ? { workspace } : {}),
+      read_attachment: async (input: import("@downcity/type/workspace").ReadFileToolInput) => {
+        site.abort_signal?.throwIfAborted();
+        const attachments = this.options.store.attachments;
+        if (!attachments.owns_local_file(input.file_path)) return null;
+        if (!await this.options.store.has_attachment(input.file_path)) {
+          return { success: false as const, error_code: "sandbox_denied" as const, message: "Attachment is not registered in this Session" };
+        }
+        return await attachments.read_file(input, site.abort_signal);
+      },
       turn_id: turn_context.session.turn_id,
       abort_signal: site.abort_signal,
       tool_call_id: site.tool_call_id,

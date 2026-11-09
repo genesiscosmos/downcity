@@ -6,6 +6,7 @@
  */
 
 import path from "node:path";
+import { realpath } from "node:fs/promises";
 import { generate_id } from "@/utils/Id.js";
 import type { FileSystem } from "@downcity/type";
 import type { SessionAttachmentStore } from "@/types/store/SessionAttachmentStore.js";
@@ -44,6 +45,20 @@ export class LocalSessionAttachmentStore implements SessionAttachmentStore {
     const candidate = path.resolve(String(url || ""));
     const relative = path.relative(this.attachments_dir_path, candidate);
     return Boolean(relative) && !relative.startsWith("..") && !path.isAbsolute(relative);
+  }
+
+  /** 登记授权在 Session 层检查；此处只允许本附件目录的普通文件。 */
+  async read_file(input: import("@downcity/type/workspace").ReadFileToolInput, abort_signal?: AbortSignal): Promise<import("@downcity/type/workspace").ReadFileToolResult> {
+    abort_signal?.throwIfAborted();
+    if (!this.owns_local_file(input.file_path)) return { success: false, error_code: "sandbox_denied", message: "File is not owned by this Session" };
+    try {
+      const [root, actual] = await Promise.all([realpath(this.attachments_dir_path), realpath(input.file_path)]);
+      const relative = path.relative(root, actual);
+      if (!relative || relative.startsWith("..") || path.isAbsolute(relative)) {
+        return { success: false, error_code: "sandbox_denied", message: "Resolved attachment escapes its Session directory" };
+      }
+    } catch { return { success: false, error_code: "file_not_found", message: "Attachment is unavailable" }; }
+    return await this.files.run_file_action({ action: "read", input }, undefined, abort_signal) as import("@downcity/type/workspace").ReadFileToolResult;
   }
 
   async persist_data_url(input: {

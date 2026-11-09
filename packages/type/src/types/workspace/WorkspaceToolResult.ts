@@ -25,6 +25,8 @@ export interface WorkspaceToolFilePart {
   media_type: string;
   /** 可选原始文件名。 */
   filename?: string;
+  /** 显式 read 时的文件元信息版本；Session 只对可信内部工具媒体保留，用于后续披露前校验。 */
+  media_version?: string;
 }
 
 /** Workspace Tool 可以追加到 Session 的消息内容。 */

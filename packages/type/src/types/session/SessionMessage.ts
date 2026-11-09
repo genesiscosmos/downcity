@@ -73,6 +73,8 @@ export interface SessionUserContextPart extends SessionContextContent {
 
 /** User 文件 part。 */
 export interface SessionUserFilePart extends SessionFileContent {
+  /** 仅内部工具输入提交器设置；表示工具显式披露的媒体，公开 prompt 归一化会移除此字段。 */
+  media_delivery?: "tool";
   /** User Message 内稳定的 part 标识。 */
   part_id: string;
   /** Part 在当前 User Message 内的不可变线性顺序，从 1 开始。 */

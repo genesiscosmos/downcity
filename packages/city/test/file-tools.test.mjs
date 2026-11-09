@@ -165,6 +165,7 @@ test("read returns images as next-step User File Parts", async (t) => {
       url: result.output.file_path,
       media_type: "image/png",
       filename: "input.bin",
+      media_version: result.output.file_version,
     }],
   }]);
 });
@@ -189,6 +190,7 @@ test("read returns PDFs as next-step User File Parts", async (t) => {
       url: result.output.file_path,
       media_type: "application/pdf",
       filename: "document.pdf",
+      media_version: result.output.file_version,
     }],
   }]);
 });

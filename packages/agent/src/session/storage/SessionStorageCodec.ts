@@ -248,6 +248,7 @@ function decode_session_part(
         media_type: read_string(content, "media_type", row),
         url: read_string(content, "url", row),
         ...optional_string(content, "filename", row),
+        ...(role === "user" && content.media_delivery === "tool" ? { media_delivery: "tool" as const, ...optional_string(content, "media_version", row) } : {}),
       };
     case "data":
       return {

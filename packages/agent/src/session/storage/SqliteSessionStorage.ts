@@ -235,6 +235,14 @@ export class SqliteSessionStorage implements SessionStorage {
     return this.read_aggregates(rows);
   }
 
+  /** 附件授权只查 file part，不加载长历史和工具输出。 */
+  async has_attachment(file_path: string): Promise<boolean> {
+    await this.initialize();
+    return Boolean(this.require_database().prepare(
+      "SELECT 1 FROM message_parts JOIN messages USING (message_id) WHERE messages.role = 'user' AND message_parts.type = 'file' AND json_extract(message_parts.content, '$.url') = ? LIMIT 1",
+    ).get(file_path));
+  }
+
   /** 读取指定 Message 聚合。 */
   async read_message(message_id: string): Promise<SessionMessage | null> {
     await this.initialize();

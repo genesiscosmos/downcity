@@ -5,13 +5,12 @@
  * 不经过 UI Message、Executor Record 或 Provider 私有格式。
  */
 
-import fs from "fs-extra";
-import path from "node:path";
+import { project_session_attachment, is_generated_attachment_context } from "./SessionAttachmentProjection.js";
+import { max_request_media_bytes } from "@downcity/type/workspace";
 import { disclosed_tool_result } from "../results/ResultReference.js";
 import { published_power_summaries, project_published_tool_input } from "./SessionPowerProjection.js";
 import type {
   ModelContent,
-  ModelFileContent,
   ModelMessage,
 } from "@downcity/type";
 import { render_session_user_context } from "@/session/messages/SessionUserContext.js";
@@ -20,7 +19,6 @@ import type {
   SessionAgentMessagePart,
   SessionAgentToolPart,
   SessionMessage,
-  SessionUserFilePart,
   SessionUserMessage,
   SessionUserMessagePart,
 } from "@downcity/type";
@@ -31,9 +29,12 @@ export async function session_messages_to_model_messages(
   project_root?: string,
 ): Promise<ModelMessage[]> {
   const output: ModelMessage[] = [];
+  let remaining_media_bytes = max_request_media_bytes;
   for (const message of messages) {
     if (message.role === "user") {
-      output.push(...await convert_user_message(message, project_root));
+      const converted = await convert_user_message(message, project_root, remaining_media_bytes);
+      remaining_media_bytes -= media_bytes(converted);
+      output.push(...converted);
     } else if (message.role === "agent") {
       output.push(...convert_assistant_message(message));
     }
@@ -50,7 +51,9 @@ export async function project_summary_part(
   part: SessionUserMessagePart | SessionAgentMessagePart,
 ): Promise<ModelMessage[]> {
   if (message.role === "user") {
-    const converted = await convert_user_parts([part as SessionUserMessagePart], undefined, true);
+    const previous = message.parts[message.parts.findIndex(item => item.part_id === part.part_id) - 1];
+    if (is_generated_attachment_context(part, previous)) return [];
+    const converted = await convert_user_parts([part as SessionUserMessagePart]);
     return converted ? [converted] : [];
   }
   return convert_assistant_message(
@@ -64,8 +67,10 @@ export async function project_summary_part(
 async function convert_user_message(
   message: SessionUserMessage,
   project_root?: string,
+  remaining_media_bytes = max_request_media_bytes,
 ): Promise<ModelMessage[]> {
-  const converted = await convert_user_parts(message.parts, project_root);
+  // internal 是由工具执行器写入的可信来源，外部 prompt 不能指定此权限。
+  const converted = await convert_user_parts(message.parts, project_root, message.visibility === "internal", remaining_media_bytes, message.session_id);
   return converted ? [converted] : [];
 }
 
@@ -73,10 +78,13 @@ async function convert_user_message(
 async function convert_user_parts(
   parts: readonly SessionUserMessagePart[],
   project_root?: string,
-  summary = false,
+  explicit_media = false,
+  remaining_media_bytes = max_request_media_bytes,
+  session_id?: string,
 ): Promise<ModelMessage | null> {
   const content: ModelContent[] = [];
-  for (const part of parts) {
+  for (const [index, part] of parts.entries()) {
+    if (is_generated_attachment_context(part, parts[index - 1])) continue;
     switch (part.type) {
       case "text":
         if (part.text.trim()) content.push({ type: "text", text: part.text });
@@ -87,11 +95,12 @@ async function convert_user_parts(
           text: render_session_user_context(part.tag, part.context),
         });
         break;
-      case "file":
-        content.push(summary
-          ? { type: "text", text: [`Attachment: ${part.filename || part.media_type}`, `Source: ${part.url.startsWith("data:") ? "inline attachment" : part.url}`, `Media type: ${part.media_type}`].join("\n") }
-          : await convert_file_part(part, project_root));
+      case "file": {
+        const projected = await project_session_attachment(part, project_root, explicit_media && part.media_delivery === "tool", remaining_media_bytes, session_id);
+        remaining_media_bytes -= media_bytes([{ role: "user", content: projected }]);
+        content.push(...projected);
         break;
+      }
       case "data":
         // Data Part 是持久化 UI 数据，不属于模型输入协议。
         break;
@@ -191,49 +200,10 @@ function append_tool_content(
   });
 }
 
-/** 把 Session 文件引用转换为单一来源的模型文件。 */
-async function convert_file_part(
-  part: Pick<SessionUserFilePart, "media_type" | "url" | "filename">,
-  project_root?: string,
-): Promise<ModelFileContent> {
-  const data_match = /^data:[^;,]+;base64,(.*)$/isu.exec(part.url);
-  if (data_match) {
-    return build_model_file(part, {
-      type: "base64",
-      data: data_match[1] ?? "",
-    });
-  }
-  if (/^https?:\/\//iu.test(part.url)) {
-    return build_model_file(part, { type: "url", url: part.url });
-  }
-  const file_path = resolve_local_file_path(part.url, project_root);
-  const data = (await fs.readFile(file_path)).toString("base64");
-  return build_model_file(part, { type: "base64", data });
-}
-
-/** 构造标准模型文件内容。 */
-function build_model_file(
-  part: Pick<SessionUserFilePart, "media_type" | "filename">,
-  source: ModelFileContent["source"],
-): ModelFileContent {
-  return {
-    type: "file",
-    media_type: part.media_type,
-    source,
-    ...(part.filename ? { filename: part.filename } : {}),
-  };
-}
-
-/** 把本地文件引用限制在项目根目录内，绝对附件路径保持可读。 */
-function resolve_local_file_path(raw_path: string, project_root?: string): string {
-  if (path.isAbsolute(raw_path)) return path.resolve(raw_path);
-  const root = path.resolve(String(project_root || "").trim() || process.cwd());
-  const file_path = path.resolve(root, raw_path);
-  const relative_path = path.relative(root, file_path);
-  if (relative_path.startsWith("..") || path.isAbsolute(relative_path)) {
-    throw new Error(`Session file escapes project root: ${raw_path}`);
-  }
-  return file_path;
+/** 请求组装按实际披露字节复核总量，不依赖较早的工具预留。 */
+function media_bytes(messages: readonly ModelMessage[]): number {
+  return messages.reduce((total, message) => total + message.content.reduce((size, part) =>
+    size + (part.type === "file" && part.source.type === "base64" ? Buffer.byteLength(part.source.data, "base64") : 0), 0), 0);
 }
 
 /** 联合类型增加成员时，强制模型投影显式选择支持或忽略。 */

@@ -13,22 +13,22 @@ export const read_file_tool_input_schema = z.object({
   file_path: z
     .string()
     .min(1)
-    .describe("Project-relative or absolute file path. A sandbox-internal path such as /workspace/a.ts is mapped back to the project root. Paths outside the project root are rejected."),
+    .describe("Project file path or the exact path of an attachment owned by this Session. Other external paths are rejected."),
   offset: z
     .number()
     .int()
     .min(0)
     .optional()
-    .default(0)
-    .describe("Zero-based line offset. Defaults to 0."),
+    .describe("Zero-based line offset. Defaults to 0. Omit with byte_offset."),
   limit: z
     .number()
     .int()
     .min(1)
     .max(2000)
     .optional()
-    .default(500)
-    .describe("Maximum lines to return. Defaults to 500 and cannot exceed 2000."),
+    .describe("Maximum lines to return. Defaults to 500 and cannot exceed 2000. Omit with byte_offset."),
+  byte_offset: z.number().int().min(0).optional().describe("Raw byte offset for bounded text continuation. Use next_byte_offset from read; omit offset and limit."),
+  expected_version: z.string().min(1).optional().describe("file_version returned by the previous read; rejects continuation when the source changed."),
 });
 
 /** write 工具输入 schema。 */

@@ -38,6 +38,7 @@ import {
   normalize_session_user_parts,
   SessionMessages,
 } from "@/session/messages/SessionMessages.js";
+import { normalize_tool_user_parts } from "@/session/messages/SessionUserMessage.js";
 import type {
   SessionInteractionLifecycle,
   SessionInteractionPort,
@@ -900,7 +901,7 @@ export class SessionLoop {
         const message = await this.messages.append_user_message({
           turn_id: active_turn.turn_id,
           visibility: "internal",
-          parts: normalize_session_user_parts([...parts]),
+          parts: normalize_tool_user_parts(parts),
         });
         active_turn.turn_context?.input.observe_user_message(message);
         return message;

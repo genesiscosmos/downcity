@@ -21,6 +21,7 @@ export type FileToolErrorCode =
   | "file_too_large"
   | "content_too_large"
   | "line_too_large"
+  | "media_too_large"
   | "encoding_error"
   | "binary_file"
   | "no_edits"
@@ -40,6 +41,10 @@ export interface ReadFileToolInput {
   offset?: number;
   /** 本次最多返回的行数。 */
   limit?: number;
+  /** 原始文件的字节起点；与 offset、limit 互斥，用于超长行续读。 */
+  byte_offset?: number;
+  /** 上次 read 返回的文件版本；不一致时拒绝续读，避免混合不同文件内容。 */
+  expected_version?: string;
 }
 
 /** 文件写入工具输入。 */
@@ -92,11 +97,11 @@ export interface ReadFileToolSuccess {
   file_path: string;
   /** 原始文件总字节数。 */
   total_bytes: number;
-  /** 文本文件总行数；图片和其他二进制文件固定为 0。 */
-  total_lines: number;
-  /** 本次返回内容的 0-based 起始行。 */
+  /** 已完整扫描的文本总行数；有界分段未扫描全文件时为 null，媒体为 0。 */
+  total_lines: number | null;
+  /** 行模式的 0-based 起始行；字节模式不扫描前缀，未知时为 -1。 */
   start_line: number;
-  /** 本次返回内容的 0-based 结束行；没有返回行时小于 start_line。 */
+  /** 行模式的 0-based 结束行；字节模式未知时为 -1，没有返回行时小于 start_line。 */
   end_line: number;
   /** 返回给模型的文本内容；图片和其他二进制文件为空字符串。 */
   content: string;
@@ -104,14 +109,20 @@ export interface ReadFileToolSuccess {
   truncated: boolean;
   /** 有后续文本时建议下一次使用的 offset。 */
   next_offset?: number;
+  /** 存在未披露字节时可直接用于下一次 read 的原始字节位置。 */
+  next_byte_offset?: number;
+  /** 本次披露文本开始的原始字节位置，分段读取时提供。 */
+  start_byte?: number;
+  /** 源文件的稳定元信息版本，续读时通过 expected_version 校验。 */
+  file_version?: string;
   /** 当前文件被识别为文本、图片还是其他二进制文件。 */
   type: "text" | "image" | "binary";
   /** 当前文件的 MIME 类型。 */
   mime_type?: string;
   /** 文本文件实际采用的解码格式。 */
   encoding?: "utf-8" | "utf-16le" | "utf-16be";
-  /** 原始文件内容的 SHA-256，可传给 edit 防止并发覆盖。 */
-  sha256: string;
+  /** 完整读取时的 SHA-256；分段读取只返回 file_version，不为哈希读取全文。 */
+  sha256?: string;
 }
 
 /** 文件写入成功结果。 */
@@ -207,6 +218,8 @@ export interface FileToolRunner {
   run_file_action(
     request: FileToolActionRequest,
     observer?: WorkspaceFileMutationObserver,
+    /** 工具调用取消信号；读取前及文本扫描的块边界检查。 */
+    abort_signal?: AbortSignal,
   ): Promise<FileToolActionResult>;
 }
 

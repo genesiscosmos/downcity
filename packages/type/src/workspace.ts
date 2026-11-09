@@ -7,6 +7,7 @@ export type {
 } from "./types/storage/Storage.js";
 export type { FileSystem, WorkspaceDirectoryEntry } from "./types/workspace/FileSystem.js";
 export type * from "./types/workspace/FileTool.js";
+export { max_explicit_media_bytes, max_request_media_bytes, file_read_version } from "./types/workspace/AttachmentPolicy.js";
 export type * from "./types/workspace/SearchTool.js";
 export type * from "./types/workspace/WorkspaceEnv.js";
 export type * from "./types/workspace/WorkspaceTools.js";

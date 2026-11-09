@@ -49,6 +49,21 @@ export function normalize_session_user_parts(
   });
 }
 
+/** 仅供可信工具输入提交边界调用；外部 prompt 继续使用普通归一化并剥离媒体权限。 */
+export function normalize_tool_user_parts(
+  parts: readonly import("@downcity/type").SessionModelUserContent[],
+): SessionUserPartContent[] {
+  const normalized = normalize_session_user_parts(structuredClone([...parts]));
+  for (const [index, part] of normalized.entries()) {
+    const source = parts[index];
+    if (part.type === "file" && source?.type === "file" && source.media_version) {
+      part.media_delivery = "tool";
+      part.media_version = source.media_version;
+    }
+  }
+  return normalized;
+}
+
 /** 判断 Assistant 结果中是否包含可持久化内容。 */
 export function has_assistant_result_content(
   parts: readonly SessionAgentContent[],

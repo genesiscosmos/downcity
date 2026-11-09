@@ -236,11 +236,13 @@ export class LocalFileSystem implements FileSystem {
   async run_file_action(
     request: FileToolActionRequest,
     observer?: WorkspaceFileMutationObserver,
+    abort_signal?: AbortSignal,
   ): Promise<FileToolActionResult> {
     return await run_file_action({
       root_path: this.root_path,
       ...(this.mounts() ? { mounts: this.mounts() } : {}),
       ...(observer ? { mutation_observer: observer } : {}),
+      ...(abort_signal ? { abort_signal } : {}),
     }, request);
   }
 

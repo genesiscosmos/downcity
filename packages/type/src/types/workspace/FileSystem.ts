@@ -73,6 +73,8 @@ export interface FileSystem {
   run_file_action(
     request: FileToolActionRequest,
     observer?: WorkspaceFileMutationObserver,
+    /** 当前工具调用取消信号；大文本扫描在块边界检查。 */
+    abort_signal?: AbortSignal,
   ): Promise<FileToolActionResult>;
 
   /** 执行一次受项目根目录限制的结构化搜索操作。 */

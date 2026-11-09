@@ -8,7 +8,7 @@
  * - 输入边界：`session.prompt()` 接收 `type: "file"`、`media_type` 和 Data URL。
  * - 存储边界：Store 解码 Data URL，写入 Agent 私有附件目录。
  * - Message 边界：Session Message 只记录附件的稳定绝对路径。
- * - 模型边界：模型转换器读取该路径，在内存中恢复成模型需要的文件内容。
+ * - 模型边界：上传只生成引用；工具显式读取后才披露文本或媒体内容。
  *
  * 因此，Data URL 不会直接进入 JSONL Message；Session Message 是附件路径的唯一引用。
  */
@@ -17,6 +17,9 @@
 export interface SessionAttachmentStore {
   /** 判断 canonical URL 是否由当前 Session Attachment Store 持有。 */
   owns_local_file(url: string): boolean;
+
+  /** 对已由调用方确认登记的附件执行有界只读操作，不扩大目录访问范围。 */
+  read_file(input: import("@downcity/type/workspace").ReadFileToolInput, abort_signal?: AbortSignal): Promise<import("@downcity/type/workspace").ReadFileToolResult>;
 
   /**
    * 保存 Data URL，并返回 Agent 私有目录中的稳定绝对路径。

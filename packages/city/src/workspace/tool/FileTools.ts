@@ -7,6 +7,7 @@
  */
 
 import path from "node:path";
+import { max_explicit_media_bytes, max_request_media_bytes } from "@downcity/type/workspace";
 import { define_agent_tool, type ToolEffect } from "@downcity/type";
 import type { WorkspaceToolActionResult } from "@downcity/type/workspace";
 import { create_workspace_file_mutation_effect } from "@downcity/type/workspace";
@@ -30,20 +31,36 @@ import {
 export function create_file_tools(runner: FileToolRunner): FileToolSet {
   const read = define_agent_tool<ReadFileToolInput, WorkspaceToolActionResult<ReadFileToolResult>>({
     description:
-      "Read a project file instead of using cat or sed. Chat attachments are hydrated by the Session and are not project file paths. Images and PDFs are attached to the next model step as local file parts. Text output is limited to 500 lines and 256KB by default; use offset and limit to continue. Other binary files return metadata only.",
+      "Read a project file or an attachment owned by this Session. Uploaded attachments are references only: call read when content is needed. Images and PDFs up to 2 MiB are explicitly attached to the next model step. Text output is bounded to 64 KiB and 500 lines by default. Continue long lines with next_byte_offset as byte_offset and expected_version; omit offset and limit in byte mode. Other binary files return metadata only and may require conversion tools.",
     input_schema: read_file_tool_input_schema,
     execute: async (
       input: ReadFileToolInput,
+      context,
     ): Promise<WorkspaceToolActionResult<ReadFileToolResult>> => {
-      const output = await runner.run_file_action({
+      context.abort_signal?.throwIfAborted();
+      const output = await context.read_attachment?.(input) ?? await runner.run_file_action({
         action: "read",
         input,
-      }) as ReadFileToolResult;
+      }, undefined, context.abort_signal) as ReadFileToolResult;
+      context.abort_signal?.throwIfAborted();
       const messages: WorkspaceToolActionResult<ReadFileToolResult>["messages"] = [];
       if (
         output.success &&
         (output.type === "image" || output.mime_type === "application/pdf")
       ) {
+        if (output.total_bytes > max_explicit_media_bytes) {
+          return { output: { success: false, error_code: "media_too_large", file_path: output.file_path,
+            message: `Media is ${output.total_bytes} bytes; explicit read limit is ${max_explicit_media_bytes} bytes. Extract or convert a smaller file before reading. Content was not delivered.` }, messages };
+        }
+        const existing_media_bytes = (context.messages ?? []).reduce((sum, message) => sum + message.content.reduce((bytes, part) => {
+          if (part.type !== "file") return bytes;
+          return bytes + (part.source.type === "base64" ? Buffer.byteLength(part.source.data, "base64") : 0);
+        }, 0), 0);
+        if (existing_media_bytes + output.total_bytes > max_request_media_bytes
+          || (context.reserve_media && !context.reserve_media(output.total_bytes, existing_media_bytes))) {
+          return { output: { success: false, error_code: "media_too_large", file_path: output.file_path,
+            message: "Explicit media exceeds the request media limit (4 MiB) or remaining model input budget. Content was not delivered; extract a smaller derivative." }, messages };
+        }
         messages.push({
           role: "user",
           parts: [{
@@ -51,6 +68,7 @@ export function create_file_tools(runner: FileToolRunner): FileToolSet {
             url: output.file_path,
             media_type: output.mime_type || "application/octet-stream",
             filename: path.basename(output.file_path),
+            media_version: output.file_version,
           }],
         });
       }

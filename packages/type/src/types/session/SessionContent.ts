@@ -35,6 +35,8 @@ export interface SessionFileContent {
   url: string;
   /** 可选原始文件名。 */
   filename?: string;
+  /** 显式工具媒体读取的源文件版本；公开 prompt 归一化会移除，仅可信内部提交保留。 */
+  media_version?: string;
 }
 
 /** Session 结构化数据内容。 */

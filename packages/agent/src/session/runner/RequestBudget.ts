@@ -11,31 +11,79 @@ export const REQUEST_SAFETY_TOKENS = 2048;
 /** 每次模型请求前最多推进的次数；即使 Composer 一直返回 true 也会结束。 */
 export const MAX_PREFLIGHT_ADVANCES = 8;
 
+/** 最大消息或内容片段的规模与位置；仅含元信息，不含正文、参数或媒体数据。 */
+type RequestBudgetItem = {
+  /** 输入项类别，例如 user_message、assistant_text、tool_input 或 tool_result。 */
+  category: string;
+  /** 在当前派生 input.messages 中的位置，从 1 开始，不包含单独传入的 system。 */
+  message_index: number;
+  /** 消息角色，用于区分当前输入与 assistant、tool 等历史消息。 */
+  role: SessionStepExecutionInput["messages"][number]["role"];
+  /** 内容片段在 message.content 中的位置，从 1 开始；整条消息为 null。 */
+  part_index: number | null;
+  /** 工具输入或结果所属的工具名；普通消息为 null。 */
+  tool_name: string | null;
+  /** 工具输入或结果对应的调用 ID；普通消息为 null。 */
+  tool_call_id: string | null;
+  /** 对该消息或片段序列化后进行保守估算所得的 token 数。 */
+  estimated_tokens: number;
+};
+
 /** 使用与实际发送完全相同的请求装配结果计算估算值与固定开销。 */
 export function measure_request(input: SessionStepExecutionInput) {
   const call = build_model_step_call(input.system, input.messages, input.tools);
   const window = input.context_window ?? input.model.context_window;
   const system = call.messages.filter(message => message.role === "system");
-  const estimated_input_tokens = estimate_context_tokens(JSON.stringify(call)) + call.messages.length * 16;
+  const serialized_call = JSON.stringify(call);
+  const estimated_input_tokens = estimate_context_tokens(serialized_call) + call.messages.length * 16;
   const fixed_tokens = estimate_context_tokens(JSON.stringify({ messages: system, tools: call.tools })) + system.length * 16;
   const output_tokens = call.max_output_tokens!;
   const safety_tokens = Math.max(REQUEST_SAFETY_TOKENS, Math.ceil((window ?? 0) * 0.05));
   const input_budget = window && window > 0 ? window - output_tokens - safety_tokens : null;
   let largest_tool_result_bytes = 0;
-  let largest_uncompressible_tokens = 0;
-  for (const message of input.messages) {
-    for (const part of message.content) {
+  // 内联媒体的编码字节独立记录，仍计入上面的保守 token 估算。
+  let media_encoded_bytes = 0;
+  let largest_item: RequestBudgetItem | null = null;
+  for (const [message_offset, message] of input.messages.entries()) {
+    const has_tool_parts = message.content.some(part => part.type === "tool_call" || part.type === "tool_result");
+    const message_item: RequestBudgetItem = {
+      category: `${message.role}_message`, message_index: message_offset + 1, role: message.role,
+      part_index: null, tool_name: null, tool_call_id: null,
+      estimated_tokens: has_tool_parts ? 0 : estimate_context_tokens(JSON.stringify(message)),
+    };
+    if (!has_tool_parts && (!largest_item || message_item.estimated_tokens > largest_item.estimated_tokens)) largest_item = message_item;
+    for (const [part_offset, part] of message.content.entries()) {
+      const is_tool = part.type === "tool_call" || part.type === "tool_result";
+      if (has_tool_parts) {
+        const part_item: RequestBudgetItem = {
+          ...message_item, category: part.type === "tool_call" ? "tool_input" : part.type === "tool_result" ? "tool_result" : `${message.role}_${part.type}`,
+          part_index: part_offset + 1, tool_name: is_tool ? part.tool_name : null,
+          tool_call_id: is_tool ? part.tool_call_id : null,
+          estimated_tokens: estimate_context_tokens(JSON.stringify(part)),
+        };
+        if (!largest_item || part_item.estimated_tokens > largest_item.estimated_tokens) largest_item = part_item;
+      }
       if (part.type === "tool_result") largest_tool_result_bytes = Math.max(largest_tool_result_bytes, Buffer.byteLength(JSON.stringify(part.content)));
-      if (part.type === "tool_call") largest_uncompressible_tokens = Math.max(largest_uncompressible_tokens, estimate_context_tokens(JSON.stringify(part.input)));
+      for (const media_part of part.type === "tool_result" ? part.content : [part]) {
+        if (media_part.type === "file" && media_part.source.type === "base64") media_encoded_bytes += Buffer.byteLength(media_part.source.data);
+      }
     }
-    if (message.role === "user") largest_uncompressible_tokens = Math.max(largest_uncompressible_tokens, estimate_context_tokens(JSON.stringify(message)));
   }
   return { estimated_input_tokens, fixed_tokens, input_budget, output_tokens, safety_tokens,
-    context_window: window ?? null, request_bytes: Buffer.byteLength(JSON.stringify(call)), largest_tool_result_bytes,
-    largest_uncompressible_tokens };
+    context_window: window ?? null, request_bytes: Buffer.byteLength(serialized_call), largest_tool_result_bytes,
+    media_encoded_bytes, largest_item };
 }
 
-/** 发送前迭代压缩并检测进展；固定输入、缺失窗口、无法缩小均返回有定位信息的终态。 */
+/** 生成超限终态；最大输入仅用于定位，不据此推断历史能否摘要。 */
+function request_budget_error(reason: string, diagnostic: ReturnType<typeof measure_request>): Error {
+  const { estimated_input_tokens, fixed_tokens, input_budget, largest_item } = diagnostic;
+  const available_tokens = input_budget === null ? null : input_budget - fixed_tokens;
+  const category = available_tokens !== null && available_tokens <= 0 ? "fixed_system_tools"
+    : largest_item && available_tokens !== null && largest_item.estimated_tokens > available_tokens ? "single_input" : "total_request";
+  return new Error(`Model request exceeds input budget: ${reason} (category=${category}, estimated_input_tokens=${estimated_input_tokens}, input_budget=${input_budget}, fixed_tokens=${fixed_tokens}, available_tokens=${available_tokens}, largest_item=${JSON.stringify(largest_item)})`);
+}
+
+/** 发送前先推进稳定历史再重新测量；固定开销不足、缺失窗口或有界推进失败均终止。 */
 export async function fit_request(input: {
   /** 每次推进后重新读取派生 checkpoint 并组装最终输入。 */
   resolve: () => Promise<SessionStepExecutionInput>;
@@ -50,18 +98,21 @@ export async function fit_request(input: {
   for (let advance_count = 0; advance_count <= MAX_PREFLIGHT_ADVANCES; advance_count++) {
     input.signal.throwIfAborted();
     const step = await input.resolve();
+    input.signal.throwIfAborted();
     const diagnostic = measure_request(step);
     await input.report({ ...diagnostic, advance_count });
-    const { input_budget, estimated_input_tokens, fixed_tokens, largest_uncompressible_tokens } = diagnostic;
+    input.signal.throwIfAborted();
+    const { input_budget, estimated_input_tokens, fixed_tokens } = diagnostic;
     if (input_budget === null) throw new Error(`Model context window metadata is required for request budgeting (model_id=${step.model.id}, estimated_input_tokens=${estimated_input_tokens})`);
-    if (fixed_tokens >= input_budget) throw new Error(`Fixed system/tools exceed model input budget (fixed_tokens=${fixed_tokens}, input_budget=${input_budget})`);
-    if (largest_uncompressible_tokens > input_budget - fixed_tokens) throw new Error(`A user message or tool input exceeds model input budget; reduce that input (estimated_tokens=${largest_uncompressible_tokens}, available_tokens=${input_budget - fixed_tokens})`);
+    if (fixed_tokens >= input_budget) throw request_budget_error("fixed system/tools exhaust the input budget", diagnostic);
     if (estimated_input_tokens <= input_budget) return step;
-    if (estimated_input_tokens >= previous_tokens) throw new Error(`Context compaction made no request-budget progress (estimated_input_tokens=${estimated_input_tokens}, input_budget=${input_budget})`);
-    if (advance_count === MAX_PREFLIGHT_ADVANCES) throw new Error(`Request-budget compaction limit reached (estimated_input_tokens=${estimated_input_tokens}, input_budget=${input_budget})`);
+    if (estimated_input_tokens >= previous_tokens) throw request_budget_error("context compaction made no request-budget progress", diagnostic);
+    if (advance_count === MAX_PREFLIGHT_ADVANCES) throw request_budget_error("request-budget compaction limit reached", diagnostic);
     previous_tokens = estimated_input_tokens;
     input.signal.throwIfAborted();
-    if (!await input.advance()) throw new Error(`Model request exceeds input budget with no stable history to compact (estimated_input_tokens=${estimated_input_tokens}, input_budget=${input_budget})`);
+    const advanced = await input.advance();
+    input.signal.throwIfAborted();
+    if (!advanced) throw request_budget_error("no stable history to compact", diagnostic);
   }
   throw new Error("Request budgeting did not reach a terminal state");
 }
