@@ -7,6 +7,7 @@
  */
 
 import { generate_id } from "@/utils/Id.js";
+import { create_result_ref, disclosed_tool_result, tool_result_value } from "@/model/results/ResultReference.js";
 import { SessionAgentMessageWriter } from "@/session/messages/SessionAgentMessageWriter.js";
 import { SessionAgentMessageState } from "@/session/messages/SessionAgentMessageState.js";
 import {
@@ -233,6 +234,7 @@ export class SessionMessages {
       `agent:${this.session_id}:${generate_id()}`;
     // 先建立持有关系，创建消息时的首次接受才会被登记为可写 Message。
     const writer = new SessionAgentMessageWriter({
+      category: this.store.origin.category,
       message_id,
       state: this.agent_state,
       cache: this.cache,
@@ -615,8 +617,18 @@ export class SessionMessages {
         source.message_id,
         source.role,
       );
+      const copied = structuredClone(source);
+      if (copied.role === "agent") {
+        // 旧结果在分支复制时固定初始披露及来源引用，后续多级 fork 也复用本地事实。
+        copied.parts = copied.parts.map((part) => {
+          if (part.type !== "tool" || (part.state !== "completed" && part.state !== "failed") || part.result_ref) return part;
+          const location = { session_id: source.session_id, message_id: source.message_id, message_sequence: source.sequence, part_id: part.part_id };
+          return { ...part, result_ref: create_result_ref(location, tool_result_value(part)),
+            model_output: disclosed_tool_result(part, location), disclosure_version: 1 };
+        });
+      }
       await this.create_message((sequence, created_at) => ({
-        ...structuredClone(source),
+        ...copied,
         message_id,
         session_id: this.session_id,
         ...(turn_id ? { turn_id } : {}),

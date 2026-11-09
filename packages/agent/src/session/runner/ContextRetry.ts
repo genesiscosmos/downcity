@@ -8,6 +8,7 @@
  */
 
 import type { Logger } from "@/utils/logger/Logger.js";
+import { ResultSaveFailure } from "@/model/results/ResultSaveFailure.js";
 import type { SessionTurnExecutionResult } from "@/types/session/SessionExecution.js";
 
 /**
@@ -20,7 +21,7 @@ interface ContextRetryOptions {
   session_id: string;
 
   /** 请求 Composer 尝试推进上下文派生状态。 */
-  advance_context: (error: unknown) => Promise<boolean>;
+  advance_context: (error: unknown, signal?: AbortSignal) => Promise<boolean>;
 
   /**
    * 当前 session 统一日志器。
@@ -29,6 +30,8 @@ interface ContextRetryOptions {
 }
 
 interface ContextRetryInput {
+  /** 当前 Turn 取消后停止摘要恢复。 */
+  signal?: AbortSignal;
   /** 按当前上下文推进次数执行完整 Turn。 */
   execute_turn: (advance_count: number) => Promise<SessionTurnExecutionResult>;
 }
@@ -60,8 +63,11 @@ export class ContextRetry {
       try {
         return await input.execute_turn(advance_count);
       } catch (error) {
+        // 操作已发生，任何 Composer 推进建议都不能授权重新执行。
+        if (error instanceof ResultSaveFailure) return this.build_failure_result({ error_text: error.message });
         if (advance_count < MAX_CONTEXT_ADVANCE_ATTEMPTS) {
-          const advanced = await this.advance_context(error);
+          input.signal?.throwIfAborted();
+          const advanced = await this.advance_context(error, input.signal);
           if (advanced) {
             await this.logger.log("info", "[agent] context.advance", {
               advanceCount: advance_count,

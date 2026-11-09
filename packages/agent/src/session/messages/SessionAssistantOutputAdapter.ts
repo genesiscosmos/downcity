@@ -60,8 +60,8 @@ export class SessionAssistantOutputAdapter implements SessionAssistantOutput {
   }
 
   /** 写入 Tool 执行终态。 */
-  async write_tool_result(result: SessionToolExecutionResult): Promise<void> {
-    await (await this.ensure_writer()).apply_tool_result(result);
+  async write_tool_result(result: SessionToolExecutionResult): Promise<import("@downcity/type").SessionAgentToolPart> {
+    return await (await this.ensure_writer()).apply_tool_result(result);
   }
 
   /** 使用模型聚合出的 canonical Parts 校验当前 Step。 */

@@ -163,7 +163,8 @@ export class SessionWork implements SessionWorkContract {
     /** 目标持久化分类。 */ session_category: "chat" | "work";
   }): Promise<SessionMessagePage> {
     const snapshot = await this.options.read_session(input.session_id, input.session_category);
-    return await snapshot.messages({ limit: normalize_limit(input.limit, DEFAULT_MESSAGE_LIMIT), before_sequence: input.before_sequence });
+    return await snapshot.messages({ limit: normalize_limit(input.limit, DEFAULT_MESSAGE_LIMIT), before_sequence: input.before_sequence,
+      include_internal: input.include_internal });
   }
 
   /** 仅归档工作分类的会话，避免模型移除主对话或外部聊天路由。 */

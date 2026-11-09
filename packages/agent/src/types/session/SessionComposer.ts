@@ -86,6 +86,8 @@ export type SessionContextAdvanceTrigger =
   | "provider_context_limit"
   /** Provider usage 已达到主动推进阈值。 */
   | "usage_pressure"
+  /** 最终请求估算超过包含输出和协议余量的输入预算。 */
+  | "request_budget"
   /** 用户主动请求压缩当前 Session 的稳定历史。 */
   | "manual";
 
@@ -101,6 +103,10 @@ export interface SessionContextAdvanceInput {
   trigger: SessionContextAdvanceTrigger;
   /** 用于生成派生摘要的当前模型。 */
   model?: ModelClient;
+  /** 宿主提供的模型窗口优先于模型目录中的默认值。 */
+  context_window?: number;
+  /** 当前 Turn 的取消信号；取消后禁止提交 checkpoint。 */
+  abort_signal?: AbortSignal;
   /** 确认存在有效推进区间后、开始耗时工作前调用并等待；空操作不调用，由调用方负责隔离观测失败。 */
   on_advance_start?: () => Promise<void>;
   /** 模型请求逐次失败的可选观测入口。 */

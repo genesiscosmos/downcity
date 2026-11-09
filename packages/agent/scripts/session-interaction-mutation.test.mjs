@@ -165,6 +165,7 @@ test("Message 收口仍然整条发布，消费方才能收敛 state", async () 
   const stored_messages = [];
   const publications = [];
   const store = {
+    origin: { category: "work", type: "work" },
     initialize: async () => {},
     list_messages: async () => structuredClone(stored_messages),
     list_recoverable_agent_messages: async () => [],

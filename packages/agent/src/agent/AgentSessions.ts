@@ -827,6 +827,7 @@ export class AgentSessions implements AgentSessionsContract<AgentSession> {
     // 默认模型是本实例创建时的快照，Agent.reconfigure 不改变已打开 Session。
     const default_model = input && Object.hasOwn(input, "restored_model") ? input.restored_model : this.get_agent_model();
     const created = new this.session_class({
+      read_result_session: (session_id, category) => context.store.read_session(session_id, category),
       ...(profile ? { assert_execution_profile: assert_profile } : {}),
       agent_id: this.agent_id,
       get_agent_name: this.get_agent_name,

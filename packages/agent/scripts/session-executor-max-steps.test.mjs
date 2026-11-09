@@ -24,7 +24,7 @@ function create_tool_loop_model(wrap_up_text) {
   let provider_call_count = 0;
   const observed_calls = [];
   return {
-    id: "tool-loop-limit-model",
+    id: "tool-loop-limit-model", context_window: 128_000,
     get provider_call_count() {
       return provider_call_count;
     },

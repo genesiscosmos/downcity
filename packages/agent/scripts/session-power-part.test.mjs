@@ -101,7 +101,9 @@ test("Action 返回前即发布内容，检查点只合并已经发布的 Parts"
   const tools = StepInput.prototype.bind_turn_context_to_tools.call({ create_tool_call_context: () => ({}) }, {
     presentation: { execute: async () => ({ output: { success: true }, messages: [{ role: "agent", parts: [content] }] }) },
   }, turn);
-  const result = await tools.presentation.execute({}, { tool_call_id: "call-1" });
+  const site = { tool_call_id: "call-1" };
+  const prepared = await tools.presentation.prepare_input({}, site);
+  const result = await tools.presentation.execute(prepared.execution_input, site);
   assert.deepEqual(events, ["prepare", "publish", "merge-record"]);
   assert.deepEqual(result, { success: true });
   assert.deepEqual(batch.published_parts, [canonical]);

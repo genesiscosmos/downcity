@@ -183,8 +183,14 @@ export interface SessionAgentToolPart {
   input_text?: string;
   /** 收敛后的结构化输入。 */
   input?: JsonValue;
-  /** 工具成功输出。 */
+  /** 工具完整终态输出，包含结构化失败；canonical 结果事实源。 */
   output?: JsonValue;
+  /** 模型实际收到的完整小结果、首次折叠包或 lookup 页，不自动展开。 */
+  model_output?: JsonValue;
+  /** 已保存模型披露视图的格式版本。 */
+  disclosure_version?: number;
+  /** 完整结果的稳定引用，与模型工具调用 ID 分离。 */
+  result_ref?: string;
   /** 工具失败信息。 */
   error?: string;
   /** 工具调用的可选展示标题。 */

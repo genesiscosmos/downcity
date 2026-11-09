@@ -19,6 +19,8 @@ import type {
 } from "@downcity/type";
 import { compose_prompt_power_tools, prompt_power_context_blocks } from "./PromptPowers.js";
 import type { BoundAgentTool, ToolCallSite } from "@/types/tool/BoundAgentTool.js";
+import { create_lookup_tool } from "@/model/results/LookupTool.js";
+import { lookup_result } from "@/model/results/ResultReader.js";
 import type {
   AgentSessionSystemBlock,
   AgentSessionSystemSnapshot,
@@ -400,6 +402,7 @@ export class StepInput {
     tools: Record<string, Tool>,
     turn_context: SessionTurnContext,
   ): Record<string, BoundAgentTool> {
+    if (Object.hasOwn(tools, "lookup")) throw new Error("Tool name is reserved by the result reader: lookup");
     const wrapped: Record<string, BoundAgentTool> = {};
     for (const [name, tool] of Object.entries(tools)) {
       const original_execute = tool.execute;
@@ -469,6 +472,7 @@ export class StepInput {
         },
       };
     }
+    wrapped.lookup = create_lookup_tool((input) => lookup_result(input, this.options.store, this.options.read_result_session));
     return wrapped;
   }
 

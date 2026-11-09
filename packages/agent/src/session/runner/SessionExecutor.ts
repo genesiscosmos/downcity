@@ -9,6 +9,7 @@
  */
 
 import type { BoundAgentTool } from "@/types/tool/BoundAgentTool.js";
+import { fit_request } from "./RequestBudget.js";
 import { log_assistant_message_now } from "@/model/messages/SessionMessageLog.js";
 import {
   MAX_INCOMPLETE_RESPONSE_RECOVERIES,
@@ -39,6 +40,7 @@ import {
   type ModelStepToolCall,
 } from "@/model/ModelStepRunner.js";
 import { execute_model_request } from "@/model/ModelRequestRunner.js";
+import { ResultSaveFailure } from "@/model/results/ResultSaveFailure.js";
 import {
   resolve_usage_ratio,
   is_context_pressured,
@@ -80,6 +82,7 @@ export interface SessionExecutorOptions {
    */
   advance_context: (
     trigger: SessionContextAdvanceTrigger,
+    signal?: AbortSignal,
   ) => Promise<boolean>;
 }
 
@@ -115,6 +118,7 @@ export interface SessionExecutorPort {
 
 /** 核心模型请求与 tool-loop 执行器。 */
 export class SessionExecutor implements SessionExecutorPort {
+  private readonly advance_context: SessionExecutorOptions["advance_context"];
   private readonly session_id: string;
   private readonly logger: Logger;
   private readonly is_context_limit: SessionExecutorOptions["is_context_limit"];
@@ -125,14 +129,15 @@ export class SessionExecutor implements SessionExecutorPort {
     this.session_id = String(options.session_id || "").trim();
     this.logger = options.logger;
     this.is_context_limit = options.is_context_limit;
+    this.advance_context = options.advance_context;
     if (!this.session_id) {
       throw new Error("SessionExecutor requires a non-empty session_id");
     }
     this.context_retry = new ContextRetry({
       session_id: this.session_id,
-      advance_context: async (error) =>
+      advance_context: async (error, signal) =>
         this.is_context_limit(error)
-          ? await options.advance_context("provider_context_limit")
+          ? await options.advance_context("provider_context_limit", signal)
           : false,
       logger: this.logger,
     });
@@ -157,6 +162,7 @@ export class SessionExecutor implements SessionExecutorPort {
     this.executing = true;
     try {
       return await this.context_retry.execute_with_retry({
+        signal: input.turn_context.lifecycle.abort_signal,
         execute_turn: async (advance_count) =>
           await this.run_tool_loop({
             turn_context: input.turn_context,
@@ -215,7 +221,12 @@ export class SessionExecutor implements SessionExecutorPort {
           step_index: step_count + 1,
         });
         await input.turn_context.input.checkpoint();
-        const step_input = await input.resolve_step_input();
+        const step_input = await fit_request({
+          resolve: input.resolve_step_input,
+          advance: () => this.advance_context("request_budget", input.turn_context.lifecycle.abort_signal),
+          signal: input.turn_context.lifecycle.abort_signal,
+          report: diagnostic => this.logger.log("info", "[agent] context.request_budget", { session_id, ...diagnostic }),
+        });
         await this.logger.log("info", "[agent] step.input_ready", {
           session_id,
           turn_id: input.turn_context.session.turn_id,
@@ -550,7 +561,11 @@ export class SessionExecutor implements SessionExecutorPort {
               : {}),
           });
         } catch (error) {
-          await turn_context.output.assistant?.abort_step();
+          try { await turn_context.output.assistant?.abort_step(); }
+          catch (cleanup_error) {
+            // 回滚也失败时仍保留“已执行、禁止重跑”的终态。
+            if (!(error instanceof ResultSaveFailure)) throw cleanup_error;
+          }
           throw error;
         }
       },
@@ -605,7 +620,12 @@ export class SessionExecutor implements SessionExecutorPort {
     await input.turn_context.input.checkpoint();
     const step = await this.execute_provider_step({
       turn_context: input.turn_context,
-      step_input: await input.resolve_step_input(),
+      step_input: await fit_request({
+        resolve: async () => ({ ...await input.resolve_step_input(), tools: {} }),
+        advance: () => this.advance_context("request_budget", input.turn_context.lifecycle.abort_signal),
+        signal: input.turn_context.lifecycle.abort_signal,
+        report: diagnostic => this.logger.log("info", "[agent] context.request_budget", { session_id: this.session_id, ...diagnostic }),
+      }),
       tools_override: {},
       on_step_finish: input.on_step_finish,
     });
@@ -647,9 +667,9 @@ function build_fallback_assistant_parts(
  * 只接收领域触发原因。
  */
 export function is_provider_context_limit_error(error: unknown): boolean {
+  if (error && typeof error === "object" && "code" in error && typeof error.code === "string") {
+    return error.code === "context_length_exceeded";
+  }
   const message = String(error ?? "").toLowerCase();
-  return message.includes("context_length") ||
-    message.includes("too long") ||
-    message.includes("maximum context") ||
-    message.includes("context window");
+  return /context_length_exceeded|maximum context (?:length|window)|context window (?:exceeded|limit)|too many (?:input )?tokens/.test(message);
 }

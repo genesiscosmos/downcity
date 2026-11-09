@@ -4,7 +4,7 @@
  * 这是预算估计，不是模型的精确 token 计数；明确超限仍由执行器缩批处理。
  */
 
-/** 非压缩原始历史的最小估算 token 数，不包含 system、摘要或工具定义。 */
+/** 原始历史保留的软目标；请求预算或 Provider 超限时允许低于此值。 */
 export const MIN_RETAINED_HISTORY_TOKENS = 10_000;
 
 /** 按文本类型估算 token；纯英文、代码与 JSON 不再按每字符一个 token 计费。 */
@@ -22,18 +22,18 @@ export function estimate_context_tokens(text: string): number {
   return Math.ceil(ascii_count / 3 + other_tokens + encoded_extra);
 }
 
-/** 在完整单元边界选择最接近 65% 的前缀，保留区 10k 优先于压缩比例。 */
-export function select_compaction_target(texts: readonly string[]): number {
+/** 在完整单元边界选择接近 65% 的前缀；强制推进时放宽 10k 保留软目标。 */
+export function select_compaction_target(texts: readonly string[], force = false): number {
   const sizes = texts.map(estimate_context_tokens);
   const total = sizes.reduce((sum, size) => sum + size, 0);
-  if (total <= MIN_RETAINED_HISTORY_TOKENS) return 0;
+  if (!force && total <= MIN_RETAINED_HISTORY_TOKENS) return 0;
   const desired = total * 0.65;
   let prefix = 0;
   let best_count = 0;
   let best_distance = Infinity;
   for (let index = 0; index < sizes.length; index++) {
     prefix += sizes[index]!;
-    if (total - prefix < MIN_RETAINED_HISTORY_TOKENS) break;
+    if (!force && total - prefix < MIN_RETAINED_HISTORY_TOKENS) break;
     const distance = Math.abs(prefix - desired);
     if (distance < best_distance) {
       best_count = index + 1;

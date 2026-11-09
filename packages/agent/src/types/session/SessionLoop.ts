@@ -90,6 +90,7 @@ export interface SessionLoopOptions {
   /** 请求推进派生上下文；Provider 上下文超限时由执行器调用。 */
   advance_context: (
     trigger: SessionContextAdvanceTrigger,
+    signal?: AbortSignal,
   ) => Promise<boolean>;
   /** 当前 Session 的配置与 Metadata 状态。 */
   state: SessionState;

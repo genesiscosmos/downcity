@@ -232,6 +232,9 @@ function decode_session_part(
         ...optional_string(content, "input_text", row),
         ...optional_json(content, "input"),
         ...optional_json(content, "output"),
+        ...optional_json(content, "model_output"),
+        ...optional_number(content, "disclosure_version", row),
+        ...optional_string(content, "result_ref", row),
         ...optional_string(content, "error", row),
         ...optional_string(content, "title", row),
         ...(content.interactions === undefined

@@ -32,8 +32,10 @@ export interface SessionToolExecutionResult {
   tool_name: string;
   /** Tool 是否成功执行。 */
   succeeded: boolean;
-  /** Tool 返回的可序列化结果。 */
+  /** Tool 返回的可序列化完整结果。 */
   output: unknown;
+  /** 可信 lookup 适配器已生成有预算的结果页；普通业务输出不得自行设置。 */
+  disclosed?: boolean;
 }
 
 /** 等待单个 canonical Tool Part 到达的异步句柄。 */

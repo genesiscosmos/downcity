@@ -31,7 +31,7 @@ export interface SessionAssistantOutput {
   /** 在 Tool 审批或执行前提交完整输入。 */
   prepare_tool_input(input: SessionToolInputReady): Promise<void>;
   /** 写入 Tool 执行终态。 */
-  write_tool_result(result: SessionToolExecutionResult): Promise<void>;
+  write_tool_result(result: SessionToolExecutionResult): Promise<import("@downcity/type").SessionAgentToolPart | void>;
   /** 使用模型流聚合出的 canonical Parts 校验当前 Step。 */
   finish_step(parts: SessionAgentMessagePart[]): Promise<void>;
   /** 放弃当前未完成 Step 的临时作用域。 */

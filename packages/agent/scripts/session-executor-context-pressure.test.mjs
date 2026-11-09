@@ -55,7 +55,7 @@ function create_runner() {
 }
 
 
-function create_turn_input(model, messages, context_window = 100, warnings = []) {
+function create_turn_input(model, messages, context_window = 128_000, warnings = []) {
   return {
     turn_context: create_session_turn_context({
       session_id: "compact-runner-session",
@@ -98,7 +98,7 @@ test("真实 usage 达到 95% 时请求 Context Policy 恢复", () => {
 test("最终 Step 达到 95% 时通过 Turn 结果请求 writer 收口后持久化 compact", async () => {
   const model = new MockModelClient({
     modelId: "usage-trigger-model",
-    doStream: async () => create_stream_text_result("done", 90, 5),
+    doStream: async () => create_stream_text_result("done", 115_200, 6_400),
   });
   const result = await create_runner().execute(create_turn_input(model, [{
     role: "user",
@@ -152,7 +152,7 @@ test("Provider 在输出前发生可重试流错误时自动重试", async () =>
   }];
 
   const result = await create_runner().execute(
-    create_turn_input(model, messages, 100, warnings),
+    create_turn_input(model, messages, 128_000, warnings),
   );
 
   assert.equal(call_count, 2);
@@ -201,7 +201,7 @@ test("Provider 不可重试失败会立即发送最终模型 Warning", async () 
   }];
 
   const result = await create_runner().execute(
-    create_turn_input(model, messages, 100, warnings),
+    create_turn_input(model, messages, 128_000, warnings),
   );
 
   assert.equal(result.success, false);
@@ -245,7 +245,7 @@ test("每个 Provider Step 使用 Composer 返回的最新 canonical history", a
     system: [],
     messages: compacted_messages,
     tools: {},
-    context_window: 100,
+    context_window: 128_000,
   });
 
   const result = await runner.execute(input);
@@ -324,7 +324,7 @@ test("每个 Provider Step 只解析一次完整 Composer 输入", async () => {
         content: [{ type: "text", text: "ping" }],
       }],
       tools: { ping: { execute: async () => "pong" } },
-      context_window: 100,
+      context_window: 128_000,
     };
   };
 

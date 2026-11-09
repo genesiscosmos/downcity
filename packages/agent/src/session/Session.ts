@@ -38,10 +38,7 @@ import type { AgentSessionPromptInput } from "@/types/sdk/AgentSessionPrompt.js"
 import type { AgentSessionStopResult } from "@/types/sdk/AgentSessionStop.js";
 import type { AgentSessionTurnHandle } from "@/types/sdk/AgentSessionTurn.js";
 import { SessionEventHub } from "@/session/messages/SessionEventHub.js";
-import {
-  create_session_local_state,
-  SessionState,
-} from "@/session/loop/SessionState.js";
+import { create_session_local_state, SessionState } from "@/session/loop/SessionState.js";
 import { SessionLoop } from "@/session/loop/SessionLoop.js";
 import { SessionQueue } from "@/session/loop/SessionQueue.js";
 import type { SessionLocalState } from "@/types/session/SessionLocalState.js";
@@ -64,10 +61,7 @@ import type {
   AppendExternalSessionUserMessageInput,
 } from "@/types/session/SessionMessages.js";
 import { StepInput } from "@/session/input/StepInput.js";
-import {
-  relocate_fork_message_files,
-  resolve_session_fork_messages,
-} from "@/session/messages/SessionForkMessageFiles.js";
+import { relocate_fork_message_files, resolve_session_fork_messages } from "@/session/messages/SessionForkMessageFiles.js";
 import { create_session_model_request_warning } from "@/session/messages/SessionModelRequestWarning.js";
 import type { SessionContextAdvanceTrigger } from "@/types/session/SessionComposer.js";
 
@@ -97,6 +91,7 @@ export class Session implements AgentSession {
 
   private readonly store: SessionStorage;
   private readonly create_session_store: SessionOptions["create_session_store"];
+  private readonly read_result_session: SessionOptions["read_result_session"];
   /** 集合提供的短 ID 分配器，新建 fork 时检查碰撞。 */
   private readonly allocate_session_id: () => Promise<string>;
   private readonly register_forked_session: SessionOptions["register_forked_session"];
@@ -145,6 +140,7 @@ export class Session implements AgentSession {
     this.origin = options.origin;
     this.store = options.store;
     this.create_session_store = options.create_session_store;
+    this.read_result_session = options.read_result_session;
     this.allocate_session_id = options.allocate_session_id ?? (async () => generate_session_id());
     this.register_forked_session = options.register_forked_session;
     this.get_tools = options.get_tools;
@@ -187,6 +183,7 @@ export class Session implements AgentSession {
       fallback_workspace_path: String(options.workspace_path || "").trim(),
     });
     this.step_input = new StepInput({
+      read_result_session: this.read_result_session,
       agent_id: this.agent_id,
       get_agent_name: this.get_agent_name,
       get_agent_description: this.get_agent_description,
@@ -225,7 +222,7 @@ export class Session implements AgentSession {
       session_origin: this.origin,
       get_workspace_path: () => this.get_workspace_path(),
       step_input: this.step_input,
-      advance_context: async (trigger) => await this.advance_context(trigger),
+      advance_context: async (trigger, signal) => await this.advance_context(trigger, signal),
       maintain_context: async () => {
         await this.advance_context("usage_pressure");
       },
@@ -816,6 +813,7 @@ export class Session implements AgentSession {
       origin: this.origin,
       store: this.create_session_store(session_id),
       create_session_store: this.create_session_store,
+      read_result_session: this.read_result_session,
       allocate_session_id: this.allocate_session_id,
       register_forked_session: this.register_forked_session,
       session_id: session_id,
@@ -851,15 +849,14 @@ export class Session implements AgentSession {
    * 写入派生边界后记为 completed，抛错时记为 failed，整个生命周期复用同一个 Action。
    * Composer 判定没有可推进区间时返回 false；手动请求记录反馈，自动推进不产生空 Action。
    */
-  private async advance_context(
-    trigger: SessionContextAdvanceTrigger,
-  ): Promise<boolean> {
+  private async advance_context(trigger: SessionContextAdvanceTrigger, abort_signal?: AbortSignal): Promise<boolean> {
     const turn_id = this.session_loop.current_turn_id();
     const action_id = `context-compaction:${this.id}:${generate_id()}`;
     try {
       const advanced = await this.composer.advance_context({
         session: this.step_input.identity(),
         model: this.get_model(),
+        context_window: this.get_model_context_window(), abort_signal,
         history: await this.store.list_messages(),
         derived: this.store.derived_store(this.composer.name),
         trigger,

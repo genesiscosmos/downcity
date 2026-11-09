@@ -6,6 +6,9 @@
  */
 
 import type { ModelStreamEvent } from "@downcity/type";
+import { project_tool_result } from "@/model/messages/ToolResultProjection.js";
+import { create_result_ref } from "@/model/results/ResultReference.js";
+import { disclose_result, DISCLOSURE_VERSION, result_bytes, RESULT_BYTES } from "@/model/results/ResultDisclosure.js";
 import type { SessionAgentMessageState } from "@/session/messages/SessionAgentMessageState.js";
 import type { SessionMessageCache } from "@/session/messages/SessionMessageCache.js";
 import { to_session_json_value } from "@/session/messages/SessionJsonValue.js";
@@ -33,6 +36,8 @@ export interface SessionAgentMessageWriterOptions {
   state: SessionAgentMessageState;
   /** Message 运行缓存。 */
   cache: SessionMessageCache;
+  /** canonical 存储分类，保证 internal 等分区可精确定位。 */
+  category?: string;
 }
 
 /** 单个 Assistant Message 的流式 Writer。 */
@@ -42,6 +47,7 @@ export class SessionAgentMessageWriter {
 
   private readonly state: SessionAgentMessageState;
   private readonly cache: SessionMessageCache;
+  private readonly category?: string;
   private readonly content_part_ids = new Map<string, string>();
   private readonly tool_call_ids = new Map<string, string>();
   private readonly current_step_part_ids = new Set<string>();
@@ -55,6 +61,7 @@ export class SessionAgentMessageWriter {
   constructor(options: SessionAgentMessageWriterOptions) {
     this.state = options.state;
     this.cache = options.cache;
+    this.category = options.category;
     this.message_id = options.message_id;
   }
 
@@ -104,22 +111,26 @@ export class SessionAgentMessageWriter {
   }
 
   /** 把 Tool 执行终态直接写入对应 canonical Tool Part。 */
-  async apply_tool_result(result: SessionToolExecutionResult): Promise<void> {
-    await this.enqueue_write(async () => {
+  async apply_tool_result(result: SessionToolExecutionResult): Promise<SessionAgentToolPart> {
+    return await this.enqueue_write(async () => {
       const tool = this.require_tool(result.tool_call_id);
-      if (tool.state === "failed" && result.succeeded) return;
-      await this.upsert_tool(result.tool_call_id, result.succeeded
-        ? {
-            tool_name: result.tool_name,
-            state: "completed",
-            output: to_session_json_value(result.output),
-          }
-        : {
-            tool_name: result.tool_name,
-            state: "failed",
-            error: read_tool_error(result.output),
-          });
-      await this.state.checkpoint(this.message_id);
+      if (tool.state === "failed" && result.succeeded) return tool;
+      // 已持久化终态不可因重试覆盖快照或改变首次披露。
+      if (tool.disclosure_version === DISCLOSURE_VERSION) return tool;
+      const message = this.current_message();
+      const output = to_session_json_value(result.output);
+      const readable = project_tool_result(output);
+      const result_ref = create_result_ref({ session_id: message.session_id, message_id: message.message_id,
+        message_sequence: message.sequence, part_id: tool.part_id, category: this.category }, readable);
+      const model_output = result.disclosed ? readable : disclose_result(readable, result_ref, result.succeeded ? "completed" : "failed");
+      if (result_bytes(model_output) > RESULT_BYTES) throw new Error("result_disclosure_budget_exceeded");
+      // 终态与可见包在同一事务提交，成功后才发布包含引用的 Mutation。
+      await this.state.commit_parts(this.message_id, [{
+        ...tool, tool_name: result.tool_name, state: result.succeeded ? "completed" : "failed", output,
+        model_output, disclosure_version: DISCLOSURE_VERSION, result_ref,
+        ...(!result.succeeded ? { error: read_tool_error(result.output) } : {}),
+      }]);
+      return this.require_tool(result.tool_call_id);
     });
   }
 

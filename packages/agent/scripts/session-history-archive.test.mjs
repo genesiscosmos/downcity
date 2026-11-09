@@ -50,8 +50,11 @@ test("messages 分页读取 compact 前原文，归档后列表保留历史而�
     for (const message of original.items) {
       const found = entries.find((entry) => entry.message_id === message.message_id);
       assert.ok(found);
-      assert.deepEqual(found.parts, message.parts);
+      assert.equal(found.part_count, message.parts.length);
+      assert.deepEqual(found.parts.map(part => part.part_id), message.parts.slice(0, 4).map(part => part.part_id));
+      assert.ok(Buffer.byteLength(JSON.stringify(found)) < 64 * 1024);
     }
+    assert.deepEqual((await work.messages({ limit: 100 })).items.filter(message => original.items.some(item => item.message_id === message.message_id)), original.items);
     const archived = (await f.tool.execute({ action: "archive", args: { session_id: work.id } }, f.context)).output.data;
     assert.equal(archived.status, "archived");
     assert.ok(!(await f.agent.sessions.list()).items.some((item) => item.session_id === work.id));

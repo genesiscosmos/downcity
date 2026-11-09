@@ -244,6 +244,15 @@ export class SqliteSessionStorage implements SessionStorage {
     return row ? this.read_aggregates([row])[0] ?? null : null;
   }
 
+  /** 利用既有 Part 主键精确读取分支复制的结果，不扫描/复制独立结果数据库。 */
+  async read_part_message(part_id: string): Promise<SessionMessage | null> {
+    await this.initialize();
+    const row = this.require_database().prepare(
+      "SELECT messages.* FROM messages JOIN message_parts USING (message_id) WHERE message_parts.part_id = ?",
+    ).get(part_id) as unknown as SessionMessageRow | undefined;
+    return row ? this.read_aggregates([row])[0] ?? null : null;
+  }
+
   /** 只读取标题生成所需的最早一条 User Message。 */
   async read_first_user_message(): Promise<SessionUserMessage | null> {
     await this.initialize();

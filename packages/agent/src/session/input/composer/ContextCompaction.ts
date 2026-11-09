@@ -18,10 +18,12 @@ import { estimate_context_tokens, select_compaction_target } from "./ContextToke
 /** 单次输入在实际模型窗口之外预留的协议余量。 */
 const CONTEXT_SAFETY_TOKENS = 2_048;
 
-/** 目标压缩约 65%，至少保留 10k 原始历史，一次生成并提交摘要。 */
+/** 目标压缩约 65%，保留 10k 为软目标；预算恢复允许消费更短尾部。 */
 export async function compact_context(input: SessionContextAdvanceInput, composer_name: string): Promise<boolean> {
   const model = input.model;
   if (!model) return false;
+  input.abort_signal?.throwIfAborted();
+  const window = input.context_window ?? model.context_window;
   const checkpoint = await read_latest_checkpoint(input.derived, composer_name);
   const units: ContextSummaryUnit[] = [];
   for (const candidate of collect_stable_parts(input.history, checkpoint)) {
@@ -30,11 +32,11 @@ export async function compact_context(input: SessionContextAdvanceInput, compose
     if (text.trim()) units.push({ ...candidate, text });
   }
   if (units.length === 0) return false;
-  let target_count = select_compaction_target(units.map(unit => unit.text));
+  let target_count = select_compaction_target(units.map(unit => unit.text),
+    input.trigger === "request_budget" || input.trigger === "provider_context_limit");
   if (target_count === 0) return false;
-  const window = model.context_window;
-  const budget = window && window > 0
-    ? window - CONTEXT_SUMMARY_MAX_OUTPUT_TOKENS - CONTEXT_SAFETY_TOKENS : undefined;
+  if (!window || window <= 0) throw new Error("Model context window metadata is required for history compaction");
+  const budget = window - CONTEXT_SUMMARY_MAX_OUTPUT_TOKENS - Math.max(CONTEXT_SAFETY_TOKENS, Math.ceil(window * 0.05));
   const summary = checkpoint?.summary ?? "";
   const overhead = build_session_summary_messages(summary, []).reduce((sum, message) =>
     sum + message.content.reduce((total, part) => total + (part.type === "text" ? estimate_context_tokens(part.text) : 0), 0) + 16, 0);
@@ -49,12 +51,17 @@ export async function compact_context(input: SessionContextAdvanceInput, compose
     target_count = fitting_count;
     if (!target_count) throw new Error("Model context window cannot fit a complete history unit with the existing summary");
   }
+  let messages = build_session_summary_messages(summary, units.slice(0, target_count).map(unit => unit.text));
+  // 最终序列化预算含摘要 system、累计摘要、消息结构与输出余量；不依赖上面的单元近似。
+  while (estimate_context_tokens(JSON.stringify({ messages, max_output_tokens: CONTEXT_SUMMARY_MAX_OUTPUT_TOKENS })) + messages.length * 16 > budget) {
+    if (--target_count === 0) throw new Error("Summary request cannot fit one stable Part with the existing summary and output reserve");
+    messages = build_session_summary_messages(summary, units.slice(0, target_count).map(unit => unit.text));
+  }
   const boundary = units[target_count - 1]!;
-  const records = units.slice(0, target_count).map(unit => unit.text);
-  const messages = build_session_summary_messages(summary, records);
   const texts = messages.flatMap(message => message.content.flatMap(part => part.type === "text" ? [part.text] : []));
   const input_characters = texts.reduce((sum, text) => sum + text.length, 0);
   const estimated_input_tokens = texts.reduce((sum, text) => sum + estimate_context_tokens(text), messages.length * 16);
+  input.abort_signal?.throwIfAborted();
   await input.on_advance_start?.();
   // 仅传输中断允许原请求重试一次；部分摘要未提交，也可以安全丢弃重做。
   for (let attempt = 1; attempt <= 2; attempt++) {
@@ -76,7 +83,9 @@ export async function compact_context(input: SessionContextAdvanceInput, compose
       const result = await generate_model(model, {
         messages,
         max_output_tokens: CONTEXT_SUMMARY_MAX_OUTPUT_TOKENS,
-      }, { request_kind: "history_compaction", retry: false, on_failure: input.on_model_request_failure });
+      }, { request_kind: "history_compaction", retry: false, signal: input.abort_signal, on_failure: input.on_model_request_failure });
+      input.abort_signal?.throwIfAborted();
+      if (result.finish_reason !== "stop") throw new Error(`Context summary was not completed (finish_reason=${result.finish_reason})`);
       const next_summary = result.text.trim();
       if (!next_summary) {
         throw new Error(`Context summary model returned an empty result (finish_reason=${String(result.finish_reason)}, usage=${JSON.stringify(result.usage ?? null)})`);

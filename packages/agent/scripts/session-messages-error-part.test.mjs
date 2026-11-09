@@ -12,6 +12,7 @@ function create_fixture(initial_messages = []) {
   let update_count = 0;
   const publications = [];
   const store = {
+    origin: { category: "work", type: "work" },
     initialize: async () => {},
     list_messages: async () => structuredClone(stored_messages),
     list_recoverable_agent_messages: async () => structuredClone(

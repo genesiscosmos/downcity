@@ -12,11 +12,10 @@ import {
   type ModelJsonValue,
   type ModelMessage,
   type ModelStreamEvent,
-  type ModelTool,
   type ModelUsage,
 } from "@downcity/type";
 import type { BoundAgentTool, ToolCallSite } from "@/types/tool/BoundAgentTool.js";
-import { z } from "zod";
+import { build_model_step_call } from "./ModelStepCall.js";
 import type { SessionSystemMessage } from "@downcity/type";
 import type { SessionAssistantOutput } from "@/types/turn/SessionAssistantOutput.js";
 import type {
@@ -25,6 +24,10 @@ import type {
 } from "@downcity/type";
 import { consume_model_stream, type ModelStreamDiagnostic } from "@/model/ModelStreamConsumer.js";
 import { validate_tool_input } from "@/model/ToolInputValidation.js";
+import { is_lookup_tool } from "./results/LookupTool.js";
+import { ResultSaveFailure } from "./results/ResultSaveFailure.js";
+import { project_tool_result } from "./messages/ToolResultProjection.js";
+import { result_bytes, RESULT_BYTES } from "./results/ResultDisclosure.js";
 
 /** 单个工具调用的执行事实。 */
 export interface ModelStepToolCall {
@@ -42,8 +45,10 @@ export interface ModelStepToolCall {
 export interface ModelStepToolResult extends ModelStepToolCall {
   /** 工具执行是否成功。 */
   success: boolean;
-  /** 工具返回或错误信息。 */
+  /** 工具返回或错误信息；完整业务结果。 */
   output: unknown;
+  /** 保存成功后的 canonical Tool Part，包含实际披露视图。 */
+  saved_part?: SessionAgentToolPart;
 }
 
 /** Agent 内部单个模型 Step 的稳定结果。 */
@@ -87,10 +92,7 @@ export async function run_model_step(input: RunModelStepInput): Promise<{
   /** 当前 Step 的运行结果。 */
   step_result: ModelStepResult;
 }> {
-  const call: ModelCall = {
-    messages: [...convert_system_messages(input.system), ...input.messages],
-    tools: convert_tools(input.tools),
-  };
+  const call: ModelCall = build_model_step_call(input.system, input.messages, input.tools);
   const collector = new StepEventCollector();
   await consume_model_stream(
     input.model,
@@ -109,14 +111,6 @@ export async function run_model_step(input: RunModelStepInput): Promise<{
     input,
     call.messages,
   );
-  for (const result of tool_results) {
-    await input.assistant_output?.write_tool_result({
-      tool_call_id: result.tool_call_id,
-      tool_name: result.tool_name,
-      succeeded: result.success,
-      output: result.output,
-    });
-  }
   const assistant_parts = append_tool_results(
     collected.assistant_parts,
     tool_results,
@@ -249,103 +243,57 @@ async function execute_tools(
 ): Promise<ModelStepToolResult[]> {
   const results: ModelStepToolResult[] = [];
   for (const call of calls) {
-    if (call.input_error) {
-      results.push({
-        ...call,
-        success: false,
-        output: { error: call.input_error },
-      });
-      continue;
-    }
-    const tool = input.tools[call.tool_name];
-    if (!tool || typeof tool.execute !== "function") {
-      results.push({
-        ...call,
-        success: false,
-        output: { error: `Unknown tool: ${call.tool_name}` },
-      });
-      continue;
-    }
+    input.abort_signal.throwIfAborted();
+    const result = await execute_tool(call, input, messages);
     try {
-      const site: ToolCallSite = {
-        tool_call_id: call.tool_call_id,
-        messages,
-        ...(input.abort_signal ? { abort_signal: input.abort_signal } : {}),
-      };
-      const prepared = tool.prepare_input
-        ? await tool.prepare_input(call.input, site)
-        : { public_input: call.input, execution_input: call.input };
-      const validated = validate_tool_input({
-        tool,
-        tool_name: call.tool_name,
-        input: prepared.execution_input,
+      const saved = await input.assistant_output?.write_tool_result({
+        tool_call_id: result.tool_call_id, tool_name: result.tool_name,
+        succeeded: result.success, output: result.output, disclosed: is_lookup_tool(input.tools[call.tool_name]),
       });
-      if ("error" in validated) {
-        results.push({
-          ...call,
-          success: false,
-          output: { error: tool.redact_output?.(validated.error) ?? validated.error },
-        });
-        continue;
+      if (saved) result.saved_part = saved;
+      else if (result_bytes(project_tool_result(result.output)) > RESULT_BYTES) {
+        throw new Error("canonical result storage unavailable");
       }
-      const output = await tool.execute(validated.input, site);
-      results.push({
-        ...call,
-        input: prepared.public_input,
-        success: !is_structured_tool_failure(output),
-        output,
-      });
-    } catch (error) {
-      results.push({
-        ...call,
-        success: false,
-        output: { error: tool.redact_output?.(error instanceof Error ? error.message : String(error)) ?? (error instanceof Error ? error.message : String(error)) },
-      });
+    } catch {
+      // 持久化错误在业务执行 catch 之外：操作已发生，禁止自动重新执行。
+      throw new ResultSaveFailure();
     }
+    results.push(result);
+    // 已执行操作先保存快照，再响应取消；同一批次后续工具不得继续执行。
+    input.abort_signal.throwIfAborted();
   }
   return results;
+}
+
+/** 执行一次业务工具，保存和披露由外层串行收口，绝不纳入业务重试。 */
+async function execute_tool(call: ModelStepToolCall, input: RunModelStepInput, messages: ModelMessage[]): Promise<ModelStepToolResult> {
+  if (call.input_error) return { ...call, success: false, output: { error: call.input_error } };
+  const tool = input.tools[call.tool_name];
+  if (!tool || typeof tool.execute !== "function") {
+    return { ...call, success: false, output: { error: `Unknown tool: ${call.tool_name}` } };
+  }
+  try {
+    const site: ToolCallSite = { tool_call_id: call.tool_call_id, messages, abort_signal: input.abort_signal };
+    const prepared = tool.prepare_input
+      ? await tool.prepare_input(call.input, site)
+      : { public_input: call.input, execution_input: call.input };
+    const validated = validate_tool_input({ tool, tool_name: call.tool_name, input: prepared.execution_input });
+    if ("error" in validated) {
+      return { ...call, success: false, output: { error: tool.redact_output?.(validated.error) ?? validated.error } };
+    }
+    input.abort_signal.throwIfAborted();
+    const output = await tool.execute(validated.input, site);
+    return { ...call, input: prepared.public_input, success: !is_structured_tool_failure(output), output };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    return { ...call, success: false, output: { error: tool.redact_output?.(message) ?? message } };
+  }
 }
 
 /** 识别 Tool 正常返回的结构化失败，避免把业务失败标记成执行成功。 */
 function is_structured_tool_failure(output: unknown): boolean {
   if (!output || typeof output !== "object" || Array.isArray(output)) return false;
   return (output as { success?: unknown }).success === false;
-}
-
-/** 把 System 快照转换成标准 ModelMessage。 */
-function convert_system_messages(messages: SessionSystemMessage[]): ModelMessage[] {
-  return messages.map((message) => ({
-    role: "system",
-    content: [{
-      type: "text",
-      text: typeof message === "string"
-        ? message
-        : String(message.content ?? ""),
-    }],
-  }));
-}
-
-/** 把已绑定工具定义转换为只含 JSON Schema 的模型协议。 */
-function convert_tools(tools: Record<string, BoundAgentTool>): ModelTool[] {
-  return Object.entries(tools).map(([name, tool]) => ({
-    name,
-    description: tool.description ?? "",
-    input_schema: read_input_schema(tool.input_schema),
-  }));
-}
-
-/** 将工具当前使用的 JSON Schema 或 Zod Schema 收敛为协议 JSON Schema。 */
-function read_input_schema(value: unknown): Record<string, ModelJsonValue> {
-  if (!value || typeof value !== "object") return {};
-  const record = value as Record<string, unknown>;
-  if (record.jsonSchema && typeof record.jsonSchema === "object") {
-    return record.jsonSchema as Record<string, ModelJsonValue>;
-  }
-  try {
-    return z.toJSONSchema(value as z.ZodType) as Record<string, ModelJsonValue>;
-  } catch {
-    return record as Record<string, ModelJsonValue>;
-  }
 }
 
 /** 将任意工具输出限制为可传输 JSON。 */
@@ -365,6 +313,7 @@ function append_tool_results(
     if (part.type !== "tool") return part;
     const result = result_by_id.get(part.tool_call_id);
     if (!result) return part;
+    if (result.saved_part) return { ...result.saved_part, part_id: part.part_id, sequence: part.sequence };
     return result.success
       ? {
           ...part,
@@ -374,6 +323,7 @@ function append_tool_results(
       : {
           ...part,
           state: "failed",
+          output: to_model_json_value(result.output),
           error: read_tool_error(result.output),
         } satisfies SessionAgentToolPart;
   });

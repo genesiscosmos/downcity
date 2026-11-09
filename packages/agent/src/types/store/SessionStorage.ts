@@ -98,6 +98,8 @@ export interface SessionStorage {
   list_messages(): Promise<SessionMessage[]>;
   /** 读取指定 Message。 */
   read_message(message_id: string): Promise<SessionMessage | null>;
+  /** 通过 canonical Part 主键读取所属消息，供分支中保留的结果引用精确定位。 */
+  read_part_message(part_id: string): Promise<SessionMessage | null>;
   /** 读取最早的 canonical User Message；空 Session 返回 null。 */
   read_first_user_message(): Promise<SessionUserMessage | null>;
   /** 在事务中分配 sequence 并创建 Message。 */

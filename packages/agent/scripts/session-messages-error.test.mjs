@@ -10,6 +10,7 @@ function create_messages(store) {
   return new SessionMessages({
     session_id: "messages-error-session",
     store: {
+      origin: { category: "work", type: "work" },
       initialize: async () => {},
       list_messages: async () => [],
       list_recoverable_agent_messages: async () => [],

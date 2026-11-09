@@ -59,7 +59,7 @@ function create_execution_input(model, turn_context) {
 
 test("SessionExecutor Provider 失败时只返回结构化错误", async () => {
   const model = {
-    id: "failing-model",
+    id: "failing-model", context_window: 128_000,
     async stream() {
       return new ReadableStream({
         start(controller) {

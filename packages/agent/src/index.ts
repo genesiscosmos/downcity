@@ -41,6 +41,7 @@ export type { SessionCallback, SessionCallbackInput, SessionCallbackHandler, Ses
 export type { AgentWorkHost } from "./types/agent/AgentWorkHost.js";
 export type { AgentSessionInput } from "./types/agent/AgentSessionInput.js";
 export type { SessionWorkContract } from "./types/agent/SessionWork.js";
+export { bound_json, json_bytes, HISTORY_PAGE_MAX_BYTES } from "./model/messages/BoundedJson.js";
 export type { SessionBackgroundInput, SessionBackgroundReceipt } from "./types/session/SessionBackgroundInput.js";
 export type { SessionContextResolution } from "./types/agent/SessionContext.js";
 export type {

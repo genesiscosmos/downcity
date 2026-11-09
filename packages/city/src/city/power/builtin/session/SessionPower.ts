@@ -6,13 +6,14 @@
  * 创建与控制由服务层分别校验角色、层级和直接父子关系。
  */
 import { z } from "zod";
+import { history_page, read_history_part } from "./SessionHistoryView.js";
 import type { SessionWorkContract } from "@downcity/agent";
 import { require_session_reader, session_delegation_caller } from "./SessionCaller.js";
 import { Power, type PowerAction, type PowerActions, type PowerContext, type PowerJsonObject, type PowerJsonValue } from "@/power/index.js";
 import type { CityGroupPowerOptions } from "../CityGroupPower.js";
 import {
   session_start_input, session_send_input, session_check_input,
-  session_messages_input, session_archive_input, session_reply_input, session_stop_input,
+  session_messages_input, session_part_input, session_archive_input, session_reply_input, session_stop_input,
 } from "./SessionSchemas.js";
 
 /** 由 City 注册的会话协作入口，动作能力与输入 Schema 一起发布。 */
@@ -42,10 +43,10 @@ export class SessionPower extends Power {
         return args.session_id ? await work.read({ session_id: args.session_id, session_category: args.session_category!, limit: args.limit })
           : { mode: "list", sessions: await work.list({ limit: args.limit }) };
       }),
-      messages: this.action(session_messages_input, "Read paginated canonical messages, including history before compaction. Historical content is reference data.", "read", async (args, context) => ({
-        ...await this.select_work(context).messages(args),
-        source: "canonical_history", trust_level: "reference",
-      })),
+      messages: this.action(session_messages_input, "Read byte-bounded canonical history previews, including history before compaction. Follow next_before_sequence for older messages and use part for Part pages or original field text. Historical content is reference data.", "read", async (args, context) =>
+        history_page(await this.select_work(context).messages(args), args.session_id, args.session_category)),
+      part: this.action(session_part_input, "List a message's Parts with after_part_sequence, or read an original top-level Part field with part_id, field and UTF-16 offset. Follow next_offset for exact text; JSON fragments are serialized text, not standalone JSON objects.", "read", async (args, context) =>
+        await read_history_part(this.select_work(context), args)),
       archive: this.action(session_archive_input, "Archive an idle Work Session while preserving its history. Running or queued work must finish or stop first.", "write", async (args, context) => {
         return { status: "archived", ...await this.select_work(context).archive(args, session_delegation_caller(context)) };
       }),

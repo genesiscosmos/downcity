@@ -5,6 +5,7 @@
  */
 import type { ModelJsonValue } from "@downcity/type";
 
+
 /** 保留工具 JSON 语义，替换嵌套的明确二进制载荷。 */
 export function project_tool_result(value: unknown): ModelJsonValue {
   const json = JSON.parse(JSON.stringify(value ?? null)) as ModelJsonValue;

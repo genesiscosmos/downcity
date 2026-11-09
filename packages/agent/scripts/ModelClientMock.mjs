@@ -8,6 +8,7 @@
 export class MockModelClient {
   constructor(options = {}) {
     this.id = options.modelId || options.id || "mock-model";
+    this.context_window = options.context_window ?? 128_000;
     this.stream_handler = options.stream || options.doStream;
     this.generate_handler = options.generate || options.doGenerate;
   }

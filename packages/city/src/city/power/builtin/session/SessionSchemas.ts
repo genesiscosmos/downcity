@@ -8,12 +8,28 @@
 
 import { z } from "zod";
 
-/** `session.messages` 读取 canonical 原始消息；游标可向 compact 之前继续翻页。 */
+/** `session.messages` 读取有界 canonical 历史预览；原文由 Part 动作分段读取。 */
 export const session_messages_input = z.strictObject({
   session_id: z.string().trim().min(1).describe("Session ID whose original messages should be read, including archived history."),
   session_category: z.enum(["chat", "work"]).describe("Category returned by check; together with session_id identifies the target."),
-  limit: z.number().int().min(1).max(100).optional().describe("Messages per page; defaults to 20."),
+  limit: z.number().int().min(1).max(100).optional().describe("Maximum messages per page; defaults to 20. The 64 KiB result budget may return fewer."),
   before_sequence: z.number().int().min(1).optional().describe("Exclusive sequence boundary from next_before_sequence. Omit for the latest page; compact does not remove history."),
+});
+
+/** 单条消息内的 Part 列表及选定字段的原文片段，复用 canonical 消息定位。 */
+export const session_part_input = z.strictObject({
+  session_id: z.string().trim().min(1).describe("Target Session; use check to obtain its category."),
+  session_category: z.enum(["chat", "work"]),
+  message_id: z.string().min(1).describe("Stable canonical message ID returned by messages or a source reference."),
+  message_sequence: z.number().int().min(1).describe("Stable message sequence from the source reference."),
+  part_id: z.string().min(1).optional().describe("Omit to list Parts; provide with field to read one original field."),
+  after_part_sequence: z.number().int().min(0).optional().describe("Exclusive Part sequence cursor for the next Part page."),
+  limit: z.number().int().min(1).max(40).optional().describe("Maximum Parts per page; defaults to 20 and is also byte bounded."),
+  field: z.string().min(1).optional().describe("Exact top-level Part field, such as text, input, output, error or data. JSON fields are serialized as text."),
+  offset: z.number().int().min(0).optional().describe("UTF-16 code-unit offset into the original field text; defaults to 0."),
+  length: z.number().int().min(1).max(4096).optional().describe("Maximum UTF-16 code units; defaults to 2048. Follow next_offset to continue."),
+}).refine(input => Boolean(input.part_id) === Boolean(input.field), {
+  message: "part_id and field must be provided together",
 });
 
 /** `session.archive` 归档空闲 Work 会话，不永久删除消息。 */

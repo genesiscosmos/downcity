@@ -23,7 +23,7 @@ function create_pressure_stream(text) {
         controller.enqueue({
           type: "finish",
           finishReason: { unified: "stop", raw: "stop" },
-          usage: { inputTokens: { total: 95 }, outputTokens: { total: 5 } },
+          usage: { inputTokens: { total: 115_200 }, outputTokens: { total: 6_400 } },
         });
         controller.close();
       },
@@ -65,7 +65,7 @@ async function run_pressure_turn(outcome) {
     modelId: "compaction-action-model",
     doStream: async () => create_pressure_stream("done"),
   });
-  model.context_window = 100;
+  model.context_window = 128_000;
 
   class ScriptedSession extends Session {
     constructor(options) {
