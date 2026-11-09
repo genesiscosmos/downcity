@@ -1,5 +1,5 @@
 /**
- * @file 验证 Session Prompt 可以从 canonical Message 恢复同一业务请求的完成结果。
+ * @file 验证 Session Prompt 按 canonical 输入定位权威 Turn 完成日志，不重复执行同一业务请求。
  */
 
 import { createHash } from "node:crypto";
@@ -47,7 +47,12 @@ function create_loop(request_id, unfinished = false) {
   let execute_count = 0;
   const loop = new SessionLoop({
     session_id,
-    ...(unfinished ? { completions: { read: async () => undefined } } : {}),
+    completions: {
+      read: async (requested_session_id, requested_turn_id) => !unfinished
+        && requested_session_id === session_id && requested_turn_id === turn_id
+        ? { session_id, turn_id, status: "completed", result: { text: "world", success: true } }
+        : undefined,
+    },
     session_origin: { category: "work", type: "work" },
     get_workspace_path: () => ("/tmp/downcity-idempotent-prompt"),
     executor: {

@@ -28,9 +28,9 @@ export function inbox_entries(data: NotificationListResult | undefined, view: In
       const payload = request.payload;
       const first = payload && typeof payload === "object" && !Array.isArray(payload) && Array.isArray(payload.questions) ? payload.questions[0] : undefined;
       const question = first && typeof first === "object" && !Array.isArray(first) && typeof first.question === "string" ? first.question : undefined;
-      const title = request.title?.trim() || question?.trim() || kind_label(kind);
+      const title = item.session_title?.trim() || request.title?.trim() || question?.trim() || kind_label(kind);
       // 公开摘要只读取请求说明或题面，绝不展开审批 payload 或私密回答。
-      const summary = [request.description, question].find((text) => text?.trim() && text.trim() !== title);
+      const summary = [request.description, question, request.title].find((text) => text?.trim() && text.trim() !== title);
       return { key: interaction_key(item), view: "pending", title,
         summary: plain_summary(summary || ""),
         source: agent_names.get(item.agent_id)?.trim() || item.agent_name?.trim() || "未命名 Agent", agent_id: item.agent_id, created_at: request.created_at,

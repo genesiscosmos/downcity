@@ -19,6 +19,8 @@ export interface AgentTool<TInput = unknown, TOutput = unknown> {
   readonly description?: string;
   /** JSON Schema 或可转换为 JSON Schema 的输入定义。 */
   readonly input_schema: unknown;
+  /** 按可信调用身份决定当前 Step 是否向模型提供此工具；省略时默认提供，执行权限仍由工具校验。 */
+  readonly is_available?: (context: ToolCallContext) => boolean | Promise<boolean>;
   /** 可选工具执行实现；缺少时该工具只向模型声明能力。 */
   readonly execute?: AgentToolHandler<TInput, TOutput | Promise<TOutput>>;
 }

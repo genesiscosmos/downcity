@@ -26,7 +26,20 @@ export class SessionQueue {
     return this.commands.shift();
   }
 
-  /** 取出当前全部 Command，供下一个 Step 检查点按顺序执行。 */
+  /** 检查点快照只固定消费范围；未执行的 Command 仍留在队列，stop 可以取消。 */
+  snapshot(): readonly SessionCommand[] {
+    return [...this.commands];
+  }
+
+  /** 开始执行快照中的一条命令；已被 stop 取消的对象返回 false。 */
+  take(command: SessionCommand): boolean {
+    const index = this.commands.indexOf(command);
+    if (index < 0) return false;
+    this.commands.splice(index, 1);
+    return true;
+  }
+
+  /** 取出当前全部 Command；Step 检查点应使用 snapshot/take 保留取消可见性。 */
   drain(): SessionCommand[] {
     return this.commands.splice(0, this.commands.length);
   }

@@ -214,8 +214,6 @@ export class SessionAgentMessageState {
     outcome: "completed" | "stopped" | "failed",
     error?: string,
   ): Promise<void> {
-    // 先释放持有，收口提交才能把 Message 收敛为终态。
-    this.options.cache.release_held(message_id);
     await this.enqueue_write(message_id, async () => {
       const current = this.require_writable_agent(message_id);
       const completed_at = Date.now();
@@ -446,7 +444,10 @@ export class SessionAgentMessageState {
       expected_revision: persisted.revision,
       changed_parts,
     });
+    // 只有收口快照持久化成功才释放 writer；失败时保留 held 与运行投影供重试。
+    // 先在 held 状态接受快照，再同步驱逐；发布失败时缓存仍可供 Writer 重试。
     this.options.cache.accept(message, options?.publish_mutation !== false);
+    if (options?.held_by_writer === false) this.options.cache.release_held(message_id);
   }
 
   /** 串行执行同一 Message 的语义检查点。 */

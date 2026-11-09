@@ -7,7 +7,7 @@
  * - Queue 由 Session 持有；这里不解释配置种类，只执行出队 Command。
  */
 
-import { create_deferred, create_active_session_turn_state, create_turn_handle, resolve_prompt_request_identity, to_persisted_turn_result, create_completed_turn_handle } from "./SessionTurnHandles.js";
+import { create_deferred, create_active_session_turn_state, create_turn_handle, resolve_prompt_request_identity, create_completed_turn_handle } from "./SessionTurnHandles.js";
 import type { PromptRequestIdentity } from "@/types/session/SessionLoop.js";
 import { isDeepStrictEqual } from "node:util";
 import { nanoid } from "nanoid";
@@ -35,10 +35,8 @@ import { create_session_turn_context } from "@/session/loop/SessionTurnContext.j
 import { SessionEventHub } from "@/session/messages/SessionEventHub.js";
 import { SessionState } from "@/session/loop/SessionState.js";
 import {
-  normalize_session_user_parts,
   SessionMessages,
 } from "@/session/messages/SessionMessages.js";
-import { normalize_tool_user_parts } from "@/session/messages/SessionUserMessage.js";
 import type {
   SessionInteractionLifecycle,
   SessionInteractionPort,
@@ -77,6 +75,8 @@ import { accept_background_input } from "./SessionBackgroundInput.js";
 import { with_session_execution_state } from "./SessionExecutionState.js";
 import type { SessionBackgroundInput, SessionBackgroundReceipt } from "@/types/session/SessionBackgroundInput.js";
 
+import { accept_session_input, completion_unavailable, SessionInternalInput } from "./SessionInputAcceptance.js";
+
 const QUEUED_PROMPT_CANCELLED_MESSAGE =
   "Prompt cancelled because session was stopped";
 
@@ -107,7 +107,12 @@ export class SessionLoop {
   private readonly create_call_context: SessionLoopOptions["create_call_context"];
   private readonly interactions:
     SessionInteractionLifecycle & SessionInteractionPort;
-  private readonly queue: SessionQueue;  private pending_prompt_count = 0;
+  private readonly queue: SessionQueue;
+  private pending_prompt_count = 0;
+  /** 每个 Turn 暂存的内部输入，Step 完整结束后由同一 FIFO 提交。 */
+  private readonly internal_inputs = new Map<string, SessionInternalInput>();
+  /** 无权威完成日志的历史 Turn 阻止所有新输入，避免重放未知副作用。 */
+  private unknown_turn_id?: string;
   /** 队列消费的同步状态，在发布事件前设置，避免订阅回调重入启动第二个消费器。 */
   private processing = false;
   /** 普通输入仅允许同对象持续注入，预占用覆盖异步持久化。 */
@@ -201,6 +206,7 @@ export class SessionLoop {
     const stop_generation = this.stop_generation;
     input.abort_signal?.throwIfAborted();
     await this.initialize_occupation();
+    if (this.unknown_turn_id) throw completion_unavailable(this.unknown_turn_id);
     input.abort_signal?.throwIfAborted();
     const identity = resolve_prompt_request_identity(this.session_id, input.request_id);
     if (identity) {
@@ -258,13 +264,20 @@ export class SessionLoop {
       if (!latest?.turn_id) return;
       // 两条判据都是纯内存事实，先于任何 IO 排除不可能恢复的情况。
       if (latest.origin) return;
-      const from = read_session_message_meta(latest)?.from;
+      // 工具内部输入没有调用方 metadata；占用身份沿同一 Turn 的可信输入恢复。
+      const owner = [...history].reverse().find((message) => message.role === "user"
+        && message.turn_id === latest.turn_id && read_session_message_meta(message)?.from);
+      const from = read_session_message_meta(owner)?.from;
       if (!from) return;
       const completed = await this.completions?.read(this.session_id, latest.turn_id);
       if (completed) return;
-      const output = await this.messages.read_latest_agent_message(latest.turn_id);
-      if (!this.completions && output && output.state !== "streaming") return;
       const actor = session_prompt_actor_schema.parse(from);
+      if (!this.completions) {
+        this.unknown_turn_id = latest.turn_id;
+        this.recovered_turn_id = latest.turn_id;
+        this.recovered_release = this.occupation.acquire(actor, this.session_id, latest.turn_id);
+        return;
+      }
       if (actor.kind === "runtime" && actor.namespace === "session_background") {
         const interrupted = create_active_session_turn_state(latest.turn_id);
         interrupted.turn_context = this.create_turn_context(interrupted);
@@ -288,6 +301,7 @@ export class SessionLoop {
   async accept_background_result(input: SessionBackgroundInput): Promise<SessionBackgroundReceipt> {
     const generation = this.stop_generation;
     await this.initialize_occupation();
+    if (this.unknown_turn_id) throw completion_unavailable(this.unknown_turn_id);
     return await accept_background_input({ session_id: this.session_id, messages: this.messages,
       completions: this.completions, loop: this,
       is_current: () => !this.stopping && generation === this.stop_generation }, input);
@@ -387,6 +401,7 @@ export class SessionLoop {
   ): Promise<AgentSessionTurnHandle> {
     input.abort_signal?.throwIfAborted();
     const deferred_handle = create_deferred<AgentSessionTurnHandle>();
+    const generation = this.stop_generation;
     this.pending_prompt_count += 1;
     this.enqueue_command({
       kind: "prompt",
@@ -397,6 +412,7 @@ export class SessionLoop {
           deferred_handle,
           request_identity?.message_id,
           persisted_message,
+          generation,
         );
       },
       cancel: () => {
@@ -418,7 +434,7 @@ export class SessionLoop {
 
   /** 是否存在等待并入下一模型步骤的输入。 */
   has_pending_prompt(): boolean {
-    return this.pending_prompt_count > 0;
+    return this.pending_prompt_count > 0 || Boolean(this.active_turn && this.internal_inputs.get(this.active_turn.turn_id)?.has_pending());
   }
 
   /** 是否存在等待检查点执行的命令。 */
@@ -446,6 +462,7 @@ export class SessionLoop {
    */
   async stop(expected_turn_id?: string): Promise<AgentSessionStopResult> {
     await this.initialize_occupation();
+    if (this.unknown_turn_id) throw completion_unavailable(this.unknown_turn_id);
     if (expected_turn_id && expected_turn_id !== (this.current_turn_id() ?? this.recovered_turn_id)) throw Object.assign(new Error("Session Turn changed before stop"), { code: "turn_changed" });
     this.stopping = true;
     const stop_generation = ++this.stop_generation;
@@ -569,18 +586,10 @@ export class SessionLoop {
    * 在下一 Session step 检查点按入队顺序提交配置并持久化 steer。
    */
   private async drain_queued_inputs(): Promise<void> {
-    const drained = this.queue.drain();
-    if (drained.length <= 0) return;
-
-    for (let index = 0; index < drained.length; index += 1) {
-      const command = drained[index];
-      try {
-        await this.execute_command(command);
-      } catch {
-        // Prompt 持久化失败时恢复尚未处理的对象；Action 自己负责失败观测。
-        this.queue.restore_front(drained.slice(index));
-        break;
-      }
+    for (const command of this.queue.snapshot()) {
+      if (!this.queue.take(command)) continue;
+      // 不恢复已经执行的 Command；输入边界失败必须终止 Step，不能继续请求模型。
+      await this.execute_command(command);
     }
   }
 
@@ -592,16 +601,9 @@ export class SessionLoop {
    * - 只抽 Maintenance；Prompt 继续留在 FIFO 里由下一 Turn 消费。
    */
   private async drain_queued_maintenance_commands(): Promise<void> {
-    const drained = this.queue.drain_maintenance();
-    for (let index = 0; index < drained.length; index += 1) {
-      const command = drained[index];
-      try {
-        await this.execute_command(command);
-      } catch {
-        // 失败时保留尚未处理的 Maintenance；Action 自己负责失败观测。
-        this.queue.restore_front(drained.slice(index));
-        break;
-      }
+    for (const command of this.queue.snapshot()) {
+      if (command.kind !== "maintenance" || !this.queue.take(command)) continue;
+      await this.execute_command(command);
     }
   }
 
@@ -650,23 +652,28 @@ export class SessionLoop {
     deferred_handle: SessionDeferred<AgentSessionTurnHandle>,
     message_id?: string,
     persisted_message?: SessionUserMessage,
+    generation = this.stop_generation,
   ): Promise<void> {
     const active_turn = this.require_active_turn();
-    if (active_turn.prompt_started) {
-      try {
-        input.abort_signal?.throwIfAborted();
-        const message = persisted_message || await this.persist_prompt_message(
-          input,
-          active_turn.turn_id,
-          message_id,
-        );
-        input.abort_signal?.throwIfAborted();
-        active_turn.turn_context?.input.observe_user_message(message);
-        this.pending_prompt_count = Math.max(0, this.pending_prompt_count - 1);
+    const turn_context = active_turn.turn_context!;
+    let accepted = false;
+    const assert_receivable = () => {
+      input.abort_signal?.throwIfAborted();
+      turn_context.lifecycle.abort_signal.throwIfAborted();
+      if (this.stopping || generation !== this.stop_generation) throw new Error(QUEUED_PROMPT_CANCELLED_MESSAGE);
+    };
+    const receive = async (close_previous: boolean) => await accept_session_input({
+      turn_context, close_previous, assert_receivable,
+      persist: async () => persisted_message ?? await this.persist_prompt_message(input, active_turn.turn_id, message_id, assert_receivable),
+      accepted: () => {
+        accepted = true;
         deferred_handle.resolve(create_turn_handle(active_turn));
-      } catch (error) {
-        // 尚未持久化的追加输入由调用方保留并重试，不留下失效的接受 Promise。
-        this.pending_prompt_count = Math.max(0, this.pending_prompt_count - 1);
+      },
+    });
+    this.pending_prompt_count = Math.max(0, this.pending_prompt_count - 1);
+    if (active_turn.prompt_started) {
+      try { await receive(true); } catch (error) {
+        if (accepted) throw error;
         deferred_handle.reject(error);
       }
       return;
@@ -676,24 +683,12 @@ export class SessionLoop {
       set_turn_prompt_powers(active_turn.turn_context, input.powers);
     }
     active_turn.prompt_started = true;
-    this.pending_prompt_count = Math.max(0, this.pending_prompt_count - 1);
-    let handle_resolved = false;
     try {
-      input.abort_signal?.throwIfAborted();
       if (read_session_message_meta(persisted_message)?.powers !== undefined) {
         throw new Error("Caller Power execution was interrupted; automatic replay is unavailable");
       }
-      const message = persisted_message || await this.persist_prompt_message(
-          input,
-          active_turn.turn_id,
-          message_id,
-        );
-      input.abort_signal?.throwIfAborted();
-      active_turn.turn_context?.input.observe_user_message(message);
-      // 只有 canonical user message 已经写入 Session 后，调用方才认为输入被接收。
-      deferred_handle.resolve(create_turn_handle(active_turn));
-      handle_resolved = true;
-      const result = await this.execute_prompt_turn({ active_turn, abort_signal: input.abort_signal });
+      await receive(false);
+      const result = await this.execute_prompt_turn({ active_turn });
       const final_result = await complete_session_turn(
         this.turn_completion_options(),
         active_turn,
@@ -705,9 +700,10 @@ export class SessionLoop {
       this.closing = true;
       this.cancel_queued_prompts();
       // 幂等输入尚未入库时拒绝提交，调用方可以保留原请求重试。
-      if (!handle_resolved) deferred_handle.reject(error);
+      if (!accepted) deferred_handle.reject(error);
       await this.fail_active_turn(active_turn, error);
     } finally {
+      if (!this.internal_inputs.get(active_turn.turn_id)?.has_pending()) this.internal_inputs.delete(active_turn.turn_id);
       if (active_turn.turn_context) clear_turn_prompt_powers(active_turn.turn_context);
     }
   }
@@ -726,6 +722,11 @@ export class SessionLoop {
     this.closing = true;
     this.cancel_queued_prompts();
     if (active_turn.turn_context) await this.child_work.cancel(active_turn.turn_context);
+    try { await this.internal_inputs.get(active_turn.turn_id)?.flush(); } catch (failure) {
+      // 暂存输入无法落盘时保留内存事实并关闭接收，禁止下一 Turn 重放未知状态。
+      this.unknown_turn_id = active_turn.turn_id;
+      error = failure;
+    }
     if (error instanceof CompletionPersistenceError) {
       this.recovered_turn_id = active_turn.turn_id;
       if (this.active_turn === active_turn) this.active_turn = null;
@@ -753,8 +754,6 @@ export class SessionLoop {
   private async execute_prompt_turn(input: {
     /** 当前活动 Turn。 */
     active_turn: ActiveSessionTurnState;
-    /** 宿主的输入接收取消信号；不传给模型。 */
-    abort_signal?: AbortSignal;
   }): Promise<{
     text: string;
     success: boolean;
@@ -767,7 +766,7 @@ export class SessionLoop {
     }
     let result: SessionTurnExecutionResult;
     try {
-      result = await this.run_turn_with_context_advance(turn_context, input.abort_signal);
+      result = await this.run_turn_with_context_advance(turn_context);
     } catch (error) {
       result = {
         text: "",
@@ -785,7 +784,7 @@ export class SessionLoop {
       await turn_context.input.checkpoint();
       if (turn_context.lifecycle.abort_signal.aborted) break;
       const compact_required = result.compact_required;
-      result = await this.run_turn_with_context_advance(turn_context, input.abort_signal);
+      result = await this.run_turn_with_context_advance(turn_context);
       if (compact_required) result.compact_required = true;
     }
     // await 返回后已同步复查队列；从最后检查到关闭窗口之间没有 await。
@@ -794,6 +793,8 @@ export class SessionLoop {
       this.cancel_queued_prompts();
       await this.child_work.cancel(turn_context);
     }
+    // 执行器已退出，活跃 Step 已结束；停止也不得丢弃此前接受暂存的内部输入。
+    await this.internal_inputs.get(input.active_turn.turn_id)?.flush();
 
     if (!result.success && !turn_context.lifecycle.abort_signal.aborted && result.error) {
       await assistant_output.append_error({
@@ -847,14 +848,13 @@ export class SessionLoop {
    */
   private async run_turn_with_context_advance(
     turn_context: SessionTurnContext,
-    abort_signal?: AbortSignal,
   ): Promise<SessionTurnExecutionResult> {
-    abort_signal?.throwIfAborted();
+    turn_context.lifecycle.abort_signal.throwIfAborted();
     return await with_session_execution_state(this.turn_completion_options(), turn_context, () => this.session_executor.execute({
       turn_context,
       resolve_step_input: async (advance_count) => {
         const input = await this.require_step_input(turn_context, advance_count);
-        abort_signal?.throwIfAborted();
+        turn_context.lifecycle.abort_signal.throwIfAborted();
         return input;
       },
     }));
@@ -876,6 +876,9 @@ export class SessionLoop {
         "SessionLoop was given an executor and cannot assemble step input",
       );
     }
+    // max-steps finalization 会直接 compose，不经过 Executor 的普通 checkpoint。
+    await this.drain_queued_inputs();
+    turn_context.lifecycle.abort_signal.throwIfAborted();
     return await step_input.build(turn_context, advance_count);
   }
 
@@ -887,25 +890,23 @@ export class SessionLoop {
       turn_id: active_turn.turn_id,
       messages: this.messages,
     });
+    const generation = this.stop_generation;
+    const internal_input = new SessionInternalInput({
+      turn_id: active_turn.turn_id, queue: this.queue, messages: this.messages,
+      get_context: () => active_turn.turn_context!,
+      assert_receivable: () => {
+        active_turn.turn_context?.lifecycle.abort_signal.throwIfAborted();
+        if (this.active_turn !== active_turn || this.stopping || generation !== this.stop_generation) throw new Error(QUEUED_PROMPT_CANCELLED_MESSAGE);
+      },
+    });
+    this.internal_inputs.set(active_turn.turn_id, internal_input);
     return create_session_turn_context({
       turn_id: active_turn.turn_id,
       session_id: this.session_id,
       session_origin: this.session_origin,
       project_root: this.get_workspace_path(),
-      commit_step_input: async () => {
-        const had_pending_prompt = this.has_pending_prompt();
-        await this.drain_queued_inputs();
-        if (had_pending_prompt) await assistant_output.close_current_message();
-      },
-      append_internal_user_message: async (parts) => {
-        const message = await this.messages.append_user_message({
-          turn_id: active_turn.turn_id,
-          visibility: "internal",
-          parts: normalize_tool_user_parts(parts),
-        });
-        active_turn.turn_context?.input.observe_user_message(message);
-        return message;
-      },
+      commit_step_input: () => this.drain_queued_inputs(),
+      append_internal_user_message: async (parts) => internal_input.stage(parts),
       has_pending_step_input: () => this.has_pending_prompt(),
       assistant_output,
       interactions: this.interactions,
@@ -937,11 +938,13 @@ export class SessionLoop {
     prompt: NormalizedAgentSessionPromptInput,
     turn_id: string,
     message_id?: string,
+    assert_receivable?: () => void,
   ): Promise<SessionUserMessage> {
     const message = await this.messages.append_prompt_message({
       project_root: this.get_workspace_path(),
       prompt,
       turn_id,
+      assert_receivable,
       ...(message_id ? { message_id } : {}),
     });
     this.state.schedule_title_generation();
@@ -970,9 +973,7 @@ export class SessionLoop {
     const prepared = await this.completions?.read(this.session_id, actual_turn_id);
     if (prepared) return create_completed_turn_handle({ turn_id: actual_turn_id, ...prepared.result });
     if (this.completions) return null;
-    const agent_message = await this.messages.read_latest_agent_message(actual_turn_id);
-    if (!agent_message || agent_message.state === "streaming") return null;
-    return create_completed_turn_handle(to_persisted_turn_result(actual_turn_id, agent_message));
+    throw completion_unavailable(actual_turn_id);
   }
 
   /** 持久化 Executor Action，并同步刷新 Session metadata。 */

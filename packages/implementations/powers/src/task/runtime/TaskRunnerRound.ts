@@ -132,8 +132,17 @@ export function buildExecutorRoundQuery(params: {
   lastOutputText?: string;
   lastFeedback?: string;
 }): string {
-  if (params.round <= 1) return params.taskBody;
+  const execution_context = [
+    "# 本次任务执行",
+    "你正在执行已经触发的一次 Task 运行。直接完成本次任务并返回最终交付物。",
+    "触发与重复执行由宿主 Scheduler 管理；正文中的调度措辞不要求你安排循环、等待下一次触发或创建定时任务。",
+    "本 Session 没有 Task 管理能力，不能使用 session.start 或 agent.delegate 继续分派执行 Session。",
+    "保留正文要求的业务数据窗口与交付约束。",
+    "",
+  ].join("\n");
+  if (params.round <= 1) return `${execution_context}\n${params.taskBody}`;
   return [
+    execution_context,
     "# 任务目标（保持不变）",
     "",
     params.taskBody || "_(empty body)_",
@@ -179,6 +188,8 @@ export function buildUserSimulatorQuery(params: {
     "2) 如果已经满足，satisfied=true，reply 给简短确认。",
     "3) score 范围 0-10。",
     "4) 如果系统规则校验有失败项（见下方），必须判定为不满意。",
+    "5) 只评审本次运行的交付物；触发、Cron 与重复执行由宿主管理，不要求执行器安排调度或等待下次运行。",
+    "6) 直接返回评审 JSON；本 Session 没有 Task 管理能力，也不能通过 session.start 或 agent.delegate 分派其他 Session。",
     "",
     `任务标题: ${params.taskTitle}`,
     `当前轮次: ${params.round}/${params.maxRounds}`,

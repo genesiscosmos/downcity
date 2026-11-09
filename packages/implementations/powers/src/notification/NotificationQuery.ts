@@ -7,7 +7,7 @@ import type { PowerLifecycleContext, PowerNotificationTargets } from "@downcity/
 import type { NotificationInteractionItem, NotificationListResult, NotificationAttention } from "./types/NotificationRenderer.js";
 import { NotificationStore } from "./NotificationStore.js";
 import { notification_interaction_key } from "./NotificationIdentity.js";
-import { interaction_target, source_availability } from "./NotificationPolicy.js";
+import { interaction_target, source_availability, notification_session_title } from "./NotificationPolicy.js";
 
 /** 最后已知请求只在 Power 生命周期中保留；来源目录由明确更新入口提供，不在查询中对账。 */
 export class NotificationQuery {
@@ -39,11 +39,17 @@ export class NotificationQuery {
     const interactions = [...new Map([...this.known_interactions.values()].flat().map((known) => {
       const removed = !agent_ids.has(known.agent_id);
       const unknown = unavailable_agents.has(known.agent_id);
-      const item: NotificationInteractionItem = removed || unknown ? { ...known,
-        availability: removed ? "removed" : "unknown", interaction: { ...known.interaction, can_respond: false } } : known;
+      const session_title = known.target ? notification_session_title(known.target, directory) : undefined;
+      const current = { ...known, session_title: session_title ?? known.session_title };
+      const item: NotificationInteractionItem = removed || unknown ? { ...current,
+        availability: removed ? "removed" : "unknown", interaction: { ...known.interaction, can_respond: false } } : current;
       return [notification_interaction_key(item), item] as const;
     })).values()];
-    const items = await this.store.list();
+    // 展示标题跟随目录元数据，改名不会重发通知或修改已读版本。
+    const items = (await this.store.list()).map((item) => {
+      const title = notification_session_title(item.target, directory);
+      return title === undefined ? item : { ...item, title };
+    });
     for (const item of items) {
       if (item.availability !== "unknown") continue;
       const agent_id = item.agent_id ?? (item.target.kind === "agent_session" ? item.target.agent_id : undefined);
@@ -55,7 +61,7 @@ export class NotificationQuery {
       const request = item.interaction.interaction.request;
       notifications.push({ notification_id: notification_interaction_key(item), topic_key: notification_interaction_key(item),
         kind: "request", scope: "inbox", outcome: "info", source_kind: !item.target ? "unknown" : item.target.kind === "group_session" ? "group" : "session",
-        availability: item.availability, target: item.target, title: request.title || "等待你的回应", created_at: request.created_at });
+        availability: item.availability, target: item.target, title: item.session_title || request.title || "等待你的回应", created_at: request.created_at });
     }
     notifications.sort((left, right) => right.created_at - left.created_at || left.notification_id.localeCompare(right.notification_id));
     const pending_request_count = notifications.filter((item) => item.kind === "request").length;

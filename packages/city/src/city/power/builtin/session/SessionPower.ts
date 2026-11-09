@@ -20,13 +20,13 @@ import {
 export class SessionPower extends Power {
   readonly name = "session";
   readonly title = "Session";
-  readonly description = "Read the current agent's sessions with check/messages, including Task and archived history. Chat can start autonomous Work Main Sessions; a Work Main, including a Task executor, can create multiple Child Sessions. Child Sessions cannot delegate. Send/reply/stop/archive only control directly created Work Sessions. Stopping a Chat reply does not stop its Main Sessions; explicitly stopping a Main also stops its Children. Execution results return automatically. Questions and approvals stay in the original Session for the user to handle. Other agents' sessions are inaccessible.";
+  readonly description = "Read the current agent's sessions with check/messages, including Task and archived history. Chat can start autonomous Work Main Sessions; an ordinary Work Main can create multiple Child Sessions. Task Sessions and Child Sessions cannot delegate. Send/reply/stop/archive only control directly created Work Sessions. Stopping a Chat reply does not stop its Main Sessions; explicitly stopping a Main also stops its Children. Execution results return automatically. Questions and approvals stay in the original Session for the user to handle. Other agents' sessions are inaccessible.";
   readonly actions: PowerActions;
 
   constructor(private readonly options: CityGroupPowerOptions) {
     super();
     this.actions = {
-      start: this.action(session_start_input, "Start project work with optional model_id. Chat starts a Work Main; any Work Main, including a Task executor, can start multiple Children. Children cannot delegate. Select workspace_id from context.workspaces.list and write a self-contained query. Returns immediately; execution results return automatically. Questions and approvals stay in the original Session for the user to handle. Do not poll.", "write", async (args, context) => {
+      start: this.action(session_start_input, "Start project work with optional model_id. Chat starts a Work Main; an ordinary Work Main can start multiple Children. Task Sessions and Children cannot delegate. Select workspace_id from context.workspaces.list and write a self-contained query. Returns immediately; execution results return automatically. Questions and approvals stay in the original Session for the user to handle. Do not poll.", "write", async (args, context) => {
         const work = this.select_work(context);
         const receipt = await work.spawn(args, session_delegation_caller(context));
         const detail = await work.read({ session_id: receipt.session_id, session_category: "work", limit: 1 });

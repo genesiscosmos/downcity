@@ -18,6 +18,8 @@ export interface NotificationInteractionItem {
   interaction: AgentInteraction;
   /** 当前用户可打开的来源目标；Group 成员映射到群聊。 */
   target?: PowerNotificationTarget;
+  /** 来源 Session 的当前标题；仅作通知外层展示，不修改原 Interaction 请求标题。 */
+  session_title?: string;
   /** 原主体未提供来源时为 unknown；不会因目录缺失丢弃请求。 */
   availability: PowerNotificationAvailability;
 }
@@ -40,7 +42,7 @@ export interface NotificationAttention {
   outcome: PowerNotificationOutcome;
   /** 可达性不改变原记录或请求状态。 */
   availability: PowerNotificationAvailability;
-  /** 用户可见标题。 */
+  /** 用户可见标题；Session/Group 来源优先使用来源标题，业务 Power 使用发布端标题。 */
   title: string;
   /** 安全摘要，不包含私密答案。 */
   body?: string;

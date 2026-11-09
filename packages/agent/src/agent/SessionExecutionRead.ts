@@ -5,7 +5,7 @@
 import type { SessionStorage } from "@/types/store/SessionStorage.js";
 import type { AgentSessionTurnResult } from "@/types/sdk/AgentSessionTurn.js";
 import type { SessionCompletionPort } from "@/types/agent/SessionCompletion.js";
-import { resolve_prompt_request_identity, to_persisted_turn_result } from "@/session/loop/SessionTurnHandles.js";
+import { resolve_prompt_request_identity } from "@/session/loop/SessionTurnHandles.js";
 
 /** 一次可恢复的 Turn 状态投影。 */
 export interface SessionExecutionReadResult {
@@ -13,7 +13,7 @@ export interface SessionExecutionReadResult {
   turn_id?: string;
   /** 无请求、运行中、终态、丢失或中断状态。 */
   status: "idle" | "running" | "completed" | "not_found" | "interrupted";
-  /** canonical 终态消息提供的真实结果。 */
+  /** 权威 Turn 完成日志提供的真实结果；单条消息终态不代表 Turn 完成。 */
   result?: AgentSessionTurnResult;
 }
 
@@ -33,9 +33,6 @@ export async function read_session_execution(storage: SessionStorage, executing:
   const resolved_turn_id = turn_id ?? message?.turn_id;
   const completion = resolved_turn_id ? await completions?.read(storage.session_id, resolved_turn_id) : undefined;
   if (completion) return { turn_id: completion.turn_id, status: "completed", result: { turn_id: completion.turn_id, ...completion.result } };
-  if (!executing && !completions && message?.state === "done" && message.turn_id) return {
-    turn_id: message.turn_id, status: "completed", result: to_persisted_turn_result(message.turn_id, message),
-  };
   if (message || request) return { turn_id: turn_id ?? message?.turn_id, status: executing ? "running" : "interrupted" };
   return { ...(turn_id ? { turn_id } : {}), status: turn_id ? "not_found" : executing ? "running" : "idle" };
 }

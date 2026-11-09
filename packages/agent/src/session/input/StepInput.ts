@@ -41,6 +41,7 @@ import { SESSION_HOOK_POINTS } from "@downcity/type";
 import { run_pipeline_point } from "@/session/input/SessionHookRunner.js";
 import { resolve_session_power_system_blocks } from "@/session/input/SessionSystem.js";
 import { to_system_messages } from "./composer/ComposerAssembly.js";
+import { resolve_model_client } from "@/model/DeferredModelClient.js";
 
 /** 当前 Session 的每步模型输入装配者。 */
 export class StepInput {
@@ -308,10 +309,17 @@ export class StepInput {
         tools[name] = tool;
       }
     }
+    // 先按真实 Session 身份收窄工具面，Composer 与模型只看到本次允许的能力。
+    for (const [name, tool] of Object.entries(tools)) {
+      if (tool.is_available && !await tool.is_available(call_context)) delete tools[name];
+    }
+    // 执行时先恢复完整客户端，预算与 Composer 不能使用只有 ID 的占位模型。
+    const selected_model = this.options.get_model();
+    const model = turn_context ? await resolve_model_client(selected_model) : selected_model;
     return {
       session: this.identity(),
       state: {
-        model: this.options.get_model(),
+        model,
         model_context_window: this.options.get_model_context_window(),
         env: workspace_env,
         systems: Object.freeze(

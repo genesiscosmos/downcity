@@ -14,6 +14,7 @@ import {
   type AgentTool as Tool,
 } from "@downcity/type";
 import { SessionMessages } from "@/session/messages/SessionMessages.js";
+import { resolve_model_client } from "@/model/DeferredModelClient.js";
 import type {
   AgentSessionConfigSnapshot,
   AgentSessionForkInput,
@@ -853,9 +854,10 @@ export class Session implements AgentSession {
     const turn_id = this.session_loop.current_turn_id();
     const action_id = `context-compaction:${this.id}:${generate_id()}`;
     try {
+      const model = await resolve_model_client(this.get_model());
       const advanced = await this.composer.advance_context({
         session: this.step_input.identity(),
-        model: this.get_model(),
+        model,
         context_window: this.get_model_context_window(), abort_signal,
         history: await this.store.list_messages(),
         derived: this.store.derived_store(this.composer.name),

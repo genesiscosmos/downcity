@@ -1,7 +1,7 @@
 /**
  * Downcity 模型事件到 canonical Assistant Message 的输出 Adapter。
  *
- * Adapter 只负责惰性打开当前 Turn 的唯一 Writer，并把标准模型事件、Tool 结果与
+ * Adapter 只负责惰性打开当前连续回复的唯一 Writer，并把标准模型事件、Tool 结果与
  * Action 内容转交给 Writer；`SessionMessages` 始终是唯一事实源。
  */
 
@@ -22,8 +22,11 @@ import type {
 export class SessionAssistantOutputAdapter implements SessionAssistantOutput {
   private readonly turn_id: string;
   private readonly messages: SessionMessages;
+  /** 当前尚未成功收口的 Writer；持久化失败时保留供重试。 */
   private writer: SessionAgentMessageWriter | null = null;
+  /** 包含惰性创建与 pending Step 初始化的共享任务。 */
   private writer_task: Promise<SessionAgentMessageWriter> | null = null;
+  /** 已 begin 但尚未绑定 Writer 的 Step，消息边界不能丢弃它。 */
   private step_pending = false;
 
   constructor(options: {
@@ -41,6 +44,7 @@ export class SessionAssistantOutputAdapter implements SessionAssistantOutput {
 
   /** 开始当前模型 Step。 */
   async begin_step(): Promise<void> {
+    if (this.writer_task) await this.writer_task;
     if (this.writer) {
       await this.writer.begin_step();
       return;
@@ -71,16 +75,18 @@ export class SessionAssistantOutputAdapter implements SessionAssistantOutput {
 
   /** 清理异常结束的 Step 作用域。 */
   async abort_step(): Promise<void> {
+    if (this.writer_task) await this.writer_task;
     if (this.writer) await this.writer.abort_step();
     this.step_pending = false;
   }
 
-  /** User steer 持久化后关闭它之前的当前 Assistant Message。 */
+  /**
+   * 在 Step 边界关闭当前 Assistant Message，失败时保留原 Writer 供重试。
+   * 尚未产生内容的 pending Step 留给下一条 Message，调用方负责等待活跃 Step 完成。
+   */
   async close_current_message(): Promise<void> {
-    if (!this.writer) {
-      this.step_pending = false;
-      return;
-    }
+    if (this.writer_task) await this.writer_task;
+    if (!this.writer) return;
     await this.writer.complete();
     this.writer = null;
   }
@@ -112,6 +118,7 @@ export class SessionAssistantOutputAdapter implements SessionAssistantOutput {
     /** 失败信息。 */
     error?: string;
   }): Promise<void> {
+    if (this.writer_task) await this.writer_task;
     if (!this.writer) {
       this.step_pending = false;
       return;
@@ -121,25 +128,32 @@ export class SessionAssistantOutputAdapter implements SessionAssistantOutput {
     else if (input.status === "completed") await writer.complete();
     else await writer.fail(input.error);
     this.writer = null;
+    this.step_pending = false;
   }
 
   /** 惰性打开当前连续 Assistant 回复的唯一 Writer。 */
   private async ensure_writer(): Promise<SessionAgentMessageWriter> {
-    if (this.writer) return this.writer;
     if (this.writer_task) return await this.writer_task;
-    this.writer_task = this.messages.open_agent_message({
-      turn_id: this.turn_id,
-    });
+    if (this.writer && !this.step_pending) return this.writer;
+    this.writer_task = this.open_writer();
     try {
-      this.writer = await this.writer_task;
-      if (this.step_pending) {
-        await this.writer.begin_step();
-        this.step_pending = false;
-      }
-      return this.writer;
+      return await this.writer_task;
     } finally {
       this.writer_task = null;
     }
+  }
+
+  /** 建立 Writer 并完成 Step 初始化后，才允许并发调用消费模型事件。 */
+  private async open_writer(): Promise<SessionAgentMessageWriter> {
+    const writer = this.writer ?? await this.messages.open_agent_message({
+      turn_id: this.turn_id,
+    });
+    this.writer = writer;
+    if (this.step_pending) {
+      await writer.begin_step();
+      this.step_pending = false;
+    }
+    return writer;
   }
 }
 

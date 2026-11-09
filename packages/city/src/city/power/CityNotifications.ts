@@ -52,6 +52,7 @@ export class CityNotifications {
   attach_group(group: Group): void {
     if (!this.receiver || this.observers.has(group)) return;
     const release_events = group.sessions.on_event(async (session_id, event) => {
+      if (event.type === "title") await this.notify_fact({ type: "targets_changed" });
       await this.notify_fact({ type: "group_event", group_id: group.id, session_id, event });
     });
     const release_removals = group.sessions.on_removed(async (session_id, reason) => {

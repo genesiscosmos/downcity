@@ -15,6 +15,7 @@ import { capture_task, revise_task } from "./application/TaskIntakeService.js";
 import { recover_task_executions } from "./application/TaskExecutionRecovery.js";
 import { TaskPreparationCoordinator } from "./application/TaskPreparationCoordinator.js";
 import { Power, create_action } from "@downcity/city/power";
+import { SESSION_ORIGIN_TYPE_TASK, type AgentTool } from "@downcity/type";
 import { z } from "zod";
 import type { PowerJsonValue } from "@downcity/city/power";
 import type { TaskWorkspaceSnapshot } from "@/task/types/TaskWorkflow.js";
@@ -23,6 +24,8 @@ import { read_task_facts } from "./runtime/TaskFacts.js";
 import type { TaskFact, TaskFactQuery } from "./types/TaskFact.js";
 import type {
   PowerActions,
+  PowerAvailability,
+  PowerRuntimeHost,
   PowerContext,
   PowerLifecycleContext,
   PowerStorage,
@@ -41,6 +44,9 @@ import {
 import { register_task_power_host_actions } from "@/task/host/TaskPowerHostActions.js";
 import { register_task_workspace_actions } from "@/task/host/TaskWorkspaceActions.js";
 
+/** Task Session 只消费本次执行正文，不参与任务管理。 */
+const task_session_blocked_reason = "Task Sessions execute the current run and cannot manage tasks or schedules.";
+
 /** task power 类实现。 */
 export class TaskPower extends Power {
   /** 当前 Power 稳定 ID。 */
@@ -55,6 +61,32 @@ export class TaskPower extends Power {
   /** Task system 文本不承担 scheduler 启动副作用。 */
   readonly system = async (_context: PowerContext): Promise<string> =>
     TASK_POWER_PROMPT;
+
+  /** Task 执行器与模拟评审器只完成本次执行，不获得任务管理能力。 */
+  readonly availability = (context: PowerContext): PowerAvailability => ({
+    enabled: true,
+    available: context.snapshot.session_origin?.type !== SESSION_ORIGIN_TYPE_TASK,
+    reasons: context.snapshot.session_origin?.type === SESSION_ORIGIN_TYPE_TASK
+      ? [task_session_blocked_reason]
+      : [],
+  });
+
+  /** 工具发现与直接工具调用使用相同边界，省略 action 的索引也不能绕过限制。 */
+  override compile_tool(host: PowerRuntimeHost): AgentTool | null {
+    const tool = super.compile_tool(host);
+    if (!tool) return null;
+    return {
+      ...tool,
+      is_available: (context) => context.session_origin?.type !== SESSION_ORIGIN_TYPE_TASK,
+      execute: async (input, context) => {
+        if (context.session_origin?.type === SESSION_ORIGIN_TYPE_TASK) {
+          const message = task_session_blocked_reason;
+          return { output: { success: false, power: this.name, error: message, message }, messages: [] };
+        }
+        return await tool.execute!(input, context);
+      },
+    };
+  }
 
   /** Task Agent actions。 */
   readonly actions: PowerActions;
@@ -260,6 +292,18 @@ export class TaskPower extends Power {
         },
       }),
     };
+    // 嵌套 Power 调用直接进入 Action，也必须校验来源，不能只隐藏模型工具。
+    this.actions = Object.fromEntries(Object.entries(this.actions).map(([name, action]) => [name, {
+      ...action,
+      execute: async (params) => {
+        const availability = this.availability(params.context);
+        if (!availability.available) {
+          const message = availability.reasons.join(" ");
+          return { success: false, error: message, message };
+        }
+        return await action.execute(params);
+      },
+    }]));
   }
 
   /** 可信组合根的可靠事实读取端口；不向模型注册，停止后拒绝读取。 */

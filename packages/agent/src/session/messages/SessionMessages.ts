@@ -201,7 +201,9 @@ export class SessionMessages {
     const message_id =
       String(input.message_id || "").trim() ||
       `user:${this.session_id}:${generate_id()}`;
-    const message = await this.create_message((sequence, created_at) => ({
+    const message = await this.create_message((sequence, created_at) => {
+      input.assert_receivable?.();
+      return ({
       message_id,
       session_id: this.session_id,
       turn_id: input.turn_id,
@@ -218,7 +220,8 @@ export class SessionMessages {
         sequence: index + 1,
         part_id: `${message_id}:part:${String(index + 1)}`,
       })),
-    }));
+      });
+    });
     if (message.role !== "user") {
       throw new Error(`User Message expected: ${message.message_id}`);
     }
@@ -310,6 +313,7 @@ export class SessionMessages {
       turn_id: input.turn_id,
       parts: normalize_session_user_parts(ui_parts),
       meta: build_session_message_meta(input.prompt),
+      assert_receivable: input.assert_receivable,
       visibility: input.prompt.visibility,
       ...(input.message_id ? { message_id: input.message_id } : {}),
     });

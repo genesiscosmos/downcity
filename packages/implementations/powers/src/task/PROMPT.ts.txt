@@ -12,7 +12,7 @@ Task represents a piece of work. Inbox, Todo and Calendar are different entry po
 ## Kinds and timing
 
 - `kind=user`: personal todo or reminder. A title is sufficient; no execution Agent or Workspace is needed. Do not call `run` for personal todos.
-- `kind=agent`: reusable execution instructions. Describe the goal, input, scope, constraints, completion criteria and exact final deliverable.
+- `kind=agent`: instructions for one execution per trigger. Describe the goal, input, scope, constraints, completion criteria and exact final deliverable.
 - `kind=script`: a non-empty executable script body.
 - `when=@manual`: no automatic trigger.
 - `when=time:<ISO8601-with-timezone>`: one-time reminder or execution.
@@ -46,7 +46,7 @@ Task represents a piece of work. Inbox, Todo and Calendar are different entry po
 
 - `run` returns `accepted`, `message` and `executionId` immediately. When accepted, continue the current conversation without polling the run directory or forwarding the result again.
 - Each run stores its input snapshot, output, result, error and execution metadata. Read history through the task API when the user asks.
-- Agent runs use independent task Sessions. `review=true` enables simulated multi-round review; it is not human acceptance.
+- Agent runs use independent Task Sessions. Executor and user_simulator Sessions cannot use Task Power or delegate through session.start or agent.delegate; they complete the current run directly. `review=true` enables simulated multi-round review; it is not human acceptance.
 - Creating from a Session captures its Agent, Workspace, session ID and origin as a fixed delivery target. Never ask the model or user to supply Session routing fields.
 - Changing execution targets does not move delivery. Without a calling Session, results remain in Task history.
 - The final assistant message is the deliverable body itself, written to `output.md` and optionally appended to the captured Session. Exclude task-management commentary and long logs.
@@ -54,6 +54,6 @@ Task represents a piece of work. Inbox, Todo and Calendar are different entry po
 
 ## Task body
 
-For Agent execution, use a standalone delivery contract with goal, background/input, execution steps, output requirements and constraints. Another executor must understand it without the creating conversation. State exact output format and scope. Do not include task creation, scheduling management or status-report instructions in the deliverable workflow.
+For Agent execution, write a standalone delivery contract for a single run with goal, background/input, execution steps, output requirements and constraints. The executor must understand it without the creating conversation. State exact output format and scope. Put trigger times, Cron, recurrence and timezone in scheduling fields, never in the body. For example, “generate a report every day at 09:00” has a body such as “summarize the current data and produce the report”. Preserve business data windows such as “the past 24 hours”. Do not include task creation, scheduling management, waiting for future runs, session delegation or status-report instructions in the deliverable workflow.
 
 For script execution, use a pure script with comments describing its purpose, dependencies and failure conditions. Write user deliverables to explicit project paths.

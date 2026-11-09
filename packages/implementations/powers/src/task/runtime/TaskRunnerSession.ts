@@ -17,7 +17,8 @@ import type { TaskDeliverySession } from "@/task/types/Task.js";
  * 构建 task 专用 Session 运行时。
  *
  * 关键点（中文）
- * - Executor、Power tools 与 system blocks 全部来自宿主 Agent。
+ * - Executor、Power tools 与 system blocks 来自宿主 Agent；TaskPower 按 Session 来源排除自身。
+ * - 执行器和模拟评审器都直接处理本次运行，统一委派策略禁止它们继续分派。
  * - run 目录仍保留 task 专用调试消息，宿主 Session 保存实际执行历史。
  */
 export async function createTaskSessionRuntimePort(params: {
@@ -58,7 +59,7 @@ export async function createTaskSessionRuntimePort(params: {
       task_id: params.task_id,
       execution_id: params.execution_id,
       role: "user_simulator",
-      // 模拟评审器只有受限执行额度，不继续扩展自主分工。
+      // 评审器保留独立身份；与执行器一样，Task 来源禁止继续分派。
       delegation_depth: 2,
     },
     ...(inherit_model_from ? { inherit_model_from } : {}),

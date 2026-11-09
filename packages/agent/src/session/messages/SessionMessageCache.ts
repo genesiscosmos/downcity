@@ -55,9 +55,16 @@ export class SessionMessageCache {
     this.held_id = message_id;
   }
 
-  /** 释放指定 Message 的持有关系；不匹配时忽略。 */
+  /**
+   * 释放指定 Message 的持有关系并移除其运行缓存；不匹配时忽略。
+   *
+   * 收口快照会先在 held 状态下进入缓存，再由这里完成驱逐。这样发布失败时
+   * 仍保留完整快照和持有关系，Writer 可以重试而不会丢失可写状态。
+   */
   release_held(message_id: string): void {
-    if (this.held_id === message_id) this.held_id = null;
+    if (this.held_id !== message_id) return;
+    this.held_id = null;
+    this.messages_by_id.delete(message_id);
   }
 
   /** 指定 Message 是否仍被未收口的 writer 持有。 */

@@ -13,18 +13,24 @@ import type {
   StableContextPart,
 } from "@/types/session/ContextCheckpoint.js";
 
-/** 收集 checkpoint 之后适合进入摘要的稳定 Part。 */
+/**
+ * 收集 checkpoint 之后适合进入摘要的稳定前缀。
+ *
+ * streaming Agent Message 是整条消息的屏障，包括空消息和仅含终态 Part 的消息。
+ * 它仍可追加任意类型的 Part，摘要不能消费其中的前缀或越过它推进到后续消息。
+ */
 export function collect_stable_parts(
   messages: readonly SessionMessage[],
   checkpoint: ContextCheckpointRow | null,
 ): StableContextPart[] {
   const stable: StableContextPart[] = [];
   for (const message of messages) {
+    if (message.role === "agent" && message.state !== "done") return stable;
     for (const part of [...message.parts].sort((left, right) => left.sequence - right.sequence)) {
       if (checkpoint && compare_part_position(message.sequence, part.sequence, checkpoint) <= 0) continue;
       // 未完成内容是推进屏障，不能跳过后再把 checkpoint 推到其后。
       if (part.type === "tool" && part.state !== "completed" && part.state !== "failed") return stable;
-      if (part.type === "text" && message.role === "agent" && (!("state" in part) || part.state !== "done" || message.state !== "done")) return stable;
+      if ((part.type === "text" || part.type === "reasoning") && message.role === "agent" && (!("state" in part) || part.state !== "done")) return stable;
       // 是否对模型可见只由统一消息投影决定，这里仅维护稳定性与源位置。
       stable.push({ message, part });
     }

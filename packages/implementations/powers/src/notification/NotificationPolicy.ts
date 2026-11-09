@@ -14,18 +14,25 @@ function is_work_main(origin: SessionOrigin): boolean {
 }
 
 /** 提交事实只决定一次关注事项更新；停止和内部执行不会产生重复交付。 */
-export function session_notification(agent_id: string, origin: SessionOrigin | undefined, event: SessionTurnCommittedHookValue): PowerNotificationInput | undefined {
+export function session_notification(agent_id: string, origin: SessionOrigin | undefined, event: SessionTurnCommittedHookValue, session_title?: string): PowerNotificationInput | undefined {
   if (!origin || event.status === "stopped" || !(origin.type === "agent" || is_work_main(origin))) return;
   const failed = event.status === "failed";
   const reply = origin.type === "agent" && !failed;
   const target: PowerNotificationTarget = { kind: "agent_session", agent_id, session_id: event.session_id, category: origin.category, origin_type: origin.type };
   const body = event.result.text.trim() || event.result.error?.trim() || "";
-  // 用交付内容的首个非空行命名通知；业务成败由 outcome 单独表达。
-  const title = body.split(/\r?\n/).find((line) => line.trim())?.replace(/^\s{0,3}#{1,6}\s+/, "").trim().slice(0, 120);
+  // 通知围绕来源会话命名；交付内容只作为正文，不承担标题语义。
+  const title = session_title?.trim() || "未命名会话";
   return { topic_key: notification_target_key(target), event_id: event.completion_id, target,
     kind: reply ? "reply" : "update", scope: reply ? "session" : "inbox", outcome: failed ? "failure" : "success",
-    title: title || (reply ? "会话回复" : "工作结果"),
+    title,
     body: body.slice(0, 1600) };
+}
+
+/** 从既有来源目录读取真实标题，空标题不会回退为执行结果或内部 ID。 */
+export function notification_session_title(target: PowerNotificationTarget, directory?: PowerNotificationTargets): string | undefined {
+  if (target.kind === "power") return;
+  const title = directory?.target_titles?.[notification_target_key(target)];
+  return title === undefined ? undefined : title.trim() || "未命名会话";
 }
 
 /** 原 Interaction 的准确来源直接决定导航，不从 chat/work 分区猜业务角色。 */

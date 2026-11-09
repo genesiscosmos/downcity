@@ -197,12 +197,15 @@ export function read_session_delegation_depth(
 /**
  * 解析阻止派发的原因；可以派发时返回 null。
  *
- * 来源 type 只表达业务来源；Chat 创建 Main，Work Main 创建 Child。
- * 专用执行器的工具由宿主执行配置限制，本规则不按来源名授予或剥夺分工能力。
+ * Chat 创建 Main，普通 Work Main 创建 Child。
+ * Task Session 负责当前运行，执行器与模拟评审器均不能继续委派。
  */
 export function resolve_delegation_blocked_reason(
   origin: { readonly [key: string]: unknown } | undefined,
 ): string | null {
+  if (origin?.type === SESSION_ORIGIN_TYPE_TASK) {
+    return "Task Sessions must execute the current run directly and cannot delegate work";
+  }
   const known_chat = origin?.category === SESSION_ORIGIN_CATEGORY_CHAT;
   const ordinary_work = origin?.category === SESSION_ORIGIN_CATEGORY_WORK;
   if (!known_chat && !ordinary_work) return "Session role cannot delegate work";
@@ -220,7 +223,7 @@ export function resolve_delegation_blocked_reason(
  * 判断一个来源是否允许派发其他会话。
  *
  * 仅判断创建工作能力；读取历史与控制已有直接子会话分别授权。
- * Chat 和任意来源的 Work Main 可以创建，Work Child 达到上限。
+ * Chat 和普通 Work Main 可以创建；Task Session 不分派，Work Child 达到上限。
  */
 export function can_delegate_work(
   origin: { readonly [key: string]: unknown } | undefined,

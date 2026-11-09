@@ -76,6 +76,8 @@ export interface PowerNotificationTargets {
   group_ids: string[];
   /** 目标当前绑定的 Workspace，只作可达性核对，不参与稳定身份。 */
   target_workspaces: Record<string, string>;
+  /** 以通知目标稳定键索引的真实 Session 标题；含活动与归档元数据，空字符串表示尚未命名。 */
+  target_titles: Record<string, string>;
   /** 当前 City 已登记 Workspace 的稳定标识。 */
   workspace_ids: string[];
   /** 目录读取失败的 Agent。 */

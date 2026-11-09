@@ -96,6 +96,12 @@ export async function fail_session_turn(
       // Error Part 兜底写入失败不能阻止 Turn Handle 收口。
     }
   }
+  // 检查点或后台等待期间抛出的错误也必须关闭原 Writer，不能只发布 Turn 终态。
+  // 完成日志已经提交；消息收口失败向宿主传播，后续按该权威结果恢复。
+  await active_turn.turn_context?.output.assistant?.finish({
+    status: stopped ? "stopped" : "failed",
+    error: message,
+  });
   options.events.publish({
     mutation_id: nanoid(),
     variant: "turn",

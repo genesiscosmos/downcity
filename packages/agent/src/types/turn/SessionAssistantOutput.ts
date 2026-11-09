@@ -36,7 +36,7 @@ export interface SessionAssistantOutput {
   finish_step(parts: SessionAgentMessagePart[]): Promise<void>;
   /** 放弃当前未完成 Step 的临时作用域。 */
   abort_step(): Promise<void>;
-  /** User steer 插入前关闭当前连续 Assistant Message。 */
+  /** 可见 User steer 持久化后关闭当前连续 Assistant Message；隐藏输入不切分。 */
   close_current_message(): Promise<void>;
   /** 把 Action 产生的封闭内容追加到当前 Assistant Message。 */
   append_result_parts(parts: readonly SessionAgentContent[], source_tool_call_id?: string): Promise<SessionAgentMessagePart[]>;

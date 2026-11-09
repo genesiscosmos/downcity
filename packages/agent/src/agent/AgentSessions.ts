@@ -901,13 +901,13 @@ export class AgentSessions implements AgentSessionsContract<AgentSession> {
     if (this.session_observers.has(cache_key)) return;
     const release_subject = this.observe_session?.(session);
     const release_directory = session.subscribe((mutation) => {
-      if (mutation.variant !== "session" || mutation.type !== "workspace") return;
+      if (mutation.variant !== "session" || (mutation.type !== "workspace" && mutation.type !== "title")) return;
       this.notify_directory_changed();
     });
     this.session_observers.set(cache_key, () => { release_subject?.(); release_directory(); });
   }
 
-  /** Workspace 换绑和归档清空只发目录事实，不改变通知记录。 */
+  /** 标题、Workspace 换绑和归档清空只发目录事实，不改变通知记录。 */
   private notify_directory_changed(): void {
     for (const listener of this.directory_listeners) {
       try { listener(); } catch (error) { this.logger.warn("Session directory observer failed", { error: String(error) }); }

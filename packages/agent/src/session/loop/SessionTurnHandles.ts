@@ -1,9 +1,7 @@
 /** Turn 句柄、延迟结果及 Prompt 幂等身份的纯构造函数，不持有调度状态。 */
 import { createHash } from "node:crypto";
-import type { SessionAgentMessage } from "@downcity/type";
 import type { AgentSessionTurnHandle, AgentSessionTurnResult } from "@/types/sdk/AgentSessionTurn.js";
 import type { ActiveSessionTurnState, SessionDeferred, PromptRequestIdentity } from "@/types/session/SessionLoop.js";
-import { extract_session_message_text } from "@/session/messages/SessionMessageText.js";
 
 /** 分离输入接受与 Turn 完成的 Promise。 */
 export function create_deferred<T>(): SessionDeferred<T> {
@@ -30,13 +28,6 @@ export function resolve_prompt_request_identity(session_id: string, request_id_i
   if (request_id.length > 512) throw new Error("session.prompt request_id must not exceed 512 characters");
   const digest = createHash("sha256").update(session_id).update("\u0000").update(request_id).digest("hex");
   return { message_id: `user-request:${digest}`, turn_id: `turn-request:${digest}` };
-}
-
-/** 从完成的 canonical Agent Message 读取结果。 */
-export function to_persisted_turn_result(turn_id: string, message: SessionAgentMessage): AgentSessionTurnResult {
-  const part = [...message.parts].reverse().find((item) => item.type === "error");
-  const error = part?.type === "error" ? part.message : undefined;
-  return { turn_id, text: extract_session_message_text(message), success: !error, ...(error ? { error } : {}) };
 }
 
 /** 为已持久化结果创建立即完成的句柄。 */

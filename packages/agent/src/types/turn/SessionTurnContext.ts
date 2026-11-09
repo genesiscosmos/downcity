@@ -47,10 +47,10 @@ export interface SessionTurnContextInit {
   /** 在 Step 检查点提交 Session 输入队列；持久化消息由 Composer 重新读取。 */
   commit_step_input?: () => Promise<void>;
 
-  /** 将 Executor 产生的内部模型输入持久化为当前 Turn 的 canonical User Message。 */
+  /** 暂存 Executor 内部输入；完整 Step 检查点持久化并建立真实消息边界。 */
   append_internal_user_message?: (
     parts: readonly SessionModelUserContent[],
-  ) => Promise<SessionUserMessage>;
+  ) => Promise<void>;
 
   /** 判断是否仍有等待下一个 Step 消费的 User prompt。 */
   has_pending_step_input?: () => boolean;
@@ -142,8 +142,8 @@ export interface SessionTurnContext {
     /** 判断是否有等待下一个 Step 消费的 Session prompt。 */
     has_pending(): boolean;
 
-    /** 持久化一条只供模型消费的内部 canonical User Message。 */
-    append_internal(parts: readonly SessionModelUserContent[]): Promise<SessionUserMessage>;
+    /** 暂存只供模型消费的内部输入；下次 compose 前由完整 Step 检查点落盘，返回不代表已持久化。 */
+    append_internal(parts: readonly SessionModelUserContent[]): Promise<void>;
 
   };
 

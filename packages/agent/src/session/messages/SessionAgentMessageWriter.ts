@@ -467,12 +467,13 @@ export class SessionAgentMessageWriter {
     error?: string,
   ): Promise<void> {
     if (this.closed) return;
+    // 持久化失败时保留 Step 映射与 Tool gate，原 Writer 仍能恢复或重试收口。
+    await this.state.complete(this.message_id, status, error);
+    this.closed = true;
+    this.reset_step_state();
     this.tool_part_gate.close(
       `Assistant Message writer closed with status ${status}`,
     );
-    this.reset_step_state();
-    await this.state.complete(this.message_id, status, error);
-    this.closed = true;
   }
 }
 

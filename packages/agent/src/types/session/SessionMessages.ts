@@ -33,6 +33,8 @@ export interface SessionMessagesOptions {
 
 /** User Message 创建参数。 */
 export interface AppendSessionUserMessageInput {
+  /** 存储创建 factory 内的最后接收检查；抛错时不创建消息。 */
+  assert_receivable?: () => void;
   /** 当前输入所属 Turn。 */
   turn_id: string;
   /** User 内容 Part；identity 与顺序由 SessionMessages 分配。 */
@@ -97,6 +99,8 @@ export interface AppendExternalSessionAgentMessageInput {
 
 /** Session Prompt 转换并持久化的输入。 */
 export interface AppendSessionPromptMessageInput {
+  /** 附件解析及存储等待结束后的最后接收检查。 */
+  assert_receivable?: () => void;
   /** 当前 Agent 项目的绝对根目录，用于解析本地附件。 */
   project_root: string;
   /** 当前 Session Prompt 输入；调用对象已由接收边界归一化。 */

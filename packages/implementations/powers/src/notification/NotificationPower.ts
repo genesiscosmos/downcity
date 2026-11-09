@@ -11,7 +11,7 @@ import type { NotificationPowerOptions } from "./types/NotificationOptions.js";
 import type { NotificationListResult } from "./types/NotificationRenderer.js";
 import { NotificationQuery } from "./NotificationQuery.js";
 import { notification_target_key, notification_target_schema as target_schema } from "./NotificationIdentity.js";
-import { session_notification, source_availability } from "./NotificationPolicy.js";
+import { session_notification, source_availability, notification_session_title } from "./NotificationPolicy.js";
 
 /** 来源引用由宿主校验，模型没有审批入口。 */
 const reference_schema = z.object({ session_category: z.enum(["chat", "work"]), session_id: z.string().min(1),
@@ -161,7 +161,8 @@ export class NotificationPower extends Power {
   /** 写入、可见目标规则和版本变更均属于 Power。 */
   private async publish(source: PowerNotificationSource, input: PowerNotificationInput): Promise<void> {
     const is_visible = () => !!input.target && [...this.visible_targets.values()].some((target) => notification_target_key(target) === notification_target_key(input.target!));
-    if (await this.require_store().publish(source, input, is_visible)) this.changed();
+    const title = input.target ? notification_session_title(input.target, this.source_directory) : undefined;
+    if (await this.require_store().publish(source, title ? { ...input, title } : input, is_visible)) this.changed();
   }
 
   /** 原 Group 事实按群聊聚合；生命周期改变来源状态，保留摘要与未读。 */
@@ -170,7 +171,7 @@ export class NotificationPower extends Power {
       if (fact.event.type === "status" && fact.event.phase === "failed") {
         const target: PowerNotificationTarget = { kind: "group_session", group_id: fact.group_id, session_id: fact.session_id };
         await this.publish({ source_kind: "group", power_id: this.name }, {
-          topic_key: notification_target_key(target), event_id: fact.event.turn_id ?? fact.event.message_id, target, kind: "update", scope: "inbox", outcome: "failure", title: "群聊执行失败" });
+          topic_key: notification_target_key(target), event_id: fact.event.turn_id ?? fact.event.message_id, target, kind: "update", scope: "inbox", outcome: "failure", title: notification_session_title(target, this.source_directory) || "未命名会话" });
       } else if (fact.event.type === "interaction") this.changed();
       return;
     }
