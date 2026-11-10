@@ -2,7 +2,7 @@
 
 `@downcity/ui` 是 Downcity 的 React UI 组件包。
 
-它提供基础 UI 原语、样式入口、以及 workboard 相关复合组件。  
+它提供基础 UI 原语、统一 Markdown 阅读组件、样式入口，以及 workboard 相关复合组件。
 这个包只负责界面组件和类型，不负责 Agent 或 City 的运行时逻辑。
 
 ## 包定位
@@ -132,6 +132,35 @@ workboard 类型
   -> src/components/workboard*.tsx
   -> src/index.ts 对外导出
 ```
+
+## Markdown 阅读组件
+
+```tsx
+import { MarkdownView } from '@downcity/ui';
+import '@downcity/ui/markdown.css';
+
+<MarkdownView text={document_text} />
+<MarkdownView text={message_text} mode="streaming" layout="embedded" />
+```
+
+宿主加载 UI 主题 token 后，再加载 Markdown 专用样式。`document` 为默认布局，正文最大宽度 `45rem`，上下 `2rem`、左右 `1.25rem` 留白；`embedded` 填满宿主且无外层留白。正文默认使用 `medium`（`0.875rem`）字号、1.65 倍行高，标题为 500 字重；标题与代码按正文的固定 `em` 比例缩放，适配整体界面缩放及浅色和深色主题。`embedded` 读取 Provider 的字号档位，`document` 与静态导出始终使用默认 `medium`。
+
+组件封装 GFM、代码高亮与复制、公式、图片、SVG、Mermaid、HTML 清洗和超限降级。代码、表格和宽公式保留内部横向滚动。字体、字号和行高由组件统一管理，MarkdownView 不提供 `typography`、`size` 或 `style` 覆盖参数；字号只接受 Provider 的受控四档选择。`class_name` 仅用于外层布局。
+
+`MarkdownViewProvider` 接入可选的 `text_size: MarkdownViewTextSize`、`resolve_image_src(src, document_url)` 和 `translate(key)`；嵌套 Provider 中未提供的项分别继承上层值。默认使用 `medium`、网页图片解析与英文图表操作文本，不依赖 Desktop。
+
+| `MarkdownViewTextSize` | 标签 | 字号 |
+| --- | --- | --- |
+| `small` | 小 | `0.8125rem` |
+| `medium` | 标准（默认） | `0.875rem` |
+| `large` | 大 | `0.9375rem` |
+| `extra_large` | 特大 | `1rem` |
+
+`@downcity/ui/markdown.css` 同时提供 `.downcity-writing-text`，供宿主输入正文共用 Markdown 的系统字体栈、400 字重、1.65 倍行高、自然字距、自动光学尺寸与抗锯齿，以及主题前景 90%／背景 10% 的文字混色。该类不设置字号、文档宽度或段落间距，不提供排版覆盖能力；宿主输入框配合 `get_markdown_text_size(text_size)` 读取受控字号。
+
+`MarkdownViewTextSize` 与 `get_markdown_text_size` 从包入口导出；`get_markdown_text_size(text_size)` 返回 rem 字符串，供宿主 Composer 与消息正文保持一致。四档数值由 UI 包内部定义，宿主负责持久化选择并将字号 Provider 限定在聊天区域。Desktop 的独立外观设置“对话字号”在本机保存、即时更新，可一键恢复 `medium`；仅作用于 Work、Chat、Draft、Group 的用户消息、Agent 回复与输入框，按钮、导航、文件预览、任务文档及静态导出保持原字号。
+
+独立静态导出可使用 `MarkdownExportContext.Provider value={true}`，始终按 `medium` 排版，展开代码与表格的横向滚动内容、使长内容换行、隐藏操作按钮，并让离屏图表完成渲染；文件生成与保存由宿主负责。
 
 ## 当前最重要的入口文件
 

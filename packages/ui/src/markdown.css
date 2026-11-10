@@ -1,0 +1,7 @@
+/* MarkdownView 完整样式入口；宿主提供主题 token，无需扫描组件源码生成排版类。 */
+@import "katex/dist/katex.min.css";
+@import "./components/markdown/markdown_text.css";
+@import "./components/markdown/markdown_view.css";
+@import "./components/markdown/markdown_content.css";
+@import "./components/markdown/mermaid/mermaid.css";
+@import "./components/markdown/markdown_export.css";

@@ -8,6 +8,12 @@
  */
 
 export { cn } from "./lib/utils";
+export { MarkdownView } from "./components/markdown/MarkdownView";
+export { MarkdownViewProvider } from "./components/markdown/markdown_host_context";
+export { MarkdownExportContext } from "./components/markdown/markdown_export_context";
+export { get_markdown_text_size } from "./components/markdown/markdown_text_size";
+export type { MarkdownViewTextSize } from "./components/markdown/markdown_text_size";
+export type { MarkdownViewProps, MarkdownViewProviderProps } from "./components/markdown/markdown_view_types";
 export {
   ShortcutProvider,
   detect_shortcut_platform,

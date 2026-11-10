@@ -6,7 +6,7 @@
 >
 > - 修改 `private/apps/desktop/src/renderer/styles/tokens.css`（9 级档位 + 清空 Tailwind 默认字号命名空间）
 > - 修改 `private/apps/desktop/src/renderer/lib/utils.ts`（把档位注册进 tailwind-merge 的 `font-size` 组）
-> - 修改 `private/apps/desktop/src/renderer/features/chat/components/messages/message_layout.ts`（消息正文改走语义档位）
+> - 修改 `private/apps/desktop/src/renderer/features/chat/components/messages/message_layout.ts`（消息宿主 UI 使用语义档位；Markdown 内容自有排版见 §五、§6.1）
 > - 修改 `private/apps/desktop/src/renderer/styles/{chat,base,mermaid}.css`（字号改引语义令牌）
 > - 迁移 `private/apps/desktop/src/renderer/` 下 61 个文件、311 处字号调用点
 > - 新增 `private/apps/desktop/tests/font_scale.test.ts`；重写 `private/apps/desktop/tests/tailwind_merge_classes.test.ts`
@@ -88,7 +88,7 @@ twMerge("text-message text-foreground") → "text-foreground"   // 字号类被�
 五点约定：
 
 1. **`base` 是默认档。** 任何「普通文字」默认用它；需要偏离时必须能说清它属于哪一档角色。
-2. **行高与字号成对，但可以单独覆盖。** Tailwind 生成的声明是 `line-height: var(--tw-leading, var(--text-base--line-height))`，因此显式 `leading-*` 永远优先。只有消息正文这么做（§五）。
+2. **UI 行高与字号成对，但可以单独覆盖。** Tailwind 生成的声明是 `line-height: var(--tw-leading, var(--text-base--line-height))`，因此显式 `leading-*` 优先。MarkdownView 内部排版由组件负责，不受宿主 `leading-*` 控制（§五）。
 3. **不加第 10 级。** 需要「比 `xs` 大一点、比 `base` 小一点」时，用现成的 `sm`（见下），而不是插一级。
 4. **`sm`（0.8125rem = 13px）只服务一处：消息身份行名称**（`agent_identity_name_class_name`）。它是「比 `xs` 大、比 `base` 小」的现成档位，将来需要紧凑正文（例如把工具活动行从正文里拉开一档）时也可用它。
    注意它与 `base`（14px）**只差 1px**，是全阶梯唯一一处 1px 相邻档。那是有意的：身份行靠字号 + `font-medium` 与正文拉开，而它不属于「正文」，不能直接跳到 `base`。
@@ -123,7 +123,7 @@ twMerge("text-message text-foreground") → "text-foreground"   // 字号类被�
 
 默认档定在 `base`（名字语义正确）与「正文适合密集桌面工具」（尺寸合适）两个要求相交处，就是 0.875rem（14px）。
 
-这个值还有一条独立的依据：它是**消息正文的历史结论**。在字号收敛之前，消息正文曾单独走过一轮调整，13px 被「Agent 正文有点小」否、15px 被「user 还是很很大」否，最终定在 14px（见 `docs/desktop-agent-message-rendering-redesign-prd.md` 第 24 节）。默认档取 14px 后，那一轮结论与全应用默认档合流，不再需要一处例外。
+这个值还有一条独立的依据：它是**消息正文的历史结论**。在字号收敛之前，消息正文曾单独走过一轮调整，13px 被「Agent 正文有点小」否、15px 被「user 还是很很大」否，最终定在 14px（见 `docs/desktop-agent-message-rendering-redesign-prd.md` 第 24 节）。14px 是 UI 默认档；MarkdownView 当前使用组件自有的 `0.875rem` 字号与 1.65 倍行高阅读基准（§五、§6.1），该历史结论不作为 Markdown 的选档依据。
 
 ### 3.2 代价由测试看住
 
@@ -177,7 +177,7 @@ twMerge("text-message text-foreground") → "text-foreground"   // 字号类被�
 | `2xs` | 元信息：时间戳、文件名、chip、字段键名、工具行细节、快捷键提示 | `ChatMessageTimestamp`、`WorkspaceTagMenu`、`ActivityToolState` 的细节行、`button.tsx` 的 `default/small` 档 |
 | `xs` | 辅助正文：列表项的次要行、帮助文案、空态说明、提示与错误 | `SettingComponents` 的描述行、`AgentsSidebar` 的主体描述、`SessionTimeline` 的 Agent 描述、消息的失败提示条 |
 | `sm` | 紧凑正文：**只服务消息身份行名称**（比 `xs` 大、比 `base` 小，且靠 `font-medium` 与正文区分） | `agent_identity_name_class_name` |
-| **`base`** | **默认正文与常规控件：消息正文、通用段落、按钮标签、标准输入、列表行主标签** | `message_layout` 的正文与容器兜底、`button.tsx` 的 `large`、`SettingComponents` 的标签、Workspace README |
+| **`base`** | **UI 默认正文与常规控件：通用段落、按钮标签、标准输入、列表行主标签；不含 MarkdownView 内部正文** | `message_layout` 的宿主容器兜底、`button.tsx` 的 `large`、`SettingComponents` 的标签 |
 | `lg` | 强调正文 + 区块标题、关键数值 | `CreateAgentView` / `CreateGroupView` 的 prompt 输入、`SettingComponents` 的页标题、`SettingsView` 的额度金额 |
 | `xl` | 面板标题、主数值 | `SettingsView` 的账号名与用量数值 |
 | `2xl` | 页面主标题：**每屏至多一个** | `CreateAgentView` / `CreateGroupView` 的问题标题、`WorkspaceView` 的 Workspace 名 |
@@ -211,56 +211,23 @@ twMerge("text-message text-foreground") → "text-foreground"   // 字号类被�
 
 ---
 
-## 五、行高：配对行高 + 阅读行高
+## 五、行高：UI 配对行高与 Markdown 阅读排版
 
-每个档位都声明了配对行高（§二 的表），所以 UI 文本不需要各自写 `leading-*`。
+每个 UI 档位都声明了配对行高（§二 的表），常规控件继续按角色选档。Markdown 内容由 `@downcity/ui` 的 `MarkdownView` 自行定义阅读排版，不使用宿主的 `text-base`、`leading-reading` 或 `leading-chat` 决定正文外观。
 
-消息排版是例外：`base` 的配对行高是 1.25rem（UI 密度），对长文太挤。这里有两个行高，对应两种阅读节奏：
+### 5.1 Markdown 的字号与行高统一
 
-| 令牌 | 值 | 14px 下 | 用在哪 |
-| --- | --- | --- | --- |
-| `--leading-reading` | 1.8 | 25.2px | Agent 正文（机器产出的长文） |
-| `--leading-chat` | 1.6 | 22.4px | 用户气泡与 Composer（人敲的短句） |
+用户消息、Agent 回复、推理与工具详情、任务、Workspace README、文件预览和导出共用 MarkdownView。正文默认使用 `medium`（`0.875rem`）字号、400 字重、1.65 倍行高；标题与强调文字为 500 字重。正文基准使用 rem，随整体界面缩放变化；聊天字号仅通过 Provider 的受控档位调整，不允许业务注入任意数值。
 
-```ts
-// message_layout.ts
-export const chat_message_text_class_name = "text-base leading-reading text-foreground";      // Agent 正文
-export const user_message_text_class_name = "text-base leading-chat text-foreground";         // 用户气泡
-```
+Desktop 在外观设置中提供独立的“对话字号”，本机保存、即时更新，可一键恢复默认 `medium`。它仅作用于 Work、Chat、Draft、Group 中的用户消息、Agent 回复与输入框；标题与代码按 `em` 比例缩放，正文行高保持 1.65。按钮、导航、文件预览、任务文档及静态导出保持原字号。
 
-- 两侧都用**默认档** `base`（0.875rem），**不另外开一级字号**。
-- `--leading-reading` = 1.8 不是随手取的：1.7 在当时的 15px 正文下被用户直接否过（「行内间距大一点」），才提到 1.8。那是一条**比例**结论，所以正文降到 14px 时保持 1.8。**不要为了全局统一而把它改小**。
-- `--leading-chat` = 1.6 给短句：用户气泡里多是一两行，1.8 在紧凑气泡里显松。
-- 两个值都是无单位倍数，乘 `base`（0.875rem）后是 25.2 / 22.4px，**不落在 1/16rem 网格上**。「整数像素」要求针对的是字形（半像素会发虚），行高的小数部分由浏览器按行处理，不影响字形清晰度，因此有意保留。
+消息身份行、时间戳和工具活动摘要仍由各自 UI 组件管理，不覆盖 MarkdownView 内部正文。输入区由宿主调用 `get_markdown_text_size(text_size)` 获取同档 rem 字符串，与消息正文保持一致；不通过宿主字号继承反向控制 Markdown。
 
-### 5.1 字号必须同值，行高按角色分开
+### 5.2 内容间距由组件管理
 
-上一版守卫写的是「四个消费处必须同值」，并直接禁止按角色分档的常量。那条规则的**本意是字号**：曾经两侧各设一档（13px / 15.5px），用户的反馈是「agent message 和 user message 的字体应该保持一致」。
+相邻正文段落间距为 0.9em；标题、列表、引用和代码等块的间距由 MarkdownView 统一定义。消息容器负责正文块、活动与文件改动之间的外层间距，不能通过 `.chat-surface` 等祖先选择器修改 Markdown 段落或标题。
 
-行高不是同一件事：它决定的是**阅读节奏**，而长文与短句的合适节奏本来就不同。所以现在的规则分两层：
-
-| 属性 | 约束 |
-| --- | --- |
-| 字号 | 四个消费处**必须**都是 `text-base`；不得按角色分档 |
-| 行高 | **按角色分开**（长文 1.8 / 短句 1.6） |
-| Composer ↔ 用户气泡 | **必须同源**（都用 `--leading-chat`）：同一段文字在发送前后的两种状态 |
-| Session ↔ Group | 同一角色必须用同一个常量（否则同一个 Agent 的长相会不一致） |
-
-`chat_message_layout.test.ts` 按这四行逐条断言。改行高时它会失败并要求确认这是有意为之。
-
-### 5.2 与字号绑定的硬约束
-
-`.markdown` 的段落间距是 `0.5em`（随正文字号缩放），它必须比消息内的块间距（`gap-3` = 0.75rem）小至少 0.125rem：
-
-```text
-0.5 × 字号 ≤ 0.75rem − 0.125rem  ⇒  字号 ≤ 1.25rem
-```
-
-也就是说**消息正文不得超过 `xl`**。当前正文是 `base`（0.875rem），段落间距 0.4375rem（= 7px），差值 0.3125rem（= 5px），还剩一档余量。
-
-**块间距从 `gap-2.5`（0.625rem）抬到 `gap-3`（0.75rem）正是为了这一步。** 默认档取 `base`（0.875rem）后，若沿用 0.625rem，差值只剩 0.1875rem（= 3px）——仍高于下限但余量不大；抬到 `gap-3` 后差值 5px，与段落/块/消息三个量级的比例（0.4375 / 0.75 / 1rem）也比原来均匀。
-
-这条约束由 `chat_message_layout.test.ts` 守着——它把三个量级都换算成 rem 再比较，因此**不需要知道根字号是多少**，与界面缩放无关。调大正文字号时它会失败，这是有意的：加字号必须同时加块间距，否则正文与工具活动会粘在一起。
+Markdown 排版的检查应验证组件自有字号、行高、标题比例、内容间距以及宿主样式隔离。消息布局检查只负责消息结构与外层间距，不再用宿主字号与段落间距公式约束 Markdown 正文。
 
 ---
 
@@ -268,35 +235,37 @@ export const user_message_text_class_name = "text-base leading-chat text-foregro
 
 这两处不用 9 级档位，都是结构性原因，不是遗漏。
 
-### 6.1 文档方言：`em` 相对值
+### 6.1 MarkdownView：组件自有基准与标题比例
 
-`markdown.css`、`mermaid.css`、`base.css` 里的 `font-size` 用的是 **em 相对值**：
+公共入口为 `import { MarkdownView } from '@downcity/ui'`，专用样式由 `@downcity/ui/markdown.css` 提供。组件以自身默认 `medium`（`0.875rem`）字号与 1.65 倍行高的正文基准定义内容层级，标题与行内代码的相对尺寸只依赖该基准，不依赖宿主字号。
 
-```css
-.markdown :where(h1) { font-size: 1.55em; }
-.markdown :where(code) { font-size: 0.92em; }
-```
+| 元素 | 字号 | 行高 |
+| --- | --- | --- |
+| 正文 | 默认 `0.875rem`；嵌入内容读取受控字号档位 | 1.65 |
+| h1 | `1.733333em` | 1.35 |
+| h2 | `1.266667em` | 1.45 |
+| h3 | `1.133333em` | 1.45 |
+| h4 | `1.066667em` | 1.45 |
+| h5 | `1em` | 1.45 |
+| h6 | `0.933333em` | 1.45 |
+| 行内代码 | `0.875em` | 随正文阅读行高 |
 
-它们不是 UI 层级，而是**文档方言**：Markdown 的标题、行内码、表格，以及 Mermaid 图表内的文字，
-都相对**承载它们的正文字号**缩放。同一段 Markdown 会出现在消息正文（`base`）、
-Workspace 文档预览（`base`）与 Plugin 说明（Plugin 自己的 `xs`）里，正文一变它们必须跟着变。
-换成绝对档位反而会与所在的阅读容器脱钩。
+标题与行内代码的 `em` 以组件正文为基准，随正文一起缩放，不固定为独立的像素尺寸。
 
-规则：
+标题与强调文字使用 500 字重，颜色跟随宿主当前主题的语义 token。主题继承不包含排版配置；字体、字号、行高、字重与内容间距均由组件内部定义，不开放 `typography`、`style` 或业务排版 CSS 变量接口。
 
-- UI 层级（**决定这段文字有多重要**）→ 只能 `text-<档位>`。
-- 文档方言（**相对宿主缩放**）→ 允许 `em`，且只允许出现在上述三个样式表里。
+`document` 布局正文最大 `45rem` 并居中，上下留白 `2rem`、左右留白 `1.25rem`；`embedded` 填满宿主且不增加外层留白。两种布局共享内容排版规则；`embedded` 读取 Provider 的 `text_size`，`document` 与静态导出始终使用默认 `medium`。`class_name` 仅用于外层定位和布局，宿主不需要声明 Markdown 字号，也不能用祖先字体、后代选择器或业务容器的行高覆盖组件排版。
 
-#### `markdown.css` 的字号是继承的，所以宿主必须声明
+页面管理纵向滚动，长代码、宽表格与公式在各自区域内横向滚动。图片资源解析、翻译与受控字号由 `MarkdownViewProvider` 注入。`text_size?: MarkdownViewTextSize` 仅接受以下四档，数值由 UI 包内部定义：
 
-`.markdown` 是 `font-size: inherit`，本文件不给基准字号（给了就会把消息正文、
-Workspace 预览、Plugin 说明三者钉成一样大）。代价是**每个渲染 `<Markdown>` 的文件
-必须自己声明字号**，否则会静默继承到无关的祖先字号（可能是标题的 `xl`）——
-不报错、不报类型错，只在某个界面看起来「字号奇怪」。
+| 档位 | 标签 | 字号 |
+| --- | --- | --- |
+| `small` | 小 | `0.8125rem` |
+| `medium` | 标准（默认） | `0.875rem` |
+| `large` | 大 | `0.9375rem` |
+| `extra_large` | 特大 | `1rem` |
 
-`font_scale.test.ts` 的「每个渲染 Markdown 的文件都自己声明了字号」盯住这一点（用临时
-探针验证过：新加一个不带字号档位的宿主会立刻失败）。新增 Markdown 宿主时，
-在包含 `<Markdown>` 的容器上加语义档位，或复用消息正文的 `chat_message_text_class_name`。
+嵌套 Provider 中未提供的 `text_size`、资源解析与翻译各自继承上层值。`get_markdown_text_size(text_size)` 从 `@downcity/ui` 导出并返回 rem 字符串，供 Composer 使用；宿主将字号 Provider 限定在聊天区域。MarkdownView 本身没有 `typography`、`size` 或任意样式覆盖参数。
 
 ### 6.2 Mermaid 图表内文字：固定 px
 
@@ -408,10 +377,10 @@ themeCSS 里的 `14px` / `12px` / `12.5px`），不用 9 级档位。
 
 | 文件 | 守住什么 |
 | --- | --- |
-| `tests/font_scale.test.ts` | **档名 → 字号 + 配对行高的硬编码契约**（`expected_scale`）；9 级、递增、全 rem、成对行高；**每一级都落在 1/16rem 网格上**（并带反向断言证明它不是恒真）；默认档 `base` 在正文约束之内；代码里无 `4xl` 及以上、无任意值；**源码里每一个 `text-*` 类名都能被 Tailwind 生成规则**；样式表字号只引令牌或 em；**每个渲染 Markdown 的文件都自己声明了字号**；`lib/utils.ts` 与 `tokens.css` 两份清单一致；9 级都真的生成规则；`4xl` 及以上一个都不生成 |
+| `tests/font_scale.test.ts` | **档名 → 字号 + 配对行高的硬编码契约**（`expected_scale`）；9 级、递增、全 rem、成对行高；**每一级都落在 1/16rem 网格上**（并带反向断言证明它不是恒真）；默认档 `base` 在正文约束之内；代码里无 `4xl` 及以上、无任意值；**源码里每一个 `text-*` 类名都能被 Tailwind 生成规则**；样式表字号只引令牌或 em；**MarkdownView 的基准字号与标题比例由组件管理，宿主不覆盖内部排版**；`lib/utils.ts` 与 `tokens.css` 两份清单一致；9 级都真的生成规则；`4xl` 及以上一个都不生成 |
 | `tests/tailwind_merge_classes.test.ts` | 跑真正的 `cn()`：四个真实调用点保留字号；**逐级**验证 9 个档位都能穿过 `cn()`；反向断言未注册的档名确实被删除（证明守卫不是恒真）；字号之间后者覆盖前者；消息正文不再依赖普通类 |
 | `tests/design_token_drift.test.ts` | 渲染层不出现 `text-4xl` 及以上与 `text-[…rem]` 这类任意值 |
-| `tests/chat_message_layout.test.ts` | 消息正文档位（`base`，0.875rem）与行高同行同源；块间距 > 段落间距且差值 ≥ 0.125rem（等价于正文 ≤ `xl`） |
+| `tests/chat_message_layout.test.ts` | 消息结构、身份行与活动等外层布局；MarkdownView 的正文排版与内容间距由组件检查负责（§五） |
 | `tests/tailwind_tokens.test.ts` | 语义颜色 / 圆角令牌能生成工具类（字号部分已移交 `font_scale.test.ts`） |
 
 两条值得单独说明的实现细节，都是「假保护」的常见来源：
@@ -435,10 +404,10 @@ cd private/apps/desktop && ./node_modules/.bin/tsc -p tsconfig.web.json --noEmit
 ## 九、未处理（有意留在范围外）
 
 - **`leading-[…]` 仍是任意值**（`leading-[1.7]`、`leading-[1.6]`、`leading-[1.65]`、`leading-[1.55]`、`leading-[1.45]` 共 6 处），以及 `leading-4/5/6/7` 这类间距尺度值。它们与字号不同：`leading-N` 是 rem 绝对值，会跟随界面缩放，不会静默失效；改成「每档一个语义行高」会改到所有正文的阅读节奏，超出本次「字号收敛 + 数值重定」的范围。
-- **Plugin 自带的 Markdown 仍是 `xs`**（`PluginRendererComponents` 的默认正文与 CodeBlock）。它们是 Plugin 自己的 UI，宿主不应单方面改其密度。
+- **Power 等嵌入区域的 Markdown 使用统一排版。** MarkdownView 内部正文默认使用 `medium`（`0.875rem`）、1.65 倍行高；嵌入内容只能通过 Provider 选择受控档位，文件预览、任务文档与静态导出保持默认字号；业务宿主的 `xs` 等档位只影响宿主 UI，不改变 Markdown 内容。
 - **Mermaid 图表内文字仍是固定 px**（`mermaid_theme.ts`），理由与实际行为见 §6.2。它不跟随界面缩放，也不取 9 级档位；本次未改变它。
-- **`markdown.css` 的 `em` 比值未重算**（`h1` 1.55em、`code` 0.92em）。它们在 `base` 下的取值与改动前一致，重算属于排版审美调整，不属于字号收敛。
+- **Markdown 的标题与代码比例由 UI 包管理。** 使用 §6.1 的正文基准、h1–h6 层级与行内代码比例，不从宿主 `base` 推导。
 - **`3xl`（1.875rem）当前无调用点。** 它是 9 级阶梯的成员，保留定义并在此记录，避免被误认为「死令牌」而删除或改值。
-- **消息列宽仍是 `max-w-[840px]`。** 正文 14px 下每行约 59 个汉字（15px 时约 55）。本次未同步调宽，因为宽度会连带影响 Composer、表格与代码块。
-- **`private/apps/homepage/` 与 `packages/ui/` 不在范围内。** homepage 是 Tailwind v3 + 自带 `tailwind.config.ts` 的营销站，`packages/ui` 尚未被 desktop 引用（desktop 的 `package.json` 里没有 `@downcity/ui`）。等 desktop 开始消费 `packages/ui` 时，需要让它在 `packages/ui/src/styles.css` 里声明同一套 `--text-*`，否则会出现第二套字号体系。
+- **消息列宽由聊天布局负责。** `embedded` MarkdownView 使用宿主可用宽度，正文固定采用组件的阅读基准；独立文档的宽度与留白见 §6.1。
+- **Homepage 的站点 UI 字号不在本规范范围内。** `public/packages/ui` 的 MarkdownView 独立管理跨宿主的阅读排版；Desktop 的 9 级 UI 档位不作为公共 Markdown 组件的排版配置。
 - **没有做视觉回归截图对比。** 除标题档外全应用字号都动了（幅度 ±1px 以内），建议在真实构建后用关键界面（会话正文与工具活动行、设置-模型列表、用量图表、命令面板、创作向导）做一次目视确认。

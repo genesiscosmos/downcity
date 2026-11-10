@@ -1,0 +1,345 @@
+/*
+ * MarkdownView 图表样式。正文规则限定在 .markdown-view；body Portal 以
+ * .markdown-mermaid-overlay 为独立根，从真实正文画布继承主题快照。
+ * 按钮、图标、焦点及字体都有明确声明，不依赖宿主全局样式或 Tailwind 扫描。
+ * 块间距使用阅读组件提供的 --markdown-block-gap。
+ */
+
+.markdown-view .markdown-mermaid {
+  position: relative;
+  max-width: 100%;
+  margin: var(--markdown-block-gap) 0;
+  border: 1px solid var(--markdown-mermaid-subtle-border);
+  border-radius: 0.625em;
+  overflow: hidden;
+}
+
+/*
+ * 失败态不再套一层容器：此时内容本身就是一段源码，容器描边会与源码块的外框叠成双重边框。
+ */
+.markdown-view .markdown-mermaid[data-mermaid-state="failed"] {
+  border: 0;
+  border-radius: 0;
+  overflow: visible;
+}
+
+.markdown-view .markdown-mermaid-canvas {
+  display: flex;
+  max-width: 100%;
+  justify-content: center;
+  padding: 0.75em;
+  overflow-x: auto;
+  scrollbar-width: thin;
+}
+
+/* 两种根共享映射；每个令牌都有独立回退，嵌入宿主无需提供 desktop globals。 */
+:is(.markdown-view, .markdown-mermaid-overlay) {
+  --markdown-mermaid-background: var(--background, #fff);
+  --markdown-mermaid-foreground: var(--foreground, #171717);
+  --markdown-mermaid-muted: var(--muted-foreground, #737373);
+  --markdown-mermaid-border: var(--border, #e5e5e5);
+  --markdown-mermaid-subtle-border: var(--border-subtle, var(--markdown-mermaid-border));
+  --markdown-mermaid-primary: var(--primary, #171717);
+  --markdown-mermaid-error: var(--destructive, #dc2626);
+  --markdown-mermaid-mono: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace);
+}
+
+:is(.markdown-view .markdown-mermaid-canvas, .markdown-mermaid-overlay .markdown-mermaid-fullscreen-canvas) .pele {
+  --pele-bg: var(--markdown-mermaid-background);
+  --pele-fg: var(--markdown-mermaid-foreground);
+  --pele-muted: var(--markdown-mermaid-muted);
+  --pele-line: var(--markdown-mermaid-muted);
+  --pele-surface: var(--card, var(--markdown-mermaid-background));
+  --pele-surface-alt: var(--muted, #f5f5f5);
+  --pele-border: var(--markdown-mermaid-border);
+  --pele-accent: var(--markdown-mermaid-primary);
+  --pele-error: var(--markdown-mermaid-error);
+  --pele-font: var(--markdown-font-family, -apple-system, BlinkMacSystemFont, "SF Pro Text", "PingFang SC", "Helvetica Neue", sans-serif, "Apple Color Emoji", "Segoe UI Emoji");
+  --pele-font-mono: var(--markdown-mermaid-mono);
+  --pele-radius: 4px;
+  --pele-series-1: var(--markdown-mermaid-primary);
+  --pele-series-2: color-mix(in srgb, var(--markdown-mermaid-primary) 70%, var(--markdown-mermaid-foreground));
+  --pele-series-3: color-mix(in srgb, var(--markdown-mermaid-primary) 70%, var(--markdown-mermaid-background));
+  --pele-series-4: color-mix(in srgb, var(--markdown-mermaid-primary) 45%, var(--markdown-mermaid-foreground));
+  --pele-series-5: color-mix(in srgb, var(--markdown-mermaid-primary) 45%, var(--markdown-mermaid-background));
+  --pele-series-6: color-mix(in srgb, var(--markdown-mermaid-primary) 85%, var(--markdown-mermaid-foreground));
+  --pele-series-7: color-mix(in srgb, var(--markdown-mermaid-primary) 85%, var(--markdown-mermaid-background));
+  --pele-series-8: color-mix(in srgb, var(--markdown-mermaid-primary) 25%, var(--markdown-mermaid-foreground));
+  background: var(--markdown-mermaid-background);
+  color: var(--markdown-mermaid-foreground);
+  font-family: inherit;
+}
+
+.markdown-view .markdown-mermaid-canvas {
+  background: var(--markdown-mermaid-background);
+}
+
+.markdown-view .markdown-mermaid-canvas[hidden] {
+  display: none;
+}
+
+/* SVG 保留布局尺寸，超出内容列时等比缩小；窄窗口布局由 Pele 的 maxWidth 控制。 */
+.markdown-view .markdown-mermaid-canvas svg {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  flex-shrink: 0;
+}
+
+.markdown-view .markdown-mermaid-toolbar {
+  position: absolute;
+  top: 0.375em;
+  right: 0.375em;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  gap: 0.125em;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.15s ease;
+}
+
+.markdown-view .markdown-mermaid:hover .markdown-mermaid-toolbar,
+.markdown-view .markdown-mermaid:focus-within .markdown-mermaid-toolbar {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.markdown-view .markdown-mermaid-pending {
+  display: flex;
+  min-height: 5.5em;
+  align-items: center;
+  justify-content: center;
+}
+
+.markdown-view .markdown-mermaid-spinner {
+  width: 1rem;
+  height: 1rem;
+  border: 2px solid var(--markdown-mermaid-border);
+  border-bottom-color: var(--markdown-mermaid-muted);
+  border-radius: 999px;
+  animation: markdown-mermaid-spin 0.9s linear infinite;
+}
+
+@keyframes markdown-mermaid-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .markdown-view .markdown-mermaid-spinner {
+    animation: none;
+  }
+}
+
+.markdown-view .markdown-mermaid-fallback {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4em;
+}
+
+.markdown-view .markdown-mermaid-status {
+  display: flex;
+  align-items: center;
+  gap: 0.375em;
+  color: var(--markdown-mermaid-muted);
+}
+
+.markdown-view .markdown-mermaid-status > svg {
+  width: 0.875em;
+  height: 0.875em;
+  flex: none;
+  color: var(--markdown-mermaid-error);
+}
+
+.markdown-view .markdown-mermaid-status-text {
+  min-width: 0;
+  flex: 1;
+}
+
+.markdown-view .markdown-mermaid-source {
+  max-width: 100%;
+  /* 一张坏图的源码可能有几百行；限制高度，避免整条消息被一段源码淹没。 */
+  max-height: 20em;
+  padding: 0.7em 0.8em;
+  border: 1px solid var(--markdown-mermaid-subtle-border);
+  border-radius: 0.5em;
+  background: color-mix(in srgb, var(--muted, #f5f5f5) 42%, var(--markdown-mermaid-background));
+  color: var(--markdown-mermaid-foreground);
+  font-family: var(--markdown-mermaid-mono);
+  font-size: 0.9em;
+  line-height: 1.6;
+  overflow: auto;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+  scrollbar-width: thin;
+}
+
+/* 控件完全由组件 CSS 管理，包括原生 button reset 与明确的 SVG 尺寸。 */
+:is(.markdown-view, .markdown-mermaid-overlay) .markdown-mermaid-action {
+  box-sizing: border-box;
+  display: flex;
+  flex: none;
+  width: 1.5rem;
+  height: 1.5rem;
+  align-items: center;
+  justify-content: center;
+  margin: 0;
+  padding: 0;
+  appearance: none;
+  border: 0;
+  border-radius: 0.375rem;
+  background: transparent;
+  color: var(--markdown-mermaid-muted);
+  font: inherit;
+  line-height: 1;
+  text-align: center;
+  text-transform: none;
+  cursor: pointer;
+  outline: none;
+  transition: color 150ms ease, background-color 150ms ease;
+}
+
+:is(.markdown-view, .markdown-mermaid-overlay) .markdown-mermaid-action > svg {
+  display: block;
+  flex: none;
+  width: 0.875rem;
+  height: 0.875rem;
+  max-width: none;
+}
+
+:is(.markdown-view, .markdown-mermaid-overlay) .markdown-mermaid-action:hover {
+  background: var(--interaction-hover, color-mix(in srgb, var(--markdown-mermaid-foreground) 8%, transparent));
+  color: var(--markdown-mermaid-foreground);
+}
+
+:is(.markdown-view, .markdown-mermaid-overlay) .markdown-mermaid-action:focus-visible {
+  outline: 2px solid var(--ring, var(--markdown-mermaid-primary));
+  outline-offset: 2px;
+}
+
+:is(.markdown-view, .markdown-mermaid-overlay) .markdown-mermaid-action:disabled {
+  pointer-events: none;
+  opacity: 0.5;
+}
+
+.markdown-mermaid-overlay .markdown-mermaid-overlay-action {
+  width: 2rem;
+  height: 2rem;
+  border: 1px solid var(--markdown-mermaid-border);
+  background: var(--popover, var(--markdown-mermaid-background));
+  box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
+}
+
+.markdown-mermaid-overlay .markdown-mermaid-overlay-action > svg {
+  width: 1rem;
+  height: 1rem;
+}
+
+/* 重试按钮沿用交互反馈，使用可读文本宽度。 */
+.markdown-view .markdown-mermaid-action.markdown-mermaid-retry {
+  width: auto;
+  height: auto;
+  padding: 0.125em 0.4em;
+  border-radius: 0.3125em;
+  color: var(--markdown-mermaid-foreground);
+  font-size: 0.875em;
+}
+
+.markdown-view .markdown-svg {
+  margin: var(--markdown-block-gap) 0;
+}
+
+.markdown-view .markdown-svg > img {
+  display: block;
+  width: auto;
+  height: auto;
+  max-width: 100%;
+}
+
+/* 全屏 Portal 使用明确根；样式和令牌不影响宿主的其他浮层。 */
+.markdown-mermaid-overlay.markdown-mermaid-fullscreen {
+  position: fixed;
+  /* 高于对话框：全屏图表是整窗接管，下面的浮层不应该透出来。 */
+  z-index: 60;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  background: color-mix(in srgb, var(--markdown-mermaid-background) 95%, transparent);
+  color: var(--markdown-mermaid-foreground);
+  font-family: var(--markdown-font-family, -apple-system, BlinkMacSystemFont, "SF Pro Text", "PingFang SC", "Helvetica Neue", sans-serif, "Apple Color Emoji", "Segoe UI Emoji");
+  font-size: 0.875rem;
+  font-weight: 400;
+  font-style: normal;
+  line-height: 1.65;
+  letter-spacing: normal;
+  text-align: start;
+  text-transform: none;
+  white-space: normal;
+  backdrop-filter: blur(3px);
+  outline: none;
+}
+
+/*
+ * 画布是全屏图表的固定尺寸基座：宽度与高度由使用方按 SVG 的 viewBox 显式给出，
+ * SVG 再 100% 填满它。缩放层根据画布尺寸计算适配缩放。
+ *
+ * 不能让 SVG 自己用 `width: auto` 找尺寸：它的宽度要相对一个未定的容器解析，
+ * 结果是 0，全屏里就什么都看不见。
+ */
+.markdown-mermaid-overlay .markdown-mermaid-fullscreen-canvas {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+
+.markdown-mermaid-overlay .markdown-mermaid-fullscreen-canvas svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  max-width: none;
+  max-height: none;
+  overflow: visible;
+}
+
+.markdown-mermaid-overlay .markdown-mermaid-float {
+  position: absolute;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+}
+
+.markdown-mermaid-overlay .markdown-mermaid-float.is-actions {
+  top: 0.75rem;
+  right: 0.75rem;
+}
+
+.markdown-mermaid-overlay .markdown-mermaid-float.is-zoom {
+  bottom: 0.75rem;
+  left: 0.75rem;
+}
+
+.markdown-mermaid-overlay .markdown-mermaid-download-error {
+  position: absolute;
+  right: 0.75rem;
+  bottom: 0.75rem;
+  z-index: 2;
+  margin: 0;
+  color: var(--markdown-mermaid-error);
+  font-size: 0.75rem;
+}
+
+/* 本文件在正文样式之后加载，明确清除图表位于文档边缘时的额外间距。 */
+.markdown-view > .markdown-mermaid:first-child,
+.markdown-view > .markdown-svg:first-child { margin-top: 0; }
+.markdown-view > .markdown-mermaid:last-child,
+.markdown-view > .markdown-svg:last-child { margin-bottom: 0; }

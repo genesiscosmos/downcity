@@ -1,0 +1,169 @@
+/* MarkdownView 的代码、表格、图片与公式；宽内容只在自身区域滚动。 */
+.markdown-view code:not(pre code) {
+  display: inline;
+  max-width: 100%;
+  padding: 0.1em 0.3em;
+  border-radius: 4px;
+  color: inherit;
+  background: color-mix(in srgb, var(--foreground) 5%, var(--background) 95%) !important;
+  font-family: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, Consolas, monospace);
+  font-size: 0.875em;
+  overflow-wrap: anywhere;
+  white-space: break-spaces;
+  word-break: break-word;
+}
+
+/* Streamdown 的高亮 pre 是滚动体，边框和留白只在外层计算一次。 */
+.markdown-view :where(pre), .markdown-view [data-streamdown="code-block"] {
+  position: relative;
+  min-width: 0;
+  max-width: 100%;
+  margin: var(--markdown-block-gap) 0 !important;
+  padding: 0 !important;
+  overflow: hidden;
+  border: 1px solid color-mix(in srgb, var(--foreground) 8%, var(--background) 92%) !important;
+  border-radius: 8px !important;
+  background: var(--surface-subtle, color-mix(in srgb, var(--foreground) 3%, var(--background) 97%)) !important;
+  box-shadow: none;
+}
+.markdown-view [data-streamdown="code-block-header"] {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  min-height: 1.5rem;
+  margin: 0;
+  padding: 0.375rem 0.375rem 0 0.625rem;
+  border: 0 !important;
+  background: transparent !important;
+}
+.markdown-view [data-streamdown="code-block-header"] > span:first-child {
+  min-width: 0;
+  margin: 0 !important;
+  overflow: hidden;
+  color: var(--muted-foreground);
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 0.6875rem;
+  line-height: 1;
+  text-overflow: ellipsis;
+  text-transform: lowercase;
+  white-space: nowrap;
+}
+.markdown-view [data-streamdown="code-block-header"] > div { display: flex; align-items: center; gap: 0.25rem; }
+.markdown-view [data-streamdown="code-block-download-button"] { display: none !important; }
+.markdown-view [data-streamdown="code-block-copy-button"] {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.5rem;
+  height: 1.5rem;
+  margin: 0;
+  padding: 0;
+  border: 0 !important;
+  border-radius: 4px;
+  color: var(--muted-foreground) !important;
+  background: transparent;
+  cursor: pointer;
+}
+.markdown-view [data-streamdown="code-block-copy-button"] svg { width: 0.875rem; height: 0.875rem; }
+.markdown-view [data-streamdown="code-block-copy-button"]:hover { color: var(--foreground) !important; background: var(--interaction-hover, var(--muted)); }
+.markdown-view [data-streamdown="code-block-copy-button"]:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
+.markdown-view [data-streamdown="code-block-copy-button"]:disabled { cursor: not-allowed; opacity: 0.5; }
+
+.markdown-view [data-streamdown="code-block-body"] {
+  max-width: 100%;
+  margin: 0 !important;
+  overflow-x: auto;
+  padding: 0.375rem 0.75rem 0.75rem !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  color: var(--foreground) !important;
+  background: transparent !important;
+  font-family: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, Consolas, monospace);
+  font-size: 0.875em !important;
+  line-height: 1.6 !important;
+  white-space: pre;
+  overflow-wrap: normal;
+  word-break: normal;
+  scrollbar-width: thin;
+}
+.markdown-view [data-streamdown="code-block-body"] code,
+.markdown-view [data-streamdown="code-block-body"] code > span,
+.markdown-view [data-streamdown="code-block-body"] code > span > span {
+  padding: 0 !important;
+  border: 0 !important;
+  border-radius: 0;
+  background: transparent !important;
+  font-size: inherit;
+  font-weight: 400 !important;
+  white-space: pre;
+}
+/* 每行显式成块，不依赖库的 Tailwind block 类进入宿主扫描结果。 */
+.markdown-view [data-streamdown="code-block-body"] code > span { display: block; }
+/* 库的行号依赖宿主生成计数器类，显式关闭，避免出现重复的 0。 */
+.markdown-view [data-streamdown="code-block-body"] code > span::before { content: none !important; }
+/* Shiki 的亮色在行内声明，深色值通过变量提供，因此这里必须覆盖行内 color。 */
+.dark .markdown-view [data-streamdown="code-block-body"],
+.dark .markdown-view [data-streamdown="code-block-body"] code,
+.dark .markdown-view [data-streamdown="code-block-body"] code > span,
+.dark .markdown-view [data-streamdown="code-block-body"] code > span > span {
+  color: var(--shiki-dark, var(--foreground)) !important;
+}
+
+.markdown-view div[data-streamdown="table-wrapper"] {
+  max-width: 100%;
+  margin: var(--markdown-block-gap) 0 !important;
+  overflow: hidden;
+  border: 1px solid var(--border-subtle, var(--border));
+  border-radius: 8px;
+  background: transparent;
+}
+.markdown-view div[data-streamdown="table-wrapper"] > div {
+  max-width: 100%;
+  overflow-x: auto;
+  border: 0;
+  scrollbar-width: thin;
+}
+.markdown-view div[data-streamdown="table-wrapper"] table {
+  width: max-content !important;
+  min-width: 100%;
+  margin: 0 !important;
+  border: 0 !important;
+  border-collapse: separate !important;
+  border-spacing: 0 !important;
+  background: transparent;
+  font-size: 1em !important;
+  line-height: 1.65;
+}
+.markdown-view [data-streamdown="table-header"],
+.markdown-view [data-streamdown="table-body"],
+.markdown-view [data-streamdown="table-row"] { border: 0 !important; background: transparent !important; }
+.markdown-view [data-streamdown="table-header-cell"],
+.markdown-view [data-streamdown="table-cell"] {
+  padding: 0.65em 0.8em !important;
+  border: 0 !important;
+  text-align: start;
+  vertical-align: top;
+  font-size: inherit;
+}
+.markdown-view [data-streamdown="table-header-cell"] {
+  color: var(--markdown-text) !important;
+  background: var(--surface-subtle, color-mix(in srgb, var(--foreground) 3%, var(--background) 97%)) !important;
+  font-weight: 500 !important;
+  white-space: nowrap;
+}
+.markdown-view [data-streamdown="table-cell"] { border-top: 1px solid var(--border-subtle, var(--border)) !important; }
+.markdown-view [data-streamdown="table-row"]:hover > [data-streamdown="table-cell"] { background: var(--interaction-hover, var(--muted)) !important; }
+.markdown-view :where(img) { display: block; max-width: 100%; height: auto; margin: var(--markdown-block-gap) 0; }
+.markdown-view :where(.katex) { color: inherit; }
+.markdown-view :where(.katex-display) {
+  max-width: 100%;
+  margin: var(--markdown-flow-gap) 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding-block: 0.15em;
+}
+
+/* 必须在具体块规则之后，清除文档首尾代码、表格和图片的额外外边距。 */
+.markdown-view > :first-child { margin-top: 0 !important; }
+.markdown-view > :last-child { margin-bottom: 0 !important; }

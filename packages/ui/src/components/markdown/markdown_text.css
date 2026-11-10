@@ -1,0 +1,19 @@
+/*
+ * Markdown 正文与宿主写作输入共用的文字基础规则。
+ * .downcity-writing-text 用于输入正文，不包含文档宽度、块间距或字号覆盖能力。
+ * 字号由受控档位决定；代码和图表继续保留各自的内容字体。
+ */
+.markdown-view,
+.downcity-writing-text {
+  --downcity-writing-font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "PingFang SC", "Helvetica Neue", sans-serif, "Apple Color Emoji", "Segoe UI Emoji";
+  --downcity-writing-line-height: 1.65;
+  color: color-mix(in srgb, var(--foreground) 90%, var(--background) 10%);
+  font-family: var(--downcity-writing-font-family);
+  font-weight: 400;
+  font-style: normal;
+  line-height: var(--downcity-writing-line-height);
+  letter-spacing: normal;
+  text-transform: none;
+  font-optical-sizing: auto;
+  -webkit-font-smoothing: antialiased;
+}

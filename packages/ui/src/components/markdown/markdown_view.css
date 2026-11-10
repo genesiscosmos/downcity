@@ -1,0 +1,126 @@
+/*
+ * MarkdownView 的统一阅读排版。所有尺寸与节奏由组件拥有，宿主只选择外层布局。
+ * rem 随应用整体缩放，em 保持标题与正文的固定比例；主题颜色仅从宿主 token 派生。
+ */
+.markdown-view-layout {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.markdown-view-layout[data-markdown-layout="document"] { padding: 2rem 1.25rem; }
+.markdown-view-layout[data-markdown-layout="document"] > .markdown-view { max-width: 45rem; margin-inline: auto; }
+.markdown-view-layout[data-markdown-layout="embedded"] { padding: 0; }
+
+.markdown-view {
+  --markdown-font-family: var(--downcity-writing-font-family);
+  --markdown-flow-gap: 0.9em;
+  --markdown-tight-gap: 0.25em;
+  --markdown-block-gap: 1em;
+  --markdown-heading-gap-before: 1.6em;
+  --markdown-text: color-mix(in srgb, var(--foreground) 90%, var(--background) 10%);
+  display: flow-root;
+  min-width: 0;
+  max-width: 100%;
+  color: var(--markdown-text);
+  font-family: var(--markdown-font-family);
+  font-size: var(--markdown-text-size, 0.875rem);
+
+  text-align: start;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.markdown-view-plain { white-space: pre-wrap; }
+
+/* 清除渲染库根节点的 space-y 与节点默认 padding，间距只由本组件计算。 */
+.markdown-view > :where(*) { margin-block: var(--markdown-flow-gap) 0; }
+.markdown-view :where(p) { display: block; min-width: 0; max-width: 100%; margin: 0; }
+.markdown-view :where(p + p) { margin-top: var(--markdown-flow-gap); }
+
+.markdown-view :where(h1, h2, h3, h4, h5, h6) {
+  margin: var(--markdown-heading-gap-before) 0 0.55em;
+  color: var(--foreground);
+  font-family: inherit;
+  font-weight: 500;
+  line-height: 1.45;
+  letter-spacing: normal;
+}
+.markdown-view :where(h1) { font-size: 1.733333em; line-height: 1.35; letter-spacing: -0.015em; }
+.markdown-view :where(h2) { font-size: 1.266667em; }
+.markdown-view :where(h3) { font-size: 1.133333em; }
+.markdown-view :where(h4) { font-size: 1.066667em; }
+.markdown-view :where(h5) { font-size: 1em; }
+.markdown-view :where(h6) { font-size: 0.933333em; color: var(--muted-foreground); }
+.markdown-view > h1:first-child { margin-bottom: 1.5rem; }
+.markdown-view :where(h1, h2, h3, h4, h5, h6) + p { margin-top: 0; }
+.markdown-view :where(strong, b), .markdown-view [data-streamdown="strong"] { color: inherit; font-weight: 500; }
+
+.markdown-view :where(ul, ol) {
+  margin: 0.8em 0 !important;
+  padding: 0 0 0 1.5em !important;
+  list-style-position: outside;
+}
+.markdown-view :where(ul) { list-style-type: disc; }
+.markdown-view :where(ol) { list-style-type: decimal; }
+.markdown-view :where(ul ul) { list-style-type: circle; }
+.markdown-view :where(ul ul ul) { list-style-type: square; }
+.markdown-view :where(li) {
+  display: list-item;
+  margin: var(--markdown-tight-gap) 0 !important;
+  padding: 0;
+  line-height: inherit;
+}
+.markdown-view :where(li)::marker {
+  color: color-mix(in srgb, var(--foreground) 60%, var(--background) 40%);
+  font-size: 0.9em;
+  font-variant-numeric: tabular-nums;
+}
+.markdown-view :where(li ul, li ol) { margin-block: var(--markdown-tight-gap) !important; }
+.markdown-view :where(li > p) { display: block; margin: 0; }
+.markdown-view :where(li > p + p) { margin-top: 0.4em; }
+.markdown-view :where(ul.contains-task-list) { list-style: none; }
+.markdown-view :where(li.task-list-item) { list-style: none; }
+.markdown-view :where(.task-list-item > input[type="checkbox"]) {
+  appearance: auto;
+  width: 0.875em;
+  height: 0.875em;
+  margin: 0 0.4em 0 -1.3em;
+  accent-color: var(--foreground);
+  vertical-align: baseline;
+}
+.markdown-view :where(.task-list-item > p:first-of-type) { display: inline; }
+
+.markdown-view :where(blockquote) {
+  margin: 1.4em 0;
+  padding: 0 0 0 1rem;
+  border: 0;
+  border-left: 2px solid color-mix(in srgb, var(--foreground) 25%, var(--background) 75%);
+  color: inherit;
+  background: transparent;
+  font-family: inherit;
+  font-size: inherit;
+  font-style: normal;
+  opacity: 1;
+}
+.markdown-view :where(blockquote)::before, .markdown-view :where(blockquote)::after { content: none; }
+.markdown-view :where(blockquote > :first-child) { margin-top: 0; }
+.markdown-view :where(blockquote > :last-child) { margin-bottom: 0; }
+
+.markdown-view :where(a) {
+  color: var(--primary);
+  font-weight: 400;
+  text-decoration: underline;
+  text-decoration-color: color-mix(in srgb, var(--primary) 40%, transparent);
+  text-underline-offset: 0.18em;
+  overflow-wrap: anywhere;
+}
+.markdown-view :where(a:hover) { text-decoration-color: var(--primary); }
+.markdown-view :where(a:focus-visible) { outline: 2px solid var(--ring); outline-offset: 2px; }
+.markdown-view :where(ins) { text-decoration: underline; text-underline-offset: 0.14em; }
+.markdown-view :where(hr) { margin: 1.4em 0; border: 0; border-top: 1px solid var(--border); }
+
+/* 在内容元素规则之后归零边缘，避免列表、代码或图表在宿主留白上再次叠加。 */
+.markdown-view > :first-child { margin-top: 0 !important; }
+.markdown-view > :last-child { margin-bottom: 0 !important; }
