@@ -27,11 +27,11 @@ const SCOPE_LABELS: Record<MemoryMainviewScopeKind, string> = {
   agent: "Agent 私有",
 };
 
-/** 当前 Agent 的记忆列表，内容管理不承担 Power 配置导航。 */
-export function memory_knowledge_view({ power, navigation, ui }: PowerMainviewComponentProps) {
+/** 当前 Agent 的记忆列表内容，可嵌入 Profile 分区，状态由组件自身持有。 */
+export function Memory_knowledge_content({ power, navigation, ui }: PowerMainviewComponentProps) {
     const {
       Button, Callout, EmptyState, Field, Group, Inline, ItemMenu, LoadingState,
-      Page, Row, Section, Status, Textarea, Toolbar,
+      Row, Section, Status, Textarea, Toolbar,
     } = ui.components;
     const [listing, set_listing] = useState<MemoryMainviewListResult>();
     const [draft, set_draft] = useState("");
@@ -49,7 +49,7 @@ export function memory_knowledge_view({ power, navigation, ui }: PowerMainviewCo
       set_loading(true);
       set_error("");
       try {
-        set_listing(await power.invoke<MemoryMainviewListResult>("memory.list", { ...input, limit: PAGE_SIZE }));
+        set_listing(await power.invoke<MemoryMainviewListResult>("memory.list", { ...input, subject_kinds: [scope], limit: PAGE_SIZE }));
       } catch (reason) {
         set_error(to_error_message(reason));
       } finally {
@@ -108,14 +108,14 @@ export function memory_knowledge_view({ power, navigation, ui }: PowerMainviewCo
     };
 
     if (loading && !listing) return <LoadingState label="正在读取 Agent 记忆…" />;
-    if (!listing) return <Page>{error
+    if (!listing) return <>{error
       ? <Callout tone="danger">{error}</Callout>
-      : <EmptyState title="无法读取记忆" description="请刷新后重试。" />}</Page>;
+      : <EmptyState title="无法读取记忆" description="请刷新后重试。" />}</>;
     const scope_label = SCOPE_LABELS[scope];
 
     const items = listing?.items ?? [];
 
-    return <Page>
+    return <>
       {error ? <Callout tone="danger">{error}</Callout> : null}
       <Toolbar
         actions={<Inline>
@@ -145,7 +145,7 @@ export function memory_knowledge_view({ power, navigation, ui }: PowerMainviewCo
           on_click={() => ui.open_view({ view_id: "memory_detail", resource_key: JSON.stringify([scope, agent_id, workspace_id, item.memory_id]), title: item.title || item.memory_id, input: { scope, agent_id, workspace_id, memory_id: item.memory_id } })}
         />)}</Group>
       </Section>}
-    </Page>;
+    </>;
 }
 
 /** 读取当前 route 中已经选定的记忆范围；默认查看 Agent 私有记忆。 */
