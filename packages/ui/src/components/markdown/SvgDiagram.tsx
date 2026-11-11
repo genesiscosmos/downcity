@@ -41,6 +41,6 @@ export function SvgDiagram({ children }: { /** SVG 围栏的原始文本子节�
       <img src={current_preview.url} alt="SVG" onError={() => set_failed_url(current_preview.url)} />
     </div>
   ) : (
-    <pre data-svg-state="source"><code className="language-svg">{source}</code></pre>
+    <pre className="markdown-svg-source" data-svg-state="source" tabIndex={0}><code className="language-svg">{source}</code></pre>
   );
 }

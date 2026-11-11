@@ -147,6 +147,8 @@ import '@downcity/ui/markdown.css';
 
 组件封装 GFM、代码高亮与复制、公式、图片、SVG、Mermaid、HTML 清洗和超限降级。代码、表格和宽公式保留内部横向滚动。字体、字号和行高由组件统一管理，MarkdownView 不提供 `typography`、`size` 或 `style` 覆盖参数；字号只接受 Provider 的受控四档选择。`class_name` 仅用于外层布局。
 
+SVG 无效或尚未完成时显示带内边距的等宽源码，支持键盘聚焦和独立滚动，完整保留内容。Mermaid 按正文实际字号布局，随四档字号与整体界面缩放重新布局；宽图保留原始布局尺寸并在图表内横向滚动，小图居中，保留全屏查看。渲染失败时结束加载转圈，显示错误与重试操作。
+
 `MarkdownViewProvider` 接入可选的 `text_size: MarkdownViewTextSize`、`resolve_image_src(src, document_url)` 和 `translate(key)`；嵌套 Provider 中未提供的项分别继承上层值。默认使用 `medium`、网页图片解析与英文图表操作文本，不依赖 Desktop。
 
 | `MarkdownViewTextSize` | 标签 | 字号 |
@@ -160,7 +162,7 @@ import '@downcity/ui/markdown.css';
 
 `MarkdownViewTextSize` 与 `get_markdown_text_size` 从包入口导出；`get_markdown_text_size(text_size)` 返回 rem 字符串，供宿主 Composer 与消息正文保持一致。四档数值由 UI 包内部定义，宿主负责持久化选择并将字号 Provider 限定在聊天区域。Desktop 的独立外观设置“对话字号”在本机保存、即时更新，可一键恢复 `medium`；仅作用于 Work、Chat、Draft、Group 的用户消息、Agent 回复与输入框，按钮、导航、文件预览、任务文档及静态导出保持原字号。
 
-独立静态导出可使用 `MarkdownExportContext.Provider value={true}`，始终按 `medium` 排版，展开代码与表格的横向滚动内容、使长内容换行、隐藏操作按钮，并让离屏图表完成渲染；文件生成与保存由宿主负责。
+独立静态导出可使用 `MarkdownExportContext.Provider value={true}`，始终按 `medium` 排版，展开代码与表格的横向滚动内容、使长内容换行、隐藏操作按钮，并让离屏图表完成渲染。导出图表按页面宽度完整缩放，SVG 回退源码展开换行；文件生成与保存由宿主负责。
 
 ## 当前最重要的入口文件
 

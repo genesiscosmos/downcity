@@ -132,7 +132,7 @@
   border-collapse: separate !important;
   border-spacing: 0 !important;
   background: transparent;
-  font-size: 1em !important;
+  font-size: 0.9286em !important;
   line-height: 1.65;
 }
 .markdown-view [data-streamdown="table-header"],
@@ -163,6 +163,25 @@
   overflow-y: hidden;
   padding-block: 0.15em;
 }
+
+/* SVG 原图保持比例；源码回退使用独立滚动体，避免通用 pre 的裁剪与零内边距。 */
+.markdown-view .markdown-svg { min-width: 0; max-width: 100%; margin: var(--markdown-block-gap) 0; }
+.markdown-view .markdown-svg > img { max-width: 100%; height: auto; margin: 0; }
+.markdown-view pre.markdown-svg-source {
+  max-height: 24em;
+  padding: 0.75em 1em !important;
+  overflow: auto;
+  color: var(--markdown-text);
+  font-family: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, Consolas, monospace);
+  font-size: 0.875em;
+  line-height: 1.6;
+  white-space: pre;
+  overflow-wrap: normal;
+  word-break: normal;
+  scrollbar-width: thin;
+}
+.markdown-view pre.markdown-svg-source > code { font: inherit; white-space: inherit; }
+.markdown-view pre.markdown-svg-source:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
 
 /* 必须在具体块规则之后，清除文档首尾代码、表格和图片的额外外边距。 */
 .markdown-view > :first-child { margin-top: 0 !important; }

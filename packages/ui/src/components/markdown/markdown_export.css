@@ -20,6 +20,15 @@
 .markdown-view-layout[data-markdown-export] .markdown-view :where(th, td) { overflow-wrap: anywhere; white-space: normal; }
 .markdown-view-layout[data-markdown-export] .markdown-view :where(button, [role="toolbar"], .markdown-mermaid-toolbar) { display: none !important; }
 
+/* 静态页面不能滚动，图表按版面完整缩放，源码展开换行，避免导出截断。 */
+.markdown-view-layout[data-markdown-export] .markdown-mermaid-canvas svg { max-width: 100%; }
+.markdown-view-layout[data-markdown-export] pre.markdown-svg-source {
+  max-height: none;
+  overflow: visible;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
 @media print {
   /* Chromium PDF 在 macOS 上可能无法嵌入 system-ui 中文字形，使用可嵌入字体回退。 */
   .markdown-view-layout[data-markdown-export] .markdown-view {

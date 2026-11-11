@@ -24,9 +24,11 @@
 }
 
 .markdown-view .markdown-mermaid-canvas {
-  display: flex;
+  display: block;
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
   max-width: 100%;
-  justify-content: center;
   padding: 0.75em;
   overflow-x: auto;
   scrollbar-width: thin;
@@ -78,12 +80,12 @@
   display: none;
 }
 
-/* SVG 保留布局尺寸，超出内容列时等比缩小；窄窗口布局由 Pele 的 maxWidth 控制。 */
+/* 引擎优先按可用宽度重排；宽图保持原生字号并局部滚动，auto margin 不会裁掉左缘。 */
 .markdown-view .markdown-mermaid-canvas svg {
   display: block;
-  max-width: 100%;
+  max-width: none;
   height: auto;
-  flex-shrink: 0;
+  margin-inline: auto;
 }
 
 .markdown-view .markdown-mermaid-toolbar {

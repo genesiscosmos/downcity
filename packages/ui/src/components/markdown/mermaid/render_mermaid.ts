@@ -24,15 +24,20 @@ export function invalidate_mermaid_fonts(): void {
 /**
  * 按容器内容宽度渲染；字体在调用时从宿主读取，主题颜色保留为 CSS 变量。
  *
- * fontSize 使用固定布局像素，SVG 再按容器等比缩放。禁止图表声明外部图片或链接，
+ * 字号读取正文实际计算值，传入引擎布局；宽图保留原生尺寸供画布滚动。禁止外部图片或链接，
  * 让模型生成的图表保持为纯展示内容；源码中的节点文字与样式由 Pele 转义、过滤。
  */
 export function render_mermaid_svg(source: string, max_width: number, canvas: HTMLElement, id_prefix: string): string {
   const style = getComputedStyle(canvas);
+  const computed_font_size = Number.parseFloat(style.fontSize);
+  const root_font_size = Number.parseFloat(getComputedStyle(canvas.ownerDocument.documentElement).fontSize);
+  const font_size = Number.isFinite(computed_font_size) && computed_font_size > 0
+    ? computed_font_size : root_font_size * 0.875;
   const options = {
     fontFamily: style.fontFamily,
     fontFamilyMono: style.getPropertyValue("--markdown-mermaid-mono").trim() || "monospace",
-    fontSize: 14,
+    fontSize: font_size,
+    responsive: false,
     maxWidth: Math.max(1, Math.floor(max_width)),
     idPrefix: cached_id_prefix,
     links: false,

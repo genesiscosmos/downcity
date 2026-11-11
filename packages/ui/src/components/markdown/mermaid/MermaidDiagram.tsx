@@ -124,6 +124,7 @@ export function MermaidDiagram({ children }: { /** rehype 转换写入的图表�
     const measure_width = () => {
       if (cancelled || !render_active_ref.current) return;
       const style = getComputedStyle(canvas);
+      // 首次渲染前画布处于 hidden 状态，用外壳内容宽度测量，避免得到 0 后无法启动。
       const width = container.clientWidth - Number.parseFloat(style.paddingLeft) - Number.parseFloat(style.paddingRight);
       measured_width_ref.current = Math.max(0, Math.floor(width));
       set_available_width(measured_width_ref.current);
@@ -224,11 +225,11 @@ export function MermaidDiagram({ children }: { /** rehype 转换写入的图表�
             </button>
           </div>
         </>
-      ) : (
+      ) : state === "pending" ? (
         <div className="markdown-mermaid-pending" role={visible ? "status" : undefined} aria-label={visible ? translate("mermaid.rendering") : undefined}>
           {visible ? <span className="markdown-mermaid-spinner" aria-hidden /> : null}
         </div>
-      )}
+      ) : null}
 
       {state === "failed" ? (
         <div className="markdown-mermaid-fallback">
