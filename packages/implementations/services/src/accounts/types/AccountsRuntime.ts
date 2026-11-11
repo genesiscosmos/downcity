@@ -21,10 +21,6 @@ export interface AccountsRuntimeOptions {
   read_env: (key: string) => string | undefined;
   /** 读取 Federation 对外基础 URL。 */
   read_base_url: () => string | undefined;
-  /** 校验 Bureau 当前存在且处于 active 状态。 */
-  require_active_bureau: (bureau_id: string) => Promise<void>;
-  /** 读取已注册 Bureau 的产品服务地址，用于固定网站 OAuth callback 白名单。 */
-  read_bureau_server_url: (bureau_id: string) => Promise<string>;
 }
 
 /** Accounts 路由统一返回值。 */

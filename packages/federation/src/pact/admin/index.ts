@@ -7,7 +7,6 @@
 import { ServiceClient } from "../invoker/invoker.js";
 import { CreditsInvoker } from "../invoker/credits/index.js";
 import { EnvInvoker } from "../invoker/env/index.js";
-import { BureausInvoker } from "../invoker/bureaus/index.js";
 import {
   requiredString,
   type RequestInitLike,
@@ -24,7 +23,6 @@ import type {
 
 export class AdminPactAccess {
   readonly credits: CreditsInvoker;
-  readonly bureaus: BureausInvoker;
   readonly env: EnvInvoker;
 
   private readonly base_url: string;
@@ -46,7 +44,6 @@ export class AdminPactAccess {
 
     const req = <T>(path: string, init: RequestInitLike) => this.json<T>(path, init);
     this.credits = new CreditsInvoker(req);
-    this.bureaus = new BureausInvoker({ requestJSON: req });
     this.env = new EnvInvoker({ requestJSON: req });
   }
 

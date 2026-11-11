@@ -1,6 +1,6 @@
 /**
  * @downcity/federation 公共入口。
- * Federation 统一提供本地运行与远端业务访问；Bureau 表达独立业务机器身份。
+ * Federation 统一提供本地运行与远端业务访问。
  * 平台数据库 Adapter 由宿主注入，包根入口不加载 Node 原生数据库。
  */
 
@@ -16,11 +16,6 @@ export type {
   RelayLogQuery, RelayRequestLog, RelayAttemptRecord,
   RelayKeyList, RelayRequestPage, RelayAttemptList, RelayCatalogSnapshot, RelayCatalogUpdated,
 } from "./types/Relay.js";
-export {
-  FederationBureauTokens,
-  FederationBureauRoute,
-  FederationBureaus,
-} from "./access/FederationBureaus.js";
 export type { FederationOptions, LocalFederationOptions, RemoteFederationOptions } from "./access/types/FederationOptions.js";
 export type {
   FederationAccountContinueInput,
@@ -45,7 +40,6 @@ export type {
   FederationAdminSession,
   FederationCurrentAdmin,
 } from "./access/types/FederationAdmin.js";
-export { Bureau, BureauUser } from "./client/bureau.js";
 
 // ===========================================================================
 // 场景 1：创建 Federation 实例
@@ -250,15 +244,8 @@ export type {
   FederationDiscovery,
   FederationJwks,
   FederationPublicJwk,
-  CreateFederationServiceTokenInput,
-  FederationServiceTokenIssueResult,
 } from "./federation/auth/types.js";
 
-export type {
-  BureauIdentity,
-  BureauOptions,
-  BureauFetch,
-} from "./types/Bureau.js";
 
 export type { UserProfile } from "./types/User.js";
 
@@ -369,19 +356,6 @@ export type {
   AdminServiceSummary,
 } from "./pact/admin/types.js";
 
-export type {
-  BureauCreateInput,
-  BureauMachineIdentity,
-  BureauRecord,
-  BureauServerRecord,
-  BureauServerUpdateInput,
-  BureauState,
-  BureauTokenIssueResult,
-  BureauTokenRecord,
-  BureauTokenSummary,
-  IssueBureauTokenInput,
-  RuntimeBureauToken,
-} from "./types/Bureau.js";
 
 // ===========================================================================
 // 场景 7：内置表 Schema

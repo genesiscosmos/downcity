@@ -6,8 +6,6 @@ export const pg_login_flows = pgTable(LOGIN_FLOW_TABLE, {
   login_id: text("login_id").primaryKey(),
   /** secret_hash 持久化字段；与同名 SQLite 字段具有相同业务含义。 */
   secret_hash: text("secret_hash").notNull(),
-  /** bureau_id 持久化字段；与同名 SQLite 字段具有相同业务含义。 */
-  bureau_id: text("bureau_id").notNull(),
   /** provider 持久化字段；与同名 SQLite 字段具有相同业务含义。 */
   provider: text("provider").notNull(),
   /** client_type 持久化字段；与同名 SQLite 字段具有相同业务含义。 */

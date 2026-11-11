@@ -14,7 +14,7 @@
 
 - 定位依据：downcity-builder-value.md。
 - README.md：声明面向构建多个 Agent 产品与工作流的 builders，列出 runtime、工具、任务、记忆、权限、用量、支付与控制界面。
-- packages/federation/README.md：给出 Federation、Embassy 与 Bureau 的接口用法；区分用户与服务身份，说明服务、认证、发现与路由职责。
+- packages/federation/README.md：给出 Federation 的接口用法；区分用户与管理员身份，说明服务、认证、发现与路由职责。
 
 以上属于产品资料与接口文档证据，不是功能集成测试或客户结果证据。尤其不能据此宣称跨产品权限隔离已经验证，或能够直接复用全部数据与业务逻辑。
 
@@ -47,7 +47,7 @@ Builder 不再只有两个独立 demo，而是有办法组织两个用途不同�
 | Agent runtime | 共用执行组件与接口 | 各 Agent 指令、模型选择与工具策略 |
 | 工具接口 | 复用检索等适用能力 | 服务凭证、数据访问和调用权限 |
 | UI SDK | 复用交互组件 | 应用页面、流程、结果呈现 |
-| Federation 服务 | 接入共同服务来源 | 用户与 Bureau 身份、授权范围、账本归属 |
+| Federation 服务 | 接入共同服务来源 | 用户与管理员身份、资源授权范围、账本归属 |
 | Workspace | 复用工作空间机制 | 应用数据分离、读写边界与清理策略 |
 | Session / memory | 复用机制或 provider | 内容可见性与作用域，不默认共享记忆 |
 | 业务逻辑 | 可复用通用模块 | 研究与审查流程、质量标准、人工检查 |

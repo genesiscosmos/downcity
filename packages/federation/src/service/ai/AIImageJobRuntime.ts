@@ -130,7 +130,7 @@ export class AIImageJobRuntime {
     ctx.locals.ai_usage_id = readOptionalString(initial_state.downcity_usage_id)
       ?? `aiu_image_${initial_job.job_id}`;
     ctx.locals.ai_usage_user_id = initial_job.user_id;
-    ctx.locals.ai_usage_bureau_id = initial_job.bureau_id;
+    ctx.locals.ai_usage_city_id = initial_job.city_id;
 
     try {
       if (this.is_terminal_image_job(initial_job)) return this.image_job_to_result(initial_job);
@@ -379,7 +379,7 @@ export class AIImageJobRuntime {
       error: created.error ?? null,
       message: created.message ?? null,
       poll_after_ms: created.poll_after_ms ? String(created.poll_after_ms) : null,
-      bureau_id: ctx.bureau?.bureau_id ?? null,
+      city_id: ctx.city_id ?? null,
       user_id: ctx.user?.user_id ?? null,
       service_id: "ai",
       model_id: ctx.metering?.model_id ?? null,
@@ -396,7 +396,12 @@ export class AIImageJobRuntime {
     if (!job_id) throw httpError(422, "job_id is required");
     const rows = await table.select({ job_id, job_type: IMAGE_GENERATE_JOB_TYPE });
     const row = rows[0];
-    if (!row) throw httpError(404, `Image job not found: ${job_id}`);
+    // 普通用户只能读取自己的任务；不存在、无主和其他用户任务统一返回 404。
+    // 管理员与受信后台的权限由路由认证保证，来源标签不参与资源授权。
+    if (!row || (ctx.identity?.kind !== "admin"
+      && (!ctx.user?.user_id || row.user_id !== ctx.user.user_id))) {
+      throw httpError(404, `Image job not found: ${job_id}`);
+    }
     return rowToAsyncJobRecord(row);
   }
 

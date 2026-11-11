@@ -1,17 +1,15 @@
 /**
  * Federation 统一鉴权器。
  *
- * 管理员 Session、Bureau Token 和 User Token 分别解析为 admin、bureau 和 user，
- * 避免机器凭证隐式获得 Federation 全局管理权限。
+ * 管理员 Session 和 User Token 分别解析为 admin 和 user，
+ * 管理员与用户业务权限保持隔离。
  */
 
 import { bearerToken, httpError } from "../../utils/helpers.js";
 import { normalizeRouteAuth, type RouteAuth, type RouteIdentity } from "../../service/service.js";
-import type { BureauRecord, RuntimeBureauToken } from "../../types/Bureau.js";
 import type { EnvProvider } from "../runtime.js";
 import { parse_user_token_ttl, type UserTokenAuthority } from "./user-token-authority.js";
 import type { FederationKeyStore } from "./federation-key-store.js";
-import type { BureauTokenStore } from "./bureau-token-store.js";
 import type { FederationAdminStore } from "./admin-store.js";
 import type { UserTokenRevocationStore } from "./user-token-revocation-store.js";
 import { USER_TOKEN_AUDIENCE } from "./audience.js";
@@ -22,8 +20,6 @@ import type {
   UserTokenPayload,
   UserTokenIssueResult,
   RuntimeUser,
-  CreateFederationServiceTokenInput,
-  FederationServiceTokenIssueResult,
 } from "./types.js";
 import type { FederationTrustedIdentity } from "../types.js";
 
@@ -33,31 +29,18 @@ export interface AuthResult {
   level: RouteIdentity;
   /** user 身份对应的 Federation User。 */
   user?: RuntimeUser;
-  /** user 或 bureau 身份对应的稳定 Bureau。 */
-  bureau?: BureauRecord;
-  /** bureau 身份使用的机器凭证元数据。 */
-  bureau_token?: RuntimeBureauToken;
   /** admin 身份对应的管理员 ID。 */
   admin_id?: string;
   /** admin 身份对应的管理会话 ID。 */
   admin_session_id?: string;
 }
 
-interface AuthenticatorStore {
-  /** 按稳定 ID 读取 Bureau。 */
-  bureau: {
-    get(bureau_id: string): Promise<BureauRecord | undefined>;
-  };
-}
-
 /** Federation 统一鉴权器。 */
 export class Authenticator {
   constructor(
     private readonly env: EnvProvider,
-    private readonly store: () => Promise<AuthenticatorStore>,
     private readonly token_authority: UserTokenAuthority,
     private readonly key_store: FederationKeyStore,
-    private readonly bureau_token_store: BureauTokenStore,
     private readonly admin_store: FederationAdminStore,
     private readonly user_token_revocations: UserTokenRevocationStore,
   ) {}
@@ -76,25 +59,11 @@ export class Authenticator {
       };
     }
 
-    const bureau_token = await this.bureau_token_store.resolve(token);
-    if (bureau_token) {
-      const bureau = await this.read_active_bureau(bureau_token.bureau_id);
-      if (!bureau) return { level: "guest" };
-      return {
-        level: "bureau",
-        bureau,
-        bureau_token: { token_id: bureau_token.token_id },
-      };
-    }
-
     try {
       const payload = await this.verifyToken(token);
-      const bureau = await this.read_active_bureau(payload.bureau_id);
-      if (!bureau) return { level: "guest" };
       return {
         level: "user",
         user: { user_id: payload.user_id, metadata: payload.metadata ?? {} },
-        bureau,
       };
     } catch (error) {
       if ((error as { /** 明确的凭证失效状态。 */ statusCode?: number }).statusCode === 401) {
@@ -107,17 +76,9 @@ export class Authenticator {
   /** 将进程内可信身份转换为统一鉴权结果。 */
   resolveTrusted(identity: FederationTrustedIdentity): AuthResult {
     if (identity.level === "admin") return { level: "admin" };
-    if (identity.level === "bureau") {
-      return {
-        level: "bureau",
-        bureau: identity.bureau,
-        bureau_token: identity.bureau_token,
-      };
-    }
     return {
       level: "user",
       user: identity.user,
-      bureau: identity.bureau,
     };
   }
 
@@ -135,31 +96,21 @@ export class Authenticator {
     return this.authorize(await this.resolve(request), required);
   }
 
-  /** 验证 Bureau 状态后签发 User Token。 */
+  /** 签发当前 Federation 用户 Token。 */
   async createToken(input: CreateUserTokenInput): Promise<UserTokenIssueResult> {
-    const bureau = await (await this.store()).bureau.get(input.bureau_id);
-    if (!bureau) throw httpError(404, `Unknown Bureau: ${input.bureau_id}`);
-    if (bureau.state !== "active") {
-      throw httpError(403, `Bureau is not active: ${input.bureau_id}`);
-    }
-
     const ttl_seconds = parse_user_token_ttl(input.ttl);
     return {
       user_token: await this.token_authority.sign(input),
-      bureau_id: input.bureau_id,
       user_id: input.user_id,
       expires_at: new Date(Date.now() + ttl_seconds * 1000).toISOString(),
     };
   }
 
-  /** 校验签名、到期、当前会话撤销和 Bureau 状态；存储不可用时拒绝。 */
+  /** 校验签名、受众、签发者、到期与当前会话撤销；存储不可用时拒绝。 */
   async verifyToken(token: string): Promise<UserTokenPayload> {
     const payload = await this.token_authority.verify(token);
     if (await this.user_token_revocations.is_revoked(payload.jti)) {
       throw httpError(401, "User token revoked");
-    }
-    if (!await this.read_active_bureau(payload.bureau_id)) {
-      throw httpError(401, "User token Bureau unavailable");
     }
     return payload;
   }
@@ -168,13 +119,6 @@ export class Authenticator {
   async revoke_user_token(token: string): Promise<void> {
     const payload = await this.token_authority.verify(token);
     await this.user_token_revocations.revoke(payload);
-  }
-
-  /** 为可信 Service 签发受众绑定的业务 Token。 */
-  create_service_token(
-    input: CreateFederationServiceTokenInput,
-  ): Promise<FederationServiceTokenIssueResult> {
-    return this.token_authority.sign_service_token(input);
   }
 
   /** 返回 Federation 当前可公开使用的 JWKS。 */
@@ -193,8 +137,4 @@ export class Authenticator {
     };
   }
 
-  private async read_active_bureau(bureau_id: string): Promise<BureauRecord | undefined> {
-    const bureau = await (await this.store()).bureau.get(bureau_id);
-    return bureau?.state === "active" ? bureau : undefined;
-  }
 }

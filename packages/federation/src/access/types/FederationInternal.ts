@@ -19,6 +19,8 @@ export interface FederationAccountOptions {
 
 /** FederationUser 内部构造参数。 */
 export interface FederationUserOptions {
+  /** 当前用户视图固定的 City 来源标签，仅用于记录，不授予权限。 */
+  city_id?: string;
   /** Federation HTTP(S) 入口。 */
   url: string;
 

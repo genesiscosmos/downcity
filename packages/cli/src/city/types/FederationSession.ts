@@ -15,10 +15,6 @@ export interface FederationUserSession {
    */
   federation_url: string;
 
-  /**
-   * 当前 user token 绑定的 Bureau ID。
-   */
-  bureau_id: string;
 
   /**
    * Federation User ID。
@@ -54,8 +50,4 @@ export interface FederationLoginInput {
    */
   federation_url: string;
 
-  /**
-   * 登录时选择的 Bureau ID。
-   */
-  bureau_id: string;
 }

@@ -3,7 +3,7 @@
  *
  * 设计边界：
  * - Federation 是 Organization 与 Membership 的唯一权威事实源；
- * - Organization 可以属于 Federation 全局，也可以限定在当前 Token Bureau；
+ * - Organization 私有资料按活动成员开放，新加入申请由 owner/admin 显式开放；
  * - 产品后端、部署路由、项目资源和产品权限不属于本 Service。
  */
 
@@ -27,7 +27,7 @@ import {
   read_organization_id,
   read_organization_name,
   read_request_id,
-  read_scope_type,
+  read_join_policy,
   require_role,
 } from "./domain/OrganizationPolicy.js";
 import { OrganizationRepository, type OrganizationTableSource } from "./infrastructure/OrganizationRepository.js";
@@ -71,9 +71,9 @@ export class OrganizationsService extends InstallableService {
     }
     this.max_organizations_per_user = options.max_organizations_per_user;
     this.instruction = [
-      "管理 Federation 全局或当前 Bureau 作用域的 Organization、Membership 与用户主动 Join Request。",
+      "管理当前用户已加入的私有 Organization、Membership 与用户主动 Join Request。",
       "Organization 只表达组织身份、成员关系和治理角色。",
-      "产品后端、部署路由、项目资源和产品权限由 Bureau、Product 与 Bureau 管理。",
+      "产品资源由对应业务 Service 管理，并按认证用户和活动成员权限授权。",
     ].join("\n");
   }
 
@@ -88,9 +88,9 @@ export class OrganizationsService extends InstallableService {
   }
 
   /** 创建 Organization 并让当前用户成为唯一 Owner。 */
-  async create(user_id: string, bureau_id: string, input: OrganizationCreateInput) {
+  async create(user_id: string, input: OrganizationCreateInput) {
     const name = read_organization_name(input.name);
-    const scope_type = read_scope_type(input.scope_type);
+    const join_policy = read_join_policy(input.join_policy);
     return await this.with_owner_slot_retry(async () => this.transaction(async (repository) => {
       const now = new Date().toISOString();
       const organization_id = new_organization_id();
@@ -98,8 +98,7 @@ export class OrganizationsService extends InstallableService {
       const organization: OrganizationRecord = {
         organization_id,
         name,
-        scope_type,
-        scope_bureau_id: scope_type === "bureau" ? bureau_id : "",
+        join_policy,
         state: "active",
         created_by: user_id,
         created_at: now,
@@ -124,10 +123,9 @@ export class OrganizationsService extends InstallableService {
     }));
   }
 
-  /** 列出当前 Token Bureau 可见且用户仍有 active Membership 的 Organization。 */
+  /** 列出用户仍有 active Membership 的 Organization。 */
   async list_my(
     user_id: string,
-    bureau_id: string,
     input: OrganizationListMyInput = {},
   ): Promise<UserOrganization[]> {
     const include_archived = read_include_archived(input.include_archived);
@@ -135,7 +133,7 @@ export class OrganizationsService extends InstallableService {
     const items: UserOrganization[] = [];
     for (const membership of memberships) {
       const organization = await this.repo().get_organization(membership.organization_id);
-      if (!organization || !this.is_visible_in_bureau(organization, bureau_id)) continue;
+      if (!organization) continue;
       if (!include_archived && organization.state === "archived") continue;
       items.push({
         ...organization,
@@ -148,9 +146,9 @@ export class OrganizationsService extends InstallableService {
   }
 
   /** 读取当前用户已加入的 Organization。 */
-  async get_organization(user_id: string, bureau_id: string, input: OrganizationIdInput) {
+  async get_organization(user_id: string, input: OrganizationIdInput) {
     const organization_id = read_organization_id(input.organization_id);
-    const organization = await this.require_visible_organization(this.repo(), organization_id, bureau_id);
+    const organization = await this.require_organization(this.repo(), organization_id);
     const membership = require_role(
       await this.repo().get_active_membership(organization_id, user_id),
       ["owner", "admin", "member"],
@@ -159,23 +157,25 @@ export class OrganizationsService extends InstallableService {
   }
 
   /** 修改 Organization 名称。 */
-  async update(user_id: string, bureau_id: string, input: OrganizationUpdateInput) {
+  async update(user_id: string, input: OrganizationUpdateInput) {
     const organization_id = read_organization_id(input.organization_id);
-    const name = read_organization_name(input.name);
+    const name = input.name === undefined ? undefined : read_organization_name(input.name);
+    const join_policy = input.join_policy === undefined ? undefined : read_join_policy(input.join_policy);
     return await this.transaction(async (repository) => {
-      const organization = await this.require_active_visible_organization(repository, organization_id, bureau_id);
+      const organization = await this.require_active_organization(repository, organization_id);
       require_role(await repository.get_active_membership(organization_id, user_id), ["owner", "admin"]);
       const updated_at = new Date().toISOString();
-      await repository.update_organization(organization_id, { name, updated_at });
-      return { ...organization, name, updated_at };
+      const changes = { ...(name === undefined ? {} : { name }), ...(join_policy === undefined ? {} : { join_policy }), updated_at };
+      await repository.update_organization(organization_id, changes);
+      return { ...organization, ...changes };
     });
   }
 
   /** 将 Organization 归档为不可恢复终态。 */
-  async archive(user_id: string, bureau_id: string, input: OrganizationIdInput) {
+  async archive(user_id: string, input: OrganizationIdInput) {
     const organization_id = read_organization_id(input.organization_id);
     return await this.transaction(async (repository) => {
-      const organization = await this.require_active_visible_organization(repository, organization_id, bureau_id);
+      const organization = await this.require_active_organization(repository, organization_id);
       require_role(await repository.get_active_membership(organization_id, user_id), ["owner"]);
       const archived_at = new Date().toISOString();
       await repository.update_organization(organization_id, {
@@ -189,9 +189,9 @@ export class OrganizationsService extends InstallableService {
   }
 
   /** 读取当前用户 Membership。 */
-  async get_membership(user_id: string, bureau_id: string, input: OrganizationIdInput) {
+  async get_membership(user_id: string, input: OrganizationIdInput) {
     const organization_id = read_organization_id(input.organization_id);
-    const organization = await this.require_visible_organization(this.repo(), organization_id, bureau_id);
+    const organization = await this.require_organization(this.repo(), organization_id);
     const membership = require_role(
       await this.repo().get_active_membership(organization_id, user_id),
       ["owner", "admin", "member"],
@@ -200,20 +200,20 @@ export class OrganizationsService extends InstallableService {
   }
 
   /** 列出 active Membership。 */
-  async list_members(user_id: string, bureau_id: string, input: OrganizationIdInput) {
+  async list_members(user_id: string, input: OrganizationIdInput) {
     const organization_id = read_organization_id(input.organization_id);
-    await this.require_active_visible_organization(this.repo(), organization_id, bureau_id);
+    await this.require_active_organization(this.repo(), organization_id);
     require_role(await this.repo().get_active_membership(organization_id, user_id), ["owner", "admin", "member"]);
     return await this.repo().list_active_memberships(organization_id);
   }
 
   /** Owner 任命或撤销 Admin。 */
-  async update_member_role(user_id: string, bureau_id: string, input: OrganizationMemberRoleInput) {
+  async update_member_role(user_id: string, input: OrganizationMemberRoleInput) {
     const organization_id = read_organization_id(input.organization_id);
     const membership_id = read_membership_id(input.membership_id);
     const role = read_assignable_role(input.role);
     return await this.transaction(async (repository) => {
-      await this.require_active_visible_organization(repository, organization_id, bureau_id);
+      await this.require_active_organization(repository, organization_id);
       require_role(await repository.get_active_membership(organization_id, user_id), ["owner"]);
       const target = await repository.get_membership(membership_id);
       if (!target || target.organization_id !== organization_id || target.state !== "active") {
@@ -227,11 +227,11 @@ export class OrganizationsService extends InstallableService {
   }
 
   /** Owner/Admin 移除允许其管理的 Membership。 */
-  async remove_member(user_id: string, bureau_id: string, input: OrganizationMemberRemoveInput) {
+  async remove_member(user_id: string, input: OrganizationMemberRemoveInput) {
     const organization_id = read_organization_id(input.organization_id);
     const membership_id = read_membership_id(input.membership_id);
     return await this.transaction(async (repository) => {
-      await this.require_active_visible_organization(repository, organization_id, bureau_id);
+      await this.require_active_organization(repository, organization_id);
       const actor = require_role(
         await repository.get_active_membership(organization_id, user_id),
         ["owner", "admin"],
@@ -249,10 +249,10 @@ export class OrganizationsService extends InstallableService {
   }
 
   /** Member/Admin 主动退出 Organization。 */
-  async leave(user_id: string, bureau_id: string, input: OrganizationIdInput) {
+  async leave(user_id: string, input: OrganizationIdInput) {
     const organization_id = read_organization_id(input.organization_id);
     return await this.transaction(async (repository) => {
-      await this.require_active_visible_organization(repository, organization_id, bureau_id);
+      await this.require_active_organization(repository, organization_id);
       const membership = require_role(
         await repository.get_active_membership(organization_id, user_id),
         ["owner", "admin", "member"],
@@ -263,11 +263,11 @@ export class OrganizationsService extends InstallableService {
   }
 
   /** 原子转移唯一 Owner 和额度槽位。 */
-  async transfer_owner(user_id: string, bureau_id: string, input: OrganizationOwnerTransferInput) {
+  async transfer_owner(user_id: string, input: OrganizationOwnerTransferInput) {
     const organization_id = read_organization_id(input.organization_id);
     const membership_id = read_membership_id(input.membership_id);
     return await this.with_owner_slot_retry(async () => this.transaction(async (repository) => {
-      await this.require_active_visible_organization(repository, organization_id, bureau_id);
+      await this.require_active_organization(repository, organization_id);
       const current_owner = require_role(
         await repository.get_active_membership(organization_id, user_id),
         ["owner"],
@@ -291,14 +291,15 @@ export class OrganizationsService extends InstallableService {
   }
 
   /** 用户主动申请加入 Organization。 */
-  async create_join_request(user_id: string, bureau_id: string, input: OrganizationIdInput) {
+  async create_join_request(user_id: string, input: OrganizationIdInput) {
     const organization_id = read_organization_id(input.organization_id);
     return await this.transaction(async (repository) => {
-      const organization = await this.require_active_visible_organization(repository, organization_id, bureau_id);
+      const organization = await this.require_active_organization(repository, organization_id);
       const membership = await repository.get_active_membership(organization_id, user_id);
       if (membership) return { state: "joined" as const, organization, membership };
       const pending = await repository.get_pending_join_request(organization_id, user_id);
       if (pending) return pending;
+      if (organization.join_policy !== "approval") throw httpError(403, "ORGANIZATION_JOIN_CLOSED");
       const request: OrganizationJoinRequestRecord = {
         request_id: new_join_request_id(),
         organization_id,
@@ -314,14 +315,14 @@ export class OrganizationsService extends InstallableService {
   }
 
   /** 用户取消自己的 pending Join Request。 */
-  async cancel_join_request(user_id: string, bureau_id: string, input: OrganizationJoinRequestIdInput) {
+  async cancel_join_request(user_id: string, input: OrganizationJoinRequestIdInput) {
     const request_id = read_request_id(input.request_id);
     return await this.transaction(async (repository) => {
       const request = await repository.get_join_request(request_id);
       if (!request || request.user_id !== user_id || request.state !== "pending") {
         throw httpError(404, "JOIN_REQUEST_NOT_FOUND");
       }
-      await this.require_visible_organization(repository, request.organization_id, bureau_id);
+      await this.require_organization(repository, request.organization_id);
       const decided_at = new Date().toISOString();
       await repository.update_join_request(request_id, {
         state: "canceled",
@@ -333,9 +334,9 @@ export class OrganizationsService extends InstallableService {
   }
 
   /** Owner/Admin 列出 pending Join Request。 */
-  async list_join_requests(user_id: string, bureau_id: string, input: OrganizationIdInput) {
+  async list_join_requests(user_id: string, input: OrganizationIdInput) {
     const organization_id = read_organization_id(input.organization_id);
-    await this.require_active_visible_organization(this.repo(), organization_id, bureau_id);
+    await this.require_active_organization(this.repo(), organization_id);
     require_role(await this.repo().get_active_membership(organization_id, user_id), ["owner", "admin"]);
     return await this.repo().list_pending_join_requests(organization_id);
   }
@@ -343,7 +344,6 @@ export class OrganizationsService extends InstallableService {
   /** Owner/Admin 批准或拒绝 Join Request。 */
   async decide_join_request(
     user_id: string,
-    bureau_id: string,
     input: OrganizationJoinRequestDecisionInput,
   ) {
     const request_id = read_request_id(input.request_id);
@@ -351,7 +351,7 @@ export class OrganizationsService extends InstallableService {
     return await this.transaction(async (repository) => {
       const request = await repository.get_join_request(request_id);
       if (!request || request.state !== "pending") throw httpError(404, "JOIN_REQUEST_NOT_FOUND");
-      await this.require_active_visible_organization(repository, request.organization_id, bureau_id);
+      await this.require_active_organization(repository, request.organization_id);
       require_role(
         await repository.get_active_membership(request.organization_id, user_id),
         ["owner", "admin"],
@@ -440,31 +440,21 @@ export class OrganizationsService extends InstallableService {
     throw new Error("OrganizationsService owner slot retry exhausted");
   }
 
-  private async require_visible_organization(
+  private async require_organization(
     repository: OrganizationRepository,
     organization_id: string,
-    bureau_id: string,
   ): Promise<OrganizationRecord> {
     const organization = await repository.require_organization(organization_id);
-    if (!this.is_visible_in_bureau(organization, bureau_id)) {
-      throw httpError(403, "ORGANIZATION_BUREAU_MISMATCH");
-    }
     return organization;
   }
 
-  private async require_active_visible_organization(
+  private async require_active_organization(
     repository: OrganizationRepository,
     organization_id: string,
-    bureau_id: string,
   ): Promise<OrganizationRecord> {
-    const organization = await this.require_visible_organization(repository, organization_id, bureau_id);
+    const organization = await this.require_organization(repository, organization_id);
     if (organization.state !== "active") throw httpError(410, "ORGANIZATION_ARCHIVED");
     return organization;
-  }
-
-  /** 判断 Organization 是否对当前 Token Bureau 可见。 */
-  private is_visible_in_bureau(organization: OrganizationRecord, bureau_id: string): boolean {
-    return organization.scope_type === "federation" || organization.scope_bureau_id === bureau_id;
   }
 
   private async transaction<TResult>(

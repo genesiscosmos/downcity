@@ -1,7 +1,7 @@
 /**
  * Credits Service 管理端调用器。
  *
- * Bureau 通过本调用器访问 `/v1/credits/*`，子资源按 cards、transactions 和
+ * 管理员通过本调用器访问 `/v1/credits/*`，子资源按 cards、transactions 和
  * history 分组，保持公开 API 的领域归属清晰。
  */
 

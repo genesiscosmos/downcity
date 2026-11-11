@@ -23,7 +23,6 @@ import type { RuntimeUser } from "./auth/types.js";
 import { build_federation_instruction } from "./federation-instruction.js";
 import { collect_federation_env_catalog } from "./federation-env-catalog.js";
 import type { FederationRequestTransport, FederationTrustedIdentity } from "./types.js";
-import type { BureauRecord, RuntimeBureauToken } from "../types/Bureau.js";
 import { AIService } from "../service/ai/ai-service.js";
 import { parse_action_input, read_request_text } from "./http/request-input.js";
 import { build_error_response as format_http_error, log_http_failure } from "./http/error-response.js";
@@ -32,10 +31,8 @@ declare module "hono" {
   interface ContextVariableMap {
     /** 服务端为本次 HTTP 请求生成的关联 ID，不能由调用方覆盖。 */
     federation_request_id: string;
-    identity?: { kind: "guest" | "user" | "bureau" | "admin" };
+    identity?: { kind: "guest" | "user" | "admin" };
     user?: RuntimeUser;
-    bureau?: BureauRecord;
-    bureau_token?: RuntimeBureauToken;
   }
 }
 
@@ -119,7 +116,6 @@ export function build_federation_router(params: {
         active: true,
         token_id: payload.jti,
         user_id: payload.user_id,
-        bureau_id: payload.bureau_id,
         expires_at: new Date(payload.exp * 1000).toISOString(),
       }, 200, no_store_headers());
     } catch (error) {
@@ -238,8 +234,14 @@ export function build_federation_router(params: {
       const handler: Handler = async (c) => {
         const request_id = c.get("federation_request_id");
         let raw_body: string | undefined;
+        let city_id: string | undefined;
         let input: Record<string, unknown>;
         try {
+          const source = c.req.raw.headers.get("x-downcity-city-id");
+          if (source !== null && !/^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/u.test(source)) {
+            throw httpError(400, "Invalid city_id source label");
+          }
+          city_id = source ?? undefined;
           if (def.method === "GET") input = search_params_to_object(new URL(c.req.raw.url).searchParams);
           else {
             raw_body = await read_request_text(c.req.raw);
@@ -258,6 +260,7 @@ export function build_federation_router(params: {
           input,
           locals: { request_id },
           request_id,
+          city_id,
           abort_signal: (c.env as FederationRouterEnv | undefined)?.abort_signal ?? c.req.raw.signal,
           request: c.req.raw,
           raw_body,
@@ -292,8 +295,6 @@ export function build_federation_router(params: {
             const identity = await authorize_request(authenticator, trusted_identity_from_env(c.env), c.req.raw, def.auth);
             ctx.identity = { kind: identity.level };
             ctx.user = identity.user;
-            ctx.bureau = identity.bureau;
-            ctx.bureau_token = identity.bureau_token;
           }
 
           for (const hook of global_service_hooks(services)) {
@@ -354,7 +355,7 @@ export function build_federation_router(params: {
  *
  * 关键说明（中文）
  * - `trusted_identity` 来自 `Federation.fetch()` 的进程内 options。
- * - 外部 HTTP 请求仍然只能通过 bearer token 进入 admin/bureau/user 身份。
+ * - 外部 HTTP 请求仍然只能通过 bearer token 进入 admin/user 身份。
  */
 async function authorize_request(
   authenticator: Authenticator,

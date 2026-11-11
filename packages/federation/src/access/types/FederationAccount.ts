@@ -51,10 +51,8 @@ export interface FederationAccountLoginStartInput extends Record<string, unknown
   /** 登录 Provider ID。 */
   provider: string;
 
-  /** 需要签发 User Token 的 Bureau ID。 */
-  bureau_id?: string;
 
-  /** 网站为 Bureau server_url 下 /api/auth/callback，CLI/Desktop 为临时 127.0.0.1 回调。 */
+  /** 网站为管理员显式配置的精确产品回调，CLI/Desktop 为临时 127.0.0.1 回调。 */
   redirect_uri?: string;
   /** 产品回调随机 state，独立于 Provider OAuth state。 */
   state?: string;

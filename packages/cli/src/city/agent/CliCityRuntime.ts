@@ -24,7 +24,7 @@ import {
   reload_cli_workspace_env,
   resolve_cli_agent_model,
 } from "@/city/runtime/AgentAssembly.js";
-import { RootLease, resolve_resource_root, ResourceCoordinator, ManagementChannel, MANAGEMENT_VERSION, get_root_identity, type ResourceService } from "@downcity/city/local";
+import { resolve_local_city_id, RootLease, resolve_resource_root, ResourceCoordinator, ManagementChannel, MANAGEMENT_VERSION, get_root_identity, type ResourceService } from "@downcity/city/local";
 import { read_city_host_state } from "@downcity/city";
 import { create_cli_resources } from "../resources/CliResources.js";
 import { create_cli_local_data, type CliLocalData } from "@/city/runtime/LocalData.js";
@@ -128,6 +128,7 @@ export class CliCityRuntime {
     const power_registrations = await power_loader.list_registrations();
     const { federation } = await new FederationSessionResolver().create_user_client();
     const city = new City({
+      city_id: resolve_local_city_id(root_path),
       storage: new LocalStorageProvider(data.root_path),
       federation,
       powers: power_registrations,

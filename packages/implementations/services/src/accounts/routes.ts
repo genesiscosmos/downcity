@@ -53,7 +53,7 @@ export function register_accounts_routes(
     handler: async (request_ctx) => {
       const result = await runtime.verify_email_account(
         ctx,
-        await request_ctx.json<{ token?: string; bureau_id?: string }>(),
+        await request_ctx.json<{ token?: string }>(),
       );
       return request_ctx.jsonResponse(result.body, result.status);
     },
@@ -77,7 +77,6 @@ export function register_accounts_routes(
       return request_ctx.jsonResponse({
         user: {
           ...request_ctx.user,
-          bureau_id: request_ctx.bureau?.bureau_id,
         },
         profile: user_id ? await runtime.read_profile(user_id) : null,
       });
@@ -90,17 +89,13 @@ export function register_accounts_routes(
     auth: ["admin"],
     handler: async (request_ctx) => {
       const body = await request_ctx.json<{
-        bureau_id?: string;
         user_id?: string;
         metadata?: Record<string, unknown>;
         ttl?: string | number;
       }>();
-      const bureau_id = typeof body.bureau_id === "string" ? body.bureau_id : "";
       const user_id = String(body.user_id ?? "").trim();
       if (!user_id) return request_ctx.jsonResponse({ error: "user_id required" }, 400);
-      await runtime.require_active_bureau(bureau_id);
       return request_ctx.jsonResponse(await ctx.createUserToken({
-        bureau_id,
         user_id,
         metadata: body.metadata,
         ttl: body.ttl ?? runtime.read_token_ttl(),

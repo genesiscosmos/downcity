@@ -1,6 +1,6 @@
 # @downcity/federation
 
-@downcity/federation 提供 Downcity Federation 服务端运行时、Federation 客户端和 Bureau 业务服务客户端。
+@downcity/federation 提供 Downcity Federation 服务端运行时、Federation 用户与管理员客户端。
 
 ## 安装
 
@@ -22,7 +22,7 @@ const providers = await federation.user.account.providers();
 
 Federation 只有两个身份子域：
 
-- federation.user：用户登录、AI、Payment、Service 和 Bureau 业务请求。
+- federation.user：用户登录、AI、Payment、Service 业务请求。
 - federation.admin：管理员 Session 和 Federation 管理。
 
 用户登录成功后，当前 Federation 实例会立即使用新 User Token：
@@ -30,7 +30,7 @@ Federation 只有两个身份子域：
 ~~~ts
 await federation.user.account.login({
   provider: "email",
-  bureau_id: "product-web",
+  client_type: "cli",
   input: {
     email: "user@example.com",
     password: "password",
@@ -48,34 +48,10 @@ await federation.admin.login({
   password: "password",
 });
 
-const bureaus = await federation.admin.bureaus.list();
+const models = await federation.admin.list_models();
 ~~~
 
-Admin Session 可以授权 Federation 签发长期 Bureau Token。Token 明文由 Federation 生成且只返回一次，数据库只保存 hash：
-
-~~~ts
-const issued = await federation.admin.bureaus.tokens.issue({
-  bureau_id: "product-web",
-  purpose: "production backend",
-});
-~~~
-
-业务服务使用独立的 Bureau 客户端消费该 Token：
-
-~~~ts
-import { Bureau } from "@downcity/federation";
-
-const bureau = new Bureau({
-  federation_url: "https://fed.example.com",
-  bureau_token: process.env.DOWNCITY_BUREAU_TOKEN!,
-});
-
-const machine = await bureau.me();
-const identity = await bureau.identify(request);
-const user = await bureau.user(request);
-~~~
-
-`Bureau` 与 `Federation` 完全解耦。Bureau Token 只能证明业务服务机器身份、读取自身注册信息和本地验证 Federation User Token，不能签发 User Token。User Token 的签发权威始终是 Federation。
+管理员与普通用户使用独立会话。来源视图通过 `federation.user.with_city("city_product")` 创建，标签仅记录日志、用量和任务，不授予权限。
 
 ## 进程内运行与 City 装配
 
@@ -91,13 +67,13 @@ const federation = new Federation({
 federation.use(new AccountsService({ local_login: true }));
 federation.use(new AIService()); // 在 ready 前注册模型渠道。
 await federation.ready();
-// 完成 Bureau 初始化和账户登录后即可通过 user 访问业务。
+// 完成账户登录后即可通过 user 访问业务。
 const city = new City({ federation });
 await city.close();
 await federation.dispose();
 ~~~
 
-`database` 与 `url` 互斥，无需额外的 mode 参数。本地请求直接进入运行时，不监听端口、不回落到网络。默认只注册 Env 与 Bureaus，账户、AI、队列和媒体存储由宿主显式装配。数据库通过 Federation 持有并释放；City 只借用，关闭 City 不会释放 Federation。
+`database` 与 `url` 互斥，无需额外的 mode 参数。本地请求直接进入运行时，不监听端口、不回落到网络。不默认注册 Service；EnvService、账户、AI、队列和媒体存储由宿主显式装配。数据库通过 Federation 持有并释放；City 只借用，关闭 City 不会释放 Federation。
 
 本地 `fetch(request, options?)` 是服务端入口，使用请求自己的身份，不继承 `user` 或 `admin` 的 Token。可信宿主初始化可通过第二参数传入 `trusted_identity`。普通用户和管理员凭证相互独立。
 
@@ -121,7 +97,7 @@ const fed = new Federation({
 });
 ~~~
 
-Federation 负责账户、Token、Admin Session、Service、BureauRecord、可信业务路由、discovery 和 JWKS。
+Federation 负责账户、Token、Admin Session、Service、discovery 和 JWKS。
 
 ## HTTP 边界与期限
 

@@ -287,8 +287,6 @@ async function read_resource(admin: FederationAdmin, resource_id: string): Promi
   if (resource_id === "models") return await admin.list_models() as unknown[];
   if (resource_id === "env") return await admin.env.list() as unknown[];
   if (resource_id === "env_catalog") return await admin.env.catalog() as unknown[];
-  if (resource_id === "bureaus") return await admin.bureaus.list() as unknown[];
-  if (resource_id === "bureau_tokens") return await admin.bureaus.tokens.list() as unknown[];
   if (resource_id === "users") return (await admin.service("accounts").get<{ items: unknown[] }>("users")).items;
   if (resource_id === "sessions") return (await admin.service("accounts").get<{ items: unknown[] }>("sessions")).items;
   if (resource_id === "usage") return (await admin.service("usage").get<{ items: unknown[] }>("events")).items;
@@ -306,18 +304,6 @@ async function run_action(admin: FederationAdmin, request: FederationWebActionRe
   }
   if (request.action === "env_remove") return await admin.env.remove(required_text(payload, "key"));
   if (request.action === "env_refresh") return await admin.env.refresh();
-  if (request.action === "bureau_create") {
-    const bureau_id = optional_text(payload, "bureau_id");
-    const input = {
-      name: required_text(payload, "name"),
-      server_url: required_text(payload, "server_url"),
-      ...(bureau_id ? { bureau_id } : {}),
-    };
-    return await admin.bureaus.create(input);
-  }
-  if (request.action === "bureau_pause") return await admin.bureaus.pause(required_text(payload, "bureau_id"));
-  if (request.action === "bureau_activate") return await admin.bureaus.activate(required_text(payload, "bureau_id"));
-  if (request.action === "bureau_archive") return await admin.bureaus.archive(required_text(payload, "bureau_id"));
   if (request.action === "service_request") {
     const service_id = required_text(payload, "service_id");
     const path = required_text(payload, "path").replace(/^\/+|\/+$/gu, "");

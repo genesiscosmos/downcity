@@ -7,9 +7,7 @@
  */
 
 import {
-  DEFAULT_BUREAU_ID,
   list_federations,
-  read_current_federation_session,
   read_persisted_downcity_cli_locale,
   read_downcity_config,
   resolve_selected_federation_url,
@@ -96,7 +94,6 @@ export function read_federation_membership_state(): FederationMembershipState {
   if (session?.user_token) {
     return {
       federation_url,
-      bureau_id: session.bureau_id,
       has_user_token: true,
       source: "federation-session",
       user_id: session.user_id,
@@ -107,7 +104,6 @@ export function read_federation_membership_state(): FederationMembershipState {
   const server = list_federations().find((item) => item.federation_url === federation_url);
   return {
     federation_url,
-    bureau_id: DEFAULT_BUREAU_ID,
     has_user_token: false,
     source: server?.source === "federation-admin"
       ? "federation-admin"
@@ -240,7 +236,7 @@ function build_city_items(params: {
       {
         id: "whoami",
         title: t({ zh: "当前账号", en: "Current account" }),
-        subtitle: params.membership.user_label || params.membership.user_id || params.membership.bureau_id,
+        subtitle: params.membership.user_label || params.membership.user_id || params.membership.federation_url,
         detail: format_membership_detail(params.membership),
       },
       {
@@ -425,7 +421,6 @@ export async function handle_city_prompt_action(
     const membership = read_federation_membership_state();
     const session = await perform_federation_user_login({
       federation_url: membership.federation_url,
-      bureau_id: read_current_federation_session()?.bureau_id ?? DEFAULT_BUREAU_ID,
     });
     if (!session) {
       return {

@@ -16,13 +16,10 @@ import type { CreateUserTokenInput, UserTokenIssueResult, RuntimeUser } from "..
 import type { InstructionDefinition } from "./instruction.js";
 import type { FederationRequestTransport } from "../federation/types.js";
 import type {
-  CreateFederationServiceTokenInput,
-  FederationServiceTokenIssueResult,
 } from "../federation/auth/types.js";
 import type { AnyPgTable } from "drizzle-orm/pg-core";
 import type { AnySQLiteTable } from "drizzle-orm/sqlite-core";
 import type { FederationQueue } from "../federation/queue.js";
-import type { BureauRecord, RuntimeBureauToken } from "../types/Bureau.js";
 
 /**
  * 框架内部安装入口。
@@ -53,10 +50,6 @@ export interface ServiceInstallContext {
   createUserToken(input: CreateUserTokenInput): Promise<UserTokenIssueResult>;
   /** 验证原始 User Token 后持久化撤销其 jti；重复撤销幂等，失败时抛错。 */
   revoke_user_token(token: string): Promise<void>;
-  /** 使用 Federation Key Ring 签发受众绑定的 Service Token。 */
-  create_service_token(
-    input: CreateFederationServiceTokenInput,
-  ): Promise<FederationServiceTokenIssueResult>;
   /**
    * 在同一数据库事务中执行多表领域命令。
    *
@@ -101,7 +94,7 @@ export interface ServiceActionRouteConfig {
    */
   body?: "json" | "raw";
   /** 允许访问的身份集合；默认要求 user，空数组表示公开访问。 */
-  auth?: Array<"user" | "bureau" | "admin">;
+  auth?: Array<"user" | "admin">;
   /**
    * 是否公开访问。
    *
@@ -125,7 +118,7 @@ export interface ServiceNativeRouteConfig {
    * - native HTTP route 不进入 action/hook 管线，但仍可声明 route 级鉴权
    */
   public?: boolean;
-  auth?: Array<"user" | "bureau" | "admin">;
+  auth?: Array<"user" | "admin">;
   handler: {
     /**
      * 原生 HTTP 请求处理器。
@@ -138,14 +131,12 @@ export interface ServiceNativeRouteConfig {
 }
 
 export interface ServiceRouteContext {
+  /** 可选 City 来源，仅作归因，不授予访问权限。 */
+  city_id?: string;
   /** 本次 HTTP 请求的服务端关联 ID；非 HTTP 调用时可能未提供。 */
   request_id?: string;
   /** 当前 user_token 解析出的用户；免登录或 admin 请求时可能为空 */
   user?: RuntimeUser;
-  /** 当前用户或机器凭证所属的 Bureau。 */
-  bureau?: BureauRecord;
-  /** bureau 身份使用的机器凭证元数据。 */
-  bureau_token?: RuntimeBureauToken;
   /** 原始 HTTP 请求 */
   request: Request;
   /** 合并 HTTP 处理截止时间与客户端取消的信号；业务上游请求应继续传递此信号。 */
@@ -171,8 +162,8 @@ function is_native_route_config(
 }
 
 function resolve_route_auth(
-  config: { auth?: Array<"user" | "bureau" | "admin">; public?: boolean },
-): Array<"user" | "bureau" | "admin"> | undefined {
+  config: { auth?: Array<"user" | "admin">; public?: boolean },
+): Array<"user" | "admin"> | undefined {
   if (config.public === true) return [];
   return config.auth;
 }
@@ -228,9 +219,8 @@ export abstract class InstallableService extends Service {
         const request = svc_ctx.request ?? new Request("http://local");
         return await config.handler({
           request_id: svc_ctx.request_id,
+          city_id: svc_ctx.city_id,
           user: svc_ctx.user,
-          bureau: svc_ctx.bureau,
-          bureau_token: svc_ctx.bureau_token,
           request,
           abort_signal: svc_ctx.abort_signal ?? request.signal,
           transport: svc_ctx.transport,
@@ -274,10 +264,6 @@ export abstract class InstallableService extends Service {
         await self._authenticator.revoke_user_token(token);
       },
 
-      async create_service_token(input) {
-        if (!self._authenticator) throw new Error("Authenticator not ready");
-        return self._authenticator.create_service_token(input);
-      },
 
       async transaction(handler) {
         return await database.transaction(async (transaction) => handler({

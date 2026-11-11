@@ -17,28 +17,23 @@ test("organizations service manages membership, governance and federation owner 
     federation.use(new OrganizationsService({ max_organizations_per_user: 1 }))
     await federation.health()
     const admin_secret = await create_test_admin_session(federation)
-    const bureau = await json_request(federation, admin_request(admin_secret, "/v1/bureaus/create", {
-      name: "Vibecape",
-      server_url: "https://vibecape.example.com",
-    }))
-    const owner_token = await issue_user_token(federation, admin_secret, bureau.bureau_id, "owner_1")
-    const member_token = await issue_user_token(federation, admin_secret, bureau.bureau_id, "member_1")
-    const other_token = await issue_user_token(federation, admin_secret, bureau.bureau_id, "other_1")
+    const owner_token = await issue_user_token(federation, admin_secret, "owner_1")
+    const member_token = await issue_user_token(federation, admin_secret, "member_1")
+    const other_token = await issue_user_token(federation, admin_secret, "other_1")
 
     const created = await json_request(federation, user_request(owner_token, "/v1/organizations/create", {
       name: "Research Team",
-      scope_type: "bureau",
+      join_policy: "approval",
     }))
     assert.match(created.organization.organization_id, /^org_[0-9A-HJKMNP-TV-Z]{26}$/)
     assert.match(created.membership.membership_id, /^mem_[0-9A-HJKMNP-TV-Z]{26}$/)
     assert.equal(created.membership.role, "owner")
-    assert.equal(created.organization.scope_type, "bureau")
-    assert.equal(created.organization.scope_bureau_id, bureau.bureau_id)
+    assert.equal(created.organization.join_policy, "approval")
     assert.equal("server_url" in created.organization, false)
 
     const quota_response = await federation.fetch(user_request(owner_token, "/v1/organizations/create", {
       name: "Second",
-      scope_type: "federation",
+      join_policy: "approval",
     }))
     assert.equal(quota_response.status, 409)
 
@@ -122,11 +117,10 @@ test("organizations service manages membership, governance and federation owner 
 
     const owner_can_create_again = await json_request(federation, user_request(member_token, "/v1/organizations/create", {
       name: "Next Organization",
-      scope_type: "federation",
+      join_policy: "approval",
     }))
     assert.equal(owner_can_create_again.membership.role, "owner")
-    assert.equal(owner_can_create_again.organization.scope_type, "federation")
-    assert.equal(owner_can_create_again.organization.scope_bureau_id, "")
+    assert.equal(owner_can_create_again.organization.join_policy, "approval")
 
     const my = await json_request(federation, user_request(member_token, "/v1/organizations/my", undefined, "GET"))
     assert.equal(my.items.length, 1)
@@ -149,20 +143,16 @@ test("concurrent organization creation cannot exceed the owner quota", async () 
     federation.use(new OrganizationsService({ max_organizations_per_user: 1 }))
     await federation.health()
     const admin_secret = await create_test_admin_session(federation)
-    const bureau = await json_request(federation, admin_request(admin_secret, "/v1/bureaus/create", {
-      name: "Concurrent Bureau",
-      server_url: "https://concurrent.example.com",
-    }))
-    const owner_token = await issue_user_token(federation, admin_secret, bureau.bureau_id, "owner_concurrent")
+    const owner_token = await issue_user_token(federation, admin_secret, "owner_concurrent")
 
     const responses = await Promise.all([
       federation.fetch(user_request(owner_token, "/v1/organizations/create", {
         name: "First",
-        scope_type: "bureau",
+        join_policy: "approval",
       })),
       federation.fetch(user_request(owner_token, "/v1/organizations/create", {
         name: "Second",
-        scope_type: "federation",
+        join_policy: "approval",
       })),
     ])
     assert.deepEqual(responses.map((response) => response.status).sort(), [200, 409])
@@ -177,63 +167,31 @@ test("concurrent organization creation cannot exceed the owner quota", async () 
   }
 })
 
-test("federation organizations cross bureau boundaries while bureau organizations stay isolated", async () => {
-  const temp_dir = await fs.mkdtemp(path.join(os.tmpdir(), "downcity-organizations-scope-"))
+test("私有组织默认关闭申请，只有 owner/admin 可开放；City 来源不能绕过成员检查", async () => {
+  const federation = new Federation({ database: createSqliteDb(":memory:") })
+  federation.use(new OrganizationsService({ max_organizations_per_user: 2 }))
   try {
-    const federation = new Federation({ database: createSqliteDb(path.join(temp_dir, "test.sqlite")) })
-    federation.use(new OrganizationsService({ max_organizations_per_user: 2 }))
-    await federation.health()
-    const admin_secret = await create_test_admin_session(federation)
-    const first_bureau = await json_request(federation, admin_request(admin_secret, "/v1/bureaus/create", {
-      name: "First Bureau",
-      server_url: "https://first.example.com",
-    }))
-    const second_bureau = await json_request(federation, admin_request(admin_secret, "/v1/bureaus/create", {
-      name: "Second Bureau",
-      server_url: "https://second.example.com",
-    }))
-    const first_token = await issue_user_token(federation, admin_secret, first_bureau.bureau_id, "shared_owner")
-    const second_token = await issue_user_token(federation, admin_secret, second_bureau.bureau_id, "shared_owner")
-
-    const global = await json_request(federation, user_request(first_token, "/v1/organizations/create", {
-      name: "Global Team",
-      scope_type: "federation",
-    }))
-    const local = await json_request(federation, user_request(first_token, "/v1/organizations/create", {
-      name: "Local Team",
-      scope_type: "bureau",
-    }))
-
-    const cross_bureau_quota = await federation.fetch(user_request(second_token, "/v1/organizations/create", {
-      name: "Second Bureau Team",
-      scope_type: "bureau",
-    }))
-    assert.equal(cross_bureau_quota.status, 409)
-
-    const global_from_second_bureau = await federation.fetch(user_request(
-      second_token,
-      `/v1/organizations/get?organization_id=${global.organization.organization_id}`,
-      undefined,
-      "GET",
-    ))
-    assert.equal(global_from_second_bureau.status, 200)
-
-    const local_from_second_bureau = await federation.fetch(user_request(
-      second_token,
-      `/v1/organizations/get?organization_id=${local.organization.organization_id}`,
-      undefined,
-      "GET",
-    ))
-    assert.equal(local_from_second_bureau.status, 403)
-
-    const second_bureau_my = await json_request(
-      federation,
-      user_request(second_token, "/v1/organizations/my", undefined, "GET"),
-    )
-    assert.deepEqual(second_bureau_my.items.map((item) => item.organization_id), [global.organization.organization_id])
-  } finally {
-    await fs.rm(temp_dir, { recursive: true, force: true })
-  }
+    await federation.ready()
+    const owner = await issue_user_token(federation, "", "owner")
+    const other = await issue_user_token(federation, "", "other")
+    const created = await json_request(federation, user_request(owner, "/v1/organizations/create", { name: "Private" }))
+    const organization_id = created.organization.organization_id
+    assert.equal(created.organization.join_policy, "closed")
+    const send = async (token, action, body, method = "POST") => {
+      const request = user_request(token, `/v1/organizations/${action}`, body, method)
+      request.headers.set("x-downcity-city-id", "city_shared")
+      return federation.fetch(request)
+    }
+    assert.equal((await send(other, "join-requests/create", { organization_id })).status, 403)
+    assert.equal((await send(other, "update", { organization_id, join_policy: "approval" })).status, 403)
+    assert.equal((await send(other, `get?organization_id=${organization_id}`, undefined, "GET")).status, 403)
+    assert.equal((await send(other, `members/list?organization_id=${organization_id}`, undefined, "GET")).status, 403)
+    await json_request(federation, user_request(owner, "/v1/organizations/update", { organization_id, join_policy: "approval" }))
+    const pending = await json_request(federation, user_request(other, "/v1/organizations/join-requests/create", { organization_id }))
+    assert.equal(pending.state, "pending")
+    await json_request(federation, user_request(owner, "/v1/organizations/update", { organization_id, join_policy: "closed" }))
+    assert.equal((await send(other, "join-requests/cancel", { request_id: pending.request_id })).status, 200)
+  } finally { await federation.dispose() }
 })
 
 function user_request(token, pathname, body, method = "POST") {
@@ -259,8 +217,8 @@ async function json_request(federation, request) {
   return body
 }
 
-async function issue_user_token(federation, secret, bureau_id, user_id) {
+async function issue_user_token(federation, secret, user_id) {
   void secret
-  const body = await (await federation.runtime.get_authenticator()).createToken({ bureau_id, user_id })
+  const body = await (await federation.runtime.get_authenticator()).createToken({ user_id })
   return body.user_token
 }

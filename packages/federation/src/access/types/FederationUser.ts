@@ -9,8 +9,6 @@ export interface FederationCurrentUserIdentity extends Record<string, unknown> {
   /** Federation 用户 ID。 */
   user_id: string;
 
-  /** User Token 绑定的 Bureau ID。 */
-  bureau_id: string;
 }
 
 /** federation.user.current 返回结果。 */

@@ -130,7 +130,7 @@ test("Federation instruction aggregates built-in and service documentation", asy
 
     assert.match(text, /# Downcity Federation Instruction/)
     assert.match(text, /## Env \(env\)/)
-    assert.match(text, /## Bureaus \(bureaus\)/)
+    assert.doesNotMatch(text, /## Bureaus \(bureaus\)/)
     assert.match(text, /## Demo InstallableService \(demo\)/)
     assert.match(text, /这是一个测试服务说明。/)
     assert.match(text, /GET \/v1\/demo\/ping \| auth: admin/)
@@ -1049,16 +1049,7 @@ test("AIService charges image jobs only after provider result succeeds", async (
     await base.health()
     const adminSession = await create_test_admin_session(base)
 
-    const city = await (await base.fetch(new Request("http://localhost/v1/bureaus/create", {
-      method: "POST",
-      headers: {
-        "content-type": "application/json",
-        authorization: `Bearer ${adminSession}`,
-      },
-      body: JSON.stringify({ name: "Demo", server_url: "https://bureau.example.com" }),
-    }))).json()
     const tokenBody = await (await base.runtime.get_authenticator()).createToken({
-      bureau_id: city.bureau_id,
       user_id: "user_1",
     })
 

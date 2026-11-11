@@ -23,7 +23,7 @@ export interface CityPowerRuntimeOptions {
   /** City 为 Power 私有数据提供的底层存储。 */
   readonly storage: StorageProvider;
   /** City 为 Power Context 提供的 Federation。 */
-  readonly federation?: Federation;
+  readonly federation?: Pick<Federation, "user">;
   /** Power Runtime 所需的 City 内部事实源访问能力。 */
   readonly runtime_access: Pick<
     CityRuntimeAccess,

@@ -66,7 +66,7 @@ flowchart LR
 - 对内支持多个 Provider、多个渠道和多个凭据。
 - 将下游协议转换为 Downcity Model Protocol，再转换为上游原生协议。
 - 支持模型映射、模型组、优先级、权重和故障转移。
-- 支持用户、Bureau、Agent、应用和 AccessKey 维度的访问控制。
+- 支持用户、组织成员角色、Agent、应用和 AccessKey 维度的访问控制。
 - 支持 RPM、TPM、并发、周期额度和费用预算。
 - 记录一次调用的执行、尝试、渠道、上游模型和实际用量。
 - 让技术用量、供应成本、客户价格和客户结算保持独立。
@@ -203,7 +203,7 @@ AccessKey 是调用方使用的下游凭据，与上游 Provider 凭据完全分
 
 AccessKey 需要能够表达：
 
-- 所属用户、Bureau、Agent 或应用。
+- 所属用户、组织成员角色、Agent 或应用。
 - 可访问的模型和模型组。
 - RPM、TPM 和并发限制。
 - 每日、每月 Token 额度。
@@ -354,7 +354,7 @@ sequenceDiagram
 
     C->>G: POST /v1/chat/completions
     G->>K: 验证下游 API Key
-    K-->>G: 用户、Bureau、权限策略
+    K-->>G: 用户、成员角色、权限策略
     G->>M: 查询公开模型
     M-->>G: PublicModel + Bindings
     G->>P: 检查模型、能力、额度、限流
@@ -713,15 +713,15 @@ flowchart TB
 4. 请求取消时按已产生的实际用量处理。
 5. 无法获得真实 Token 用量时标记为未知，不记成零消耗。
 
-## 12. 用户、Bureau、Agent 和 AccessKey 策略
+## 12. 用户、组织成员角色、Agent 和 AccessKey 策略
 
 模型可见性和用量限制应当按调用身份计算：
 
 ```mermaid
 flowchart TB
     ALL["全部 Federation 模型"] --> USER["用户身份"]
-    USER --> BUREAU["Bureau / 团队策略"]
-    BUREAU --> AGENT["Agent / 应用策略"]
+    USER --> MEMBERSHIP["组织成员策略"]
+    MEMBERSHIP --> AGENT["Agent / 应用策略"]
     AGENT --> KEY["AccessKey 策略"]
     KEY --> GROUP["模型组权限"]
     GROUP --> ALLOWLIST["模型白名单"]
@@ -975,7 +975,7 @@ flowchart TB
 - `attempt_id`。
 - `usage_id`。
 - `access_key_id`。
-- 用户、Bureau、Agent 或应用 ID。
+- 用户、组织成员角色、Agent 或应用 ID。
 - 公开模型 ID。
 - ModelBinding ID。
 - Channel ID。

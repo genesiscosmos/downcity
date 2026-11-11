@@ -2,24 +2,13 @@
 
 import type { OrganizationRole } from "./Membership.js";
 
-/** 创建 Federation 全局 Organization 的输入。 */
-export interface FederationOrganizationCreateInput extends Record<string, unknown> {
+/** 创建私有 Organization 的输入，默认关闭非成员申请。 */
+export interface OrganizationCreateInput extends Record<string, unknown> {
   /** 面向用户展示的 Organization 名称。 */
   name: string;
-  /** 明确声明 Federation 全局作用域。 */
-  scope_type: "federation";
+  /** 新申请策略；省略时关闭，由 owner/admin 显式开放后才接受新申请。 */
+  join_policy?: "closed" | "approval";
 }
-
-/** 创建当前 Bureau Organization 的输入。 */
-export interface BureauOrganizationCreateInput extends Record<string, unknown> {
-  /** 面向用户展示的 Organization 名称。 */
-  name: string;
-  /** 明确声明当前 Token Bureau 作用域。 */
-  scope_type: "bureau";
-}
-
-/** 创建 Organization 的输入。 */
-export type OrganizationCreateInput = FederationOrganizationCreateInput | BureauOrganizationCreateInput;
 
 /** 列出当前用户 Organization 的输入。 */
 export interface OrganizationListMyInput extends Record<string, unknown> {
@@ -35,8 +24,10 @@ export interface OrganizationIdInput extends Record<string, unknown> {
 
 /** 更新 Organization 名称的输入。 */
 export interface OrganizationUpdateInput extends OrganizationIdInput {
-  /** 新的展示名称。 */
-  name: string;
+  /** 新的展示名称；省略时保留。 */
+  name?: string;
+  /** owner/admin 修改的新申请策略；省略时保留。 */
+  join_policy?: "closed" | "approval";
 }
 
 /** 更新 Membership 角色的输入。 */

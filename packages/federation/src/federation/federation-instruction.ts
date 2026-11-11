@@ -38,7 +38,7 @@ export async function build_federation_instruction(services: Service[]): Promise
 
   return formatInstructionDocument({
     base: {
-      builtin_services: ["env", "bureaus"],
+      builtin_services: [],
       loaded_modules: sections.map((item) => item.id),
     },
     sections,

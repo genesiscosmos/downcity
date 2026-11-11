@@ -2,7 +2,7 @@
  * Downcity 官方 Feedback 服务实现。
  *
  * 设计边界：
- * - 用户反馈按 Bureau 产品作用域记录
+ * - 用户反馈按用户授权，City 来源仅用于记录
  * - 服务只负责落库、查询、答复与状态更新，不做通知推送
  * - official edge-worker 只需要显式注册本服务，不需要实现私有反馈逻辑
  */
@@ -55,7 +55,7 @@ export class FeedbackService extends InstallableService {
     this.instruction = [
       "允许已登录用户提交产品反馈、问题报告和建议。",
       "管理员可查询反馈、写入官方答复，并更新 open / reviewing / replied / closed 状态。",
-      "用户可查看自己在当前 Bureau 提交过的反馈和官方答复。",
+      "用户可查看自己提交过的反馈和官方答复。",
       "反馈默认只保存在 Downcity 数据库，不会自动发送到邮件、Slack 或其它外部渠道。",
     ].join("\n");
   }
@@ -68,13 +68,13 @@ export class FeedbackService extends InstallableService {
   /**
    * 创建用户反馈。
    */
-  async create(user_id: string, bureau_id: string, input: FeedbackCreateInput): Promise<FeedbackCreateResult> {
+  async create(user_id: string, city_id: string | undefined, input: FeedbackCreateInput): Promise<FeedbackCreateResult> {
     const message = readRequiredText(input.message, "message", 10_000);
     const contact = readOptionalText(input.contact, "contact", 500);
     const now = new Date().toISOString();
     const item: FeedbackMessage = {
       feedback_id: randomFeedbackId(),
-      bureau_id,
+      city_id: city_id ?? null,
       user_id: readRequiredText(user_id, "user_id", 500),
       message,
       contact,
@@ -100,20 +100,20 @@ export class FeedbackService extends InstallableService {
    * 管理员查询反馈。
    */
   async listMessages(input: FeedbackQueryInput): Promise<FeedbackMessage[]> {
-    const bureau_id = input.bureau_id;
-    if (bureau_id !== undefined && (
-      typeof bureau_id !== "string"
-      || bureau_id.length === 0
-      || bureau_id.length > 500
+    const city_id = input.city_id;
+    if (city_id !== undefined && (
+      typeof city_id !== "string"
+      || city_id.length === 0
+      || city_id.length > 500
     )) {
-      throw httpError(400, "bureau_id must contain between 1 and 500 characters");
+      throw httpError(400, "city_id must contain between 1 and 500 characters");
     }
     const user_id = normalizeOptionalFilter(input.user_id, "user_id");
     const status = normalizeOptionalFeedbackStatus(input.status);
     const limit = normalizeLimit(input.limit, 100, 500);
     const where: Partial<FeedbackMessage> = {};
 
-    if (bureau_id) where.bureau_id = bureau_id;
+    if (city_id) where.city_id = city_id;
     if (user_id) where.user_id = user_id;
     if (status) where.status = status;
 
@@ -121,14 +121,13 @@ export class FeedbackService extends InstallableService {
   }
 
   /**
-   * 查询当前用户在当前 Bureau 下提交的反馈。
+   * 查询当前用户提交的反馈，不以自报来源过滤权限。
    */
-  async listUserMessages(user_id: string, bureau_id: string, input: FeedbackQueryInput): Promise<FeedbackMessage[]> {
+  async listUserMessages(user_id: string, input: FeedbackQueryInput): Promise<FeedbackMessage[]> {
     const status = normalizeOptionalFeedbackStatus(input.status);
     const limit = normalizeLimit(input.limit, 100, 200);
     const where: Partial<FeedbackMessage> = {
       user_id: readRequiredText(user_id, "user_id", 500),
-      bureau_id,
     };
 
     if (status) where.status = status;

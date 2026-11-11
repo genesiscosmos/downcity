@@ -16,6 +16,8 @@ import type { CityPowerCollection, CityPowerHost } from "@/city/types/CityPower.
 
 /** City 的资源容器构造参数。 */
 export interface CityOptions {
+  /** 宿主提供的稳定来源 ID；持久宿主应从 root 恢复，内存 City 省略时生成临时 ID。仅用于记录。 */
+  city_id?: string;
   /** City 为 Agent 提供的底层存储；省略时使用进程内存储。 */
   storage?: StorageProvider;
 

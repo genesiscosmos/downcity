@@ -276,11 +276,9 @@ city 的 `1.1.x` / `0.2.x` 已经全部标过 deprecated，无需重复处理。
 
 另外 `plugins-docs` 这个文档集本身的目录名与路由 `/plugins-docs` 仍叫 plugin，内容讲的却是 power，`meta.json` 的 title 是 "Agent Powers Docs"。改它牵连导航、URL 与 SEO 收录，属于独立议题。
 
-### 5.1 已修复：`@downcity/bureau` 与 Workboard 组件
+### 5.1 SDK 文档与 Workboard 组件
 
-这两处原先被归入"待确认"，在核对文档与代码后已确认是真实错误并修复：
-
-**`@downcity/bureau`（4 处，已修）** —— `docs/{en,zh}/federation/organizations.mdx` 与 `organizations-api.mdx` 里写的是 `import { Federation } from "@downcity/bureau"`。`@downcity/bureau` 在 npm 上返回 Not Found，workspace 里也不存在。核对时还发现第二层错误：这些示例同时调用 `bureau.service(...)` 与 `bureau.post(...)`，而 `bureau` 变量在全文从未声明，示例根本不可能运行。已改为文档其他页面使用的 `Embassy` 入口：`embassy.user.service("organizations").action(...).invoke(...)`，以及 `embassy.user.post("/v1/projects", ...)`（`EmbassyUser.post` 要求同源相对路径，原来的绝对 URL 会被 `resolve_request_url` 拒绝）。
+组织接口示例统一使用 `@downcity/federation` 的 `Federation`，通过 `federation.user.service("organizations").action(...).invoke(...)` 调用。业务调用只发往当前 Federation。
 
 **Workboard 组件（8 处，已修）** —— `ui-sdk-docs/{en,zh}/components/` 下 `workboard-game.mdx`、`workboard-stage.mdx`、`workboard-stage-map.mdx` 文档的 7 个组件里，只有 `Workboard` 是真实导出。`@downcity/ui` 实际只导出两个 workboard 值：`Workboard` 与 `buildWorkboardGameMapConfig`；`WorkboardGameAtlas`/`GameInspector`/`GameRoom`/`PixelAgent`/`RoomField`/`Stage`/`StageMap` 全部是内部 renderer，从未在 `index.ts` 中导出（git 历史确认：只有 `DowncityWorkboard*Props` 类型被导出过，组件值从未导出）。已重写这四页：说明这些是组合式 `Workboard` 的内部层，公开面是 `Workboard` 与地图构造函数，示例只使用真实存在的导出。
 

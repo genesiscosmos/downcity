@@ -13,7 +13,7 @@
  * ```
  */
 
-import { Hook } from "./hook.js";
+import { Hook, type HookFn } from "./hook.js";
 import type { Context } from "./service.js";
 
 /** Action 的业务逻辑函数 */
@@ -66,4 +66,4 @@ export class Action {
  * 接收 Context，不返回值（返回 void 或 Promise<void>）。
  * 如需修改 context，直接在 ctx 上改（如 ctx.output）。
  */
-export type HookFn = (ctx: Context) => void | Promise<void>;
+export type { HookFn } from "./hook.js";

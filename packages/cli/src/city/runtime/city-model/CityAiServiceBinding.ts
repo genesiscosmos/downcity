@@ -8,6 +8,7 @@
  */
 
 import { Federation } from "@downcity/federation";
+import { resolve_local_city_id, resolve_resource_root } from "@downcity/city/local";
 import type { CityModelDescriptor, ModelClient } from "@downcity/type";
 import { FederationSessionResolver } from "@/city/shared/FederationSessionResolver.js";
 
@@ -67,7 +68,7 @@ export async function listCityAiServiceModelsForUser(
   const { federation_user } = await federation_session_resolver.create_user_client({
     env,
   });
-  const catalog = await federation_user.ai.catalog();
+  const catalog = await federation_user.with_city(resolve_local_city_id(resolve_resource_root())).ai.catalog();
   return catalog.all();
 }
 
@@ -138,7 +139,7 @@ export async function create_city_ai_model_client(input: {
   if (!modelId) throw new Error("modelId cannot be empty");
   const federation_user = input.federation?.mode === "local" ? input.federation.user
     : (await federation_session_resolver.create_user_client({ env: input.federation ? process.env : input.env ?? process.env }, input.federation)).federation_user;
-  const catalog = await federation_user.ai.catalog();
+  const catalog = await federation_user.with_city(resolve_local_city_id(resolve_resource_root())).ai.catalog();
   const model = catalog.get(modelId);
   if (!model || !is_city_ai_execution_model(model)) {
     throw new Error(`Agent execution model not found in Federation: ${modelId}`);

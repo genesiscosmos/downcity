@@ -20,9 +20,6 @@ import type {
 /** 默认 Federation 地址。 */
 export const DEFAULT_FEDERATION_URL = "https://base.downcity.ai";
 
-/** 默认产品身份；仅作为 CLI 的显式预配置 Bureau。 */
-export const DEFAULT_BUREAU_ID = "downcity";
-
 const DOWNCITY_CONFIG_KEY = "downcity.config";
 const FEDERATION_CONFIG_KEY = "federation.config";
 
@@ -169,7 +166,6 @@ export function list_federations(): FederationProfile[] {
       source: existing.source === "downcity-profile" ? "downcity-profile" : profile.source,
       has_admin_session: existing.has_admin_session || profile.has_admin_session,
       has_user_session: existing.has_user_session || profile.has_user_session,
-      bureau_id: existing.bureau_id || profile.bureau_id,
       user_id: existing.user_id || profile.user_id,
     });
   };
@@ -183,7 +179,6 @@ export function list_federations(): FederationProfile[] {
       source: "downcity-profile",
       has_admin_session: Boolean(read_federation_admin_session_for_url(profile.federation_url)),
       has_user_session: Boolean(session?.user_token),
-      bureau_id: session?.bureau_id,
       user_id: session?.user_id,
     });
   }
@@ -263,7 +258,6 @@ function read_federation_admin_profiles(): FederationProfile[] {
         && Date.parse(read_downcity_string(item.admin_session_expires_at)) > Date.now(),
       ),
       has_user_session: Boolean(session?.user_token),
-      bureau_id: session?.bureau_id,
       user_id: session?.user_id,
     });
   }
@@ -291,17 +285,13 @@ function normalize_downcity_config(value: DowncityConfig | null | undefined): Do
     : {};
   for (const [key, session] of Object.entries(input_sessions)) {
     const federation_url = normalize_federation_url(read_downcity_string(session?.federation_url) || key);
-    const bureau_id = session?.bureau_id;
     const user_token = read_downcity_string(session?.user_token);
     if (
       !federation_url
-      || typeof bureau_id !== "string"
-      || bureau_id.length === 0
       || !user_token
     ) continue;
     sessions[federation_url] = {
       federation_url,
-      bureau_id,
       user_id: read_downcity_string(session?.user_id) || undefined,
       user_label: read_downcity_string(session?.user_label) || undefined,
       user_token,

@@ -165,8 +165,6 @@ export {
   sqlite_organizations,
 } from "./organizations/index.js";
 export type {
-  BureauOrganizationCreateInput,
-  FederationOrganizationCreateInput,
   OrganizationCreateInput,
   OrganizationIdInput,
   OrganizationJoinRequestDecisionInput,
@@ -182,7 +180,6 @@ export type {
   OrganizationOwnerTransferInput,
   OrganizationRecord,
   OrganizationRole,
-  OrganizationScopeType,
   OrganizationsServiceOptions,
   OrganizationState,
   OrganizationUpdateInput,

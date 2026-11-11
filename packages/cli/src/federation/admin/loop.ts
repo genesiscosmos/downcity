@@ -13,7 +13,6 @@ import { create_admin_tui_runtime } from "@/federation/tui/AdminTuiRuntime.js";
 import type { admin_tui_runtime } from "@/federation/types/AdminTui.js";
 import { manageEnv } from "@/federation/admin/commands/service-env.js";
 import { manageDashboard } from "@/federation/admin/commands/dashboard.js";
-import { manage_bureaus } from "@/federation/admin/commands/bureaus.js";
 import { manageAccounts } from "@/federation/admin/commands/accounts.js";
 import { manage_credits } from "@/federation/admin/commands/credits.js";
 import { manageUsage } from "@/federation/admin/commands/usage.js";
@@ -28,7 +27,6 @@ const commands: Record<string, (a: FederationAdmin, baseUrl: string, runtime: ad
   env: manageEnv,
   instruction: manageInstruction,
   models: manageModels,
-  bureaus: manage_bureaus,
   accounts: manageAccounts,
   credits: manage_credits,
   usage: manageUsage,
@@ -108,17 +106,6 @@ export async function adminLoop(
         },
         {
           label: t({
-            zh: "产品管理",
-            en: "Products",
-          }),
-          value: "bureaus",
-          hint: t({
-            zh: "管理 Bureau 产品身份、授权域和生命周期；City 仅作为 Agent 终端连接 Bureau。",
-            en: "Manage Bureau product identities, authorization domains, and lifecycle. City is an Agent terminal that connects to a Bureau.",
-          }),
-        },
-        {
-          label: t({
             zh: "用户管理",
             en: "Users",
           }),
@@ -146,8 +133,8 @@ export async function adminLoop(
           }),
           value: "usage",
           hint: t({
-            zh: "查看 Bureau/产品维度的 service 调用事件与聚合统计。",
-            en: "View service-call events and summaries by Bureau/product.",
+            zh: "查看 City 来源维度的 service 调用事件与聚合统计。",
+            en: "View service-call events and summaries by City source.",
           }),
         },
         {

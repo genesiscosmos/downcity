@@ -7,7 +7,7 @@ function create_context(input) {
   return {
     input: { ...input }, locals: {}, db: {},
     env: (key) => key === "UPSTREAM_API_KEY" ? "secret" : undefined,
-    user: { user_id: "user_1" }, bureau: { bureau_id: "bureau_1" },
+    user: { user_id: "user_1" }, city_id: "city_1",
     request: new Request("https://federation.test/v1/ai/stream"),
   }
 }
@@ -66,7 +66,7 @@ test("AIChannel action receives a scoped input instead of Federation Context", a
   const context = create_context({ model: "image-model", prompt: "draw" })
   await model.runtime.actions.image_create(context)
 
-  assert.deepEqual(Object.keys(received_input).sort(), ["abort_signal", "bureau_id", "env", "input", "model", "user_id"])
+  assert.deepEqual(Object.keys(received_input).sort(), ["abort_signal", "city_id", "env", "input", "model", "user_id"])
   assert.equal(received_input.input, context.input)
   assert.equal(received_input.abort_signal, context.request.signal)
   assert.equal("db" in received_input, false)

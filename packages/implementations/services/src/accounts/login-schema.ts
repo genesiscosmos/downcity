@@ -9,8 +9,6 @@ export const login_flows = sqliteTable(LOGIN_FLOW_TABLE, {
   login_id: text("login_id").primaryKey(),
   /** SHA-256 of the initiating client's private claim credential. */
   secret_hash: text("secret_hash").notNull(),
-  /** Target Bureau validated against the Federation registry. */
-  bureau_id: text("bureau_id").notNull(),
   /** Configured authentication provider. */
   provider: text("provider").notNull(),
   /** web、cli 或 desktop 产品交互方式。 */

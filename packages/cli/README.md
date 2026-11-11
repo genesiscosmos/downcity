@@ -163,10 +163,4 @@ CLI City 只维护一个 daemon，并分别监听一个 HTTP 端口和一个原�
 
 Federation Admin 配置与 Federation User Session 同样保存在 `~/.downcity/downcity.db`。脚本可通过 `DOWNCITY_FEDERATION_URL` 和 `DOWNCITY_USER_TOKEN` 显式覆盖当前 Federation 用户身份。
 
-为独立产品后端登记 Bureau：
-
-```bash
-fed bureau token --id fed_x
-```
-
-Bureau Token 命令同样按本次操作选择 Federation，支持互斥的 `--id` / `--name`，也可把参数放在 `token` 父命令上，例如 `fed bureau token --id fed_x list`；省略参数、重名和非交互报错规则同上。命令打开 Bureau Token 交互式管理界面，可签发、查看和撤销 Token。签发时必须先登录 Federation Admin 并输入用途，也可以直接运行 `fed bureau token --id fed_x issue <bureau_id>`。CLI 不生成凭证；它请求 Federation 生成明文、保存 hash，并将明文返回一次。把明文写入 Bureau 业务服务的 `DOWNCITY_BUREAU_TOKEN` 环境变量。脚本中可用 `fed bureau token --id fed_x list` 查看元数据，使用 `fed bureau token --id fed_x revoke <token_id>` 撤销。Bureau Token 不能签发 User Token。
+用户通过 `city federation login [url]` 登录 Federation。用户会话负责身份和额度，City 自动携带持久的 `city_id` 来源标签。来源不参与授权，多个 City 可共用同一个 Federation。

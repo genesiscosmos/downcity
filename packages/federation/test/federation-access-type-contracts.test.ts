@@ -3,9 +3,6 @@
  */
 
 import type {
-  BureauTokenIssueResult,
-  BureauTokenSummary,
-  BureauRecord,
   Federation,
   FederationOptions,
   FederationAccountProvider,
@@ -21,29 +18,24 @@ const admin_session: Promise<FederationAdminSession> = federation.admin.login({
   admin_id: "owner",
   password: "password",
 });
-const bureaus: Promise<BureauRecord[]> = federation.admin.bureaus.list();
-const issued_token: Promise<BureauTokenIssueResult> = federation.admin.bureaus.tokens.issue({
-  bureau_id: "product-web",
-  purpose: "production backend",
-});
-const tokens: Promise<BureauTokenSummary[]> = federation.admin.bureaus.tokens.list();
-
 const invalid_options: FederationOptions = {
   url: "https://fed.example.com",
-  // @ts-expect-error bureau_id 属于登录请求，不属于 Federation 构造参数
-  bureau_id: "product-web",
+  // @ts-expect-error City 来源属于用户视图，不属于 Federation 宿主身份
+  city_id: "city_product",
 };
 
 void providers;
 void current_user;
 void admin_session;
-void bureaus;
-void issued_token;
-void tokens;
 void invalid_options;
 
 // @ts-expect-error Federation 只有 user 和 admin 两个身份子域
 void federation.bureau;
 
-// @ts-expect-error Bureau 身份与 Federation Admin 解耦
+// @ts-expect-error 管理员身份不暴露来源识别或机器授权
 void federation.admin.identify;
+
+// @ts-expect-error 管理端没有产品机器注册表
+void federation.admin.bureaus;
+const source_user = federation.user.with_city("city_product");
+void source_user;

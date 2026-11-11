@@ -101,16 +101,10 @@ test("UsageService merges applied Credits and final AI usage by local day", asyn
 
     await federation.health()
     const admin_secret = await create_test_admin_session(federation)
-    const bureau = await (await federation.fetch(admin_request(admin_secret, {
-      path: "/v1/bureaus/create",
-      body: { name: "Demo", server_url: "https://bureau.example.com" },
-    }))).json()
     const token = await (await federation.runtime.get_authenticator()).createToken({
-      bureau_id: bureau.bureau_id,
       user_id: "user_1",
     })
     const other_user_token = await (await federation.runtime.get_authenticator()).createToken({
-      bureau_id: bureau.bureau_id,
       user_id: "user_2",
     })
     await credits_service.topup({

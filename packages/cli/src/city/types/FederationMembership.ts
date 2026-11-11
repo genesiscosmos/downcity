@@ -56,13 +56,6 @@ export interface FederationProfile {
    */
   has_user_session: boolean;
 
-  /**
-   * Federation User Session 中绑定的 bureau_id。
-   *
-   * 说明（中文）
-   * - 为空表示未登录或 session 文件不可用。
-   */
-  bureau_id?: string;
 
   /**
    * Federation User Session 中的 Federation User ID。
@@ -82,10 +75,6 @@ export interface FederationMembershipState {
    */
   federation_url: string;
 
-  /**
-   * 当前 Federation User Session 使用的 bureau_id。
-   */
-  bureau_id: string;
 
   /**
    * 是否已保存 user token。

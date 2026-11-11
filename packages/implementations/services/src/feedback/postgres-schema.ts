@@ -3,8 +3,8 @@ import { pgTable, text } from "drizzle-orm/pg-core";
 export const pg_feedback_messages = pgTable("service_feedback_messages", {
   /** feedback_id 持久化字段；与同名 SQLite 字段具有相同业务含义。 */
   feedback_id: text("feedback_id").primaryKey(),
-  /** bureau_id 持久化字段；与同名 SQLite 字段具有相同业务含义。 */
-  bureau_id: text("bureau_id").notNull(),
+  /** city_id 持久化字段；与同名 SQLite 字段具有相同业务含义。 */
+  city_id: text("city_id"),
   /** user_id 持久化字段；与同名 SQLite 字段具有相同业务含义。 */
   user_id: text("user_id").notNull(),
   /** message 持久化字段；与同名 SQLite 字段具有相同业务含义。 */

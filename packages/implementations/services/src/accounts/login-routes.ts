@@ -12,17 +12,13 @@ export function register_login_routes(runtime: AccountsRuntime, ctx: ServiceInst
     handler: async (request_ctx) => {
       const body = await request_ctx.json<AccountsLoginStartRequest>();
       const provider_id = String(body.provider ?? "");
-      const bureau_id = String(body.bureau_id ?? "");
-      await runtime.require_active_bureau(bureau_id);
       const provider = runtime.login_provider(provider_id);
       if (!provider) throw httpError(400, "login provider is not enabled");
-      const server_url = body.client_type === "web" && provider.type === "oauth"
-        ? await runtime.read_bureau_server_url(bureau_id) : "";
-      const { cookie, ...proof } = await runtime.flow.start(bureau_id, provider_id, body.client_type, request_ctx.request, body, server_url);
+      const { cookie, ...proof } = await runtime.flow.start(provider_id, body.client_type, request_ctx.request, body);
       const headers = new Headers({ "cache-control": "no-store" });
       if (cookie) headers.set("set-cookie", cookie);
       if (provider_id === "local") {
-        await runtime.flow.ready(proof.login_id, "created", await runtime.local_login_token(ctx, bureau_id));
+        await runtime.flow.ready(proof.login_id, "created", await runtime.local_login_token(ctx));
         return Response.json({ ...proof, provider: provider_id, status: "done" }, { headers });
       }
       if (provider_id === "email") {
@@ -38,11 +34,10 @@ export function register_login_routes(runtime: AccountsRuntime, ctx: ServiceInst
       const body = await request_ctx.json<AccountsLoginContinueRequest>();
       const row = await runtime.flow.claim(String(body.login_id ?? ""), String(body.login_secret ?? ""), request_ctx.request);
       if (row.provider !== "email") throw httpError(400, "this provider does not accept input");
-      await runtime.require_active_bureau(row.bureau_id);
       if (!await runtime.flow.advance(row.login_id, "created", "verifying")) throw httpError(409, "login already in progress");
       const input = toRecord(body.input);
       const result = await runtime.create_email_login_token(ctx, {
-        email: input?.email, password: input?.password, bureau_id: row.bureau_id,
+        email: input?.email, password: input?.password,
       });
       if ("error" in result) {
         await runtime.flow.advance(row.login_id, "verifying", "created");
@@ -66,7 +61,6 @@ export function register_login_routes(runtime: AccountsRuntime, ctx: ServiceInst
     handler: async (request_ctx) => {
       const body = await request_ctx.json<AccountsLoginExchangeRequest>();
       const row = await runtime.flow.claim(String(body.login_id ?? ""), String(body.login_secret ?? ""), request_ctx.request);
-      await runtime.require_active_bureau(row.bureau_id);
       return Response.json(await runtime.exchange_login(row, body), { headers: { "cache-control": "no-store" } });
     },
   });

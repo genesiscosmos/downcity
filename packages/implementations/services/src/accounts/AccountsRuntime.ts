@@ -66,7 +66,7 @@ export class AccountsRuntime {
 
   constructor(private readonly options: AccountsRuntimeOptions) {
     this.store = new AccountsStore(options.database);
-    this.flow = new LoginFlow(options.database);
+    this.flow = new LoginFlow(options.database, options.service_options.trusted_web_callbacks);
   }
 
   /** 幂等准备数据库：作废旧登录状态，并确保 Provider 身份唯一索引存在。 */
@@ -156,16 +156,6 @@ export class AccountsRuntime {
     return this.options.service_options.token_ttl;
   }
 
-  /** 校验 Bureau 当前可用于登录或 Token 签发。 */
-  async require_active_bureau(bureau_id: string): Promise<void> {
-    await this.options.require_active_bureau(bureau_id);
-  }
-
-  /** 读取 Bureau 注册的可信产品 URL，供 OAuth 网站回调校验。 */
-  async read_bureau_server_url(bureau_id: string): Promise<string> {
-    return await this.options.read_bureau_server_url(bureau_id);
-  }
-
   /** Select a configured provider before allocating any login flow. */
   login_provider(provider_id: string): AccountsProviderItem | undefined {
     return this.list_visible_providers().find((provider) => provider.id === provider_id && provider.enabled);
@@ -184,7 +174,7 @@ export class AccountsRuntime {
   /** 校验 Email 密码并签发 User Token。 */
   async create_email_login_token(
     ctx: ServiceInstallContext,
-    input: { email?: unknown; password?: unknown; bureau_id?: unknown },
+    input: { email?: unknown; password?: unknown },
   ): Promise<
     { provider: "email"; user_token: string; user_id?: string; email?: string }
     | { error: string; status: number }
@@ -233,7 +223,6 @@ export class AccountsRuntime {
         });
       }
       const user_token = await ctx.createUserToken({
-        bureau_id: String(input.bureau_id ?? ""),
         user_id,
         ttl: this.options.service_options.token_ttl,
       });
@@ -249,9 +238,9 @@ export class AccountsRuntime {
   }
 
   /** Sign a local token only after the route has validated the explicit local login policy. */
-  async local_login_token(ctx: ServiceInstallContext, bureau_id: string): Promise<string> {
+  async local_login_token(ctx: ServiceInstallContext): Promise<string> {
     if (!this.is_local_login_enabled()) throw new Error("local login is disabled");
-    return (await this.create_local_login_token(ctx, bureau_id)).user_token;
+    return (await this.create_local_login_token(ctx)).user_token;
   }
 
   /** 注册 Email 账号并触发验证邮件。 */
@@ -311,7 +300,7 @@ export class AccountsRuntime {
   /** 验证邮箱所有权；验证完成后通过正常密码登录获取 User Token。 */
   async verify_email_account(
     _ctx: ServiceInstallContext,
-    input: { token?: string; bureau_id?: string },
+    input: { token?: string },
   ): Promise<AccountsRouteResult> {
     if (!this.get_enabled_email_provider()) {
       return { body: { error: "email provider not configured" }, status: 400 };
@@ -358,7 +347,6 @@ export class AccountsRuntime {
         this.get_oauth_callback_url(),
       );
       const user_id = await this.store.ensure_oauth_user(profile, request);
-      await this.require_active_bureau(entry.bureau_id);
       return await this.flow.oauth_callback(entry, user_id);
     } catch (caught) {
       return oauthErrorResponse(readErrorMessage(caught));
@@ -372,7 +360,7 @@ export class AccountsRuntime {
     if (oauth && await this.flow.begin_oauth_exchange(row, String(input.authorization_code ?? ""), String(input.code_verifier ?? ""), input.exchange_id)) {
       try {
         if (!row.user_id) throw new Error("authenticated identity missing");
-        const result = await this.create_user_token(row.bureau_id, row.user_id);
+        const result = await this.create_user_token(row.user_id);
         await this.flow.ready(row.login_id, "issuing", result.user_token);
       } catch (reason) {
         await this.flow.retry_oauth_exchange(row.login_id, input.exchange_id);
@@ -405,12 +393,10 @@ export class AccountsRuntime {
 
   /** 为 OAuth 流程签发 User Token。 */
   private async create_user_token(
-    bureau_id: string,
     user_id: string,
   ): Promise<{ user_token: string }> {
     const ctx = this.install_context;
     return await ctx.createUserToken({
-      bureau_id,
       user_id,
       ttl: this.options.service_options.token_ttl,
     });
@@ -419,10 +405,8 @@ export class AccountsRuntime {
   /** 创建 Local User Token。 */
   private async create_local_login_token(
     ctx: ServiceInstallContext,
-    bureau_id: string,
   ): Promise<{ provider: "local"; user_token: string; user_id: string }> {
     const user_token = await ctx.createUserToken({
-      bureau_id,
       user_id: LOCAL_USER_ID,
       ttl: this.options.service_options.token_ttl,
     });

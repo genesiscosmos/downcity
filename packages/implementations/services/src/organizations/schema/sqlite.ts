@@ -6,8 +6,8 @@ import { integer, sqliteTable, text } from "drizzle-orm/sqlite-core";
 export const sqlite_organizations = sqliteTable("service_organizations", {
   organization_id: text("organization_id").primaryKey(),
   name: text("name").notNull(),
-  scope_type: text("scope_type").notNull(),
-  scope_bureau_id: text("scope_bureau_id").notNull(),
+  /** 申请策略仅控制加入入口，不开放私有组织内容。 */
+  join_policy: text("join_policy").notNull(),
   state: text("state").notNull(),
   created_by: text("created_by").notNull(),
   created_at: text("created_at").notNull(),
@@ -52,14 +52,12 @@ export const sqlite_organizations_ddl = [
   `CREATE TABLE IF NOT EXISTS service_organizations (
     organization_id TEXT PRIMARY KEY,
     name TEXT NOT NULL,
-    scope_type TEXT NOT NULL CHECK (scope_type IN ('federation', 'bureau')),
-    scope_bureau_id TEXT NOT NULL,
+    join_policy TEXT NOT NULL CHECK (join_policy IN ('closed', 'approval')),
     state TEXT NOT NULL CHECK (state IN ('active', 'archived')),
     created_by TEXT NOT NULL,
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL,
-    archived_at TEXT NOT NULL,
-    CHECK ((scope_type = 'federation' AND scope_bureau_id = '') OR (scope_type = 'bureau' AND scope_bureau_id <> ''))
+    archived_at TEXT NOT NULL
   )`,
   `CREATE TABLE IF NOT EXISTS service_organization_memberships (
     membership_id TEXT PRIMARY KEY,

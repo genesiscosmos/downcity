@@ -55,7 +55,7 @@ export class Federation {
       if (this.runtime) {
         const target = new URL(url);
         if (target.origin !== new URL(this.url).origin) {
-          throw new TypeError("Local Federation cannot dispatch to an external Bureau URL");
+          throw new TypeError("Local Federation cannot dispatch to an external origin");
         }
         return this.fetch(new Request(url, init));
       }

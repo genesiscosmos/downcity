@@ -5,7 +5,7 @@ import fs from "node:fs/promises"
 import os from "node:os"
 import path from "node:path"
 import test from "node:test"
-import { Bureau, Federation } from "@downcity/federation"
+import { EnvService, Federation } from "@downcity/federation"
 import { createSqliteDb } from "./sqlite-db.mjs"
 import { create_test_admin_session } from "../admin-fixture.mjs"
 import {
@@ -24,10 +24,6 @@ test("accountsService registers users, logs in, and issues Federation tokens", a
     process.chdir(tempDir)
     const { base, adminSecret, verification_emails } = await setupBase(tempDir)
 
-    const city = await (await base.fetch(adminRequest(adminSecret, {
-      path: "/v1/bureaus/create",
-      body: { name: "Demo", server_url: "https://bureau.example.com" },
-    }))).json()
 
     const registerResponse = await base.fetch(jsonRequest("/v1/accounts/register", {
       email: "USER@example.com",
@@ -42,7 +38,7 @@ test("accountsService registers users, logs in, and issues Federation tokens", a
     assert.equal(verification_emails.length, 1)
     const verification_url = new URL(verification_emails[0].text.replace(/^Verification: /, ""))
     const unverified_start = await (await base.fetch(jsonRequest("/v1/accounts/login/start", {
-      provider: "email", client_type: "cli", bureau_id: city.bureau_id,
+      provider: "email", client_type: "cli",
     }))).json()
     const unverified_login = await base.fetch(jsonRequest("/v1/accounts/login/continue", {
       login_id: unverified_start.login_id,
@@ -62,7 +58,6 @@ test("accountsService registers users, logs in, and issues Federation tokens", a
     const authStartResponse = await base.fetch(jsonRequest("/v1/accounts/login/start", {
       provider: "email",
       client_type: "cli",
-      bureau_id: city.bureau_id,
     }))
     assert.equal(authStartResponse.status, 200)
     const authStarted = await authStartResponse.json()
@@ -96,7 +91,7 @@ test("accountsService registers users, logs in, and issues Federation tokens", a
     assert.equal(meResponse.status, 200)
     const me = await meResponse.json()
     assert.equal(me.user.user_id, registered.user_id)
-    assert.equal(me.user.bureau_id, city.bureau_id)
+    assert.equal("bureau_id" in me.user, false)
     const logout = await base.fetch(new Request("http://localhost/v1/accounts/logout", {
       method: "POST", headers: { authorization: `Bearer ${authResult.user_token}` }, body: "{}",
     }))
@@ -105,70 +100,6 @@ test("accountsService registers users, logs in, and issues Federation tokens", a
       headers: { authorization: `Bearer ${authResult.user_token}` },
     }))
     assert.equal(revoked.status, 401)
-  } finally {
-    process.chdir(cwd)
-    await fs.rm(tempDir, { recursive: true, force: true })
-  }
-})
-
-test("City 直读 Profile，Bureau 本地验签后按需读取同一 Federation Profile", async () => {
-  const cwd = process.cwd()
-  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "downcity-accounts-bureau-"))
-
-  try {
-    process.chdir(tempDir)
-    const { base, adminSecret } = await setupBase(tempDir)
-    const admin = create_admin(base, adminSecret)
-    const bureau_a_record = await admin.bureaus.create({ name: "Product A", server_url: "https://bureau-a.example.com" })
-    const bureau_b_record = await admin.bureaus.create({ name: "Product B", server_url: "https://bureau-b.example.com" })
-    const token_a = await register_bureau(admin, bureau_a_record.bureau_id)
-    const token_b = await register_bureau(admin, bureau_b_record.bureau_id)
-
-    const registered = await (await base.fetch(jsonRequest("/v1/accounts/register", {
-      email: "bureau@example.com",
-      password: "password123",
-    }))).json()
-    const user_token = await admin.service("accounts").action("tokens/issue").invoke({
-      bureau_id: bureau_a_record.bureau_id,
-      user_id: registered.user_id,
-      ttl: "1h",
-    })
-
-    const bureau_issue_response = await base.fetch(new Request("http://localhost/v1/accounts/tokens/issue", {
-      method: "POST",
-      headers: {
-        authorization: `Bearer ${token_a.bureau_token}`,
-        "content-type": "application/json",
-      },
-      body: JSON.stringify({
-        bureau_id: bureau_a_record.bureau_id,
-        user_id: registered.user_id,
-        ttl: "1h",
-      }),
-    }))
-    assert.equal(bureau_issue_response.status, 403)
-
-    const federation = create_federation(base, { user_token: user_token.user_token })
-    const current_user = await federation.user.current()
-    const federation_profile = current_user.profile
-    assert.equal(current_user.user.user_id, registered.user_id)
-
-    const bureau_a = create_bureau(base, token_a.bureau_token)
-    const bureau_user = await bureau_a.user(user_request(user_token.user_token))
-    assert.equal(bureau_user.identity.user_id, registered.user_id)
-    assert.equal(bureau_user.identity.bureau_id, bureau_a_record.bureau_id)
-    const bureau_profile = await bureau_user.profile()
-    assert.deepEqual(bureau_profile, federation_profile)
-
-    const bureau_b = create_bureau(base, token_b.bureau_token)
-    await assert.rejects(
-      bureau_b.identify(user_request(user_token.user_token)),
-      (error) => error?.statusCode === 401,
-    )
-    await assert.rejects(
-      bureau_a.identify(user_request(`${user_token.user_token}invalid`)),
-      (error) => error?.statusCode === 401,
-    )
   } finally {
     process.chdir(cwd)
     await fs.rm(tempDir, { recursive: true, force: true })
@@ -244,10 +175,6 @@ test("accountsService exposes local login when enabled", async () => {
     process.chdir(tempDir)
     const { base, adminSecret } = await setupBase(tempDir, {}, { local_login: true })
 
-    const city = await (await base.fetch(adminRequest(adminSecret, {
-      path: "/v1/bureaus/create",
-      body: { name: "Local Demo", server_url: "https://bureau.example.com" },
-    }))).json()
 
     const localProvidersResponse = await base.fetch(new Request("http://localhost/v1/accounts/providers"))
     assert.equal(localProvidersResponse.status, 200)
@@ -267,7 +194,6 @@ test("accountsService exposes local login when enabled", async () => {
     const authStartResponse = await base.fetch(jsonRequest("/v1/accounts/login/start", {
       provider: "local",
       client_type: "cli",
-      bureau_id: city.bureau_id,
     }))
     assert.equal(authStartResponse.status, 200)
     const authStarted = await authStartResponse.json()
@@ -324,14 +250,11 @@ test("accountsService does not expose email login without an email provider", as
     process.chdir(tempDir)
     const db = createSqliteDb(path.join(tempDir, "test.sqlite"))
     const base = new Federation({ database: db })
+  base.use(new EnvService())
     base.use(new AccountsService({ token_ttl: "7d" }))
     await base.health()
 
     const admin_secret = await create_test_admin_session(base)
-    const bureau = await (await base.fetch(adminRequest(admin_secret, {
-      path: "/v1/bureaus/create",
-      body: { name: "Demo", server_url: "https://bureau.example.com" },
-    }))).json()
 
     const providersResponse = await base.fetch(new Request("http://localhost/v1/accounts/providers"))
     assert.equal(providersResponse.status, 200)
@@ -340,7 +263,6 @@ test("accountsService does not expose email login without an email provider", as
     const loginResponse = await base.fetch(jsonRequest("/v1/accounts/login/start", {
       provider: "email",
       client_type: "cli",
-      bureau_id: bureau.bureau_id,
     }))
     assert.equal(loginResponse.status, 400)
     const login_error = await loginResponse.json()
@@ -364,28 +286,23 @@ for (const client_type of ["desktop", "cli", "web"]) test(`accountsService deliv
       GOOGLE_CLIENT_SECRET: "google_client_secret",
     })
 
-    const city = await (await base.fetch(adminRequest(adminSecret, {
-      path: "/v1/bureaus/create",
-      body: { name: "Demo", server_url: "https://bureau.example.com" },
-    }))).json()
 
     const code_verifier = randomBytes(32).toString("base64url")
     const callback_state = randomBytes(32).toString("base64url")
-    const redirect_uri = client_type === "web" ? "https://bureau.example.com/api/auth/callback" : "http://127.0.0.1:43123/oauth/callback/test"
+    const redirect_uri = client_type === "web" ? "https://product.example.com/api/auth/callback" : "http://127.0.0.1:43123/oauth/callback/test"
     const callback_input = { redirect_uri, state: callback_state,
       code_challenge: createHash("sha256").update(code_verifier).digest("base64url"), code_challenge_method: "S256" }
-    for (const invalid_uri of ["https://attacker.example/api/auth/callback", "https://bureau.example.com/wrong", "http://localhost:43123/oauth/callback/test", `${redirect_uri}?extra=1`, `${redirect_uri}#fragment`]) {
+    for (const invalid_uri of ["https://attacker.example/api/auth/callback", "https://product.example.com/wrong", "http://localhost:43123/oauth/callback/test", `${redirect_uri}?extra=1`, `${redirect_uri}#fragment`]) {
       assert.equal((await base.fetch(jsonRequest("/v1/accounts/login/start", {
-        provider: "google", client_type, bureau_id: city.bureau_id, ...callback_input, redirect_uri: invalid_uri,
+        provider: "google", client_type, ...callback_input, redirect_uri: invalid_uri,
       }))).status, 400)
     }
     assert.equal((await base.fetch(jsonRequest("/v1/accounts/login/start", {
-      provider: "google", client_type: "device", bureau_id: city.bureau_id, ...callback_input,
+      provider: "google", client_type: "device", ...callback_input,
     }))).status, 400)
     const startResponse = await base.fetch(jsonRequest("/v1/accounts/login/start", {
       provider: "google",
       client_type,
-      bureau_id: city.bureau_id,
       ...callback_input,
     }))
     assert.equal(startResponse.status, 200)
@@ -482,16 +399,12 @@ test("accountsService automatically returns WeChat OAuth to CLI and requires cal
       WECHAT_CLIENT_SECRET: "wechat_client_secret",
     })
 
-    const city = await (await base.fetch(adminRequest(adminSecret, {
-      path: "/v1/bureaus/create",
-      body: { name: "Demo", server_url: "https://bureau.example.com" },
-    }))).json()
 
     const code_verifier = randomBytes(32).toString("base64url")
     const state = randomBytes(32).toString("base64url")
     const redirect_uri = "http://127.0.0.1:43123/oauth/callback/wechat"
     const startResponse = await base.fetch(jsonRequest("/v1/accounts/login/start", {
-      provider: "wechat", client_type: "cli", bureau_id: city.bureau_id,
+      provider: "wechat", client_type: "cli",
       redirect_uri, state, code_challenge: createHash("sha256").update(code_verifier).digest("base64url"), code_challenge_method: "S256",
     }))
     assert.equal(startResponse.status, 200)
@@ -611,8 +524,10 @@ async function setupBase(tempDir, env = {}, accountsOptions = {}) {
   const verification_emails = []
   const db = createSqliteDb(path.join(tempDir, "test.sqlite"))
   const base = new Federation({ database: db })
+  base.use(new EnvService())
   base.use(new AccountsService({
     token_ttl: "7d",
+    trusted_web_callbacks: ["https://product.example.com/api/auth/callback"],
     ...accountsOptions,
     providers: [
       emailAccountsProvider({
@@ -653,21 +568,10 @@ function user_request(user_token) {
   })
 }
 
-function create_bureau(base, bureau_token) {
-  return new Bureau({
-    federation_url: "http://localhost",
-    bureau_token,
-    fetch: (input, init) => base.fetch(new Request(input, init)),
-  })
-}
-
 function create_admin(base, admin_secret_key) {
   return create_federation(base, { admin_token: admin_secret_key }).admin
 }
 
-async function register_bureau(admin, bureau_id) {
-  return await admin.bureaus.tokens.issue({ bureau_id, purpose: "accounts auth test" })
-}
 
 function create_federation(base, credentials = {}) {
   return new Federation({

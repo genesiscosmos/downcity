@@ -4,7 +4,7 @@
  * downfed CLI 根命令装配模块。
  *
  * 关键点（中文）
- * - `downfed` 是 Federation 管理器，负责部署、Bureau 身份、机器凭证与服务资源。
+ * - `downfed` 是 Federation 管理器，负责部署与服务资源。
  * - 默认无参数时打开交互式 Federation 管理界面。
  * - 本模块承载 Federation commander 根命令，`src/index.ts` 只负责按命令名分发。
  */
@@ -29,12 +29,6 @@ import { run_federation_clean, type FederationCleanOptions } from "@/federation/
 import { open_federation_server_workspace } from "@/federation/server/FederationServerWorkspace.js";
 import { CliError } from "@/shared/CliError.js";
 import { helpText, langOptionText, resolveCliLocale, setCliLocale, t } from "@/shared/CliLocale.js";
-import {
-  issue_federation_bureau_token,
-  list_federation_bureaus,
-  revoke_federation_bureau,
-} from "@/federation/bureau/commands/bureau.js";
-import { run_interactive_bureau_token_manager } from "@/federation/bureau/InteractiveBureauTokenManager.js";
 import { run_federation_web } from "@/federation/web/FederationWebCommand.js";
 import type { FederationWebOptions } from "@/federation/types/FederationWeb.js";
 import type { FederationQueryCommandOptions } from "@/federation/types/FederationQuery.js";
@@ -61,8 +55,8 @@ export async function runDownfedCli(): Promise<void> {
   program
     .name("downfed")
     .description(t({
-      zh: "Downcity Federation CLI — 管理 Federation、Bureau 身份与服务资源",
-      en: "Downcity Federation CLI — manage Federation, Bureau identities, and service resources",
+      zh: "Downcity Federation CLI — 管理 Federation 与服务资源",
+      en: "Downcity Federation CLI — manage Federation and service resources",
     }))
     .version(packageJson.version, "-v, --version");
 
@@ -116,7 +110,6 @@ export async function runDownfedCli(): Promise<void> {
       await manage_federation_server(command.optsWithGlobals<FederationTargetOptions>());
     }));
 
-  register_bureau_commands(program);
 
   program
     .command("web")
@@ -325,55 +318,6 @@ function register_instance_commands(program: Command): void {
   }
 }
 
-/** 注册 Federation Bureau 注册表命令。 */
-function register_bureau_commands(program: Command): void {
-  const bureau_program = program
-    .command("bureau")
-    .description(t({
-      zh: "管理本次指定 Federation 的 Bureau 注册表",
-      en: "manage Bureau registrations for this operation's Federation",
-    }))
-    .helpOption("--help", helpText());
-
-  const token_program = bureau_program
-    .command("token")
-    .description(t({
-      zh: "交互式管理 Bureau Token",
-      en: "interactively manage Bureau tokens",
-    }))
-    .option("--id <id>", "Federation ID (exact match)")
-    .option("--name <name>", "Federation name (exact match)")
-    .helpOption("--help", helpText())
-    .action(createVersionBanner(packageJson.version, async (options: FederationTargetOptions) => {
-      await run_interactive_bureau_token_manager(options);
-    }));
-
-  token_program
-    .command("issue <bureau_id>")
-    .description(t({ zh: "签发 Bureau Token", en: "issue a Bureau token" }))
-    .helpOption("--help", helpText())
-    .action(createVersionBanner(packageJson.version, async (bureau_id: string, _options: unknown, command: Command) => {
-      await issue_federation_bureau_token(bureau_id, command.optsWithGlobals<FederationTargetOptions>());
-    }));
-
-  token_program
-    .command("list")
-    .description(t({ zh: "列出 Bureau 注册记录", en: "list Bureau registrations" }))
-    .helpOption("--help", helpText())
-    .action(createVersionBanner(packageJson.version, async (_options: unknown, command: Command) => {
-      await list_federation_bureaus(command.optsWithGlobals<FederationTargetOptions>());
-    }));
-
-  token_program
-    .command("revoke <token_id>")
-    .description(t({ zh: "撤销 Bureau Token", en: "revoke a Bureau token" }))
-    .helpOption("--help", helpText())
-    .action(createVersionBanner(packageJson.version, async (token_id: string, _options: unknown, command: Command) => {
-      await revoke_federation_bureau(token_id, command.optsWithGlobals<FederationTargetOptions>());
-    }));
-}
-
-/** 打开本次显式指定或交互选择的 Federation 管理工作区。 */
 async function manage_federation_server(options: FederationTargetOptions = {}): Promise<void> {
   const server = await resolve_federation_target(options);
   if (!server) return;

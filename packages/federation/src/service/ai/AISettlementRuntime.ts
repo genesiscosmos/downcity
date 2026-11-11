@@ -6,7 +6,7 @@
  * 模型执行检查点调用这些能力。
  */
 
-import { is_bureau_id } from "../../federation/identity/bureau-id.js";
+import { normalize_city_source } from "../../access/city-source.js";
 import type { Context } from "../service.js";
 import type { ServiceDatabaseContext } from "../../types/database/Database.js";
 import type { AIBillInput, AICharge, AIModelDefinition } from "../../types/AI.js";
@@ -130,7 +130,7 @@ export class AISettlementRuntime {
       ...(model.pricing ? { pricing: model.pricing } : {}),
       ...(ctx.metering ? { metering: ctx.metering } : {}),
       ...(ctx.user?.user_id ? { user_id: ctx.user.user_id } : {}),
-      ...(ctx.bureau?.bureau_id ? { bureau_id: ctx.bureau.bureau_id } : {}),
+      ...(ctx.city_id ? { city_id: ctx.city_id } : {}),
     };
   }
 
@@ -282,8 +282,8 @@ export class AISettlementRuntime {
     return {
       usage_id,
       user_id: ctx.user?.user_id ?? readOptionalString(ctx.locals.ai_usage_user_id) ?? null,
-      bureau_id: ctx.bureau?.bureau_id
-        ?? (is_bureau_id(ctx.locals.ai_usage_bureau_id) ? ctx.locals.ai_usage_bureau_id : null),
+      city_id: ctx.city_id
+        ?? (typeof ctx.locals.ai_usage_city_id === "string" ? normalize_city_source(ctx.locals.ai_usage_city_id) : null) ?? null,
       action_id: ctx.action?.id ?? "",
       model_id: metering?.model_id ?? ctx.variant?.id ?? "",
       channel_id: metering?.channel_id ?? ctx.variant?.channel_id ?? null,

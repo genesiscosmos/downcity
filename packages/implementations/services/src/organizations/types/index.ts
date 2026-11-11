@@ -2,7 +2,6 @@
 
 export type {
   OrganizationRecord,
-  OrganizationScopeType,
   OrganizationState,
   UserOrganization,
 } from "./Organization.js";
@@ -14,8 +13,6 @@ export type {
 } from "./Membership.js";
 export type { OrganizationJoinRequestRecord, OrganizationJoinRequestState } from "./JoinRequest.js";
 export type {
-  BureauOrganizationCreateInput,
-  FederationOrganizationCreateInput,
   OrganizationCreateInput,
   OrganizationIdInput,
   OrganizationJoinRequestDecisionInput,

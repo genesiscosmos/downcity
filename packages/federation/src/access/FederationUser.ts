@@ -1,8 +1,8 @@
 /**
  * Federation 用户身份子域。
  *
- * 用户全局 Service 与 Bureau 业务路由共用当前 User Token，但分别发送到
- * Federation origin 和 Federation 发布的可信 Bureau origin。
+ * 用户业务统一通过当前 Federation 的 Service 调用。
+ * 每个 City 可借用不可变来源视图，共享用户凭据但不共享可变来源状态。
  */
 
 import { UserPactAccess } from "../pact/user/index.js";
@@ -10,11 +10,9 @@ import type { ServiceClient } from "../pact/invoker/invoker.js";
 import type { UserServiceSummary } from "../pact/user/types.js";
 import {
   defaultFetch,
-  requestJSON,
   type FetchLike,
-  type RequestInitLike,
 } from "../pact/http.js";
-import type { BureauRecord } from "../types/Bureau.js";
+import { normalize_city_source } from "./city-source.js";
 import { FederationAccount } from "./FederationAccount.js";
 import { FederationRelay } from "./FederationRelay.js";
 import type { FederationAccountLoginOptions, FederationAccountLoginResult } from "./types/FederationAccount.js";
@@ -28,18 +26,22 @@ export class FederationUser {
 
   private readonly url: string;
   private readonly fetcher: FetchLike;
-  private user_token?: string;
-  private user_access: UserPactAccess;
-  private bureau_promise?: Promise<BureauRecord>;
+  private readonly city_id?: string;
+  private credentials: {
+    /** 仅保存用户认证凭据；来源视图共享此凭据事实源。 */
+    user_token?: string;
+  };
+  /** 每次访问创建凭据快照，已经创建的请求不受后续账户切换影响。 */
+  private get user_access(): UserPactAccess { return this.create_user_access(); }
 
   constructor(options: FederationUserOptions) {
     this.url = normalize_http_url(options.url, "url");
-    this.user_token = read_optional_string(options.user_token);
+    this.credentials = { user_token: read_optional_string(options.user_token) };
     this.fetcher = options.fetch ?? defaultFetch();
-    this.user_access = this.create_user_access();
+    this.city_id = normalize_city_source(options.city_id);
     this.account = new FederationAccount({
       accounts: () => this.service("accounts"),
-      read_user_token: () => this.user_token,
+      read_user_token: () => this.credentials.user_token,
       update_user_token: (user_token) => this.set_token(user_token),
     });
   }
@@ -78,7 +80,7 @@ export class FederationUser {
   async current(): Promise<FederationCurrentUser> {
     this.require_user_token();
     const result = await this.service("accounts").get<Partial<FederationCurrentUser>>("me");
-    if (!result.user?.user_id || !result.user.bureau_id) {
+    if (!result.user?.user_id) {
       throw new TypeError("Federation returned an invalid current user");
     }
     return {
@@ -87,94 +89,42 @@ export class FederationUser {
     };
   }
 
-  /** 向当前 Bureau 的可信业务入口发送 JSON GET 请求。 */
-  get<T = unknown>(path: string): Promise<T> {
-    return this.request_bureau_json<T>(path, { method: "GET" });
-  }
-
-  /** 向当前 Bureau 的可信业务入口发送 JSON POST 请求。 */
-  post<T = unknown>(path: string, body: unknown = {}): Promise<T> {
-    return this.request_bureau_json<T>(path, {
-      method: "POST",
-      body: JSON.stringify(body),
+  /** 借用当前用户的 City 来源视图；不注册 City、不增加权限，也不改变其他视图。 */
+  with_city(city_id: string): FederationUser {
+    const source = normalize_city_source(city_id)!;
+    const scoped = new FederationUser({
+      url: this.url,
+      fetch: this.fetcher,
+      city_id: source,
     });
+    scoped.credentials = this.credentials;
+    return scoped;
   }
 
-  /** 释放当前实例保存的用户身份与 Bureau 缓存。 */
+  /** 释放当前实例及其来源视图共享的用户身份。 */
   clear_credentials(): void { this.set_token(undefined); }
 
   /** 更新后续请求使用的 Token，已创建的请求保留原身份快照。 */
   set_token(user_token: string | undefined): void {
-    this.user_token = read_optional_string(user_token);
-    this.user_access = this.create_user_access();
-    this.bureau_promise = undefined;
+    this.credentials.user_token = read_optional_string(user_token);
   }
 
   private create_user_access(): UserPactAccess {
     return new UserPactAccess({
       base_url: this.url,
-      user_token: this.user_token,
-      fetch: this.fetcher,
-    });
-  }
-
-  private async request_bureau_json<T>(
-    path: string,
-    init: RequestInitLike,
-  ): Promise<T> {
-    const bureau = await this.resolve_bureau();
-    const user_token = this.require_user_token();
-    return await requestJSON<T>({
-      fetch: this.fetcher,
-      url: resolve_request_url(path, bureau.server.server_url),
-      init: {
+      user_token: this.credentials.user_token,
+      fetch: this.city_id ? (url, init) => this.fetcher(url, {
         ...init,
-        headers: {
-          accept: "application/json",
-          "content-type": "application/json",
-          authorization: "Bearer " + user_token,
-        },
-      },
+        headers: { ...init.headers, "x-downcity-city-id": this.city_id! },
+      }) : this.fetcher,
     });
-  }
-
-  private async resolve_bureau(): Promise<BureauRecord> {
-    if (!this.bureau_promise) {
-      this.bureau_promise = this.read_current_bureau().catch((error) => {
-        this.bureau_promise = undefined;
-        throw error;
-      });
-    }
-    return await this.bureau_promise;
-  }
-
-  private async read_current_bureau(): Promise<BureauRecord> {
-    const user_token = this.require_user_token();
-    const body = await requestJSON<{ bureau?: BureauRecord }>({
-      fetch: this.fetcher,
-      url: this.url + "/v1/bureaus/current",
-      init: {
-        method: "GET",
-        headers: {
-          accept: "application/json",
-          authorization: "Bearer " + user_token,
-        },
-      },
-    });
-    const bureau = body.bureau;
-    if (!bureau?.bureau_id || !bureau.server?.server_url
-      || bureau.server.bureau_id !== bureau.bureau_id
-      || bureau.state !== "active") {
-      throw new TypeError("Federation returned an invalid current Bureau");
-    }
-    return bureau;
   }
 
   private require_user_token(): string {
-    if (!this.user_token) {
+    if (!this.credentials.user_token) {
       throw new TypeError("user_token is required for this operation");
     }
-    return this.user_token;
+    return this.credentials.user_token;
   }
 }
 
@@ -197,15 +147,4 @@ function read_optional_string(value: string | undefined): string | undefined {
   if (value === undefined) return undefined;
   const normalized = value.trim();
   return normalized || undefined;
-}
-
-function resolve_request_url(value: string, base_url: string): string {
-  const input = String(value ?? "").trim();
-  if (!input) throw new TypeError("url is required");
-  const base = new URL(base_url.replace(/\/+$/u, "") + "/");
-  const resolved = new URL(input, base);
-  if (resolved.origin !== base.origin) {
-    throw new TypeError("url must use the current Bureau server origin");
-  }
-  return resolved.toString();
 }

@@ -8,7 +8,6 @@ import type { Database } from "../database/Database.js";
 import type { FederationHttpPolicy } from "../types/FederationHttp.js";
 import type { FederationStorage } from "./storage.js";
 import type { RuntimeUser } from "./auth/types.js";
-import type { BureauRecord, RuntimeBureauToken } from "../types/Bureau.js";
 
 /**
  * Federation 进程内可信身份。
@@ -27,16 +26,6 @@ export type FederationTrustedIdentity =
       level: "user";
       /** 当前用户信息，会注入到 `ctx.user`。 */
       user: RuntimeUser;
-      /** 当前用户所属 Bureau。 */
-      bureau: BureauRecord;
-    }
-  | {
-      /** 以可信 Bureau 机器身份访问当前 Federation。 */
-      level: "bureau";
-      /** 当前机器身份所属 Bureau。 */
-      bureau: BureauRecord;
-      /** 当前机器凭证元数据。 */
-      bureau_token: RuntimeBureauToken;
     };
 
 /**

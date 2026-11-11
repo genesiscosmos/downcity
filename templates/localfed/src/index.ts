@@ -8,7 +8,7 @@
  */
 
 import { serve } from "@hono/node-server";
-import { AIService, Federation } from "@downcity/federation";
+import { AIService, EnvService, Federation } from "@downcity/federation";
 import { Database } from "@downcity/database-sqlite";
 import { AccountsService } from "@downcity/services";
 import { DeepSeekChannel } from "./deepseek_channel.js";
@@ -29,6 +29,7 @@ const federation = new Federation({
   database: new Database({ filename: database_path }),
 });
 
+federation.use(new EnvService());
 federation.use(new AccountsService({ local_login }));
 
 const deepseek = new DeepSeekChannel();

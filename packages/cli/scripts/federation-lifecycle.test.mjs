@@ -79,7 +79,7 @@ async function assert_release_health(server) {
   });
 }
 
-test("City 登录只公开 Bureau ID 参数", () => {
+test("City 登录无需来源或产品注册参数", () => {
   const cli_path = fileURLToPath(new URL("../bin/downcity.js", import.meta.url));
   const platform_root = create_temp_dir("downcity-city-login-help-");
   try {
@@ -88,41 +88,17 @@ test("City 登录只公开 Bureau ID 参数", () => {
       [cli_path, "--lang", "en", "federation", "login", "--help"],
       { encoding: "utf8", env: { ...process.env, DC_PLATFORM_ROOT: platform_root } },
     );
-    assert.match(output, /--bureau-id <bureau_id>/u);
+    assert.doesNotMatch(output, /--bureau-id/u);
     assert.doesNotMatch(output, /--city-id/u);
   } finally {
     fs.rmSync(platform_root, { recursive: true, force: true });
   }
 });
 
-test("Bureau Token 使用独立管理命令树", () => {
+test("Federation 管理命令不提供机器注册或凭据入口", () => {
   const cli_path = fileURLToPath(new URL("../bin/downfed.js", import.meta.url));
-  const platform_root = create_temp_dir("downcity-bureau-command-");
-  const options = {
-    encoding: "utf8",
-    env: { ...process.env, DC_PLATFORM_ROOT: platform_root },
-  };
-  try {
-    const token_help = execFileSync(
-      process.execPath,
-      [cli_path, "--lang", "en", "bureau", "token", "--help"],
-      options,
-    );
-    assert.match(token_help, /interactively manage Bureau tokens/u);
-    assert.match(token_help, /issue/u);
-    assert.match(token_help, /list/u);
-    assert.match(token_help, /revoke/u);
-
-    const bureau_help = execFileSync(
-      process.execPath,
-      [cli_path, "--lang", "en", "bureau", "--help"],
-      options,
-    );
-    assert.match(bureau_help, /token/u);
-    assert.doesNotMatch(bureau_help, /^\s+(list|revoke)\b/mu);
-  } finally {
-    fs.rmSync(platform_root, { recursive: true, force: true });
-  }
+  const output = execFileSync(process.execPath, [cli_path, "--lang", "en", "--help"], { encoding: "utf8" });
+  assert.doesNotMatch(output, /^\s+bureau\b/mu);
 });
 
 test("内置模板生成严格的新 Federation 配置", async () => {

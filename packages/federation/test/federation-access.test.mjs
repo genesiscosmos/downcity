@@ -37,7 +37,7 @@ test("Federation account 查询状态不交付 Token，显式交换后更新当�
   const result = await federation.user.account.login_start({
     provider: "local",
     client_type: "cli",
-    bureau_id: "bureau_product",
+
   })
 
   assert.equal(result.status, "done")
@@ -63,7 +63,7 @@ test("Federation account 查询状态不交付 Token，显式交换后更新当�
   assert.deepEqual(JSON.parse(requests[0].init.body), {
     provider: "local",
     client_type: "cli",
-    bureau_id: "bureau_product",
+
   })
 })
 
@@ -85,7 +85,7 @@ test("Federation OAuth 通过宿主回调交换 Token 后供 user current 使用
       return json({
         user: {
           user_id: "user_1",
-          bureau_id: "bureau_product",
+
         },
         profile: null,
       })
@@ -93,7 +93,7 @@ test("Federation OAuth 通过宿主回调交换 Token 后供 user current 使用
   })
 
   await federation.user.account.login({
-    provider: "google", client_type: "cli", bureau_id: "bureau_product",
+    provider: "google", client_type: "cli",
     redirect_uri: "http://127.0.0.1:45000/oauth/callback/test", state: "s".repeat(43),
     code_challenge: "c".repeat(43), code_challenge_method: "S256",
     on_authorize: async (url) => {
@@ -140,40 +140,24 @@ test("Federation admin 登录后立即提供管理能力", async () => {
   assert.equal(requests[1].init.headers.authorization, "Bearer admin_session_1")
 })
 
-test("Federation 拒绝把 User Token 转发到其他 origin", async () => {
+test("Federation 业务只请求当前 origin，不发现或转发其他服务地址", async () => {
+  const requests = []
   const federation = new Federation({
     url: "https://fed.example.com",
     user_token: "user_token_1",
-    fetch: async (url) => {
-      if (url.endsWith("/v1/bureaus/current")) {
-        return json({
-          bureau: {
-            bureau_id: "bureau_product",
-            name: "Product",
-            server: {
-              bureau_id: "bureau_product",
-              server_url: "https://product.example.com",
-              created_at: "2026-01-01T00:00:00.000Z",
-              updated_at: "2026-01-01T00:00:00.000Z",
-            },
-            state: "active",
-            created_at: "2026-01-01T00:00:00.000Z",
-            updated_at: "2026-01-01T00:00:00.000Z",
-            archived_at: "",
-          },
-        })
-      }
-      return json({})
-    },
+    fetch: async (url) => { requests.push(url); return json({}) },
   })
-
-  await assert.rejects(
-    federation.user.get("https://attacker.example.com/private"),
-    /current Bureau server origin/,
-  )
+  try {
+    assert.equal("get" in federation.user, false)
+    assert.equal("post" in federation.user, false)
+    await federation.user.service("business").action("https://attacker.example.com/private").invoke()
+    assert.equal(requests.length, 1)
+    assert.equal(new URL(requests[0]).origin, "https://fed.example.com")
+    assert.ok(requests.every((url) => !url.includes("/bureaus/current")))
+  } finally { await federation.dispose() }
 })
 
-test("Federation 不接收 Bureau Token，也不提供 identify", () => {
+test("Federation 管理员入口不提供 identify", () => {
   const federation = new Federation({
     url: "https://fed.example.com",
     admin_token: "admin_session_1",

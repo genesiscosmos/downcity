@@ -1,7 +1,7 @@
 /**
  * Federation 用户数据调用器。
  *
- * City 直接通过该调用器访问 Federation Accounts，不依赖 Bureau。
+ * City 直接通过该调用器访问 Federation Accounts。
  */
 
 import type { RequestInitLike } from "../../http.js";

@@ -292,7 +292,7 @@ test("context power sandbox 动作回答沙箱事实并按 Workspace 边界判�
   }
 });
 
-test("context power usage.get 在 bureau 未暴露用户用量前明确失败", async () => {
+test("context power usage.get 在未配置用户用量读取器时明确失败", async () => {
   const fixture = await create_city_tool_fixture();
   try {
     const usage = await call_city_tool(fixture.tools.context, {

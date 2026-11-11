@@ -26,7 +26,7 @@ Downcity gives creators, indie builders, and teams one reusable runtime layer fo
 | `downcity` | Public CLI bundle: `city`/`downcity` is the local City container for Agent management, runtime, and console workflows; `fed`/`downfed` is the Federation Server Manager. |
 | `@downcity/city` | Application composition root: Agent registry, Workspace/Shell resources, Plugin SDK and lifecycle, RemoteAgent, Storage, and HTTP/RPC transport. |
 | `@downcity/agent` | Single-Agent execution runtime: Agent, Group, AgentSessions, Session, model/tool loop, and neutral host-extension ports. |
-| `@downcity/federation` | Unified local and remote Federation SDK for Services, auth, env, Bureau, user, and admin access. |
+| `@downcity/federation` | Unified local and remote Federation SDK for Services, auth, env, user, and admin access. |
 | `@downcity/type` | Neutral cross-package protocols, including Workspace, Shell, Session extension, and City model types. |
 | `@downcity/services` | Public services for accounts, balance, usage, payment, and Stripe payment flows. |
 | `@downcity/ui` | React + Tailwind UI SDK for reusable Console and host-application components. |

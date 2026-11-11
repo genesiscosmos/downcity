@@ -1,8 +1,7 @@
 /**
  * Federation 管理员身份子域。
  *
- * Admin Session 管理 Federation 控制面。Bureau 机器身份由独立 Bureau 对象持有，
- * 不进入 Federation 管理员身份的生命周期。
+ * Admin Session 管理 Federation 控制面，与用户身份隔离。
  */
 
 import { AdminPactAccess } from "../pact/admin/index.js";
@@ -24,7 +23,6 @@ import type {
   FederationCurrentAdmin,
 } from "./types/FederationAdmin.js";
 import type { FederationAdminOptions } from "./types/FederationInternal.js";
-import { FederationBureaus } from "./FederationBureaus.js";
 import { FederationRelayAdmin } from "./FederationRelay.js";
 
 /** Federation 管理员身份子域。 */
@@ -33,7 +31,6 @@ export class FederationAdmin {
   private readonly fetcher: FetchLike;
   private admin_token?: string;
   private admin_access?: AdminPactAccess;
-  private bureau_management?: FederationBureaus;
 
   constructor(options: FederationAdminOptions) {
     this.url = normalize_http_url(options.url);
@@ -49,14 +46,6 @@ export class FederationAdmin {
   /** Federation Credits 管理入口。 */
   get credits(): CreditsInvoker {
     return this.require_admin_access().credits;
-  }
-
-  /** Federation Bureau 管理入口。 */
-  get bureaus(): FederationBureaus {
-    if (!this.bureau_management) {
-      this.bureau_management = new FederationBureaus(this.require_admin_access().bureaus);
-    }
-    return this.bureau_management;
   }
 
   /** Federation 环境变量管理入口。 */
@@ -83,7 +72,6 @@ export class FederationAdmin {
     }
     this.admin_token = result.session_token;
     this.admin_access = undefined;
-    this.bureau_management = undefined;
     return result;
   }
 
@@ -120,7 +108,6 @@ export class FederationAdmin {
     });
     this.admin_token = undefined;
     this.admin_access = undefined;
-    this.bureau_management = undefined;
   }
 
   /** 读取当前 Federation 实例中的 Admin Session Token。 */
@@ -152,7 +139,6 @@ export class FederationAdmin {
   clear_credentials(): void {
     this.admin_token = undefined;
     this.admin_access = undefined;
-    this.bureau_management = undefined;
   }
 
   private require_admin_token(): string {

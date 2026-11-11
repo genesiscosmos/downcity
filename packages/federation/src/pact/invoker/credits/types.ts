@@ -1,10 +1,10 @@
 /**
  * Credits 管理端公开类型。
  *
- * 本模块描述 Bureau 通过 Federation HTTP API 读写的 Card、Transaction 与 Entry。
+ * 本模块描述 管理员通过 Federation HTTP API 读写的 Card、Transaction 与 Entry。
  */
 
-/** Bureau 可定位的一张 Credits Card。 */
+/** 用户或管理员可定位的一张 Credits Card。 */
 export type CreditsCardReference =
   | {
       /** Card 类型，固定为 primary。 */

@@ -112,7 +112,7 @@ function create_local_entrypoint(): string {
 
 import { join } from "node:path";
 import { serve } from "@hono/node-server";
-import { AIService, Federation } from "@downcity/federation";
+import { AIService, EnvService, Federation } from "@downcity/federation";
 import { Database } from "@downcity/database-sqlite";
 import {
   AccountsService,
@@ -155,6 +155,7 @@ const database = new Database({
 });
 const federation = new Federation({ database });
 
+federation.use(new EnvService());
 const accounts_service = new AccountsService({ local_login: true });
 federation.use(accounts_service);
 const credits_service = new CreditsService();

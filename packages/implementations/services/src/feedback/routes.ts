@@ -27,7 +27,7 @@ export function register_feedback_routes(service: FeedbackService, ctx: ServiceI
     handler: async (c) => {
       const identity = require_service_user_identity(c);
       const body = await c.json<FeedbackCreateInput>();
-      return c.jsonResponse(await service.create(identity.user_id, identity.bureau_id, body));
+      return c.jsonResponse(await service.create(identity.user_id, c.city_id, body));
     },
   });
 
@@ -39,7 +39,7 @@ export function register_feedback_routes(service: FeedbackService, ctx: ServiceI
       const identity = require_service_user_identity(c);
       const input = await c.json<FeedbackQueryInput>();
       return c.jsonResponse({
-        items: await service.listUserMessages(identity.user_id, identity.bureau_id, input),
+        items: await service.listUserMessages(identity.user_id, input),
       });
     },
   });

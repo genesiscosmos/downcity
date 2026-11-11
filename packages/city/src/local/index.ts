@@ -12,6 +12,7 @@ export { CityTokenRepository } from "./repositories/CityTokenRepository.js";
 export type { CityTokenScope, CityTokenSummary, CityTokenConfig, IssuedCityToken } from "./types/CityToken.js";
 
 export { LocalDatabase } from "./database/LocalDatabase.js";
+export { resolve_local_city_id } from "./runtime/LocalCityIdentity.js";
 export type {
   LocalDatabaseMutationResult,
   LocalDatabaseOptions,

@@ -4,7 +4,7 @@
  * city.service("translate").action("zh2en").invoke({ text: "你好" })
  *   → POST /v1/translate/zh2en
  *
- * 用户身份与 Bureau 身份只来自请求凭证，不向业务输入重复注入。
+ * 用户身份只来自请求凭证，不向业务输入重复注入。
  * GET Action 支持通过第二个参数传 query。
  */
 

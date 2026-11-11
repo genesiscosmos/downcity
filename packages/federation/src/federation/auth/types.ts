@@ -26,11 +26,6 @@ export interface RuntimeUser {
  */
 export interface CreateUserTokenInput {
   /**
-   * token 所属的稳定 Bureau ID。
-   */
-  bureau_id: string;
-
-  /**
    * token 所属的终端用户 ID。
    */
   user_id: string;
@@ -53,7 +48,7 @@ export interface CreateUserTokenInput {
  */
 export interface UserTokenPayload {
   /**
-   * Federation 与 Bureau 用户服务面的固定受众。
+   * Federation 用户服务面的固定受众。
    */
   aud: typeof USER_TOKEN_AUDIENCE;
 
@@ -61,11 +56,6 @@ export interface UserTokenPayload {
    * 签发该 token 的 Federation 稳定 issuer。
    */
   iss: string;
-
-  /**
-   * token 所属 Bureau ID。
-   */
-  bureau_id: string;
 
   /**
    * token 所属用户 ID。
@@ -160,7 +150,7 @@ export interface FederationDiscovery {
   /** 当前 Federation 的公开 JWKS 地址。 */
   jwks_uri: string;
 
-  /** Federation 与 Bureau 共同接收 user_token 时校验的 audience。 */
+  /** Federation 接收 user_token 时校验的 audience。 */
   user_token_audience: typeof USER_TOKEN_AUDIENCE;
 }
 
@@ -174,11 +164,6 @@ export interface UserTokenIssueResult {
   user_token: string;
 
   /**
-   * token 所属 Bureau ID。
-   */
-  bureau_id: string;
-
-  /**
    * token 所属用户 ID。
    */
   user_id: string;
@@ -186,30 +171,6 @@ export interface UserTokenIssueResult {
   /**
    * token 过期时间。
    */
-  expires_at: string;
-}
-
-/** Federation 为可信 Service 签发受众绑定 Token 的输入。 */
-export interface CreateFederationServiceTokenInput {
-  /** Token 受众，例如目标 City Server Origin。 */
-  audience: string;
-  /** Token 主体。 */
-  subject: string;
-  /** Token 类型前缀，例如 `ot_`。 */
-  prefix: string;
-  /** Token 有效期，格式与 user_token TTL 一致。 */
-  ttl: string | number;
-  /** Service 自己拥有的非标准 Claims。 */
-  claims: Record<string, unknown>;
-}
-
-/** Federation Service Token 签发结果。 */
-export interface FederationServiceTokenIssueResult {
-  /** 带业务前缀的 Compact JWT。 */
-  token: string;
-  /** Token 唯一 ID。 */
-  token_id: string;
-  /** ISO 8601 过期时间。 */
   expires_at: string;
 }
 

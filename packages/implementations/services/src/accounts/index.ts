@@ -6,7 +6,7 @@
  * Provider 选择、认证流程和持久化分别由内部模块负责。
  */
 
-import { httpError, InstallableService } from "@downcity/federation";
+import { InstallableService } from "@downcity/federation";
 import type { EnvRequirement, ServiceInstallContext } from "@downcity/federation";
 import { AccountsRuntime } from "./AccountsRuntime.js";
 import { accounts_database_schemas } from "./database-schemas.js";
@@ -57,7 +57,7 @@ export class AccountsService extends InstallableService {
     this.instruction = ({ actions }) => [
       "提供 Downcity 的统一账号服务容器，具体登录方式由 email / phone / OAuth 等 provider 决定。",
       "provider 满足 required env 或 runtime 配置后，才会出现在 /providers 中供客户端使用。",
-      "登录开始传 bureau_id 和 client_type。OAuth 必须绑定产品 redirect_uri、随机 state 与 S256 PKCE；网站回调是 Bureau server_url 下 /api/auth/callback，CLI/Desktop 使用本机 loopback。Provider 认证后自动回到产品，使用 authorization_code、code_verifier、login_secret 与 exchange_id 一次性交换 Token。状态查询不能交付 Token。",
+      "登录开始传 client_type。OAuth 必须绑定产品 redirect_uri、随机 state 与 S256 PKCE；网站回调必须精确匹配 trusted_web_callbacks，CLI/Desktop 使用本机 loopback。Provider 认证后自动回到产品，使用 authorization_code、code_verifier、login_secret 与 exchange_id 一次性交换 Token。状态查询不能交付 Token。",
       "OAuth 回调地址固定为 /v1/accounts/oauth/callback，服务会根据 Federation 公网地址生成完整回调 URL。",
       `当前暴露 ${actions.length} 个动作，常用流程由 /providers 返回的 provider 决定。`,
     ].join("\n");
@@ -99,16 +99,6 @@ export class AccountsService extends InstallableService {
     return await this.require_runtime().handle_oauth_callback(request);
   }
 
-  /** 确认 Bureau 存在且当前可用于登录与 Token 签发。 */
-  private async require_active_bureau(bureau_id: string): Promise<void> {
-    if (!bureau_id) throw httpError(400, "bureau_id required");
-    const bureau = await this._bureauStore?.get(bureau_id);
-    if (!bureau) throw httpError(404, `Unknown Bureau: ${bureau_id}`);
-    if (bureau.state !== "active") {
-      throw httpError(403, `Bureau is not active: ${bureau_id}`);
-    }
-  }
-
   /** 依赖注入后按需创建运行时，允许数据库准备和维护先于路由安装执行。 */
   private require_runtime(): AccountsRuntime {
     this.runtime ??= new AccountsRuntime({
@@ -121,12 +111,6 @@ export class AccountsService extends InstallableService {
       },
       read_env: (key) => this._env?.get(key),
       read_base_url: () => this._baseURL,
-      require_active_bureau: (bureau_id) => this.require_active_bureau(bureau_id),
-      read_bureau_server_url: async (bureau_id) => {
-        await this.require_active_bureau(bureau_id);
-        const bureau = await this._bureauStore!.get(bureau_id);
-        return bureau!.server.server_url;
-      },
     });
     return this.runtime;
   }

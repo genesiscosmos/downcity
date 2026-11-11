@@ -48,9 +48,8 @@ federation.use(new OrganizationsService({
 }));
 ```
 
-Organization 可以使用 Federation 全局作用域，也可以限定在当前 Token City。Service
-只管理 Organization、Membership、Join Request 和治理角色，不保存产品后端地址。
-City 使用当前 `user_token` 调用产品配置的可信 Bureau，Bureau 再向 Federation 查询
+Organization 私有内容只向活动成员开放，管理按 owner/admin 角色授权。新建默认关闭申请；owner/admin 可显式设置 `join_policy: "approval"`，关闭后仍保留已有申请。Service 只管理成员关系与治理，不保存产品后端地址。
+客户端使用当前 `user_token` 请求 Federation 业务 Service，并按活动成员查询
 Membership 并执行自己的产品资源权限。Organizations Service 支持 SQLite、PostgreSQL
 与 Cloudflare D1，三种数据库统一使用 `context.transaction()`。
 
@@ -103,6 +102,6 @@ Webhook 验签、规范化后先持久化 inbox，再入队，成功返回 HTTP 
 
 `AccountsService` 启用只代表账号服务、表和 better-auth runtime 已安装；具体登录方式由 provider 决定。`/v1/accounts/providers` 只返回 required env 或 runtime 配置已经满足的 provider。产品侧使用 `POST /v1/accounts/login/start`，显式指定 `client_type`，保存返回的 `login_id` 与仅供发起端保管的 `login_secret`。OAuth 返回授权 URL，input provider 通过 `POST login/continue` 提交输入及领取凭据。`POST login/result` 携带 `login_id`、`login_secret`，只返回状态；完成后通过 `POST login/exchange` 携带相同凭据与稳定的随机 `exchange_id` 领取 `user_token`。网络失败重试必须复用原 `exchange_id`。不要将 `login_secret` 放入 URL、页面或日志。
 
-OAuth 使用 `web`、`cli` 或 `desktop`，均在开始时绑定 `redirect_uri`、随机 `state` 与 S256 PKCE。网站回调精确匹配 Bureau 注册 `server_url` 下 `/api/auth/callback`，BFF 验证发起浏览器交易；CLI/Desktop 用本机系统浏览器和独占的 `127.0.0.1` 临时端口回调。Provider 认证后自动返回产品，交换 Token 还需浏览器交付的 `authorization_code` 与发起产品保管的 `code_verifier`，状态查询不能交付 Token。CLI OAuth 不支持远程或无图形会话。Email 登录要求邮箱验证，OAuth 身份不会按相同邮箱静默合并。
+OAuth 使用 `web`、`cli` 或 `desktop`，均在开始时绑定 `redirect_uri`、随机 `state` 与 S256 PKCE。网站回调精确匹配 AccountsService `trusted_web_callbacks` 精确白名单，BFF 验证发起浏览器交易；CLI/Desktop 用本机系统浏览器和独占的 `127.0.0.1` 临时端口回调。Provider 认证后自动返回产品，交换 Token 还需浏览器交付的 `authorization_code` 与发起产品保管的 `code_verifier`，状态查询不能交付 Token。CLI OAuth 不支持远程或无图形会话。Email 登录要求邮箱验证，OAuth 身份不会按相同邮箱静默合并。
 
-`await federation.user.account.logout()` 先撤销当前 User Token，再清理本地凭证；撤销失败保留凭证以便重试。Bureau 对新的受保护请求向 Federation 在线检查 Token，有效性检查不可用时拒绝访问；已开始的流式请求不会被强制中断。
+`await federation.user.account.logout()` 先撤销当前 User Token，再清理本地凭证；撤销失败保留凭证以便重试。Federation 为新的受保护请求检查 Token，有效性检查不可用时拒绝访问；已开始的流式请求不会被强制中断。

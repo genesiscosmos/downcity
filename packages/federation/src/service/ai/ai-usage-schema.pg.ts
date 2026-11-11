@@ -10,7 +10,7 @@ import { bigint, index, pgTable, text } from "drizzle-orm/pg-core";
 export const pg_ai_usage_records = pgTable("service_ai_usage_records", {
   usage_id: text("usage_id").primaryKey(),
   user_id: text("user_id"),
-  bureau_id: text("bureau_id"),
+  city_id: text("city_id"),
   action_id: text("action_id").notNull(),
   model_id: text("model_id").notNull(),
   channel_id: text("channel_id"),

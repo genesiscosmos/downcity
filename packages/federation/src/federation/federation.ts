@@ -17,7 +17,6 @@ import { UserTokenRevocationStore } from "./auth/user-token-revocation-store.js"
 import { measure_startup } from "./startup-timing.js";
 import { asInstallableService, type ServiceDefinition } from "../service/installable-service.js";
 import { EnvService } from "../service/env/env-service.js";
-import { BureausService } from "../service/bureaus/bureaus-service.js";
 import { build_federation_instruction } from "./federation-instruction.js";
 import { initialize_federation, prepare_federation_schema } from "./federation-init.js";
 import { build_federation_router } from "./federation-router.js";
@@ -31,8 +30,6 @@ import type { FederationStorage } from "./storage.js";
 import type { Authenticator } from "./auth/authenticator.js";
 import type { Runtime } from "./runtime.js";
 import type { CityTableApi } from "../store/table-api.js";
-import type { BureauStore } from "../service/bureaus/bureau-store.js";
-import type { BureauRecord } from "../types/Bureau.js";
 import type { FederationMiddleware, FederationMiddlewareContext } from "../types/FederationMiddleware.js";
 
 export class FederationRuntime {
@@ -48,7 +45,6 @@ export class FederationRuntime {
   private init_promise?: Promise<void>;
   private hono?: Hono;
   private authenticator?: Authenticator;
-  private bureau_store?: BureauStore;
   /** 活跃前台请求与流；关闭时统一撤销。 */
   private readonly requests = new Set<AbortController>();
   /** 已进入的前台业务、队列与维护执行；取消响应不代表业务已经停止。 */
@@ -72,8 +68,6 @@ export class FederationRuntime {
       get_queue: () => this.queue,
       get_storage: () => this.runtime.storage,
     });
-    this.use(new EnvService());
-    this.use(new BureausService());
   }
 
   /**
@@ -104,7 +98,7 @@ export class FederationRuntime {
    * 关键说明（中文）
    * - middleware 在内部 Hono router 之前执行。
    * - 适合 CORS、body limit、rate limit、request id、timeout 等 HTTP 横切能力。
-   * - 不用于依赖 `ctx.user` / `ctx.bureau` 的业务生命周期逻辑。
+   * - 不用于依赖 `ctx.user` 的业务生命周期逻辑。
    */
   middle(...middlewares: FederationMiddleware[]): this {
     this.assert_configuring();
@@ -222,14 +216,12 @@ export class FederationRuntime {
     const state = await initialize_federation({
       runtime: this.runtime,
       services: this.get_services(),
-      require_ready: () => this.require_ready(),
       queue: this.queue,
       prepare_database,
       on_startup_timing: this.options.on_startup_timing,
     });
 
     this.table_map = state.table_map;
-    this.bureau_store = state.bureau_store;
     this.authenticator = state.authenticator;
     this.hono = build_federation_router({
       runtime: this.runtime,
@@ -319,15 +311,4 @@ export class FederationRuntime {
     if (this.init_promise) throw new Error("Federation configuration is frozen after initialization begins");
   }
 
-  /**
-   * 给 Authenticator 延迟访问 Bureau Store。
-   */
-  private async require_ready(): Promise<{
-    bureau: { get(id: string): Promise<BureauRecord | undefined> };
-  }> {
-    await this.ready();
-    return {
-      bureau: this.bureau_store ?? { get: () => Promise.resolve(undefined) },
-    };
-  }
 }

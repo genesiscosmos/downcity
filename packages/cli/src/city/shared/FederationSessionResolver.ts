@@ -10,7 +10,6 @@
 import { Federation, type FederationUser } from "@downcity/federation";
 import {
   DEFAULT_FEDERATION_URL,
-  DEFAULT_BUREAU_ID,
   normalize_federation_url,
   read_federation_admin_session_for_url,
   read_current_federation_session,
@@ -50,7 +49,6 @@ export class FederationSessionResolver {
       federation_url: Boolean(env_federation_url),
       user_token: Boolean(env_user_token),
     };
-    const bureau_id = session?.bureau_id ?? DEFAULT_BUREAU_ID;
     const user_token = env_user_token || session?.user_token || "";
     const source = env_user_token ? "env" : "federation-session";
     const warnings: string[] = [];
@@ -70,7 +68,6 @@ export class FederationSessionResolver {
 
     const resolved: ResolvedFederationUser = {
       federation_url,
-      bureau_id,
       user_token,
       user_id: env_user_token ? undefined : session?.user_id,
       user_label: env_user_token ? undefined : session?.user_label,
@@ -108,11 +105,9 @@ export class FederationSessionResolver {
       verify_user: false,
     });
     if (!user.user_token) {
-      current?.user.clear_credentials();
       throw new Error("Federation user token is required. Run `city federation login` first.");
     }
     if (current && current.url !== user.federation_url) {
-      current.user.clear_credentials();
       throw new Error("Federation target changed. Reopen the City host to use the selected target.");
     }
     const federation = current ?? new Federation({ url: user.federation_url, user_token: user.user_token });
@@ -141,14 +136,8 @@ export class FederationSessionResolver {
     });
     const result = await federation.user.current();
     const token_user_id = read_string(result.user.user_id);
-    const token_bureau_id = typeof result.user.bureau_id === "string"
-      ? result.user.bureau_id
-      : "";
     if (!token_user_id) {
       throw new Error("Federation user token resolved without a user_id. Run `city federation login` again.");
-    }
-    if (!token_bureau_id) {
-      throw new Error("Federation user token resolved without a bureau_id. Run `city federation login` again.");
     }
     if (session_user_id && !user.env_overrides.user_token && session_user_id !== token_user_id) {
       throw new Error([
@@ -163,7 +152,6 @@ export class FederationSessionResolver {
     const display_name = read_string(result.profile?.display_name);
     return {
       ...user,
-      bureau_id: token_bureau_id,
       user_id: token_user_id,
       user_label: email || display_name || token_user_id,
     };

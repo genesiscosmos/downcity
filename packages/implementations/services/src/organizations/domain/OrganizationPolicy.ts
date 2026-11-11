@@ -4,7 +4,6 @@ import { httpError } from "@downcity/federation";
 import type {
   OrganizationMembershipRecord,
   OrganizationRole,
-  OrganizationScopeType,
 } from "../types/index.js";
 
 /** 读取并校验 Organization ID。 */
@@ -39,10 +38,11 @@ export function read_organization_name(value: unknown): string {
   return read_required_text(value, "name", 120);
 }
 
-/** 读取 Organization 作用域类型。 */
-export function read_scope_type(value: unknown): OrganizationScopeType {
-  if (value === "federation" || value === "bureau") return value;
-  throw httpError(400, "ORGANIZATION_SCOPE_INVALID: scope_type must be federation or bureau");
+/** 读取显式新申请策略，省略时默认为关闭。 */
+export function read_join_policy(value: unknown): "closed" | "approval" {
+  if (value === undefined || value === "closed") return "closed";
+  if (value === "approval") return "approval";
+  throw httpError(400, "ORGANIZATION_INPUT_INVALID: join_policy must be closed or approval");
 }
 
 /** 读取是否包含归档 Organization 的查询参数。 */

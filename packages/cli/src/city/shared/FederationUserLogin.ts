@@ -122,7 +122,6 @@ async function email_login(input: FederationLoginInput): Promise<FederationUserS
   const result = await federation.user.account.login({
     provider: "email",
     client_type: "cli",
-    bureau_id: input.bureau_id,
     input: { email, password },
   });
   const done = read_done_login_result(result, "email login");
@@ -178,11 +177,10 @@ async function email_register(input: FederationLoginInput): Promise<FederationUs
 
   const verified = await accounts.action("verify-email").invoke<VerifyResult>({
     token: verification_token,
-    bureau_id: input.bureau_id,
   });
   if (verified.error || !verified.success) throw new Error(verified.error || "verification failed");
   const result = await federation.user.account.login({
-    provider: "email", bureau_id: input.bureau_id, client_type: "cli", input: { email, password },
+    provider: "email", client_type: "cli", input: { email, password },
   });
   const done = read_done_login_result(result, "verified email login");
   return await build_verified_user_session({
@@ -203,7 +201,7 @@ async function oauth_auth(
   process.once("SIGTERM", cancel);
   try {
     const result = await federation.user.account.login({
-      provider, client_type: "cli", bureau_id: input.bureau_id,
+      provider, client_type: "cli",
       redirect_uri: callback.redirect_uri, state: callback.state,
       code_challenge: callback.code_challenge, code_challenge_method: "S256",
       on_authorize: async (authorization_url) => {
@@ -241,7 +239,6 @@ async function input_auth(
   const result = await federation.user.account.login({
     provider,
     client_type: "cli",
-    bureau_id: input.bureau_id,
   });
   const done = read_done_login_result(result, "login");
   return await build_verified_user_session({
@@ -270,7 +267,6 @@ function build_user_session(input: FederationLoginInput & {
 }): FederationUserSession {
   return {
     federation_url: input.federation_url,
-    bureau_id: input.bureau_id,
     user_token: input.user_token,
     user_id: read_string(input.user_id) || undefined,
     user_label: read_string(input.user_label) || undefined,
@@ -286,7 +282,6 @@ async function build_verified_user_session(input: FederationLoginInput & {
   const verified = await read_user_session_from_token(input);
   return build_user_session({
     ...input,
-    bureau_id: verified.bureau_id,
     user_id: verified.user_id || input.user_id,
     user_label: verified.user_label || input.user_label,
   });
@@ -295,7 +290,6 @@ async function build_verified_user_session(input: FederationLoginInput & {
 async function read_user_session_from_token(input: FederationLoginInput & {
   user_token: string;
 }): Promise<{
-  bureau_id: string;
   user_id?: string;
   user_label?: string;
 }> {
@@ -304,17 +298,10 @@ async function read_user_session_from_token(input: FederationLoginInput & {
     user_token: input.user_token,
   });
   const result = await federation.user.current();
-  const bureau_id = typeof result.user.bureau_id === "string"
-    ? result.user.bureau_id
-    : "";
   const user_id = read_string(result.user.user_id);
-  if (!bureau_id) {
-    throw new Error("Federation user token resolved without a bureau_id.");
-  }
   const email = read_string(result.profile?.email);
   const display_name = read_string(result.profile?.display_name);
   return {
-    bureau_id,
     user_id: user_id || undefined,
     user_label: email || display_name || user_id || undefined,
   };
@@ -339,9 +326,6 @@ function format_provider_label(provider: string): string {
 export async function perform_federation_user_login(
   input: FederationLoginInput,
 ): Promise<FederationUserSession | null> {
-  if (typeof input.bureau_id !== "string" || input.bureau_id.length === 0) {
-    throw new TypeError("bureau_id is required");
-  }
   const method = await prompt_auth_method(input.federation_url);
   if (!method) return null;
   if (method.startsWith("oauth:")) {

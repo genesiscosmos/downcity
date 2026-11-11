@@ -29,23 +29,9 @@ test("feedbackService manages user feedback and admin replies", async () => {
     const services = await servicesResponse.json()
     assert.ok(services.items.some((item) => item.id === "feedback"))
 
-    const cityOne = await (await base.fetch(adminRequest(adminSecret, {
-      path: "/v1/bureaus/create",
-      body: {
-        bureau_id: " legacy:city/id ",
-        name: "City One",
-        server_url: "https://city-one.example.com",
-      },
-    }))).json()
-    assert.equal(cityOne.bureau_id, " legacy:city/id ")
-    const cityTwo = await (await base.fetch(adminRequest(adminSecret, {
-      path: "/v1/bureaus/create",
-      body: { name: "City Two", server_url: "https://city-two.example.com" },
-    }))).json()
-
-    const userOneToken = await issue_user_token(base, cityOne.bureau_id, "user_1")
-    const userTwoToken = await issue_user_token(base, cityOne.bureau_id, "user_2")
-    const userOtherCityToken = await issue_user_token(base, cityTwo.bureau_id, "user_1")
+    const userOneToken = await issue_user_token(base, "user_1")
+    const userTwoToken = await issue_user_token(base, "user_2")
+    const userOtherCityToken = await issue_user_token(base, "user_1")
 
     const emptyResponse = await base.fetch(userRequest({
       token: userOneToken,
@@ -79,6 +65,7 @@ test("feedbackService manages user feedback and admin replies", async () => {
 
     const createOtherCityResponse = await base.fetch(userRequest({
       token: userOtherCityToken,
+      city_id: "city_other",
       path: "/v1/feedback/send",
       body: { message: "City-specific issue" },
     }))
@@ -91,9 +78,11 @@ test("feedbackService manages user feedback and admin replies", async () => {
     }))
     assert.equal(meResponse.status, 200)
     const me = await meResponse.json()
-    assert.equal(me.items.length, 1)
+    assert.equal(me.items.length, 2)
+    assert.ok(me.items.every((item) => item.user_id === "user_1"))
+    me.items = me.items.filter((item) => item.feedback_id === createdOne.feedback_id)
     assert.equal(me.items[0].feedback_id, createdOne.feedback_id)
-    assert.equal(me.items[0].bureau_id, cityOne.bureau_id)
+    assert.equal(me.items[0].city_id, "city_first")
     assert.equal(me.items[0].user_id, "user_1")
     assert.equal(me.items[0].status, "open")
     assert.equal(me.items[0].reply, "")
@@ -102,7 +91,7 @@ test("feedbackService manages user feedback and admin replies", async () => {
     assert.equal(me.items[0].metadata_json, JSON.stringify({ page: "/billing", client_version: "1.2.3" }))
 
     const queryStatusResponse = await base.fetch(adminRequest(adminSecret, {
-      path: "/v1/feedback/messages?status=open&bureau_id=" + encodeURIComponent(cityOne.bureau_id),
+      path: "/v1/feedback/messages?status=open&city_id=city_first",
       method: "GET",
     }))
     assert.equal(queryStatusResponse.status, 200)
@@ -212,20 +201,20 @@ function adminRequest(adminSecret, { path: pathname, method = "POST", body }) {
   })
 }
 
-function userRequest({ token, path: pathname, method = "POST", body }) {
+function userRequest({ token, path: pathname, method = "POST", body, city_id = "city_first" }) {
   return new Request(`http://localhost${pathname}`, {
     method,
     headers: {
       "content-type": "application/json",
       authorization: `Bearer ${token}`,
+      "x-downcity-city-id": city_id,
     },
     body: body === undefined ? undefined : JSON.stringify(body),
   })
 }
 
-async function issue_user_token(base, bureau_id, user_id) {
+async function issue_user_token(base, user_id) {
   const token_body = await (await base.runtime.get_authenticator()).createToken({
-    bureau_id,
     user_id,
   })
   return token_body.user_token

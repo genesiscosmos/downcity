@@ -217,6 +217,27 @@ test("降级后再次投递成功会清理降级痕迹", async () => {
   )
 })
 
+test("图片结果按已认证用户归属隔离，无主任务不向普通用户开放，来源标签不授予权限", async () => {
+  const counters = { create_calls: 0, fetch_calls: 0 }
+  await with_image_federation({ counters }, async (base, admin_session) => {
+    await create_image(base, admin_session)
+    const read_as_user = async (user_id, city_id = "city_owner") => base.fetch(new Request(
+      "http://localhost/v1/ai/image/result",
+      { method: "POST", headers: { "x-downcity-city-id": city_id, "content-type": "application/json" }, body: JSON.stringify({ job_id: "img_1" }) },
+    ), { trusted_identity: { level: "user", user: { user_id } } })
+    assert.equal((await read_as_user("owner")).status, 404, "无主任务不公开")
+    const table = await base.table("ai.async_jobs")
+    await table.update({ where: { job_id: "img_1" }, values: { user_id: "owner" } })
+    const owner_response = await read_as_user("owner", "city_another")
+    assert.equal(owner_response.status, 200, "同一用户从其他 City 仍可读取自己的任务")
+    assert.equal((await owner_response.json()).job_id, "img_1")
+    assert.equal((await read_as_user("other", "city_owner")).status, 404, "自报相同 City 不得跨用户读取")
+    assert.equal((await read_image(base, admin_session, "img_1")).status, 200, "管理员保留读取权限")
+    await base.queue.call({ service: "ai", action: "image/fetch", input: { job_id: "img_1" } })
+    assert.equal(counters.fetch_calls, 1, "受信后台保留抓取权限")
+  })
+})
+
 test("结算重试在调度不可用时降级但不抛错，计费不受影响", async () => {
   const counters = { create_calls: 0, fetch_calls: 0 }
   await with_image_federation({ counters, use_queue: false }, async (base, admin_session) => {

@@ -90,7 +90,7 @@ Downcity 当前并不是缺少“人类交互暂停”或“memory 能力”：
 - 多级 fallback 的循环检测和预算上限；
 - fallback 后的 usage、计费和最终结果幂等结算证明。
 
-`AIUsageRecord` 已记录用户、Bureau、Action、模型、上游模型、Token、时长和结果，但没有：
+`AIUsageRecord` 已记录用户、可选 City 来源、Action、模型、上游模型、Token、时长和结果，但没有：
 
 - `agent_id`、`session_id`、`turn_id`；
 - `tool_call_id`、`plugin_name`；

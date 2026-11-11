@@ -6,7 +6,7 @@
 - 范围：将 `@downcity/services` 的 `BalanceService` 重构为 `CreditsService`
 - 核心模型：一个永久 Primary Card + 多个限时 Ephemeral Card
 - 账务模型：Credits Transaction + Transaction Entries
-- 管理入口：Federation 内部实例与可信 Bureau
+- 管理入口：Federation 管理员与显式装配的本地业务 Service
 - 用户范围：只支持已经拥有 `user_id` 的注册账户
 
 本阶段不包含：
@@ -39,7 +39,7 @@ CreditsService
 1. 创建一张新的 Ephemeral Card，并写入初始额度。
 2. 给一张仍然有效的 Ephemeral Card 继续 Topup。
 
-CreditsService 不判断用户为什么获得额度。新用户奖励、文档导入奖励、连续活跃奖励与创作者奖励，都只是 Bureau 或其他可信业务调用 Credits API 的原因。
+CreditsService 不判断用户为什么获得额度。新用户奖励、文档导入奖励、连续活跃奖励与创作者奖励，都只是 可信业务 Service调用 Credits API 的原因。
 
 用户消费时，CreditsService 统一选择 Card、判断有效期并原子扣款。调用方不自行拼接余额，也不自行修改 Card。
 
@@ -148,15 +148,15 @@ service_credits_transaction_entries
 - 管理支付商品、Checkout、webhook 或支付订单状态。
 - 决定业务应该复用旧 Ephemeral Card 还是创建新 Card。
 
-### 4.3 Bureau 负责
+### 4.3 业务 Service 负责
 
 - 执行业务与运营规则。
 - 验证请求中的 `user_token`。
 - 创建 Ephemeral Card 或选择目标 Card。
 - 根据真实模型用量计算应扣 credits。
-- 使用 `bureau_token` 调用 Federation Credits 管理接口。
+- 在明确的管理员授权或本地受信执行边界调用 Credits。
 
-Bureau 不保存 Card 余额，也不直接访问 Credits 数据表。
+业务 Service 不保存 Card 余额，也不直接访问 Credits 数据表。
 
 ## 5. Card 领域模型
 
@@ -679,7 +679,7 @@ export interface CreditsEphemeralCardCreateInput {
 调用示例：
 
 ```ts
-const card = await bureau.credits.cards.create_ephemeral({
+const card = await federation.admin.credits.cards.create_ephemeral({
   user_id: "user_123",
   name: "新用户 7 天体验卡",
   initial_credits: 1_000_000,
@@ -766,7 +766,7 @@ const transaction = await credits.topup({
 Ephemeral Card Topup：
 
 ```ts
-const transaction = await bureau.credits.topup({
+const transaction = await federation.admin.credits.topup({
   card: {
     kind: "ephemeral",
     card_id: "card_ephemeral_123",
@@ -901,48 +901,21 @@ POST /v1/credits/charges/create
 
 本阶段不增加预授权与冻结。业务方通过模型最大输出 Token 限制单次调用风险，调用完成后按 Provider 返回的真实 usage Charge。
 
-## 12. Bureau 管理接口
+## 12. Federation 管理接口
 
-`Bureau` 增加 `credits` typed invoker：
-
-```ts
-const bureau = new Bureau({
-  federation_url: process.env.DOWNCITY_FEDERATION_URL!,
-  bureau_token: process.env.DOWNCITY_BUREAU_TOKEN!,
-});
-```
-
-目标 API：
+管理端通过独立 Admin Session 访问 Credits：
 
 ```ts
-bureau.credits.get_user(user_id);
-bureau.credits.list_users(query);
-
-bureau.credits.cards.get_primary(user_id);
-bureau.credits.cards.get_ephemeral(card_id);
-bureau.credits.cards.list_ephemeral(query);
-bureau.credits.cards.create_ephemeral(input);
-
-bureau.credits.topup(input);
-bureau.credits.charge(input);
-
-bureau.credits.transactions.list(query);
-bureau.credits.transactions.get(transaction_id);
-bureau.credits.history.list(query);
+const federation = new Federation({ url: federation_url });
+await federation.admin.login({ admin_id, password });
+const credits = federation.admin.credits;
+await credits.get_user(user_id);
+await credits.cards.create_ephemeral(input);
+await credits.topup(topup_input);
+await credits.charge(charge_input);
 ```
 
-Card 不直接挂在 Bureau 根对象上。使用 `bureau.credits.cards` 可以保持领域归属，避免与未来其他领域的 Card 概念冲突。
-
-Bureau Token 后续需要支持最小权限：
-
-```text
-credits:read
-credits:cards:create
-credits:topup
-credits:charge
-```
-
-每个管理写操作由 Federation 自动记录当前 Bureau `token_id`，不能相信请求 body 自报的操作者身份。
+管理员身份由 Federation 验证；请求 body 中的操作者或 City 来源不能授予管理权限。本地宿主可在受信执行边界直接调用注入的 CreditsService，不能将此权限转换成外部请求头约定。
 
 ## 13. 用户接口
 
@@ -1070,7 +1043,7 @@ PaymentService 不直接修改 Card 表，CreditsService 不保存等待支付�
 BalanceService  → CreditsService
 balance         → credits
 /v1/balance/*   → /v1/credits/*
-bureau.balance  → bureau.credits
+管理员余额调用  → federation.admin.credits
 ```
 
 项目规则不要求向后兼容，因此不保留长期别名或双路由。
@@ -1146,7 +1119,7 @@ packages/implementations/services/src/credits/
 4. 实现指定 Card Topup。
 5. 实现按到期时间自动选择 Card 的 Charge。
 6. 增加 Transaction 与 History 查询。
-7. 增加 Bureau `credits` typed invoker。
+7. 增加 Federation 管理员 `credits` typed invoker。
 8. 增加用户 Credits 与 Cards 查询接口。
 9. 调整 PaymentService 与 CreditsService 的入账连接。
 10. 迁移旧 Balance 数据并删除旧 API。
@@ -1168,8 +1141,8 @@ pnpm all:patch:build
 - Ephemeral Card 到期时间统一保存为 UTC ISO 8601。
 - 每个用户最多拥有 100 张未过期且有余额的 Ephemeral Card。
 - 到期 Ephemeral Card 自动删除，不进入可用余额，也不能 Topup 或 Charge；Entries 历史继续保留。
-- Bureau 可以创建 Ephemeral Card 并原子写入初始 Topup。
-- Bureau 可以给仍有效的指定 Card Topup。
+- 管理员可以创建 Ephemeral Card 并原子写入初始 Topup。
+- 管理员可以给仍有效的指定 Card Topup。
 - 相同幂等键重试不会重复创建 Card、Topup 或 Charge。
 - 自动 Charge 优先消费最早到期的 Ephemeral Card。
 - Ephemeral Cards 不足时可以在同一事务继续消费 Primary Card。

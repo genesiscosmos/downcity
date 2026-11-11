@@ -8,6 +8,8 @@
 
 import { Agent, Group } from "@downcity/agent";
 import path from "node:path";
+import { randomUUID } from "node:crypto";
+import type { FederationUser } from "@downcity/federation";
 import { create_shell_completion_handler } from "./ShellCompletionBridge.js";
 import { CityPowerRuntime } from "@/city/power/CityPowerRuntime.js";
 import { AiPower } from "@/city/power/builtin/AiPower.js";
@@ -36,6 +38,10 @@ import type { CityRuntimeAccess } from "@/city/types/CityRuntimeAccess.js";
 
 /** Agent 实例索引与 transport 宿主。 */
 export class City implements CityRuntime {
+  /** 当前 City 的稳定来源标签，不承担身份或权限证明。 */
+  readonly city_id: string;
+  /** 带本 City 不可变来源的用户视图，与宿主共享凭据但不共享来源状态。 */
+  readonly federation_user?: FederationUser;
   /** City 持有的底层 Storage；默认是进程内存储。 */
   readonly storage: StorageProvider;
 
@@ -97,8 +103,11 @@ export class City implements CityRuntime {
   private close_promise?: Promise<void>;
 
   constructor(options: CityOptions = {}) {
+    this.city_id = options.city_id ?? `city_${randomUUID()}`;
+    if (!/^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/u.test(this.city_id)) throw new TypeError("Invalid city_id");
     this.storage = options.storage || new MemoryStorageProvider();
     this.federation = options.federation;
+    this.federation_user = this.federation?.user.with_city(this.city_id);
     this.runtime_access = Object.freeze({
       get_agent: (agent_id) => this.get_agent(agent_id),
       list_agents: () => this.list_agents(),
@@ -126,7 +135,7 @@ export class City implements CityRuntime {
     });
     this.power_runtime = new CityPowerRuntime({
       storage: this.storage,
-      ...(this.federation ? { federation: this.federation } : {}),
+      ...(this.federation_user ? { federation: { user: this.federation_user } } : {}),
       runtime_access: this.runtime_access,
       ...(options.power_host ? { host: options.power_host } : {}),
     });
@@ -210,7 +219,7 @@ export class City implements CityRuntime {
       access: this.runtime_access,
       files_for: (agent_id: string, group_id: string) =>
         this.storage.open_scope(["agents", agent_id, "powers", group_id]).files,
-      ...(this.federation ? { federation: { user: this.federation.user } } : {}),
+      ...(this.federation_user ? { federation: { user: this.federation_user } } : {}),
     };
     return [new ContextPower(options), new AiPower(options), new AgentPower(options, create_agent), new SessionPower(options)];
   }

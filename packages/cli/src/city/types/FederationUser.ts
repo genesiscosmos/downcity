@@ -35,10 +35,6 @@ export interface ResolvedFederationUser {
    */
   federation_url: string;
 
-  /**
-   * 当前产品的 Bureau ID。
-   */
-  bureau_id: string;
 
   /**
    * Federation User Token。

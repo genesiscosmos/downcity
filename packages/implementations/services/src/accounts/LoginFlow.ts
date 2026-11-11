@@ -21,7 +21,7 @@ export class LoginFlow {
   /** 当前方言的参数化数据库入口。 */
   private readonly database: ServiceDatabaseContext;
 
-  constructor(database: ServiceDatabaseContext) {
+  constructor(database: ServiceDatabaseContext, private readonly trusted_web_callbacks: readonly string[] = []) {
     this.database = service_sql_database(database);
   }
 
@@ -33,8 +33,8 @@ export class LoginFlow {
     });
   }
 
-  /** 创建短期事务；网站可信地址由 Bureau 注册表提供，秘密只通过 JSON 返回。 */
-  async start(bureau_id: string, provider: string, client_type: unknown, request: Request, input: Partial<AccountsLoginStartRequest> = {}, server_url = "") {
+  /** 创建短期事务；网站回调由宿主显式白名单提供，秘密只通过 JSON 返回。 */
+  async start(provider: string, client_type: unknown, request: Request, input: Partial<AccountsLoginStartRequest> = {}) {
     if (client_type !== "web" && client_type !== "cli" && client_type !== "desktop") {
       throw httpError(400, "explicit client_type web, cli or desktop required");
     }
@@ -44,11 +44,11 @@ export class LoginFlow {
     const login_id = randomToken(24);
     const login_secret = randomToken(32);
     const browser_secret = randomToken(32);
-    const callback = oauth ? oauth_login_parameters({ ...input, client_type }, server_url)
+    const callback = oauth ? oauth_login_parameters({ ...input, client_type }, this.trusted_web_callbacks)
       : { redirect_uri: "", callback_state: "", code_challenge: "" };
     await this.database.query({
-      sql: `INSERT INTO ${LOGIN_FLOW_TABLE} (login_id, secret_hash, bureau_id, provider, client_type, oauth_state, browser_hash, redirect_uri, callback_state, code_challenge, authorization_code_hash, phase, user_id, user_token, exchange_hash, retry_until, expires_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '', 'created', '', '', '', 0, ?)`,
-      params: [login_id, await digest_secret(login_secret), bureau_id, provider, client_type,
+      sql: `INSERT INTO ${LOGIN_FLOW_TABLE} (login_id, secret_hash, provider, client_type, oauth_state, browser_hash, redirect_uri, callback_state, code_challenge, authorization_code_hash, phase, user_id, user_token, exchange_hash, retry_until, expires_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, '', 'created', '', '', '', 0, ?)`,
+      params: [login_id, await digest_secret(login_secret), provider, client_type,
         randomToken(32), client_type === "web" && !oauth ? await digest_secret(browser_secret) : "",
         callback.redirect_uri, callback.callback_state, callback.code_challenge, Date.now() + 300_000],
     });

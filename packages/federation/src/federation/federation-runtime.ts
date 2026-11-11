@@ -11,7 +11,6 @@ import {
   pg_federation_auth_keys,
   sqlite_federation_auth_keys,
 } from "./auth/key-schema.js";
-import { pg_bureau_tokens, sqlite_bureau_tokens } from "./auth/bureau-token-schema.js";
 import {
   pg_federation_administrators,
   pg_federation_admin_sessions,
@@ -23,12 +22,6 @@ import {
   pg_user_token_revocations,
   sqlite_user_token_revocations,
 } from "./auth/user-token-schema.js";
-import {
-  pg_bureau_servers,
-  pg_bureaus,
-  sqlite_bureau_servers,
-  sqlite_bureaus,
-} from "../service/bureaus/schema.js";
 import { normalizeEnvKey, parseDotenvEntries } from "../utils/helpers.js";
 import type { FederationRuntimeOptions } from "./types.js";
 import type { BuiltinTables, EnvProvider, Runtime } from "./runtime.js";
@@ -61,21 +54,15 @@ function builtin_tables_for(schema_id: string): BuiltinTables {
   }
   return schema_id === "postgresql"
     ? {
-        bureaus: pg_bureaus,
-        bureau_servers: pg_bureau_servers,
         env: pgEnv,
         federation_auth_keys: pg_federation_auth_keys,
-        bureau_tokens: pg_bureau_tokens,
         federation_administrators: pg_federation_administrators,
         federation_admin_sessions: pg_federation_admin_sessions,
         federation_user_token_revocations: pg_user_token_revocations,
       }
     : {
-        bureaus: sqlite_bureaus,
-        bureau_servers: sqlite_bureau_servers,
         env: sqliteEnv,
         federation_auth_keys: sqlite_federation_auth_keys,
-        bureau_tokens: sqlite_bureau_tokens,
         federation_administrators: sqlite_federation_administrators,
         federation_admin_sessions: sqlite_federation_admin_sessions,
         federation_user_token_revocations: sqlite_user_token_revocations,

@@ -14,7 +14,7 @@ import { sqliteTable, text } from "drizzle-orm/sqlite-core";
  */
 export const feedbackMessages = sqliteTable("service_feedback_messages", {
   feedback_id: text("feedback_id").primaryKey(),
-  bureau_id: text("bureau_id").notNull(),
+  city_id: text("city_id"),
   user_id: text("user_id").notNull(),
   message: text("message").notNull(),
   contact: text("contact").notNull(),

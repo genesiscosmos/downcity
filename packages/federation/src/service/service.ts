@@ -14,14 +14,11 @@ import type { CityTableApi } from "../store/table-api.js";
 import type { RuntimeUser } from "../federation/auth/types.js";
 import type { Authenticator } from "../federation/auth/authenticator.js";
 import type { EnvProvider } from "../federation/runtime.js";
-import type { BureauStore } from "./bureaus/bureau-store.js";
-import type { BureauRecord, RuntimeBureauToken } from "../types/Bureau.js";
 import type { InstructionActionDefinition, InstructionCapable, InstructionDefinition } from "./instruction.js";
 import type { RuntimeMetering } from "../types/Metering.js";
 import type { FederationQueue } from "../federation/queue.js";
 import type { FederationStorage } from "../federation/storage.js";
 import type { FederationRequestTransport } from "../federation/types.js";
-import type { BureauTokenStore } from "../federation/auth/bureau-token-store.js";
 import type { ServiceDatabaseContext } from "../types/database/Database.js";
 import type { ServiceDatabaseSchemas } from "./installable-service.js";
 
@@ -40,7 +37,7 @@ const SERVICE_MAINTENANCE = Symbol("downcity.service.maintenance");
 // ===========================================================================
 
 /** 当前请求最终解析出的身份。 */
-export type RouteIdentity = "guest" | "user" | "bureau" | "admin";
+export type RouteIdentity = "guest" | "user" | "admin";
 /** Action 可声明的可访问身份。空数组表示免登录。 */
 export type RouteAuth = Array<Exclude<RouteIdentity, "guest">>;
 
@@ -55,6 +52,8 @@ export interface Context {
   locals: Record<string, unknown>;
   /** 同一次 HTTP 请求共享的关联标识，用于串联路由、hook、Action 与错误响应。 */
   request_id?: string;
+  /** 调用方自报的可选 City 来源，仅用于记录，绝不作为身份或授权条件。 */
+  city_id?: string;
   /** 原始 HTTP Request，服务 webhook 等需要读取 header 时使用 */
   request?: Request;
   /** AI 等执行层组合的取消与期限信号；未提供时使用原始请求信号。 */
@@ -69,10 +68,6 @@ export interface Context {
   user?: RuntimeUser;
   /** 当前请求身份 */
   identity?: { kind: RouteIdentity };
-  /** 当前用户或机器凭证所属的稳定 Bureau。 */
-  bureau?: BureauRecord;
-  /** bureau 身份使用的机器凭证元数据。 */
-  bureau_token?: RuntimeBureauToken;
   /** 当前解析的 variant（如 AI model、翻译语言对等）。由 Service 自行注入 */
   variant?: {
     /** variant 唯一 ID。 */
@@ -222,10 +217,6 @@ export class Service {
 
   _authenticator?: Authenticator;
   _env?: EnvProvider;
-  /** Federation Bureau 身份持久化入口。 */
-  _bureauStore?: BureauStore;
-  /** Federation Bureau Token 持久化与校验入口。 */
-  _bureauTokenStore?: BureauTokenStore;
 
   /** 服务公网 URL */
   _baseURL?: string;

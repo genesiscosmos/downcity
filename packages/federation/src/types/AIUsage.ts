@@ -22,8 +22,8 @@ export interface AIUsageRecord extends Record<string, unknown> {
   usage_id: string;
   /** 当前调用所属用户；admin 调用没有用户时为空。 */
   user_id: string | null;
-  /** 当前调用所属 Bureau；admin 调用没有 Bureau 时为空。 */
-  bureau_id: string | null;
+  /** 可选 City 来源标签；直接用户和管理员调用可为空，不参与授权。 */
+  city_id: string | null;
   /** AIService Action ID，例如 text、stream 或 image/fetch。 */
   action_id: string;
   /** Federation 对外模型 ID。 */

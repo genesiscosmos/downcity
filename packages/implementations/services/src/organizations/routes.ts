@@ -29,7 +29,6 @@ export function register_organization_routes(
       return request.jsonResponse({
         items: await service.list_my(
           identity.user_id,
-          identity.bureau_id,
           await request.json<OrganizationListMyInput>(),
         ),
       });
@@ -43,7 +42,7 @@ export function register_organization_routes(
     handler: async (request) => {
       const identity = require_service_user_identity(request);
       return request.jsonResponse(await service.get_organization(
-        identity.user_id, identity.bureau_id, await request.json<OrganizationIdInput>(),
+        identity.user_id, await request.json<OrganizationIdInput>(),
       ));
     },
   });
@@ -55,7 +54,7 @@ export function register_organization_routes(
     handler: async (request) => {
       const identity = require_service_user_identity(request);
       return request.jsonResponse(await service.create(
-        identity.user_id, identity.bureau_id, await request.json<OrganizationCreateInput>(),
+        identity.user_id, await request.json<OrganizationCreateInput>(),
       ));
     },
   });
@@ -67,7 +66,7 @@ export function register_organization_routes(
     handler: async (request) => {
       const identity = require_service_user_identity(request);
       return request.jsonResponse(await service.update(
-        identity.user_id, identity.bureau_id, await request.json<OrganizationUpdateInput>(),
+        identity.user_id, await request.json<OrganizationUpdateInput>(),
       ));
     },
   });
@@ -79,7 +78,7 @@ export function register_organization_routes(
     handler: async (request) => {
       const identity = require_service_user_identity(request);
       return request.jsonResponse(await service.archive(
-        identity.user_id, identity.bureau_id, await request.json<OrganizationIdInput>(),
+        identity.user_id, await request.json<OrganizationIdInput>(),
       ));
     },
   });
@@ -91,7 +90,7 @@ export function register_organization_routes(
     handler: async (request) => {
       const identity = require_service_user_identity(request);
       return request.jsonResponse(await service.get_membership(
-        identity.user_id, identity.bureau_id, await request.json<OrganizationIdInput>(),
+        identity.user_id, await request.json<OrganizationIdInput>(),
       ));
     },
   });
@@ -103,7 +102,7 @@ export function register_organization_routes(
     handler: async (request) => {
       const identity = require_service_user_identity(request);
       return request.jsonResponse({ items: await service.list_members(
-        identity.user_id, identity.bureau_id, await request.json<OrganizationIdInput>(),
+        identity.user_id, await request.json<OrganizationIdInput>(),
       ) });
     },
   });
@@ -115,7 +114,7 @@ export function register_organization_routes(
     handler: async (request) => {
       const identity = require_service_user_identity(request);
       return request.jsonResponse(await service.update_member_role(
-        identity.user_id, identity.bureau_id, await request.json<OrganizationMemberRoleInput>(),
+        identity.user_id, await request.json<OrganizationMemberRoleInput>(),
       ));
     },
   });
@@ -127,7 +126,7 @@ export function register_organization_routes(
     handler: async (request) => {
       const identity = require_service_user_identity(request);
       return request.jsonResponse(await service.remove_member(
-        identity.user_id, identity.bureau_id, await request.json<OrganizationMemberRemoveInput>(),
+        identity.user_id, await request.json<OrganizationMemberRemoveInput>(),
       ));
     },
   });
@@ -139,7 +138,7 @@ export function register_organization_routes(
     handler: async (request) => {
       const identity = require_service_user_identity(request);
       return request.jsonResponse(await service.leave(
-        identity.user_id, identity.bureau_id, await request.json<OrganizationIdInput>(),
+        identity.user_id, await request.json<OrganizationIdInput>(),
       ));
     },
   });
@@ -151,7 +150,7 @@ export function register_organization_routes(
     handler: async (request) => {
       const identity = require_service_user_identity(request);
       return request.jsonResponse(await service.transfer_owner(
-        identity.user_id, identity.bureau_id, await request.json<OrganizationOwnerTransferInput>(),
+        identity.user_id, await request.json<OrganizationOwnerTransferInput>(),
       ));
     },
   });
@@ -163,7 +162,7 @@ export function register_organization_routes(
     handler: async (request) => {
       const identity = require_service_user_identity(request);
       return request.jsonResponse(await service.create_join_request(
-        identity.user_id, identity.bureau_id, await request.json<OrganizationIdInput>(),
+        identity.user_id, await request.json<OrganizationIdInput>(),
       ));
     },
   });
@@ -175,7 +174,7 @@ export function register_organization_routes(
     handler: async (request) => {
       const identity = require_service_user_identity(request);
       return request.jsonResponse(await service.cancel_join_request(
-        identity.user_id, identity.bureau_id, await request.json<OrganizationJoinRequestIdInput>(),
+        identity.user_id, await request.json<OrganizationJoinRequestIdInput>(),
       ));
     },
   });
@@ -187,7 +186,7 @@ export function register_organization_routes(
     handler: async (request) => {
       const identity = require_service_user_identity(request);
       return request.jsonResponse({ items: await service.list_join_requests(
-        identity.user_id, identity.bureau_id, await request.json<OrganizationIdInput>(),
+        identity.user_id, await request.json<OrganizationIdInput>(),
       ) });
     },
   });
@@ -200,7 +199,6 @@ export function register_organization_routes(
       const identity = require_service_user_identity(request);
       return request.jsonResponse(await service.decide_join_request(
         identity.user_id,
-        identity.bureau_id,
         await request.json<OrganizationJoinRequestDecisionInput>(),
       ));
     },

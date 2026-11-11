@@ -1,13 +1,13 @@
 /**
  * OAuth 产品回调与 PKCE 参数校验。
- * 网站只能回到 Bureau 注册地址下的固定 BFF callback；CLI/Desktop 只能回到
+ * 网站只能回到宿主明确配置的精确可信产品 callback；CLI/Desktop 只能回到
  * 127.0.0.1 临时端口。Provider state 与产品 callback state 分别绑定两次浏览器跳转。
  */
 import { httpError } from "@downcity/federation";
 import type { AccountsLoginStartRequest } from "./types.js";
 
-/** 校验全部 OAuth 客户端的回调目标；可信网站地址只能来自 Bureau 注册事实。 */
-export function oauth_login_parameters(input: Partial<AccountsLoginStartRequest>, server_url: string) {
+/** 校验全部 OAuth 客户端的回调目标；空白名单拒绝网站回调，不从请求推导信任。 */
+export function oauth_login_parameters(input: Partial<AccountsLoginStartRequest>, trusted_web_callbacks: readonly string[] = []) {
   let url: URL;
   try { url = new URL(String(input.redirect_uri ?? "")); }
   catch { throw httpError(400, "OAuth redirect_uri required"); }
@@ -15,14 +15,11 @@ export function oauth_login_parameters(input: Partial<AccountsLoginStartRequest>
     throw httpError(400, "canonical OAuth callback URL required");
   }
   if (input.client_type === "web") {
-    const registered = new URL(server_url);
-    const local = ["localhost", "127.0.0.1", "[::1]"].includes(registered.hostname);
-    if (registered.username || registered.password || registered.search || registered.hash
-      || (registered.protocol !== "https:" && !(registered.protocol === "http:" && local))) {
-      throw httpError(400, "Bureau server_url must be a trusted HTTPS website or local development URL");
+    const local = ["localhost", "127.0.0.1", "[::1]"].includes(url.hostname);
+    if ((url.protocol !== "https:" && !(url.protocol === "http:" && local))
+      || !trusted_web_callbacks.includes(url.href)) {
+      throw httpError(400, "redirect_uri must exactly match a trusted product callback");
     }
-    registered.pathname = `${registered.pathname.replace(/\/+$/u, "")}/api/auth/callback`;
-    if (url.href !== registered.href) throw httpError(400, "redirect_uri must match the registered Bureau website callback");
   } else if (url.protocol !== "http:" || url.hostname !== "127.0.0.1" || !url.port
     || Number(url.port) < 1024 || url.pathname === "/") {
     throw httpError(400, "loopback redirect_uri must use 127.0.0.1 with an unprivileged port and callback path");

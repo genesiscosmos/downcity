@@ -121,6 +121,8 @@ export interface AccountsProviderItem {
  * Accounts 服务配置。
  */
 export interface AccountsServiceOptions {
+  /** 管理员显式信任的精确产品 OAuth 回调 URL；未配置时拒绝 Web OAuth 回调。 */
+  trusted_web_callbacks?: readonly string[];
   /**
    * 登录、验证邮箱或 OAuth 完成后签发的 City user_token 有效期。
    */
@@ -250,7 +252,7 @@ export interface AccountsLoginStartRequest extends Record<string, unknown> {
    */
   provider?: string;
 
-  /** OAuth 回调：网站为 Bureau server_url 下 /api/auth/callback，CLI/Desktop 为 127.0.0.1 临时端口。 */
+  /** OAuth 回调：网站为管理员显式配置的精确可信产品回调，CLI/Desktop 为 127.0.0.1 临时端口。 */
   redirect_uri?: string;
   /** 产品回调 state，与 Provider OAuth state 独立，至少 32 个 URL-safe 字符。 */
   state?: string;
@@ -259,10 +261,6 @@ export interface AccountsLoginStartRequest extends Record<string, unknown> {
   /** OAuth 必须明确指定 S256。 */
   code_challenge_method?: "S256";
 
-  /**
-   * 需要签发 `user_token` 的稳定 Bureau ID。
-   */
-  bureau_id?: string;
 }
 
 /**

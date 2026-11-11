@@ -102,6 +102,7 @@ function create_worker_entrypoint(): string {
 import {
   AIService,
   Federation,
+  EnvService,
   R2Storage,
   type FederationQueueMessage,
 } from "@downcity/federation";
@@ -144,6 +145,7 @@ function create_federation(env: Env): Federation {
       public_url_prefix,
     }));
   }
+  federation.use(new EnvService());
   const accounts_service = new AccountsService({
     providers: [
       githubAccountsProvider(),

@@ -149,7 +149,7 @@
      parts,
      metadata: stripUndefined({
        model: input.model.id,
-       bureau_id: input.bureau_id,
+       city_id: input.city_id,
        user_id: input.user_id,
        ...metadata,
      }),

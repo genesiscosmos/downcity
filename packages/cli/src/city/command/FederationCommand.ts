@@ -29,8 +29,8 @@ export function register_federation_command(program: Command): void {
   const federation = program
     .command("federation")
     .description(t({
-      zh: "管理 City 终端连接的 Federation、Bureau 与账号登录态",
-      en: "manage the City terminal's Federation, Bureau, and account login state",
+      zh: "管理 City 终端连接的 Federation 与账号登录态",
+      en: "manage the City terminal's Federation and account login state",
     }))
     .helpOption("--help", helpText())
     .action(async () => {
@@ -123,21 +123,16 @@ export function register_federation_command(program: Command): void {
       zh: "登录当前或指定 Federation",
       en: "sign in to the current or specified Federation",
     }))
-    .option("--bureau-id <bureau_id>", t({
-      zh: "登录用户所属产品的 Bureau ID",
-      en: "Bureau ID of the product being signed in",
-    }))
     .option("--json [enabled]", t({
       zh: "以 JSON 输出",
       en: "output as JSON",
     }), parseBoolean)
     .action(async (
       url: string | undefined,
-      options: { bureauId?: string; json?: boolean },
+      options: { json?: boolean },
     ) => {
       await run_federation_login_command({
         url,
-        bureau_id: options.bureauId,
         as_json: options.json === true,
       });
     });
