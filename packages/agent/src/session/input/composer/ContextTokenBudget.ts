@@ -1,6 +1,6 @@
 /**
  * 摘要文本 token 预算与历史保留策略。
- * 当前 ModelClient 不提供 tokenizer，使用 ASCII 每三字符约一 token、非 ASCII 按码点估算。
+ * 当前 ModelClient 不提供 tokenizer，ASCII 每三个字符约一 token，非 ASCII 每个 UTF-16 码元约一 token。
  * 这是预算估计，不是模型的精确 token 计数；明确超限仍由执行器缩批处理。
  */
 
@@ -10,12 +10,11 @@ export const MIN_RETAINED_HISTORY_TOKENS = 10_000;
 /** 按文本类型估算 token；纯英文、代码与 JSON 不再按每字符一个 token 计费。 */
 export function estimate_context_tokens(text: string): number {
   let ascii_count = 0;
-  let other_tokens = 0;
-  for (const character of text) {
-    const point = character.codePointAt(0)!;
-    if (point <= 0x7f) ascii_count++;
-    else other_tokens += point > 0xffff ? 2 : 1;
+  // 非 ASCII 码点原本按占用的码元数计费，因此只需统计 ASCII，再用总长度减去它。
+  for (let index = 0; index < text.length; index++) {
+    if (text.charCodeAt(index) <= 0x7f) ascii_count++;
   }
+  const other_tokens = text.length - ascii_count;
   // 连续高密度编码串不按自然语言估算；二进制投影未识别的长串也保留预算余量。
   let encoded_extra = 0;
   for (const match of text.matchAll(/[A-Za-z0-9+/_=\-]{256,}/g)) encoded_extra += match[0].length * 2 / 3;
