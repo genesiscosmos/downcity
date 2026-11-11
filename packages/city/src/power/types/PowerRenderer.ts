@@ -227,7 +227,10 @@ export interface PowerRendererItemMenuProps {
   /** 菜单中的全部操作。 */
   readonly actions: readonly PowerRendererItemMenuAction[];
 
-  /** 是否仅在所属 Item 悬浮或菜单展开时显示触发器。 */
+  /** 替换触发器省略号的状态指示；状态说明应同时包含在 label 中，整个按钮仍负责打开菜单。 */
+  readonly indicator?: ReactNode;
+
+  /** 是否仅在所属 Item 悬浮或菜单展开时显示触发器；存在 indicator 时保持可见。 */
   readonly reveal_on_hover?: boolean;
 }
 

@@ -739,7 +739,7 @@ test("Inbox两个插槽共享查询，刷新保留选择并阻止旧快照回退
     await reading;
     resolve(structuredClone(snapshot));
     await refreshing;
-    assert.equal(store.get_snapshot().selected.pending.key, selected.key);
+    assert.equal(store.get_snapshot().selected.key, selected.key);
     assert.equal(store.get_snapshot().handled.has(selected.key), true);
     assert.equal(store.get_snapshot().data.interactions.length, 1);
     assert.equal(inbox_entries(store.get_snapshot().data, "pending")[0].source, "程序员");
@@ -752,7 +752,7 @@ test("Inbox两个插槽共享查询，刷新保留选择并阻止旧快照回退
     const action_count = invoked.length;
     await store.update_notifications("clear_read");
     assert.equal(invoked.length, action_count);
-    assert.equal(store.get_snapshot().selected.updates, undefined);
+    assert.equal(store.get_snapshot().selected.key, selected.key);
     assert.deepEqual(invoked.at(-1), { action: "notification.clear_read_updates", input: { updates: [{ notification_id: "update", created_at: 2 }] } });
     const cleared_snapshot = { ...read_snapshot, revision: 3, items: [] };
     resolve_action({ snapshot: cleared_snapshot });
@@ -765,7 +765,7 @@ test("Inbox两个插槽共享查询，刷新保留选择并阻止旧快照回退
     assert.equal(store.get_snapshot().data, cleared_snapshot);
     const removed_snapshot = { ...cleared_snapshot, revision: 4, interactions: [] };
     const refresh_removed = store.refresh(); resolve(removed_snapshot); await refresh_removed;
-    assert.equal(store.get_snapshot().selected.pending.key, selected.key);
+    assert.equal(store.get_snapshot().selected.key, selected.key);
     release_sidebar();
     const still_active = store.refresh(); resolve(snapshot); await still_active;
     release_main();

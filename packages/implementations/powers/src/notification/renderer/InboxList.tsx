@@ -1,9 +1,9 @@
-/** Inbox 事项列表：公开摘要和状态用于扫描；选择与通知整理使用互相独立的按钮。 */
-import type { PowerMainviewComponentProps } from "@downcity/city/power/react";
+/** Inbox 侧栏列表：复用宿主双行条目，状态统一显示在每项菜单按钮内部。 */
+import type { PowerSidebarComponentProps } from "@downcity/city/power/react";
 import type { InboxEntry } from "../types/Inbox.js";
 import { full_time, relative_time } from "./InboxEntries.js";
 import { InboxAvatar } from "./InboxAvatar.js";
-import { InboxAttention } from "./InboxAttention.js";
+import { InboxAttention, inbox_attention_label } from "./InboxAttention.js";
 import type { NotificationRendererOptions } from "../types/NotificationRenderer.js";
 
 /** 列表不负责已读；只在用户打开具体详情后由详情确认阅读。 */
@@ -14,34 +14,25 @@ export function InboxList({ entries, selected_key, busy, choose, update_notifica
   /** 普通通知动作正在进行，防止重复整理。 */ busy: boolean;
   /** 经过草稿离开确认的详情选择动作。 */ choose: (entry: InboxEntry) => Promise<void>;
   /** 由共享 Store 执行的版本化通知动作。 */ update_notifications: (operation: "read" | "clear", entry: InboxEntry) => Promise<void>;
-  /** 宿主提供统一菜单和基础控件。 */ props: PowerMainviewComponentProps;
+  /** 宿主提供统一侧栏行、菜单和基础控件。 */ props: PowerSidebarComponentProps;
 }) {
-  const { ItemMenu } = props.ui.components;
-  return <ul className="inbox-list" aria-label="收件箱事项">
-    {entries.map((entry) => {
-      const failure = entry.update?.outcome === "failure";
-      return <li key={entry.key} className="inbox-list-row" data-active={selected_key === entry.key}
-        data-unread={entry.unread} data-failure={failure}>
-        <button type="button" className="inbox-list-select" onClick={() => void choose(entry)}
-          aria-current={selected_key === entry.key ? "true" : undefined}>
-          <InboxAvatar entry={entry} size="list" options={options} />
-          <span className="inbox-list-content">
-            <span className="inbox-list-sender">
-              <span className="inbox-list-name">{entry.source}</span>
-              <time className="inbox-list-time" dateTime={new Date(entry.created_at).toISOString()} title={full_time(entry.created_at)}>{relative_time(entry.created_at)}</time>
-            </span>
-            <span className="inbox-list-title">{entry.title}</span>
-            {entry.summary ? <span className="inbox-list-summary">{entry.summary}</span> : null}
-          </span>
-          <span className="inbox-list-indicator"><InboxAttention entry={entry} options={options} presentation="dot" /></span>
-        </button>
-        {entry.update ? <div className="inbox-list-actions">
-          <ItemMenu label={`通知操作：${entry.title}`} reveal_on_hover={false} actions={[
-            ...(entry.unread ? [{ action_id: "read_update", label: "标为已读", disabled: busy, on_select: () => update_notifications("read", entry) }] : []),
-            { action_id: "clear_update", label: "清除此通知", disabled: busy, on_select: () => update_notifications("clear", entry) },
-          ]} />
-        </div> : null}
-      </li>;
-    })}
-  </ul>;
+  const { SidebarItem, ItemMenu } = props.ui.components;
+  return <>{entries.map((entry) => {
+    const needs_attention = entry.unread && (!entry.pending || entry.pending.interaction.can_respond);
+    return <SidebarItem key={entry.key}
+    label={entry.title}
+    description={<span className="inbox-list-meta"><span>{entry.source}</span><span aria-hidden="true">·</span><time dateTime={new Date(entry.created_at).toISOString()} title={full_time(entry.created_at)}>{relative_time(entry.created_at)}</time></span>}
+    leading={<InboxAvatar entry={entry} size="list" options={options} />}
+    active={selected_key === entry.key}
+    on_select={() => void choose(entry)}
+    menu={<ItemMenu label={`事项操作：${entry.title}${needs_attention ? `，${inbox_attention_label(entry)}` : ""}`} reveal_on_hover
+      indicator={needs_attention ? <InboxAttention entry={entry} options={options} presentation="dot" /> : undefined} actions={[
+        { action_id: "view_detail", label: "查看详情", on_select: () => choose(entry) },
+        ...(entry.update ? [
+          ...(entry.unread ? [{ action_id: "read_update", label: "标为已读", separator_before: true, disabled: busy, on_select: () => update_notifications("read", entry) }] : []),
+          { action_id: "clear_update", label: "清除此通知", separator_before: !entry.unread, disabled: busy, on_select: () => update_notifications("clear", entry) },
+        ] : []),
+      ]} />}
+    />;
+  })}</>;
 }

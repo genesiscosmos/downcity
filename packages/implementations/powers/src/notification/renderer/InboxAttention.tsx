@@ -3,6 +3,13 @@ import type { InboxEntry } from "../types/Inbox.js";
 import type { NotificationRendererOptions } from "../types/NotificationRenderer.js";
 import { kind_label } from "./InboxEntries.js";
 
+/** 行菜单与详情共用可读状态，避免按钮名称与可见指示表达不同含义。 */
+export function inbox_attention_label(entry: InboxEntry): string {
+  return entry.pending && !entry.pending.interaction.can_respond ? "已中断"
+    : entry.update?.outcome === "failure" ? "执行失败"
+      : entry.update?.outcome === "success" ? "已完成" : kind_label(entry.kind);
+}
+
 /** 中断请求使用中性文字；已读通知只移除圆点，保留原业务结果。 */
 export function InboxAttention({ entry, options, presentation }: {
   /** 原始事项投影，不修改其已读或业务状态。 */ entry: InboxEntry;
@@ -10,8 +17,7 @@ export function InboxAttention({ entry, options, presentation }: {
   /** 状态文字或仍需注意的圆点。 */ presentation: "dot" | "status";
 }) {
   const interrupted = !!entry.pending && !entry.pending.interaction.can_respond;
-  const label = interrupted ? "已中断" : entry.update?.outcome === "failure" ? "执行失败"
-    : entry.update?.outcome === "success" ? "已完成" : kind_label(entry.kind);
+  const label = inbox_attention_label(entry);
   if (presentation === "dot" && (!entry.unread || interrupted)) return null;
   if (interrupted) return <span>{label}</span>;
   return options.render_attention?.({ kind: entry.pending ? "request" : "update",

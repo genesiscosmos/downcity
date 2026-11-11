@@ -39,8 +39,8 @@ export interface InboxState {
   loading: boolean;
   /** 读取失败的安全说明，失败不清除已有内容。 */
   error: string;
-  /** 各筛选当前选中项，保留已处理请求以便原位确认；首次进入不自动选择。 */
-  selected: Partial<Record<InboxView, InboxEntry>>;
+  /** 当前选中事项，保留已处理请求以便原位确认；首次进入不自动选择。 */
+  selected?: InboxEntry;
   /** 已在本页面成功回应的项目标识。 */
   handled: ReadonlySet<string>;
   /** 当前表单存在未提交修改的项目，不保存输入内容。 */

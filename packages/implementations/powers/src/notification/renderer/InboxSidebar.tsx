@@ -1,30 +1,52 @@
-/** Inbox 分类导航：只展示关注、通知和全部筛选，具体事项由主区域承载。 */
+/** Inbox 事项侧栏：标题菜单固定使用省略号，事项状态由各行菜单与详情展示。 */
+import { useEffect, useRef } from "react";
 import type { PowerSidebarComponentProps } from "@downcity/city/power/react";
+import type { NotificationRendererOptions } from "../types/NotificationRenderer.js";
+import type { InboxEntry } from "../types/Inbox.js";
 import { InboxStore } from "./InboxStore.js";
 import { use_inbox } from "./InboxContext.js";
 import { inbox_entries } from "./InboxEntries.js";
-import { InboxIcon } from "./InboxIcon.js";
+import { InboxList } from "./InboxList.js";
 
 /** 侧栏与详情借用同一个Store，避免重复轮询及选择分叉。 */
-export function InboxSidebar({ store, ...props }: PowerSidebarComponentProps & {
-  /** Renderer工厂拥有的临时共享状态。 */ store: InboxStore;
+export function InboxSidebar({ store, options, ...props }: PowerSidebarComponentProps & {
+  /** Renderer 工厂拥有的临时共享状态。 */ store: InboxStore;
+  /** 与详情共用的宿主头像和关注状态适配。 */ options: NotificationRendererOptions;
 }) {
-  const { state, view, change_view } = use_inbox(store, props);
-  const { Sidebar, SidebarSection, SidebarItem, SidebarSubText } = props.ui.components;
+  const { state, choose } = use_inbox(store, props);
+  const { Sidebar, SidebarSection, SidebarSubText, ItemMenu } = props.ui.components;
   const data = state.data;
+  const list_region = useRef<HTMLDivElement>(null);
+  const previous_selection = useRef(state.selected?.key);
+  useEffect(() => {
+    if (!state.selected && previous_selection.current) list_region.current?.focus();
+    previous_selection.current = state.selected?.key;
+  }, [state.selected?.key]);
+  const entries = inbox_entries(data, "all");
+  const attention_keys = new Set(inbox_entries(data, "pending").map((entry) => entry.key));
+  // 失效请求仍可查看；未读失败只在关注组展示，阅读后自然归入通知组。
   const groups = [
-    { view: "pending" as const, label: "需要处理", icon: "approval" as const, count: data?.badge_count ?? 0 },
-    { view: "updates" as const, label: "通知", icon: "update" as const, count: data?.unread_update_count ?? 0 },
-    { view: "all" as const, label: "全部", icon: "inbox" as const, count: inbox_entries(data, "all").length },
+    { key: "pending", label: "需要处理", entries: entries.filter((entry) => entry.pending || attention_keys.has(entry.key)), count: data?.badge_count ?? 0 },
+    { key: "updates", label: "通知", entries: entries.filter((entry) => !entry.pending && !attention_keys.has(entry.key)), count: (data?.unread_update_count ?? 0) - (data?.unread_failure_count ?? 0) },
   ];
-  return <Sidebar>
-    <SidebarSection>
-      {groups.map((group) => <SidebarItem key={group.view} label={group.label}
-        leading={<span className="inbox-nav-icon"><InboxIcon kind={group.icon} /></span>}
-        trailing={<span className="inbox-nav-count">{group.count}</span>}
-        active={view === group.view} disabled={!!state.busy_key}
-        on_select={() => void change_view(group.view)} />)}
-    </SidebarSection>
-    {data && data.badge_count > 0 ? <SidebarSubText>待处理 {data.pending_request_count} · 未读失败 {data.unread_failure_count}</SidebarSubText> : null}
+  const update_notifications = async (operation: "read" | "clear" | "clear_read", entry?: InboxEntry) => {
+    await store.update_notifications(operation, entry);
+    props.ui.invalidate();
+  };
+  const busy = !!state.update_action;
+  return <Sidebar actions={
+    <ItemMenu label="收件箱操作" actions={[
+      { action_id: "read_all_updates", label: "全部通知标为已读", disabled: busy || !data?.unread_update_count, on_select: () => update_notifications("read") },
+      { action_id: "clear_read_updates", label: "清除已读通知", disabled: busy || !data?.items.some((item) => item.scope === "inbox" && item.read), on_select: () => update_notifications("clear_read") },
+    ]} />
+  }>
+    <div ref={list_region} tabIndex={-1} className="inbox-sidebar-items" role="region" aria-label="收件箱事项">
+      {state.update_error ? <SidebarSubText><span className="inbox-inline-error" role="alert" title={state.update_error}>通知整理失败，请重试。</span></SidebarSubText> : null}
+      {state.loading ? <SidebarSubText><span role="status">正在读取收件箱…</span></SidebarSubText>
+        : !data ? <SidebarSubText><span role="status">暂时无法读取收件箱，请再次点击 Inbox。</span></SidebarSubText> : groups.map((group) => <SidebarSection key={group.key} label={<span className="inbox-group-label">{group.label}{group.count > 0 ? <span>{group.count}</span> : null}</span>}>
+          {group.entries.length ? <InboxList entries={group.entries} selected_key={state.selected?.key} busy={busy} choose={choose} update_notifications={update_notifications} props={props} options={options} />
+            : <SidebarSubText>{group.key === "pending" ? "暂无待处理事项" : "暂无通知"}</SidebarSubText>}
+        </SidebarSection>)}
+    </div>
   </Sidebar>;
 }

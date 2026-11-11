@@ -112,7 +112,7 @@ export interface NotificationRendererOptions {
   open_notification?: (item: NotificationItem) => Promise<void>;
   /** 仅为 can_respond 为 true 的原请求挂载表单；控件提交时须标明是否包含私密问题。 */
   render_interaction?: (item: NotificationInteractionItem, respond: (input: RespondSessionInteractionInput, private_question?: boolean) => Promise<void>, display: NotificationInteractionDisplay) => ReactNode;
-  /** 由受信宿主解析真实 Agent 头像；list 为 32px 独立头像列，detail 为 18px 来源行；不暴露本地路径或加载策略。 */
+  /** 由受信宿主解析真实 Agent 头像；list 为 20px 侧栏头像，detail 为 18px 来源行；不暴露本地路径或加载策略。 */
   render_agent_avatar?: (agent_id: string, size: "list" | "detail") => ReactNode;
   /** 复用宿主 Rail 的状态映射与语义配色；未提供时使用中性展示。 */
   render_attention?: (display: NotificationAttentionDisplay) => ReactNode;

@@ -1,78 +1,32 @@
-/** Downcity Inbox：固定 360px 完整浅底列表与留白详情共享顶部基线；三层消息行复用宿主头像和 Rail 状态。 */
-.inbox-workspace { --inbox-edge: 16px; --inbox-panel-inset: 8px; --inbox-row-inset: 12px; --inbox-avatar-size: 32px; --inbox-toolbar-height: 36px; container: inbox / inline-size; width: 100%; height: 100%; min-width: 0; min-height: 0; color: var(--foreground); }
-.inbox-workspace-layout { box-sizing: border-box; height: 100%; min-height: 0; padding: var(--inbox-edge); }
-.inbox-toolbar { box-sizing: border-box; display: flex; flex-shrink: 0; align-items: center; justify-content: space-between; gap: 12px; height: var(--inbox-toolbar-height); padding-inline: var(--inbox-row-inset); }
-.inbox-toolbar-heading h1 { display: flex; align-items: center; gap: 8px; margin: 0; font-size: 12px; font-weight: 500; color: var(--muted-foreground); }
-.inbox-total { font-size: var(--text-2xs, 12px); font-weight: 400; color: var(--muted-foreground); font-variant-numeric: tabular-nums; }
-.inbox-toolbar-actions { display: flex; align-items: center; gap: 8px; }
-.inbox-workspace button:disabled { opacity: .4; cursor: default; }
-.inbox-nav-icon { display: flex; color: var(--muted-foreground); }
-.inbox-nav-icon svg { width: 15px; height: 15px; }
-.inbox-nav-count { font-size: var(--text-2xs, 12px); font-variant-numeric: tabular-nums; color: var(--muted-foreground); }
-.inbox-panes { height: 100%; display: flex; gap: 24px; min-height: 0; min-width: 0; align-items: stretch; }
-.inbox-list-pane { box-sizing: border-box; display: flex; flex-direction: column; flex: 0 0 360px; width: 360px; min-width: 0; min-height: 0; padding: var(--inbox-panel-inset); background: var(--surface-subtle); border-radius: var(--radius-surface, 12px); }
-.inbox-list-scroll { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; }
-.inbox-detail-pane { display: flex; flex: 1; min-width: 0; overflow-y: auto; overscroll-behavior: contain; border-radius: var(--radius-surface, 12px); }
-.inbox-list { list-style: none; padding: 0; margin: 0; }
-.inbox-list-row { position: relative; margin-block: 4px; border-radius: var(--radius-control, 6px); }
-.inbox-list-row:hover { background: var(--interaction-hover); }
-.inbox-list-row[data-active="true"] { background: var(--interaction-active); }
-.inbox-list-select { box-sizing: border-box; width: 100%; min-width: 0; min-height: 84px; display: grid; grid-template-columns: var(--inbox-avatar-size) minmax(0, 1fr) 24px; align-items: start; column-gap: 10px; padding: 12px var(--inbox-row-inset); text-align: left; cursor: pointer; border-radius: inherit; }
-.inbox-list-content { display: flex; flex-direction: column; min-width: 0; gap: 4px; }
-.inbox-list-indicator { display: inline-flex; align-items: center; justify-content: center; height: 20px; }
+/** Inbox 展示样式：行与页面骨架归宿主，仅定义来源元信息、单列阅读内容和紧凑状态。 */
+.inbox-workspace { display: flex; flex: 1; flex-direction: column; min-width: 0; min-height: 0; color: var(--foreground); }
+.inbox-workspace:focus, .inbox-sidebar-items:focus { outline: none; }
+.inbox-sidebar-items { min-width: 0; }
+.inbox-group-label { display: flex; align-items: center; gap: .5rem; }
+.inbox-group-label > span { font-variant-numeric: tabular-nums; }
+.inbox-list-meta { display: flex; align-items: center; gap: .375rem; min-width: 0; }
+.inbox-list-meta > span:first-child { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.inbox-list-meta > time { flex-shrink: 0; white-space: nowrap; font-variant-numeric: tabular-nums; }
 .inbox-avatar { display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; color: var(--muted-foreground); }
-.inbox-avatar[data-size="list"] { width: var(--inbox-avatar-size); height: var(--inbox-avatar-size); }
-.inbox-avatar[data-size="detail"] { width: 18px; height: 18px; }
+.inbox-avatar[data-size="list"] { width: 1.25rem; height: 1.25rem; }
+.inbox-avatar[data-size="detail"] { width: 1.125rem; height: 1.125rem; }
 .inbox-avatar > :is(svg, img) { width: 100%; height: 100%; }
-.inbox-list-sender { display: flex; align-items: center; gap: 6px; min-width: 0; }
-.inbox-list-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; line-height: 20px; color: var(--muted-foreground); }
-.inbox-list-title { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; font-weight: 400; line-height: 1.5; }
-.inbox-list-row[data-unread="true"] .inbox-list-title { font-weight: 500; }
-.inbox-list-summary { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; min-width: 0; overflow: hidden; overflow-wrap: anywhere; color: var(--muted-foreground); font-size: 12px; line-height: 1.6; }
-/* 时间紧随名称；右上圆点与右下菜单使用固定独立槽位，不影响文本宽度或彼此遮挡。 */
-.inbox-list-time { flex-shrink: 0; line-height: 20px; font-size: 11px; color: var(--muted-foreground); font-variant-numeric: tabular-nums; white-space: nowrap; }
-.inbox-list-actions { position: absolute; right: var(--inbox-row-inset); bottom: 10px; display: flex; width: 24px; height: 24px; align-items: center; justify-content: center; }
-.inbox-detail-toolbar { box-sizing: border-box; display: flex; align-items: center; justify-content: space-between; gap: 12px; height: var(--inbox-toolbar-height); margin-bottom: 28px; }
-/* 两个导航操作使用同一轻量尺寸；表单主次操作由宿主共享 Button 提供。 */
-.inbox-detail-toolbar > button { display: inline-flex; align-items: center; justify-content: center; height: 32px; padding-inline: 8px; border: 0; border-radius: var(--radius-control, 6px); background: transparent; color: var(--muted-foreground); font-size: var(--text-2xs, 12px); white-space: nowrap; cursor: pointer; }
-.inbox-detail-toolbar > button:hover { background: var(--interaction-hover); color: var(--foreground); }
-.inbox-notices { flex-shrink: 0; padding: 0 var(--inbox-row-inset) 4px; }
-.inbox-notices .inbox-inline-error { margin: 0; padding: 10px 0; }
-.inbox-action-status { display: block; padding: 8px 0; font-size: var(--text-2xs, 12px); color: var(--muted-foreground); }
-.inbox-list-skeleton { padding: 12px 28px; }
-.inbox-list-skeleton i { display: block; height: 76px; margin: 12px 0; background: var(--surface-subtle, var(--interaction-hover)); border-radius: var(--radius-control, 6px); }
-.inbox-workspace :is(button, summary):focus-visible { outline: none; background: var(--interaction-active); }
-.inbox-list-pane:focus, .inbox-detail-pane:focus { outline: none; }
-@media (hover: hover) and (pointer: fine) {
-  .inbox-list-actions { opacity: 0; pointer-events: none; }
-  .inbox-list-row:hover .inbox-list-actions, .inbox-list-row:focus-within .inbox-list-actions, .inbox-list-actions:has([data-popup-open]) { opacity: 1; pointer-events: auto; }
-}
-@container inbox (max-width: 760px) {
-  .inbox-panes { gap: 0; }
-  .inbox-workspace-layout[data-detail-open="true"] .inbox-list-pane { display: none; }
-  .inbox-list-pane { flex: 1; width: auto; }
-  .inbox-workspace-layout[data-detail-open="false"] .inbox-detail-pane { display: none; }
-}
-@container inbox (max-width: 520px) {
-  .inbox-workspace-layout { --inbox-edge: 8px; --inbox-row-inset: 8px; }
-}
-.inbox-icon-button { display: inline-flex; padding: 5px; border-radius: var(--radius-control, 6px); color: var(--muted-foreground); cursor: pointer; }
-.inbox-icon-button svg { width: 14px; height: 14px; }
-.inbox-icon-button:hover { background: var(--interaction-hover); }
 .inbox-attention-dot { display: inline-block; flex: 0 0 6px; width: 6px; height: 6px; border-radius: 50%; }
 .inbox-attention-neutral { background: var(--muted-foreground); }
-.inbox-detail { box-sizing: border-box; flex: 1; min-width: 0; padding: var(--inbox-panel-inset) calc(var(--inbox-panel-inset) + var(--inbox-row-inset)) 48px; overflow-wrap: anywhere; }
+.inbox-detail { box-sizing: border-box; width: 100%; max-width: 48rem; min-width: 0; margin-inline: auto; padding-bottom: 2rem; overflow-wrap: anywhere; }
 .inbox-detail :is(.inbox-form, .inbox-result, .markdown-body) { min-width: 0; max-width: none; }
 .inbox-result :is(pre, table) { max-width: 100%; overflow-x: auto; }
 .inbox-result pre { white-space: pre-wrap; overflow-wrap: anywhere; }
-.inbox-detail-header { display: grid; gap: 10px; padding-bottom: 24px; }
+.inbox-detail-header { display: grid; gap: .75rem; padding-bottom: 1.5rem; }
+.inbox-detail-heading { display: flex; align-items: flex-start; gap: 1rem; }
+.inbox-detail-heading > :last-child { flex-shrink: 0; margin-left: auto; }
+.inbox-detail-actions { display: flex; flex-wrap: wrap; gap: .5rem; }
 .inbox-detail-status { display: inline-flex; align-items: center; gap: 6px; }
-.inbox-detail-title { margin: 0; font-size: 20px; font-weight: 500; line-height: 1.6; letter-spacing: -.02em; overflow-wrap: anywhere; }
-.inbox-detail-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; font-size: var(--text-2xs, 12px); color: var(--muted-foreground); }
+.inbox-detail-title { min-width: 0; margin: 0; font-size: var(--text-xl, 1.25rem); font-weight: 500; line-height: var(--text-xl--line-height, 1.75rem); overflow-wrap: anywhere; }
+.inbox-detail-meta { display: flex; flex-wrap: wrap; align-items: center; gap: .375rem .625rem; font-size: var(--text-2xs, .6875rem); color: var(--muted-foreground); }
 .inbox-source { display: inline-flex; align-items: center; gap: 7px; }
-.inbox-source-link { margin-left: auto; }
 .inbox-form { padding-block: 4px 12px; }
-.inbox-result { font-size: 13px; line-height: 1.9; overflow-wrap: anywhere; }
+.inbox-result { font-size: var(--text-sm, .8125rem); line-height: 1.9; overflow-wrap: anywhere; }
 .inbox-detail-note { color: var(--muted-foreground); font-size: var(--text-xs, 13px); line-height: 1.7; }
 .inbox-origin { margin-top: 20px; padding-top: 8px; font-size: var(--text-2xs, 12px); color: var(--muted-foreground); }
 .inbox-origin summary { cursor: pointer; width: fit-content; }
@@ -82,14 +36,10 @@
 .inbox-resolution > svg { width: 20px; height: 20px; flex-shrink: 0; color: var(--muted-foreground); }
 .inbox-resolution h2 { margin: 0 0 5px; font-size: var(--text-sm, 14px); font-weight: 500; }
 .inbox-resolution p { margin: 0 0 16px; color: var(--muted-foreground); font-size: var(--text-xs, 13px); line-height: 1.7; }
-.inbox-connection { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px; padding: 9px 0; background: var(--surface-subtle); color: var(--muted-foreground); font-size: var(--text-2xs, 12px); }
-.inbox-connection button, .inbox-inline-error button { text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
+.inbox-inline-error button { text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
 .inbox-inline-error { color: var(--destructive); font-size: var(--text-2xs, 12px); line-height: 1.6; padding-bottom: 12px; }
 .inbox-inline-error button { margin-left: 8px; }
-.inbox-empty { min-height: 65%; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; padding: 40px 24px; text-align: center; }
-.inbox-empty > svg { width: 30px; height: 30px; color: var(--muted-foreground); opacity: .6; margin-bottom: 5px; }
+.inbox-empty { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: .625rem; padding: 2.5rem 1.5rem; text-align: center; }
+.inbox-empty > svg { width: 1.75rem; height: 1.75rem; color: var(--muted-foreground); margin-bottom: .25rem; }
 .inbox-empty h2 { margin: 0; font-size: var(--text-sm, 14px); font-weight: 500; }
 .inbox-empty p { margin: 0; max-width: 310px; font-size: var(--text-2xs, 12px); line-height: 1.7; color: var(--muted-foreground); }
-@container inbox (max-width: 520px) {
-  .inbox-detail { padding-bottom: 32px; }
-}

@@ -3,13 +3,13 @@
  * 不保存交互答案，选择保留失效项让用户了解变化，不在刷新中自动跳往另一张表单。
  */
 import type { PowerActionGateway } from "@downcity/city/power/react";
-import type { InboxEntry, InboxState, InboxView } from "../types/Inbox.js";
+import type { InboxEntry, InboxState } from "../types/Inbox.js";
 import type { NotificationListResult, NotificationUpdateResult } from "../types/NotificationRenderer.js";
 import { inbox_entries } from "./InboxEntries.js";
 
 /** 只缓存公开快照和界面状态，不拥有业务状态与执行生命周期。 */
 export class InboxStore {
-  private state: InboxState = { loading: true, error: "", selected: {}, handled: new Set() };
+  private state: InboxState = { loading: true, error: "", handled: new Set() };
   private readonly listeners = new Set<() => void>();
   private readonly gateways = new Map<symbol, PowerActionGateway>();
   private refresh_pending = false;
@@ -37,16 +37,6 @@ export class InboxStore {
     };
   }
 
-  /** 用户主动重试是明确的来源对账入口；自动快照刷新始终只读。 */
-  refresh_sources = async (): Promise<void> => {
-    const gateway = this.gateways.values().next().value;
-    if (!gateway) return;
-    try {
-      await gateway.invoke("notification.refresh_sources", {});
-      await this.refresh();
-    } catch (error) { this.patch({ error: error instanceof Error ? error.message : String(error) }); }
-  };
-
   /** 请求不重叠；后台失败保留当前内容，首次失败也结束占位。 */
   refresh = async (): Promise<void> => {
     if (this.in_flight) { this.refresh_pending = true; return await this.in_flight; }
@@ -69,13 +59,13 @@ export class InboxStore {
     }
   };
 
-  select(entry: InboxEntry, view: InboxView = entry.view): void {
-    this.patch({ selected: { ...this.state.selected, [view]: entry }, dirty_key: undefined });
+  select(entry: InboxEntry): void {
+    this.patch({ selected: entry, dirty_key: undefined });
   }
 
-  /** 关闭详情后保留筛选与列表位置，不自动选择下一项。 */
-  close(view: InboxView): void {
-    this.patch({ selected: { ...this.state.selected, [view]: undefined }, dirty_key: undefined });
+  /** 关闭详情后保留列表位置，不自动选择下一项。 */
+  close(): void {
+    this.patch({ selected: undefined, dirty_key: undefined });
   }
 
   dirty(key: string): void { if (this.state.dirty_key !== key) this.patch({ dirty_key: key }); }
@@ -118,12 +108,9 @@ export class InboxStore {
   /** 整体接收 Power 快照，列表、组成和数字始终来自同一版本。 */
   private receive(data: NotificationListResult): void {
     if (this.state.data && data.revision < this.state.data.revision) return;
-    const selected = { ...this.state.selected };
-    const entries = inbox_entries(data, "all");
-    for (const view of ["pending", "updates", "all"] as const) {
-      const previous = selected[view];
-      selected[view] = previous ? entries.find((item) => item.key === previous.key) ?? (previous.pending ? previous : undefined) : undefined;
-    }
+    const previous = this.state.selected;
+    const selected = previous ? inbox_entries(data, "all").find((item) => item.key === previous.key)
+      ?? (previous.pending ? previous : undefined) : undefined;
     this.patch({ data, selected, loading: false, error: "" });
   }
 

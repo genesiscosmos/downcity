@@ -1,5 +1,5 @@
 /**
- * Notification Power 的 Inbox：分类侧栏与列表优先的响应式工作区。
+ * Notification Power 的 Inbox：侧栏选择事项，主区域展示单项详情与处理表单。
  * Canonical Interaction 的生命周期归原 Session；这里只查询、展示和转发用户响应。
  * Desktop 注入现有表单与专用私密传输，不改变通用 PowerRenderer 协议。
  */
@@ -18,7 +18,7 @@ export function create_notification_power_renderer(options: NotificationRenderer
   const store = new InboxStore();
   return define_power_renderer({
     sidebar: function NotificationSidebar(props) {
-      return <InboxSidebar {...props} store={store} />;
+      return <InboxSidebar {...props} store={store} options={options} />;
     },
     mainview: function NotificationMainview(props) {
       return <InboxMainview {...props} store={store} options={options} />;
