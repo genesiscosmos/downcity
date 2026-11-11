@@ -1,5 +1,6 @@
 /** Workspace 登记与生命周期用例；项目文件与 Session 历史始终保留。 */
 import fs from "node:fs/promises";
+import { SshWorkspace, SshHostKeyError, normalize_ssh_host, type SshRequestOptions } from "@downcity/workspace-ssh";
 import path from "node:path";
 import type { LocalWorkspaceConfig } from "../types/LocalConfig.js";
 import type { ResourceDependencies } from "./types.js";
@@ -7,8 +8,18 @@ import { count_workspace_sessions, read_session_agent_references } from "./Sessi
 import { assert_resource_revision, resource_revision } from "./ResourceCoordinator.js";
 import { require_resource_value, require_workspace_id, ResourceError, is_missing_file } from "./ResourceError.js";
 
+/** SSH 登记中的显式安装选择和主机确认。 */
+interface WorkspaceRegistrationOptions {
+  /** 在登记前安装缺失的 SSH Workspace 依赖。 */
+  initialize_dependencies?: boolean;
+  /** Desktop 原生对话框已确认的 OpenSSH 主机指纹提示。 */
+  confirmed_prompt?: string;
+}
+
 /** 管理项目登记，路径和 SSH 授权不通过此用例修改。 */
 export class WorkspaceResources {
+  private readonly initializing_hosts = new Set<string>();
+
   constructor(private readonly dependencies: ResourceDependencies) {}
 
   /** 登记和运行索引并集，内部 main 目录默认隐藏。 */
@@ -33,8 +44,11 @@ export class WorkspaceResources {
     return { workspace: await this.project(workspace_id, config ?? undefined), session_count: await this.session_count(workspace_id) };
   }
 
-  /** register 只验证/规范化现有目录，不创建项目资产。 */
-  async register(workspace_path: string, name?: string) {
+  /** 登记现有目录；仅显式选择时初始化 SSH 依赖，不写入项目资产。 */
+  async register(workspace_path: string, name?: string, source?: LocalWorkspaceConfig["source"], options: WorkspaceRegistrationOptions = {}) {
+    if (source) require_resource_value(source.kind === "ssh" && typeof source.host === "string", "SSH source requires kind=ssh and host");
+    require_resource_value(!options.initialize_dependencies || source?.kind === "ssh", "Dependency initialization requires an SSH Workspace");
+    if (source) return await this.register_remote(workspace_path, name, source, options);
     require_resource_value(typeof workspace_path === "string" && workspace_path.trim(), "Workspace path is required");
     const real_path = await fs.realpath(path.resolve(workspace_path));
     require_resource_value((await fs.stat(real_path)).isDirectory(), "Workspace path must be a directory");
@@ -46,7 +60,7 @@ export class WorkspaceResources {
       // 对旧记录只报告 alias 冲突，不自动合并稳定 ID。
       const aliases: string[] = [];
       for (const config of repository.list()) {
-        if (config.workspace_path === real_path) continue;
+        if (config.source || config.workspace_path === real_path) continue;
         try { if (await fs.realpath(config.workspace_path) === real_path) aliases.push(config.workspace_id); }
         catch (error) { if (!is_missing_file(error)) throw error; }
       }
@@ -56,6 +70,54 @@ export class WorkspaceResources {
       this.dependencies.host?.invalidate();
       return { workspace: await this.project(config.workspace_id, config), changed: !existing, name_mismatch: !!existing && name !== undefined && name !== existing.name };
     });
+  }
+
+  /** 验证远端目录后才登记；未知身份通过结构化挑战返回，确认仅用于当前目标。 */
+  private async register_remote(workspace_path: string, name: string | undefined, source: NonNullable<LocalWorkspaceConfig["source"]>, options: WorkspaceRegistrationOptions) {
+    source = { kind: "ssh", host: normalize_ssh_host(source.host) };
+    const workspace = new SshWorkspace({ id: "registration", root_path: workspace_path, host: source.host });
+    try {
+      let validation;
+      const request = { discover_host: true, confirmed_prompt: options.confirmed_prompt };
+      try {
+        validation = options.initialize_dependencies
+          ? await this.initialize_remote(workspace, source.host, request)
+          : await workspace.validate(request);
+      }
+      catch (error) {
+        if (error instanceof SshHostKeyError) throw new ResourceError("dependency_conflict", "SSH host identity requires explicit confirmation", 4, false, { ssh_host_challenge: error.challenge });
+        throw error;
+      }
+      return await this.dependencies.coordinator.mutate(async () => {
+        const repository = this.dependencies.workspaces;
+        if (!repository) throw new Error("Workspace repository is unavailable");
+        const existing = repository.list().find((item) => item.source?.host === source.host && item.workspace_path === validation.root_path);
+        const config = existing ?? repository.ensure({ workspace_path: validation.root_path, name, source });
+        this.dependencies.host?.invalidate();
+        return { workspace: await this.project(config.workspace_id, config), changed: !existing, name_mismatch: !!existing && !!name && name !== existing.name };
+      });
+    } finally { await workspace.dispose(); }
+  }
+
+  /** 已登记的 SSH Workspace 可补齐依赖，仍使用登记的主机及规范路径。 */
+  async initialize(workspace_id: string) {
+    require_workspace_id(workspace_id);
+    const config = this.require_registered(workspace_id);
+    const source = config.source;
+    require_resource_value(source?.kind === "ssh", "Dependency initialization requires an SSH Workspace");
+    const workspace = new SshWorkspace({ id: workspace_id, root_path: config.workspace_path, host: source.host, canonical_root: true });
+    try {
+      await this.initialize_remote(workspace, source.host);
+      return { workspace_id, dependencies_ready: true };
+    } finally { await workspace.dispose(); }
+  }
+
+  /** 同一个 SSH 目标同时只安装一次；远端网络等待不占用资源协调器。 */
+  private async initialize_remote(workspace: SshWorkspace, host: string, request?: SshRequestOptions) {
+    if (this.initializing_hosts.has(host)) throw new ResourceError("resource_busy", `Dependency initialization is already running for ${host}`, 4);
+    this.initializing_hosts.add(host);
+    try { return await workspace.initialize(request); }
+    finally { this.initializing_hosts.delete(host); }
   }
 
   /** 名称不参与 Shell/Workspace 身份，无需重建运行实例。 */
@@ -124,10 +186,11 @@ export class WorkspaceResources {
     const runtime = this.dependencies.host?.city.workspaces.get(workspace_id);
     const workspace_path = config?.workspace_path ?? runtime?.path ?? null;
     let path_state = "unknown";
-    if (workspace_path) {
+    if (config?.source) path_state = "remote";
+    else if (workspace_path) {
       try { path_state = (await fs.stat(workspace_path)).isDirectory() ? "available" : "inaccessible"; }
       catch (error) { path_state = is_missing_file(error) ? "missing" : "inaccessible"; }
     }
-    return { workspace_id, name: config?.name ?? workspace_id, workspace_path, registered: !!config, internal: workspace_id.startsWith("agent-main:"), path_state, runtime_state: this.dependencies.coordinator.blocked_workspaces.has(workspace_id) ? "blocked" : this.dependencies.host ? runtime ? "loaded" : "unloaded" : "unknown", created_at: config?.created_at ?? null, updated_at: config?.updated_at ?? null, revision: config ? resource_revision(config) : null, ssh_authorized: config?.ssh !== undefined };
+    return { source: config?.source ?? { kind: "local" }, workspace_id, name: config?.name ?? workspace_id, workspace_path, registered: !!config, internal: workspace_id.startsWith("agent-main:"), path_state, runtime_state: this.dependencies.coordinator.blocked_workspaces.has(workspace_id) ? "blocked" : this.dependencies.host ? runtime ? "loaded" : "unloaded" : "unknown", created_at: config?.created_at ?? null, updated_at: config?.updated_at ?? null, revision: config ? resource_revision(config) : null, ssh_authorized: config?.ssh !== undefined };
   }
 }

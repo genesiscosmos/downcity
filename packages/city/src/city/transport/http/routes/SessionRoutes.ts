@@ -251,9 +251,6 @@ export function register_sdk_session_routes(
         ...(c.req.query("before_sequence")
           ? { before_sequence: Number(c.req.query("before_sequence")) }
           : {}),
-        ...(c.req.query("include_internal") === "true"
-          ? { include_internal: true }
-          : {}),
       });
       return c.json({
         success: true,

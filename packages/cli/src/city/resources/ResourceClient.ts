@@ -40,7 +40,9 @@ export class ResourceClient {
       this.observed_host = state;
       let data: unknown;
       try {
-        data = await request_management(state, this.root_path, method, input, this.options.timeout_ms ?? (method === "session.send" ? 305_000 : 30_000), this.options.abort_signal);
+        const initializes_workspace = method === "workspace.initialize" || (method === "workspace.register" && input.initialize_dependencies === true);
+        const default_timeout_ms = initializes_workspace ? 365_000 : method === "session.send" ? 305_000 : 30_000;
+        data = await request_management(state, this.root_path, method, input, this.options.timeout_ms ?? default_timeout_ms, this.options.abort_signal);
       } catch (error) {
         if (method !== "session.send" || !(error instanceof ResourceError) || ![5, 7, 130].includes(error.exit_code) || typeof input.request_id !== "string") throw error;
         // 不重发 prompt。独立只读连接核对同一 request_id，原客户端取消不能取消核实。

@@ -3,7 +3,7 @@
  *
  * 关键点（中文）
  * - Action 只把 Agent/Session 上下文映射为 MemoryProvider 的领域输入。
- * - 物理存储、检索实现和提炼策略全部属于 Provider。
+ * - 知识查询委托 Provider；语义提炼与提交编排由应用服务负责。
  * - 所有 Provider 异常都转换为稳定 PowerActionResult，不伪造成功。
  */
 
@@ -14,7 +14,6 @@ import type {
   MemoryProvider,
   MemoryReadInput,
   MemoryRecallInput,
-  MemoryRememberInput,
 } from "@/memory/types/Memory.js";
 import type { MemoryAccessContext } from "@/memory/types/MemoryAccess.js";
 
@@ -74,27 +73,6 @@ export async function list_memory_action(
     ...input,
     access,
   }) as unknown as PowerJsonValue);
-}
-
-/** remember action。 */
-export async function remember_memory_action(
-  provider: MemoryProvider,
-  access: MemoryAccessContext,
-  input: Omit<MemoryRememberInput, "access">,
-): Promise<PowerActionResult<PowerJsonValue>> {
-  return await run_provider_action(async () => {
-    const result = await provider.remember({ ...input, access });
-    return {
-      target: input.target,
-      mode: "knowledge",
-      status: result.mode,
-      memory_id: result.memory_id,
-      ...(result.evidence_id ? { evidence_id: result.evidence_id } : {}),
-      ...(result.summary ? { summary: result.summary } : {}),
-      activation: "on_recall",
-      location: "wiki",
-    };
-  });
 }
 
 /** forget action。 */

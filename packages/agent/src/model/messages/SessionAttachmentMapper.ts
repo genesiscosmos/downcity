@@ -6,6 +6,8 @@
  * 上传不触发内容披露，显式 read 才读取内容。
  */
 
+import { stat } from "node:fs/promises";
+import { file_read_version } from "@downcity/type/workspace";
 import type { SessionUserContent } from "@downcity/type";
 import type { SessionAttachmentStore } from "@/types/store/SessionAttachmentStore.js";
 
@@ -25,7 +27,8 @@ export async function persist_user_prompt_file_parts(
       media_type: part.media_type,
       ...(part.filename ? { filename: part.filename } : {}),
     });
-    output.push({ ...part, url: stored_path });
+    // 显式工具媒体以已保存附件的版本重放，不把远端快照版本套在本地 inode 上。
+    output.push({ ...part, url: stored_path, ...(part.media_version ? { media_version: file_read_version(await stat(stored_path)) } : {}) });
   }
   return output;
 }

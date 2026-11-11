@@ -2,7 +2,7 @@
  * Session canonical 消息类型。
  *
  * Session 只维护一条由 sequence 排序的双主体消息序列；User 与 Agent 是顶层角色，
- * text、reasoning、tool、interaction、file、data、action、error 都是主体内部 Part。
+ * text、reasoning、tool、inbox、file、data、action、error 都是主体内部 Part；Interaction 归属 Tool。
  */
 
 import type { JsonObject, JsonValue } from "../json/Json.js";
@@ -11,6 +11,7 @@ import type {
   SessionDataContent,
   SessionFileContent,
   SessionPowerContent,
+  SessionModelUserContent,
   SessionTextContent,
 } from "./SessionContent.js";
 import type {
@@ -19,9 +20,6 @@ import type {
   SessionInteractionStatus,
 } from "./SessionInteraction.js";
 import type { SessionPromptActor } from "./SessionPromptActor.js";
-
-/** Message 默认展示范围。 */
-export type SessionMessageVisibility = "visible" | "internal";
 
 /** 从其他 Session 导入时保留的来源身份。 */
 export interface SessionMessageOrigin {
@@ -45,8 +43,6 @@ export interface SessionMessageBase {
   sequence: number;
   /** Message 版本号；每次对外发布的消息变化后递增。 */
   revision: number;
-  /** 当前 Message 是否默认对用户可见。 */
-  visibility: SessionMessageVisibility;
   /** Message 首次创建时间戳（ms）。 */
   created_at: number;
   /** Message 最近更新时间戳（ms）。 */
@@ -73,8 +69,6 @@ export interface SessionUserContextPart extends SessionContextContent {
 
 /** User 文件 part。 */
 export interface SessionUserFilePart extends SessionFileContent {
-  /** 仅内部工具输入提交器设置；表示工具显式披露的媒体，公开 prompt 归一化会移除此字段。 */
-  media_delivery?: "tool";
   /** User Message 内稳定的 part 标识。 */
   part_id: string;
   /** Part 在当前 User Message 内的不可变线性顺序，从 1 开始。 */
@@ -109,11 +103,11 @@ export type SessionUserPartContent =
   | Omit<SessionUserDataPart, "part_id" | "sequence">;
 
 /**
- * 本条用户消息携带的请求记账。
+ * Session 输入携带的请求记账。
  *
  * 说明（中文）
  * - 这里只描述「谁发起了这次输入」以及本次请求独有的绑定，不是用户撰写的内容，
- *   因此不进入 `parts`、不参与模型上下文，也不在聊天界面上渲染。
+ *   保存于 User Message.meta 或 Inbox Part.meta，不参与模型上下文，也不在聊天界面渲染。
  * - 它是消息级只读数据：写入方是 SDK 输入接收链路，宿主与 UI 只读取。
  */
 export interface SessionMessageMeta {
@@ -304,6 +298,42 @@ export interface SessionAgentPowerPart extends SessionPowerContent {
   step_id?: string;
 }
 
+/** 运行时输入的因果来源；仅可信执行入口可以设置。 */
+export interface SessionInboxSource {
+  /** 产生该输入的 Tool Call；用于关联媒体或异步工具事件。 */
+  tool_call_id?: string;
+  /** 产生该输入的原 Turn；后台续行时与接收 Turn 可以不同。 */
+  turn_id?: string;
+}
+
+/** 尚未分配 Part 身份的运行时输入；inbox_id 由来源提供以保证重试幂等。 */
+export interface SessionInboxInput {
+  /** 当前 Session 内稳定且唯一的事件身份；重试必须复用同一个值。 */
+  inbox_id: string;
+  /** 输入的语义种类，例如 shell_result、delegation_result、tool_media 或 runtime_notice。 */
+  kind: string;
+  /** 该输入关联的执行来源；不可用作用户授权。 */
+  source?: SessionInboxSource;
+  /** 可供模型使用的封闭内容集合；文件持久化后只保存附件引用。 */
+  content: SessionModelUserContent[];
+  /** 自动执行输入的请求记账；不作为模型输入或 UI 正文展示。 */
+  meta?: SessionMessageMeta;
+}
+
+/** Agent 执行期间收到的一项运行时输入；与模型输出共享同一条 Part 时间线。 */
+export interface SessionAgentInboxPart extends SessionInboxInput {
+  /** Part 判别字段。 */
+  type: "inbox";
+  /** 当前 Message 内稳定的 Part 标识。 */
+  part_id: string;
+  /** 当前 Message 内不可变的线性顺序，从 1 开始。 */
+  sequence: number;
+  /** 非模型输入通常不属于模型 Step，此字段可以省略。 */
+  step_id?: string;
+  /** 该输入成功提交到 Message 的时间戳，单位为毫秒。 */
+  created_at: number;
+}
+
 /** Agent Message Part。 */
 export type SessionAgentMessagePart =
   | SessionAgentTextPart
@@ -313,7 +343,8 @@ export type SessionAgentMessagePart =
   | SessionAgentDataPart
   | SessionAgentPowerPart
   | SessionAgentActionPart
-  | SessionAgentErrorPart;
+  | SessionAgentErrorPart
+  | SessionAgentInboxPart;
 
 /** Agent 顶层 Message。 */
 export interface SessionAgentMessage extends SessionMessageBase {
@@ -321,6 +352,8 @@ export interface SessionAgentMessage extends SessionMessageBase {
   role: "agent";
   /** Agent Message 聚合当前仍在写入，还是已经永久收口。 */
   state: "streaming" | "done";
+  /** 已由写入方冻结的连续 Part 前缀水位；零表示尚无可摘要前缀，水位内的 Part 永不可修改。 */
+  stable_part_sequence: number;
   /** Agent 内按真实产生顺序保存的 Parts。 */
   parts: SessionAgentMessagePart[];
 }
@@ -336,8 +369,6 @@ export interface ListSessionMessagesInput {
   before_sequence?: number;
   /** 单页返回的最大 Message 数量。 */
   limit?: number;
-  /** 是否包含 internal Message。 */
-  include_internal?: boolean;
 }
 
 /** Session Message snapshot 分页结果。 */

@@ -4,12 +4,12 @@
  */
 import { createHash } from "node:crypto";
 import type { PowerLifecycleContext } from "@downcity/city/power";
-import type { MemoryDreamOptions, MemoryDreamScope, MemoryDreamView, MemorySignalInput, MemoryDreamAccessResolver } from "../types/MemoryDream.js";
-import type { MemoryJob } from "../types/MemoryJob.js";
+import type { MemoryDreamOptions, MemoryDreamScope, MemoryDreamSummary, MemoryDreamView, MemorySignalInput, MemoryDreamAccessResolver } from "../types/MemoryDream.js";
+import type { MemoryJob, MemoryJobView } from "../types/MemoryJob.js";
 import { memory_job_view } from "../types/MemoryJob.js";
 import { MemorySignalStore } from "../storage/MemorySignalStore.js";
 import { MemoryJobStore } from "../storage/MemoryJobStore.js";
-import { MemoryCoordinator } from "./MemoryCoordinator.js";
+import type { MemoryCoordinator } from "./MemoryCoordinator.js";
 import { MemorySignalIntake } from "./MemorySignalIntake.js";
 import { MemoryDreamPlanner, MEMORY_DREAM_COOLDOWN_MS, MEMORY_DREAM_DAILY_BATCH_LIMIT } from "./MemoryDreamPlanner.js";
 
@@ -33,7 +33,7 @@ export class MemoryDreaming {
   private source_error?: string;
 
   constructor(private readonly host: PowerLifecycleContext, private readonly store: MemorySignalStore,
-    private readonly jobs: MemoryJobStore, private readonly coordinator: MemoryCoordinator,
+    private readonly jobs: MemoryJobStore, private readonly coordinator: Pick<MemoryCoordinator, "has_work" | "has_explicit_work" | "submit" | "retry" | "reconcile_committed">,
     private readonly resolve_access: MemoryDreamAccessResolver, private readonly options: MemoryDreamOptions = {}) {
     this.owner_id = createHash("sha256").update(host.storage.path).digest("hex");
     this.intake = new MemorySignalIntake(store);
@@ -56,15 +56,6 @@ export class MemoryDreaming {
     if (scope.target === "current_workspace" && !scope.workspace_id) throw new Error("Workspace dream requires an explicit Workspace");
   }
 
-  /** 普通显式记忆动作不受此自动开关影响；后台每次实际取 Job 都重新核对。 */
-  async can_run(job: MemoryJob): Promise<boolean> {
-    if (this.stopped || job.kind !== "dream" || job.mode !== "knowledge" || job.target === "user") return false;
-    const scope: MemoryDreamScope = { agent_id: job.access.agent_id, workspace_id: job.access.workspace_id, target: job.target };
-    const ledger = await this.store.read(scope);
-    const batch = ledger.batches.find((item) => item.job_id === job.job_id && item.owner_id === this.owner_id);
-    return ledger.enabled && Boolean(batch) && !this.coordinator.has_explicit_work;
-  }
-
   /** 明确纠错由宿主管理输入调用，接收不意味着已经提炼或提交。 */
   async receive(input: MemorySignalInput): Promise<void> {
     if (this.stopped) throw new Error("Memory dreaming is stopping");
@@ -78,6 +69,46 @@ export class MemoryDreaming {
     await this.assert_scope(scope);
     await this.store.mutate(scope, (ledger) => { ledger.enabled = enabled; ledger.defer_reason = enabled ? "waiting_for_maintenance" : "disabled"; });
     return await this.view(scope);
+  }
+
+  /** 只读已有启用账本；当前宿主目录过滤已删除范围，读取失败必须向管理页报告。 */
+  async list(): Promise<{ items: MemoryDreamSummary[] }> {
+    const [agents, workspaces, scopes] = await Promise.all([
+      this.host.system.list_agents(), this.host.system.list_workspaces(), this.store.scopes(),
+    ]);
+    const agent_ids = new Set(agents.map((agent) => agent.agent_id));
+    const workspace_ids = new Set(workspaces.map((workspace) => workspace.workspace_id));
+    const items: MemoryDreamSummary[] = [];
+    for (const scope of scopes) {
+      if (!agent_ids.has(scope.agent_id)) continue;
+      if (scope.workspace_id !== undefined && !workspace_ids.has(scope.workspace_id)) continue;
+      if (scope.target !== "agent" && scope.target !== "current_workspace") continue;
+      if (scope.target === "current_workspace" && !scope.workspace_id) continue;
+      const ledger = await this.store.read(scope);
+      if (!ledger.enabled) continue;
+      const last_error = this.source_error ?? ledger.last_error;
+      items.push({
+        scope,
+        backlog: ledger.signals.filter((signal) => signal.state !== "processed").length,
+        ...(last_error === undefined ? {} : { last_error }),
+      });
+    }
+    return { items };
+  }
+
+  /** 可信宿主按原 Job 找到本 City 的准确批次，再沿原重试入口执行预算和冷却检查。 */
+  async retry_job(job: MemoryJob): Promise<MemoryJobView> {
+    if (job.kind !== "dream" || job.mode !== "knowledge" || job.target === "user") {
+      throw new Error("Invalid automatic memory Job");
+    }
+    const scope: MemoryDreamScope = { agent_id: job.access.agent_id, workspace_id: job.access.workspace_id, target: job.target };
+    await this.assert_scope(scope);
+    const batch = (await this.store.read(scope)).batches.find((item) => item.job_id === job.job_id && item.owner_id === this.owner_id);
+    if (!batch) throw new Error("Dream batch belongs to another City or does not exist");
+    const result = await this.retry(scope, batch.batch_id);
+    const updated = result.jobs.find((item) => item.job_id === job.job_id);
+    if (!updated) throw new Error("Memory Job not found after dream retry");
+    return updated;
   }
 
   /** 管理页区分批次状态与真实 Job 提交结果，不显示虚构的 delivery 成功。 */

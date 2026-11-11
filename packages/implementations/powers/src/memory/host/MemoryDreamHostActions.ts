@@ -10,6 +10,8 @@ const scope_schema = z.object({
 
 /** 不注册到普通模型 Action 集合，来源身份和 producer 只能由可信宿主接线提供。 */
 export function register_memory_dream_host_actions(host: PowerLifecycleContext, dreaming: MemoryDreaming): void {
+  host.power.action({ id: "memory.dream.list", run: async () =>
+    await dreaming.list() as unknown as PowerJsonValue });
   host.power.action({ id: "memory.dream.status", run: async (input) =>
     await dreaming.view(scope_schema.parse(input)) as unknown as PowerJsonValue });
   host.power.action({ id: "memory.dream.configure", run: async (input) => {

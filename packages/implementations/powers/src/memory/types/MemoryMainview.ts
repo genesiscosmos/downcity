@@ -8,66 +8,10 @@
  * - 所有 mutation 都返回刷新后的列表，避免界面自己拼状态。
  */
 
-import type { PowerJsonObject } from "@downcity/city/power";
-import type { MemoryProviderState } from "@/memory/types/Memory.js";
 import type { MemorySubject } from "@/memory/types/MemoryAccess.js";
 
 /** 界面可切换的记忆范围。 */
 export type MemoryMainviewScopeKind = "city" | "agent";
-
-/** 界面可切换的一个 Agent 执行范围。 */
-export interface MemoryMainviewAgent {
-  /** Agent 的稳定 ID。 */
-  readonly agent_id: string;
-
-  /** Agent 的用户可见名称。 */
-  readonly name: string;
-
-  /** 该 Agent 私有记忆的条目数量；读取失败时省略。 */
-  readonly memory_count?: number;
-}
-
-/** 界面可切换的一个 Workspace 执行范围。 */
-export interface MemoryMainviewWorkspace {
-  /** Workspace 的稳定 ID。 */
-  readonly workspace_id: string;
-
-  /** Workspace 的用户可见名称。 */
-  readonly name: string;
-}
-
-/** 当前 Provider 的状态摘要。 */
-export interface MemoryMainviewProviderStatus {
-  /** 当前 Provider 的稳定名称。 */
-  readonly provider: string;
-
-  /** 当前 Provider 的生命周期状态。 */
-  readonly state: MemoryProviderState;
-
-  /** 当前 Provider 是否支持按作用域枚举记忆。 */
-  readonly supports_list: boolean;
-
-  /** 当前 Provider 是否提供 City 共享 Store。 */
-  readonly city_memory_available: boolean;
-
-  /** Provider 可选返回的结构化状态统计。 */
-  readonly details?: PowerJsonObject;
-}
-
-/** Memory 工作区一次读取返回的完整快照。 */
-export interface MemoryMainviewSnapshot {
-  /** 当前可切换的 Agent 执行范围。 */
-  readonly agents: MemoryMainviewAgent[];
-
-  /** 当前可提供执行上下文的 Workspace。 */
-  readonly workspaces: MemoryMainviewWorkspace[];
-
-  /** 当前 Provider 的状态摘要。 */
-  readonly status: MemoryMainviewProviderStatus;
-
-  /** City 共享记忆的条目数量；读取失败时省略。 */
-  readonly city_count?: number;
-}
 
 /** 一次枚举返回的一条记忆摘要。 */
 export interface MemoryMainviewListItem {

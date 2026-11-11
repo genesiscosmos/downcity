@@ -2,8 +2,9 @@
  * Memory Power 的宿主管理 actions。
  *
  * 关键点（中文）
- * - 界面不直接持有 Provider；所有读写都在界面显式选定的 Agent + Workspace
- *   执行范围里调用本 Power 的领域 action，因此权限判断与 Agent 调用完全一致。
+ * - Provider 快照直接检查当前实例；范围目录只读宿主资源，不执行领域 action。
+ * - Job 管理要求显式选定 Agent；所有内容与 Job 操作都将空 Workspace 视为无项目。
+ * - 记忆内容读写通过本 Power 的领域 action，权限判断与 Agent 调用完全一致。
  * - Agent / Workspace 列表由宿主作为只读能力注入，界面不猜测可用范围。
  * - 记忆的可读范围由访问上下文决定；界面只展示 Provider 返回的 Subject。
  */
@@ -18,10 +19,14 @@ import type {
   MemoryReadResult,
   MemoryRememberResult,
   MemoryForgetResult,
-  MemoryStatusResult,
+  MemoryProvider,
 } from "@/memory/types/Memory.js";
 import type { MemorySubject } from "@/memory/types/MemoryAccess.js";
 import type { MemoryJobView } from "@/memory/types/MemoryJob.js";
+import type {
+  MemoryManagementScopes,
+  MemoryConfigSnapshot,
+} from "@/memory/types/MemoryManagement.js";
 import type {
   MemoryMainviewForgetInput,
   MemoryMainviewListItem,
@@ -34,14 +39,31 @@ import type {
   MemoryMainviewReviseInput,
   MemoryMainviewScopeInput,
   MemoryMainviewScopeKind,
-  MemoryMainviewSnapshot,
 } from "@/memory/types/MemoryMainview.js";
 
 /** 界面默认枚举的条目数量。 */
 const DEFAULT_LIST_LIMIT = 50;
 
 /** 注册 Memory Power 的宿主管理 actions。 */
-export function register_memory_power_host_actions(context: PowerLifecycleContext): void {
+export function register_memory_power_host_actions(
+  context: PowerLifecycleContext,
+  provider: MemoryProvider,
+  model_id?: string,
+): void {
+  context.power.action({
+    id: "memory.config.snapshot",
+    run: async () => {
+      const snapshot: MemoryConfigSnapshot = {
+        knowledge: { status: await provider.inspect() },
+        processing: { ...(model_id === undefined ? {} : { model_id }) },
+      };
+      return as_json(snapshot);
+    },
+  });
+  context.power.action({
+    id: "memory.scopes",
+    run: async () => as_json(await read_management_scopes(context)),
+  });
   context.power.action({
     id: "memory.jobs",
     run: async (input) => {
@@ -49,7 +71,7 @@ export function register_memory_power_host_actions(context: PowerLifecycleContex
       return as_json(await invoke_domain_action<{ items: MemoryJobView[]; total: number }>(context, read_scope(source), "jobs", {
         ...(source.limit === undefined ? {} : { limit: source.limit }),
         ...(source.offset === undefined ? {} : { offset: source.offset }),
-      }));
+      }, true));
     },
   });
   for (const action_id of ["job_status", "job_detail", "retry"] as const) {
@@ -59,14 +81,10 @@ export function register_memory_power_host_actions(context: PowerLifecycleContex
         const source = read_record(input);
         return as_json(await invoke_domain_action<unknown>(context, read_scope(source), action_id, {
           job_id: read_required_string(source, "job_id"),
-        }));
+        }, true));
       },
     });
   }
-  context.power.action({
-    id: "memory.snapshot",
-    run: async (input) => as_json(await create_snapshot(context, read_scope(input))),
-  });
   context.power.action({
     id: "memory.list",
     run: async (input) => as_json(await list_memories(context, read_list_input(input))),
@@ -89,100 +107,16 @@ export function register_memory_power_host_actions(context: PowerLifecycleContex
   });
 }
 
-/**
- * 创建 Memory 工作区快照。
- *
- * Provider 状态必须在一个真实执行范围上读取，因此这里优先使用界面选定的
- * Agent；没有可用范围时退化为静态能力描述，让界面仍能渲染空态。
- */
-async function create_snapshot(
-  context: PowerLifecycleContext,
-  scope: MemoryMainviewScopeInput,
-): Promise<MemoryMainviewSnapshot> {
+/** 读取宿主范围目录，只投影名称与标识，不查询领域状态或知识数量。 */
+async function read_management_scopes(context: PowerLifecycleContext): Promise<MemoryManagementScopes> {
   const [agents, workspaces] = await Promise.all([
     context.system.list_agents(),
     context.system.list_workspaces(),
   ]);
-  const resolved_agent = agents.find((agent) => agent.agent_id === scope.agent_id) ?? agents[0];
-  const resolved_workspace = workspaces.find(
-    (workspace) => workspace.workspace_id === scope.workspace_id,
-  ) ?? workspaces[0];
-  const status = resolved_agent
-    ? await read_status(context, resolved_agent.agent_id, resolved_workspace?.workspace_id)
-    : undefined;
-  const counts = resolved_agent
-    ? await read_scope_counts(context, resolved_agent.agent_id, agents, resolved_workspace?.workspace_id)
-    : undefined;
   return {
-    agents: agents.map((agent) => ({
-      agent_id: agent.agent_id,
-      name: agent.name,
-      ...(counts?.agents[agent.agent_id] === undefined
-        ? {}
-        : { memory_count: counts.agents[agent.agent_id] }),
-    })),
-    workspaces: workspaces.map((workspace) => ({
-      workspace_id: workspace.workspace_id,
-      name: workspace.name,
-    })),
-    status: {
-      provider: status?.provider ?? "unknown",
-      state: status?.state ?? "degraded",
-      supports_list: status?.capabilities.list === true,
-      city_memory_available: status?.details?.city_memory_available === true,
-      ...(status?.details ? { details: status.details } : {}),
-    },
-    ...(counts?.city === undefined ? {} : { city_count: counts.city }),
+    agents: agents.map((agent) => ({ agent_id: agent.agent_id, name: agent.name })),
+    workspaces: workspaces.map((workspace) => ({ workspace_id: workspace.workspace_id, name: workspace.name })),
   };
-}
-
-/**
- * 读取共享范围与每个 Agent 私有范围的条目数量。
- *
- * 关键点（中文）：计数只用于导航副标题，单个范围失败不能让整个快照失败；
- * 因此这里逐个吞掉错误并省略对应计数。共享计数借用一个真实 Agent 执行。
- */
-async function read_scope_counts(
-  context: PowerLifecycleContext,
-  executor_agent_id: string,
-  agents: readonly { readonly agent_id: string }[],
-  workspace_id: string | undefined,
-): Promise<{
-  /** City 共享记忆条目数量。 */
-  city: number | undefined;
-  /** 按 Agent ID 索引的私有记忆条目数量。 */
-  agents: Record<string, number | undefined>;
-}> {
-  const [city, ...agent_counts] = await Promise.all([
-    count_scope(context, executor_agent_id, workspace_id, "city"),
-    ...agents.map((agent) => count_scope(context, agent.agent_id, workspace_id, "agent")),
-  ]);
-  return {
-    city,
-    agents: Object.fromEntries(
-      agents.map((agent, index) => [agent.agent_id, agent_counts[index]]),
-    ),
-  };
-}
-
-/** 统计一个执行范围内指定 Subject 的条目数量。 */
-async function count_scope(
-  context: PowerLifecycleContext,
-  agent_id: string,
-  workspace_id: string | undefined,
-  subject_kind: MemoryMainviewScopeKind,
-): Promise<number | undefined> {
-  try {
-    const result = await invoke_domain_action<MemoryListResult>(
-      context,
-      { scope: subject_kind, agent_id, workspace_id: workspace_id ?? "" },
-      "list",
-      { subject_kinds: [subject_kind], limit: 1 },
-    );
-    return result.total;
-  } catch {
-    return undefined;
-  }
 }
 
 /** 枚举指定执行范围中的记忆。 */
@@ -276,43 +210,35 @@ async function forget_memory(
   return await mutation_result(context, input, result.memory_id, message);
 }
 
-/** 在指定执行范围读取 Provider 状态。 */
-async function read_status(
-  context: PowerLifecycleContext,
-  agent_id: string,
-  workspace_id: string | undefined,
-): Promise<MemoryStatusResult | undefined> {
-  const result = await context.system.invoke_agent_power({
-    agent_id,
-    workspace_id,
-    power_id: context.power.id,
-    action_id: "status",
-    input: {},
-  }) as unknown as { success?: boolean; data?: MemoryStatusResult };
-  return result?.success === true ? result.data : undefined;
-}
-
 /**
  * 在界面选定的执行范围里调用本 Power 的领域 action。
  *
  * 关键点（中文）：领域 action 必须绑定一个真实 Agent，即使要读的是 City 共享记忆；
- * 因此 `agent_id` 缺失时回退到第一个可用 Agent，而不是拒绝请求。领域 action 已经
- * 声明 `access` 与输入 schema；这里只负责把执行范围交给 City，并把稳定失败结果还原
- * 为异常，避免界面把失败当成空数据。
+ * 因此内容入口的 `agent_id` 缺失时回退到第一个可用 Agent；非空无效 ID 必须报错。
+ * Job 管理传入 require_selected_scope，要求显式选定 Agent。所有调用中的空 Workspace
+ * 都表示无项目。领域 action 已声明 `access` 与输入 schema；这里负责传递范围，
+ * 并把稳定失败结果还原为异常，避免界面把失败当成空数据。
  */
 async function invoke_domain_action<TResult>(
   context: PowerLifecycleContext,
   scope: MemoryMainviewScopeInput,
   action_id: string,
   input: PowerJsonObject,
+  require_selected_scope = false,
 ): Promise<TResult> {
+  if (require_selected_scope && !scope.agent_id) throw new Error("Memory Job management requires a selected Agent");
   const agents = await context.system.list_agents();
-  const agent = agents.find((item) => item.agent_id === scope.agent_id) ?? agents[0];
-  if (!agent) throw new Error("Memory requires at least one Agent as execution context");
+  const agent = scope.agent_id
+    ? agents.find((item) => item.agent_id === scope.agent_id)
+    : agents[0];
+  if (!agent) throw new Error(scope.agent_id
+    ? "Selected Memory Agent was not found"
+    : "Memory requires at least one Agent as execution context");
   const workspaces = await context.system.list_workspaces();
-  const workspace = workspaces.find((item) => item.workspace_id === scope.workspace_id)
-    ?? workspaces[0];
-  if (scope.workspace_id && !workspaces.some((item) => item.workspace_id === scope.workspace_id)) {
+  const workspace = scope.workspace_id
+    ? workspaces.find((item) => item.workspace_id === scope.workspace_id)
+    : undefined;
+  if (scope.workspace_id && !workspace) {
     throw new Error("Selected Memory Workspace was not found");
   }
   if (action_id === "remember" && input.target === "current_workspace" && !workspace) {

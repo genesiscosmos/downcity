@@ -3,6 +3,7 @@
  * 原执行仍活动时注入；原执行已收口时仅按明确策略启动后续处理，不冒用用户身份。
  */
 import { resolve_prompt_request_identity } from "./SessionTurnHandles.js";
+import { read_prompt_input } from "./SessionInputFacts.js";
 import { SessionBusyError } from "../SessionBusyError.js";
 import type { SessionBackgroundHost, SessionBackgroundInput, SessionBackgroundReceipt } from "@/types/session/SessionBackgroundInput.js";
 import type { SessionLoop } from "./SessionLoop.js";
@@ -33,13 +34,10 @@ export async function accept_background_input(host: SessionBackgroundHost, input
 async function receive_background_input(host: SessionBackgroundHost, input: SessionBackgroundInput): Promise<SessionBackgroundReceipt> {
   const identity = resolve_prompt_request_identity(host.session_id, input.request_id);
   if (!identity || !input.turn_id.trim()) throw new Error("Background input requires Turn and request identities");
-  const previous = await host.messages.read_message(identity.message_id);
+  const previous = await read_prompt_input(host.messages, identity);
   if (previous) {
-    if (previous.role !== "user" || previous.visibility !== "internal") throw new Error("Background request identity belongs to another input");
-    const source = previous.parts.find((part) => part.type === "context" && part.tag === "background_source");
-    if (!source || source.type !== "context" || JSON.parse(source.context).caller_turn_id !== input.turn_id) {
-      throw new Error("Background request belongs to another Turn");
-    }
+    if ("role" in previous.input) throw new Error("Background request identity belongs to another input");
+    if (previous.input.source?.turn_id !== input.turn_id) throw new Error("Background request belongs to another Turn");
     return "accepted";
   }
   if (!host.is_current()) return "retry";
@@ -51,7 +49,7 @@ async function receive_background_input(host: SessionBackgroundHost, input: Sess
     const actor = host.loop.occupied_by();
     if (!host.loop.is_active() && actor) {
       // 重启恢复的占用仍属于原执行；沿已有恢复入口续行，不重放外部命令。
-      await host.loop.prompt({ actor, request_id: input.request_id, query, visibility: "internal" });
+      await host.loop.prompt_inbox({ actor, request_id: input.request_id, query });
       return "accepted";
     }
     return await host.loop.accept_delegation_result(input.turn_id, input.request_id, query) ? "accepted" : "retry";
@@ -65,11 +63,10 @@ async function receive_background_input(host: SessionBackgroundHost, input: Sess
   if (completed.status !== "completed" && !input.allow_stopped_turn) return "discarded";
   if (host.loop.is_busy()) return "retry";
   try {
-    await host.loop.prompt({
+    await host.loop.prompt_inbox({
       actor: { kind: "runtime", namespace: "session_background", object_id: input.request_id },
       request_id: input.request_id,
       query,
-      visibility: "internal",
     });
     return "accepted";
   } catch (error) {

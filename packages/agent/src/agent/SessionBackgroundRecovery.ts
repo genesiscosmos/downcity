@@ -2,7 +2,8 @@
  * 启动时发现已接收但未收口的后台续轮。
  * 消息是接收事实源；只恢复后台续轮的终态，不自动重放模型或命令，也不新增投递队列。
  */
-import { read_session_message_meta } from "@/session/messages/SessionMessageMeta.js";
+import type { SessionMessage } from "@downcity/type";
+import { latest_session_input, session_input_facts } from "@/session/loop/SessionInputFacts.js";
 import type { SessionStore } from "@/types/store/SessionStore.js";
 import type { AgentSession } from "@/types/agent/SessionActor.js";
 
@@ -20,18 +21,24 @@ export async function recover_background_sessions(
         try {
           const view = await store.read_session(entry.session_id, category);
           let before_sequence: number | undefined;
+          let latest: SessionMessage | undefined;
           for (;;) {
-            const messages = await view.messages({ limit: 20, include_internal: true, ...(before_sequence === undefined ? {} : { before_sequence }) });
-            const latest = [...messages.items].reverse().find((message) => message.role === "user");
-            if (latest) {
-              const actor = read_session_message_meta(latest)?.from;
-              if (!latest.origin && actor?.kind === "runtime" && actor.namespace === "session_background") {
+            const messages = await view.messages({ limit: 100, ...(before_sequence === undefined ? {} : { before_sequence }) });
+            latest ??= latest_session_input(messages.items)?.message;
+            if (latest?.origin) break;
+            // Tool inbox 可以没有 meta；只向前翻到该 Turn 最近的可信输入，不加载整个会话。
+            const turn_id = latest?.turn_id;
+            const owner = turn_id && session_input_facts(messages.items).reverse().find((fact) =>
+              !fact.message.origin && fact.message.turn_id === turn_id && fact.meta?.from);
+            const actor = owner && owner.meta?.from;
+            if (actor) {
+              if (actor.kind === "runtime" && actor.namespace === "session_background") {
                 await (await restore(entry.session_id, category)).status();
               }
               break;
             }
-            if (!messages.items.length) break;
-            before_sequence = Math.min(...messages.items.map((message) => message.sequence));
+            if (!messages.has_more || !messages.next_before_sequence) break;
+            before_sequence = messages.next_before_sequence;
           }
         } catch (error) { report_error(error); }
       }

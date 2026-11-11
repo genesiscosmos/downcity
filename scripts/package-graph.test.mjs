@@ -13,10 +13,10 @@ import {
 
 const workspace_root = path.resolve(import.meta.dirname, "..");
 
-test("City 构建会自动补齐 Type、Federation 与 Agent", () => {
+test("City 构建会自动补齐 Type、Federation、Agent 与 SSH Workspace", () => {
   assert.deepEqual(
     resolve_package_build_order(workspace_root, ["city"]),
-    ["type", "agent", "federation", "city"],
+    ["type", "agent", "federation", "workspace-ssh", "city"],
   );
 });
 
@@ -28,6 +28,7 @@ test("CLI 构建闭包完全来自 manifest 运行时依赖", () => {
       "agent",
       "federation",
       "sandbox-native",
+      "workspace-ssh",
       "city",
       "powers",
       "cli",

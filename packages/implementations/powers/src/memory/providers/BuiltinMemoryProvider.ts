@@ -7,7 +7,6 @@
  * - 当前召回使用确定性文本扫描；以后可在 Provider 内替换索引而不改变 Power API。
  */
 
-import { randomUUID } from "node:crypto";
 import { get_logger } from "@downcity/agent";
 import { notify_memory_change } from "@/memory/types/MemoryChange.js";
 import type {
@@ -25,12 +24,7 @@ import type {
   MemoryRecallInput,
   MemoryRecallItem,
   MemoryRecallResult,
-  MemoryRememberInput,
-  MemoryRememberResult,
   MemoryStatusResult,
-  MemorySystemContextInput,
-  MemorySystemContextItem,
-  MemorySystemContextResult,
 } from "@/memory/types/Memory.js";
 import type {
   MemoryAccessContext,
@@ -54,7 +48,6 @@ import {
   clamp_number,
   count_memory_subjects,
   create_citation,
-  create_subject_memory_id,
   memory_id_to_key,
   normalize_list_limit,
   normalize_list_offset,
@@ -64,19 +57,20 @@ import {
   to_memory_list_item,
 } from "@/memory/runtime/BuiltinMemoryDocument.js";
 
-import type { MemoryChangeSet, MemoryCommitReceipt, MemoryVersionInput, MemoryVersionResult, MemoryCommitReceiptInput } from "../types/MemoryChangeSet.js";
+import type { MemoryChangeSet, MemoryCommitReceipt, MemoryVersionInput, MemoryVersionResult, MemoryCommitReceiptInput, MemoryCommitProvider } from "../types/MemoryChangeSet.js";
 import { commit_memory_changes, read_memory_manifest, read_memory_commit_receipt, active_memory_records } from "../runtime/MemoryCommit.js";
 
 const DEFAULT_MAX_RESULTS = 6;
 const DEFAULT_MIN_SCORE = 0.35;
-const DEFAULT_MAX_CONTEXT_CHARS = 4_000;
 const SNIPPET_MAX_CHARS = 700;
-const INDEX_RELATIVE_MEMORY_ID = "wiki/index";
 
 /** Downcity 默认的 provider-neutral Memory 实现。 */
 export class BuiltinMemoryProvider implements MemoryProvider {
   /** 当前 Provider 稳定名称。 */
   readonly name = "builtin";
+
+  /** Builtin 保留原生强事务端口，基础 Provider 不要求实现它。 */
+  readonly transactions: MemoryCommitProvider = this;
 
   /** 当前 Provider 支持的完整能力。 */
   readonly capabilities: MemoryProviderCapabilities = Object.freeze({
@@ -85,7 +79,7 @@ export class BuiltinMemoryProvider implements MemoryProvider {
     read: true,
     list: true,
     forget: true,
-    system_context: true,
+    transactions: true,
   });
 
   /** 调用方注入的内容变更回调。 */
@@ -163,6 +157,22 @@ export class BuiltinMemoryProvider implements MemoryProvider {
     this.assert_access(input.access);
     const address = resolve_writable_memory_address(input.access, input.target);
     return await read_memory_commit_receipt(this.active_storage, address.prefix, input.commit_id);
+  }
+
+  /** 直接检查当前实例的初始化与 Adapter 状态，不读取任何范围的记忆。 */
+  async inspect(): Promise<MemoryStatusResult> {
+    const ready = this.initialized && Boolean(this.storage);
+    return {
+      provider: this.name,
+      state: ready ? "ready" : "degraded",
+      capabilities: this.capabilities,
+      details: {
+        initialized: this.initialized,
+        ...(this.storage ? { storage_adapter: this.storage.name } : {}),
+        city_memory_available: this.city_memory_available,
+      },
+      ...(ready ? {} : { warnings: ["BuiltinMemoryProvider is not initialized"] }),
+    };
   }
 
   /** 返回 Provider 状态与可重建统计。 */
@@ -304,24 +314,6 @@ export class BuiltinMemoryProvider implements MemoryProvider {
     };
   }
 
-  /** 显式原意保存，每次创建独立知识；语义归并交给 Service 的 MemorySession。 */
-  async remember(input: MemoryRememberInput): Promise<MemoryRememberResult> {
-    const request_id = input.request_id || randomUUID();
-    const receipt = await this.commit({
-      access: input.access, target: input.target, commit_id: request_id, request_id,
-      changes: [{ operation: "create", content: input.content, topic: input.topic,
-        memory_type: input.memory_type,
-        source_refs: input.source_refs ?? [{ source_id: request_id, source_type: "explicit_request",
-          agent_id: input.access.agent_id, role: "request", ...(input.source ? { label: input.source } : {}) }],
-      }],
-    });
-    return { memory_id: receipt.changes[0]!.memory_id, mode: "created" };
-  }
-
-
-
-
-
   /** 删除当前 Provider 中的指定记忆。 */
   async forget(input: MemoryForgetInput): Promise<MemoryForgetResult> {
     this.assert_access(input.access);
@@ -336,49 +328,6 @@ export class BuiltinMemoryProvider implements MemoryProvider {
       changes: [{ operation: "delete", memory_id, expected_version: existing.version, source_refs: [] }],
     });
     return { memory_id, forgotten: true };
-  }
-
-  /** 从稳定候选投影中生成有界 system context。 */
-  async system_context(
-    input: MemorySystemContextInput,
-  ): Promise<MemorySystemContextResult> {
-    this.assert_access(input.access);
-    const max_items = Math.max(0, Math.floor(input.max_items));
-    const max_chars = Math.max(0, Math.floor(input.max_chars || DEFAULT_MAX_CONTEXT_CHARS));
-    if (max_items === 0 || max_chars === 0) return { items: [] };
-    const relative_candidates = [
-      "wiki/project-overview",
-      "wiki/rules",
-      INDEX_RELATIVE_MEMORY_ID,
-    ];
-    const items: MemorySystemContextItem[] = [];
-    let remaining_chars = max_chars;
-    for (const address of resolve_readable_memory_addresses(input.access)) {
-      for (const relative_memory_id of relative_candidates) {
-        const memory_id = create_subject_memory_id(address, relative_memory_id);
-        const record = (await this.read({ access: input.access, memory_id })).memory;
-        if (!record) continue;
-        const stable_lines = record.content
-          .split("\n")
-          .map((line) => line.trim().replace(/^[-*]\s+/, ""))
-          .filter((line) => line && !line.startsWith("#"))
-          .slice(0, 3)
-          .join("\n");
-        if (!stable_lines) continue;
-        const bounded_content = stable_lines.slice(0, remaining_chars);
-        if (!bounded_content) break;
-        items.push({
-          memory_id,
-          subject: address.subject,
-          content: bounded_content,
-          citation: create_citation(memory_id),
-        });
-        remaining_chars -= bounded_content.length;
-        if (items.length >= max_items || remaining_chars <= 0) break;
-      }
-      if (items.length >= max_items || remaining_chars <= 0) break;
-    }
-    return { items };
   }
 
   /** 释放底层 Adapter 并关闭当前绑定。 */

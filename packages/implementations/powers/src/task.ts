@@ -8,6 +8,7 @@ export type { TaskAnalyzer, TaskAnalysis, TaskAnalysisInput, TaskPreparation } f
 export type { TaskCaptureInput } from "./task/types/TaskIntake.js";
 export type { TaskGenerateInput, TaskGenerateResult } from "./task/types/TaskGenerate.js";
 export { TaskPower } from "./task/TaskPower.js";
+export type { TaskNotification, TaskNotificationChannel } from "./task/types/TaskNotification.js";
 export type { TaskPowerOptions } from "./task/types/TaskPowerOptions.js";
 export type { TaskServiceContract, TaskWorkInput, TaskMutationResult } from "./task/types/TaskService.js";
 export type { TaskWorkspaceSnapshot, TaskWorkspaceItem, TaskWorkspaceSaveInput, TaskInboxItem, TaskState, TaskProgress, TaskOccurrence } from "./task/types/TaskWorkflow.js";

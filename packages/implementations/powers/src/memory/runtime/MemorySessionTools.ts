@@ -5,7 +5,7 @@ import type { MemoryProvider } from "../types/Memory.js";
 import type { MemoryJob, MemoryJobChangeDetail } from "../types/MemoryJob.js";
 import { MEMORY_SESSION_KIND } from "../types/MemorySession.js";
 import { MemoryJobStore } from "../storage/MemoryJobStore.js";
-import { resolve_writable_memory_address } from "./MemoryAddress.js";
+import { memory_matches_target, read_target_memory } from "../application/MemoryKnowledge.js";
 import { create_profile_stage_tool } from "./MemoryProfileTools.js";
 import { MemoryJobSnapshotCache, assert_memory_job_detail_budget, memory_job_source_excerpts, memory_source_excerpt_schema } from "./MemoryJobDetail.js";
 
@@ -44,8 +44,6 @@ export function create_memory_session_tools(options: MemorySessionToolOptions): 
   };
   /** 将所有读写限定为本 Job 的唯一目标。 */
   const assert_memory_id = (job: MemoryJob, memory_id: string): void => {
-    const address = resolve_writable_memory_address(job.access, job.target);
-    if (!memory_id.startsWith(`${address.prefix}/wiki/`)) throw new Error("Memory is outside the Job target");
     if (job.kind === "revise" && memory_id !== job.memory_id) throw new Error("Revision may only modify its bound memory");
   };
   return {
@@ -67,9 +65,8 @@ export function create_memory_session_tools(options: MemorySessionToolOptions): 
       execute: async (input, context) => {
         const { query } = z.object({ query: z.string().min(1).max(1000) }).strict().parse(input);
         const job = await bind_job(context);
-        const prefix = `${resolve_writable_memory_address(job.access, job.target).prefix}/wiki/`;
         const result = await options.provider.recall({ access: job.access, target: job.target, query, max_results: 20 });
-        return { items: result.items.filter((item) => item.memory.memory_id.startsWith(prefix)) };
+        return { items: result.items.filter((item) => memory_matches_target(item.memory, job.access, job.target)) };
       },
     },
     memory_read: {
@@ -79,12 +76,9 @@ export function create_memory_session_tools(options: MemorySessionToolOptions): 
         const { memory_id } = z.object({ memory_id: z.string().min(1) }).strict().parse(input);
         const job = await bind_job(context);
         assert_memory_id(job, memory_id);
-        const result = await options.provider.read({ access: job.access, memory_id });
-        if (result.memory) {
-          if (result.memory.memory_id !== memory_id) throw new Error("Memory provider returned a different record");
-          snapshots.capture_memory(job, result.memory);
-        }
-        return result;
+        const memory = await read_target_memory(options.provider, job.access, job.target, memory_id);
+        snapshots.capture_memory(job, memory);
+        return { memory_id, memory };
       },
     },
     memory_stage: {
@@ -103,6 +97,7 @@ export function create_memory_session_tools(options: MemorySessionToolOptions): 
           } else {
             if (!change.memory_id || !change.expected_version) throw new Error("Update requires memory ID and read version");
             assert_memory_id(job, change.memory_id);
+            await read_target_memory(options.provider, job.access, job.target, change.memory_id);
           }
           if (change.operation !== "invalidate" && !change.content.trim()) throw new Error("Memory content cannot be empty");
         }

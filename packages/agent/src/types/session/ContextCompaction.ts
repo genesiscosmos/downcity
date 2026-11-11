@@ -1,8 +1,8 @@
 /** 单次上下文摘要的输入单元及可观测诊断，不持久化聊天正文副本。 */
-import type { StableContextPart } from "./ContextCheckpoint.js";
+import type { StableContextUnit } from "./ContextCheckpoint.js";
 
 /** 模型可见语义与 canonical 边界的关联。 */
-export interface ContextSummaryUnit extends StableContextPart {
+export interface ContextSummaryUnit extends StableContextUnit {
   /** 经统一消息投影后供摘要使用的文本，不包含 UI 数据或附件二进制。 */
   text: string;
 }

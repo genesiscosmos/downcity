@@ -15,6 +15,8 @@
 
 /** Session 附件持久化与 fork 复制能力。 */
 export interface SessionAttachmentStore {
+  /** 当前 Store 真实持有的附件根目录，由存储实现提供，模型路径不能推导或覆盖。 */
+  readonly root_path?: string;
   /** 判断 canonical URL 是否由当前 Session Attachment Store 持有。 */
   owns_local_file(url: string): boolean;
 

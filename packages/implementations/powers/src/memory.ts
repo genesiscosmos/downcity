@@ -36,9 +36,6 @@ export type {
   MemoryReviseInput,
   MemorySourceReference,
   MemoryStatusResult,
-  MemorySystemContextInput,
-  MemorySystemContextItem,
-  MemorySystemContextResult,
   MemoryType,
 } from "./memory/types/Memory.js";
 export type {
@@ -49,21 +46,17 @@ export type {
   MemoryWriteTarget,
 } from "./memory/types/MemoryAccess.js";
 export type {
-  MemoryMainviewAgent,
   MemoryMainviewForgetInput,
   MemoryMainviewListItem,
   MemoryMainviewListInput,
   MemoryMainviewListResult,
   MemoryMainviewMutationResult,
-  MemoryMainviewProviderStatus,
   MemoryMainviewReadInput,
   MemoryMainviewReadResult,
   MemoryMainviewRememberInput,
   MemoryMainviewReviseInput,
   MemoryMainviewScopeInput,
   MemoryMainviewScopeKind,
-  MemoryMainviewSnapshot,
-  MemoryMainviewWorkspace,
 } from "./memory/types/MemoryMainview.js";
 export type {
   BuiltinMemoryProjectionDraft,

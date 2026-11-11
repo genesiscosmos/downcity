@@ -66,6 +66,9 @@ importers:
       '@downcity/type':
         specifier: workspace:*
         version: link:../type
+      '@downcity/workspace-ssh':
+        specifier: workspace:*
+        version: link:../implementations/workspaces/ssh
       commander:
         specifier: ^15.0.0
         version: 15.0.0
@@ -75,15 +78,15 @@ importers:
       fs-extra:
         specifier: ^11.3.5
         version: 11.3.5
-      globby:
-        specifier: ^11.1.0
-        version: 11.1.0
       hono:
         specifier: ^4.12.23
         version: 4.12.23
       node-pty:
         specifier: 1.2.0-beta.14
         version: 1.2.0-beta.14
+      picomatch:
+        specifier: ^4.0.7
+        version: 4.0.7
       pinyin-pro:
         specifier: ^3.27.0
         version: 3.29.3
@@ -115,6 +118,9 @@ importers:
       react:
         specifier: ^19.2.6
         version: 19.2.6
+      '@types/picomatch':
+        specifier: ^4.0.3
+        version: 4.0.3
       tsc-alias:
         specifier: ^1.8.17
         version: 1.8.17
@@ -142,6 +148,9 @@ importers:
       '@downcity/type':
         specifier: workspace:*
         version: link:../type
+      '@downcity/workspace-ssh':
+        specifier: workspace:*
+        version: link:../implementations/workspaces/ssh
       '@earendil-works/pi-tui':
         specifier: ^0.74.2
         version: 0.74.2
@@ -473,6 +482,22 @@ importers:
       tsc-alias:
         specifier: ^1.8.16
         version: 1.8.17
+      typescript:
+        specifier: ^6.0.3
+        version: 6.0.3
+
+  packages/implementations/workspaces/ssh:
+    dependencies:
+      '@downcity/type':
+        specifier: workspace:*
+        version: link:../../../type
+      zod:
+        specifier: ^4.4.3
+        version: 4.4.3
+    devDependencies:
+      '@types/node':
+        specifier: ^25.9.1
+        version: 25.9.1
       typescript:
         specifier: ^6.0.3
         version: 6.0.3
@@ -3033,6 +3058,9 @@ packages:
   '@types/node@25.9.1':
     resolution: {integrity: sha512-xfrlY7UD5rMJk3ZVJP8BNzS28J36YJg+xp+LPXV1TdWxr8uMH5A860QNxYDGQe/ylDSgjxE52Q9VnO7p75tJxg==}
 
+  '@types/picomatch@4.0.3':
+    resolution: {integrity: sha512-iG0T6+nYJ9FAPmx9SsUlnwcq1ZVRuCXcVEvWnntoPlrOpwtSTKNDC9uVAxTsC3PUvJ+99n4RpAcNgBbHX3JSnQ==}
+
   '@types/react-dom@19.2.3':
     resolution: {integrity: sha512-jp2L/eY6fn+KgVVQAOqYItbF0VY/YApe5Mz2F0aykSO8gx31bYCZyvSeYxCHKvzHG5eZjc+zyaS5BrBWya2+kQ==}
     peerDependencies:
@@ -4730,6 +4758,10 @@ packages:
     resolution: {integrity: sha512-QP88BAKvMam/3NxH6vj2o21R6MjxZUAd6nlwAS/pnGvN9IVLocLHxGYIzFhg6fUQ+5th6P4dv4eW9jX3DSIj7A==}
     engines: {node: '>=12'}
 
+  picomatch@4.0.7:
+    resolution: {integrity: sha512-qcJu88Q2IWqJsDD529JKMdwGm/dvInW4HvQnRwiH9JtihJvzGOscDtHE3x1pBKeUOTysQ8kVmLnJ2kJu7yhcGA==}
+    engines: {node: '>=12'}
+
   pinyin-pro@3.29.3:
     resolution: {integrity: sha512-+UU9bx6vfDw8amOJGHm0TE0rdQl8VPylsDWviQ5OOQ3e+on1xRP4OqDbiDuMT5OISgvfl/Y6ez1BBRaIP80GLQ==}
 
@@ -5626,6 +5658,8 @@ packages:
     resolution: {integrity: sha512-bXE4cR/kVZhKZX/RjPEflHaKVhUVl85noU3v6b8apfQEc1x4A+zBxjZ4lN8LqGd6WZ3dl98pY4o717VFmoPp+A==}
 
 snapshots:
+
+  '@types/picomatch@4.0.3': {}
 
   '@ai-sdk/gateway@3.0.166(zod@4.4.3)':
     dependencies:
@@ -9646,6 +9680,8 @@ snapshots:
   picomatch@2.3.2: {}
 
   picomatch@4.0.4: {}
+
+  picomatch@4.0.7: {}
 
   pinyin-pro@3.29.3: {}
 

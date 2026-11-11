@@ -62,7 +62,7 @@ export class DefaultSessionComposer implements SessionComposer {
         content: `<session-context-summary>\n${checkpoint.summary}\n</session-context-summary>`,
       }] : [],
       messages: inject_power_context(
-        await session_messages_to_model_messages(tail, input.session.project_root),
+        await session_messages_to_model_messages(tail, input.session.project_root, input.attachment_root),
         input.state.power_context_blocks ?? [],
       ),
       tools: { ...input.state.tools },

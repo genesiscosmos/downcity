@@ -8,7 +8,7 @@ import { MemoryJobStore, memory_job_identity } from "../storage/MemoryJobStore.j
 import { MemoryCoordinator } from "./MemoryCoordinator.js";
 import { explicit_memory_source, memory_request_hash, read_memory_sources } from "./MemorySources.js";
 import { MemoryDelivery, memory_result_recipient } from "./MemoryDelivery.js";
-import { resolve_readable_memory_address } from "../runtime/MemoryAddress.js";
+import { memory_record_target, require_memory_transactions } from "./MemoryKnowledge.js";
 
 /** Power 唯一持有的记忆业务服务。 */
 export class MemoryService {
@@ -18,7 +18,7 @@ export class MemoryService {
     /** 持久化内部处理请求。 */
     private readonly jobs: MemoryJobStore,
     /** 执行请求并恢复。 */
-    private readonly coordinator: MemoryCoordinator,
+    private readonly coordinator: Pick<MemoryCoordinator, "submit" | "retry">,
     /** 有界来源读取由宿主校验真实 Session 身份。 */
     private readonly host: PowerLifecycleContext,
     /** 接收身份由调用方绑定，处理完成后可靠回传。 */
@@ -34,7 +34,7 @@ export class MemoryService {
   /** 显式新增保留原意，不让模型把指令改写成用户原话。 */
   async remember(context: PowerContext, access: MemoryAccessContext, input: Omit<MemoryRememberInput, "access">) {
     const source = explicit_memory_source(context, input.content);
-    const receipt = await this.provider.commit({
+    const receipt = await require_memory_transactions(this.provider).commit({
       access, target: input.target, commit_id: `explicit:${source.source_id}:${input.target}`,
       changes: [{ operation: "create", content: input.content, topic: input.topic, memory_type: input.memory_type,
         allow_recreation: true,
@@ -63,11 +63,11 @@ export class MemoryService {
 
   /** 自然语言更正必须经专用 Session，既有内容不会被追加一段修改指令。 */
   async revise(context: PowerContext, access: MemoryAccessContext, input: Omit<MemoryReviseInput, "access">): Promise<MemoryJobView> {
-    const address = resolve_readable_memory_address(access, input.memory_id);
-    const target: MemoryWriteTarget = address.subject.kind === "workspace" ? "current_workspace" : address.subject.kind === "user" ? "user" : "agent";
-    if (address.subject.kind === "city") throw new Error("City legacy memories must be imported before revision");
+    require_memory_transactions(this.provider);
     const current = await this.provider.read({ access, memory_id: input.memory_id });
     if (!current.memory) throw new Error("Memory not found");
+    if (current.memory.memory_id !== input.memory_id) throw new Error("Memory provider returned a different record");
+    const target = memory_record_target(current.memory, access);
     const source = explicit_memory_source(context, JSON.stringify({ instruction: input.instruction, evidence: input.evidence }));
     return await this.submit(context, {
       kind: "revise", access, target, mode: "knowledge", memory_id: input.memory_id, sources: [source],

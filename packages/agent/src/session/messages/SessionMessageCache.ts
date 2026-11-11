@@ -176,6 +176,7 @@ function project_message_change(
     previous?.role !== "agent" ||
     message.role !== "agent" ||
     previous.state !== message.state ||
+    previous.stable_part_sequence !== message.stable_part_sequence ||
     previous.parts.some(
       (part) => !message.parts.some((next) => next.part_id === part.part_id),
     )

@@ -9,6 +9,7 @@
 
 import { constants, lstat, mkdir, open, readFile } from "node:fs/promises";
 import path from "node:path";
+import { read_image_dimensions, image_header_bytes, type ImageDimensions } from "@downcity/type/workspace";
 import type { WorkspaceSandboxMount } from "@downcity/type/shell";
 import type {
   EditFileToolInput,
@@ -38,6 +39,7 @@ import {
   normalize_text_to_lf,
 } from "@/workspace/file/FileEncoding.js";
 import { write_file_atomically } from "@/workspace/file/FileAtomicWriter.js";
+import { read_file_tool_input_schema } from "@/workspace/tool/FileToolSchemas.js";
 import { read_text_window, file_read_version, MAX_TEXT_WINDOW_BYTES } from "./FileReadWindow.js";
 
 const DEFAULT_READ_LINES = 500;
@@ -153,6 +155,11 @@ async function read_file_action(
 ): Promise<ReadFileToolResult> {
   let file_path = "";
   try {
+    // SDK 直调也使用同一 schema，旧字段与混合范围不能被静默忽略。
+    const parsed = read_file_tool_input_schema.safeParse(input);
+    if (!parsed.success) throw new FileToolRuntimeError({ error_code: "invalid_path", message: `Invalid read input: ${parsed.error.message}` });
+    input = parsed.data;
+    const range = input.range;
     const resolved = await resolve_file_tool_path({
       root_path: context.root_path,
       file_path: input.file_path,
@@ -160,20 +167,32 @@ async function read_file_action(
       ...(context.mounts ? { mounts: context.mounts } : {}),
     });
     file_path = resolved.file_path;
-    if (input.byte_offset !== undefined && (input.offset !== undefined || input.limit !== undefined)) {
-      throw new FileToolRuntimeError({ error_code: "invalid_path", message: "byte_offset cannot be combined with offset or limit", file_path });
-    }
     context.abort_signal?.throwIfAborted();
     const file = await open(file_path, constants.O_RDONLY | constants.O_NOFOLLOW);
     let metadata;
     const head = Buffer.alloc(512);
     let head_bytes = 0;
+    let image_dimensions: ImageDimensions | undefined;
     try {
       metadata = await file.stat();
       head_bytes = (await file.read(head, 0, head.length, 0)).bytesRead;
+      const header = head.subarray(0, head_bytes);
+      const header_image_type = detect_image_file_mime_type(header);
+      if (header_image_type) {
+        image_dimensions = read_image_dimensions(header);
+        if (!image_dimensions && (header_image_type === "image/jpeg" || header_image_type === "image/webp")) {
+          context.abort_signal?.throwIfAborted();
+          const extended = Buffer.alloc(Math.min(metadata.size, image_header_bytes));
+          const result = await file.read(extended, 0, extended.length, 0);
+          image_dimensions = read_image_dimensions(extended.subarray(0, result.bytesRead));
+        }
+      }
+      if (file_read_version(await file.stat()) !== file_read_version(metadata)) {
+        throw new FileToolRuntimeError({ error_code: "file_changed", message: "File changed while reading its header", file_path });
+      }
     } finally { await file.close(); }
     const file_version = file_read_version(metadata);
-    if (input.expected_version && input.expected_version !== file_version) {
+    if (range?.expected_version && range.expected_version !== file_version) {
       throw new FileToolRuntimeError({ error_code: "file_changed", message: "File changed; restart reading", file_path });
     }
     const sample = head.subarray(0, head_bytes);
@@ -182,9 +201,10 @@ async function read_file_action(
     if (detected_image || detected_mime === "application/pdf" || is_binary_file(sample)) {
       return { success: true, file_path, total_bytes: metadata.size, total_lines: 0, start_line: 0, end_line: -1,
         content: "", truncated: false, type: detected_image ? "image" : "binary", file_version,
+        ...(image_dimensions ? { image_width: image_dimensions.width, image_height: image_dimensions.height } : {}),
         ...(detected_mime ? { mime_type: detected_mime } : {}) };
     }
-    if (input.byte_offset !== undefined || metadata.size > MAX_TEXT_WINDOW_BYTES) return await read_text_window(file_path, input, context.abort_signal);
+    if (range?.type === "bytes" || metadata.size > MAX_TEXT_WINDOW_BYTES) return await read_text_window(file_path, input, context.abort_signal);
     // 小文件也有界读取，不能依赖 stat 后文件大小保持不变。
     const small_file = await open(file_path, constants.O_RDONLY | constants.O_NOFOLLOW);
     let buffer: Buffer;
@@ -208,10 +228,10 @@ async function read_file_action(
     const decoded = decode_text_file(buffer);
     const lines = split_text_lines(decoded.content);
     const total_lines = lines.length;
-    const offset = Math.max(0, Math.floor(input.offset ?? 0));
+    const offset = range?.offset ?? 0;
     const limit = Math.min(
       MAX_READ_LINES,
-      Math.max(1, Math.floor(input.limit ?? DEFAULT_READ_LINES)),
+      range?.type === "lines" ? range.limit ?? DEFAULT_READ_LINES : DEFAULT_READ_LINES,
     );
     const selected_lines: string[] = [];
     let output_bytes = 0;

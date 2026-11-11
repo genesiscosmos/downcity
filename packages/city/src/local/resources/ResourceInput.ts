@@ -12,6 +12,14 @@ export function validate_resource_input(method: string, input: Record<string, un
     require_resource_value(!(input.model !== undefined && input.unset_model), "model and unset_model are mutually exclusive");
   }
   if (method.startsWith("workspace.") && !["workspace.list", "workspace.register"].includes(method)) require_workspace_id(input.id, method === "workspace.get");
+  if (method === "workspace.register") {
+    if (input.source !== undefined) {
+      const source = input.source as Record<string, unknown> | null;
+      require_resource_value(source && source.kind === "ssh" && typeof source.host === "string" && source.host.trim(), "SSH source requires kind=ssh and host");
+    }
+    require_resource_value(input.initialize_dependencies === undefined || typeof input.initialize_dependencies === "boolean", "initialize_dependencies must be a boolean");
+    require_resource_value(input.initialize_dependencies !== true || input.source !== undefined, "Dependency initialization requires an SSH Workspace");
+  }
   if (method.startsWith("session.")) {
     require_agent_id(input.agent);
     require_resource_value(input.category === undefined || input.category === "work" || input.category === "chat", "category must be chat or work");

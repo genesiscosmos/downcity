@@ -10,7 +10,7 @@ import type { CityPowerRegistration } from "@downcity/city/power";
 import { MessengerPower } from "@/messenger.js";
 import { MemoryPower, type MemoryChangeHandler } from "@/memory.js";
 import { SkillPower } from "@/skill.js";
-import { TaskPower, type TaskAnalyzer } from "@/task.js";
+import { TaskPower, type TaskAnalyzer, type TaskNotificationChannel } from "@/task.js";
 import { WebPower } from "@/web.js";
 import { PresentationPower } from "@/presentation/Power.js";
 import { NotificationPower } from "@/notification.js";
@@ -28,6 +28,8 @@ export function create_builtin_power_registrations(input: {
   platform_root_path: string;
   /** 宿主提供的可选任务分析端口。 */
   analyze_task?: TaskAnalyzer;
+  /** 宿主可选注入的 Task 通知展示渠道。 */
+  task_notification_channel?: TaskNotificationChannel;
   /** Memory 内容实际提交后的业务回调，包含知识记录和 Profile。 */
   on_memory_changed?: MemoryChangeHandler;
   /** Task 定义或执行状态变化的应用回调，覆盖后台提交。 */
@@ -36,7 +38,7 @@ export function create_builtin_power_registrations(input: {
   on_notification_changed?: () => void | Promise<void>;
 }): BuiltinPowerRegistration[] {
   // Task 持有可靠事实，Memory 低频重放；组合根只接线，不承载做梦业务。
-  const task_power = new TaskPower({ analyze_task: input.analyze_task, on_changed: input.on_task_changed });
+  const task_power = new TaskPower({ analyze_task: input.analyze_task, on_changed: input.on_task_changed, notification_channel: input.task_notification_channel });
   return [
     {
       readme: builtin_readme_path("notification"),

@@ -41,7 +41,6 @@ import type { SessionBrowseBaseInput } from "@/types/store/SessionBrowse.js";
 import { SessionBrowseClient } from "./SessionBrowseClient.js";
 import type { LocalSessionStoreOptions } from "@/types/store/LocalStore.js";
 import type { SessionOrigin } from "@downcity/type";
-import { migrate_session_origin_categories } from "@/session/storage/OriginCategoryMigration.js";
 import { normalize_session_origin, normalize_session_origin_category, SESSION_ORIGIN_CATEGORY_WORK } from "@downcity/type";
 
 /** 解码目录中经过 URL 编码的 Session 标识。 */
@@ -76,14 +75,6 @@ export class LocalSessionStore implements SessionStore {
   /** 内存模式中已归档但仍由 Store 持有的 Session。 */
   private readonly archived_sessions = new Map<string, LocalSessionDataStore>();
 
-  /**
-   * 来源分类迁移的唯一执行入口。
-   *
-   * 懒执行且在实例内只跑一次：所有异步读写路径先经过它，保证迁移完成后
-   * 才会按新分区读取历史会话。
-   */
-  private migration?: Promise<void>;
-
   /** 列表专用生命周期、世代与共享 Worker 接入。 */
   private readonly browse: SessionBrowseClient;
 
@@ -100,20 +91,6 @@ export class LocalSessionStore implements SessionStore {
       ...(this.workspace_id ? { workspace_id: this.workspace_id } : {}),
       memory: this.database_location.type === "memory",
     });
-  }
-
-  /** 保证历史数据已完成来源分类迁移；失败时释放缓存以便下次重试。 */
-  private async ensure_origin_categories_migrated(): Promise<void> {
-    if (this.database_location.type === "memory") return;
-    this.migration ??= migrate_session_origin_categories({
-      files: this.files,
-      storage_root_path: this.storage_root_path,
-    }).then(() => undefined).catch((error: unknown) => {
-      // 失败不留半成品状态：下次调用重新扫描，已迁移的会话靠自身幂等跳过。
-      this.migration = undefined;
-      throw error;
-    });
-    await this.migration;
   }
 
   /** 为新 Session 创建稳定持久化视图。 */
@@ -151,7 +128,6 @@ export class LocalSessionStore implements SessionStore {
 
   /** 打开已有 Session，并以数据库中的完整 origin 作为唯一事实。 */
   async open_session(session_id: string, category = SESSION_ORIGIN_CATEGORY_WORK): Promise<SessionStorage> {
-    await this.ensure_origin_categories_migrated();
     const resolved_session_id = normalize_session_id(session_id);
     if (!resolved_session_id) {
       throw new Error("SessionStore.open_session requires a non-empty session_id");
@@ -250,7 +226,6 @@ export class LocalSessionStore implements SessionStore {
 
   /** 判断活动 Session 是否存在。 */
   async has_session(session_id: string, category = SESSION_ORIGIN_CATEGORY_WORK): Promise<boolean> {
-    await this.ensure_origin_categories_migrated();
     const resolved_category = normalize_session_origin_category(category);
     const cache_key = this.session_cache_key(session_id, resolved_category);
     if (this.database_location.type === "memory") return this.sessions.has(cache_key);
@@ -271,7 +246,6 @@ export class LocalSessionStore implements SessionStore {
 
   /** 执行永久删除；外层浏览世代覆盖所有异步阶段。 */
   private async remove_session_data(session_id: string, category: string): Promise<boolean> {
-    await this.ensure_origin_categories_migrated();
     const resolved_category = normalize_session_origin_category(category);
     const session_path = this.session_path(session_id, resolved_category);
     const cache_key = this.session_cache_key(session_id, resolved_category);
@@ -299,7 +273,6 @@ export class LocalSessionStore implements SessionStore {
 
   /** 执行消息清空。 */
   private async clear_session_message_data(session_id: string, category: string): Promise<boolean> {
-    await this.ensure_origin_categories_migrated();
     const resolved_category = normalize_session_origin_category(category);
     if (!(await this.has_session(session_id, resolved_category))) return false;
     const storage = await this.open_session(session_id, resolved_category);
@@ -315,7 +288,6 @@ export class LocalSessionStore implements SessionStore {
     return await this.browse.list(
       input, false, executing_session_ids,
       () => this.cached_session_projections(this.sessions, input?.category),
-      () => this.ensure_origin_categories_migrated(),
     );
   }
 
@@ -326,7 +298,6 @@ export class LocalSessionStore implements SessionStore {
 
   /** 执行活动到归档的移动，内存模式同样受世代保护。 */
   private async archive_session_data(session_id: string, category: string): Promise<AgentArchiveSessionResult> {
-    await this.ensure_origin_categories_migrated();
     const resolved_category = normalize_session_origin_category(category);
     const cache_key = this.session_cache_key(session_id, resolved_category);
     if (this.database_location.type === "memory") {
@@ -372,7 +343,6 @@ export class LocalSessionStore implements SessionStore {
     return await this.browse.list(
       input, true, new Set(),
       () => this.cached_session_projections(this.archived_sessions, input?.category),
-      () => this.ensure_origin_categories_migrated(),
     );
   }
 
@@ -383,7 +353,6 @@ export class LocalSessionStore implements SessionStore {
 
   /** 执行归档清理，部分失败仍会失效已有快照。 */
   private async clean_archive_data(): Promise<AgentCleanArchiveResult> {
-    await this.ensure_origin_categories_migrated();
     if (this.database_location.type === "memory") {
       const archived = [...this.archived_sessions.values()];
       this.archived_sessions.clear();

@@ -19,8 +19,10 @@ export function register_agent_resource_commands(agent: Command): void {
 /** 项目登记树；移除保留项目、历史和附件。 */
 export function register_workspace_commands(program: Command): void {
   const workspace = program.command("workspace").description("Manage project Workspace registrations");
-  resource_options(workspace.command("register <path>").option("--name <name>"))
-    .action(async (path, options) => await execute_resource_command("workspace.register", options, { path }));
+  resource_options(workspace.command("register <path>").option("--name <name>").option("--ssh <host>", "System OpenSSH target; remote path must be absolute").option("--initialize-dependencies", "Install missing Python, ripgrep and ps on the SSH host before registering"))
+    .action(async (path, options) => await execute_resource_command("workspace.register", options, { path, ...(options.ssh ? { source: { kind: "ssh", host: options.ssh } } : {}) }));
+  resource_options(workspace.command("initialize <workspace_id>").description("Install missing Python, ripgrep and ps on a registered SSH host"))
+    .action(async (id, options) => await execute_resource_command("workspace.initialize", options, { id }));
   resource_options(workspace.command("list").option("--query <text>").option("--include-internal"))
     .action(async (options) => await execute_resource_command("workspace.list", options));
   resource_options(workspace.command("get <workspace_id>"))

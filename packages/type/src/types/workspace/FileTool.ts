@@ -33,18 +33,37 @@ export type FileToolErrorCode =
   | "file_changed"
   | "internal_error";
 
-/** 文件读取工具输入。 */
-export interface ReadFileToolInput {
-  /** 要读取的项目内相对路径或绝对路径。 */
-  file_path: string;
-  /** 从第几行开始读取，使用 0-based 行号。 */
+/** 文本读取范围；判别字段使行与字节游标不会出现在同一调用中。 */
+export type ReadFileRange = ReadFileLineRange | ReadFileByteRange;
+
+/** 按逻辑行选取文本；省略起点和数量时从首行读取最多 500 行。 */
+export interface ReadFileLineRange {
+  /** 行范围判别字段。 */
+  type: "lines";
+  /** 从第几行开始读取，使用 0-based 行号；省略时为 0。 */
   offset?: number;
-  /** 本次最多返回的行数。 */
+  /** 本次最多返回的行数，默认 500，最大 2000。 */
   limit?: number;
-  /** 原始文件的字节起点；与 offset、limit 互斥，用于超长行续读。 */
-  byte_offset?: number;
-  /** 上次 read 返回的文件版本；不一致时拒绝续读，避免混合不同文件内容。 */
+  /** 前次 read 返回的 file_version；续读时原样传回，不能填写路径或猜测值。 */
   expected_version?: string;
+}
+
+/** 按原始字节续读文本；不允许传入行数或行偏移。 */
+export interface ReadFileByteRange {
+  /** 字节范围判别字段。 */
+  type: "bytes";
+  /** 原始文件字节起点；使用上次 read 返回的 next_byte_offset。 */
+  offset: number;
+  /** 前次 read 返回的 file_version；续读时原样传回，变化后拒绝拼接。 */
+  expected_version?: string;
+}
+
+/** 文件读取工具输入；图片、PDF 和默认首段读取只需文件路径。 */
+export interface ReadFileToolInput {
+  /** 要读取的项目文件或当前 Session 登记拥有的附件路径。 */
+  file_path: string;
+  /** 文本范围；省略时读取默认首段。图片和 PDF 不需要此字段。 */
+  range?: ReadFileRange;
 }
 
 /** 文件写入工具输入。 */
@@ -119,6 +138,10 @@ export interface ReadFileToolSuccess {
   type: "text" | "image" | "binary";
   /** 当前文件的 MIME 类型。 */
   mime_type?: string;
+  /** 从真实图片头解析的宽度，单位像素；无法识别时省略。 */
+  image_width?: number;
+  /** 从真实图片头解析的高度，单位像素；无法识别时省略。 */
+  image_height?: number;
   /** 文本文件实际采用的解码格式。 */
   encoding?: "utf-8" | "utf-16le" | "utf-16be";
   /** 完整读取时的 SHA-256；分段读取只返回 file_version，不为哈希读取全文。 */

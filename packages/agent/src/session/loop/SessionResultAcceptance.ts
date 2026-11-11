@@ -6,6 +6,7 @@ import type { AgentSessionPromptInput } from "@/types/sdk/AgentSessionPrompt.js"
 import type { PromptRequestIdentity } from "@/types/session/SessionLoop.js";
 import type { SessionMessages } from "../messages/SessionMessages.js";
 import { resolve_prompt_request_identity } from "./SessionTurnHandles.js";
+import { read_prompt_input } from "./SessionInputFacts.js";
 
 /** 一个正在等待 canonical 接收确认的后台结果。 */
 interface PendingSessionResult {
@@ -24,7 +25,7 @@ export class SessionResultAcceptance {
     /** 目标 Session 的稳定标识，用于解析 canonical 消息身份。 */
     private readonly session_id: string,
     /** canonical 消息读取端口，是跨重启接收确认的事实源。 */
-    private readonly messages: Pick<SessionMessages, "read_message">,
+    private readonly messages: Pick<SessionMessages, "read_message" | "read_inbox">,
   ) {}
 
   /** 相同请求只能接收一次；是否能注入原 Turn 由同步检查并入队的回调决定。 */
@@ -36,24 +37,26 @@ export class SessionResultAcceptance {
   ): Promise<boolean> {
     const identity = resolve_prompt_request_identity(this.session_id, request_id);
     if (!identity || !turn_id.trim()) throw new Error("Delegation result requires Turn and request identities");
-    const pending = this.pending.get(identity.message_id);
+    const pending = this.pending.get(identity.inbox_id);
     if (pending) {
       if (pending.turn_id !== turn_id) throw new Error("Delegation result belongs to another Turn");
       return await pending.receipt;
     }
     const receipt = (async () => {
-      const existing = await this.messages.read_message(identity.message_id);
+      const existing = await read_prompt_input(this.messages, identity);
       if (existing) {
-        if (existing.role !== "user" || existing.turn_id !== turn_id) throw new Error("Delegation result belongs to another Turn");
+        if ("role" in existing.input || existing.message.turn_id !== turn_id || existing.input.source?.turn_id !== turn_id) {
+          throw new Error("Delegation result belongs to another Turn");
+        }
         return true;
       }
       return await enqueue(identity, query);
     })();
-    this.pending.set(identity.message_id, { turn_id, receipt });
+    this.pending.set(identity.inbox_id, { turn_id, receipt });
     try {
       return await receipt;
     } finally {
-      this.pending.delete(identity.message_id);
+      this.pending.delete(identity.inbox_id);
     }
   }
 }

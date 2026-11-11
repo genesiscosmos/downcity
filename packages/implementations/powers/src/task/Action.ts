@@ -27,6 +27,8 @@ import {
 } from "./runtime/Store.js";
 import { runTaskNow } from "./runtime/Runner.js";
 import { normalize_task_state, task_work_is_closed, task_is_recurring, task_occurrence_key } from "./runtime/TaskWorkflowModel.js";
+import { publish_task_run_notification } from "./runtime/TaskRunNotification.js";
+import { create_task_notification } from "./runtime/TaskNotificationDispatcher.js";
 import { register_task_occurrence, settle_task_execution, save_task_workflow } from "./runtime/TaskWorkflowState.js";
 import { list_task_runs, read_task_run_detail } from "./runtime/TaskRunStore.js";
 import type {
@@ -371,7 +373,8 @@ export async function runTaskDefinition(params: {
   definitions: TaskDefinitionRepository;
   request: TaskRunRequest;
   executions: TaskExecutionCoordinator;
-  notifications?: import("@downcity/city/power").PowerNotificationPublisher;
+  /** TaskPower 实例统一通知出口。 */
+  notification_dispatcher?: import("./types/TaskNotification.js").TaskNotificationChannel;
   execution_context?: StepSnapshot;
   delivery: TaskCompletionDeliveryPort;
 }): Promise<TaskRunResponse> {
@@ -389,7 +392,7 @@ export async function runTaskDefinition(params: {
 
   try {
     // 关键点（中文）：run 改为“异步受理”，先做存在性校验，再后台执行。
-    const executionId = `${taskId}:${Date.now()}`;
+    const executionId = `${taskId}:${randomUUID()}`;
     const accepted = await params.definitions.mutate(async (storage) => {
       const task = await readTask({ taskId, storage });
       // 调度读取与受理之间允许用户修改，旧回调必须在事务内退出。
@@ -446,6 +449,8 @@ export async function runTaskDefinition(params: {
       }
       await save_task_workflow(params.definitions, task);
       return params.executions.start(taskId, async () => {
+        // 只在 Runner 确认完整产物保存后记录时间戳；早期异常不伪造记录链接。
+        let run_timestamp: string | undefined;
         await runTaskNow({
           context: params.context,
           storage,
@@ -453,7 +458,6 @@ export async function runTaskDefinition(params: {
           task_snapshot: task,
           trigger,
           executionId,
-          notifications: params.notifications,
           delivery: params.delivery,
           ...(params.execution_context?.workspace_env
             ? { workspace_env: { ...params.execution_context.workspace_env } }
@@ -463,10 +467,20 @@ export async function runTaskDefinition(params: {
             : {}),
         })
         .then(async (result) => {
-          await settle_task_execution({ definitions: params.definitions, task, execution_id: executionId,
-            success: result.status === "success" && result.resultStatus !== "invalid", timestamp: result.timestamp,
-            ...(result.resultErrors.length ? { error: result.resultErrors.join("; ") } : {}),
+          run_timestamp = result.timestamp;
+          const success = result.status === "success" && result.resultStatus !== "invalid";
+          const settlement = await settle_task_execution({ definitions: params.definitions, task, execution_id: executionId,
+            success, timestamp: result.timestamp,
+            ...(!success ? { error: result.error_text || result.resultErrors.join("; ") } : {}),
           });
+          // 通知只能在产物与 workflow 均提交后发出；投递失败不能改写执行结果。
+          if (settlement.applied && result.status !== "skipped") {
+            await publish_task_run_notification(params.context, params.notification_dispatcher, create_task_notification(task,
+              success ? (settlement.review ? "review" : "success") : "failure", executionId, {
+                run_timestamp: result.timestamp, occurrence_id: settlement.occurrence_id,
+                body: success ? undefined : result.error_text || result.resultErrors.join("; "),
+              }));
+          }
           params.context.logger.info(
             formatTaskLogMessage("Task run finished"),
             {
@@ -487,7 +501,12 @@ export async function runTaskDefinition(params: {
           );
         })
         .catch(async (error) => {
-          await settle_task_execution({ definitions: params.definitions, task, execution_id: executionId, success: false, error: String(error) });
+          const settlement = await settle_task_execution({ definitions: params.definitions, task, execution_id: executionId, success: false, error: String(error), timestamp: run_timestamp });
+          if (settlement.applied) {
+            await publish_task_run_notification(params.context, params.notification_dispatcher, create_task_notification(task, "failure", executionId, {
+              body: String(error), occurrence_id: settlement.occurrence_id, run_timestamp,
+            }));
+          }
           params.context.logger.error(
             formatTaskLogMessage("Task run failed"),
             {

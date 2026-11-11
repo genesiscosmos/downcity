@@ -50,7 +50,7 @@ export async function lookup_result(input: ResultLookupInput, local: SessionStor
       let view: SessionReadView;
       try { view = await read_session(location.session_id, category); }
       catch { continue; }
-      const page = await view.messages({ before_sequence: location.message_sequence + 1, limit: 1, include_internal: true });
+      const page = await view.messages({ before_sequence: location.message_sequence + 1, limit: 1 });
       const value = read_snapshot(page.items.find((item) => item.sequence === location.message_sequence), location, category);
       if (value !== undefined) matches.push(value);
     }

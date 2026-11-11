@@ -47,6 +47,7 @@ function create_agent_message(overrides = {}) {
     visibility: "visible",
     created_at: 1,
     updated_at: 1,
+    stable_part_sequence: 0,
     role: "agent",
     state: "streaming",
     parts: [],
@@ -267,6 +268,7 @@ test("角色消息和 Assistant 内 Tool Call 保持稳定层级且不超过可�
     visibility: "visible",
     created_at: 1,
     updated_at: 1,
+    stable_part_sequence: 0,
     role: "agent",
     parts: [{
       part_id: "text-1",

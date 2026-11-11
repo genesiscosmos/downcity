@@ -5,6 +5,7 @@
  * Agent 与 Workspace 只作为 Task 定义中的执行目标，在触发瞬间进入对应动态上下文。
  */
 
+import { TaskNotificationDispatcher } from "./runtime/TaskNotificationDispatcher.js";
 import { randomUUID } from "node:crypto";
 import type { TaskGenerateInput, TaskGenerateResult } from "./types/TaskGenerate.js";
 import type { TaskDeliverySession } from "./types/Task.js";
@@ -106,6 +107,9 @@ export class TaskPower extends Power {
   /** Power initialize 后唯一的 scheduler。 */
   private scheduler?: TaskSchedulerCoordinator;
 
+  /** 全部 Task 入口共享的提交后通知出口。 */
+  private readonly notification_dispatcher: TaskNotificationDispatcher;
+
   /** 生命周期级生成协调器，保存后同步调度并受理用户要求的立即执行。 */
   private preparation?: TaskPreparationCoordinator;
 
@@ -118,8 +122,10 @@ export class TaskPower extends Power {
   constructor(options?: TaskPowerOptions) {
     super();
     this.options = options || {};
+    this.notification_dispatcher = new TaskNotificationDispatcher(() => this.require_lifecycle_context(), this.options.notification_channel);
     this.actions = {
       ...createTaskPowerActions({
+        notification_dispatcher: this.notification_dispatcher,
         resolve_notifications: () =>
           this.require_lifecycle_context().notifications,
         resolve_storage: () => this.require_storage(),
@@ -338,6 +344,8 @@ export class TaskPower extends Power {
       context,
       resolve_task_timezone(this.options.timezone),
       definitions,
+      undefined,
+      this.notification_dispatcher,
     );
     this.scheduler = scheduler;
     register_task_power_host_actions(context, {

@@ -46,6 +46,7 @@ export function resolve_session_message_preview(
         return part.fallback_text;
       case "text":
       case "reasoning":
+      case "inbox":
       case "tool":
       case "file":
       case "data":

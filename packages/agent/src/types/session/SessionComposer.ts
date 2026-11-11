@@ -68,6 +68,8 @@ export interface SessionComposerInitializeInput {
 
 /** 单次模型输入组装参数。 */
 export interface SessionComposeInput {
+  /** 当前 Session 存储提供的附件根目录；缺省时只允许项目内媒体，不从消息路径推导授权。 */
+  attachment_root?: string;
   /** 当前 Session 身份快照。 */
   session: SessionComposeIdentity;
   /** 当前 Step 已生效的运行状态。 */

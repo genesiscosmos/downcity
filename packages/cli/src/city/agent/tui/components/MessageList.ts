@@ -58,7 +58,6 @@ export class MessageListComponent implements Component {
   /** 使用完整历史快照替换消息流，内部 Message 不进入用户 Transcript。 */
   set_messages(messages: SessionMessage[]): void {
     this.items = messages
-      .filter((message) => message.visibility === "visible")
       .map((message) => structuredClone(message))
       .sort((left, right) => left.sequence - right.sequence);
     this.rebuild_components();
@@ -67,7 +66,6 @@ export class MessageListComponent implements Component {
 
   /** 添加或按 revision 更新一条完整 canonical Session Message。 */
   upsert_message(message: SessionMessage): void {
-    if (message.visibility !== "visible") return;
     const index = this.items.findIndex(
       (item) => !is_transcript_notice(item) && item.message_id === message.message_id,
     );

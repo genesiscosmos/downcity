@@ -8,7 +8,7 @@
  * - 把最终产物写入 run 目录的具体格式委托给 `TaskRunArtifacts.ts`。
  */
 
-import type { PowerContext, PowerNotificationPublisher, PowerStorage } from "@downcity/city/power";
+import type { PowerContext, PowerStorage } from "@downcity/city/power";
 import type {
   DialogueRoundRecord,
   TaskCompletionDeliveryPort,
@@ -44,7 +44,6 @@ import {
 } from "./TaskRunArtifacts.js";
 import { dispatchTaskRunCompletionToSession } from "./TaskRunSessionDispatch.js";
 import { runScriptTaskBranch } from "./TaskRunnerScript.js";
-import { publish_task_run_notification } from "./TaskRunNotification.js";
 
 const DEFAULT_MAX_DIALOGUE_ROUNDS = 3;
 const DEFAULT_SINGLE_ROUND = 1;
@@ -83,8 +82,6 @@ export async function runTaskNow(params: {
   task_snapshot?: ShipTaskDefinitionV1;
   trigger: ShipTaskRunTriggerV1;
   executionId?: string;
-  /** Task 完成后使用的可选宿主通知端口。 */
-  notifications?: PowerNotificationPublisher;
   /** Task 完成结果的 City 级跨 Agent Session 交付端口。 */
   delivery: TaskCompletionDeliveryPort;
   /** 发起该任务的 Session step 已提交生效的 env 快照。 */
@@ -92,6 +89,8 @@ export async function runTaskNow(params: {
   /** 发起该任务的 Session step 已提交生效的 instruction 快照。 */
   agent_systems?: readonly string[];
 }): Promise<{
+  /** 执行失败说明，供提交后的统一通知整理短摘要。 */
+  error_text: string;
   ok: boolean;
   status: ShipTaskRunStatusV1;
   executionStatus: ShipTaskRunExecutionStatusV1;
@@ -497,15 +496,9 @@ export async function runTaskNow(params: {
     runStatus: status,
     executionStatus,
     resultStatus,
-  });
-  await publish_task_run_notification({
-    context,
-    notifications: params.notifications,
-    task,
-    status,
-    timestamp,
-    error_text: errorText,
-    result_errors: resultErrors,
+  }).catch((error) => {
+    // 最终产物已经提交；展示进度的失败不能覆盖真实执行结果。
+    context.logger.warn("[TASK] Final run progress could not be saved", { task_id: task.taskId, timestamp, error: String(error) });
   });
   await dispatchTaskRunCompletionToSession({
     context,
@@ -518,6 +511,7 @@ export async function runTaskNow(params: {
   });
 
   return {
+    error_text: errorText,
     ok,
     status,
     executionStatus,

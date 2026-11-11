@@ -5,8 +5,7 @@
  */
 
 import type { SessionAgentMessagePart, SessionMessage } from "./SessionMessage.js";
-import type { ModelErrorCode } from "../model/ModelError.js";
-import type { ModelRequestKind } from "../model/ModelRequest.js";
+import type { ModelRequestFailureNotice } from "../model/ModelRequest.js";
 
 /** 所有 Session Mutation 的公共字段。 */
 export interface SessionMutationBase {
@@ -183,29 +182,13 @@ export type SessionStateMutation =
   | SessionRuntimeMutation;
 
 /** 模型请求失败 Warning Mutation。 */
-export type SessionModelRequestWarningMutation = SessionMutationBase & {
+export type SessionModelRequestWarningMutation = SessionMutationBase & ModelRequestFailureNotice & {
   /** Mutation 层级固定为 warning。 */
   variant: "warning";
   /** 当前 Warning 类型固定为模型请求失败。 */
   type: "model_request";
-  /** 当前模型请求用途。 */
-  request_kind: ModelRequestKind;
   /** 当前 Warning 所属 Turn 标识；后台 Session 请求允许为空。 */
   turn_id?: string;
-  /** Downcity 稳定模型错误码。 */
-  code: ModelErrorCode;
-  /** 可安全展示给 Session 使用者的失败说明。 */
-  message: string;
-  /** Provider 是否声明该错误允许安全重试。 */
-  retryable: boolean;
-  /** 当前失败是本次请求的第几次调用，从 1 开始。 */
-  attempt: number;
-  /** 包含首次调用与自动重试在内的最大调用次数。 */
-  max_attempts: number;
-  /** 当前失败后是否还会自动重试。 */
-  will_retry: boolean;
-  /** Provider 返回的可选请求标识。 */
-  provider_request_id?: string;
 };
 
 /** Session 对外唯一实时 Mutation 联合类型。 */

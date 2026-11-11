@@ -90,6 +90,17 @@ function create_start_context(storage_path) {
   };
 }
 
+/** Seed a versioned record through the explicit transaction contract. */
+async function create_knowledge_fixture(provider, input) {
+  const commit_id = crypto.randomUUID();
+  const receipt = await provider.transactions.commit({
+    access: input.access, target: input.target, commit_id,
+    changes: [{ operation: "create", content: input.content, topic: input.topic, memory_type: input.memory_type,
+      source_refs: [{ source_id: commit_id, source_type: "manual", role: "request", label: input.source }] }],
+  });
+  return { memory_id: receipt.changes[0].memory_id, mode: "created" };
+}
+
 test("Builtin Provider 把 Memory 数据写入独立 Adapter 根而不是 Workspace", async (context) => {
   const temporary_root = await fs.mkdtemp(path.join(os.tmpdir(), "downcity-memory-"));
   context.after(async () => await fs.rm(temporary_root, { recursive: true, force: true }));
@@ -101,7 +112,7 @@ test("Builtin Provider 把 Memory 数据写入独立 Adapter 根而不是 Worksp
   });
   await provider.initialize();
 
-  const remembered = await provider.remember({
+  const remembered = await create_knowledge_fixture(provider, {
     access: create_access("memory_test_workspace"),
     target: "agent",
     content: "The user prefers concise answers.",
@@ -143,7 +154,7 @@ test("Builtin Provider 把 Memory 数据写入独立 Adapter 根而不是 Worksp
     agent_id: "memory_test_agent",
   });
 
-  const second_memory = await provider.remember({
+  const second_memory = await create_knowledge_fixture(provider, {
     access: create_access("memory_test_workspace", "session-that-must-not-own-memory"),
     target: "agent",
     content: "The user also prefers structured results.",
@@ -290,14 +301,14 @@ test("Builtin Provider 只枚举 manifest 有效记录，旧 Markdown 需显式�
   await storage.write(`${legacy_id}.md`, "Legacy note awaiting explicit import.");
   assert.equal((await provider.read({ access, memory_id: legacy_id })).memory, null);
   assert.equal((await provider.list({ access })).total, 0);
-  await provider.remember({
+  await create_knowledge_fixture(provider, {
     access,
     target: "agent",
     content: "User prefers concise answers.",
     topic: "user-preferences",
     memory_type: "preference",
   });
-  await provider.remember({
+  await create_knowledge_fixture(provider, {
     access,
     target: "agent",
     content: "Deploy uses the native sandbox backend.",
@@ -459,4 +470,59 @@ test("Workspace 记忆在项目内跨 Agent 可见，私有与跨项目记忆隔
   assert.match(cross_agent_read.error, /outside the current access context/);
 
   await power.dispose();
+});
+
+/** An opaque backend ID must not determine scope authorization. */
+test("Memory Session authorizes structured ownership with opaque backend IDs", async () => {
+  const { create_memory_session_tools } = await import("../bin/memory/runtime/MemorySessionTools.js");
+  const { MEMORY_SESSION_KIND } = await import("../bin/memory/types/MemorySession.js");
+  const access = create_access("project");
+  const record = { memory_id: "external:uuid:123", version: "v1", memory_type: "fact", content: "before",
+    owner: { kind: "agent", agent_id: access.agent_id }, subject: { kind: "agent", agent_id: access.agent_id },
+    source_refs: [], observed_at: "2026-01-01T00:00:00.000Z" };
+  const foreign = { ...record, memory_id: `agent/${access.agent_id}/wiki/looks-local`, owner: { kind: "agent", agent_id: "foreign" } };
+  const job = { job_id: "job", session_id: "session", status: "running", access, target: "agent", mode: "knowledge", kind: "revise",
+    memory_id: record.memory_id, sources: [{ source_id: "original", agent_id: access.agent_id, category: "manual", role: "user", text: "after" }] };
+  let staged;
+  const provider = {
+    recall: async () => ({ items: [record, foreign].map((memory) => ({ memory, score: 1, snippet: memory.content })) }),
+    read: async ({ memory_id }) => ({ memory_id, memory: memory_id === record.memory_id ? record : foreign }),
+  };
+  const tools = create_memory_session_tools({ provider, jobs: { read: async () => job, stage: async (_id, _session, value) => { staged = value; } } });
+  const context = { agent_id: access.agent_id, session_id: job.session_id, session_origin: { type: MEMORY_SESSION_KIND, memory_job_id: job.job_id } };
+  const recalled = await tools.memory_query.execute({ query: "fact" }, context);
+  assert.deepEqual(recalled.items.map((item) => item.memory.memory_id), [record.memory_id]);
+  assert.equal((await tools.memory_read.execute({ memory_id: record.memory_id }, context)).memory.version, "v1");
+  await assert.rejects(tools.memory_read.execute({ memory_id: foreign.memory_id }, context), /bound memory/);
+  job.kind = "digest";
+  await assert.rejects(tools.memory_read.execute({ memory_id: foreign.memory_id }, context), /outside the Job target/);
+  job.kind = "revise";
+  await tools.memory_stage.execute({ changes: [{ operation: "update", memory_id: record.memory_id, expected_version: "v1",
+    topic: "fact", content: "after", source_ids: ["original"], source_excerpts: [{ source_id: "original", excerpt: "after" }] }] }, context);
+  assert.equal(staged.changes[0].memory_id, record.memory_id);
+  assert.equal(staged.change_details[0].before.content, "before");
+});
+
+/** Unsupported transaction guarantees must fail before a model or Job is started. */
+test("Read-only Knowledge Provider rejects transactional work without affecting Profile", async (context) => {
+  const { MemoryCoordinator } = await import("../bin/memory/application/MemoryCoordinator.js");
+  const { require_memory_transactions } = await import("../bin/memory/application/MemoryKnowledge.js");
+  let created = 0;
+  const provider = { name: "read-only", capabilities: { transactions: false } };
+  const coordinator = new MemoryCoordinator({ provider, jobs: { create: async () => { created++; return { job_id: "profile", status: "skipped" }; } } });
+  assert.throws(() => require_memory_transactions(provider), /does not support transactional/);
+  await assert.rejects(coordinator.submit({ mode: "knowledge", kind: "digest" }), /does not support transactional/);
+  assert.equal(created, 0);
+  assert.equal((await coordinator.submit({ mode: "profile", kind: "profile_optimize" })).job_id, "profile");
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "downcity-memory-injected-"));
+  context.after(() => fs.rm(root, { recursive: true, force: true }));
+  let initialized = false;
+  let disposed = false;
+  const injected = { ...provider, initialize: async () => { initialized = true; }, dispose: async () => { disposed = true; } };
+  const power = new MemoryPower({ platform_root_path: root, provider: injected });
+  await power.initialize(create_start_context(path.join(root, "power")));
+  assert.equal(power.provider, injected);
+  assert.equal(initialized, true);
+  await power.dispose();
+  assert.equal(disposed, true);
 });

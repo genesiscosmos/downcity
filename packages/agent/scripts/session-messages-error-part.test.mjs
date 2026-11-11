@@ -105,6 +105,7 @@ function create_completed_agent_message() {
     visibility: "visible",
     created_at: 1,
     updated_at: 1,
+    stable_part_sequence: 0,
     role: "agent",
     state: "done",
     parts: [{ part_id: "text-1", sequence: 1, type: "text", text: "处理中", state: "done" }],

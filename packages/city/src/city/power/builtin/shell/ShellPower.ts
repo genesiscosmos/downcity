@@ -283,7 +283,7 @@ export class ShellPower extends Power {
 
   /** Power 用途说明。 */
   readonly description =
-    "Run commands and manage interactive sessions in the Workspace's isolated Sandbox. "
+    "Run commands and manage interactive sessions using the Workspace execution backend. "
     + "Host execution is not the default and requires approval.";
 
   /** 当前 power 的完整动作集合。 */
@@ -362,7 +362,7 @@ export class ShellPower extends Power {
       "Interactive or long-running work: `session_start`, then `session_send` / `session_read` /",
       "`session_list` / `session_stop`.",
       "",
-      "Commands run in the Workspace's persistent isolated Sandbox by default.",
+      "Local Workspace commands run in its persistent isolated Sandbox by default. SSH Workspace commands run on the remote host with the remote user permissions, without local Sandbox isolation; target host is unavailable there.",
       "`target: \"host\"` runs on the real machine and requires approval; pass `reason` when using it.",
       "Do not ask for a separate chat confirmation before a host call whose command and reason are already clear.",
     ].join("\n");

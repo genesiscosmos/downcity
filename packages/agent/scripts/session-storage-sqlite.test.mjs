@@ -11,6 +11,7 @@ import { SqliteSessionStorage } from "../bin/session/storage/SqliteSessionStorag
 /** 创建测试用文件系统协议。 */
 function create_files() {
   return {
+    path_exists: async (file_path) => await fs.access(file_path).then(() => true, () => false),
     ensure_directory: async (directory_path) => await fs.mkdir(directory_path, { recursive: true }),
     file_size: async (file_path) => (await fs.stat(file_path)).size,
   };
@@ -41,7 +42,6 @@ function create_user_message(state) {
     sequence: state.message_sequence,
     revision: 1,
     role: "user",
-    visibility: "visible",
     created_at: 10,
     updated_at: 10,
     parts: [{ part_id: "part-user-1", sequence: 1, type: "text", text: "你好" }],
@@ -98,9 +98,9 @@ test("Storage 只查询中断状态，不擅自解释领域恢复语义", async 
     turn_id: "turn-1",
     sequence: state.message_sequence,
     revision: 1,
+    stable_part_sequence: 0,
     role: "agent",
     state: "streaming",
-    visibility: "visible",
     created_at: 10,
     updated_at: 10,
     parts: [
@@ -130,7 +130,7 @@ test("Composer 只能写自己的派生 namespace，clear 触发 FK 清理", asy
     transaction.execute("CREATE TABLE composer_sequence_test (message_id TEXT REFERENCES messages(message_id) ON DELETE CASCADE)");
     transaction.execute("INSERT INTO composer_sequence_test (message_id) VALUES (?)", ["user-1"]);
   });
-  await assert.rejects(policy.transaction((transaction) => transaction.execute("UPDATE messages SET visibility = 'internal'")), /can only mutate/);
+  await assert.rejects(policy.transaction((transaction) => transaction.execute("UPDATE messages SET revision = 2")), /can only mutate/);
   await assert.rejects(policy.transaction((transaction) => transaction.execute("ALTER TABLE messages ADD COLUMN invalid TEXT")), /cannot execute database control/);
   await assert.rejects(
     policy.transaction((transaction) => transaction.execute(
@@ -159,7 +159,7 @@ test("初始化失败会关闭连接并允许同一实例重试", async () => {
     files: create_files(),
     attachments: {},
   });
-  await assert.rejects(storage.initialize(), /Unsupported Session schema version/);
+  await assert.rejects(storage.initialize(), /session_schema_mismatch/);
   const repair = new DatabaseSync(database_path);
   repair.exec("PRAGMA user_version = 0");
   repair.close();
@@ -183,7 +183,7 @@ test("旧 SQLite schema 必须由外部脚本迁移", async () => {
     files: create_files(),
     attachments: {},
   });
-  await assert.rejects(storage.initialize(), /requires the external migration script/);
+  await assert.rejects(storage.initialize(), /session_schema_mismatch.*offline migration/);
   await storage.dispose();
 });
 

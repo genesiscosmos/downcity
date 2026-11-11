@@ -7,6 +7,8 @@
  */
 
 import { generate_id } from "@/utils/Id.js";
+import { prepare_session_prompt_inbox, type PrepareSessionPromptInboxInput } from "./SessionInbox.js";
+import type { SessionAgentInboxPart, SessionInboxInput } from "@downcity/type";
 import { create_result_ref, disclosed_tool_result, tool_result_value } from "@/model/results/ResultReference.js";
 import { SessionAgentMessageWriter } from "@/session/messages/SessionAgentMessageWriter.js";
 import { SessionAgentMessageState } from "@/session/messages/SessionAgentMessageState.js";
@@ -198,6 +200,7 @@ export class SessionMessages {
   async append_user_message(
     input: AppendSessionUserMessageInput,
   ): Promise<SessionUserMessage> {
+    if (input.meta && input.meta.from.kind !== "user") throw new Error("User Message requires a user input actor");
     const message_id =
       String(input.message_id || "").trim() ||
       `user:${this.session_id}:${generate_id()}`;
@@ -209,7 +212,6 @@ export class SessionMessages {
       turn_id: input.turn_id,
       sequence,
       revision: 1,
-      visibility: input.visibility || "visible",
       created_at,
       updated_at: created_at,
       role: "user",
@@ -250,11 +252,11 @@ export class SessionMessages {
         turn_id: input.turn_id,
         sequence,
         revision: 1,
-        visibility: input.visibility || "visible",
         created_at,
         updated_at: created_at,
         role: "agent",
         state: "streaming",
+        stable_part_sequence: 0,
         parts: [],
       }), true);
     } catch (error) {
@@ -302,6 +304,7 @@ export class SessionMessages {
   async append_prompt_message(
     input: AppendSessionPromptMessageInput,
   ): Promise<SessionUserMessage> {
+    if (input.prompt.actor.kind !== "user") throw new Error("User Message requires a user prompt actor");
     const query = input.prompt.query;
     const ui_parts = typeof query === "string"
       ? [{ type: "text" as const, text: query.trim() }]
@@ -314,10 +317,25 @@ export class SessionMessages {
       parts: normalize_session_user_parts(ui_parts),
       meta: build_session_message_meta(input.prompt),
       assert_receivable: input.assert_receivable,
-      visibility: input.prompt.visibility,
       ...(input.message_id ? { message_id: input.message_id } : {}),
     });
     return canonical;
+  }
+
+  /** 准备运行时输入；提交由当前 Turn 的唯一 Assistant Writer 完成。 */
+  async prepare_prompt_inbox(input: PrepareSessionPromptInboxInput): Promise<SessionInboxInput> {
+    return await prepare_session_prompt_inbox(input, this.attachment_store);
+  }
+
+  /** 按来源幂等标识读取已经提交的运行时输入。 */
+  async read_inbox(inbox_id: string): Promise<{
+    /** 该输入所属的完整 Agent Message。 */
+    message: SessionAgentMessage;
+    /** 已提交的 Inbox Part。 */
+    part: SessionAgentInboxPart;
+  } | null> {
+    await this.ensure_initialized();
+    return await this.store.read_inbox(inbox_id);
   }
 
   /** 读取指定 Turn 最近一条 canonical Agent Message。 */
@@ -423,11 +441,11 @@ export class SessionMessages {
       ...(event.turn_id ? { turn_id: event.turn_id } : {}),
       sequence,
       revision: 1,
-      visibility: "visible",
       created_at,
       updated_at: created_at,
       role: "agent",
       state: resolve_session_message_state(parts, false),
+      stable_part_sequence: 0,
       parts,
     }), event.status === "running", publish_mutation);
   }
@@ -540,11 +558,11 @@ export class SessionMessages {
       ...(input.turn_id ? { turn_id: input.turn_id } : {}),
       sequence,
       revision: 1,
-      visibility: "visible",
       created_at,
       updated_at: created_at,
       role: "agent",
       state: resolve_session_message_state([error_part], false),
+      stable_part_sequence: 0,
       parts: [error_part],
     }));
     if (message.role !== "agent") {
@@ -569,7 +587,6 @@ export class SessionMessages {
     const page = await this.store.list_message_page({
       ...(before_sequence !== undefined ? { before_sequence } : {}),
       limit: limit + 1,
-      include_internal: input?.include_internal === true,
     });
     const has_more = page.length > limit;
     const messages = has_more ? page.slice(1) : page;

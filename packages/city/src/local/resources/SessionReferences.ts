@@ -28,7 +28,7 @@ export async function read_session_agent_references(root_path: string, agent_ids
             const checked_turns = new Map<string, boolean>();
             let before_sequence: number | undefined;
             do {
-              const messages = await view.messages({ limit: 200, include_internal: true, ...(before_sequence ? { before_sequence } : {}) });
+              const messages = await view.messages({ limit: 200, ...(before_sequence ? { before_sequence } : {}) });
               for (const message of messages.items) {
                 if (message.role === "user" && agent_id === target_agent_id && message.turn_id) {
                   let delivered = checked_turns.get(message.turn_id);

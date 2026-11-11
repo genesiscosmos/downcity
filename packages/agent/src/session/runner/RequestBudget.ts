@@ -2,7 +2,9 @@
  * 最终请求预算与有界主动推进。输入是冻结 system、动态摘要、消息及已绑定工具的最终视图。
  * 只重新组装模型输入并推进 checkpoint，不执行任何工具；估算不冒充 Provider usage。
  */
+import { omit_oldest_automatic_image } from "@/model/messages/AutomaticImageBudget.js";
 import { build_model_step_call } from "@/model/ModelStepCall.js";
+import { estimate_request_tokens, estimate_message_tokens, estimate_content_tokens } from "./RequestTokenEstimate.js";
 import { estimate_context_tokens } from "@/session/input/composer/ContextTokenBudget.js";
 import type { SessionStepExecutionInput } from "@/types/session/SessionExecution.js";
 
@@ -35,21 +37,21 @@ export function measure_request(input: SessionStepExecutionInput) {
   const window = input.context_window ?? input.model.context_window;
   const system = call.messages.filter(message => message.role === "system");
   const serialized_call = JSON.stringify(call);
-  const estimated_input_tokens = estimate_context_tokens(serialized_call) + call.messages.length * 16;
+  const token_estimate = estimate_request_tokens(call);
+  const estimated_input_tokens = token_estimate.text_estimated_tokens + token_estimate.image_estimated_tokens;
   const fixed_tokens = estimate_context_tokens(JSON.stringify({ messages: system, tools: call.tools })) + system.length * 16;
   const output_tokens = call.max_output_tokens!;
   const safety_tokens = Math.max(REQUEST_SAFETY_TOKENS, Math.ceil((window ?? 0) * 0.05));
   const input_budget = window && window > 0 ? window - output_tokens - safety_tokens : null;
   let largest_tool_result_bytes = 0;
-  // 内联媒体的编码字节独立记录，仍计入上面的保守 token 估算。
-  let media_encoded_bytes = 0;
+  // 图片按视觉启发式预留，编码大小单独记录；其它媒体仍按原文本估算处理。
   let largest_item: RequestBudgetItem | null = null;
   for (const [message_offset, message] of input.messages.entries()) {
     const has_tool_parts = message.content.some(part => part.type === "tool_call" || part.type === "tool_result");
     const message_item: RequestBudgetItem = {
       category: `${message.role}_message`, message_index: message_offset + 1, role: message.role,
       part_index: null, tool_name: null, tool_call_id: null,
-      estimated_tokens: has_tool_parts ? 0 : estimate_context_tokens(JSON.stringify(message)),
+      estimated_tokens: has_tool_parts ? 0 : estimate_message_tokens(message),
     };
     if (!has_tool_parts && (!largest_item || message_item.estimated_tokens > largest_item.estimated_tokens)) largest_item = message_item;
     for (const [part_offset, part] of message.content.entries()) {
@@ -59,19 +61,16 @@ export function measure_request(input: SessionStepExecutionInput) {
           ...message_item, category: part.type === "tool_call" ? "tool_input" : part.type === "tool_result" ? "tool_result" : `${message.role}_${part.type}`,
           part_index: part_offset + 1, tool_name: is_tool ? part.tool_name : null,
           tool_call_id: is_tool ? part.tool_call_id : null,
-          estimated_tokens: estimate_context_tokens(JSON.stringify(part)),
+          estimated_tokens: estimate_content_tokens(part),
         };
         if (!largest_item || part_item.estimated_tokens > largest_item.estimated_tokens) largest_item = part_item;
       }
       if (part.type === "tool_result") largest_tool_result_bytes = Math.max(largest_tool_result_bytes, Buffer.byteLength(JSON.stringify(part.content)));
-      for (const media_part of part.type === "tool_result" ? part.content : [part]) {
-        if (media_part.type === "file" && media_part.source.type === "base64") media_encoded_bytes += Buffer.byteLength(media_part.source.data);
-      }
     }
   }
   return { estimated_input_tokens, fixed_tokens, input_budget, output_tokens, safety_tokens,
     context_window: window ?? null, request_bytes: Buffer.byteLength(serialized_call), largest_tool_result_bytes,
-    media_encoded_bytes, largest_item };
+    ...token_estimate, largest_item };
 }
 
 /** 生成超限终态；最大输入仅用于定位，不据此推断历史能否摘要。 */
@@ -97,9 +96,17 @@ export async function fit_request(input: {
   let previous_tokens = Infinity;
   for (let advance_count = 0; advance_count <= MAX_PREFLIGHT_ADVANCES; advance_count++) {
     input.signal.throwIfAborted();
-    const step = await input.resolve();
+    let step = await input.resolve();
     input.signal.throwIfAborted();
-    const diagnostic = measure_request(step);
+    let diagnostic = measure_request(step);
+    // 可选图片先退为引用，再考虑历史摘要；避免自动图片使普通对话无法继续。
+    while (diagnostic.input_budget !== null && diagnostic.estimated_input_tokens > diagnostic.input_budget) {
+      input.signal.throwIfAborted();
+      const messages = omit_oldest_automatic_image(step.messages);
+      if (!messages) break;
+      step = { ...step, messages };
+      diagnostic = measure_request(step);
+    }
     await input.report({ ...diagnostic, advance_count });
     input.signal.throwIfAborted();
     const { input_budget, estimated_input_tokens, fixed_tokens } = diagnostic;

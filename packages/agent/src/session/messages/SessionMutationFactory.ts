@@ -56,5 +56,7 @@ export function create_session_part_mutation(input: {
       return { ...base, type: "action", part };
     case "error":
       return { ...base, type: "error", part };
+    case "inbox":
+      return { ...base, type: "inbox", part };
   }
 }

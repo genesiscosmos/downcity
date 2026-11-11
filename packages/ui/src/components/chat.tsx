@@ -11,11 +11,12 @@ import Placeholder from "@tiptap/extension-placeholder";
 import { Archive, ArrowDown, ArrowUp, Check, ChevronDown, ChevronLeft, ChevronRight, CircleStop, Copy, File, FilePenLine, History, LoaderCircle, MessageCircle, MoreHorizontal, Paperclip, Plus, Send, Terminal, X } from "lucide-react";
 import { TbArrowUp, TbCheck, TbChevronDown, TbChevronRight, TbFile as TbFileIcon, TbLoader2, TbLock, TbPaperclip, TbPlus, TbRobot, TbShieldCheck, TbSquare, TbTerminal } from "./chat-icons";
 import { cn } from "../lib/utils";
+import { ChatInbox } from "./chat-inbox";
 import { resolve_chat_composer_enter_action } from "../lib/chat-composer-keymap";
 import { ChatComposerNewline } from "../lib/chat-composer-newline";
 import { ChatComposerCodeLanguage, chat_composer_document_to_text, parse_fenced_paste, read_chat_composer_code_fence } from "../lib/chat-composer-code-fence";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "./dropdown-menu";
-import type { DowncityChatApprovalMode, DowncityChatChangedFile, DowncityChatMessage, DowncityChatMessagePart, DowncityChatModelOption, DowncityChatPanelProps, DowncityChatQuestion, DowncityChatSubmitInput, DowncityChatSubmitMode, DowncityChatThread } from "../types/chat";
+import type { DowncityChatApprovalMode, DowncityChatChangedFile, DowncityChatContentPart, DowncityChatMessage, DowncityChatMessagePart, DowncityChatModelOption, DowncityChatPanelProps, DowncityChatQuestion, DowncityChatSubmitInput, DowncityChatSubmitMode, DowncityChatThread } from "../types/chat";
 import type { DowncityChatQueuedInput } from "../types/chat-runtime";
 
 function format_thread_time(value: DowncityChatThread["updated_at"]): string {
@@ -35,7 +36,7 @@ function ThinkingDots() {
   return <span className="dc-chat-thinking-dots" aria-hidden>{Array.from({ length: 6 }, (_, index) => <i key={index} />)}</span>;
 }
 
-function ToolActivity({ part }: { part: DowncityChatMessagePart }) {
+function ToolActivity({ part }: { part: DowncityChatContentPart }) {
   const is_generating = part.tool_state === "input-streaming";
   const is_running = part.tool_state === "running" || is_generating;
   const is_failed = part.tool_state === "failed" || Boolean(part.error);
@@ -67,7 +68,7 @@ function ToolActivity({ part }: { part: DowncityChatMessagePart }) {
   );
 }
 
-function ReasoningActivity({ part }: { part: DowncityChatMessagePart }) {
+function ReasoningActivity({ part }: { part: DowncityChatContentPart }) {
   const is_running = part.state === "streaming" || part.state === "running";
   return <details className={cn("dc-chat-activity-row", "dc-chat-reasoning-row", is_running && "is-running")}>
     <summary className="dc-chat-activity-summary"><span className="dc-chat-activity-main">{is_running ? <ThinkingDots /> : <TbCheck />}<span className="dc-chat-activity-state">{is_running ? "正在思考" : "已思考"}</span><span className="dc-chat-activity-name">{part.text?.replace(/\s+/g, " ").trim()}</span><TbChevronRight className="dc-chat-activity-chevron" /></span></summary>
@@ -75,7 +76,7 @@ function ReasoningActivity({ part }: { part: DowncityChatMessagePart }) {
   </details>;
 }
 
-function InteractionCard({ part, on_respond_interaction }: { part: DowncityChatMessagePart; on_respond_interaction?: DowncityChatPanelProps["on_respond_interaction"] }) {
+function InteractionCard({ part, on_respond_interaction }: { part: DowncityChatContentPart; on_respond_interaction?: DowncityChatPanelProps["on_respond_interaction"] }) {
   const [submitted, set_submitted] = useState(false);
   const [submitting, set_submitting] = useState(false);
   const [error, set_error] = useState<string | null>(null);
@@ -123,6 +124,7 @@ function ChangedFiles({ files = [] }: { files?: DowncityChatChangedFile[] }) {
 }
 
 function render_part(part: DowncityChatMessagePart, on_respond_interaction?: DowncityChatPanelProps["on_respond_interaction"], render_interaction?: DowncityChatPanelProps["render_interaction"]): ReactNode {
+  if (part.type === "inbox") return <ChatInbox part={part} />;
   if (part.type === "text") return <MarkdownContent text={part.text ?? ""} />;
   if (part.type === "reasoning") return <ReasoningActivity part={part} />;
   if (part.type === "tool") return <ToolActivity part={part} />;
@@ -180,7 +182,7 @@ export function ChatMessage({ message, render_message, on_respond_interaction, r
   if (message.role === "system") return null;
   const is_user = message.role === "user";
   const rendered = render_message?.({ message });
-  const text = message.parts?.filter((part) => part.type === "text").map((part) => part.text).join("") ?? message.content ?? "";
+  const text = message.parts?.filter((part): part is DowncityChatContentPart => part.type === "text").map((part) => part.text).join("") ?? message.content ?? "";
   const copy = () => { void navigator.clipboard?.writeText(text).then(() => { set_copied(true); setTimeout(() => set_copied(false), 1200); }); };
   return <article className={cn("dc-chat-message", "group", is_user ? "is-user" : "is-assistant", message.role === "error" && "is-error")}>
     <div className={cn("dc-chat-message-content", is_user ? "dc-chat-user-message-content" : "dc-chat-assistant-message-content")}>

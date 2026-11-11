@@ -1,4 +1,5 @@
 /** Task 实例配置与应用回调；任务变化与启动 Action 返回是独立事实。 */
+import type { TaskNotificationChannel } from "./TaskNotification.js";
 import type { TaskAnalyzer } from "./TaskPreparation.js";
 
 /**
@@ -13,6 +14,8 @@ import type { TaskAnalyzer } from "./TaskPreparation.js";
  * TaskPower 构造参数。
  */
 export interface TaskPowerOptions {
+  /** 宿主可选通知渠道；省略时仍发布已有应用内通知。 */
+  readonly notification_channel?: TaskNotificationChannel;
   /** 定义提交或执行状态改变后调用；无历史重放，异步回调不阻塞任务。 */
   readonly on_changed?: () => void | Promise<void>;
   /**

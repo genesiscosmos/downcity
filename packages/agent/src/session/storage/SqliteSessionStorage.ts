@@ -6,12 +6,14 @@
  */
 
 import path from "node:path";
-import { migrate_session_storage } from "./SessionStorageMigration.js";
+import { isDeepStrictEqual as is_deep_strict_equal } from "node:util";
 import { decode_model_binding } from "./ModelBindingCodec.js";
+import { assert_persisted_stable_prefix, validate_session_stable_prefix } from "./SessionStablePrefix.js";
 import { DatabaseSync, type SQLInputValue } from "node:sqlite";
 import { normalize_session_id } from "@/session/SessionIdentity.js";
 import type {
   SessionAgentActionPart,
+  SessionAgentInboxPart,
   SessionAgentMessage,
   SessionAgentMessagePart,
   SessionMessage,
@@ -31,6 +33,7 @@ import {
   type SessionMessageRow,
 } from "@/session/storage/SessionStorageCodec.js";
 import {
+  assert_session_storage_schema,
   SESSION_STORAGE_SCHEMA_SQL,
   SESSION_STORAGE_SCHEMA_VERSION,
 } from "@/session/storage/SessionStorageSchema.js";
@@ -235,12 +238,17 @@ export class SqliteSessionStorage implements SessionStorage {
     return this.read_aggregates(rows);
   }
 
-  /** 附件授权只查 file part，不加载长历史和工具输出。 */
+  /** 附件授权覆盖 User 文件与 Inbox 文件内容，不加载长历史和工具输出。 */
   async has_attachment(file_path: string): Promise<boolean> {
     await this.initialize();
     return Boolean(this.require_database().prepare(
-      "SELECT 1 FROM message_parts JOIN messages USING (message_id) WHERE messages.role = 'user' AND message_parts.type = 'file' AND json_extract(message_parts.content, '$.url') = ? LIMIT 1",
-    ).get(file_path));
+      `SELECT 1 FROM message_parts JOIN messages USING (message_id)
+       WHERE (messages.role = 'user' AND message_parts.type = 'file' AND json_extract(message_parts.content, '$.url') = ?)
+          OR (message_parts.type = 'inbox' AND EXISTS (
+            SELECT 1 FROM json_each(message_parts.content, '$.content') AS item
+            WHERE json_extract(item.value, '$.type') = 'file' AND json_extract(item.value, '$.url') = ?
+          )) LIMIT 1`,
+    ).get(file_path, file_path));
   }
 
   /** 读取指定 Message 聚合。 */
@@ -259,6 +267,27 @@ export class SqliteSessionStorage implements SessionStorage {
       "SELECT messages.* FROM messages JOIN message_parts USING (message_id) WHERE message_parts.part_id = ?",
     ).get(part_id) as unknown as SessionMessageRow | undefined;
     return row ? this.read_aggregates([row])[0] ?? null : null;
+  }
+
+  /** 按 Session 内唯一 inbox_id 精确读取输入及其所属 Agent Message。 */
+  async read_inbox(inbox_id: string): Promise<{
+    /** 拥有该 Inbox Part 的完整 Agent Message。 */
+    message: SessionAgentMessage;
+    /** 已持久化的 Inbox Part，保留原始身份与输入内容。 */
+    part: SessionAgentInboxPart;
+  } | null> {
+    await this.initialize();
+    const row = this.require_database().prepare(`
+      SELECT messages.* FROM messages JOIN message_parts USING (message_id)
+      WHERE message_parts.type = 'inbox' AND json_extract(message_parts.content, '$.inbox_id') = ?
+    `).get(inbox_id) as unknown as SessionMessageRow | undefined;
+    if (!row) return null;
+    const message = this.read_aggregates([row])[0];
+    if (!message || message.role !== "agent") throw new Error(`Invalid Inbox owner: ${inbox_id}`);
+    const part = message.parts.find((candidate): candidate is SessionAgentInboxPart =>
+      candidate.type === "inbox" && candidate.inbox_id === inbox_id);
+    if (!part) throw new Error(`Invalid persisted Inbox: ${inbox_id}`);
+    return { message, part };
   }
 
   /** 只读取标题生成所需的最早一条 User Message。 */
@@ -295,11 +324,16 @@ export class SqliteSessionStorage implements SessionStorage {
   async update_message(input: SessionMessageUpdate): Promise<void> {
     await this.initialize();
     this.run_transaction(() => {
-      this.validate_message_update_unsafe(input);
-      this.update_message_envelope_unsafe(input.message, input.expected_revision);
+      input.assert_receivable?.();
+      const stable_part_sequence = this.validate_message_update_unsafe(input);
       for (const part of input.changed_parts) {
-        this.upsert_part_unsafe(input.message, part);
+        // 已稳定且同值的 Part 不再执行 UPSERT，保留原始稳定行。
+        if (part.sequence > stable_part_sequence) this.upsert_part_unsafe(input.message, part);
       }
+      if (input.message.role === "agent") {
+        assert_persisted_stable_prefix(this.require_database(), input.message, input.message.stable_part_sequence);
+      }
+      this.update_message_envelope_unsafe(input.message, input.expected_revision);
       this.update_message_projection_unsafe(input.message, false);
     });
   }
@@ -308,20 +342,16 @@ export class SqliteSessionStorage implements SessionStorage {
   async list_message_page(input?: {
     before_sequence?: number;
     limit?: number;
-    include_internal?: boolean;
   }): Promise<SessionMessage[]> {
     await this.initialize();
     const limit = Math.min(Math.max(input?.limit ?? 50, 1), 201);
     const before_sequence = input?.before_sequence;
-    const include_internal = input?.include_internal === true;
     const rows = this.require_database().prepare(`
       SELECT * FROM messages
-      WHERE (? = 1 OR visibility = 'visible')
-        AND (? IS NULL OR sequence < ?)
+      WHERE (? IS NULL OR sequence < ?)
       ORDER BY sequence DESC
       LIMIT ?
     `).all(
-      include_internal ? 1 : 0,
       before_sequence ?? null,
       before_sequence ?? null,
       limit,
@@ -469,6 +499,11 @@ export class SqliteSessionStorage implements SessionStorage {
   private async initialize_storage(): Promise<void> {
     if (this.disposed) throw new Error(`SessionStorage is disposed: ${this.session_id}`);
     if (this.database_location.type === "file") {
+      // 已有文件先只读校验，拒绝旧 schema 时不打开可写连接或切换日志模式。
+      if (await this.files.path_exists(this.database_path)) {
+        const existing = new DatabaseSync(this.database_path, { readOnly: true });
+        try { assert_session_storage_schema(existing, true); } finally { existing.close(); }
+      }
       await this.files.ensure_directory(path.dirname(this.database_path));
     }
     const database = new DatabaseSync(
@@ -476,22 +511,10 @@ export class SqliteSessionStorage implements SessionStorage {
     );
     this.database = database;
     try {
+      assert_session_storage_schema(database, true);
       database.exec("PRAGMA foreign_keys = ON; PRAGMA busy_timeout = 5000;");
       if (this.database_location.type === "file") {
         database.exec("PRAGMA journal_mode = WAL; PRAGMA synchronous = NORMAL;");
-      }
-      let version = Number(database.prepare("PRAGMA user_version").get()?.user_version ?? 0);
-      if (version === 3 || version === 4 || version === 5) {
-        migrate_session_storage(database, version);
-        version = SESSION_STORAGE_SCHEMA_VERSION;
-      }
-      if (version > SESSION_STORAGE_SCHEMA_VERSION) {
-        throw new Error(`Unsupported Session schema version: ${String(version)}`);
-      }
-      if (version > 0 && version < SESSION_STORAGE_SCHEMA_VERSION) {
-        throw new Error(
-          `Session schema version ${String(version)} requires the external migration script`,
-        );
       }
       database.exec(SESSION_STORAGE_SCHEMA_SQL);
       database.exec(`PRAGMA user_version = ${String(SESSION_STORAGE_SCHEMA_VERSION)}`);
@@ -569,16 +592,21 @@ export class SqliteSessionStorage implements SessionStorage {
     const row = encode_session_message_row(message);
     this.require_database().prepare(`
       INSERT INTO messages (
-        message_id, turn_id, sequence, revision, role, state,
-        visibility, meta, origin_session_id, origin_message_id, origin_turn_id,
+        message_id, turn_id, sequence, revision, role, state, stable_part_sequence,
+        meta, origin_session_id, origin_message_id, origin_turn_id,
         created_at, updated_at
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       row.message_id, row.turn_id, row.sequence, row.revision, row.role,
-      row.state, row.visibility, row.meta, row.origin_session_id,
+      row.state, 0, row.meta, row.origin_session_id,
       row.origin_message_id, row.origin_turn_id, row.created_at, row.updated_at,
     );
     for (const part of message.parts) this.insert_part_unsafe(message, part);
+    if (row.stable_part_sequence > 0) {
+      this.require_database().prepare(
+        "UPDATE messages SET stable_part_sequence = ? WHERE message_id = ?",
+      ).run(row.stable_part_sequence, row.message_id);
+    }
   }
 
   /** 使用 revision 乐观锁更新 Message envelope。 */
@@ -589,11 +617,11 @@ export class SqliteSessionStorage implements SessionStorage {
     const row = encode_session_message_row(message);
     const result = this.require_database().prepare(`
       UPDATE messages SET
-        turn_id = ?, revision = ?, state = ?, visibility = ?, meta = ?,
+        turn_id = ?, revision = ?, state = ?, stable_part_sequence = ?, meta = ?,
         updated_at = ?
       WHERE message_id = ? AND revision = ? AND role = ? AND sequence = ?
     `).run(
-      row.turn_id, row.revision, row.state, row.visibility, row.meta,
+      row.turn_id, row.revision, row.state, row.stable_part_sequence, row.meta,
       row.updated_at, row.message_id, expected_revision, row.role, row.sequence,
     );
     if (result.changes !== 1) {
@@ -682,8 +710,8 @@ export class SqliteSessionStorage implements SessionStorage {
     this.validate_parts(message);
   }
 
-  /** 只读取 envelope，校验定向更新没有改变聚合身份。 */
-  private validate_message_update_unsafe(input: SessionMessageUpdate): void {
+  /** 校验身份与稳定前缀，返回本次更新之前已经冻结的水位。 */
+  private validate_message_update_unsafe(input: SessionMessageUpdate): number {
     const message = input.message;
     const current = this.require_database().prepare(
       "SELECT * FROM messages WHERE message_id = ?",
@@ -706,22 +734,28 @@ export class SqliteSessionStorage implements SessionStorage {
       throw new Error(`Session Message update changed immutable identity: ${message.message_id}`);
     }
     this.validate_parts(message);
+    if (message.role === "agent" && message.stable_part_sequence < current.stable_part_sequence) {
+      throw new Error(`Stable Part sequence cannot move backwards: ${message.message_id}`);
+    }
+    assert_persisted_stable_prefix(this.require_database(), message, current.stable_part_sequence);
     const message_parts = new Map<string, SessionMessage["parts"][number]>();
     for (const part of message.parts) message_parts.set(part.part_id, part);
     const changed_ids = new Set<string>();
     for (const part of input.changed_parts) {
       if (
         changed_ids.has(part.part_id) ||
-        JSON.stringify(message_parts.get(part.part_id)) !== JSON.stringify(part)
+        !is_deep_strict_equal(message_parts.get(part.part_id), part)
       ) {
         throw new Error(`Invalid changed Session Part: ${part.part_id}`);
       }
       changed_ids.add(part.part_id);
     }
+    return current.stable_part_sequence;
   }
 
   /** 校验 Part identity、类型和连续顺序。 */
   private validate_parts(message: SessionMessage): void {
+    validate_session_stable_prefix(message);
     const ids = new Set<string>();
     for (let index = 0; index < message.parts.length; index += 1) {
       const part = message.parts[index];

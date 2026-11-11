@@ -107,6 +107,8 @@ const TASK_STATUS_REQ_SCHEMA = z.object({
 export function createTaskPowerActions(params: {
   /** 读取 TaskPower initialize 后由 City 绑定的通知端口。 */
   resolve_notifications: () => PowerNotificationPublisher;
+  /** 所有执行入口共用的提交后通知渠道。 */
+  notification_dispatcher: import("../types/TaskNotification.js").TaskNotificationChannel;
   /** 读取 TaskPower 生命周期级统一存储。 */
   resolve_storage: () => PowerStorage;
   /** 读取 TaskPower 唯一的定义事务入口。 */
@@ -295,7 +297,7 @@ export function createTaskPowerActions(params: {
           definitions: params.resolve_definitions(),
           payload: actionParams.input as TaskRunRequest,
           executions: params.executions,
-          notifications: params.resolve_notifications(),
+          notification_dispatcher: params.notification_dispatcher,
           execution_context: actionParams.context.snapshot,
           delivery: params.resolve_delivery(),
         });

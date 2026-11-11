@@ -1,0 +1,6 @@
+{
+  "extends": "../../../agent/tsconfig.json",
+  "compilerOptions": {"rootDir": "src", "outDir": "bin", "paths": {}},
+  "include": ["src/**/*"],
+  "exclude": ["node_modules", "bin"]
+}

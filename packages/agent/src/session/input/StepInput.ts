@@ -318,6 +318,7 @@ export class StepInput {
     const model = turn_context ? await resolve_model_client(selected_model) : selected_model;
     return {
       session: this.identity(),
+      attachment_root: this.options.store.attachments.root_path,
       state: {
         model,
         model_context_window: this.options.get_model_context_window(),
@@ -421,10 +422,14 @@ export class StepInput {
     const wrapped: Record<string, BoundAgentTool> = {};
     // 每个 Step 独立预留；并发工具不能分别通过总量校验后一起突破上限。
     let reserved_media_bytes = 0;
-    const reserve_media = (bytes: number, existing_bytes: number): boolean => {
-      if (!Number.isSafeInteger(bytes) || bytes < 0 || existing_bytes + reserved_media_bytes + bytes > max_request_media_bytes
-        || Math.ceil((reserved_media_bytes + bytes) / 3) * 4 > media_tokens) return false;
+    let reserved_media_tokens = 0;
+    const reserve_media = (bytes: number, existing_bytes: number, estimated_tokens: number): boolean => {
+      if (!Number.isSafeInteger(bytes) || bytes < 0 || !Number.isSafeInteger(existing_bytes) || existing_bytes < 0
+        || !Number.isSafeInteger(estimated_tokens) || estimated_tokens <= 0
+        || existing_bytes + reserved_media_bytes + bytes > max_request_media_bytes
+        || reserved_media_tokens + estimated_tokens > media_tokens) return false;
       reserved_media_bytes += bytes;
+      reserved_media_tokens += estimated_tokens;
       return true;
     };
     for (const [name, tool] of Object.entries(tools)) {
@@ -489,7 +494,9 @@ export class StepInput {
               turn_context.output.enqueue_assistant_parts(message.parts, { source_tool_call_id: tool_call_id, published_parts });
               continue;
             }
-            await turn_context.input.append_internal(message.parts);
+            await turn_context.input.append_inbox({
+              kind: "tool_media", source: { tool_call_id, turn_id: turn_context.session.turn_id }, content: message.parts,
+            });
           }
           return safe_output.output;
         },

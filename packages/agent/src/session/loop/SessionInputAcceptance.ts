@@ -1,29 +1,28 @@
 /**
  * Session 输入的接收边界。
  *
- * User message 成功落盘即成为 accepted 事实；之后的调用方取消不能撤销它。
- * 旧回复收口失败必须向执行层传播，禁止继续装配模型上下文。
- * Tool 产生的内部输入先进入同一 FIFO，完整 Step 结束后才落盘和关闭 Writer。
+ * User Message 或 inbox Part 成功落盘即成为 accepted 事实，之后的取消不能撤销它。
+ * 真人追加输入建立回复边界；运行时输入沿同一 FIFO 在完整 Step 后追加，不关闭 Writer。
  */
 
-import type { SessionModelUserContent, SessionUserMessage } from "@downcity/type";
+import { nanoid } from "nanoid";
+import type { SessionAgentInboxPart, SessionInboxInput, SessionUserMessage } from "@downcity/type";
 import type { SessionCommand } from "@/types/session/SessionCommand.js";
-import type { SessionTurnContext } from "@/types/turn/SessionTurnContext.js";
-import type { SessionMessages } from "@/session/messages/SessionMessages.js";
-import { normalize_tool_user_parts } from "@/session/messages/SessionUserMessage.js";
+import type { SessionTurnContext, SessionTurnInboxInput } from "@/types/turn/SessionTurnContext.js";
+import { normalize_inbox_content } from "@/session/messages/SessionUserMessage.js";
 import type { SessionQueue } from "./SessionQueue.js";
 
 /** 单次 canonical 输入提交所需的操作；持久化后不再检查普通取消。 */
 export interface SessionInputAcceptanceOptions {
   /** 最后一次接收检查，包含调用方取消、Turn 取消及 stop 代次。 */
   assert_receivable: () => void;
-  /** 返回已经持久化的 User message。 */
-  persist: () => Promise<SessionUserMessage>;
+  /** 返回已经持久化的真人消息或运行时 inbox Part。 */
+  persist: () => Promise<SessionUserMessage | SessionAgentInboxPart>;
   /** canonical 输入已经存在时同步兑现接收回执。 */
-  accepted: (message: SessionUserMessage) => void;
+  accepted: () => void;
   /** 输入归属的执行上下文。 */
   turn_context: SessionTurnContext;
-  /** 首条输入没有旧回复；追加输入必须建立回复边界。 */
+  /** 首条真人输入没有旧回复；后续真人输入才建立回复边界。 */
   close_previous: boolean;
 }
 
@@ -31,10 +30,10 @@ export interface SessionInputAcceptanceOptions {
 export async function accept_session_input(options: SessionInputAcceptanceOptions): Promise<void> {
   options.assert_receivable();
   const message = await options.persist();
-  options.accepted(message);
-  options.turn_context.input.observe_user_message(message);
-  if (options.close_previous) {
-    await options.turn_context.output.assistant?.close_current_message();
+  options.accepted();
+  if ("role" in message) {
+    options.turn_context.input.observe_user_message(message);
+    if (options.close_previous) await options.turn_context.output.assistant?.close_current_message();
   }
 }
 
@@ -48,8 +47,6 @@ export class SessionInternalInput {
     turn_id: string;
     /** 与排队 User 共用的 FIFO。 */
     queue: SessionQueue;
-    /** canonical 消息存储。 */
-    messages: SessionMessages;
     /** 暂存前确认 Turn 仍接受输入。 */
     assert_receivable: () => void;
     /** 延迟读取已经装配完成的 Turn 上下文。 */
@@ -57,26 +54,19 @@ export class SessionInternalInput {
   }) {}
 
   /** 暂存完成不代表已落盘；它保证当前 Turn 在结束前尝试提交，不提前关闭活跃 Step。 */
-  stage(parts: readonly SessionModelUserContent[]): void {
+  stage(input: SessionTurnInboxInput): void {
     this.options.assert_receivable();
-    const normalized_parts = normalize_tool_user_parts(parts);
-    if (normalized_parts.length === 0) return;
-    let persisted_message: SessionUserMessage | undefined;
+    const content = normalize_inbox_content(input.content);
+    if (content.length === 0) return;
+    const prepared: SessionInboxInput = structuredClone({ ...input, content, inbox_id: input.inbox_id ?? `inbox:${this.options.turn_id}:${nanoid()}` });
     const command: SessionCommand = {
       kind: "maintenance",
       execute: async () => {
-        // 已暂存输入即使随后 stop，也要在 Step 结束后保存其事实。
-        // 成功落盘后先移除 pending，避免后续 Writer 失败触发重复输入。
-        const message = persisted_message ?? await this.options.messages.append_user_message({
-          turn_id: this.options.turn_id,
-          visibility: "internal",
-          parts: normalized_parts,
-        });
-        persisted_message = message;
+        // 已暂存输入即使随后 stop，也要在 Step 结束后保存事实；同一 ID 可安全重试。
+        const assistant = this.options.get_context().output.assistant;
+        if (!assistant) throw new Error("Session inbox requires an Assistant output writer");
+        await assistant.append_inbox(prepared);
         this.pending.delete(command);
-        const context = this.options.get_context();
-        context.input.observe_user_message(message);
-        await context.output.assistant?.close_current_message();
       },
     };
     this.pending.add(command);

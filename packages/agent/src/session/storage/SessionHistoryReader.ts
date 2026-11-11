@@ -70,9 +70,8 @@ export function read_file_session_history(
   return create_session_read_view(metadata, archived, {
     list_message_page: async (input) => with_database((database) => {
       const rows = database.prepare(`
-        SELECT * FROM messages WHERE (? = 1 OR visibility = 'visible')
-          AND (? IS NULL OR sequence < ?) ORDER BY sequence DESC LIMIT ?
-      `).all(input?.include_internal === true ? 1 : 0, input?.before_sequence ?? null,
+        SELECT * FROM messages WHERE (? IS NULL OR sequence < ?) ORDER BY sequence DESC LIMIT ?
+      `).all(input?.before_sequence ?? null,
         input?.before_sequence ?? null, Math.min(Math.max(input?.limit ?? 50, 1), 201)) as unknown as SessionMessageRow[];
       return read_aggregates(database, session_id, rows.reverse());
     }),

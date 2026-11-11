@@ -42,8 +42,8 @@ export interface ToolCallContext {
   readonly workspace?: WorkspaceRuntime;
   /** 仅尝试读取当前 Session 登记且持有的附件；非附件返回 null，不授予写权限。 */
   readonly read_attachment?: (input: ReadFileToolInput) => Promise<ReadFileToolResult | null>;
-  /** 为当前 Step 的显式媒体预留字节；并行工具共享计数，existing_bytes 是已保留上下文媒体大小。 */
-  readonly reserve_media?: (bytes: number, existing_bytes: number) => boolean;
+  /** 为当前 Step 的显式媒体分别预留字节与估算 token；并行调用共享计数，existing_bytes 是已保留上下文媒体大小。 */
+  readonly reserve_media?: (bytes: number, existing_bytes: number, estimated_tokens: number) => boolean;
   /** 当前 Turn 稳定标识；非 Turn 调用时为空。 */
   readonly turn_id?: string;
   /** 当前调用的协作式取消信号；没有取消来源时为空。 */

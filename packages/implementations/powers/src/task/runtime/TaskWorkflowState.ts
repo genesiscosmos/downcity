@@ -6,6 +6,7 @@
  * 执行令牌保护迟到结果，Run 文件继续独立保存。
  */
 
+import type { TaskExecutionSettlement } from "../types/TaskExecutionSettlement.js";
 import type { ShipTaskDefinitionV1 } from "../types/Task.js";
 import type { TaskDefinitionRepository } from "./TaskDefinitionRepository.js";
 import {
@@ -71,14 +72,14 @@ export async function settle_task_execution(params: {
   timestamp?: string;
   /** 失败原因；成功时为空。 */
   error?: string;
-}): Promise<void> {
-  await params.definitions.mutate(async () => {
+}): Promise<TaskExecutionSettlement> {
+  return await params.definitions.mutate(async () => {
     const current = await readTask({
       storage: params.definitions.storage,
       taskId: params.task.taskId,
     });
     const state = normalize_task_state(current.workflow);
-    if (state.active_execution_id !== params.execution_id) return;
+    if (state.active_execution_id !== params.execution_id) return { applied: false, review: false };
     const recurring = task_is_recurring(params.task);
     const review =
       params.success &&
@@ -113,5 +114,6 @@ export async function settle_task_execution(params: {
       });
     current.workflow = state;
     await save_task_workflow(params.definitions, current);
+    return { applied: true, review, ...(occurrence ? { occurrence_id: occurrence.occurrence_id } : {}) };
   });
 }

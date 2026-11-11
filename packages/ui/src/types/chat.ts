@@ -5,18 +5,22 @@
  * Electron 能力；宿主负责把自己的 SessionMessage 投影到这里。
  */
 import type * as React from "react";
+import type { DowncityChatInboxPart } from "./chat-inbox";
 
 /** Chat 面板运行状态。 */
 export type DowncityChatStatus = "ready" | "submitted" | "streaming" | "building-context" | "error";
 /** 消息角色。 */
 export type DowncityChatMessageRole = "user" | "assistant" | "system" | "error";
 /** 消息 part 类型。 */
-export type DowncityChatMessagePartType = "text" | "reasoning" | "tool" | "interaction" | "file" | "source" | "operation" | "changed-files" | "data" | "step-start";
+export type DowncityChatMessagePartType = "text" | "reasoning" | "tool" | "interaction" | "file" | "source" | "operation" | "changed-files" | "data" | "step-start" | "inbox";
 
-/** Chat 消息中的结构化 part。 */
-export interface DowncityChatMessagePart {
+/** Chat 消息中的结构化 Part；运行时输入使用独立的 inbox 协议。 */
+export type DowncityChatMessagePart = DowncityChatContentPart | DowncityChatInboxPart;
+
+/** Chat 消息中的正文、活动与交互 Part。 */
+export interface DowncityChatContentPart {
   /** part 稳定标识。 */ id: string;
-  /** part 类型。 */ type: DowncityChatMessagePartType;
+  /** part 类型；inbox 使用独立的判别分支。 */ type: Exclude<DowncityChatMessagePartType, "inbox">;
   /** 文本内容。 */ text?: string;
   /** part 是否仍在流式生成。 */ state?: string;
   /** 工具调用标识。 */ tool_call_id?: string;
@@ -74,7 +78,7 @@ export interface DowncityChatMessage {
   /** 创建时间。 */ created_at?: Date | number | string;
   /** 顶层附件。 */ attachments?: DowncityChatAttachment[];
   /** 是否流式。 */ is_streaming?: boolean;
-  /** 展示元数据。 */ metadata?: { official_message_id?: string; presentation_status?: string; error?: string; sequence?: number; revision?: number; turn_id?: string; visibility?: string; session_type?: string; };
+  /** 展示元数据。 */ metadata?: { official_message_id?: string; presentation_status?: string; error?: string; sequence?: number; revision?: number; turn_id?: string; session_type?: string; };
 }
 /** 会话摘要。 */
 export interface DowncityChatThread { /** 会话标识。 */ id: string; /** 会话标题。 */ title: string; /** 更新时间。 */ updated_at?: Date | number | string; /** 是否未读。 */ unread?: boolean; /** 是否归档。 */ archived?: boolean; }

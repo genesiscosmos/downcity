@@ -43,16 +43,12 @@ export interface AppendSessionUserMessageInput {
   meta?: SessionMessageMeta;
   /** 可选的稳定 Message 标识。 */
   message_id?: string;
-  /** 当前 Message 的默认展示范围。 */
-  visibility?: "visible" | "internal";
 }
 
 /** Assistant Message 创建参数。 */
 export interface OpenSessionAgentMessageInput {
   /** 当前 Assistant 所属 Turn。 */
   turn_id: string;
-  /** 当前 Message 的默认展示范围。 */
-  visibility?: "visible" | "internal";
   /** 可选的稳定 Message 标识。 */
   message_id?: string;
 }

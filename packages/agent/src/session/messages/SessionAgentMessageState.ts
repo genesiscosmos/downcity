@@ -6,6 +6,7 @@
  */
 
 import { generate_id } from "@/utils/Id.js";
+import { resolve_stable_part_sequence } from "./SessionStablePrefix.js";
 import { create_session_part_mutation } from "@/session/messages/SessionMutationFactory.js";
 import { resolve_session_message_state } from "@/session/messages/SessionMessageState.js";
 import {
@@ -64,6 +65,7 @@ export class SessionAgentMessageState {
       throw new Error(`Agent Part sequence changed: ${part.part_id}`);
     }
     if (existing && is_same_agent_part(existing, part)) return;
+    if (part.sequence <= current.stable_part_sequence) throw new Error(`Stable Agent Part cannot change: ${part.part_id}`);
     const projected: SessionAgentMessage = {
       ...current,
       updated_at: Date.now(),
@@ -102,6 +104,7 @@ export class SessionAgentMessageState {
       updated_at: Date.now(),
       parts: current.parts.map((part) => {
         if (part.part_id !== part_id) return part;
+        if (part.sequence <= current.stable_part_sequence) throw new Error(`Stable Agent Part cannot change: ${part_id}`);
         if (
           (type === "text" || type === "reasoning") &&
           (part.type === "text" || part.type === "reasoning") &&
@@ -149,7 +152,7 @@ export class SessionAgentMessageState {
     });
   }
 
-  /** 校验 Step Part identity 后原子提交模型给出的最终快照。 */
+  /** 校验 Step Part identity 后原子提交模型给出的最终快照及稳定前缀。 */
   async commit_step(
     message_id: string,
     parts: SessionAgentMessagePart[],
@@ -165,7 +168,7 @@ export class SessionAgentMessageState {
       ) {
         throw new Error(`Agent step changed canonical Part identity: ${message_id}`);
       }
-      await this.persist_snapshot(message_id, parts);
+      await this.persist_snapshot(message_id, parts, { advance_stable_prefix: true });
     });
   }
 
@@ -178,7 +181,14 @@ export class SessionAgentMessageState {
   async commit_parts(
     message_id: string,
     parts: readonly SessionAgentMessagePart[],
-    options?: { publish_mutation?: boolean },
+    options?: {
+      /** 是否发布本次语义提交。 */
+      publish_mutation?: boolean;
+      /** 仅新输入接收传入；在存储事务真正提交前再次确认停止代次。 */
+      assert_receivable?: () => void;
+      /** 完整非模型输入提交后允许冻结连续终态前缀。 */
+      advance_stable_prefix?: boolean;
+    },
   ): Promise<void> {
     if (parts.length === 0) return;
     await this.enqueue_write(message_id, async () => {
@@ -192,7 +202,7 @@ export class SessionAgentMessageState {
       await this.persist_snapshot(
         message_id,
         merged.sort((left, right) => left.sequence - right.sequence),
-        { publish_mutation: options?.publish_mutation !== false },
+        { publish_mutation: options?.publish_mutation !== false, assert_receivable: options?.assert_receivable, advance_stable_prefix: options?.advance_stable_prefix },
       );
     });
   }
@@ -418,6 +428,10 @@ export class SessionAgentMessageState {
       held_by_writer?: boolean;
       /** 是否向订阅方发布 Message Mutation。 */
       publish_mutation?: boolean;
+      /** 新输入落盘前的接收校验；不用于已经接收的工具事实。 */
+      assert_receivable?: () => void;
+      /** 完整 Step 或 Inbox 提交时推进不可变 Part 水位。 */
+      advance_stable_prefix?: boolean;
     },
   ): Promise<void> {
     const persisted = await this.options.store.read_message(message_id);
@@ -436,6 +450,9 @@ export class SessionAgentMessageState {
       ),
       revision: persisted.revision + 1,
       updated_at: committed_at,
+      stable_part_sequence: options?.advance_stable_prefix
+        ? resolve_stable_part_sequence(next_parts, persisted.stable_part_sequence)
+        : persisted.stable_part_sequence,
       parts: next_parts,
     };
     const changed_parts = resolve_changed_agent_parts(persisted.parts, message.parts);
@@ -443,6 +460,7 @@ export class SessionAgentMessageState {
       message,
       expected_revision: persisted.revision,
       changed_parts,
+      assert_receivable: options?.assert_receivable,
     });
     // 只有收口快照持久化成功才释放 writer；失败时保留 held 与运行投影供重试。
     // 先在 held 状态接受快照，再同步驱逐；发布失败时缓存仍可供 Writer 重试。

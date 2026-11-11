@@ -1,12 +1,8 @@
 /**
- * 用户消息请求记账（`messages.meta`）的构建与读取。
+ * Session 输入请求记账的构建与读取。
  *
- * 背景（中文）
- * - 本条消息「由谁发起」以及本次请求独有的绑定，属于消息级只读数据，不是用户撰写的内容。
- *   它保存在 `SessionUserMessage.meta`，不进入 `parts`，因此既不参与模型上下文，
- *   也不会被消息编辑器恢复、渲染或原样回传。
- * - 写成 data Part 曾被用于承载这些数据；那会让身份与用户可编辑的内容同构，
- *   编辑器往返就能覆盖真实发起方。本模块是该数据的唯一写入契约。
+ * 真人输入的身份保存在 User Message.meta；自动执行输入的身份保存在 Inbox Part.meta。
+ * 这些字段仅由受信接收边界写入，不参与模型上下文和用户内容编辑。
  */
 
 import type { SessionMessage, SessionMessageMeta } from "@downcity/type";
@@ -38,13 +34,15 @@ export function build_session_message_meta(
   };
 }
 
-/**
- * 读取任意消息的请求记账。
- *
- * 只有用户消息可能携带它；Agent 消息、缺失消息与解码后没有记账的消息都返回 undefined。
- */
+/** 读取消息最近一次输入的记账；指定 inbox_id 时只读取对应事件。 */
 export function read_session_message_meta(
   message: SessionMessage | null | undefined,
+  inbox_id?: string,
 ): SessionMessageMeta | undefined {
-  return message?.role === "user" ? message.meta : undefined;
+  if (!message) return undefined;
+  if (message.role === "user") return message.meta;
+  for (const part of [...message.parts].reverse()) {
+    if (part.type === "inbox" && part.meta && (!inbox_id || part.inbox_id === inbox_id)) return part.meta;
+  }
+  return undefined;
 }

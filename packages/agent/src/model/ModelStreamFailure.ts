@@ -23,6 +23,12 @@ export class ModelStreamFailure extends Error {
 
   /** 保留 HTTP 拒绝状态供诊断；恢复策略优先使用 code。 */
   readonly status_code?: number;
+  /** 上游结构化错误码。 */
+  readonly provider_error_code?: string;
+  /** 被拒绝的参数路径，不包含参数值。 */
+  readonly provider_error_param?: string;
+  /** 白名单归一化的原因摘要。 */
+  readonly provider_error_reason?: string;
 
   constructor(error: ModelError, has_partial_output: boolean) {
     super(error.message);
@@ -31,6 +37,9 @@ export class ModelStreamFailure extends Error {
     this.retryable = error.retryable;
     this.has_partial_output = has_partial_output;
     this.status_code = error.status_code;
+    this.provider_error_code = error.provider_error_code;
+    this.provider_error_param = error.provider_error_param;
+    this.provider_error_reason = error.provider_error_reason;
     if (error.provider_request_id) {
       this.provider_request_id = error.provider_request_id;
     }
@@ -50,10 +59,16 @@ export function normalize_model_invocation_failure(
   if (!cancelled && classified) return new ModelStreamFailure(classified, has_partial_output);
   const record = error && typeof error === "object" ? error as Record<string, unknown> : {};
   const status = Number(record.status_code ?? record.statusCode ?? record.status);
-  if (!cancelled && status && status >= 400 && status < 500) return new ModelStreamFailure({
-    code: "invalid_request", status_code: status, retryable: false,
-    message: "Model request rejected; the rejection is not classified as a context limit",
-  }, has_partial_output);
+  if (!cancelled && Number.isInteger(status) && status >= 400 && status <= 599) {
+    const code: ModelError["code"] = status === 401 ? "authentication_failed"
+      : status === 403 ? "permission_denied" : status === 404 ? "model_unavailable"
+      : status === 429 ? "rate_limited" : status === 408 || status === 504 ? "provider_timeout"
+      : status >= 500 ? "provider_error" : "invalid_request";
+    return new ModelStreamFailure(read_model_error({
+      code, status_code: status,
+      retryable: code === "rate_limited" || code === "provider_error" || code === "provider_timeout",
+    })!, has_partial_output);
+  }
   return new ModelStreamFailure({
     code: cancelled ? "cancelled" : "transport_error",
     message: error instanceof Error ? error.message : String(error),

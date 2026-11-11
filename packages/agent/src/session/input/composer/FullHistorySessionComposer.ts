@@ -36,6 +36,7 @@ export class FullHistorySessionComposer implements SessionComposer {
         await session_messages_to_model_messages(
           input.history,
           input.session.project_root,
+          input.attachment_root,
         ),
         input.state.power_context_blocks ?? [],
       ),

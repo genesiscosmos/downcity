@@ -18,6 +18,7 @@ import { normalize_session_title } from "@/session/storage/Metadata.js";
 import type { SessionStorage } from "@/types/store/SessionStorage.js";
 import type { SessionMessage } from "@downcity/type";
 import { extract_session_message_text } from "@/session/messages/SessionMessageText.js";
+import { session_input_facts } from "./SessionInputFacts.js";
 import type { ModelRequestFailureReporter } from "@/types/model/ModelRequest.js";
 
 const GENERATED_SESSION_TITLE_MAX_CHARS = 24;
@@ -76,10 +77,12 @@ function truncate_title(input: string, max_chars: number): string {
   return title.slice(0, max_chars).trimEnd();
 }
 
-function resolve_first_user_text(messages: SessionMessage[]): string {
-  for (const message of messages) {
-    if (message.role !== "user") continue;
-    const text = extract_session_message_text(message);
+/** 标题取首个可信 Prompt 的正文，工具 media 和恢复提示不作为会话主题。 */
+function resolve_first_prompt_text(messages: SessionMessage[]): string {
+  for (const fact of session_input_facts(messages)) {
+    const text = "role" in fact.input
+      ? extract_session_message_text(fact.input)
+      : fact.meta?.from ? fact.input.content.flatMap((part) => part.type === "text" ? [part.text] : []).join("\n").trim() : "";
     if (text) return text;
   }
   return "";
@@ -203,7 +206,7 @@ export async function generate_session_title(input: {
       messages: build_text_model_messages(
         "You generate minimal conversation titles. Output only the title itself, with no explanation and no quotation marks.",
         [
-        "Generate a short conversation title from the first user message below.",
+        "Generate a short conversation title from the first input below.",
         "Requirements: 3 to 12 Chinese characters or 2 to 6 English words; no period; no prefix.",
         "",
         input.first_user_text,
@@ -257,7 +260,7 @@ export async function ensure_session_title(
   const current = await input.store.read_metadata();
   if (current.title) return current;
 
-  const first_user_text = resolve_first_user_text(input.messages);
+  const first_user_text = resolve_first_prompt_text(input.messages);
   if (input.generate !== true) {
     return current;
   }

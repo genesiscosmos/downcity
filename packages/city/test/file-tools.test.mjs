@@ -82,7 +82,7 @@ test("write creates parents and read paginates text with a stable hash", async (
 
   const first_page = await execute_tool(fixture.tools, "read", {
     file_path: "nested/example.txt",
-    limit: 2,
+    range: { type: "lines", limit: 2 },
   });
   assert.equal(first_page.success, true);
   assert.equal(first_page.content, "first\nsecond");
@@ -95,8 +95,7 @@ test("write creates parents and read paginates text with a stable hash", async (
 
   const second_page = await execute_tool(fixture.tools, "read", {
     file_path: "nested/example.txt",
-    offset: first_page.next_offset,
-    limit: 2,
+    range: { type: "lines", offset: first_page.next_offset, limit: 2 },
   });
   assert.equal(second_page.success, true);
   assert.equal(second_page.content, "third\nfourth");

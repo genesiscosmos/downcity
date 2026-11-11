@@ -155,6 +155,7 @@ export class WorkspaceSshAuthorization {
   private require_workspace(workspace_id: string): LocalWorkspaceConfig {
     const config = this.workspaces.get(workspace_id);
     if (!config) throw new Error(`Workspace not found: ${workspace_id}`);
+    if (config.source) throw new Error("Local SSH authorization is unavailable for remote SSH Workspaces");
     return config;
   }
 }

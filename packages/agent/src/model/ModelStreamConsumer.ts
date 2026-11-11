@@ -8,6 +8,8 @@
 
 import {
   ModelStreamValidator,
+  read_model_error,
+  type ModelError,
   type ModelCall,
   type ModelClient,
   type ModelStreamEvent,
@@ -32,6 +34,8 @@ export interface ModelStreamDiagnostic {
   last_event_type: ModelStreamEvent["type"] | null;
   /** 最近一次读取到事件的 Unix 毫秒时间；尚无事件时为 null。 */
   last_event_at: number | null;
+  /** 失败时附带标准安全错误，包含分类、状态码和脱敏的上游诊断。 */
+  model_error?: { [TKey in keyof ModelError]: ModelError[TKey] };
 }
 
 /** 消费并校验一次完整模型事件流，诊断失败不改变执行结果。 */
@@ -48,11 +52,12 @@ export async function consume_model_stream(
   let event_count = 0;
   let last_event_type: ModelStreamEvent["type"] | null = null;
   let last_event_at: number | null = null;
-  const report = async (phase: ModelStreamDiagnostic["phase"]): Promise<void> => {
+  const report = async (phase: ModelStreamDiagnostic["phase"], model_error?: ModelError): Promise<void> => {
     try {
       await on_diagnostic?.({
         phase, stage, elapsed_ms: Date.now() - started_at,
         event_count, last_event_type, last_event_at,
+        ...(model_error ? { model_error } : {}),
       });
     } catch {
       // 诊断写入失败不能改变模型请求结果。
@@ -117,7 +122,7 @@ export async function consume_model_stream(
     stage = "complete";
     await report("stream_end");
   } catch (error) {
-    await report("request_failed");
+    await report("request_failed", read_model_error(error));
     throw error;
   } finally {
     if (timer) clearInterval(timer);

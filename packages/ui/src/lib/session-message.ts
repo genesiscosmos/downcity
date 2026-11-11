@@ -1,5 +1,6 @@
 /** Session SDK canonical JSONL 到 Chat 展示协议的纯函数 adapter。 */
-import type { DowncityChatMessage, DowncityChatMessagePart } from "../types/chat";
+import type { DowncityChatContentPart, DowncityChatMessage, DowncityChatMessagePart } from "../types/chat";
+import type { DowncityChatInboxContent } from "../types/chat-inbox";
 
 function to_string(value: unknown): string | undefined {
   return typeof value === "string" ? value : undefined;
@@ -27,7 +28,7 @@ export function session_message_to_chat_message(record: Record<string, unknown>)
   raw_parts.sort((left, right) => Number((left as Record<string, unknown>)?.sequence ?? 0) - Number((right as Record<string, unknown>)?.sequence ?? 0));
   const parts = raw_parts.map((part, index) => session_part_to_chat_part(part, index)).filter((part): part is DowncityChatMessagePart => part !== null);
   if (role === "assistant") {
-    const interactions = parts.filter((part) => part.type === "interaction");
+    const interactions = parts.filter((part): part is DowncityChatContentPart => part.type === "interaction");
     for (const interaction of interactions) {
       if (!interaction.interaction_tool_call_id) continue;
       const tool = parts.find((part) => part.type === "tool" && part.tool_call_id === interaction.interaction_tool_call_id);
@@ -41,7 +42,7 @@ export function session_message_to_chat_message(record: Record<string, unknown>)
     }
   }
   if (role === "user") {
-    const text_parts = parts.filter((part) => part.type === "text");
+    const text_parts = parts.filter((part): part is DowncityChatContentPart => part.type === "text");
     for (const part of text_parts) if (part.text) part.text = parse_user_text(part.text);
   }
   const error_message = raw_parts.flatMap((part) => {
@@ -55,7 +56,7 @@ export function session_message_to_chat_message(record: Record<string, unknown>)
     parts,
     created_at: typeof record.created_at === "number" || typeof record.created_at === "string" ? record.created_at : undefined,
     is_streaming: record.state === "streaming",
-    metadata: { official_message_id: message_id, presentation_status: typeof record.state === "string" ? record.state : undefined, error: error_message, sequence: typeof record.sequence === "number" ? record.sequence : undefined, revision: typeof record.revision === "number" ? record.revision : undefined, turn_id: to_string(record.turn_id), visibility: to_string(record.visibility), session_type: record_role },
+    metadata: { official_message_id: message_id, presentation_status: typeof record.state === "string" ? record.state : undefined, error: error_message, sequence: typeof record.sequence === "number" ? record.sequence : undefined, revision: typeof record.revision === "number" ? record.revision : undefined, turn_id: to_string(record.turn_id), session_type: record_role },
   };
 }
 
@@ -65,6 +66,20 @@ export function session_part_to_chat_part(raw_part: unknown, index = 0): Downcit
   const part = raw_part as Record<string, unknown>;
   const type = String(part.type ?? "");
   const id = typeof part.part_id === "string" ? part.part_id : `${type}-${index}`;
+  if (type === "inbox") {
+    const source = part.source && typeof part.source === "object" && !Array.isArray(part.source)
+      ? part.source as Record<string, unknown> : undefined;
+    return {
+      id,
+      type,
+      inbox_id: to_string(part.inbox_id) ?? id,
+      kind: to_string(part.kind) ?? "runtime_input",
+      source: source ? { tool_call_id: to_string(source.tool_call_id), turn_id: to_string(source.turn_id) } : undefined,
+      content: Array.isArray(part.content)
+        ? part.content.map(session_inbox_content_to_chat_content).filter((item): item is DowncityChatInboxContent => item !== null) : [],
+      created_at: typeof part.created_at === "number" ? part.created_at : undefined,
+    };
+  }
   if (type === "text" || type === "reasoning") return { id, type, text: typeof part.text === "string" ? part.text : "", state: typeof part.state === "string" ? part.state : undefined };
   if (type === "power") return { id, type: "text", text: to_string(part.fallback_text) ?? "" };
   if (type === "step-start") return { id, type };
@@ -101,13 +116,27 @@ export function session_part_to_chat_part(raw_part: unknown, index = 0): Downcit
   if (type === "file") return { id, type, url: typeof part.url === "string" ? part.url : undefined, media_type: typeof part.media_type === "string" ? part.media_type : undefined, filename: typeof part.filename === "string" ? part.filename : undefined };
   if (type === "source") return { id, type, source_title: typeof part.title === "string" ? part.title : undefined, source_url: typeof part.url === "string" ? part.url : undefined };
   if (type === "data") return { id, type, data_type: typeof part.data_type === "string" ? part.data_type : undefined, data: part.data };
-  if (type === "changed-files") return { id, type, files: Array.isArray(part.files) ? part.files as DowncityChatMessagePart["files"] : [], summary: part.summary as DowncityChatMessagePart["summary"] };
+  if (type === "changed-files") return { id, type, files: Array.isArray(part.files) ? part.files as DowncityChatContentPart["files"] : [], summary: part.summary as DowncityChatContentPart["summary"] };
   if (type === "action") {
     const status = part.state === "completed" ? "finished" : part.state === "failed" ? "failed" : "progress";
     const data = part.data && typeof part.data === "object" && !Array.isArray(part.data) ? part.data as Record<string, unknown> : undefined;
     return { id, type: "operation", operation: { status, name: String(part.action_type ?? "operation"), label: to_string(part.title), error: status === "failed" ? to_string(part.description) : undefined, progress: typeof data?.progress === "number" ? data.progress : undefined } };
   }
   if (type === "error") return { id, type: "operation", operation: { status: "failed", name: to_string(part.code) ?? "error", label: to_string(part.message), error: to_string(part.message) } };
+  return null;
+}
+
+/** 只投影 inbox 的文本、上下文和文件展示字段，不透传 meta 或媒体读取权限。 */
+function session_inbox_content_to_chat_content(raw_content: unknown): DowncityChatInboxContent | null {
+  if (!raw_content || typeof raw_content !== "object" || Array.isArray(raw_content)) return null;
+  const content = raw_content as Record<string, unknown>;
+  if (content.type === "text" && typeof content.text === "string") return { type: "text", text: content.text };
+  if (content.type === "context" && typeof content.tag === "string" && typeof content.context === "string") {
+    return { type: "context", tag: content.tag, context: content.context };
+  }
+  if (content.type === "file" && typeof content.url === "string" && typeof content.media_type === "string") {
+    return { type: "file", url: content.url, media_type: content.media_type, filename: to_string(content.filename) };
+  }
   return null;
 }
 
@@ -131,7 +160,6 @@ export function session_jsonl_to_chat_messages(jsonl: string): DowncityChatMessa
     } catch { /* 忽略损坏行，保持历史可展示 */ }
   }
   return [...latest.values()]
-    .filter((record) => record.visibility !== "internal")
     .sort((left, right) => Number(left.sequence ?? 0) - Number(right.sequence ?? 0))
     .map(session_message_to_chat_message);
 }

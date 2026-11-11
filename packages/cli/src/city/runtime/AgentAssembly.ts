@@ -5,6 +5,10 @@
  * 只接收已经创建完成的 Agent，不参与任何装配决策。
  */
 
+import { SshWorkspace } from "@downcity/workspace-ssh";
+import type { WorkspaceRuntime } from "@downcity/type/workspace";
+
+
 import {
   LocalPowerLoader,
   resolve_workspace_ssh_access,
@@ -76,7 +80,8 @@ export async function create_cli_agent(input: {
 export async function create_cli_workspace(
   config: LocalWorkspaceConfig,
   root_path_input?: string,
-): Promise<Workspace> {
+): Promise<WorkspaceRuntime> {
+  if (config.source?.kind === "ssh") return new SshWorkspace({ id: config.workspace_id, name: config.name, host: config.source.host, root_path: config.workspace_path, canonical_root: true });
   const root_path = resolve_local_root_path(root_path_input);
   const ssh = await resolve_workspace_ssh_access(root_path, config);
   return new Workspace({

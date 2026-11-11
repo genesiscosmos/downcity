@@ -3,7 +3,7 @@
  *
  * 关键点（中文）
  * - `grep` 通过参数数组执行 `rg --json`，不会把模型输入拼接进 shell 命令。
- * - `find` 通过 globby 流式发现文件，尊重 `.gitignore` 且不跟随符号链接。
+ * - `find` 通过独立 rg 进程枚举文件，按搜索目录匹配 POSIX glob，尊重忽略规则且不跟随符号链接。
  * - 两个 action 都复用项目根目录约束，并在结果达到上限后尽快停止扫描。
  */
 
@@ -11,8 +11,7 @@ import { spawn } from "node:child_process";
 import { lstat } from "node:fs/promises";
 import path from "node:path";
 import readline from "node:readline";
-import type { Readable } from "node:stream";
-import globby from "globby";
+import { find_files } from "./FindFileSearch.js";
 import type { WorkspaceSandboxMount } from "@downcity/type/shell";
 import type {
   FindToolInput,
@@ -370,71 +369,13 @@ async function find_action(
       });
     }
     const max_results = resolve_max_results(input.max_results);
-    const search_prefix = to_posix_path(
-      path.relative(resolved.root_path, search_path),
-    );
-    const scoped_pattern = search_prefix
-      ? path.posix.join(search_prefix, pattern)
-      : pattern;
-    const stream = globby.stream(scoped_pattern, {
-      cwd: resolved.root_path,
-      gitignore: true,
-      dot: true,
-      onlyFiles: true,
-      followSymbolicLinks: false,
-      unique: true,
-      expandDirectories: false,
-      ignore: [".git/**"],
-    }) as Readable & AsyncIterable<string | Buffer>;
-    let aborted = false;
-    const abort_handler = (): void => {
-      aborted = true;
-      stream.destroy();
-    };
-    abort_signal?.addEventListener("abort", abort_handler, { once: true });
-    const files: string[] = [];
-    let truncated = false;
-    try {
-      for await (const entry of stream) {
-        if (aborted) break;
-        if (files.length >= max_results) {
-          truncated = true;
-          break;
-        }
-        const relative_to_root_entry = String(entry);
-        const absolute_path = path.resolve(
-          resolved.root_path,
-          relative_to_root_entry,
-        );
-        const relative_to_search = path.relative(search_path, absolute_path);
-        const relative_to_root = path.relative(resolved.root_path, absolute_path);
-        if (
-          relative_to_search === ".." ||
-          relative_to_search.startsWith(`..${path.sep}`) ||
-          path.isAbsolute(relative_to_search) ||
-          relative_to_root === ".." ||
-          relative_to_root.startsWith(`..${path.sep}`) ||
-          path.isAbsolute(relative_to_root)
-        ) {
-          throw new SearchToolRuntimeError({
-            error_code: "sandbox_denied",
-            message: `Glob result escapes search path: ${relative_to_root_entry}`,
-            search_path,
-          });
-        }
-        files.push(to_posix_path(relative_to_root));
-      }
-    } finally {
-      abort_signal?.removeEventListener("abort", abort_handler);
-    }
-    if (aborted) {
-      throw new SearchToolRuntimeError({
-        error_code: "aborted",
-        message: "find search was aborted",
-        search_path,
-      });
-    }
-    files.sort((left, right) => left.localeCompare(right));
+    const { files, truncated } = await find_files({
+      root_path: resolved.root_path,
+      search_path,
+      pattern,
+      max_results,
+      abort_signal,
+    });
     return {
       success: true,
       root_path: resolved.root_path,

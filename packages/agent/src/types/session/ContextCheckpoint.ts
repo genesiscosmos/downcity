@@ -36,3 +36,9 @@ export interface StableContextPart {
   /** 具体 canonical Part。 */
   part: SessionUserMessagePart | SessionAgentMessagePart;
 }
+
+/** 不可拆分的摘要源单元；part 始终指向 parts 的最后一项，复用 checkpoint 位置协议。 */
+export interface StableContextUnit extends StableContextPart {
+  /** 完整 User Message、完整模型 Step 或独立 inbox 的连续 Parts；不可按预算拆开。 */
+  parts: readonly (SessionUserMessagePart | SessionAgentMessagePart)[];
+}

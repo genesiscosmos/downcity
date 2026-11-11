@@ -85,9 +85,9 @@ function create_turn_input(model) {
         session_id: "tool-loop-limit-session",
         session_origin: { category: "work", type: "work" },
         turn_id: "tool-loop-limit-turn",
-        append_internal_user_message: async (parts) => {
-          internal_parts.push(...parts);
-          return { message_id: "internal", parts };
+        append_inbox: async (input) => {
+          assert.equal(input.kind, "max_steps_finalization");
+          internal_parts.push(...input.content);
         },
       }),
       resolve_step_input: async () => ({

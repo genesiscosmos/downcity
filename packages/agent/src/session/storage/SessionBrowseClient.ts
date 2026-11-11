@@ -63,7 +63,6 @@ export class SessionBrowseClient {
     archived: boolean,
     executing_session_ids: ReadonlySet<string>,
     memory_source: SessionBrowseMemorySource,
-    prepare: () => Promise<void>,
   ): Promise<AgentSessionSummaryPage> {
     this.assert_available();
     if (this.mutations) throw session_list_cursor_expired();
@@ -83,7 +82,7 @@ export class SessionBrowseClient {
       }, 120_000);
       entry = {
         cancelled: false,
-        run: () => this.execute_list(input, archived, executing_session_ids, memory_source, prepare),
+        run: () => this.execute_list(input, archived, executing_session_ids, memory_source),
         resolve: (page) => {
           if (settled) return;
           settled = true;
@@ -125,13 +124,12 @@ export class SessionBrowseClient {
     }
   }
 
-  /** 在可取消的操作内完成迁移、扫描和分页，executing 只在返回当前页时覆盖。 */
+  /** 在可取消的操作内完成只读扫描和分页，executing 只在返回当前页时覆盖。 */
   private async execute_list(
     input: AgentListSessionsInput | undefined,
     archived: boolean,
     executing_session_ids: ReadonlySet<string>,
     memory_source: SessionBrowseMemorySource,
-    prepare: () => Promise<void>,
   ): Promise<AgentSessionSummaryPage> {
     this.assert_available();
     if (this.mutations) throw session_list_cursor_expired();
@@ -168,8 +166,6 @@ export class SessionBrowseClient {
           ? memory_browse_snapshots.page(query, input.cursor, limit)
           : (await request_session_browse({ action: "page", query, limit, cursor: input.cursor })).page!;
       } else {
-        await prepare();
-        check();
         if (this.options.memory) {
           memory_browse_snapshots.begin(query);
           for await (const projection of memory_source()) {

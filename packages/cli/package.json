@@ -36,6 +36,7 @@
     "@downcity/powers": "workspace:^",
     "@downcity/sandbox-native": "workspace:^",
     "@downcity/type": "workspace:*",
+    "@downcity/workspace-ssh": "workspace:*",
     "@earendil-works/pi-tui": "^0.74.2",
     "better-sqlite3": "^13.0.3",
     "chalk": "^5.6.2",

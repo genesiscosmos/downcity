@@ -56,10 +56,10 @@ export class SessionResources {
     return { session: { ...project_session(metadata, view.archived), model_binding: model_binding ?? null, saved_model_override: saved_model_id ?? null, model_selection_required: !(model_binding?.override_model_id ?? saved_model_id ?? model_binding?.default_model_id) }, runtime: await this.observe(cached), pending_interaction_count: (await view.interactions()).length };
   }
 
-  /** canonical Message 页；include_internal 直接贯通 SDK 解码，不展开附件。 */
+  /** canonical Message 页；直接贯通 SDK 解码，不展开附件。 */
   async history(input: Record<string, unknown>) {
     const view = await this.browser(this.agent_id(input)).get(this.session_id(input), this.category(input));
-    return await view.messages({ limit: integer_option(input.limit, 50, 1, 200), ...(input.before_sequence !== undefined ? { before_sequence: integer_option(input.before_sequence, 1, 1, Number.MAX_SAFE_INTEGER) } : {}), include_internal: input.include_internal === true });
+    return await view.messages({ limit: integer_option(input.limit, 50, 1, 200), ...(input.before_sequence !== undefined ? { before_sequence: integer_option(input.before_sequence, 1, 1, Number.MAX_SAFE_INTEGER) } : {}) });
   }
 
   /** 接收与完成分开，no_wait 关闭客户端后由宿主持有执行。 */

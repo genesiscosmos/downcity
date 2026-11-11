@@ -27,6 +27,7 @@ function create_writer_fixture() {
     visibility: "visible",
     created_at: 1,
     updated_at: 1,
+    stable_part_sequence: 0,
     role: "agent",
     state: "streaming",
     parts: [

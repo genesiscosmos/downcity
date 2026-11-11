@@ -7,6 +7,7 @@
 
 import type { SessionHistoryMeta } from "@/types/store/SessionHistoryMeta.js";
 import type {
+  SessionAgentInboxPart,
   SessionAgentMessage,
   SessionAgentMessagePart,
   SessionMessage,
@@ -24,11 +25,13 @@ export interface SessionMessageCreateState {
 
 /** Message 定向更新事务。 */
 export interface SessionMessageUpdate {
-  /** 更新后的完整领域快照；Storage 只写 envelope 与明确列出的 Part。 */
+  /** 可信新输入在事务写入前的最终接收校验；抛错时整个提交回滚。 */
+  assert_receivable?: () => void;
+  /** 更新后的完整领域快照；Agent stable_part_sequence 只能推进，已有稳定前缀必须与数据库一致。 */
   message: SessionMessage;
   /** 调用方读取快照时的 revision，用于拒绝并发覆盖。 */
   expected_revision: number;
-  /** 本次新增或内容发生变化的 Part；每项必须属于 message。 */
+  /** 本次新增或内容发生变化的 Part；每项必须属于 message，稳定前缀只能携带未变化的同值 Part。 */
   changed_parts: Array<SessionUserMessagePart | SessionAgentMessagePart>;
 }
 
@@ -96,19 +99,26 @@ export interface SessionStorage {
 
   /** 读取全部 canonical Message 聚合。 */
   list_messages(): Promise<SessionMessage[]>;
-  /** 检查当前 canonical 用户消息是否登记了该精确附件路径，不读取消息正文。 */
+  /** 检查 canonical 用户消息或 Inbox 内容是否登记该精确附件路径，不加载完整历史。 */
   has_attachment(file_path: string): Promise<boolean>;
   /** 读取指定 Message。 */
   read_message(message_id: string): Promise<SessionMessage | null>;
   /** 通过 canonical Part 主键读取所属消息，供分支中保留的结果引用精确定位。 */
   read_part_message(part_id: string): Promise<SessionMessage | null>;
+  /** 读取当前 Session 内已接收的 Inbox 输入，供幂等接收与 fork 后重试定位。 */
+  read_inbox(inbox_id: string): Promise<{
+    /** 包含该 Inbox Part 的完整 canonical Agent Message。 */
+    message: SessionAgentMessage;
+    /** 保留稳定身份、内容及接收时间的 Inbox Part。 */
+    part: SessionAgentInboxPart;
+  } | null>;
   /** 读取最早的 canonical User Message；空 Session 返回 null。 */
   read_first_user_message(): Promise<SessionUserMessage | null>;
   /** 在事务中分配 sequence 并创建 Message。 */
   create_message(
     build_message: (state: SessionMessageCreateState) => SessionMessage,
   ): Promise<SessionMessage>;
-  /** 原子提交 Message envelope 和明确发生变化的 Part。 */
+  /** 原子写入变化 Parts 后提交 envelope 与稳定水位；拒绝前缀修改、删除、越界及未终态边界。 */
   update_message(input: SessionMessageUpdate): Promise<void>;
   /** 按 Message sequence 向前分页。 */
   list_message_page(input?: {
@@ -116,8 +126,6 @@ export interface SessionStorage {
     before_sequence?: number;
     /** 单页最大 Message 数量。 */
     limit?: number;
-    /** 是否包含只供运行时消费的内部 Message。 */
-    include_internal?: boolean;
   }): Promise<SessionMessage[]>;
   /** 读取需要由 SessionMessages 收口的非终态 Agent Message。 */
   list_recoverable_agent_messages(): Promise<SessionAgentMessage[]>;

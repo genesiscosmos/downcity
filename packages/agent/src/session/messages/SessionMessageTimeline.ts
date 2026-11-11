@@ -145,6 +145,15 @@ export function to_session_message_timeline_events(
       case "tool":
         events.push(...project_tool_part(message, part, events.length));
         break;
+      case "inbox":
+        events.push({
+          ...create_timeline_event({ message, role: "inbox", text: stringify_for_display(part.content), index: events.length }),
+          id: part.part_id,
+          ts: part.created_at,
+          kind: part.kind,
+          ...(part.source ? { source: JSON.stringify(part.source) } : {}),
+        });
+        break;
       case "reasoning":
       case "file":
       case "data":

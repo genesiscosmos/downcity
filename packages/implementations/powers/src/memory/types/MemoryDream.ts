@@ -93,6 +93,16 @@ export interface MemoryDreamLedger {
   last_error?: string;
 }
 
+/** Builtin 管理页的已启用整理摘要；不返回来源正文、批次或其他 City 的 Job。 */
+export interface MemoryDreamSummary {
+  /** 已登记、启用且宿主当前仍可管理的准确执行与写入范围。 */
+  scope: MemoryDreamScope;
+  /** 尚未对账成功的信号数，包含已分配、失败和来源错误信号。 */
+  backlog: number;
+  /** 最近来源读取、摄取或执行错误；不存在错误时省略。 */
+  last_error?: string;
+}
+
 export interface MemoryDreamView {
   /** 当前明确范围的持久调度状态。 */
   ledger: MemoryDreamLedger;

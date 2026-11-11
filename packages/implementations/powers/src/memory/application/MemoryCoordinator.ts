@@ -4,7 +4,8 @@ import type { MemoryProvider } from "../types/Memory.js";
 import type { MemoryJob, MemoryJobInput } from "../types/MemoryJob.js";
 import { MEMORY_SESSION_KIND } from "../types/MemorySession.js";
 import { MemoryJobStore } from "../storage/MemoryJobStore.js";
-import { MemoryProfile } from "../runtime/MemoryProfile.js";
+import type { MemoryProfile } from "../runtime/MemoryProfile.js";
+import { require_memory_transactions } from "./MemoryKnowledge.js";
 import type { ProfileScope } from "../types/Profile.js";
 import { register_memory_session_profile, MEMORY_SESSION_PROFILE_VERSION } from "../runtime/MemorySession.js";
 
@@ -15,7 +16,7 @@ export interface MemoryCoordinatorOptions {
   /** 确定性记忆提交与查询。 */
   provider: MemoryProvider;
   /** 核心记忆文件管理。 */
-  profile: MemoryProfile;
+  profile: Pick<MemoryProfile, "read" | "edit" | "read_mutation_receipt">;
   /** 本 Power 的内部处理账本。 */
   jobs: MemoryJobStore;
   /** 可选的专用模型选择，创建后由 Session 固定实际身份。 */
@@ -71,6 +72,7 @@ export class MemoryCoordinator {
   async submit(input: MemoryJobInput): Promise<MemoryJob> {
     if (this.stopped) throw new Error("Memory Coordinator is stopping");
     if (input.kind === "dream" && (input.mode !== "knowledge" || input.target === "user")) throw new Error("Automatic memory only supports Agent/Workspace knowledge");
+    if (input.mode === "knowledge") require_memory_transactions(this.options.provider);
     const job = await this.options.jobs.create(input);
     if (["queued", "retry_wait", "running", "committing"].includes(job.status)) this.schedule(job.job_id, job.kind === "dream");
     return job;
@@ -79,7 +81,7 @@ export class MemoryCoordinator {
   /** 即使自动开关关闭，也可根据已有提交回执补齐终态；此路径绝不发起新提交。 */
   async reconcile_committed(job: MemoryJob): Promise<MemoryJob> {
     if (job.mode !== "knowledge" || job.status === "skipped") return job;
-    const receipt = await this.options.provider.read_commit_receipt({ access: job.access, target: job.target, commit_id: `job:${job.job_id}` });
+    const receipt = await require_memory_transactions(this.options.provider).read_commit_receipt({ access: job.access, target: job.target, commit_id: `job:${job.job_id}` });
     if (!receipt && job.status === "succeeded") throw new Error("Memory succeeded Job has no matching commit receipt");
     if (!receipt || job.status === "succeeded") return job;
     await this.commit(job);
@@ -91,7 +93,7 @@ export class MemoryCoordinator {
     if (job.status !== "failed") throw new Error("Only failed Memory Jobs can be retried");
     const committed = job.mode === "profile"
       ? await this.options.profile.read_mutation_receipt(memory_job_profile_scope(job), `job:${job.job_id}`)
-      : await this.options.provider.read_commit_receipt({ access: job.access, target: job.target, commit_id: `job:${job.job_id}` });
+      : await require_memory_transactions(this.options.provider).read_commit_receipt({ access: job.access, target: job.target, commit_id: `job:${job.job_id}` });
     const updated = await this.options.jobs.update(job.job_id, {
       status: committed ? "committing" : "queued",
       ...(committed ? {} : { session_id: undefined, turn_id: undefined, changes: undefined, change_details: undefined, scope_version: undefined, profile_edits: undefined, profile_version: undefined }),
@@ -161,7 +163,7 @@ export class MemoryCoordinator {
       job = await this.options.jobs.update(job.job_id, { status: "running", attempt, session_id: session.session_id });
     }
     if (job.mode === "knowledge" && job.scope_version === undefined) {
-      const version = await this.options.provider.read_version({ access: job.access, target: job.target });
+      const version = await require_memory_transactions(this.options.provider).read_version({ access: job.access, target: job.target });
       job = await this.options.jobs.update(job.job_id, { scope_version: version.scope_version });
     }
     const session_id = job.session_id!;
@@ -227,8 +229,8 @@ export class MemoryCoordinator {
       return;
     }
     const scope = { access: job.access, target: job.target };
-    const existing = await this.options.provider.read_commit_receipt({ ...scope, commit_id });
-    const receipt = existing ?? await this.options.provider.commit({
+    const existing = await require_memory_transactions(this.options.provider).read_commit_receipt({ ...scope, commit_id });
+    const receipt = existing ?? await require_memory_transactions(this.options.provider).commit({
       ...scope, commit_id, expected_scope_version: job.scope_version,
       changes: (job.changes ?? []).map((change, index) => ({
         operation: change.operation, memory_id: change.memory_id, expected_version: change.expected_version,

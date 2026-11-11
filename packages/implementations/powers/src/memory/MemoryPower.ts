@@ -72,7 +72,9 @@ import {
 } from "./runtime/MemoryActionInput.js";
 import { MemorySignalStore } from "./storage/MemorySignalStore.js";
 import { MemoryDreaming } from "./application/MemoryDreaming.js";
+import { can_run_memory_background } from "./application/MemoryMaintenanceGate.js";
 import { register_memory_dream_host_actions } from "./host/MemoryDreamHostActions.js";
+import { register_memory_record_host_actions } from "./host/MemoryRecordHostActions.js";
 
 /** Agent 长期记忆 Power。 */
 export class MemoryPower extends Power {
@@ -130,7 +132,8 @@ export class MemoryPower extends Power {
     if (platform_root_path && !path.isAbsolute(platform_root_path)) {
       throw new Error("MemoryPower platform_root_path must be an absolute path");
     }
-    if (shared_root_path) {
+    this.provider_instance = options.provider;
+    if (shared_root_path && !this.provider_instance) {
       this.provider_instance = create_memory_provider({
         on_changed: options.on_changed,
         shared_root_path,
@@ -194,14 +197,17 @@ export class MemoryPower extends Power {
       return { ...users.update({ display_name }) };
     } });
     await this.provider.initialize();
-    register_memory_power_host_actions(context);
     const config = context.config.get();
+    const model_id = this.options.model_id ?? (typeof config.model_id === "string" ? config.model_id : undefined);
+    register_memory_power_host_actions(context, this.provider, model_id);
     this.profile_runtime = new MemoryProfile(context, platform_root, this.options.on_changed);
     const jobs = new MemoryJobStore(path.join(context.storage.path, "processing"));
+    const signals = new MemorySignalStore(path.join(platform_root, "memory", "dreaming"));
+    const maintenance_owner_id = createHash("sha256").update(context.storage.path).digest("hex");
     this.coordinator = new MemoryCoordinator({ host: context, provider: this.provider,
       profile: this.profile_runtime, jobs,
-      can_run_background: async (job) => await this.dreaming?.can_run(job) ?? false,
-      model_id: this.options.model_id ?? (typeof config.model_id === "string" ? config.model_id : undefined),
+      can_run_background: async (job) => await can_run_memory_background(signals, maintenance_owner_id, job),
+      model_id,
     });
     this.delivery = new MemoryDelivery(jobs, new MemoryDeliveryStore(path.join(context.storage.path, "delivery")),
       async (recipient, delivery_id, text) => {
@@ -210,12 +216,13 @@ export class MemoryPower extends Power {
       }, context.logger);
     this.service_instance = new MemoryService(this.provider, jobs, this.coordinator, context, this.delivery);
     this.dreaming = new MemoryDreaming(context,
-      new MemorySignalStore(path.join(platform_root, "memory", "dreaming")), jobs, this.coordinator,
+      signals, jobs, this.coordinator,
       async (scope) => ({ agent_id: scope.agent_id, workspace_id: scope.workspace_id, city_memory_available: true, exclude_city: true }),
       this.options.dreaming);
     await this.coordinator.initialize();
     await this.dreaming.initialize();
     register_memory_dream_host_actions(context, this.dreaming);
+    register_memory_record_host_actions(context, this.service, jobs, this.dreaming);
     this.delivery.initialize();
     register_profile_host_actions(context, this.profile_runtime);
 

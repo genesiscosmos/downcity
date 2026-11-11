@@ -23,19 +23,11 @@ test("SessionTurnContext 在检查点消费输入并封装输出缓冲", async (
     commit_step_input: async () => {
       commit_count += 1;
     },
-    append_internal_user_message: async (parts) => {
-      internal_messages.push(parts);
-      return {
-        message_id: "internal-1", session_id: "session-context-test",
-        turn_id: "turn-context-test", sequence: 1, revision: 1,
-        visibility: "internal", created_at: 1, updated_at: 1,
-        role: "user", parts: parts.map((part, index) => ({
-          ...part, part_id: `part-${index + 1}`, sequence: index + 1,
-        })),
-      };
+    append_inbox: async (input) => {
+      internal_messages.push(input);
     },
   });
-  await context.input.append_internal([{ type: "text", text: "injected" }]);
+  await context.input.append_inbox({ kind: "session_input", content: [{ type: "text", text: "injected" }] });
   context.output.enqueue_assistant_parts([{
     type: "file",
     media_type: "text/plain",
@@ -44,7 +36,8 @@ test("SessionTurnContext 在检查点消费输入并封装输出缓冲", async (
 
   await context.input.checkpoint();
   await context.input.checkpoint();
-  assert.equal(internal_messages[0][0].text, "injected");
+  assert.equal(internal_messages[0].content[0].text, "injected");
+  assert.equal(context.input.user_messages().length, 0);
   assert.equal(commit_count, 2);
   assert.equal(context.output.take_assistant_parts().length, 1);
   assert.equal(context.output.take_assistant_parts().length, 0);

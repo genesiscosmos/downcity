@@ -2,6 +2,7 @@
 
 import crypto from "node:crypto";
 import path from "node:path";
+import { normalize_ssh_host, normalize_remote_root } from "@downcity/workspace-ssh";
 import type { LocalDatabase } from "@/local/database/LocalDatabase.js";
 import type { LocalWorkspaceConfig } from "@/local/types/LocalConfig.js";
 import type { LocalWorkspaceSshAuthorization } from "../types/WorkspaceSsh.js";
@@ -31,12 +32,17 @@ export class WorkspaceRepository {
     workspace_id?: string;
     /** 本地目录。 */
     workspace_path: string;
+    /** SSH 来源；省略时登记本地目录。 */
+    source?: LocalWorkspaceConfig["source"];
     /** 可选展示名称。 */
     name?: string;
   }): LocalWorkspaceConfig {
-    const workspace_path = path.resolve(String(input.workspace_path || "").trim());
+    const source = input.source ? { kind: "ssh" as const, host: normalize_ssh_host(input.source.host) } : undefined;
+    if (!String(input.workspace_path || "").trim()) throw new Error("workspace_path is required");
+    const workspace_path = source ? normalize_remote_root(input.workspace_path) : path.resolve(input.workspace_path);
+    const identity = source ? `ssh:${JSON.stringify([source.host, workspace_path])}` : workspace_path;
     if (!workspace_path) throw new Error("workspace_path is required");
-    const existing = this.get_by_path(workspace_path);
+    const existing = this.list().find((item) => item.workspace_path === workspace_path && item.source?.host === source?.host);
     if (existing) return existing;
     const workspace_id = input.workspace_id
       ? normalize_workspace_id(input.workspace_id)
@@ -45,6 +51,7 @@ export class WorkspaceRepository {
     const config: LocalWorkspaceConfig = {
       workspace_id,
       workspace_path,
+      ...(source ? { source } : {}),
       name: String(input.name || "").trim() || path.basename(workspace_path) || workspace_id,
       created_at: current_time,
       updated_at: current_time,
@@ -55,7 +62,7 @@ export class WorkspaceRepository {
       ) VALUES (?, ?, ?, ?, ?);
     `).run(
       workspace_id,
-      workspace_path,
+      identity,
       JSON.stringify(config),
       current_time,
       current_time,
@@ -85,6 +92,7 @@ export class WorkspaceRepository {
   update_ssh(workspace_id_input: string, authorization: LocalWorkspaceSshAuthorization | null): LocalWorkspaceConfig {
     const current = this.get(workspace_id_input);
     if (!current) throw new Error(`Workspace not found: ${workspace_id_input}`);
+    if (current.source?.kind === "ssh") throw new Error("Remote SSH connection is separate from local SSH authorization");
     const { ssh: _previous, ...rest } = current;
     const config: LocalWorkspaceConfig = {
       ...rest,
@@ -136,7 +144,8 @@ export class WorkspaceRepository {
     const raw = JSON.parse(row.config_json) as Record<string, unknown>;
     return {
       workspace_id: row.workspace_id,
-      workspace_path: path.resolve(row.workspace_path),
+      workspace_path: raw.source ? normalize_remote_root(String(raw.workspace_path)) : path.resolve(row.workspace_path),
+      ...(raw.source ? { source: { kind: "ssh" as const, host: normalize_ssh_host((raw.source as { host: string }).host) } } : {}),
       name: String(raw.name || "").trim() || path.basename(row.workspace_path),
       ...(raw.ssh === undefined ? {} : { ssh: parse_workspace_ssh_authorization(raw.ssh) }),
       created_at: String(raw.created_at || row.created_at),

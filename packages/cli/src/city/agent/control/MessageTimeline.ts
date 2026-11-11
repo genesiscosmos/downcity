@@ -10,46 +10,11 @@ import type { SessionMessage } from "@downcity/agent";
 import {
   extract_session_message_text,
   resolve_session_assistant_visible_text,
+  to_session_message_timeline_events,
 } from "@downcity/agent";
 import type {
   ControlTimelineEvent,
-  ControlTimelineRole,
 } from "@/city/agent/control/types/ControlViewData.js";
-import { truncateText } from "@/city/agent/control/CommonHelpers.js";
-
-/** 把结构化值格式化为时间线文本。 */
-function stringify_for_display(input: unknown, max_chars = 2400): string {
-  if (input === undefined) return "";
-  if (input === null) return "null";
-  if (typeof input === "string") return truncateText(input.trim(), max_chars);
-  try {
-    return truncateText(JSON.stringify(input, null, 2), max_chars);
-  } catch {
-    return truncateText(String(input), max_chars);
-  }
-}
-
-/** 构造一条普通 canonical Message 时间线事件。 */
-function to_message_event(input: {
-  /** 来源 canonical Message。 */
-  message: SessionMessage;
-  /** 展示角色。 */
-  role: ControlTimelineRole;
-  /** 展示文本。 */
-  text: string;
-  /** Message 内事件序号。 */
-  sequence: number;
-  /** 可选工具名称。 */
-  tool_name?: string;
-}): ControlTimelineEvent {
-  return {
-    id: `${input.message.message_id}:${String(input.sequence)}`,
-    role: input.role,
-    ts: input.message.updated_at,
-    text: input.text,
-    ...(input.tool_name ? { tool_name: input.tool_name } : {}),
-  };
-}
 
 /** 读取一条 canonical Message 的用户可见预览。 */
 export function resolve_message_preview(message: SessionMessage): string {
@@ -72,73 +37,10 @@ export function resolve_message_preview(message: SessionMessage): string {
 
 /** 把一条 canonical Message 展开为 Control 时间线。 */
 export function to_message_timeline(message: SessionMessage): ControlTimelineEvent[] {
-  if (message.role === "user") {
-    return [to_message_event({
-      message,
-      role: "user",
-      text: resolve_message_preview(message),
-      sequence: 0,
-    })];
-  }
-
-  const events: ControlTimelineEvent[] = [];
-  for (const part of message.parts) {
-    if (part.type === "text" && part.text.trim()) {
-      events.push(to_message_event({
-        message,
-        role: "assistant",
-        text: part.text.trim(),
-        sequence: events.length,
-      }));
-    } else if (part.type === "tool") {
-      events.push(to_message_event({
-        message,
-        role: "tool-call",
-        text: stringify_for_display(part.input) || "(empty)",
-        sequence: events.length,
-        tool_name: part.tool_name,
-      }));
-      if (part.state === "completed" || part.state === "failed") {
-        events.push(to_message_event({
-          message,
-          role: "tool-result",
-          text: stringify_for_display(
-            part.state === "failed"
-              ? { error: part.error || "tool_error" }
-              : part.output,
-          ) || "(empty)",
-          sequence: events.length,
-          tool_name: part.tool_name,
-        }));
-      }
-    } else if (part.type === "action") {
-      events.push({
-        id: `${message.message_id}:${String(events.length)}`,
-        role: "action",
-        ts: message.updated_at,
-        text: part.description ? `${part.title}\n${part.description}` : part.title,
-        action_title: part.title,
-        ...(part.description ? { action_description: part.description } : {}),
-        action_state: part.state,
-      });
-    } else if (part.type === "error") {
-      events.push(to_message_event({
-        message,
-        role: "assistant",
-        text: part.message,
-        sequence: events.length,
-      }));
-    }
-  }
-  if (events.length === 0) {
-    events.push(to_message_event({
-      message,
-      role: "assistant",
-      text: resolve_message_preview(message),
-      sequence: 0,
-    }));
-  }
-  return events;
+  return to_session_message_timeline_events(message).map((event) => ({
+    ...event,
+    role: event.role === "agent" ? "assistant" : event.role,
+  }));
 }
 
 /** 从 JSONL 文件读取并折叠 canonical Message revision。 */

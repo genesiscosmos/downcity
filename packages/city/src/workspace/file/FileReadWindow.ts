@@ -17,23 +17,21 @@ export { file_read_version } from "@downcity/type/workspace";
 /** 有界读取大文本；传入的文件已经通过路径策略校验。 */
 export async function read_text_window(file_path: string, input: ReadFileToolInput, abort_signal?: AbortSignal): Promise<ReadFileToolSuccess> {
   abort_signal?.throwIfAborted();
-  if (input.byte_offset !== undefined && (input.offset !== undefined || input.limit !== undefined)) {
-    throw new FileToolRuntimeError({ error_code: "invalid_path", message: "byte_offset cannot be combined with offset or limit", file_path });
-  }
+  const range = input.range;
   const file = await open(file_path, constants.O_RDONLY | constants.O_NOFOLLOW);
   try {
     const metadata = await file.stat();
     if (!metadata.isFile()) throw new FileToolRuntimeError({ error_code: "not_a_file", message: "Expected a regular file", file_path });
     const file_version = file_read_version(metadata);
-    if (input.expected_version && input.expected_version !== file_version) throw changed_file(file_path);
+    if (range?.expected_version && range.expected_version !== file_version) throw changed_file(file_path);
     const head = Buffer.alloc(512);
     const header = await file.read(head, 0, head.length, 0);
     const encoding = detect_text_encoding(head.subarray(0, header.bytesRead));
     const bom_bytes = encoding !== "utf-8" ? 2 : head.subarray(0, 3).equals(Buffer.from([0xef, 0xbb, 0xbf])) ? 3 : 0;
-    const start_byte = input.byte_offset !== undefined ? Math.min(input.byte_offset, metadata.size)
-      : await locate_line_start(file, metadata.size, encoding, bom_bytes, input.offset ?? 0, abort_signal);
+    const start_byte = range?.type === "bytes" ? Math.min(range.offset, metadata.size)
+      : await locate_line_start(file, metadata.size, encoding, bom_bytes, range?.offset ?? 0, abort_signal);
     if (encoding !== "utf-8" && start_byte % 2) {
-      throw new FileToolRuntimeError({ error_code: "encoding_error", message: "UTF-16 byte_offset must be aligned; use next_byte_offset", file_path });
+      throw new FileToolRuntimeError({ error_code: "encoding_error", message: "UTF-16 range.offset must be aligned; use next_byte_offset with range.type=bytes", file_path });
     }
     abort_signal?.throwIfAborted();
     const bytes = Buffer.alloc(MAX_TEXT_WINDOW_BYTES);
@@ -46,8 +44,8 @@ export async function read_text_window(file_path: string, input: ReadFileToolInp
     } catch { throw new FileToolRuntimeError({ error_code: "encoding_error", message: `Invalid ${encoding} continuation; use next_byte_offset`, file_path }); }
     const skipped_bom = start_byte === 0 && raw.startsWith("\ufeff") ? bom_bytes : 0;
     if (skipped_bom) raw = raw.slice(1);
-    if (input.byte_offset === undefined) {
-      const limit = Math.min(2000, Math.max(1, input.limit ?? 500));
+    if (range?.type !== "bytes") {
+      const limit = range?.limit ?? 500;
       let count = 0;
       for (const match of raw.matchAll(/\r\n|\r|\n/g)) {
         if (++count === limit) { raw = raw.slice(0, match.index! + match[0].length); break; }
@@ -70,7 +68,7 @@ export async function read_text_window(file_path: string, input: ReadFileToolInp
     const next_byte_offset = start_byte + skipped_bom + consumed_bytes;
     if (file_read_version(await file.stat()) !== file_version) throw changed_file(file_path);
     const content = normalize_text_to_lf(raw);
-    const start_line = input.byte_offset === undefined ? input.offset ?? 0 : -1;
+    const start_line = range?.type === "bytes" ? -1 : range?.offset ?? 0;
     const line_count = content ? content.split("\n").length - (content.endsWith("\n") ? 1 : 0) : 0;
     return {
       success: true, file_path, total_bytes: metadata.size, total_lines: null,

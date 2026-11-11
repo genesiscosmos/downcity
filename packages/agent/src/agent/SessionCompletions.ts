@@ -9,7 +9,7 @@
  */
 import { createHash } from "node:crypto";
 import type { EffectHook, JsonValue, SessionTurnCommittedHookValue, ToolCallContext } from "@downcity/type";
-import { read_session_message_meta } from "@/session/messages/SessionMessageMeta.js";
+import { select_session_input, session_input_facts } from "@/session/loop/SessionInputFacts.js";
 import type { SessionCompletionOptions, SessionCompletionRecord } from "@/types/agent/SessionCompletion.js";
 
 /** Agent 唯一的完成通知队列；生命周期跟随 Agent。 */
@@ -53,12 +53,11 @@ export class SessionCompletions {
   async prepare(event: SessionTurnCommittedHookValue, context: ToolCallContext, notify = true): Promise<void> {
     const handlers = notify ? this.handlers() : new Map<string, EffectHook>();
     const recipient_ids = [...handlers.keys()].filter((id) => !id.startsWith("callback:"));
-    for (const message of notify ? event.messages : []) {
-      if (message.role !== "user") continue;
-      const name = (read_session_message_meta(message)?.callback as { /** 业务回调名称。 */ name: string } | undefined)?.name;
+    for (const fact of notify ? session_input_facts(event.messages) : []) {
+      const name = (fact.meta?.callback as { /** 业务回调名称。 */ name: string } | undefined)?.name;
       if (!name) continue;
       this.validate_callback(name);
-      recipient_ids.push(`callback:${name}\u0000${message.message_id}`);
+      recipient_ids.push(`callback:${name}\u0000${fact.input_id}`);
     }
     const file_path = this.record_path(event.completion_id);
     // 在首次异步操作前声明提交所有权，恢复不能接管刚写盘但尚未完成 canonical 收口的记录。
@@ -169,12 +168,12 @@ export class SessionCompletions {
     for (const [id, delivery] of Object.entries(record.deliveries)) {
       if (this.suspended) return;
       if (delivery.delivered || delivery.retry_at > Date.now()) continue;
-      const [handler_id, message_id] = id.split("\u0000");
+      const [handler_id, input_id] = id.split("\u0000");
       const registered = handlers.get(handler_id!);
-      const handler = registered && message_id
+      const handler = registered && input_id
         ? Object.assign(async (value: JsonValue, call_context: ToolCallContext) => {
             const event = value as unknown as SessionTurnCommittedHookValue;
-            await registered({ ...event, messages: event.messages.filter((message) => message.message_id === message_id) } as unknown as JsonValue, call_context);
+            await registered({ ...event, messages: select_session_input(event.messages, input_id) } as unknown as JsonValue, call_context);
           }, { handler_id })
         : registered;
       if (!handler) continue;

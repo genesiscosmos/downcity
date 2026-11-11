@@ -50,7 +50,7 @@ export function history_page(page: SessionMessagePage, session_id: string, sessi
 /** 读取指定消息的 Part 页或单个字段；原文从不被预览或递归投影替换。 */
 export async function read_history_part(work: SessionWorkContract, input: z.infer<typeof session_part_input>) {
   const page = await work.messages({ session_id: input.session_id, session_category: input.session_category,
-    before_sequence: input.message_sequence + 1, limit: 1, include_internal: true });
+    before_sequence: input.message_sequence + 1, limit: 1 });
   const message = page.items.find(item => item.message_id === input.message_id && item.sequence === input.message_sequence);
   if (!message) throw new Error("Canonical message not found at the supplied ID and sequence");
   const base = { source: "canonical_history", trust_level: "reference", session_id: input.session_id,

@@ -31,17 +31,29 @@ export interface ModelError {
   status_code?: number;
   /** 可选上游请求 ID。 */
   provider_request_id?: string;
+  /** 上游结构化错误码；只允许有限长度的协议标识，不包含原始正文。 */
+  provider_error_code?: string;
+  /** 被拒绝的请求参数路径；不包含参数值。 */
+  provider_error_param?: string;
+  /** 经过白名单归一化的原因摘要，不复用供应商原始描述。 */
+  provider_error_reason?: string;
 }
 
 /** 稳定安全说明白名单，解码时不复用不可信的原始错误文本。 */
 const MODEL_ERROR_MESSAGES: Record<ModelErrorCode, string> = {
-  invalid_request: "Model request rejected; the rejection is not classified as a context limit",
+  invalid_request: "Model request rejected",
   authentication_failed: "Model authentication failed", permission_denied: "Model permission denied",
   model_unavailable: "Model unavailable", rate_limited: "Model rate limit exceeded",
   context_length_exceeded: "Model context length exceeded", content_rejected: "Model content rejected",
   provider_timeout: "Model provider timed out", provider_error: "Model provider failed",
   transport_error: "Model transport failed", cancelled: "Model request cancelled", internal_error: "Model execution failed",
 };
+
+/** 可公开传输的原因摘要白名单；未知原因只保留错误分类。 */
+const PROVIDER_ERROR_REASONS = new Set([
+  "Unsupported request parameter", "Invalid tool schema", "Invalid tool message sequence",
+  "Request body too large", "Upstream temporarily unavailable", "Upstream rate limit exceeded",
+]);
 
 /** 从协议对象读取稳定分类；只保留白名单字段和有限长度的请求标识。 */
 export function read_model_error(value: unknown): ModelError | undefined {
@@ -53,7 +65,19 @@ export function read_model_error(value: unknown): ModelError | undefined {
     ? Number(record.status_code) : undefined;
   const provider_request_id = typeof record.provider_request_id === "string" && /^[A-Za-z0-9_.:/-]{1,128}$/.test(record.provider_request_id)
     ? record.provider_request_id : undefined;
+  const provider_error_code = read_error_identifier(record.provider_error_code);
+  const provider_error_param = read_error_identifier(record.provider_error_param);
+  const provider_error_reason = typeof record.provider_error_reason === "string" && PROVIDER_ERROR_REASONS.has(record.provider_error_reason)
+    ? record.provider_error_reason : undefined;
   return { code, message: MODEL_ERROR_MESSAGES[code],
-    retryable: (code === "rate_limited" || code === "transport_error" || code === "provider_error") && record.retryable === true,
-    ...(status_code ? { status_code } : {}), ...(provider_request_id ? { provider_request_id } : {}) };
+    retryable: (code === "rate_limited" || code === "transport_error" || code === "provider_error" || code === "provider_timeout") && record.retryable === true,
+    ...(status_code ? { status_code } : {}), ...(provider_request_id ? { provider_request_id } : {}),
+    ...(provider_error_code ? { provider_error_code } : {}),
+    ...(provider_error_param ? { provider_error_param } : {}),
+    ...(provider_error_reason ? { provider_error_reason } : {}) };
+}
+
+/** 只接收结构化错误码和参数路径；拒绝自由文本、URL 和超长内容。 */
+function read_error_identifier(value: unknown): string | undefined {
+  return typeof value === "string" && /^[A-Za-z][A-Za-z0-9_.\[\]-]{0,95}$/.test(value) ? value : undefined;
 }

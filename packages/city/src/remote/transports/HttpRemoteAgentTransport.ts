@@ -236,7 +236,6 @@ export class HttpRemoteAgentTransport implements RemoteAgentTransport {
     if (input?.before_sequence !== undefined) {
       query.set("before_sequence", String(input.before_sequence));
     }
-    if (input?.include_internal) query.set("include_internal", "true");
     const payload = await read_http_json<{
       success?: boolean;
       error?: string;

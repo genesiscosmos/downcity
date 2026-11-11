@@ -5,7 +5,7 @@
  * 并把上游 SSE 规范化为 ModelStreamEvent。路由、fallback、计费和工具执行不属于本模块。
  */
 
-import { create_upstream_model_error, is_upstream_context_limit } from "./UpstreamModelError.js";
+import { create_upstream_model_error, classify_upstream_model_error } from "./UpstreamModelError.js";
 import type {
   ModelContent,
   ModelFileContent,
@@ -17,6 +17,7 @@ import type {
   ModelToolChoice,
   ModelToolResultPart,
   ModelUsage,
+  ModelError,
 } from "@downcity/type";
 import type { AIChannelStreamInput, AIChannelStreamResult } from "../../types/AI.js";
 import type {
@@ -69,7 +70,7 @@ export async function stream_openai_compatible_model(
     stream: create_event_stream(response.body, {
       request_id,
       model_id: input.model.id,
-    }),
+    }, options.api_key),
     request: {
       request_id,
       metadata: { provider_protocol: "openai_chat_completions" },
@@ -208,12 +209,13 @@ function stringify_tool_result(parts: ModelToolResultPart[]): string {
 function create_event_stream(
   body: ReadableStream<Uint8Array>,
   identity: { request_id: string; model_id: string },
+  api_key: string,
 ): ReadableStream<ModelStreamEvent> {
   const reader = body.getReader();
   const decoder = new TextDecoder();
   return new ReadableStream<ModelStreamEvent>({
     async start(controller) {
-      const state = new OpenAIStreamState(controller);
+      const state = new OpenAIStreamState(controller, identity.request_id, api_key);
       const response_events: string[] = [];
       controller.enqueue({ type: "model_start", ...identity });
       let buffer = "";
@@ -248,7 +250,7 @@ function create_event_stream(
         const error_code = classify_stream_error(error);
         controller.enqueue({
           type: "model_error",
-          error: {
+          error: error instanceof OpenAIStreamError && error.model_error ? error.model_error : {
             code: error_code,
             message: normalize_stream_error_message(error),
             retryable: error_code === "transport_error",
@@ -269,12 +271,16 @@ function create_event_stream(
 /** Provider 流在协议或传输边界产生的稳定内部错误。 */
 class OpenAIStreamError extends Error {
   /** 映射到 Downcity Model Protocol 的错误码。 */
-  readonly code: "provider_error" | "transport_error" | "context_length_exceeded" | "invalid_request";
+  readonly code: ModelError["code"];
 
-  constructor(code: OpenAIStreamError["code"], message: string) {
+  /** 来自上游错误帧的标准安全错误；本地解析错误不设置此字段。 */
+  readonly model_error?: ModelError;
+
+  constructor(code: OpenAIStreamError["code"], message: string, model_error?: ModelError) {
     super(message);
     this.name = "OpenAIStreamError";
     this.code = code;
+    this.model_error = model_error;
   }
 }
 
@@ -305,16 +311,22 @@ class OpenAIStreamState {
     started: boolean;
   }>();
 
-  constructor(private readonly controller: ReadableStreamDefaultController<ModelStreamEvent>) {}
+  constructor(
+    private readonly controller: ReadableStreamDefaultController<ModelStreamEvent>,
+    private readonly request_id: string,
+    private readonly api_key: string,
+  ) {}
 
   /** 消费一个上游 JSON chunk。 */
   accept(value: unknown): void {
     const record = as_record(value);
     if (record.error) {
       const detail = as_record(record.error);
-      const context_limit = is_upstream_context_limit(detail);
-      throw new OpenAIStreamError(context_limit ? "context_length_exceeded" : "invalid_request",
-        context_limit ? "Model context length exceeded" : "Model provider rejected the request");
+      const raw_status = detail.status_code ?? detail.status;
+      const status_code = typeof raw_status === "number" && Number.isInteger(raw_status) && raw_status >= 400 && raw_status <= 599
+        ? raw_status : undefined;
+      const model_error = classify_upstream_model_error(detail, status_code, this.request_id, this.api_key);
+      throw new OpenAIStreamError(model_error.code, model_error.message, model_error);
     }
     const usage = read_usage(record.usage);
     if (usage) {

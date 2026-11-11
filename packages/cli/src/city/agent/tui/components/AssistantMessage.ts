@@ -15,6 +15,7 @@ import {
 } from "@/city/agent/tui/constant/rendering.js";
 import { current_theme } from "@/city/agent/tui/theme/index.js";
 import { createMarkdownTheme } from "@/city/agent/tui/theme/pi-tui-theme.js";
+import type { SessionAgentInboxPart } from "@downcity/type";
 import type { SessionAgentMessage } from "@downcity/agent";
 
 /** 缓存一个文本类 Part 的 Markdown 组件及其源文本。 */
@@ -55,7 +56,7 @@ export class AssistantMessageComponent implements Component {
     if (safe_width <= 0) return [""];
 
     const visible_parts = this.message.parts.filter((part) => {
-      if (part.type === "tool" || part.type === "action" || part.type === "error") return true;
+      if (part.type === "tool" || part.type === "action" || part.type === "error" || part.type === "inbox") return true;
       return (
         (part.type === "text" || part.type === "reasoning") &&
         part.text.trim().length > 0
@@ -93,6 +94,16 @@ export class AssistantMessageComponent implements Component {
         }
         continue;
       }
+      if (part.type === "inbox") {
+        const source = part.source?.tool_call_id ?? part.source?.turn_id;
+        const label = `Inbox · ${part.kind}${source ? ` · ${source}` : ""}`;
+        lines.push(MESSAGE_INDENT + current_theme.dim_fg("textDim", label));
+        const view = this.text_views.get(part.part_id);
+        for (const content_line of view?.component.render(Math.max(1, safe_width - MESSAGE_INDENT.length)) ?? []) {
+          lines.push(MESSAGE_INDENT + content_line);
+        }
+        continue;
+      }
       if (part.type === "tool") {
         const view = this.tool_views.get(part.part_id);
         if (view) lines.push(...view.render(safe_width));
@@ -120,12 +131,13 @@ export class AssistantMessageComponent implements Component {
     }
 
     for (const part of this.message.parts) {
-      if (part.type === "text" || part.type === "reasoning") {
+      if (part.type === "text" || part.type === "reasoning" || part.type === "inbox") {
+        const text = part.type === "inbox" ? inbox_display_text(part) : part.text;
         const current = this.text_views.get(part.part_id);
-        if (current?.text === part.text) continue;
+        if (current?.text === text) continue;
         this.text_views.set(part.part_id, {
-          text: part.text,
-          component: new Markdown(part.text.trim(), 0, 0, createMarkdownTheme()),
+          text,
+          component: new Markdown(text.trim(), 0, 0, createMarkdownTheme()),
         });
         continue;
       }
@@ -142,4 +154,13 @@ export class AssistantMessageComponent implements Component {
 function get_working_frame(): string {
   const frame_index = Math.floor(Date.now() / 80) % BRAILLE_SPINNER_FRAMES.length;
   return BRAILLE_SPINNER_FRAMES[frame_index] ?? BRAILLE_SPINNER_FRAMES[0];
+}
+
+/** Inbox 保留独立输入标签；正文只展示内容，不展开请求记账。 */
+function inbox_display_text(part: SessionAgentInboxPart): string {
+  return part.content.map((content) => {
+    if (content.type === "text") return content.text;
+    if (content.type === "context") return content.context;
+    return `[${content.filename ?? content.media_type}](${content.url})`;
+  }).join("\n");
 }

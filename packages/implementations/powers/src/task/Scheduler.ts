@@ -6,6 +6,8 @@
  * workspace_id 请求 City 创建执行范围。
  */
 
+import { create_task_notification } from "./runtime/TaskNotificationDispatcher.js";
+import type { TaskNotificationChannel } from "./types/TaskNotification.js";
 import type { PowerLifecycleContext } from "@downcity/city/power";
 import { resolve_runtime_timezone } from "@downcity/type";
 import {
@@ -50,6 +52,8 @@ export class TaskSchedulerCoordinator {
     private readonly definitions: TaskDefinitionRepository,
     /** 当前 Power 实例唯一的 timer engine；测试可以注入确定性实现。 */
     private readonly engine: TaskCronEngine = new TaskCronTriggerEngine(),
+    /** 当前 TaskPower 的统一提交通知出口。 */
+    private readonly notification_dispatcher?: TaskNotificationChannel,
   ) {}
 
   /**
@@ -198,14 +202,18 @@ export class TaskSchedulerCoordinator {
         return;
       }
       if (task.kind === "user") {
-        await this.definitions.mutate(async (storage) => {
+        const notification = await this.definitions.mutate(async (storage) => {
           const latest = await readTask({ storage, taskId: task_id });
           if (latest.schedule !== "enabled" || task_work_is_closed(latest) || !trigger_matches(latest, trigger)) return;
           if (latest.preparing && latest.preparing.status !== "ready") return;
-          if (!register_task_occurrence(latest, new Date())) return;
+          const at = new Date();
+          if (!register_task_occurrence(latest, at)) return;
           if (trigger.type === "time") latest.schedule = "paused";
           await save_task_workflow(this.definitions, latest);
+          const occurrence_id = task_occurrence_key(latest, at);
+          return create_task_notification(latest, "reminder", occurrence_id, { occurrence_id });
         });
+        if (notification) await this.notification_dispatcher?.send(notification);
         if (trigger.type === "time" && !this.disposed) await this.reconcile(task_id);
         return;
       }
@@ -242,7 +250,7 @@ export class TaskSchedulerCoordinator {
       }
     } catch (error) {
       // 触发失败也必须进入待处理，不能只留日志；保存失败仍保持明确日志。
-      await this.definitions.mutate(async (storage) => {
+      const notification = await this.definitions.mutate(async (storage) => {
         const task = await readTask({ storage, taskId: task_id });
         if (task.schedule !== "enabled" || !trigger_matches(task, trigger) || task_work_is_closed(task)) return;
         if (task.preparing && task.preparing.status !== "ready") return;
@@ -251,11 +259,14 @@ export class TaskSchedulerCoordinator {
         const occurrence_id = task_occurrence_key(task, at);
         const item_id = `trigger_failure:${occurrence_id}`;
         if (!state.occurrences.some((item) => item.occurrence_id === occurrence_id)) state.occurrences.push({ occurrence_id, planned_at: at.toISOString(), status: "pending" });
-        if (!state.inbox.some((item) => item.item_id === item_id)) state.inbox.push({ item_id, kind: "failure", message: `计划执行无法启动：${String(error)}`, created_at: at.toISOString(), resolved: false, occurrence_id });
+        const is_new = !state.inbox.some((item) => item.item_id === item_id);
+        if (is_new) state.inbox.push({ item_id, kind: "failure", message: `计划执行无法启动：${String(error)}`, created_at: at.toISOString(), resolved: false, occurrence_id });
         task.workflow = state;
         if (trigger.type === "time") task.schedule = "paused";
         await save_task_workflow(this.definitions, task);
+        return is_new ? create_task_notification(task, "trigger_failure", occurrence_id, { occurrence_id, body: String(error) }) : undefined;
       }).catch((state_error) => this.context.logger.warn("[TASK] Trigger failure state could not be saved", { task_id, error: String(state_error) }));
+      if (notification) await this.notification_dispatcher?.send(notification);
       this.context.logger.error(`${TASK_LOG_PREFIX} Scheduled task trigger failed`, {
         task_id,
         trigger: trigger.type,
@@ -268,17 +279,20 @@ export class TaskSchedulerCoordinator {
   private async mark_missed_one_shot(task: ShipTaskDefinitionV1): Promise<boolean> {
     const planned = resolveTaskWhenOneShotMs(task.when);
     if (task.schedule !== "enabled" || planned === null || Date.now() - planned < 60_000) return false;
-    await this.definitions.mutate(async (storage) => {
+    const notification = await this.definitions.mutate(async (storage) => {
       const latest = await readTask({ storage, taskId: task.taskId });
       if (latest.when !== task.when || latest.schedule !== "enabled") return;
       const state = normalize_task_state(latest.workflow);
       const item_id = `missed:${latest.when}`;
-      if (!state.inbox.some((item) => item.item_id === item_id)) state.inbox.push({ item_id, kind: "missed", message: "计划时间已错过，请立即处理或重新安排", created_at: new Date().toISOString(), resolved: false });
+      const is_new = !state.inbox.some((item) => item.item_id === item_id);
+      if (is_new) state.inbox.push({ item_id, kind: "missed", message: "计划时间已错过，请立即处理或重新安排", created_at: new Date().toISOString(), resolved: false });
       latest.workflow = state;
       latest.workflow = normalize_task_state(latest.workflow);
       latest.schedule = "paused";
       await save_task_workflow(this.definitions, latest);
+      return is_new ? create_task_notification(latest, "missed", latest.when) : undefined;
     });
+    if (notification) await this.notification_dispatcher?.send(notification);
     return true;
   }
 

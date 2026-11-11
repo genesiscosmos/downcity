@@ -24,6 +24,7 @@ export function is_session_part_in_flight(part: SessionAgentMessagePart): boolea
     case "data":
     case "power":
     case "error":
+    case "inbox":
       return false;
   }
 }

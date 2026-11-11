@@ -1,5 +1,6 @@
 /** Memory 处理记录：列表只展示状态，独立授权详情接口展示有界的固定差异与证据。 */
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
+import type { MemoryManagementScopes } from "../types/MemoryManagement.js";
 import type { PowerMainviewComponentProps } from "@downcity/city/power/react";
 import type { MemoryJobDetail, MemoryJobView } from "../types/MemoryJob.js";
 import { memory_job_changes as MemoryJobChanges } from "./MemoryJobDetail.js";
@@ -14,10 +15,14 @@ interface MemoryJobsPage {
 
 /** 组件只使用现有 Power 网关、宿主 UI 和稳定的范围定位。 */
 interface MemoryJobsProps extends Pick<PowerMainviewComponentProps, "power" | "navigation" | "ui"> {
-  /** 调用领域 action 的真实 Agent。 */
-  agent_id: string;
-  /** 当前项目；空字符串表示未指定。 */
-  workspace_id: string;
+  /** 可选 Agent 筛选，省略时包含全部可管理 Agent。 */
+  agent_id?: string;
+  /** 可选项目筛选，省略表示全部，空字符串表示无项目。 */
+  workspace_id?: string;
+  /** 父级提供的范围选择控件，置于标题下方并在范围变化时重新挂载记录视图。 */
+  readonly scope_controls: ReactNode;
+  /** 可选的宿主目录，用于显示 Agent 与项目名称，不参与授权判断。 */
+  readonly scopes?: MemoryManagementScopes;
 }
 
 const PAGE_SIZE = 20;
@@ -29,8 +34,43 @@ const KIND_LABELS: Record<MemoryJobView["kind"], string> = {
   digest: "会话提炼", revise: "记忆修订", profile_optimize: "核心记忆整理", dream: "后台整理",
 };
 
+/** 打开即查询全部可管理记录，目录读取只服务于可选筛选，不阻塞记录展示。 */
+export function MemoryJobs(props: PowerMainviewComponentProps) {
+  const { power, ui } = props;
+  const { Callout, Field, Inline, Select } = ui.components;
+  const [scopes, set_scopes] = useState<MemoryManagementScopes>();
+  const [error, set_error] = useState("");
+  const [agent_id, set_agent_id] = useState("");
+  const [workspace_filter, set_workspace_filter] = useState("all");
+  useEffect(() => {
+    let disposed = false;
+    set_error("");
+    void power.invoke<MemoryManagementScopes>("memory.scopes")
+      .then((value) => { if (!disposed) set_scopes(value); })
+      .catch((reason) => { if (!disposed) set_error(error_message(reason)); });
+    return () => { disposed = true; };
+  }, [power, ui.revision]);
+  const workspace_id = workspace_filter === "all" ? undefined : workspace_filter === "none" ? "" : workspace_filter.slice(3);
+  const controls = <>
+    {error ? <Callout tone="danger">无法读取筛选选项：{error}</Callout> : null}
+    <Inline>
+      <Field label="Agent"><Select value={agent_id} disabled={!scopes}
+        options={[{ value: "", label: "全部 Agent" }, ...(scopes?.agents ?? []).map((agent) => ({ value: agent.agent_id, label: agent.name }))]}
+        on_value_change={set_agent_id} /></Field>
+      <Field label="项目"><Select value={workspace_filter} disabled={!scopes}
+        options={[{ value: "all", label: "全部项目" }, { value: "none", label: "无项目" }, ...(scopes?.workspaces ?? []).map((workspace) => ({ value: `id:${workspace.workspace_id}`, label: workspace.name }))]}
+        on_value_change={set_workspace_filter} /></Field>
+    </Inline>
+  </>;
+  return <MemoryJobList key={`${agent_id}:${workspace_filter}`} {...props} agent_id={agent_id || undefined}
+    workspace_id={workspace_id} scope_controls={controls} scopes={scopes} />;
+}
+
+/** JSX 组件别名沿用函数的 snake_case 定义。 */
+const MemoryJobList = memory_job_list;
+
 /** 仅活跃记录参与轮询；卸载、切换页码和刷新时忽略此前请求结果。 */
-export function MemoryJobs({ power, navigation, ui, agent_id, workspace_id }: MemoryJobsProps) {
+function memory_job_list({ power, ui, agent_id, workspace_id, scope_controls, scopes }: MemoryJobsProps) {
   const { Button, Callout, EmptyState, Group, Inline, LoadingState, Page, Row, Section, Status, Toolbar } = ui.components;
   const [page, set_page] = useState<MemoryJobsPage>();
   const [offset, set_offset] = useState(0);
@@ -41,7 +81,7 @@ export function MemoryJobs({ power, navigation, ui, agent_id, workspace_id }: Me
   const [detail, set_detail] = useState<MemoryJobDetail>();
   const [reading, set_reading] = useState(false);
   const [busy, set_busy] = useState(false);
-  const input = { agent_id, workspace_id };
+  const input = { ...(agent_id ? { agent_id } : {}), ...(workspace_id === undefined ? {} : { workspace_id }) };
 
   useEffect(() => {
     let disposed = false;
@@ -50,7 +90,7 @@ export function MemoryJobs({ power, navigation, ui, agent_id, workspace_id }: Me
     set_error("");
     const load = async () => {
       try {
-        const result = await power.invoke<MemoryJobsPage>("memory.jobs", { agent_id, workspace_id, offset, limit: PAGE_SIZE });
+        const result = await power.invoke<MemoryJobsPage>("memory.records.list", { ...input, offset, limit: PAGE_SIZE });
         if (disposed) return;
         set_page(result);
         set_error("");
@@ -75,7 +115,7 @@ export function MemoryJobs({ power, navigation, ui, agent_id, workspace_id }: Me
     set_reading(true);
     const load = async () => {
       try {
-        const value = await power.invoke<MemoryJobDetail>("memory.job_detail", { agent_id, workspace_id, job_id: selected_id });
+        const value = await power.invoke<MemoryJobDetail>("memory.records.detail", { job_id: selected_id });
         if (disposed) return;
         set_detail(value);
         if (["queued", "running", "committing", "retry_wait"].includes(value.job.status)) timer = setTimeout(() => void load(), 3000);
@@ -91,7 +131,7 @@ export function MemoryJobs({ power, navigation, ui, agent_id, workspace_id }: Me
     set_busy(true);
     set_error("");
     try {
-      const result = await power.invoke<MemoryJobView>("memory.retry", { ...input, job_id });
+      const result = await power.invoke<MemoryJobView>("memory.records.retry", { job_id });
       set_detail(undefined);
       set_reading(true);
       set_selected_id(result.job_id);
@@ -102,17 +142,18 @@ export function MemoryJobs({ power, navigation, ui, agent_id, workspace_id }: Me
   };
 
   return <Page>
-    <Toolbar title="记忆处理记录" description="仅已提交表示保存完成；暂存差异和失败记录不能视为已生效。" actions={<Inline>
-      <Button on_click={() => navigation.navigate({ ...navigation.route, view: "list" })}>返回记忆</Button>
+    <Toolbar title={selected_id ? "处理详情" : "处理记录"} actions={<Inline>
+      {selected_id ? <Button on_click={() => { set_selected_id(""); set_detail(undefined); }}>返回记录</Button> : null}
       <Button disabled={loading || busy} on_click={() => set_revision((value) => value + 1)}>刷新</Button>
     </Inline>} />
+    {!selected_id ? scope_controls : null}
     {error ? <Callout tone="danger">{error}</Callout> : null}
-    {loading && !page ? <LoadingState label="正在读取处理记录…" /> : null}
-    {page && !page.items.length ? <EmptyState title="还没有处理记录" description="会话提炼、修订和核心记忆整理的请求会显示在这里。" /> : null}
-    {page?.items.length ? <Section title={`处理记录 · ${page.total}`}>
+    {!selected_id && loading && !page ? <LoadingState label="正在读取处理记录…" /> : null}
+    {!selected_id && page && !page.items.length ? <EmptyState title="还没有处理记录" description="会话提炼、修订和核心记忆整理的请求会显示在这里。" /> : null}
+    {!selected_id && page?.items.length ? <Section title={`处理记录 · ${page.total}`}>
       <Group>{page.items.map((job) => <Row key={job.job_id}
         label={KIND_LABELS[job.kind]}
-        description={`${job.target} · ${job.agent_id} · ${job.updated_at}${job.detail ? ` · ${job.detail}` : ""}`}
+        description={`${job_scope_label(job, scopes)} · ${new Date(job.updated_at).toLocaleString()}${job.detail ? ` · ${job.detail}` : ""}`}
         trailing={<Status tone={job.status === "succeeded" ? "success" : job.status === "failed" ? "danger" : "muted"}>{STATUS_LABELS[job.status]}</Status>}
         on_click={() => set_selected_id(job.job_id)}
       />)}</Group>
@@ -122,19 +163,27 @@ export function MemoryJobs({ power, navigation, ui, agent_id, workspace_id }: Me
         <Button disabled={loading || offset + PAGE_SIZE >= page.total} on_click={() => { set_page(undefined); set_offset(offset + PAGE_SIZE); }}>下一页</Button>
       </Inline>
     </Section> : null}
-    {selected_id ? <Section title="处理详情">
+    {selected_id ? <Section>
       {!detail ? (reading ? <LoadingState label="正在读取详情…" /> : <EmptyState title="无法读取处理详情" description="请刷新后重试。" size="compact" />) : <Group>
         <Row label="Job ID" description={detail.job.job_id} />
         <Row label="状态" trailing={<Status>{STATUS_LABELS[detail.job.status]}</Status>} />
-        <Row label="范围" description={`${detail.job.target} · ${detail.job.mode} · ${detail.job.agent_id}${detail.job.workspace_id ? ` · ${detail.job.workspace_id}` : ""}`} />
+        <Row label="归属" description={job_scope_label(detail.job, scopes)} />
         {detail.job.session_id ? <Row label="Memory Session" description={detail.job.session_id} /> : null}
         {detail.job.detail ? <Row label="说明" description={detail.job.detail} /> : null}
         {detail.job.status === "succeeded" && detail.job.memory_ids?.length ? <Row label="提交结果" description={detail.job.memory_ids.join("、")} /> : null}
         <MemoryJobChanges key={`${detail.job.job_id}:${detail.job.session_id ?? ""}`} detail={detail} ui={ui} />
-        {detail.job.status === "failed" && detail.job.kind !== "dream" ? <Row label="重新处理" trailing={<Button disabled={busy} on_click={() => void retry(detail.job.job_id)}>{busy ? "提交中…" : "重试"}</Button>} /> : null}
+        {detail.job.status === "failed" ? <Row label="重新处理" trailing={<Button disabled={busy} on_click={() => void retry(detail.job.job_id)}>{busy ? "提交中…" : "重试"}</Button>} /> : null}
       </Group>}
     </Section> : null}
   </Page>;
+}
+
+/** 用名称和知识归属解释记录，只有目录缺失时退回稳定标识。 */
+function job_scope_label(job: MemoryJobView, scopes?: MemoryManagementScopes): string {
+  const agent = scopes?.agents.find((item) => item.agent_id === job.agent_id)?.name ?? job.agent_id;
+  const workspace = scopes?.workspaces.find((item) => item.workspace_id === job.workspace_id)?.name ?? job.workspace_id;
+  const target = job.target === "user" ? "用户记忆" : job.target === "current_workspace" ? "项目共享" : "Agent 私有";
+  return [agent, workspace, target].filter(Boolean).join(" · ");
 }
 
 /** 将宿主失败转换为可读文本，不把错误视为空列表。 */

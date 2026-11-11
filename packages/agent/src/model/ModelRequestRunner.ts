@@ -62,6 +62,10 @@ export async function execute_model_request<TResult>(
               ? MAX_MODEL_REQUEST_ATTEMPTS
               : attempt,
             will_retry: can_retry,
+            ...(error.status_code ? { status_code: error.status_code } : {}),
+            ...(error.provider_error_code ? { provider_error_code: error.provider_error_code } : {}),
+            ...(error.provider_error_param ? { provider_error_param: error.provider_error_param } : {}),
+            ...(error.provider_error_reason ? { provider_error_reason: error.provider_error_reason } : {}),
             ...(error.provider_request_id
               ? { provider_request_id: error.provider_request_id }
               : {}),

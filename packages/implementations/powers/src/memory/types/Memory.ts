@@ -4,11 +4,11 @@
  * 关键点（中文）
  * - MemoryPower 只依赖 MemoryProvider，不感知文件、数据库或远程服务。
  * - 所有公开结果使用稳定 memory_id 与 citation，不暴露物理存储路径。
- * - Provider 负责记忆形成、存储、召回、修订与删除的完整语义。
+ * - Provider 提供知识查询与持久化能力；提炼由 Processing 负责，Profile 独立管理。
  */
 
 import type { PowerJsonObject, PowerJsonValue } from "@downcity/city/power";
-import type { MemoryCommitProvider as import_memory_commit_provider } from "./MemoryChangeSet.js";
+import type { MemoryCommitProvider } from "./MemoryChangeSet.js";
 import type {
   MemoryAccessContext,
   MemoryOwner,
@@ -115,8 +115,8 @@ export interface MemoryProviderCapabilities {
   /** Provider 是否支持删除或失效记忆。 */
   forget: boolean;
 
-  /** Provider 是否支持生成受预算约束的稳定上下文。 */
-  system_context: boolean;
+  /** Provider 是否提供版本检查、原子变更集与持久回执的事务端口。 */
+  transactions: boolean;
 
 }
 
@@ -359,41 +359,10 @@ export interface MemoryForgetResult {
   forgotten: boolean;
 }
 
-/** Provider 生成稳定上下文时的预算输入。 */
-export interface MemorySystemContextInput {
-  /** 当前上下文请求使用的可信访问上下文。 */
-  access: MemoryAccessContext;
-
-  /** 允许返回的最大记忆条数。 */
-  max_items: number;
-
-  /** 允许返回的最大总字符数。 */
-  max_chars: number;
-}
-
-/** 一条可进入 system context 的稳定记忆。 */
-export interface MemorySystemContextItem {
-  /** 当前稳定记忆标识。 */
-  memory_id: string;
-
-  /** 当前 Core 内容描述的 Subject，用于生成独立命名 block。 */
-  subject: MemorySubject;
-
-  /** 当前记忆的有界文本内容。 */
-  content: string;
-
-  /** 当前内容的可选逻辑引用。 */
-  citation?: string;
-}
-
-/** Provider 生成的稳定上下文结果。 */
-export interface MemorySystemContextResult {
-  /** 按注入优先级排列的稳定记忆。 */
-  items: MemorySystemContextItem[];
-}
-
 /** MemoryPower 依赖的最小 Provider 协议。 */
-export interface MemoryProvider extends import_memory_commit_provider {
+export interface MemoryProvider {
+  /** 可选强事务端口；缺省时仍可提供读取和检索，依赖事务的工作流必须拒绝启动。 */
+  readonly transactions?: MemoryCommitProvider;
   /** Provider 的稳定名称。 */
   readonly name: string;
 
@@ -403,7 +372,10 @@ export interface MemoryProvider extends import_memory_commit_provider {
   /** 初始化当前 City Power 实例持有的 Provider 生命周期。 */
   initialize(): Promise<void>;
 
-  /** 读取 Provider 当前状态与统计。 */
+  /** 读取全局生命周期、存储 Adapter 与能力；无需访问上下文，不读取记忆或计算范围统计。 */
+  inspect(): Promise<MemoryStatusResult>;
+
+  /** 读取当前访问范围内的 Provider 状态与统计。 */
   status(access: MemoryAccessContext): Promise<MemoryStatusResult>;
 
   /** 按查询与作用域召回长期记忆。 */
@@ -415,16 +387,8 @@ export interface MemoryProvider extends import_memory_commit_provider {
   /** 按当前访问上下文枚举可读记忆，供目录浏览与界面展示。 */
   list(input: MemoryListInput): Promise<MemoryListResult>;
 
-  /** 显式形成或更新一条长期记忆。 */
-  remember(input: MemoryRememberInput): Promise<MemoryRememberResult>;
-
   /** 删除或失效一条记忆。 */
   forget(input: MemoryForgetInput): Promise<MemoryForgetResult>;
-
-  /** 生成受预算约束的稳定 system context。 */
-  system_context(
-    input: MemorySystemContextInput,
-  ): Promise<MemorySystemContextResult>;
 
   /** 释放 Provider 持有的存储、索引和后台任务。 */
   dispose(): Promise<void>;
@@ -438,10 +402,8 @@ export interface MemoryPowerOptions {
   dreaming?: import("./MemoryDream.js").MemoryDreamOptions;
   /** 专用 Memory Session 的模型；省略时首次创建使用所属 Agent 默认模型。 */
   model_id?: string;
-  /** 当前启用的 Memory Provider。 */
-  provider?: "builtin";
-  /** 当前启用的 Memory Storage。 */
-  storage?: "file";
+  /** 宿主注入的知识后端；省略时创建 Builtin。生命周期由 Power 管理，Profile 不经过此后端。 */
+  provider?: MemoryProvider;
   /** City 为当前 MemoryPower 唯一实例分配的共享绝对数据目录；通常由 City 生命周期提供。 */
   shared_root_path?: string;
   /** 平台数据根目录；用于定位 `agents/<agent_id>/memory` 下的 Agent 私有记忆。 */

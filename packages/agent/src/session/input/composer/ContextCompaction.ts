@@ -9,7 +9,7 @@ import { generate_model } from "@/model/ModelGenerate.js";
 import type { SessionContextAdvanceInput } from "@/types/session/SessionComposer.js";
 import type { ContextCompactionDiagnostic, ContextSummaryUnit } from "@/types/session/ContextCompaction.js";
 import { render_summary_text } from "./ContextSummaryText.js";
-import { collect_stable_parts } from "./AdaptiveContextParts.js";
+import { collect_stable_units } from "./AdaptiveContextParts.js";
 import { insert_checkpoint, read_latest_checkpoint } from "./AdaptiveContextCheckpoint.js";
 import { build_session_summary_messages, CONTEXT_SUMMARY_MAX_OUTPUT_TOKENS } from "./ContextSummaryPrompts.js";
 
@@ -26,10 +26,15 @@ export async function compact_context(input: SessionContextAdvanceInput, compose
   const window = input.context_window ?? model.context_window;
   const checkpoint = await read_latest_checkpoint(input.derived, composer_name);
   const units: ContextSummaryUnit[] = [];
-  for (const candidate of collect_stable_parts(input.history, checkpoint)) {
-    const projected = await project_summary_part(candidate.message, candidate.part);
-    const text = render_summary_text(projected);
-    if (text.trim()) units.push({ ...candidate, text });
+  for (const candidate of collect_stable_units(input.history, checkpoint)) {
+    const records: string[] = [];
+    for (const part of candidate.parts) {
+      const projected = await project_summary_part(candidate.message, part);
+      const text = render_summary_text(projected);
+      if (text.trim()) records.push(text);
+    }
+    // 同一 Step 的多个 Tool 结果保持为一个单元，任何选取和预算裁剪都不能拆开。
+    if (records.length) units.push({ ...candidate, text: records.join("\n\n") });
   }
   if (units.length === 0) return false;
   let target_count = select_compaction_target(units.map(unit => unit.text),
@@ -40,21 +45,19 @@ export async function compact_context(input: SessionContextAdvanceInput, compose
   const summary = checkpoint?.summary ?? "";
   const overhead = build_session_summary_messages(summary, []).reduce((sum, message) =>
     sum + message.content.reduce((total, part) => total + (part.type === "text" ? estimate_context_tokens(part.text) : 0), 0) + 16, 0);
-  if (budget !== undefined) {
-    let used = overhead;
-    let fitting_count = 0;
-    for (const unit of units.slice(0, target_count)) {
-      used += estimate_context_tokens(unit.text) + 16;
-      if (used > budget) break;
-      fitting_count++;
-    }
-    target_count = fitting_count;
-    if (!target_count) throw new Error("Model context window cannot fit a complete history unit with the existing summary");
+  let used = overhead;
+  let fitting_count = 0;
+  for (const unit of units.slice(0, target_count)) {
+    used += estimate_context_tokens(unit.text) + 16;
+    if (used > budget) break;
+    fitting_count++;
   }
+  target_count = fitting_count;
+  if (!target_count) throw complete_unit_budget_error(units[0]!);
   let messages = build_session_summary_messages(summary, units.slice(0, target_count).map(unit => unit.text));
   // 最终序列化预算含摘要 system、累计摘要、消息结构与输出余量；不依赖上面的单元近似。
   while (estimate_context_tokens(JSON.stringify({ messages, max_output_tokens: CONTEXT_SUMMARY_MAX_OUTPUT_TOKENS })) + messages.length * 16 > budget) {
-    if (--target_count === 0) throw new Error("Summary request cannot fit one stable Part with the existing summary and output reserve");
+    if (--target_count === 0) throw complete_unit_budget_error(units[0]!);
     messages = build_session_summary_messages(summary, units.slice(0, target_count).map(unit => unit.text));
   }
   const boundary = units[target_count - 1]!;
@@ -109,6 +112,11 @@ export async function compact_context(input: SessionContextAdvanceInput, compose
     }
   }
   throw new Error("Context summary request attempts exhausted");
+}
+
+/** 预算不足时报告完整单元位置，不降级为截断 Tool 结果或半个 Step。 */
+function complete_unit_budget_error(unit: ContextSummaryUnit): Error {
+  return new Error(`Summary request cannot fit one complete Step/inbox history unit with the existing summary and output reserve (message_sequence=${unit.message.sequence}, from_part_sequence=${unit.parts[0]!.sequence}, through_part_sequence=${unit.part.sequence})`);
 }
 
 /** 诊断不参与领域提交，观测失败不能改变压缩结果。 */

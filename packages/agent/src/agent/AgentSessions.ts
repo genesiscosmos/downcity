@@ -8,6 +8,7 @@
  */
 
 import { SessionLifecycle } from "./SessionLifecycle.js";
+import { archive_session_subtree } from "./SessionArchive.js";
 import { createHash } from "node:crypto";
 import { read_session_execution } from "./SessionExecutionRead.js";
 import { SessionExecutionProfiles } from "./SessionExecutionProfiles.js";
@@ -25,7 +26,6 @@ import type {
   AgentCleanArchiveResult,
   AgentListSessionsInput,
   AgentSessionSummaryPage,
-  AgentSessionSummary,
   AgentSessionSystemBlock,
 } from "@/types/agent/SessionTypes.js";
 import type { AgentSessionConstructor } from "@/types/agent/AgentOptions.js";
@@ -141,7 +141,7 @@ export class AgentSessions implements AgentSessionsContract<AgentSession> {
   /** 可信宿主配置及同键创建互斥；业务模型不能注册资源。 */
   private readonly execution_profiles = new SessionExecutionProfiles();
   private readonly execution_creations = new Map<string, Promise<AgentSession>>();
-  /** 创建、恢复、删除与归档扫描共用的进程内生命周期互斥。 */
+  /** 扫描保护集合关系，搬迁只预留待归档子树；恢复按会话身份独立保护。 */
   private readonly lifecycle = new SessionLifecycle();
   /** 当前活动目录元数据变化；只提供事实失效信号。 */
   private readonly directory_listeners = new Set<() => void>();
@@ -321,7 +321,8 @@ export class AgentSessions implements AgentSessionsContract<AgentSession> {
    * - Workspace 仅用于首次创建；已有会话的目录实例由宿主通过 get/set 明确恢复。
    */
   async self(input?: { workspace?: WorkspaceRuntime }): Promise<AgentSession> {
-    return await this.lifecycle.access(() => this.open_self(input));
+    const key = this.session_cache_key(resolve_agent_session_id(this.agent_id), create_agent_session_origin().category);
+    return await this.lifecycle.access(() => this.open_self(input), [key]);
   }
 
   /** 生命周期保护内恢复或创建 Agent 主会话。 */
@@ -385,11 +386,11 @@ export class AgentSessions implements AgentSessionsContract<AgentSession> {
   async create(
     input?: AgentCreateSessionInput & { workspace?: WorkspaceRuntime; /** 显式关闭默认 Workspace 继承。 */ inherit_workspace?: boolean },
   ): Promise<AgentSession> {
+    const origin = normalize_session_origin(input?.origin);
     return await this.lifecycle.access(async () => {
-      const origin = normalize_session_origin(input?.origin);
       const session_id = await this.allocate_session_id(origin);
       return await this.create_with_id(session_id, origin, input?.workspace, input?.inherit_workspace);
-    });
+    }, this.session_parent_keys(origin));
   }
 
   /** 注册宿主可信配置；撤销后缓存会话也不得继续执行。 */
@@ -419,6 +420,7 @@ export class AgentSessions implements AgentSessionsContract<AgentSession> {
     const operation = this.lifecycle.access(async () => {
       const context = this.resolve_session_context({ origin });
       const exists = await context.store.has_session(session_id, origin.category);
+      if (!exists) await this.assert_parent_available(origin, context.store);
       const storage = exists ? await context.store.open_session(session_id, origin.category)
         : context.store.create_session(session_id, origin, input.workspace_id);
       const metadata = await storage.read_metadata();
@@ -436,7 +438,7 @@ export class AgentSessions implements AgentSessionsContract<AgentSession> {
       await session.initialize();
       if (!exists) await this.notify_created(session);
       return session;
-    });
+    }, [key, ...this.session_parent_keys(origin)]);
     this.execution_creations.set(key, operation);
     try { return await operation; }
     finally { if (this.execution_creations.get(key) === operation) this.execution_creations.delete(key); }
@@ -473,7 +475,9 @@ export class AgentSessions implements AgentSessionsContract<AgentSession> {
     delegation_depth?: number,
     child_origin?: SessionOrigin,
   ): Promise<AgentSession> {
-    return await this.lifecycle.access(() => this.open_work_session(session_id, workspace, delegation_depth, child_origin));
+    const origin = child_origin ?? { category: SESSION_ORIGIN_CATEGORY_WORK, type: SESSION_ORIGIN_TYPE_WORK };
+    return await this.lifecycle.access(() => this.open_work_session(session_id, workspace, delegation_depth, child_origin),
+      [this.session_cache_key(session_id, origin.category), ...this.session_parent_keys(origin)]);
   }
 
   /** 生命周期保护内恢复幂等委派或创建会话。 */
@@ -506,11 +510,7 @@ export class AgentSessions implements AgentSessionsContract<AgentSession> {
       creating: inherit_workspace,
       ...(workspace ? { workspace } : {}),
     });
-    if (origin.parent_agent_id === this.agent_id && typeof origin.parent_session_id === "string"
-      && typeof origin.parent_session_category === "string"
-      && !await context.store.has_session(origin.parent_session_id, origin.parent_session_category)) {
-      throw new Error("session_parent_unavailable: parent Session is missing or archived");
-    }
+    await this.assert_parent_available(origin, context.store);
     const storage = context.store.create_session(session_id, origin, context.workspace_id);
     const restored_model = await resolve_session_snapshot(storage, this.get_agent_model(), true);
     const session = this.get_or_create_session({ session_id, workspace, origin, inherit_workspace, storage, restored_model });
@@ -532,7 +532,8 @@ export class AgentSessions implements AgentSessionsContract<AgentSession> {
     category = SESSION_ORIGIN_CATEGORY_WORK,
     input?: { workspace?: WorkspaceRuntime },
   ): Promise<AgentSession> {
-    return await this.lifecycle.access(() => this.open_existing_session(session_id, category, input));
+    return await this.lifecycle.read(this.session_cache_key(session_id, normalize_session_origin_category(category)),
+      () => this.open_existing_session(session_id, category, input));
   }
 
   /** 生命周期保护内读取持久化信息并恢复 Session 句柄。 */
@@ -543,6 +544,7 @@ export class AgentSessions implements AgentSessionsContract<AgentSession> {
     }
     const resolved_category = normalize_session_origin_category(category);
     const cache_key = this.session_cache_key(resolved_session_id, resolved_category);
+    const cached = this.sessions_by_id.get(cache_key);
     const context = this.resolve_session_context({
       ...(input?.workspace ? { workspace: input.workspace } : {}),
     });
@@ -566,6 +568,11 @@ export class AgentSessions implements AgentSessionsContract<AgentSession> {
     if (execution_profile && input?.workspace) throw new Error("execution_profile_immutable: Workspace capabilities cannot be attached");
     const persisted_workspace_id = String(persisted_metadata.workspace_id || "").trim() || undefined;
     this.assert_resource_available(persisted_workspace_id);
+    if (cached && (!input?.workspace || (cached.get("workspace") === input.workspace && input.workspace.id === persisted_workspace_id))) {
+      // 保留资源和执行配置校验，跳过重复模型恢复与实例装配。
+      await cached.initialize();
+      return cached;
+    }
     const requested_workspace_id = String(input?.workspace?.id || "").trim() || undefined;
     // 目录不是身份，也不在 Session 侧还原：
     // - 宿主传了实例 → 用它；
@@ -598,7 +605,8 @@ export class AgentSessions implements AgentSessionsContract<AgentSession> {
    * - 该方法不处理任何 Power 自有数据。
    */
   async remove(session_id: string, category = SESSION_ORIGIN_CATEGORY_WORK): Promise<boolean> {
-    return await this.lifecycle.access(() => this.remove_existing_session(session_id, category));
+    return await this.lifecycle.access(() => this.remove_existing_session(session_id, category),
+      [this.session_cache_key(session_id, normalize_session_origin_category(category))]);
   }
 
   /** 生命周期保护内删除单个活动会话。 */
@@ -632,7 +640,8 @@ export class AgentSessions implements AgentSessionsContract<AgentSession> {
    * 清空一个 Session 的消息目录。
    */
   async clear_messages(session_id: string, category = SESSION_ORIGIN_CATEGORY_WORK): Promise<boolean> {
-    return await this.lifecycle.access(() => this.clear_existing_messages(session_id, category));
+    return await this.lifecycle.access(() => this.clear_existing_messages(session_id, category),
+      [this.session_cache_key(session_id, normalize_session_origin_category(category))]);
   }
 
   /** 生命周期保护内清理消息，避免与归档搬迁同时进行。 */
@@ -680,85 +689,20 @@ export class AgentSessions implements AgentSessionsContract<AgentSession> {
   async archive(
     input: AgentArchiveSessionInput,
   ): Promise<AgentArchiveSessionResult> {
-    return await this.lifecycle.archive(() => this.archive_subtree(input));
-  }
-
-  /** 集合生命周期独占期间扫描并归档子树。 */
-  private async archive_subtree(input: AgentArchiveSessionInput): Promise<AgentArchiveSessionResult> {
-    const session_id = normalize_session_id(input?.id || "");
-    if (!session_id) {
-      throw new Error("sessions.archive requires a non-empty id");
-    }
-    const category = normalize_session_origin_category(input.category ?? SESSION_ORIGIN_CATEGORY_WORK);
-    const root_view = await this.resolve_session_context().store.read_session(session_id, category);
-    const complete_plan = await this.collect_archive_plan(session_id, category);
-    // 已归档根仍扫描并处理活动后代，保证部分归档后的重试能收敛。
-    const plan = root_view.archived ? complete_plan.filter((item) => item.id !== session_id || item.category !== category) : complete_plan;
-    const locked = new Set<AgentManagedSession>();
+    const removals: SessionRemovalEvent[] = [];
     try {
-      // 此循环没有 await：所有节点预检成功前，不移动任何 Session 数据。
-      for (const item of plan) {
-        const cached = this.sessions_by_id.get(this.session_cache_key(item.id, item.category!));
-        if (!cached) continue;
-        cached.begin_archive();
-        locked.add(cached);
-      }
-      let root_result: AgentArchiveSessionResult | undefined;
-      for (const item of plan) {
-        const item_category = item.category!;
-        const cache_key = this.session_cache_key(item.id, item_category);
-        const cached = this.sessions_by_id.get(cache_key);
-        const result = await this.resolve_session_context().store.archive_session(item.id, item_category);
-        cached?.finish_archive(true);
-        if (cached) locked.delete(cached);
-        cached?.dispose_title_generation?.();
-        cached?.clear_secrets();
-        this.delete_cached_session(cache_key);
-        await this.notify_removed({
-          type: "archived", session_id: item.id, category: item_category,
-          origin_type: cached?.origin.type ?? SESSION_ORIGIN_TYPE_WORK,
-          workspace_id: cached?.workspace_id,
-        });
-        root_result = result;
-      }
-      return { ...(root_view.archived ? { session_id } : root_result!), changed: plan.length > 0 };
+      return await this.lifecycle.archive(() => archive_session_subtree(input, {
+        agent_id: this.agent_id,
+        store: this.resolve_session_context().store,
+        get_cached: (session_id, category) => this.sessions_by_id.get(this.session_cache_key(session_id, category)),
+        remove_cached: (session_id, category) => this.delete_cached_session(this.session_cache_key(session_id, category)),
+        reserve_sessions: (plan) => this.lifecycle.reserve_archive(plan.map((item) => this.session_cache_key(item.id, item.category!))),
+        record_removal: (event) => { removals.push(event); },
+      }));
     } finally {
-      for (const cached of locked) cached.finish_archive(false);
+      // 生命周期保护已释放；部分成功时也必须通知，宿主回调可安全读取其他会话。
+      for (const event of removals) await this.notify_removed(event);
     }
-  }
-
-  /** 完整分页读取 Work 目录，按不可变直接父子关系生成后序归档计划，不按 Workspace 截断。 */
-  private async collect_archive_plan(session_id: string, category: string): Promise<AgentArchiveSessionInput[]> {
-    const children = new Map<string, AgentSessionSummary[]>();
-    let cursor: string | undefined;
-    const seen_cursors = new Set<string>();
-    do {
-      const page = await this.list({ category: SESSION_ORIGIN_CATEGORY_WORK, limit: 200, ...(cursor ? { cursor } : {}) });
-      for (const session of page.items) {
-        const origin = session.origin;
-        if (origin.parent_agent_id !== this.agent_id || typeof origin.parent_session_id !== "string"
-          || typeof origin.parent_session_category !== "string") continue;
-        const parent_key = this.session_cache_key(origin.parent_session_id, origin.parent_session_category);
-        const siblings = children.get(parent_key) ?? [];
-        siblings.push(session);
-        children.set(parent_key, siblings);
-      }
-      if (!page.has_more) break;
-      if (!page.next_cursor || seen_cursors.has(page.next_cursor)) throw new Error("Session archive received an invalid pagination cursor");
-      cursor = page.next_cursor;
-      seen_cursors.add(cursor);
-    } while (true);
-    const plan: AgentArchiveSessionInput[] = [];
-    const visited = new Set<string>();
-    const append = (id: string, item_category: string) => {
-      const key = this.session_cache_key(id, item_category);
-      if (visited.has(key)) throw new Error(`Session archive found a cyclic parent relation: ${id}`);
-      visited.add(key);
-      for (const child of children.get(key) ?? []) append(child.session_id, child.origin.category);
-      plan.push({ id, category: item_category });
-    };
-    append(session_id, category);
-    return plan;
   }
 
   /**
@@ -774,7 +718,7 @@ export class AgentSessions implements AgentSessionsContract<AgentSession> {
    * 永久清空已归档 session。
    */
   async clean_archive(): Promise<AgentCleanArchiveResult> {
-    const result = await this.lifecycle.access(() => this.resolve_session_context().store.clean_archive());
+    const result = await this.lifecycle.clean_archive(() => this.resolve_session_context().store.clean_archive());
     this.notify_directory_changed();
     return result;
   }
@@ -867,13 +811,13 @@ export class AgentSessions implements AgentSessionsContract<AgentSession> {
    *   而旧订阅仍然挂在被丢弃的实例上。
    */
   release(session_id: string, category = SESSION_ORIGIN_CATEGORY_WORK): boolean {
-    if (this.lifecycle.is_archiving()) return false;
     const resolved_session_id = normalize_session_id(session_id);
     if (!resolved_session_id) return false;
     const cache_key = this.session_cache_key(
       resolved_session_id,
       normalize_session_origin_category(category),
     );
+    if (this.lifecycle.is_busy(cache_key)) return false;
     const cached = this.sessions_by_id.get(cache_key);
     if (!cached || cached.is_executing()) return false;
     cached.dispose_title_generation?.();
@@ -930,6 +874,22 @@ export class AgentSessions implements AgentSessionsContract<AgentSession> {
   /** 返回来源分类内唯一的 Session 运行时缓存键。 */
   private session_cache_key(session_id: string, category: string): string {
     return `${category}\u0000${normalize_session_id(session_id)}`;
+  }
+
+  /** 新建节点必须连接仍在活动存储中的同 Agent 父节点。 */
+  private async assert_parent_available(origin: SessionOrigin, store: SessionStore): Promise<void> {
+    if (origin.parent_agent_id === this.agent_id && typeof origin.parent_session_id === "string"
+      && typeof origin.parent_session_category === "string"
+      && !await store.has_session(origin.parent_session_id, origin.parent_session_category)) {
+      throw new Error("session_parent_unavailable: parent Session is missing or archived");
+    }
+  }
+
+  /** 创建期间同时保护同 Agent 的直接父节点，阻止归档计划确定后新增后代。 */
+  private session_parent_keys(origin: SessionOrigin): string[] {
+    if (origin.parent_agent_id !== this.agent_id || typeof origin.parent_session_id !== "string"
+      || typeof origin.parent_session_category !== "string") return [];
+    return [this.session_cache_key(origin.parent_session_id, origin.parent_session_category)];
   }
 
   /** 检查持久化与进程内预留标识，避免并发创建复用尚未初始化的 ID。 */

@@ -236,7 +236,8 @@ export async function executeTaskRunAction(params: {
   definitions: TaskDefinitionRepository;
   payload: TaskRunRequest;
   executions: TaskExecutionCoordinator;
-  notifications?: PowerNotificationPublisher;
+  /** TaskPower 实例统一通知出口。 */
+  notification_dispatcher?: import("../types/TaskNotification.js").TaskNotificationChannel;
   execution_context?: StepSnapshot;
   delivery: TaskCompletionDeliveryPort;
 }) {
@@ -245,7 +246,7 @@ export async function executeTaskRunAction(params: {
     definitions: params.definitions,
     request: params.payload,
     executions: params.executions,
-    notifications: params.notifications,
+    notification_dispatcher: params.notification_dispatcher,
     execution_context: params.execution_context,
     delivery: params.delivery,
   });

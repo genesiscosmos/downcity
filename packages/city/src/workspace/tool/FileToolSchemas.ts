@@ -8,27 +8,25 @@
 
 import { z } from "zod";
 
-/** read 工具输入 schema。 */
-export const read_file_tool_input_schema = z.object({
-  file_path: z
-    .string()
-    .min(1)
-    .describe("Project file path or the exact path of an attachment owned by this Session. Other external paths are rejected."),
-  offset: z
-    .number()
-    .int()
-    .min(0)
-    .optional()
-    .describe("Zero-based line offset. Defaults to 0. Omit with byte_offset."),
-  limit: z
-    .number()
-    .int()
-    .min(1)
-    .max(2000)
-    .optional()
-    .describe("Maximum lines to return. Defaults to 500 and cannot exceed 2000. Omit with byte_offset."),
-  byte_offset: z.number().int().min(0).optional().describe("Raw byte offset for bounded text continuation. Use next_byte_offset from read; omit offset and limit."),
-  expected_version: z.string().min(1).optional().describe("file_version returned by the previous read; rejects continuation when the source changed."),
+/** 文本范围使用严格判别联合；模型 schema 与运行时校验共享互斥语义。 */
+const read_range_schema = z.discriminatedUnion("type", [
+  z.strictObject({
+    type: z.literal("lines"),
+    offset: z.number().int().nonnegative().optional().describe("Zero-based line offset; default 0."),
+    limit: z.number().int().min(1).max(2000).optional().describe("Maximum lines; default 500, maximum 2000."),
+    expected_version: z.string().min(1).optional().describe("Copy file_version from an earlier read; never use a file path or invent a version. Omit for the first read."),
+  }),
+  z.strictObject({
+    type: z.literal("bytes"),
+    offset: z.number().int().nonnegative().describe("Raw byte position. Copy next_byte_offset from an earlier read."),
+    expected_version: z.string().min(1).optional().describe("Copy file_version from the read being continued. Never use a file path or invent a version."),
+  }),
+]);
+
+/** 图片、PDF 和首次默认读取仅需 file_path；range 只表达可选文本范围。 */
+export const read_file_tool_input_schema = z.strictObject({
+  file_path: z.string().min(1).describe("Project file path or the exact path of an attachment owned by this Session. Other external paths are rejected."),
+  range: read_range_schema.optional().describe("Optional text range. Omit for images, PDFs, or the default first text read. Choose either lines or bytes, never combine them."),
 });
 
 /** write 工具输入 schema。 */

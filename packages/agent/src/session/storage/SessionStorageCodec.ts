@@ -5,6 +5,8 @@
  */
 
 import { validate_session_power_content } from "@downcity/type";
+import { decode_session_inbox_part } from "./SessionInboxCodec.js";
+import { validate_session_stable_prefix } from "./SessionStablePrefix.js";
 import { session_prompt_actor_schema } from "@/types/sdk/SessionPromptActor.js";
 import type {
   JsonObject,
@@ -32,8 +34,8 @@ export interface SessionMessageRow {
   role: "user" | "agent";
   /** Agent Message 写入状态；User Message 固定为空。 */
   state: "streaming" | "done" | null;
-  /** 默认展示范围。 */
-  visibility: "visible" | "internal";
+  /** 已提交的稳定 Part 前缀末尾 sequence；0 表示空前缀，User 固定为 0。 */
+  stable_part_sequence: number;
   /** 本条用户消息携带的请求记账 JSON；Agent 消息固定为空。 */
   meta: string | null;
   /** Fork 来源 Session。 */
@@ -77,7 +79,7 @@ export function encode_session_message_row(message: SessionMessage): SessionMess
     revision: message.revision,
     role: message.role,
     state: message.role === "agent" ? message.state : null,
-    visibility: message.visibility,
+    stable_part_sequence: message.role === "agent" ? message.stable_part_sequence : 0,
     meta: message.role === "user" && message.meta ? JSON.stringify(message.meta) : null,
     origin_session_id: message.origin?.session_id ?? null,
     origin_message_id: message.origin?.message_id ?? null,
@@ -104,7 +106,7 @@ export function encode_session_part_row(
     step_id,
     type,
     content: JSON.stringify(content),
-    created_at: message.created_at,
+    created_at: part.type === "inbox" ? part.created_at : message.created_at,
     updated_at: message.updated_at,
   };
 }
@@ -131,14 +133,13 @@ export function decode_session_message(
     ...(row.turn_id ? { turn_id: row.turn_id } : {}),
     sequence: row.sequence,
     revision: row.revision,
-    visibility: row.visibility,
     created_at: row.created_at,
     updated_at: row.updated_at,
     ...(origin ? { origin } : {}),
   };
   if (row.role === "user") {
     const user_parts = parts.filter(is_session_user_part);
-    if (row.state !== null || user_parts.length !== parts.length) {
+    if (row.state !== null || row.stable_part_sequence !== 0 || user_parts.length !== parts.length) {
       throw new Error(`Invalid persisted User Message: ${row.message_id}`);
     }
     return {
@@ -152,12 +153,15 @@ export function decode_session_message(
   if (!row.state || agent_parts.length !== parts.length) {
     throw new Error(`Invalid persisted Agent Message: ${row.message_id}`);
   }
-  return {
+  const message: SessionMessage = {
     ...base,
     role: "agent",
     state: row.state,
+    stable_part_sequence: row.stable_part_sequence,
     parts: agent_parts,
   };
+  validate_session_stable_prefix(message);
+  return message;
 }
 
 /** 解码单个 Part 的类型专属 content。 */
@@ -166,15 +170,6 @@ function decode_session_part(
   role: SessionMessageRow["role"],
 ): SessionUserMessagePart | SessionAgentMessagePart {
   const content = parse_part_content(row);
-  // 旧数据可能仍存有已废弃的独立 Interaction Part；类型层已不含该值，按原始字符串拦截。
-  // 归属取自旧行的 request.source.tool_call_id，所以修复路径是确定的一次性迁移，而不是丢弃数据。
-  if ((row.type as string) === "interaction") {
-    throw invalid_part(
-      row,
-      "legacy standalone Interaction Part requires migration into its Tool Part; "
-        + "run `node scripts/migrate-session-interaction-into-tool.mjs` once from the repository root",
-    );
-  }
   const identity = {
     part_id: row.part_id,
     sequence: row.sequence,
@@ -248,7 +243,8 @@ function decode_session_part(
         media_type: read_string(content, "media_type", row),
         url: read_string(content, "url", row),
         ...optional_string(content, "filename", row),
-        ...(role === "user" && content.media_delivery === "tool" ? { media_delivery: "tool" as const, ...optional_string(content, "media_version", row) } : {}),
+        // 媒体披露必须继续绑定原版本，读取历史附件不能隐式移除版本检查。
+        ...optional_string(content, "media_version", row),
       };
     case "data":
       return {
@@ -258,6 +254,9 @@ function decode_session_part(
         data: read_json(content, "data", row),
         ...optional_string(content, "data_id", row),
       };
+    case "inbox":
+      if (role !== "agent") throw invalid_part(row, "Inbox content requires agent role");
+      return decode_session_inbox_part(row, content);
     case "power": {
       if (role !== "agent") throw invalid_part(row, "Power content requires agent role");
       const part = { ...content, type: "power" };

@@ -107,7 +107,7 @@ export function create_power_session_host(power_id: string, access: CityPowerRun
         input.through_sequence === undefined ? Infinity : input.through_sequence + 1);
       const storage = await agent.sessions.read_session_storage(input.session_id, input.category);
       const page = await storage.list_message_page({
-        ...(Number.isFinite(before_sequence) ? { before_sequence } : {}), limit: limit + 1, include_internal: false,
+        ...(Number.isFinite(before_sequence) ? { before_sequence } : {}), limit: limit + 1,
       });
       const candidates = page.filter((message) => message.sequence > (input.after_sequence ?? 0));
       const messages: typeof candidates = [];

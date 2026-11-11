@@ -4,8 +4,21 @@
  * 提示词、上游错误正文和凭据都不进入异常信息或中转调用日志。
  */
 
-import { read_model_error, type ModelErrorCode } from "@downcity/type";
+import { read_model_error, type ModelError, type ModelErrorCode } from "@downcity/type";
 import { read_bounded_error_text } from "../../shared/BoundedResponseText.js";
+
+/** 已知上游结构化错误标识；未知标识不推测为临时故障。 */
+const UPSTREAM_ERROR_CODES = new Map<string, ModelErrorCode>([
+  ["rate_limit_exceeded", "rate_limited"], ["rate_limit_error", "rate_limited"], ["too_many_requests", "rate_limited"],
+  ["server_error", "provider_error"], ["internal_server_error", "provider_error"],
+  ["overloaded_error", "provider_error"], ["service_unavailable", "provider_error"],
+  ["timeout", "provider_timeout"], ["timeout_error", "provider_timeout"],
+  ["request_timeout", "provider_timeout"], ["upstream_timeout", "provider_timeout"],
+  ["invalid_api_key", "authentication_failed"], ["authentication_error", "authentication_failed"],
+  ["permission_denied", "permission_denied"], ["permission_error", "permission_denied"],
+  ["model_not_found", "model_unavailable"], ["model_unavailable", "model_unavailable"],
+  ["content_filter", "content_rejected"], ["content_policy_violation", "content_rejected"], ["safety_violation", "content_rejected"],
+]);
 
 /** 构造可跨 Federation 边界传递的诊断错误。 */
 export async function create_upstream_model_error(response: Response, api_key: string): Promise<Error> {
@@ -17,15 +30,7 @@ export async function create_upstream_model_error(response: Response, api_key: s
     const value = parsed?.error ?? parsed;
     if (value && typeof value === "object" && !Array.isArray(value)) detail = value;
   } catch { /* 未知或截断正文不推测其拒绝原因。 */ }
-  const context_limit = is_upstream_context_limit(detail);
-  const code: ModelErrorCode = context_limit && [400, 413, 422].includes(response.status) ? "context_length_exceeded"
-    : response.status === 401 ? "authentication_failed" : response.status === 403 ? "permission_denied"
-    : response.status === 404 ? "model_unavailable" : response.status === 429 ? "rate_limited"
-    : response.status === 408 || response.status === 504 ? "provider_timeout"
-    : response.status < 500 ? "invalid_request" : "provider_error";
-  const model_error = read_model_error({ code, status_code: response.status,
-    retryable: response.status === 429 || response.status >= 500,
-    provider_request_id: request_id && (!api_key || !request_id.includes(api_key)) ? request_id : undefined })!;
+  const model_error = classify_upstream_model_error(detail, response.status, request_id, api_key);
   const error = new Error(model_error.message);
   const retry_after = response.headers.get("retry-after");
   const retry_after_ms = retry_after
@@ -38,6 +43,44 @@ export async function create_upstream_model_error(response: Response, api_key: s
     ...(Number.isFinite(retry_after_ms) ? { retry_after_ms } : {}),
     ...(model_error.provider_request_id ? { provider_request_id: model_error.provider_request_id } : {}),
   });
+}
+
+/** HTTP 与 SSE 共用的上游错误分类；HTTP 状态优先，流内错误使用明确的结构化错误码。 */
+export function classify_upstream_model_error(
+  detail: Record<string, unknown>,
+  status_code?: number,
+  request_id?: string | null,
+  api_key = "",
+): ModelError {
+  const raw_code = typeof detail.code === "string" ? detail.code : detail.type;
+  const upstream_class = [detail.code, detail.type]
+    .map((value) => typeof value === "string" ? UPSTREAM_ERROR_CODES.get(value.toLowerCase()) : undefined)
+    .find((value) => value !== undefined);
+  const code: ModelErrorCode = status_code === 401 ? "authentication_failed"
+    : status_code === 403 ? "permission_denied"
+    : status_code === 404 ? "model_unavailable"
+    : status_code === 429 ? "rate_limited"
+    : status_code === 408 || status_code === 504 ? "provider_timeout"
+    : status_code !== undefined && status_code >= 500 ? "provider_error"
+    : is_upstream_context_limit(detail) ? "context_length_exceeded"
+    : upstream_class ?? "invalid_request";
+  const message = typeof detail.message === "string" ? detail.message.slice(0, 2048).toLowerCase() : "";
+  const provider_error_reason = code === "rate_limited" ? "Upstream rate limit exceeded"
+    : code === "provider_error" || code === "provider_timeout" ? "Upstream temporarily unavailable"
+    : status_code === 413 ? "Request body too large"
+    : /unsupported (?:parameter|value)|unknown parameter|unrecognized request argument/.test(message) ? "Unsupported request parameter"
+    : /invalid (?:function|tool).*schema|invalid schema for (?:function|tool)/.test(message) ? "Invalid tool schema"
+    : /tool_call_id|tool calls?.*(?:response|follow)|tool.*messages?.*(?:preced|follow)/.test(message) ? "Invalid tool message sequence"
+    : undefined;
+  // 关键点（中文）：原始正文只参与分类；跨边界仅传递有限标识和预定义原因。
+  const safe_identifier = (value: unknown): unknown => typeof value === "string" && api_key && value.includes(api_key) ? undefined : value;
+  return read_model_error({ code, status_code,
+    retryable: code === "rate_limited" || code === "provider_error" || code === "provider_timeout",
+    provider_request_id: safe_identifier(request_id),
+    provider_error_code: safe_identifier(raw_code),
+    provider_error_param: safe_identifier(detail.param),
+    provider_error_reason,
+  })!;
 }
 
 /** 只匹配已知供应商结构及明确超限描述；HTTP 与错误 SSE 帧共用，普通 400 不命中。 */

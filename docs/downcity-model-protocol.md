@@ -638,6 +638,15 @@ export interface ModelError {
 
   /** 可选上游请求 ID。 */
   provider_request_id?: string;
+
+  /** 上游结构化错误码，只保留有限长度的协议标识。 */
+  provider_error_code?: string;
+
+  /** 被拒绝的参数路径，不包含参数值。 */
+  provider_error_param?: string;
+
+  /** 白名单归一化的原因摘要，不复用供应商原始描述。 */
+  provider_error_reason?: string;
 }
 
 export interface ModelErrorEvent {
@@ -649,7 +658,7 @@ export interface ModelErrorEvent {
 }
 ```
 
-Provider 原始错误、响应体和密钥相关信息只进入服务端受控日志，不能写入协议错误。
+Provider 原始错误、响应体和密钥相关信息不能写入协议错误或模型请求阶段日志。HTTP 与 SSE 错误帧在 Provider Adapter 边界共用分类逻辑；未知拒绝保持不可重试。标准错误诊断字段贯穿 Agent 的失败阶段日志、重试通知与 Session Warning，不复制供应商原始正文。明确的限流、临时服务错误和上游超时可声明 `retryable: true`，Agent 仍检查取消状态和部分输出，部分输出后不重试。本地协议解析错误不因分类为 `provider_error` 而自动重试。
 
 ## 10. SSE Wire Format
 

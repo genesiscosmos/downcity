@@ -41,6 +41,9 @@ export class LocalSessionAttachmentStore implements SessionAttachmentStore {
     this.attachments_dir_path = path.resolve(options.attachments_dir_path);
   }
 
+  /** 供可信请求组装使用，不能从消息中猜测附件目录。 */
+  get root_path(): string { return this.attachments_dir_path; }
+
   owns_local_file(url: string): boolean {
     const candidate = path.resolve(String(url || ""));
     const relative = path.relative(this.attachments_dir_path, candidate);

@@ -18,6 +18,8 @@ import type {
   SessionAgentErrorPart,
   SessionAgentMessage,
   SessionAgentMessagePart,
+  SessionAgentInboxPart,
+  SessionInboxInput,
   SessionAgentToolPart,
 } from "@downcity/type";
 import type {
@@ -199,6 +201,33 @@ export class SessionAgentMessageWriter {
       }
       await this.state.commit_parts(this.message_id, appended_parts);
       return appended_parts;
+    });
+  }
+
+  /** 在完整 Step 之后提交一项运行时输入，不改变当前 Message 的生命周期。 */
+  async append_inbox(input: SessionInboxInput, assert_receivable?: () => void): Promise<SessionAgentInboxPart> {
+    return await this.enqueue_write(async () => {
+      if (this.closed) throw new Error("Assistant Message writer is closed");
+      if (this.step_active) throw new Error("Inbox input requires a completed model Step");
+      const inbox_id = input.inbox_id.trim();
+      if (!inbox_id || !input.kind.trim() || input.content.length === 0) {
+        throw new Error("Inbox input requires identity, kind and content");
+      }
+      const existing = this.current_message().parts.find(
+        (part): part is SessionAgentInboxPart => part.type === "inbox" && part.inbox_id === inbox_id,
+      );
+      if (existing) return existing;
+      assert_receivable?.();
+      const part: SessionAgentInboxPart = {
+        ...structuredClone(input),
+        inbox_id,
+        type: "inbox",
+        part_id: `inbox:${generate_id()}`,
+        sequence: this.next_part_sequence(),
+        created_at: Date.now(),
+      };
+      await this.state.commit_parts(this.message_id, [part], { assert_receivable, advance_stable_prefix: true });
+      return part;
     });
   }
 

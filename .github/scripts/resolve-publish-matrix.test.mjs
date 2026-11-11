@@ -25,6 +25,7 @@ test("当前 workspace 被解析为四个稳定发布层", () => {
       "@downcity/sandbox-microsandbox",
       "@downcity/sandbox-native",
       "@downcity/workspace-cloudflare-computer",
+      "@downcity/workspace-ssh",
     ],
     [
       "@downcity/city",
@@ -43,7 +44,7 @@ test("当前 workspace 被解析为四个稳定发布层", () => {
   assert.equal(outputs.has_layer_4, "false");
   assert.equal(outputs.has_layer_2, "true");
   assert.equal(JSON.parse(outputs.layer_0_matrix).include.length, 2);
-  assert.equal(JSON.parse(outputs.layer_1_matrix).include.length, 5);
+  assert.equal(JSON.parse(outputs.layer_1_matrix).include.length, 6);
   assert.equal(JSON.parse(outputs.layer_2_matrix).include.length, 5);
   assert.equal(JSON.parse(outputs.layer_3_matrix).include.length, 1);
   assert.equal(JSON.parse(outputs.layer_4_matrix).include.length, 0);

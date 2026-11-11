@@ -31,8 +31,11 @@ export async function read_agent_pending_references(storage_root_path: string, a
     if (record.state === "delivered") continue;
     const ids = new Set([agent_id]);
     collect_route_ids(record.origin, ids);
-    // 只检查用户消息的结构化 callback 元数据，不把正文或私密回答当作引用。
-    for (const message of record.event.messages) if (message.role === "user") collect_route_ids(message.meta, ids);
+    // 只检查输入的结构化请求记账，不把运行时正文或私密回答当作引用。
+    for (const message of record.event.messages) {
+      if (message.role === "user") collect_route_ids(message.meta, ids);
+      else for (const part of message.parts) if (part.type === "inbox") collect_route_ids(part.meta, ids);
+    }
     for (const referenced_agent_id of ids) result.push({ kind: "pending_completion", owner_agent_id: agent_id, referenced_agent_id, record_id: record.event.completion_id });
   }
   return result;

@@ -11,31 +11,55 @@ import type {
 import type {
   ContextCheckpointRow,
   StableContextPart,
+  StableContextUnit,
 } from "@/types/session/ContextCheckpoint.js";
+import { group_context_units, is_context_request_unit, is_context_unit_terminal } from "./ContextStableUnits.js";
 
-/**
- * 收集 checkpoint 之后适合进入摘要的稳定前缀。
- *
- * streaming Agent Message 是整条消息的屏障，包括空消息和仅含终态 Part 的消息。
- * 它仍可追加任意类型的 Part，摘要不能消费其中的前缀或越过它推进到后续消息。
- */
+/** 收集可摘要的稳定 Parts；边界选择统一由完整单元算法负责。 */
 export function collect_stable_parts(
   messages: readonly SessionMessage[],
   checkpoint: ContextCheckpointRow | null,
 ): StableContextPart[] {
-  const stable: StableContextPart[] = [];
+  return collect_stable_units(messages, checkpoint).flatMap(unit =>
+    unit.parts.map(part => ({ message: unit.message, part })));
+}
+
+/**
+ * 读取写端保证不可变的连续单元前缀，并保留最后一个请求单元。
+ * streaming 消息仅允许消费 stable_part_sequence 水位内的完整单元；到达它后
+ * 始终停止，不越过它读取后续消息。任何未终态内容也构成不可跨越的屏障。
+ */
+export function collect_stable_units(
+  messages: readonly SessionMessage[],
+  checkpoint: ContextCheckpointRow | null,
+): StableContextUnit[] {
+  const stable: StableContextUnit[] = [];
+  let retained_tail: StableContextUnit | undefined;
   for (const message of messages) {
-    if (message.role === "agent" && message.state !== "done") return stable;
-    for (const part of [...message.parts].sort((left, right) => left.sequence - right.sequence)) {
-      if (checkpoint && compare_part_position(message.sequence, part.sequence, checkpoint) <= 0) continue;
-      // 未完成内容是推进屏障，不能跳过后再把 checkpoint 推到其后。
-      if (part.type === "tool" && part.state !== "completed" && part.state !== "failed") return stable;
-      if ((part.type === "text" || part.type === "reasoning") && message.role === "agent" && (!("state" in part) || part.state !== "done")) return stable;
-      // 是否对模型可见只由统一消息投影决定，这里仅维护稳定性与源位置。
-      stable.push({ message, part });
+    const units = group_context_units(message);
+    retained_tail = [...units].reverse().find(is_context_request_unit) ?? retained_tail;
+    const streaming = message.role === "agent" && message.state !== "done";
+    const watermark = streaming ? message.stable_part_sequence : Infinity;
+    let blocked = false;
+    for (const unit of units) {
+      if (checkpoint && compare_part_position(message.sequence, unit.part.sequence, checkpoint) <= 0) continue;
+      if (checkpoint && compare_part_position(message.sequence, unit.parts[0]!.sequence, checkpoint) <= 0) {
+        throw new Error("Context checkpoint splits a complete Step or inbox unit");
+      }
+      if ((streaming && (!Number.isSafeInteger(watermark) || watermark < 0 || unit.part.sequence > watermark))
+        || !is_context_unit_terminal(unit)) {
+        blocked = true;
+        break;
+      }
+      stable.push(unit);
     }
+    if (streaming || blocked) break;
   }
-  return stable;
+  // 只保留一个最新原始单元，避免当前任务及最后一步在强制推进时全部变成摘要。
+  if (!retained_tail) return stable;
+  const tail = retained_tail;
+  return stable.filter(unit => unit.message.sequence < tail.message.sequence
+    || (unit.message.sequence === tail.message.sequence && unit.part.sequence < tail.parts[0]!.sequence));
 }
 
 /** 删除 checkpoint 以前的 Part；边界可以位于单个 Message 内部。 */

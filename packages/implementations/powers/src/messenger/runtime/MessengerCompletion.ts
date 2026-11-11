@@ -42,31 +42,37 @@ export function commit_messenger_completion(
   });
 }
 
-/** 收集本轮直接入站与委派来源；内部结果必须显式引用调用轮次。 */
+/** 收集本轮直接入站与 Inbox 因果来源；后台续轮通过来源 Turn 关联已提交路由。 */
 function resolve_inbound_ids(
   store: MessengerStore,
   agent_id: string,
   event: SessionTurnCommittedHookValue,
 ): string[] {
   const ids = new Set<string>();
+  const caller_turn_ids = new Set<string>();
   for (const message of event.messages) {
-    if (message.role !== "user") continue;
-    for (const part of message.parts) {
-      if (part.type !== "context") continue;
-      if (part.tag === "messenger_request") {
+    if (message.origin) continue;
+    if (message.role === "user") {
+      for (const part of message.parts) {
+        if (part.type !== "context" || part.tag !== "messenger_request") continue;
         const value = JSON.parse(part.context) as { /** Inbox 中由宿主生成的稳定标识。 */ inbound_id?: string };
         if (value.inbound_id) ids.add(value.inbound_id);
       }
-      if (message.visibility === "internal" && (part.tag === "delegation_result" || part.tag === "background_source")) {
-        const value = JSON.parse(part.context) as { /** 触发该后台工作的原始 Channel Turn。 */ caller_turn_id?: string };
-        if (!value.caller_turn_id) throw new Error("Delegated Channel output is missing its caller Turn route");
-        // 结果可能并入仍在执行的调用轮次；本轮直接入站已提供其路由。
-        if (value.caller_turn_id === event.turn_id) continue;
-        const source_ids = store.completion_routes.get(agent_id, event.session_id, value.caller_turn_id);
-        if (source_ids === null) throw new Error(`Caller Turn route is not committed yet: ${value.caller_turn_id}`);
-        for (const id of source_ids) ids.add(id);
-      }
+      continue;
     }
+    for (const part of message.parts) {
+      if (part.type !== "inbox") continue;
+      const caller_turn_id = part.source?.turn_id;
+      if (part.kind === "delegation_result" || part.kind === "session_background") {
+        if (!caller_turn_id) throw new Error("Delegated Channel output is missing its caller Turn route");
+      }
+      if (caller_turn_id && caller_turn_id !== event.turn_id) caller_turn_ids.add(caller_turn_id);
+    }
+  }
+  for (const caller_turn_id of caller_turn_ids) {
+    const source_ids = store.completion_routes.get(agent_id, event.session_id, caller_turn_id);
+    if (source_ids === null) throw new Error(`Caller Turn route is not committed yet: ${caller_turn_id}`);
+    for (const id of source_ids) ids.add(id);
   }
   return [...ids];
 }

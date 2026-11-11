@@ -24,7 +24,6 @@ function create_loop(request_id, unfinished = false) {
     turn_id,
     sequence: 1,
     revision: 1,
-    visibility: "visible",
     created_at: 1,
     updated_at: 1,
     role: "user",
@@ -37,9 +36,9 @@ function create_loop(request_id, unfinished = false) {
     turn_id,
     sequence: 2,
     revision: 1,
-    visibility: "visible",
     created_at: 2,
     updated_at: 2,
+    stable_part_sequence: 0,
     role: "agent",
     state: "done",
     parts: [{ part_id: "agent-part", sequence: 1, type: "text", text: "world", state: "done" }],
@@ -67,6 +66,7 @@ function create_loop(request_id, unfinished = false) {
     state: { ensure_runnable: async () => {} },
     messages: {
       list_history_messages: async () => [user_message, agent_message],
+      read_inbox: async () => null,
       read_message: async (message_id) => message_id === user_message.message_id
         ? user_message
         : null,

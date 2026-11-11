@@ -1,34 +1,14 @@
 /**
- * @file 将现有 Session SQLite v3/v4 一次性迁移为 v5。
+ * @file 已停用的历史 Session v5 离线迁移入口。
  *
- * 背景（中文）
- * - v4 -> v5 把请求记账从 User Message 的 `data` Part 移入消息级 `messages.meta` 列，
- *   并删除承载它的 Part；`prompt_power_fingerprint` 不再保留（它是 `powers` 的派生摘要）。
- *   这条迁移此前只在运行时内联执行：用户点开哪条会话，哪条才升级。库多了以后，
- *   每个库的首次打开都要额外背一次一次性开销。
- * - 本脚本把这件事前移成一次离线批处理，让运行时的打开路径回到纯读取。
- *
- * 与运行时的关系（中文）
- * - 迁移实现直接复用 `packages/agent` 的编译产物 `migrate_session_storage`，
- *   不在这里重写一份，避免离线脚本与运行时逻辑分叉。
- * - 迁移后的收尾（执行 schema SQL、写回 `user_version`）与
- *   `SqliteSessionStorage.initialize_storage` 保持同一顺序，使迁移结果与
- *   「运行时第一次打开」得到的状态完全一致。
- *
- * 使用方式
- *   node public/scripts/migrate-session-sqlite-v5.mjs --dry-run
- *   node public/scripts/migrate-session-sqlite-v5.mjs
- *
- * 前提
- * - 建议先退出 Desktop：迁移需要对这些库取得写锁，运行中的应用会与之争用。
- *   正在被占用的库会跳过并在结果中标记，可在关闭应用后重跑。
+ * Inbox schema 不复用历史迁移实现。本入口在扫描或打开数据库前明确失败，
+ * 保留命令入口用于给出准确原因；当前 schema 的离线迁移需要另行设计与确认。
  */
 
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { DatabaseSync } from "node:sqlite";
-import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 
 /** 目标 schema 版本。 */
@@ -37,24 +17,12 @@ const TARGET_SCHEMA_VERSION = 5;
 /** 可原地升级的来源版本。 */
 const MIGRATABLE_VERSIONS = new Set([3, 4]);
 
-const require = createRequire(import.meta.url);
-/** 仓库内 Session 运行时包根目录（本脚本位于 <repo>/public/scripts）。 */
-const scripts_directory = path.dirname(fileURLToPath(import.meta.url));
-const agent_package_directory = path.resolve(scripts_directory, "../packages/agent");
-
-/** 载入运行时使用的真实迁移实现与 schema。 */
+/** 在任何数据库访问前阻止使用已停用的历史迁移。 */
 function load_runtime_migration() {
-  const migration = require(path.join(agent_package_directory, "bin/session/storage/SessionStorageMigration.js"));
-  const schema = require(path.join(agent_package_directory, "bin/session/storage/SessionStorageSchema.js"));
-  if (typeof migration.migrate_session_storage !== "function") {
-    throw new Error("packages/agent/bin 缺少 migrate_session_storage：请先在 public/packages/agent 执行 pnpm build");
-  }
-  if (schema.SESSION_STORAGE_SCHEMA_VERSION !== TARGET_SCHEMA_VERSION) {
-    throw new Error(
-      `运行时 schema 版本为 ${String(schema.SESSION_STORAGE_SCHEMA_VERSION)}，与本脚本目标 ${String(TARGET_SCHEMA_VERSION)} 不一致`,
-    );
-  }
-  return { migrate_session_storage: migration.migrate_session_storage, schema_sql: schema.SESSION_STORAGE_SCHEMA_SQL };
+  throw new Error(
+    "session_schema_mismatch: this historical migration does not support the Inbox schema; "
+      + "an explicitly approved offline migration is required; no database was opened or changed",
+  );
 }
 
 /** 解析一次性迁移脚本参数。 */

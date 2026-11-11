@@ -9,6 +9,8 @@ export interface LocalWorkspaceConfig {
   workspace_id: string;
   /** Workspace 当前指向的真实绝对目录。 */
   workspace_path: string;
+  /** 项目来源；缺省表示本地目录。 */
+  source?: { /** 来源判别字段。 */ kind: "ssh"; /** 系统 OpenSSH 目标。 */ host: string };
   /** Workspace 的用户可见名称。 */
   name: string;
   /** 宿主批准的 SSH 身份使用记录；缺省表示未授权，不从进程环境自动继承。 */

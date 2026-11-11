@@ -50,14 +50,15 @@ export function normalize_session_user_parts(
 }
 
 /** 仅供可信工具输入提交边界调用；外部 prompt 继续使用普通归一化并剥离媒体权限。 */
-export function normalize_tool_user_parts(
+export function normalize_inbox_content(
   parts: readonly import("@downcity/type").SessionModelUserContent[],
-): SessionUserPartContent[] {
-  const normalized = normalize_session_user_parts(structuredClone([...parts]));
+): import("@downcity/type").SessionModelUserContent[] {
+  const normalized = normalize_session_user_parts(structuredClone([...parts])).filter(
+    (part): part is import("@downcity/type").SessionModelUserContent => part.type !== "data",
+  );
   for (const [index, part] of normalized.entries()) {
     const source = parts[index];
     if (part.type === "file" && source?.type === "file" && source.media_version) {
-      part.media_delivery = "tool";
       part.media_version = source.media_version;
     }
   }

@@ -5,7 +5,7 @@
  */
 
 import type { ModelStreamEvent } from "@downcity/type";
-import type { SessionAgentContent } from "@downcity/type";
+import type { SessionAgentContent, SessionAgentInboxPart, SessionInboxInput } from "@downcity/type";
 import type { SessionAgentMessagePart } from "@downcity/type";
 import type {
   SessionToolExecutionResult,
@@ -36,8 +36,13 @@ export interface SessionAssistantOutput {
   finish_step(parts: SessionAgentMessagePart[]): Promise<void>;
   /** 放弃当前未完成 Step 的临时作用域。 */
   abort_step(): Promise<void>;
-  /** 可见 User steer 持久化后关闭当前连续 Assistant Message；隐藏输入不切分。 */
+  /** 真人 User steer 持久化后关闭当前连续 Assistant Message。 */
   close_current_message(): Promise<void>;
+  /**
+   * 幂等追加运行时输入，惰性建立当前 writer，保持连续 Assistant Message。
+   * assert_receivable 必须在 Writer 串行写入点检查；已暂存的工具事实省略它，以便 stop 后保存。
+   */
+  append_inbox(input: SessionInboxInput, assert_receivable?: () => void): Promise<SessionAgentInboxPart>;
   /** 把 Action 产生的封闭内容追加到当前 Assistant Message。 */
   append_result_parts(parts: readonly SessionAgentContent[], source_tool_call_id?: string): Promise<SessionAgentMessagePart[]>;
   /** 在 Turn 收口产物之前追加用户可见的 canonical Error Part。 */

@@ -2,6 +2,7 @@
 import fs from "node:fs";
 import { pathToFileURL } from "node:url";
 import { DatabaseSync } from "node:sqlite";
+import { assert_session_storage_schema } from "./SessionStorageSchema.js";
 
 /** 只读打开现有数据库；immutable 只允许在调用方持有排他协调的共享读取租约时使用。 */
 export function open_session_read_database(database_path: string, immutable = false): DatabaseSync {
@@ -15,5 +16,12 @@ export function open_session_read_database(database_path: string, immutable = fa
       }
     }
   }
-  return new DatabaseSync(immutable ? `${pathToFileURL(database_path).href}?immutable=1` : database_path, { readOnly: true });
+  const database = new DatabaseSync(immutable ? `${pathToFileURL(database_path).href}?immutable=1` : database_path, { readOnly: true });
+  try {
+    assert_session_storage_schema(database);
+    return database;
+  } catch (error) {
+    database.close();
+    throw error;
+  }
 }

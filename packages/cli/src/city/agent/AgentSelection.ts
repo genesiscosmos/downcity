@@ -181,8 +181,8 @@ export async function resolve_cli_workspace(
 ): Promise<WorkspaceRegistryRecord> {
   const explicit = String(workspace_input || "").trim();
   const result = await new ResourceClient().call("workspace.list");
-  const workspaces: WorkspaceRegistryRecord[] = (result.data as WorkspaceListData).items.filter((item) => item.registered && item.workspace_path).map((item) => ({ workspace_id: item.workspace_id, workspace_path: item.workspace_path!, name: item.name, created_at: item.created_at ?? "", updated_at: item.updated_at ?? "" }));
-  const current_workspace = workspaces.find((item) => item.workspace_path === path.resolve(explicit || process.cwd()));
+  const workspaces: WorkspaceRegistryRecord[] = (result.data as WorkspaceListData).items.filter((item) => item.registered && item.workspace_path).map((item) => ({ ...(item.source.kind === "ssh" ? { source: item.source as NonNullable<WorkspaceRegistryRecord["source"]> } : {}), workspace_id: item.workspace_id, workspace_path: item.workspace_path!, name: item.name, created_at: item.created_at ?? "", updated_at: item.updated_at ?? "" }));
+  const current_workspace = workspaces.find((item) => !item.source && item.workspace_path === path.resolve(explicit || process.cwd()));
   const resolved = explicit ? workspaces.find((item) => item.workspace_id === explicit) ?? current_workspace : current_workspace;
   if (resolved) return resolved;
   if (!explicit && process.stdin.isTTY && process.stdout.isTTY && workspaces.length > 1) {

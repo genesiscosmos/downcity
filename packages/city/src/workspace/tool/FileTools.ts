@@ -7,7 +7,7 @@
  */
 
 import path from "node:path";
-import { max_explicit_media_bytes, max_request_media_bytes } from "@downcity/type/workspace";
+import { max_explicit_media_bytes, max_request_media_bytes, estimate_image_tokens } from "@downcity/type/workspace";
 import { define_agent_tool, type ToolEffect } from "@downcity/type";
 import type { WorkspaceToolActionResult } from "@downcity/type/workspace";
 import { create_workspace_file_mutation_effect } from "@downcity/type/workspace";
@@ -31,13 +31,14 @@ import {
 export function create_file_tools(runner: FileToolRunner): FileToolSet {
   const read = define_agent_tool<ReadFileToolInput, WorkspaceToolActionResult<ReadFileToolResult>>({
     description:
-      "Read a project file or an attachment owned by this Session. Uploaded attachments are references only: call read when content is needed. Images and PDFs up to 2 MiB are explicitly attached to the next model step. Text output is bounded to 64 KiB and 500 lines by default. Continue long lines with next_byte_offset as byte_offset and expected_version; omit offset and limit in byte mode. Other binary files return metadata only and may require conversion tools.",
+      "Read a project file or an attachment owned by this Session. Attachments always include a path reference. Small static PNG/JPEG/WebP images may already be included; call read when content_delivery is reference_only or other content is needed. Images and PDFs up to 2 MiB are explicitly attached to the next model step. For images, PDFs, and the default first text read, pass only file_path. Optional text range must choose one mode: {type:'lines',offset:0,limit:100} or {type:'bytes',offset:<next_byte_offset>,expected_version:<file_version>}. Do not invent versions. Text output is bounded to 64 KiB and 500 lines by default. Other binary files return metadata only and may require conversion tools.",
     input_schema: read_file_tool_input_schema,
     execute: async (
       input: ReadFileToolInput,
       context,
     ): Promise<WorkspaceToolActionResult<ReadFileToolResult>> => {
       context.abort_signal?.throwIfAborted();
+      input = read_file_tool_input_schema.parse(input);
       const output = await context.read_attachment?.(input) ?? await runner.run_file_action({
         action: "read",
         input,
@@ -53,11 +54,17 @@ export function create_file_tools(runner: FileToolRunner): FileToolSet {
             message: `Media is ${output.total_bytes} bytes; explicit read limit is ${max_explicit_media_bytes} bytes. Extract or convert a smaller file before reading. Content was not delivered.` }, messages };
         }
         const existing_media_bytes = (context.messages ?? []).reduce((sum, message) => sum + message.content.reduce((bytes, part) => {
-          if (part.type !== "file") return bytes;
-          return bytes + (part.source.type === "base64" ? Buffer.byteLength(part.source.data, "base64") : 0);
+          // 原生工具媒体与顶层媒体共享总量；普通 JSON 内的 file 字段不是媒体协议。
+          for (const item of part.type === "tool_result" ? part.content : [part]) {
+            if (item.type === "file" && item.source.type === "base64") bytes += Buffer.byteLength(item.source.data, "base64");
+          }
+          return bytes;
         }, 0), 0);
+        const estimated_tokens = output.type === "image"
+          ? estimate_image_tokens(output.image_width && output.image_height ? { width: output.image_width, height: output.image_height } : undefined)
+          : Math.ceil(output.total_bytes / 3) * 4;
         if (existing_media_bytes + output.total_bytes > max_request_media_bytes
-          || (context.reserve_media && !context.reserve_media(output.total_bytes, existing_media_bytes))) {
+          || (context.reserve_media && !context.reserve_media(output.total_bytes, existing_media_bytes, estimated_tokens))) {
           return { output: { success: false, error_code: "media_too_large", file_path: output.file_path,
             message: "Explicit media exceeds the request media limit (4 MiB) or remaining model input budget. Content was not delivered; extract a smaller derivative." }, messages };
         }

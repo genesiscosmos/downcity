@@ -493,11 +493,12 @@ export async function writeTaskRunArtifacts(
       : {}),
   };
   await params.storage.files.write_file_atomically(
-    params.filePaths.metaJsonPath,
-    `${JSON.stringify(meta, null, 2)}\n`,
-  );
-  await params.storage.files.write_file_atomically(
     params.filePaths.resultMdPath,
     buildResultLines(params).join("\n"),
+  );
+  // 最后提交完成元数据；恢复与通知只能引用已完整保存的最终执行结果。
+  await params.storage.files.write_file_atomically(
+    params.filePaths.metaJsonPath,
+    `${JSON.stringify(meta, null, 2)}\n`,
   );
 }
