@@ -1,5 +1,5 @@
 /**
- * Power Sidebar、Mainview、Config 与 Agent Profile 页签的 React 契约。
+ * Power Sidebar、Mainview、Config、Agent Profile 与独立视图的 React 契约。
  *
  * Renderer 作为受信任本地 ESM 模块在宿主 React 树中运行。宿主负责注入统一 UI
  * Components 与按界面隔离的 action gateway，Power 不读取宿主内部状态。
@@ -31,7 +31,20 @@ export function get_power_renderer_definition_error(value: unknown): string | un
     if (typeof agent_config.label !== "string" || !agent_config.label.trim()) return "agent_config.label must be a non-empty string";
     if (typeof agent_config.component !== "function") return "agent_config.component must be a component";
   }
-  if (!definition.sidebar && !definition.config && !definition.message && !agent_config) return "at least one UI capability is required";
+  const views = definition.views;
+  if (views !== undefined) {
+    if (!Array.isArray(views)) return "views must be an array";
+    const view_ids = new Set<string>();
+    for (const view of views) {
+      if (!view || typeof view !== "object" || Array.isArray(view)) return "views entries must be objects";
+      if (typeof view.id !== "string" || !view.id.trim()) return "views.id must be a non-empty string";
+      if (view_ids.has(view.id)) return `views.id must be unique: ${view.id}`;
+      view_ids.add(view.id);
+      if (view.label !== undefined && typeof view.label !== "string") return "views.label must be a string";
+      if (typeof view.component !== "function") return "views.component must be a component";
+    }
+  }
+  if (!definition.sidebar && !definition.config && !definition.message && !agent_config && !views?.length) return "at least one UI capability is required";
   return undefined;
 }
 
@@ -50,6 +63,10 @@ export type {
   PowerConfigGateway,
   PowerMainviewComponent,
   PowerMainviewComponentProps,
+  PowerOpenViewInput,
+  PowerViewComponent,
+  PowerViewComponentProps,
+  PowerViewDefinition,
   PowerRendererButtonProps,
   PowerRendererCalloutProps,
   PowerRendererCodeBlockProps,

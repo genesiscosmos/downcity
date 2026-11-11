@@ -1,5 +1,5 @@
 /**
- * Power Sidebar、Mainview、Config、Agent Profile、Message 与宿主 UI 注入协议。
+ * Power Sidebar、Mainview、Config、Agent Profile、独立视图、Message 与宿主 UI 注入协议。
  *
  * Agent Profile 通过可选 agent_config 声明单个页签。宿主按已启用 Power 收集，
  * 为页签 ID 添加 Power 命名空间，并注入当前 Agent、业务网关与统一 UI。
@@ -630,13 +630,28 @@ export interface PowerRendererUiComponents {
   readonly Link: (props: PowerRendererLinkProps) => ReactNode;
 }
 
-/** 宿主注入的 Mainview 交互能力。 */
+/** 打开所属 Power 的独立视图；宿主绑定 Power 身份并管理 tab 生命周期。 */
+export interface PowerOpenViewInput {
+  /** 所属 Power 的 views 中已注册的非空视图标识。 */
+  readonly view_id: string;
+  /** 资源稳定标识，须包含 Agent、范围等身份信息，供宿主识别同一资源 tab。 */
+  readonly resource_key: string;
+  /** 宿主 tab 展示的用户可见标题。 */
+  readonly title: string;
+  /** 传给独立视图的 JSON 输入，包含业务资源身份与读取参数。 */
+  readonly input: PowerJsonObject;
+}
+
+/** 宿主注入的 Power 界面交互能力。 */
 export interface PowerRendererUi {
   /** 当前 Power 功能界面的宿主刷新版本。 */
   readonly revision: number;
 
   /** 通知同一 Power 的 Sidebar 与 Mainview 重新读取业务快照。 */
   invalidate(): void;
+
+  /** 在宿主管理的独立 tab 中打开所属 Power 的视图，不改变工作区或配置路由。 */
+  open_view(input: PowerOpenViewInput): void;
 
   /** 显示非阻塞反馈。 */
   toast(input: PowerRendererToastInput): void;
@@ -720,6 +735,29 @@ export interface PowerAgentConfigDefinition {
   readonly component: PowerAgentConfigComponent;
 }
 
+/** 独立视图属性；资源由业务输入指定，Power 身份与 tab 生命周期由宿主持有。 */
+export interface PowerViewComponentProps {
+  /** 打开视图时的 JSON 输入，包含读取目标资源所需的业务参数。 */
+  readonly input: PowerJsonObject;
+  /** 已绑定所属 Power 的业务 action 网关。 */
+  readonly power: PowerActionGateway;
+  /** 宿主提供的反馈能力、刷新版本与统一 UI 组件。 */
+  readonly ui: PowerRendererUi;
+}
+
+/** 由宿主在独立 tab 中渲染的 Power 业务视图。 */
+export type PowerViewComponent = (props: PowerViewComponentProps) => ReactNode;
+
+/** Power 独立视图声明，只属于 Renderer，不构成 power.json 的独立能力。 */
+export interface PowerViewDefinition {
+  /** 所属 Power 内唯一且非空的视图标识，例如 skill_detail。 */
+  readonly id: string;
+  /** 可选的用户可见视图名称；具体资源 tab 标题由 open_view 提供。 */
+  readonly label?: string;
+  /** 宿主打开此视图时挂载的 React 组件。 */
+  readonly component: PowerViewComponent;
+}
+
 /** Power 自己拥有的 Config 组件。 */
 export type PowerConfigComponent = (
   props: PowerConfigComponentProps,
@@ -794,6 +832,9 @@ export interface PowerRendererDefinition {
 
   /** 已启用 Power 自动贡献到 Agent Profile 的页签，无需 power.json 能力标记。 */
   readonly agent_config?: PowerAgentConfigDefinition;
+
+  /** 可由 ui.open_view 打开的独立业务视图，无需 power.json 能力标记。 */
+  readonly views?: readonly PowerViewDefinition[];
 
   /** 回复正文中的结构化内容；允许只注册此插槽。 */
   readonly message?: PowerMessageComponent;

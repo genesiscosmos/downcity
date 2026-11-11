@@ -3,6 +3,7 @@ import { createElement, useState } from "react";
 import { define_power_renderer } from "@downcity/city/power/react";
 import type { PowerAgentConfigComponentProps, PowerMainviewComponentProps } from "@downcity/city/power/react";
 import { memory_config_view as MemoryConfigView, provider_state_label, use_memory_config } from "./MemoryConfigView.js";
+import { memory_detail_view } from "./MemoryDetailView.js";
 import { MemoryJobs } from "./MemoryJobs.js";
 import { memory_knowledge_view as MemoryKnowledgeView } from "./MemoryKnowledgeView.js";
 
@@ -44,5 +45,6 @@ export const MEMORY_POWER_RENDERER = define_power_renderer({
     const view = read_view(props.navigation.route);
     return view === "config" ? <MemoryConfigView {...props} /> : <MemoryJobs {...props} />;
   },
+  views: [{ id: "memory_detail", label: "记忆", component: memory_detail_view }],
   agent_config: { id: "knowledge", label: "记忆", component: (props) => createElement(memory_agent_knowledge, { ...props, key: props.agent_id }) },
 });
