@@ -71,6 +71,27 @@ export class AgentRepository {
       .sort((left, right) => left.agent_id.localeCompare(right.agent_id));
   }
 
+  /** 列出身份与执行配置摘要，不读取 SOUL.md；完整定义仍由 list/get 提供。 */
+  async list_summaries(): Promise<Omit<LocalAgentConfig, "instruction">[]> {
+    const root_path = get_local_agents_path(this.root_path);
+    const entries = await fs.readdir(root_path, { withFileTypes: true }).catch((error: NodeJS.ErrnoException) => {
+      if (error.code === "ENOENT") return [];
+      throw error;
+    });
+    const summaries = await Promise.all(entries.filter((entry) => entry.isDirectory()).map(async (entry) => {
+      const agent_id = normalize_agent_id(entry.name);
+      const file_path = this.definition_path(agent_id);
+      if (await fs.pathExists(`${file_path}.commit`)) throw new Error(`Agent configuration recovery required: ${agent_id}`);
+      const definition = await fs.readJson(file_path).catch((error: NodeJS.ErrnoException) => {
+        if (error.code === "ENOENT") return null;
+        throw error;
+      }) as AgentDefinitionFile | null;
+      return definition ? this.to_summary(agent_id, definition) : null;
+    }));
+    return summaries.filter((item): item is Omit<LocalAgentConfig, "instruction"> => item !== null)
+      .sort((left, right) => left.agent_id.localeCompare(right.agent_id));
+  }
+
   /** 创建一个不绑定 Workspace 的 Agent。 */
   create(input: {
     /** Agent 稳定 ID。 */
@@ -124,13 +145,24 @@ export class AgentRepository {
     return this.get(agent_id)!;
   }
 
-  /** 按稳定 ID 读取 Agent 定义。 */
+  /** 按稳定 ID 读取完整定义，供运行时与 CLI 使用。 */
   get(agent_id_input: string): LocalAgentConfig | null {
+    const summary = this.get_summary(agent_id_input);
+    return summary ? { ...summary, instruction: this.read_soul(summary.agent_id) } : null;
+  }
+
+  /** 从唯一的 agent.json 读取摘要，沿用完整定义的提交恢复与身份校验。 */
+  get_summary(agent_id_input: string): Omit<LocalAgentConfig, "instruction"> | null {
     const agent_id = normalize_agent_id(agent_id_input);
     const file_path = this.definition_path(agent_id);
     if (fs.pathExistsSync(`${file_path}.commit`)) throw new Error(`Agent configuration recovery required: ${agent_id}`);
     if (!fs.pathExistsSync(file_path)) return null;
     const definition = this.read_json<AgentDefinitionFile>(file_path);
+    return this.to_summary(agent_id, definition);
+  }
+
+  /** 同步完整读取与异步摘要读取共享身份校验和字段归一化。 */
+  private to_summary(agent_id: string, definition: AgentDefinitionFile): Omit<LocalAgentConfig, "instruction"> {
     if (
       definition.schema_version !== 2
       || definition.id !== agent_id
@@ -146,13 +178,36 @@ export class AgentRepository {
         ? { execution: structuredClone(definition.execution) }
         : {}),
       ...(is_json_object(definition.llm) ? { llm: structuredClone(definition.llm) } : {}),
-      instruction: this.read_soul(agent_id),
       created_at: String(definition.created_at || ""),
       updated_at: String(definition.updated_at || ""),
     };
   }
 
-  /** 读取 Agent 头像并转换为 Renderer 可安全消费的 data URL。 */
+  /** 只异步读取头像元数据，供宿主生成受控文件 URL；不加载或编码图片正文。 */
+  async get_avatar_file(agent_id_input: string): Promise<{
+    /** 头像文件的绝对路径；宿主仍须通过自身文件协议校验读取权限。 */
+    file_path: string;
+    /** 文件身份、大小和修改时间共同组成的版本；替换、编辑后使 URL 失效。 */
+    version: string;
+  } | undefined> {
+    const agent_id = normalize_agent_id(agent_id_input);
+    for (const file_name of AVATAR_FILE_NAMES) {
+      const file_path = path.join(get_local_agent_path(this.root_path, agent_id), file_name);
+      const stats = await fs.stat(file_path).catch((error: NodeJS.ErrnoException) => {
+        if (error.code === "ENOENT") return undefined;
+        throw error;
+      });
+      if (!stats) continue;
+      if (!stats.isFile() || stats.size > MAX_AVATAR_BYTES) return undefined;
+      return {
+        file_path,
+        version: `${stats.dev}-${stats.ino}-${stats.size}-${stats.mtimeMs}-${stats.ctimeMs}`,
+      };
+    }
+    return undefined;
+  }
+
+  /** 按需读取完整头像 data URL，供需要内联图片的本地调用者使用。 */
   get_avatar_url(agent_id_input: string): string | undefined {
     const agent_id = normalize_agent_id(agent_id_input);
     for (const file_name of AVATAR_FILE_NAMES) {

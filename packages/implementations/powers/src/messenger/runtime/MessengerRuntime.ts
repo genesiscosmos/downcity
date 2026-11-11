@@ -4,6 +4,7 @@ import path from "node:path";
 import { SESSION_ORIGIN_CATEGORY_CHAT, SESSION_ORIGIN_TYPE_CHANNEL, type SessionTurnCommittedHookValue } from "@downcity/type";
 import { commit_messenger_completion } from "./MessengerCompletion.js";
 import { MessengerTyping } from "./MessengerTyping.js";
+import { MessengerAccounts } from "./MessengerAccounts.js";
 import type { SessionExecutionStateHookValue } from "@downcity/type";
 import fs from "fs-extra";
 import { createHash } from "node:crypto";
@@ -36,39 +37,8 @@ const MAX_ATTEMPTS = 5;
 const MAX_CONCURRENT_CONVERSATIONS = 4;
 /** 连接健康检查周期。 */
 const CONNECTION_HEALTH_INTERVAL_MS = 15_000;
-/** 自愈重连的基础退避与上限。 */
-const RECONNECT_BASE_DELAY_MS = 5_000;
-const RECONNECT_MAX_DELAY_MS = 5 * 60_000;
 /** Account 未连接时 Requeue Outbox 的延后时间，不消耗重试次数。 */
 const OFFLINE_REQUEUE_DELAY_MS = 30_000;
-
-/**
- * 单个 Account 的 Connector、可观察状态与自愈重连状态。
- */
-interface MessengerAccountRuntime {
-  /** 当前 Account 配置快照。 */
-  account: MessengerAccountConfig;
-  /** 当前平台 Connector。 */
-  connector?: BaseMessengerChannel & MessengerConnector;
-  /** 当前连接状态。 */
-  state: MessengerAccountConnectionState;
-  /** 最近一次连接错误。 */
-  last_error?: string;
-  /** 已连续发起的自愈重连次数。 */
-  reconnect_attempts: number;
-  /** 下一次允许发起自愈重连的时间。 */
-  next_reconnect_at: number;
-  /** 当前是否正在执行重连，避免并发重复重连。 */
-  reconnecting: boolean;
-  /**
-   * 当前是否允许自愈重连。
-   *
-   * 说明（中文）
-   * - 凭据缺失、Workspace 不存在等配置问题必须由用户修正，重连不会成功。
-   * - 此类失败会关闭自动重连，避免无意义地反复重试。
-   */
-  reconnect_allowed: boolean;
-}
 
 /** Messenger Runtime 对 Desktop 暴露的 Account 状态。 */
 export interface MessengerRuntimeAccountState {
@@ -85,8 +55,14 @@ export class MessengerRuntime {
   /** 实际执行期间的临时 typing 租约；不持久化到 Outbox。 */
   private readonly typing: MessengerTyping;
 
-  /** Account ID 到 Connector Runtime 的唯一映射。 */
-  private readonly accounts = new Map<string, MessengerAccountRuntime>();
+  /** 账号连接队列与后台连接任务归本 Runtime 所有。 */
+  private readonly account_lifecycle: MessengerAccounts;
+  /** 可靠 Worker 始终读取账号管理器持有的当前连接实例。 */
+  private get accounts() { return this.account_lifecycle.accounts; }
+  /** 卸载前必须收口的 Inbox/Outbox Worker 调度任务。 */
+  private readonly worker_tasks = new Set<Promise<unknown>>();
+  /** 并发卸载调用共享同一个收尾过程。 */
+  private dispose_promise?: Promise<void>;
   /** 当前仍在执行的 Agent Turn。 */
   private readonly active_turns = new Set<PowerHostSessionTurn>();
   /** 当前由 Inbox 调度器持有的异步任务。 */
@@ -99,8 +75,6 @@ export class MessengerRuntime {
   private outbox_timer?: ReturnType<typeof setInterval>;
   /** 连接健康检查 Timer。 */
   private health_timer?: ReturnType<typeof setInterval>;
-  /** 连接健康检查当前是否正在执行。 */
-  private health_running = false;
   /** Inbox Worker 当前是否正在调度。 */
   private inbox_running = false;
   /** Outbox Worker 当前是否正在调度。 */
@@ -120,6 +94,12 @@ export class MessengerRuntime {
         action: "typing",
       });
     }, () => { this.context.logger.warn("Telegram typing heartbeat failed; reply execution continues"); });
+    this.account_lifecycle = new MessengerAccounts({
+      logger: context.logger,
+      store: this.store,
+      create_connector: (account) => this.create_connector(account),
+      stop_typing: (account_id) => this.typing.stop_account(account_id),
+    });
   }
 
   /** 统一响应直接入站和后台续轮的实际执行状态，空档立即释放租约。 */
@@ -139,8 +119,9 @@ export class MessengerRuntime {
     }, abort_signal);
   }
 
-  /** 恢复可靠任务并启动全部 enabled Account。 */
+  /** 恢复本地可靠状态与路由后返回；账号连接在受管理的后台任务中并行执行。 */
   async initialize(configured_accounts: MessengerAccountConfig[]): Promise<void> {
+    const started_at = performance.now();
     this.store.recover_expired_leases();
     // 关键点（中文）：旧 Work 历史仍归原 Agent 所有，外部聊天从新 Channel Session 继续。
     // 每条路由独立提交，启动中断后仅重试尚未完成的升级。
@@ -161,10 +142,10 @@ export class MessengerRuntime {
       });
       this.store.complete_channel_session_upgrade(conversation.conversation_id, session.session_id);
     }
-    for (const account of configured_accounts) {
-      await this.start_account(account);
-    }
+    if (this.disposed) return;
+    this.account_lifecycle.initialize(configured_accounts);
     this.start_workers();
+    this.context.logger.info("Messenger local runtime ready", { elapsed_ms: Math.round(performance.now() - started_at), account_count: configured_accounts.length });
   }
 
   /** 所有 Channel 轮次共用的回复出口，包括委派结果触发的后续执行。 */
@@ -176,18 +157,12 @@ export class MessengerRuntime {
 
   /** 返回指定 Account 当前运行状态。 */
   get_account_state(account_id: string): MessengerRuntimeAccountState | undefined {
-    const runtime = this.accounts.get(String(account_id || "").trim());
-    if (!runtime) return undefined;
-    return {
-      state: this.resolve_runtime_state(runtime),
-      ...(runtime.last_error ? { last_error: runtime.last_error } : {}),
-    };
+    return this.account_lifecycle.get_account_state(String(account_id || ""));
   }
 
   /** 使用最新配置重启一个 Account，并重置自愈重连计数。 */
   async restart_account(account: MessengerAccountConfig): Promise<void> {
-    await this.stop_account(account.account_id);
-    await this.start_account(account);
+    await this.account_lifecycle.restart_account(account);
   }
 
   /**
@@ -197,12 +172,7 @@ export class MessengerRuntime {
    * - 供网络代理等运行环境发生变化的场景使用，立即使用新配置重建连接。
    */
   async restart_enabled_accounts(): Promise<void> {
-    const accounts = [...this.accounts.values()]
-      .map((runtime) => runtime.account)
-      .filter((account) => account.enabled);
-    for (const account of accounts) {
-      await this.restart_account(account);
-    }
+    await this.account_lifecycle.restart_enabled_accounts();
   }
 
   /** 测试一个已创建 Account 的平台连通性。 */
@@ -238,6 +208,7 @@ export class MessengerRuntime {
     /** 可选最早发送时间。 */
     available_at?: number;
   }): MessengerDeliveryAcceptance {
+    if (this.disposed) throw new Error("Messenger is shutting down");
     const conversation = this.store.get_conversation_by_session(input.session_id);
     if (!conversation || conversation.agent_id !== input.agent_id) {
       throw new Error("Messenger conversation is not owned by the current Agent");
@@ -276,6 +247,7 @@ export class MessengerRuntime {
     /** 是否使用平台的大号 Reaction 展示。 */
     is_big?: boolean;
   }): MessengerDeliveryAcceptance {
+    if (this.disposed) throw new Error("Messenger is shutting down");
     const conversation = this.store.get_conversation_by_session(input.session_id);
     if (!conversation || conversation.agent_id !== input.agent_id) {
       throw new Error("Messenger conversation is not owned by the current Agent");
@@ -303,19 +275,18 @@ export class MessengerRuntime {
 
   /** 停止一个 Account，不影响其他 Bot。 */
   async stop_account(account_id_input: string): Promise<void> {
-    const account_id = String(account_id_input || "").trim();
-    if (!account_id) return;
-    const runtime = this.accounts.get(account_id);
-    if (!runtime) return;
-    this.typing.stop_account(account_id);
-    this.accounts.delete(account_id);
-    if (runtime.connector) await runtime.connector.stop();
-    this.store.append_activity({ account_id, type: "account_stopped" });
+    if (this.disposed) { await this.dispose_promise; return; }
+    await this.account_lifecycle.stop_account(String(account_id_input || ""));
   }
 
   /** 关闭可靠 Worker、在途 Turn、Connector 与 Store。 */
-  async dispose(): Promise<void> {
-    if (this.disposed) return;
+  dispose(): Promise<void> {
+    this.dispose_promise ??= this.run_dispose();
+    return this.dispose_promise;
+  }
+
+  /** 先禁止新增工作并停止连接，再等待所有回调和投递落盘后关闭 Store。 */
+  private async run_dispose(): Promise<void> {
     this.disposed = true;
     this.typing.dispose();
     if (this.inbox_timer) clearInterval(this.inbox_timer);
@@ -325,102 +296,16 @@ export class MessengerRuntime {
     this.outbox_timer = undefined;
     this.health_timer = undefined;
 
+    const account_shutdown = Promise.allSettled([this.account_lifecycle.dispose()]);
     const turns = [...this.active_turns];
     await Promise.allSettled(turns.map(async (turn) => await turn.stop()));
     await Promise.allSettled(turns.map(async (turn) => await turn.finished));
     await Promise.allSettled([...this.active_inbox_tasks]);
-    await Promise.allSettled(
-      [...this.accounts.keys()].map(async (account_id) => await this.stop_account(account_id)),
-    );
+    await Promise.allSettled([...this.worker_tasks]);
+    const results = await account_shutdown;
     this.store.close();
-  }
-
-  /** 创建并启动一个 Account Connector。 */
-  private async start_account(account: MessengerAccountConfig): Promise<void> {
-    const runtime: MessengerAccountRuntime = {
-      account,
-      state: account.enabled ? "connecting" : "disabled",
-      reconnect_attempts: 0,
-      next_reconnect_at: 0,
-      reconnecting: false,
-      reconnect_allowed: true,
-    };
-    this.accounts.set(account.account_id, runtime);
-    if (!account.enabled) return;
-
-    let connector: (BaseMessengerChannel & MessengerConnector) | null;
-    try {
-      connector = await this.create_connector(account);
-    } catch (error) {
-      // 关键点（中文）：凭据或 Workspace 等配置错误无法通过重连恢复，直接等待用户修正。
-      runtime.state = "error";
-      runtime.last_error = normalize_error(error);
-      runtime.reconnect_allowed = false;
-      this.record_account_failure(runtime, runtime.last_error);
-      return;
-    }
-    if (!connector) {
-      runtime.state = "error";
-      runtime.last_error = "Messenger Account credentials are incomplete";
-      runtime.reconnect_allowed = false;
-      this.record_account_failure(runtime, runtime.last_error);
-      return;
-    }
-
-    try {
-      runtime.connector = connector;
-      await connector.start();
-      this.sync_runtime_status(runtime);
-      this.store.append_activity({ account_id: account.account_id, type: "account_started" });
-    } catch (error) {
-      runtime.state = "error";
-      runtime.last_error = normalize_error(error);
-      this.record_account_failure(runtime, runtime.last_error);
-    }
-  }
-
-  /** 记录一次 Account 级失败，并保留可展示原因。 */
-  private record_account_failure(runtime: MessengerAccountRuntime, error: string): void {
-    this.store.append_activity({
-      account_id: runtime.account.account_id,
-      type: "account_error",
-      detail: { error },
-    });
-    this.context.logger.error("Messenger Account startup failed", {
-      account_id: runtime.account.account_id,
-      provider: runtime.account.provider,
-      error,
-    });
-  }
-
-  /**
-   * 把 Connector 权威状态同步到 Account Runtime。
-   *
-   * 关键点（中文）
-   * - 连接状态只以 Connector 的 `linkState` 为准，不再根据进程内标志推测。
-   * - 失败原因必须写入 `last_error`，使 Desktop 能直接展示可操作信息。
-   */
-  private sync_runtime_status(runtime: MessengerAccountRuntime): void {
-    if (!runtime.account.enabled) {
-      runtime.state = "disabled";
-      runtime.last_error = undefined;
-      return;
-    }
-    const status = runtime.connector?.getExecutorStatus();
-    if (!status) {
-      runtime.state = "disconnected";
-      return;
-    }
-    runtime.state = status.linkState;
-    runtime.last_error = status.linkState === "error"
-      ? status.link_error || "Messenger Account connection failed"
-      : undefined;
-  }
-
-  /** 解析一个 Account 对外暴露的连接状态。 */
-  private resolve_runtime_state(runtime: MessengerAccountRuntime): MessengerAccountConnectionState {
-    this.sync_runtime_status(runtime);
-    return runtime.state;
+    const errors = results.flatMap((result) => result.status === "rejected" ? [result.reason] : []);
+    if (errors.length) throw new AggregateError(errors, "Messenger shutdown failed");
   }
 
   /** 根据 Account Provider 创建平台 Connector。 */
@@ -480,8 +365,9 @@ export class MessengerRuntime {
         chat_type: String(input.chatType || "").trim() || undefined,
         chat_title: String(input.chatTitle || "").trim() || undefined,
       }),
-      receive_message: async (input) => await this.receive_message(account, input),
+      receive_message: async (input) => await this.track_task(this.receive_message(account, input)),
       record_audit: async (input) => {
+        if (this.disposed) return;
         this.store.append_activity({
           account_id: account.account_id,
           type: "inbound_audit",
@@ -492,30 +378,33 @@ export class MessengerRuntime {
         });
       },
       clear_conversation: async (input) => {
-        const current = this.store.find_conversation({
-          account_id: account.account_id,
-          external_chat_id: input.chat_id,
-          chat_type: input.chat_type || "unknown",
-          thread_id: input.thread_id,
-        });
-        if (!current) return;
-        const session = await this.context.system.create_agent_session({
-          agent_id: current.agent_id,
-          origin: {
-            category: SESSION_ORIGIN_CATEGORY_CHAT,
-            type: SESSION_ORIGIN_TYPE_CHANNEL,
+        if (this.disposed) return;
+        await this.track_task((async () => {
+          const current = this.store.find_conversation({
             account_id: account.account_id,
-            channel: account.provider,
-            chat_id: current.external_chat_id,
-            chat_type: current.chat_type,
-            ...(current.thread_id ? { thread_id: current.thread_id } : {}),
-            ...(current.title ? { chat_title: current.title } : {}),
-          },
-        });
-        this.store.update_conversation({
-          conversation_id: current.conversation_id,
-          session_id: session.session_id,
-        });
+            external_chat_id: input.chat_id,
+            chat_type: input.chat_type || "unknown",
+            thread_id: input.thread_id,
+          });
+          if (!current) return;
+          const session = await this.context.system.create_agent_session({
+            agent_id: current.agent_id,
+            origin: {
+              category: SESSION_ORIGIN_CATEGORY_CHAT,
+              type: SESSION_ORIGIN_TYPE_CHANNEL,
+              account_id: account.account_id,
+              channel: account.provider,
+              chat_id: current.external_chat_id,
+              chat_type: current.chat_type,
+              ...(current.thread_id ? { thread_id: current.thread_id } : {}),
+              ...(current.title ? { chat_title: current.title } : {}),
+            },
+          });
+          this.store.update_conversation({
+            conversation_id: current.conversation_id,
+            session_id: session.session_id,
+          });
+        })());
       },
     };
   }
@@ -674,7 +563,9 @@ export class MessengerRuntime {
     this.inbox_timer = setInterval(() => void this.kick_inbox(), WORKER_INTERVAL_MS);
     this.outbox_timer = setInterval(() => void this.kick_outbox(), WORKER_INTERVAL_MS);
     this.health_timer = setInterval(
-      () => void this.kick_connection_health(),
+      () => void this.account_lifecycle.check_health().catch((error) => {
+        this.context.logger.warn("Messenger connection health check failed", { error: String(error) });
+      }),
       CONNECTION_HEALTH_INTERVAL_MS,
     );
     this.inbox_timer.unref?.();
@@ -684,83 +575,22 @@ export class MessengerRuntime {
     void this.kick_outbox();
   }
 
-  /**
-   * 检查全部 enabled Account 的连接健康度，并为失败的连接安排自愈重连。
-   *
-   * 关键点（中文）
-   * - 只有 Connector 已停止（`running === false`）才重建，避免对能自恢复的链路频繁重连。
-   * - 重连采用有上限的指数退避，成功后重置计数，避免失败时持续消耗资源。
-   */
-  private async kick_connection_health(): Promise<void> {
-    if (this.disposed || this.health_running) return;
-    this.health_running = true;
-    try {
-      for (const runtime of [...this.accounts.values()]) {
-        if (this.disposed) return;
-        if (!runtime.account.enabled) continue;
-        this.sync_runtime_status(runtime);
-        if (runtime.state === "connected") {
-          if (runtime.reconnect_attempts > 0) {
-            runtime.reconnect_attempts = 0;
-            this.store.append_activity({
-              account_id: runtime.account.account_id,
-              type: "account_recovered",
-            });
-          }
-          continue;
-        }
-        const status = runtime.connector?.getExecutorStatus();
-        // 说明（中文）：Connector 仍在运行（例如轮询自愈中）时不主动重建。
-        if (status?.running) continue;
-        if (!runtime.reconnect_allowed) continue;
-        if (runtime.reconnecting || Date.now() < runtime.next_reconnect_at) continue;
-        await this.reconnect_account(runtime);
-      }
-    } finally {
-      this.health_running = false;
-    }
+  /** 跟踪所有可能异步写 Store 的 Worker 与 Connector 回调，释放时统一等待。 */
+  private track_task<T>(task: Promise<T>): Promise<T> {
+    this.worker_tasks.add(task);
+    void task.then(() => this.worker_tasks.delete(task), () => this.worker_tasks.delete(task));
+    return task;
   }
 
-  /** 对一个已停止的 Account 执行一次带退避的自愈重连。 */
-  private async reconnect_account(runtime: MessengerAccountRuntime): Promise<void> {
-    const account = runtime.account;
-    runtime.reconnecting = true;
-    runtime.reconnect_attempts += 1;
-    const attempt = runtime.reconnect_attempts;
-    try {
-      this.store.append_activity({
-        account_id: account.account_id,
-        type: "account_reconnecting",
-        detail: { attempt, error: runtime.last_error ?? null },
-      });
-      if (runtime.connector) await runtime.connector.stop().catch(() => undefined);
-      runtime.connector = undefined;
-      const connector = await this.create_connector(account);
-      if (!connector) throw new Error("Messenger Account credentials are incomplete");
-      runtime.connector = connector;
-      await connector.start();
-      this.sync_runtime_status(runtime);
-    } catch (error) {
-      runtime.last_error = normalize_error(error);
-      this.store.append_activity({
-        account_id: account.account_id,
-        type: "account_error",
-        detail: { error: runtime.last_error, attempt },
-      });
-      this.context.logger.warn("Messenger Account reconnect failed", {
-        account_id: account.account_id,
-        provider: account.provider,
-        attempt,
-        error: runtime.last_error,
-      });
-    } finally {
-      runtime.reconnecting = false;
-      runtime.next_reconnect_at = Date.now() + reconnect_backoff_ms(attempt);
-    }
+  /** 周期调度失败保留可靠状态，后续周期继续尝试。 */
+  private kick_inbox(): Promise<void> {
+    return this.track_task(this.drain_inbox()).catch((error) => {
+      this.context.logger.error("Messenger Inbox worker failed", { error: String(error) });
+    });
   }
 
   /** 领取并执行下一条 Inbox。 */
-  private async kick_inbox(): Promise<void> {
+  private async drain_inbox(): Promise<void> {
     if (this.disposed || this.inbox_running) return;
     this.inbox_running = true;
     try {
@@ -770,7 +600,9 @@ export class MessengerRuntime {
       ) {
         const inbound = this.store.lease_next_inbound(INBOX_LEASE_MS);
         if (!inbound) return;
-        const task = this.process_inbound(inbound).finally(() => {
+        const task = this.process_inbound(inbound).catch((error) => {
+          this.context.logger.error("Messenger Inbox task failed", { error: String(error) });
+        }).finally(() => {
           this.active_inbox_tasks.delete(task);
           void this.kick_inbox();
         });
@@ -817,6 +649,11 @@ export class MessengerRuntime {
         ],
       });
       this.active_turns.add(turn);
+      if (this.disposed) {
+        await turn.stop();
+        await turn.finished.finally(() => { this.active_turns.delete(turn); });
+        throw new Error("Messenger is shutting down; inbound retained for retry");
+      }
       this.store.append_activity({
         account_id: conversation.account_id,
         conversation_id: conversation.conversation_id,
@@ -824,6 +661,7 @@ export class MessengerRuntime {
         detail: { turn_id: turn.turn_id },
       });
       const result = await turn.finished.finally(() => { this.active_turns.delete(turn); });
+      if (this.disposed) throw new Error("Messenger is shutting down; inbound retained for retry");
       // 最终回复统一由完成 Hook 入 Outbox。执行失败不重复提交同一幂等输入。
       if (!result.success) {
         this.store.fail_inbound(inbound.inbound_id, result.error || "Agent Turn failed");
@@ -851,8 +689,15 @@ export class MessengerRuntime {
     }
   }
 
+  /** 观察后台外发错误，同时为卸载持有在途投递任务。 */
+  private kick_outbox(): Promise<void> {
+    return this.track_task(this.drain_outbox()).catch((error) => {
+      this.context.logger.error("Messenger Outbox worker failed", { error: String(error) });
+    });
+  }
+
   /** 领取并发送下一条 Outbox。 */
-  private async kick_outbox(): Promise<void> {
+  private async drain_outbox(): Promise<void> {
     if (this.disposed || this.outbox_running) return;
     this.outbox_running = true;
     try {
@@ -865,10 +710,10 @@ export class MessengerRuntime {
           this.store.fail_outbound(delivery.delivery_id, "Messenger conversation is unavailable");
           continue;
         }
-        if (!runtime?.connector) {
-          // 关键点（中文）：Account 离线只是暂时不可投递，不应消耗有限重试次数。
+        if (!runtime?.connector || this.get_account_state(delivery.account_id)?.state !== "connected") {
+          // 连接中与离线只推迟投递，不消耗有限重试次数；其他账号仍可继续外发。
           this.store.requeue_outbound(delivery.delivery_id, OFFLINE_REQUEUE_DELAY_MS);
-          return;
+          continue;
         }
         try {
           if (delivery.operation === "attachment") {
@@ -903,6 +748,11 @@ export class MessengerRuntime {
             type: "delivery_completed",
           });
         } catch (error) {
+          if (this.disposed || this.accounts.get(delivery.account_id) !== runtime
+            || this.get_account_state(delivery.account_id)?.state !== "connected") {
+            this.store.requeue_outbound(delivery.delivery_id, OFFLINE_REQUEUE_DELAY_MS);
+            continue;
+          }
           const retry_at = delivery.attempt_count < MAX_ATTEMPTS
             ? Date.now() + retry_delay_ms(delivery.attempt_count)
             : undefined;
@@ -966,12 +816,6 @@ function fallback_message_id(
 /** 根据失败次数计算有上限的指数退避。 */
 function retry_delay_ms(attempt_count: number): number {
   return Math.min(5 * 60_000, 1_000 * 2 ** Math.max(0, attempt_count - 1));
-}
-
-/** 根据自愈重连次数计算有上限的指数退避。 */
-function reconnect_backoff_ms(attempt_count: number): number {
-  const exponent = Math.max(0, Math.trunc(attempt_count) - 1);
-  return Math.min(RECONNECT_MAX_DELAY_MS, RECONNECT_BASE_DELAY_MS * 2 ** exponent);
 }
 
 /** 把未知错误规范化为日志与持久化文本。 */

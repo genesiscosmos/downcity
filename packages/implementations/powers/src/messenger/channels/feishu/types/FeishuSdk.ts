@@ -112,7 +112,12 @@ export interface FeishuSdkWsClient {
   /**
    * 启动长连接。
    */
-  start(input: { eventDispatcher: unknown }): void;
+  start(input: { eventDispatcher: unknown }): Promise<void>;
+  /** 关闭底层 Socket，并停止 SDK 自动重连与心跳。 */
+  close(input: {
+    /** 生命周期卸载直接终止连接，避免继续接收业务事件。 */
+    force: boolean;
+  }): void;
 }
 
 /**

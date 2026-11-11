@@ -219,6 +219,7 @@ export class FeishuPlatformClient {
       // 关键点（中文）：启动失败必须落到 runtime 状态，否则 UI 会一直停在“连接中”。
       this.lastStartupError = error instanceof Error ? error.message : String(error);
       this.isRunning = false;
+      this.wsClient?.close({ force: true });
       this.client = null;
       this.wsClient = null;
       throw error;
@@ -243,7 +244,11 @@ export class FeishuPlatformClient {
       },
     });
 
-    this.wsClient.start({ eventDispatcher });
+    await this.wsClient.start({ eventDispatcher });
+    if (!this.isRunning) {
+      this.wsClient?.close({ force: true });
+      return;
+    }
     this.logger.info("Feishu Bot started, using long connection mode");
 
     this.messageCleanupInterval = setInterval(() => {
@@ -264,7 +269,11 @@ export class FeishuPlatformClient {
       clearInterval(this.messageCleanupInterval);
       this.messageCleanupInterval = null;
     }
-    if (this.wsClient) {
+    const ws_client = this.wsClient;
+    this.wsClient = null;
+    this.client = null;
+    if (ws_client) {
+      ws_client.close({ force: true });
       this.logger.info("Feishu Bot stopped");
     }
   }
