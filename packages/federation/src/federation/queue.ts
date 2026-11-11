@@ -56,6 +56,8 @@ export class FederationQueueUnavailableError extends Error {
 interface FederationQueueDeps {
   /** 获取 Federation 是否已 ready。 */
   ensure_ready(): Promise<void>;
+  /** 通过 Federation 关闭门禁登记并等待完整执行，防止数据库早于后台 Action 关闭。 */
+  execute<TResult>(handler: () => Promise<TResult>): Promise<TResult>;
   /** 获取 Service 列表。 */
   get_services(): Service[];
   /** 获取表映射。 */
@@ -120,15 +122,17 @@ export class FederationQueue {
   /**
    * 消费一条 Queue 消息，并执行对应 Service Action。
    */
-  async call(message: CityQueueMessage): Promise<unknown> {
-    await this.deps.ensure_ready();
-    const services = this.deps.get_services();
-    const service = services.find((item) => item.id === message.service);
-    if (!service) throw new Error(`Unknown queue service: ${message.service}`);
-    const action = service.get(message.action);
-    if (!action) throw new Error(`Unknown queue action: ${message.service}.${message.action}`);
-    const ctx = this.createContext(service, action, message);
-    return await runServiceAction(services, service, action, ctx);
+  call(message: CityQueueMessage): Promise<unknown> {
+    return this.deps.execute(async () => {
+      await this.deps.ensure_ready();
+      const services = this.deps.get_services();
+      const service = services.find((item) => item.id === message.service);
+      if (!service) throw new Error(`Unknown queue service: ${message.service}`);
+      const action = service.get(message.action);
+      if (!action) throw new Error(`Unknown queue action: ${message.service}.${message.action}`);
+      const ctx = this.createContext(service, action, message);
+      return await runServiceAction(services, service, action, ctx);
+    });
   }
 
   /**

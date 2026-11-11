@@ -49,15 +49,15 @@ export interface FederationProfile {
   has_admin_session: boolean;
 
   /**
-   * 该 Federation 是否已有 Embassy User Session。
+   * 该 Federation 是否已有 Federation User Session。
    *
    * 说明（中文）
-   * - 用户 Session 由 Embassy 登录流程维护，不从 Federation Admin 配置导入。
+   * - 用户 Session 由 Federation 登录流程维护，不从 Federation Admin 配置导入。
    */
   has_user_session: boolean;
 
   /**
-   * Embassy User Session 中绑定的 bureau_id。
+   * Federation User Session 中绑定的 bureau_id。
    *
    * 说明（中文）
    * - 为空表示未登录或 session 文件不可用。
@@ -65,7 +65,7 @@ export interface FederationProfile {
   bureau_id?: string;
 
   /**
-   * Embassy User Session 中的 Federation User ID。
+   * Federation User Session 中的 Federation User ID。
    *
    * 说明（中文）
    * - 只用于状态展示，不参与权限判断。
@@ -83,7 +83,7 @@ export interface FederationMembershipState {
   federation_url: string;
 
   /**
-   * 当前 Embassy User Session 使用的 bureau_id。
+   * 当前 Federation User Session 使用的 bureau_id。
    */
   bureau_id: string;
 
@@ -100,13 +100,13 @@ export interface FederationMembershipState {
    * 连接来源。
    *
    * 说明（中文）
-   * - `embassy-session` 表示 Downcity 已在当前 Federation 登录用户。
+   * - `federation-session` 表示 Downcity 已在当前 Federation 登录用户。
    * - `downcity-profile` 表示已选择 Federation，但尚未登录用户。
    * - `federation-admin` 表示当前 Federation 来自 `fed` 管理配置。
    * - `default` 表示使用默认 Federation。
    * - `missing` 表示没有可用成员资格。
    */
-  source: "embassy-session" | "downcity-profile" | "federation-admin" | "default" | "missing";
+  source: "federation-session" | "downcity-profile" | "federation-admin" | "default" | "missing";
 
   /**
    * 当前登录用户 ID。

@@ -6,7 +6,7 @@
  */
 
 import type { Logger } from "@downcity/agent";
-import type { Embassy } from "@downcity/federation";
+import type { Federation } from "@downcity/federation";
 import type { CityRuntimeAccess } from "@/city/types/CityRuntimeAccess.js";
 import type {
   CityPowerRegistration,
@@ -22,8 +22,8 @@ import type { StorageProvider } from "@/workspace/index.js";
 export interface CityPowerRuntimeOptions {
   /** City 为 Power 私有数据提供的底层存储。 */
   readonly storage: StorageProvider;
-  /** City 为 Power Context 提供的 Federation Embassy。 */
-  readonly embassy?: Embassy;
+  /** City 为 Power Context 提供的 Federation。 */
+  readonly federation?: Federation;
   /** Power Runtime 所需的 City 内部事实源访问能力。 */
   readonly runtime_access: Pick<
     CityRuntimeAccess,

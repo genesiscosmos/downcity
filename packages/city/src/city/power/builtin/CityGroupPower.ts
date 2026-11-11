@@ -7,12 +7,12 @@
  *   因此领域拆分不会改变模型侧已有的动作 id。
  * - 动作组私有文件按 Agent + 组隔离（`files_for` 以组名为键），
  *   所以组在 power 之间搬迁不会改变落盘路径。
- * - City 内部事实源（Agent / Workspace 快照）与 Embassy 由构造期注入，
+ * - City 内部事实源（Agent / Workspace 快照）与 Federation 由构造期注入，
  *   不进入通用 `PowerContext`，因此外部 power 拿不到这些能力。
  * - 动作 id 在构造期一次性展开，注册后不再变化。
  */
 
-import type { Embassy } from "@downcity/federation";
+import type { Federation } from "@downcity/federation";
 import { resolve_runtime_timezone } from "@downcity/type";
 import type {
   PowerAction,
@@ -35,8 +35,8 @@ export interface CityGroupPowerOptions {
   readonly access: Pick<CityRuntimeAccess, "list_agents" | "list_workspaces">;
   /** 按 Agent 与动作组分配私有文件端口。 */
   readonly files_for: (agent_id: string, group_id: string) => FileSystem;
-  /** City 持有的 Federation Embassy；未配置时省略。 */
-  readonly embassy?: Embassy;
+  /** City 持有的 Federation；未配置时省略。 */
+  readonly federation?: Pick<Federation, "user">;
 }
 
 /**
@@ -195,7 +195,7 @@ function build_city_context(
     files: options.files_for(power_context.agent.id, input.group_id),
     tool_call_id: power_context.call.tool_call_id ?? null,
     interactions: power_context.call.interactions,
-    ...(options.embassy ? { embassy: options.embassy } : {}),
+    ...(options.federation ? { federation: options.federation } : {}),
     ...(abort_signal ? { abort_signal } : {}),
   };
 }

@@ -13,7 +13,7 @@ import type { Agent } from "@downcity/agent";
 import type { SessionInteractionPort } from "@downcity/type";
 import type { WorkspaceRuntime, FileSystem } from "@/workspace/index.js";
 import type { WorkspaceSandboxSnapshot } from "@downcity/type/shell";
-import type { Embassy } from "@downcity/federation";
+import type { Federation } from "@downcity/federation";
 
 /** city 动作可预期的失败码；用于区分模型可自行纠正与不可重试的情况。 */
 export type CityActionErrorCode =
@@ -66,8 +66,8 @@ export interface CityPowerContext {
 
   /** 当前动作组在当前 Agent 范围内的私有文件端口。 */
   readonly files: FileSystem;
-  /** City 的 Federation Embassy；未配置时为空。 */
-  readonly embassy?: Embassy;
+  /** City 的 Federation；未配置时为空。 */
+  readonly federation?: Pick<Federation, "user">;
   /** 当前 Turn 的取消信号。 */
   readonly abort_signal?: AbortSignal;
   /** 当前调用的工具调用标识，用于归属审批与交互；非工具入口为空。 */

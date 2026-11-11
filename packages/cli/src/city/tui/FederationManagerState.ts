@@ -9,15 +9,15 @@
 import {
   DEFAULT_BUREAU_ID,
   list_federations,
-  read_current_embassy_session,
+  read_current_federation_session,
   read_persisted_downcity_cli_locale,
   read_downcity_config,
   resolve_selected_federation_url,
   upsert_federation_profile,
   write_downcity_config,
 } from "@/city/shared/DowncityConfigStore.js";
-import { perform_embassy_user_login } from "@/city/shared/EmbassyUserLogin.js";
-import { EmbassySessionResolver } from "@/city/shared/EmbassySessionResolver.js";
+import { perform_federation_user_login } from "@/city/shared/FederationUserLogin.js";
+import { FederationSessionResolver } from "@/city/shared/FederationSessionResolver.js";
 import {
   readCurrentCityBalance,
   rechargeCurrentCityUser,
@@ -44,7 +44,7 @@ import {
 } from "@/city/tui/FederationManagerFormat.js";
 import type { FederationMembershipState, FederationProfile } from "@/city/types/FederationMembership.js";
 import type { CityBalanceAccount } from "@/city/types/CityBalance.js";
-import type { EmbassyUserSession } from "@/city/types/EmbassySession.js";
+import type { FederationUserSession } from "@/city/types/FederationSession.js";
 import type { tui_list_item } from "@/city/types/Tui.js";
 
 /** Federation 管理器可选动作。 */
@@ -87,7 +87,7 @@ export interface city_manager_state {
   initial_action?: city_manager_action;
 }
 
-const embassy_session_resolver = new EmbassySessionResolver();
+const federation_session_resolver = new FederationSessionResolver();
 
 export function read_federation_membership_state(): FederationMembershipState {
   const state = read_downcity_config();
@@ -98,7 +98,7 @@ export function read_federation_membership_state(): FederationMembershipState {
       federation_url,
       bureau_id: session.bureau_id,
       has_user_token: true,
-      source: "embassy-session",
+      source: "federation-session",
       user_id: session.user_id,
       user_label: session.user_label,
     };
@@ -117,7 +117,7 @@ export function read_federation_membership_state(): FederationMembershipState {
   };
 }
 
-export function save_city_user_session(session: EmbassyUserSession): void {
+export function save_city_user_session(session: FederationUserSession): void {
   const state = upsert_federation_profile(read_downcity_config(), {
     federation_url: session.federation_url,
   });
@@ -344,7 +344,7 @@ export async function handle_city_action(params: {
   if (params.action === "whoami") {
     params.set_detail(loading_text(t({ zh: "正在读取当前账号", en: "Reading current account" })));
     try {
-      const user = await embassy_session_resolver.resolve_current_user();
+      const user = await federation_session_resolver.resolve_current_user();
       await params.refresh_state({
         keep_action: "whoami",
         detail_override: format_current_user_detail(user),
@@ -423,9 +423,9 @@ export async function handle_city_prompt_action(
 
   if (action === "login") {
     const membership = read_federation_membership_state();
-    const session = await perform_embassy_user_login({
+    const session = await perform_federation_user_login({
       federation_url: membership.federation_url,
-      bureau_id: read_current_embassy_session()?.bureau_id ?? DEFAULT_BUREAU_ID,
+      bureau_id: read_current_federation_session()?.bureau_id ?? DEFAULT_BUREAU_ID,
     });
     if (!session) {
       return {

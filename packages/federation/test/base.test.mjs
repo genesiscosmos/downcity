@@ -224,7 +224,7 @@ test("Federation bootstraps internal secrets into the env table", async () => {
 
     await base.health()
 
-    const envProvider = base.getService("env")._env
+    const envProvider = base.get_service("env")._env
     assert.equal(envProvider.get("DOWNCITY_FEDERATION_ADMIN_SECRET_KEY"), undefined)
     assert.match(envProvider.get("DOWNCITY_FEDERATION_ID"), /^fed_/)
     assert.match(envProvider.get("BETTER_AUTH_SECRET"), /^better_auth_/)
@@ -1057,7 +1057,7 @@ test("AIService charges image jobs only after provider result succeeds", async (
       },
       body: JSON.stringify({ name: "Demo", server_url: "https://bureau.example.com" }),
     }))).json()
-    const tokenBody = await (await base.getAuthenticator()).createToken({
+    const tokenBody = await (await base.runtime.get_authenticator()).createToken({
       bureau_id: city.bureau_id,
       user_id: "user_1",
     })
@@ -1423,7 +1423,7 @@ test("Federation exposes service env requirements and env catalog", async () => 
       ],
     })
 
-    await base.getService("env")._env.upsert({ key: "STRIPE_SECRET_KEY", value: "sk_test" })
+    await base.get_service("env")._env.upsert({ key: "STRIPE_SECRET_KEY", value: "sk_test" })
     const adminSession = await create_test_admin_session(base)
 
     const catalogResponse = await base.fetch(new Request("http://localhost/v1/env/catalog", {

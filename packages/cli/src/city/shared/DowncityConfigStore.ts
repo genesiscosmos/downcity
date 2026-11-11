@@ -2,14 +2,14 @@
  * Downcity 本地配置存储。
  *
  * 关键点（中文）
- * - 只负责读取/写入 Downcity 保存的 Federation 与 Embassy Session。
+ * - 只负责读取/写入 Downcity 保存的 Federation 与 Federation Session。
  * - 用户配置与 `fed` 管理端配置共用 `downcity.db`，但使用独立配置 key。
  * - 不包含交互菜单、输出渲染或用户身份校验逻辑。
  */
 
 import { with_cli_local_data } from "@/city/runtime/LocalData.js";
 import type { FederationProfile } from "@/city/types/FederationMembership.js";
-import type { EmbassyUserSession } from "@/city/types/EmbassySession.js";
+import type { FederationUserSession } from "@/city/types/FederationSession.js";
 import type { CliLocale } from "@/shared/types/CliLocale.js";
 import type {
   FederationAdminConfig,
@@ -97,7 +97,7 @@ export function resolve_selected_federation_url(state: DowncityConfig = read_dow
 /**
  * 读取当前选中 Federation 的 user session。
  */
-export function read_current_embassy_session(): EmbassyUserSession | null {
+export function read_current_federation_session(): FederationUserSession | null {
   const state = read_downcity_config();
   const federation_url = resolve_selected_federation_url(state);
   return state.sessions?.[federation_url] ?? null;
@@ -106,7 +106,7 @@ export function read_current_embassy_session(): EmbassyUserSession | null {
 /**
  * 读取指定 Federation 的 user session。
  */
-export function read_embassy_session_for_federation(federation_url: string): EmbassyUserSession | null {
+export function read_federation_session_for_federation(federation_url: string): FederationUserSession | null {
   const state = read_downcity_config();
   const normalized_url = normalize_federation_url(federation_url);
   if (!normalized_url) return null;
@@ -285,7 +285,7 @@ function normalize_downcity_config(value: DowncityConfig | null | undefined): Do
       federation_url,
     });
   }
-  const sessions: Record<string, EmbassyUserSession> = {};
+  const sessions: Record<string, FederationUserSession> = {};
   const input_sessions = value?.sessions && typeof value.sessions === "object"
     ? value.sessions
     : {};

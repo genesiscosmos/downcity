@@ -5,7 +5,7 @@ import fs from "node:fs/promises"
 import os from "node:os"
 import path from "node:path"
 import test from "node:test"
-import { Bureau, Embassy, Federation } from "@downcity/federation"
+import { Bureau, Federation } from "@downcity/federation"
 import { createSqliteDb } from "./sqlite-db.mjs"
 import { create_test_admin_session } from "../admin-fixture.mjs"
 import {
@@ -148,8 +148,8 @@ test("City 直读 Profile，Bureau 本地验签后按需读取同一 Federation 
     }))
     assert.equal(bureau_issue_response.status, 403)
 
-    const embassy = create_embassy(base, { user_token: user_token.user_token })
-    const current_user = await embassy.user.current()
+    const federation = create_federation(base, { user_token: user_token.user_token })
+    const current_user = await federation.user.current()
     const federation_profile = current_user.profile
     assert.equal(current_user.user.user_id, registered.user_id)
 
@@ -625,7 +625,7 @@ async function setupBase(tempDir, env = {}, accountsOptions = {}) {
   }))
   await base.health()
 
-  const envProvider = base.getService("env")._env
+  const envProvider = base.get_service("env")._env
   for (const [key, value] of Object.entries(env)) {
     await envProvider.upsert({ key, value: String(value) })
   }
@@ -662,16 +662,16 @@ function create_bureau(base, bureau_token) {
 }
 
 function create_admin(base, admin_secret_key) {
-  return create_embassy(base, { admin_token: admin_secret_key }).admin
+  return create_federation(base, { admin_token: admin_secret_key }).admin
 }
 
 async function register_bureau(admin, bureau_id) {
   return await admin.bureaus.tokens.issue({ bureau_id, purpose: "accounts auth test" })
 }
 
-function create_embassy(base, credentials = {}) {
-  return new Embassy({
-    federation_url: "http://localhost",
+function create_federation(base, credentials = {}) {
+  return new Federation({
+    url: "http://localhost",
     ...credentials,
     fetch: (input, init) => base.fetch(new Request(input, init)),
   })

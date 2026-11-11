@@ -1,11 +1,11 @@
 /**
- * Embassy 管理员身份子域。
+ * Federation 管理员身份子域。
  *
  * Admin Session 管理 Federation 控制面。Bureau 机器身份由独立 Bureau 对象持有，
- * 不进入 Embassy 管理员身份的生命周期。
+ * 不进入 Federation 管理员身份的生命周期。
  */
 
-import { FederationAdmin } from "../pact/admin/index.js";
+import { AdminPactAccess } from "../pact/admin/index.js";
 import type { ServiceClient } from "../pact/invoker/invoker.js";
 import type { CreditsInvoker } from "../pact/invoker/credits/index.js";
 import type { EnvInvoker } from "../pact/invoker/env/index.js";
@@ -19,31 +19,31 @@ import {
   type FetchLike,
 } from "../pact/http.js";
 import type {
-  EmbassyAdminLoginInput,
-  EmbassyAdminSession,
-  EmbassyCurrentAdmin,
-} from "./types/EmbassyAdmin.js";
-import type { EmbassyAdminOptions } from "./types/EmbassyInternal.js";
-import { EmbassyBureaus } from "./EmbassyBureaus.js";
-import { EmbassyRelayAdmin } from "./EmbassyRelay.js";
+  FederationAdminLoginRequest,
+  FederationAdminSession,
+  FederationCurrentAdmin,
+} from "./types/FederationAdmin.js";
+import type { FederationAdminOptions } from "./types/FederationInternal.js";
+import { FederationBureaus } from "./FederationBureaus.js";
+import { FederationRelayAdmin } from "./FederationRelay.js";
 
-/** Embassy 管理员身份子域。 */
-export class EmbassyAdmin {
-  private readonly federation_url: string;
+/** Federation 管理员身份子域。 */
+export class FederationAdmin {
+  private readonly url: string;
   private readonly fetcher: FetchLike;
   private admin_token?: string;
-  private admin_access?: FederationAdmin;
-  private bureau_management?: EmbassyBureaus;
+  private admin_access?: AdminPactAccess;
+  private bureau_management?: FederationBureaus;
 
-  constructor(options: EmbassyAdminOptions) {
-    this.federation_url = normalize_http_url(options.federation_url);
+  constructor(options: FederationAdminOptions) {
+    this.url = normalize_http_url(options.url);
     this.admin_token = read_optional_string(options.admin_token);
     this.fetcher = options.fetch ?? defaultFetch();
   }
 
   /** 模型中转目录、渠道部署和全局日志管理。 */
-  get relay(): EmbassyRelayAdmin {
-    return new EmbassyRelayAdmin(() => this.service("ai"));
+  get relay(): FederationRelayAdmin {
+    return new FederationRelayAdmin(() => this.service("ai"));
   }
 
   /** Federation Credits 管理入口。 */
@@ -52,9 +52,9 @@ export class EmbassyAdmin {
   }
 
   /** Federation Bureau 管理入口。 */
-  get bureaus(): EmbassyBureaus {
+  get bureaus(): FederationBureaus {
     if (!this.bureau_management) {
-      this.bureau_management = new EmbassyBureaus(this.require_admin_access().bureaus);
+      this.bureau_management = new FederationBureaus(this.require_admin_access().bureaus);
     }
     return this.bureau_management;
   }
@@ -65,10 +65,10 @@ export class EmbassyAdmin {
   }
 
   /** 使用管理员 ID 和密码创建新的 Admin Session。 */
-  async login(input: EmbassyAdminLoginInput): Promise<EmbassyAdminSession> {
-    const result = await requestJSON<EmbassyAdminSession>({
+  async login(input: FederationAdminLoginRequest): Promise<FederationAdminSession> {
+    const result = await requestJSON<FederationAdminSession>({
       fetch: this.fetcher,
-      url: this.federation_url + "/v1/admin/login",
+      url: this.url + "/v1/admin/login",
       init: {
         method: "POST",
         headers: {
@@ -88,11 +88,11 @@ export class EmbassyAdmin {
   }
 
   /** 读取当前管理员 Session。 */
-  async current(): Promise<EmbassyCurrentAdmin> {
+  async current(): Promise<FederationCurrentAdmin> {
     const admin_token = this.require_admin_token();
-    return await requestJSON<EmbassyCurrentAdmin>({
+    return await requestJSON<FederationCurrentAdmin>({
       fetch: this.fetcher,
-      url: this.federation_url + "/v1/admin/session",
+      url: this.url + "/v1/admin/session",
       init: {
         method: "GET",
         headers: {
@@ -108,7 +108,7 @@ export class EmbassyAdmin {
     const admin_token = this.require_admin_token();
     await requestJSON<{ ok: true }>({
       fetch: this.fetcher,
-      url: this.federation_url + "/v1/admin/logout",
+      url: this.url + "/v1/admin/logout",
       init: {
         method: "POST",
         headers: {
@@ -123,7 +123,7 @@ export class EmbassyAdmin {
     this.bureau_management = undefined;
   }
 
-  /** 读取当前 Embassy 实例中的 Admin Session Token。 */
+  /** 读取当前 Federation 实例中的 Admin Session Token。 */
   token(): string | undefined {
     return this.admin_token;
   }
@@ -148,6 +148,13 @@ export class EmbassyAdmin {
     return this.require_admin_access().instruction();
   }
 
+  /** 释放当前实例保存的管理员身份与访问器缓存。 */
+  clear_credentials(): void {
+    this.admin_token = undefined;
+    this.admin_access = undefined;
+    this.bureau_management = undefined;
+  }
+
   private require_admin_token(): string {
     if (!this.admin_token) {
       throw new TypeError("admin_token is required for this operation");
@@ -155,10 +162,10 @@ export class EmbassyAdmin {
     return this.admin_token;
   }
 
-  private require_admin_access(): FederationAdmin {
+  private require_admin_access(): AdminPactAccess {
     if (!this.admin_access) {
-      this.admin_access = new FederationAdmin({
-        base_url: this.federation_url,
+      this.admin_access = new AdminPactAccess({
+        base_url: this.url,
         credential: this.require_admin_token(),
         fetch: this.fetcher,
       });
@@ -170,15 +177,15 @@ export class EmbassyAdmin {
 
 function normalize_http_url(value: unknown): string {
   if (typeof value !== "string" || !value.trim()) {
-    throw new TypeError("federation_url is required");
+    throw new TypeError("url is required");
   }
   const input = value.trim().replace(/\/+$/u, "");
   const url = new URL(input);
   if (url.protocol !== "http:" && url.protocol !== "https:") {
-    throw new TypeError("federation_url must use http or https");
+    throw new TypeError("url must use http or https");
   }
   if (url.username || url.password) {
-    throw new TypeError("federation_url must not contain credentials");
+    throw new TypeError("url must not contain credentials");
   }
   return input;
 }

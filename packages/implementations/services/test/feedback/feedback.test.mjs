@@ -224,7 +224,7 @@ function userRequest({ token, path: pathname, method = "POST", body }) {
 }
 
 async function issue_user_token(base, bureau_id, user_id) {
-  const token_body = await (await base.getAuthenticator()).createToken({
+  const token_body = await (await base.runtime.get_authenticator()).createToken({
     bureau_id,
     user_id,
   })

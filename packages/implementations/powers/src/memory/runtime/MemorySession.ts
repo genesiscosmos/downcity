@@ -27,7 +27,7 @@ export function register_memory_session_profile(
       const model = context.model_id
         ? context.default_model?.id === context.model_id
           ? context.default_model
-          : host.embassy?.user.ai.model(context.model_id)
+          : host.federation?.user.ai.model(context.model_id)
         : context.default_model;
       if (!model) throw new Error("Memory Session requires an available model");
       if (context.model_id && model.id !== context.model_id) throw new Error("Memory Session model identity changed");

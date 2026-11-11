@@ -1,5 +1,5 @@
 /**
- * Embassy 用户身份子域。
+ * Federation 用户身份子域。
  *
  * 用户全局 Service 与 Bureau 业务路由共用当前 User Token，但分别发送到
  * Federation origin 和 Federation 发布的可信 Bureau origin。
@@ -15,38 +15,38 @@ import {
   type RequestInitLike,
 } from "../pact/http.js";
 import type { BureauRecord } from "../types/Bureau.js";
-import { EmbassyAccount } from "./EmbassyAccount.js";
-import { EmbassyRelay } from "./EmbassyRelay.js";
-import type { EmbassyAccountLoginOptions, EmbassyAccountLoginResult } from "./types/EmbassyAccount.js";
-import type { EmbassyUserOptions } from "./types/EmbassyInternal.js";
-import type { EmbassyCurrentUser } from "./types/EmbassyUser.js";
+import { FederationAccount } from "./FederationAccount.js";
+import { FederationRelay } from "./FederationRelay.js";
+import type { FederationAccountLoginOptions, FederationAccountLoginResult } from "./types/FederationAccount.js";
+import type { FederationUserOptions } from "./types/FederationInternal.js";
+import type { FederationCurrentUser } from "./types/FederationUser.js";
 
-/** Embassy 用户身份子域。 */
-export class EmbassyUser {
+/** Federation 用户身份子域。 */
+export class FederationUser {
   /** Federation Accounts Service 访问器。 */
-  readonly account: EmbassyAccount;
+  readonly account: FederationAccount;
 
-  private readonly federation_url: string;
+  private readonly url: string;
   private readonly fetcher: FetchLike;
   private user_token?: string;
   private user_access: UserPactAccess;
   private bureau_promise?: Promise<BureauRecord>;
 
-  constructor(options: EmbassyUserOptions) {
-    this.federation_url = normalize_http_url(options.federation_url, "federation_url");
+  constructor(options: FederationUserOptions) {
+    this.url = normalize_http_url(options.url, "url");
     this.user_token = read_optional_string(options.user_token);
     this.fetcher = options.fetch ?? defaultFetch();
     this.user_access = this.create_user_access();
-    this.account = new EmbassyAccount({
+    this.account = new FederationAccount({
       accounts: () => this.service("accounts"),
       read_user_token: () => this.user_token,
-      update_user_token: (user_token) => this.update_user_token(user_token),
+      update_user_token: (user_token) => this.set_token(user_token),
     });
   }
 
   /** 登录用户的 API Key 管理与中转调用日志。 */
-  get relay(): EmbassyRelay {
-    return new EmbassyRelay(() => this.service("ai"));
+  get relay(): FederationRelay {
+    return new FederationRelay(() => this.service("ai"));
   }
 
   /** 用户侧 AI 调用入口。 */
@@ -70,14 +70,14 @@ export class EmbassyUser {
   }
 
   /** 执行一次账户登录编排。 */
-  login(options: EmbassyAccountLoginOptions): Promise<EmbassyAccountLoginResult> {
+  login(options: FederationAccountLoginOptions): Promise<FederationAccountLoginResult> {
     return this.account.login(options);
   }
 
   /** 读取当前 Token 对应的 Federation 用户和 Profile。 */
-  async current(): Promise<EmbassyCurrentUser> {
+  async current(): Promise<FederationCurrentUser> {
     this.require_user_token();
-    const result = await this.service("accounts").get<Partial<EmbassyCurrentUser>>("me");
+    const result = await this.service("accounts").get<Partial<FederationCurrentUser>>("me");
     if (!result.user?.user_id || !result.user.bureau_id) {
       throw new TypeError("Federation returned an invalid current user");
     }
@@ -100,7 +100,11 @@ export class EmbassyUser {
     });
   }
 
-  private update_user_token(user_token: string | undefined): void {
+  /** 释放当前实例保存的用户身份与 Bureau 缓存。 */
+  clear_credentials(): void { this.set_token(undefined); }
+
+  /** 更新后续请求使用的 Token，已创建的请求保留原身份快照。 */
+  set_token(user_token: string | undefined): void {
     this.user_token = read_optional_string(user_token);
     this.user_access = this.create_user_access();
     this.bureau_promise = undefined;
@@ -108,7 +112,7 @@ export class EmbassyUser {
 
   private create_user_access(): UserPactAccess {
     return new UserPactAccess({
-      base_url: this.federation_url,
+      base_url: this.url,
       user_token: this.user_token,
       fetch: this.fetcher,
     });
@@ -148,7 +152,7 @@ export class EmbassyUser {
     const user_token = this.require_user_token();
     const body = await requestJSON<{ bureau?: BureauRecord }>({
       fetch: this.fetcher,
-      url: this.federation_url + "/v1/bureaus/current",
+      url: this.url + "/v1/bureaus/current",
       init: {
         method: "GET",
         headers: {

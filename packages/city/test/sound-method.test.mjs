@@ -33,7 +33,7 @@ async function create_fixture(options = {}) {
   const city = new City({
     storage: new LocalStorageProvider(root),
     workspaces: [workspace],
-    embassy: { user: { ai: current_sound_ai } },
+    federation: { user: { ai: current_sound_ai } },
   });
   city.agents.add(agent);
   // power 注册是异步 lifecycle；这里等它稳定后读取 Agent 持有的编译产物。

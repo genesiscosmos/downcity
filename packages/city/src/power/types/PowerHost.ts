@@ -5,7 +5,7 @@
  * `dispose` 使用同一个稳定上下文完成释放。这里不再声明第二套 main 生命周期。
  */
 
-import type { Embassy } from "@downcity/federation";
+import type { Federation } from "@downcity/federation";
 import type { PowerInteractionHost } from "./PowerInteraction.js";
 import type {
   PowerLogger,
@@ -269,7 +269,7 @@ export interface PowerSelf {
 /** Power 加入 City 后在完整 City 生命周期内持有的稳定上下文。 */
 export interface PowerLifecycleContext {
   /** 宿主提供的 Federation 访问入口，用于后台调用模型。 */
-  readonly embassy?: Embassy;
+  readonly federation?: Pick<Federation, "user">;
   /** 当前 Power 的自身能力。 */
   readonly power: PowerSelf;
   /** 当前 Power 在 City 中唯一的结构化配置存储。 */

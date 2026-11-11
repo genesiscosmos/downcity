@@ -2,7 +2,7 @@
  * Admin City 说明文档查看命令。
  */
 
-import { EmbassyAdmin } from "@downcity/federation";
+import { FederationAdmin } from "@downcity/federation";
 import { t } from "@/shared/CliLocale.js";
 import type { admin_tui_runtime } from "@/federation/types/AdminTui.js";
 
@@ -10,7 +10,7 @@ import type { admin_tui_runtime } from "@/federation/types/AdminTui.js";
  * 展示当前 City 聚合后的说明文档。
  */
 export async function manageInstruction(
-  a: EmbassyAdmin,
+  a: FederationAdmin,
   _baseUrl: string,
   runtime: admin_tui_runtime,
 ): Promise<void> {

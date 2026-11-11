@@ -161,7 +161,7 @@ CLI 与 Desktop 在同一 root 下互斥持有执行权，资源命令连接经�
 
 CLI City 只维护一个 daemon，并分别监听一个 HTTP 端口和一个原生 TCP RPC 端口。两种协议都按 `agent_id` 路由，不为每个 Agent 分配独立端口。
 
-Federation Admin 配置与 Embassy User Session 同样保存在 `~/.downcity/downcity.db`。脚本可通过 `DOWNCITY_FEDERATION_URL` 和 `DOWNCITY_USER_TOKEN` 显式覆盖当前 Embassy 用户身份。
+Federation Admin 配置与 Federation User Session 同样保存在 `~/.downcity/downcity.db`。脚本可通过 `DOWNCITY_FEDERATION_URL` 和 `DOWNCITY_USER_TOKEN` 显式覆盖当前 Federation 用户身份。
 
 为独立产品后端登记 Bureau：
 

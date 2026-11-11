@@ -9,7 +9,7 @@
 
 import { emitCliBlock } from "@/shared/CliReporter.js";
 import { open_system_browser } from "@/shared/SystemBrowser.js";
-import { EmbassySessionResolver } from "@/city/shared/EmbassySessionResolver.js";
+import { FederationSessionResolver } from "@/city/shared/FederationSessionResolver.js";
 import type { CreditsAccount } from "@downcity/federation";
 import type {
   CityBalanceAccount,
@@ -19,14 +19,14 @@ import type {
 } from "@/city/types/CityBalance.js";
 
 const DEFAULT_PAYMENT_METHOD_ID = "stripe";
-const embassy_session_resolver = new EmbassySessionResolver();
+const federation_session_resolver = new FederationSessionResolver();
 
 /**
  * 读取当前 City user 的余额。
  */
 export async function readCurrentCityBalance(): Promise<CityBalanceAccount> {
-  const { user, embassy_user } = await embassy_session_resolver.create_user_client();
-  const account_view = await embassy_user.service("credits").get<CreditsAccount>("me");
+  const { user, federation_user } = await federation_session_resolver.create_user_client();
+  const account_view = await federation_user.service("credits").get<CreditsAccount>("me");
   const account: CityBalanceAccount = {
     user_id: account_view.user_id,
     credits: account_view.available_credits,
@@ -44,10 +44,10 @@ export async function readCurrentCityBalance(): Promise<CityBalanceAccount> {
 export async function rechargeCurrentCityUser(
   input: CityRechargeInput,
 ): Promise<CityRechargeResult> {
-  const { embassy_user } = await embassy_session_resolver.create_user_client();
+  const { federation_user } = await federation_session_resolver.create_user_client();
   const topup_amount_minor = normalizePositiveInteger(input.topup_amount_minor, "topup_amount_minor");
   const method_id = normalizeText(input.method_id) || DEFAULT_PAYMENT_METHOD_ID;
-  const checkout = await embassy_user.payment.method(method_id).invoke<CityCheckoutResult>({
+  const checkout = await federation_user.payment.method(method_id).invoke<CityCheckoutResult>({
     topup_amount_minor,
     idempotency_key: normalizeText(input.ref) || `city_cli:${crypto.randomUUID()}`,
     note: normalizeText(input.note) || "City user recharge",

@@ -8,7 +8,7 @@
  * - 嵌套 power 调用沿用本次调用的来源身份，因此组合 power 不会丢掉交互能力。
  */
 
-import type { Embassy } from "@downcity/federation";
+import type { Federation } from "@downcity/federation";
 import type { FileSystem, WorkspaceRuntime, WorkspaceShell } from "@/workspace/index.js";
 import type {
   PowerJsonObject,
@@ -61,8 +61,8 @@ export interface CreatePowerContextInput {
   readonly config: PowerJsonObject;
   /** 当前执行范围日志器。 */
   readonly logger: PowerLogger;
-  /** City 可选 Embassy。 */
-  readonly embassy?: Embassy;
+  /** City 可选 Federation。 */
+  readonly federation?: Pick<Federation, "user">;
   /** 当前 Power 通知端口。 */
   readonly notifications?: PowerNotificationPublisher;
   /** 延迟读取 Workspace env；读当前值，与快照不同。 */
@@ -75,7 +75,7 @@ export interface CreatePowerContextInput {
 export function create_power_context(input: CreatePowerContextInput): PowerContext {
   return new PowerContext({
     city: {
-      ...(input.embassy ? { embassy: input.embassy } : {}),
+      ...(input.federation ? { federation: input.federation } : {}),
       powers: input.host.powers_for(input.site),
     },
     agent: {

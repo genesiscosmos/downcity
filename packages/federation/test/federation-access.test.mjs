@@ -1,27 +1,27 @@
 /**
- * Embassy 客户端行为测试。
+ * Federation 客户端行为测试。
  */
 
 import assert from "node:assert/strict"
 import test from "node:test"
 
-import { Embassy } from "../bin/index.js"
+import { Federation } from "../bin/index.js"
 
-test("Embassy 只公开 user 和 admin 身份子域", () => {
-  const embassy = new Embassy({
-    federation_url: "https://fed.example.com",
+test("Federation 只公开 user 和 admin 身份子域", () => {
+  const federation = new Federation({
+    url: "https://fed.example.com",
   })
 
-  assert.ok(embassy.user)
-  assert.ok(embassy.admin)
-  assert.equal("bureau" in embassy, false)
-  assert.equal("city" in embassy, false)
+  assert.ok(federation.user)
+  assert.ok(federation.admin)
+  assert.equal("bureau" in federation, false)
+  assert.equal("city" in federation, false)
 })
 
-test("Embassy account 查询状态不交付 Token，显式交换后更新当前 User Token", async () => {
+test("Federation account 查询状态不交付 Token，显式交换后更新当前 User Token", async () => {
   const requests = []
-  const embassy = new Embassy({
-    federation_url: "https://fed.example.com",
+  const federation = new Federation({
+    url: "https://fed.example.com",
     fetch: async (url, init) => {
       requests.push({ url, init })
       return json({
@@ -34,7 +34,7 @@ test("Embassy account 查询状态不交付 Token，显式交换后更新当前 
     },
   })
 
-  const result = await embassy.user.account.login_start({
+  const result = await federation.user.account.login_start({
     provider: "local",
     client_type: "cli",
     bureau_id: "bureau_product",
@@ -42,18 +42,18 @@ test("Embassy account 查询状态不交付 Token，显式交换后更新当前 
 
   assert.equal(result.status, "done")
   assert.equal(result.user_token, undefined)
-  assert.equal(embassy.user.account.token(), undefined)
-  const status = await embassy.user.account.status()
+  assert.equal(federation.user.account.token(), undefined)
+  const status = await federation.user.account.status()
   assert.equal(status.status, "done")
   assert.equal(status.user_token, undefined)
-  assert.equal(embassy.user.account.token(), undefined)
+  assert.equal(federation.user.account.token(), undefined)
   assert.equal(requests[1].url, "https://fed.example.com/v1/accounts/login/result")
   assert.equal(requests[1].init.method, "POST")
   assert.deepEqual(JSON.parse(requests[1].init.body), {
     login_id: "login_1", login_secret: "private_login_proof",
   })
-  await embassy.user.account.exchange()
-  assert.equal(embassy.user.account.token(), "user_token_1")
+  await federation.user.account.exchange()
+  assert.equal(federation.user.account.token(), "user_token_1")
   assert.equal(requests[2].url, "https://fed.example.com/v1/accounts/login/exchange")
   const exchange = JSON.parse(requests[2].init.body)
   assert.equal(exchange.login_id, "login_1")
@@ -67,10 +67,10 @@ test("Embassy account 查询状态不交付 Token，显式交换后更新当前 
   })
 })
 
-test("Embassy OAuth 通过宿主回调交换 Token 后供 user current 使用，不轮询领取", async () => {
+test("Federation OAuth 通过宿主回调交换 Token 后供 user current 使用，不轮询领取", async () => {
   const requests = []
-  const embassy = new Embassy({
-    federation_url: "https://fed.example.com",
+  const federation = new Federation({
+    url: "https://fed.example.com",
     fetch: async (url, init) => {
       requests.push({ url, init })
       if (url.endsWith("/login/start")) {
@@ -92,7 +92,7 @@ test("Embassy OAuth 通过宿主回调交换 Token 后供 user current 使用，
     },
   })
 
-  await embassy.user.account.login({
+  await federation.user.account.login({
     provider: "google", client_type: "cli", bureau_id: "bureau_product",
     redirect_uri: "http://127.0.0.1:45000/oauth/callback/test", state: "s".repeat(43),
     code_challenge: "c".repeat(43), code_challenge_method: "S256",
@@ -106,7 +106,7 @@ test("Embassy OAuth 通过宿主回调交换 Token 后供 user current 使用，
   assert.equal(exchange_input.code_verifier, "v".repeat(43))
   assert.equal(exchange_input.login_secret, "private_login_proof")
   assert.equal(requests.some((item) => item.url.endsWith("/login/result")), false)
-  const current_user = await embassy.user.current()
+  const current_user = await federation.user.current()
 
   assert.equal(current_user.user.user_id, "user_1")
   assert.equal(requests[1].url, "https://fed.example.com/v1/accounts/login/exchange")
@@ -114,10 +114,10 @@ test("Embassy OAuth 通过宿主回调交换 Token 后供 user current 使用，
   assert.equal(requests[2].init.headers.authorization, "Bearer user_token_1")
 })
 
-test("Embassy admin 登录后立即提供管理能力", async () => {
+test("Federation admin 登录后立即提供管理能力", async () => {
   const requests = []
-  const embassy = new Embassy({
-    federation_url: "https://fed.example.com",
+  const federation = new Federation({
+    url: "https://fed.example.com",
     fetch: async (url, init) => {
       requests.push({ url, init })
       if (url.endsWith("/v1/admin/login")) {
@@ -131,18 +131,18 @@ test("Embassy admin 登录后立即提供管理能力", async () => {
     },
   })
 
-  await embassy.admin.login({
+  await federation.admin.login({
     admin_id: "owner",
     password: "secret",
   })
-  assert.deepEqual(await embassy.admin.list_services(), [])
+  assert.deepEqual(await federation.admin.list_services(), [])
   assert.equal(requests[1].url, "https://fed.example.com/v1/services")
   assert.equal(requests[1].init.headers.authorization, "Bearer admin_session_1")
 })
 
-test("Embassy 拒绝把 User Token 转发到其他 origin", async () => {
-  const embassy = new Embassy({
-    federation_url: "https://fed.example.com",
+test("Federation 拒绝把 User Token 转发到其他 origin", async () => {
+  const federation = new Federation({
+    url: "https://fed.example.com",
     user_token: "user_token_1",
     fetch: async (url) => {
       if (url.endsWith("/v1/bureaus/current")) {
@@ -168,18 +168,18 @@ test("Embassy 拒绝把 User Token 转发到其他 origin", async () => {
   })
 
   await assert.rejects(
-    embassy.user.get("https://attacker.example.com/private"),
+    federation.user.get("https://attacker.example.com/private"),
     /current Bureau server origin/,
   )
 })
 
-test("Embassy 不接收 Bureau Token，也不提供 identify", () => {
-  const embassy = new Embassy({
-    federation_url: "https://fed.example.com",
+test("Federation 不接收 Bureau Token，也不提供 identify", () => {
+  const federation = new Federation({
+    url: "https://fed.example.com",
     admin_token: "admin_session_1",
   })
 
-  assert.equal("identify" in embassy.admin, false)
+  assert.equal("identify" in federation.admin, false)
 })
 
 function json(body, status = 200) {

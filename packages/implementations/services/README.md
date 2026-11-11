@@ -105,4 +105,4 @@ Webhook 验签、规范化后先持久化 inbox，再入队，成功返回 HTTP 
 
 OAuth 使用 `web`、`cli` 或 `desktop`，均在开始时绑定 `redirect_uri`、随机 `state` 与 S256 PKCE。网站回调精确匹配 Bureau 注册 `server_url` 下 `/api/auth/callback`，BFF 验证发起浏览器交易；CLI/Desktop 用本机系统浏览器和独占的 `127.0.0.1` 临时端口回调。Provider 认证后自动返回产品，交换 Token 还需浏览器交付的 `authorization_code` 与发起产品保管的 `code_verifier`，状态查询不能交付 Token。CLI OAuth 不支持远程或无图形会话。Email 登录要求邮箱验证，OAuth 身份不会按相同邮箱静默合并。
 
-`await embassy.user.account.logout()` 先撤销当前 User Token，再清理本地凭证；撤销失败保留凭证以便重试。Bureau 对新的受保护请求向 Federation 在线检查 Token，有效性检查不可用时拒绝访问；已开始的流式请求不会被强制中断。
+`await federation.user.account.logout()` 先撤销当前 User Token，再清理本地凭证；撤销失败保留凭证以便重试。Bureau 对新的受保护请求向 Federation 在线检查 Token，有效性检查不可用时拒绝访问；已开始的流式请求不会被强制中断。

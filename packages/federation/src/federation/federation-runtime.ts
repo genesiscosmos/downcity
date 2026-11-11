@@ -30,18 +30,18 @@ import {
   sqlite_bureaus,
 } from "../service/bureaus/schema.js";
 import { normalizeEnvKey, parseDotenvEntries } from "../utils/helpers.js";
-import type { FederationOptions } from "./types.js";
+import type { FederationRuntimeOptions } from "./types.js";
 import type { BuiltinTables, EnvProvider, Runtime } from "./runtime.js";
 import type { EnvEntry, EnvUpsertInput } from "../service/env/types.js";
 
 /**
- * 从 FederationOptions 创建 runtime。
+ * 从 FederationRuntimeOptions 创建 runtime。
  *
  * 关键说明（中文）
  * - Database Adapter 显式声明 schema_id。
  * - Federation 不再读取 Drizzle dialect 或底层 Client。
  */
-export function create_federation_runtime(options: FederationOptions): Runtime {
+export function create_federation_runtime(options: FederationRuntimeOptions): Runtime {
   const builtin_tables = builtin_tables_for(options.database.schema_id);
 
   return {

@@ -1,37 +1,37 @@
 /**
- * Embassy 用户登录流程。
+ * Federation 用户登录流程。
  *
  * 关键点（中文）
- * - 只负责通过 Embassy Account providers 获取 User Token。
+ * - 只负责通过 Federation Account providers 获取 User Token。
  * - 不读写 Downcity 本地状态，调用方负责持久化 Session。
  */
 
 import prompts from "@/city/tui/Prompts.js";
 import {
-  Embassy,
-  type EmbassyAccountDoneResult,
-  type EmbassyAccountLoginResult,
-  type EmbassyAccountProvider,
+  Federation,
+  type FederationAccountDoneResult,
+  type FederationAccountLoginResult,
+  type FederationAccountProvider,
 } from "@downcity/federation";
 import { emitCliBlock } from "@/shared/CliReporter.js";
 import { can_open_system_browser, open_system_browser } from "@/shared/SystemBrowser.js";
 import { create_loopback_login_callback } from "@downcity/federation/node";
 import type {
-  EmbassyLoginInput,
-  EmbassyUserSession,
-} from "@/city/types/EmbassySession.js";
+  FederationLoginInput,
+  FederationUserSession,
+} from "@/city/types/FederationSession.js";
 import type {
   AuthOption,
   RegisterResult,
-  EmbassyAuthMethod,
+  FederationAuthMethod,
   VerifyResult,
-} from "@/city/types/EmbassyAuth.js";
+} from "@/city/types/FederationAuth.js";
 
 function read_string(value: unknown): string {
   return typeof value === "string" ? value.trim() : "";
 }
 
-function map_providers_to_options(items: EmbassyAccountProvider[]): AuthOption[] {
+function map_providers_to_options(items: FederationAccountProvider[]): AuthOption[] {
   const options: AuthOption[] = [];
   for (const item of items) {
     if (!item.enabled) continue;
@@ -74,11 +74,11 @@ function map_providers_to_options(items: EmbassyAccountProvider[]): AuthOption[]
 }
 
 async function load_auth_options(federation_url: string): Promise<AuthOption[]> {
-  const embassy = new Embassy({ federation_url });
-  return map_providers_to_options(await embassy.user.account.providers());
+  const federation = new Federation({ url: federation_url });
+  return map_providers_to_options(await federation.user.account.providers());
 }
 
-async function prompt_auth_method(federation_url: string): Promise<EmbassyAuthMethod | null> {
+async function prompt_auth_method(federation_url: string): Promise<FederationAuthMethod | null> {
   const auth_options = await load_auth_options(federation_url);
   if (auth_options.length === 0) {
     emitCliBlock({
@@ -97,11 +97,11 @@ async function prompt_auth_method(federation_url: string): Promise<EmbassyAuthMe
       description: item.description,
       value: item.value,
     })),
-  })) as { method?: EmbassyAuthMethod };
+  })) as { method?: FederationAuthMethod };
   return response.method ?? null;
 }
 
-async function email_login(input: EmbassyLoginInput): Promise<EmbassyUserSession | null> {
+async function email_login(input: FederationLoginInput): Promise<FederationUserSession | null> {
   const response = (await prompts([
     {
       type: "text",
@@ -118,8 +118,8 @@ async function email_login(input: EmbassyLoginInput): Promise<EmbassyUserSession
   const password = String(response.password || "");
   if (!email || !email.includes("@") || !password) return null;
 
-  const embassy = new Embassy({ federation_url: input.federation_url });
-  const result = await embassy.user.account.login({
+  const federation = new Federation({ url: input.federation_url });
+  const result = await federation.user.account.login({
     provider: "email",
     client_type: "cli",
     bureau_id: input.bureau_id,
@@ -134,7 +134,7 @@ async function email_login(input: EmbassyLoginInput): Promise<EmbassyUserSession
   });
 }
 
-async function email_register(input: EmbassyLoginInput): Promise<EmbassyUserSession | null> {
+async function email_register(input: FederationLoginInput): Promise<FederationUserSession | null> {
   const response = (await prompts([
     {
       type: "text",
@@ -152,8 +152,8 @@ async function email_register(input: EmbassyLoginInput): Promise<EmbassyUserSess
   if (!email || !email.includes("@")) throw new Error("invalid email");
   if (password.length < 8) throw new Error("password must be at least 8 characters");
 
-  const embassy = new Embassy({ federation_url: input.federation_url });
-  const accounts = embassy.user.service("accounts");
+  const federation = new Federation({ url: input.federation_url });
+  const accounts = federation.user.service("accounts");
   const registered = await accounts.action("register").invoke<RegisterResult>({
     email,
     password,
@@ -181,7 +181,7 @@ async function email_register(input: EmbassyLoginInput): Promise<EmbassyUserSess
     bureau_id: input.bureau_id,
   });
   if (verified.error || !verified.success) throw new Error(verified.error || "verification failed");
-  const result = await embassy.user.account.login({
+  const result = await federation.user.account.login({
     provider: "email", bureau_id: input.bureau_id, client_type: "cli", input: { email, password },
   });
   const done = read_done_login_result(result, "verified email login");
@@ -191,18 +191,18 @@ async function email_register(input: EmbassyLoginInput): Promise<EmbassyUserSess
 }
 
 async function oauth_auth(
-  input: EmbassyLoginInput,
+  input: FederationLoginInput,
   provider: string,
-): Promise<EmbassyUserSession | null> {
+): Promise<FederationUserSession | null> {
   if (!can_open_system_browser()) throw new Error("OAuth sign-in requires a local system browser. Remote or headless CLI sessions are not supported.");
-  const embassy = new Embassy({ federation_url: input.federation_url });
+  const federation = new Federation({ url: input.federation_url });
   const callback = await create_loopback_login_callback(180_000);
   let cancelled = false;
   const cancel = () => { cancelled = true; callback.close(); };
   process.once("SIGINT", cancel);
   process.once("SIGTERM", cancel);
   try {
-    const result = await embassy.user.account.login({
+    const result = await federation.user.account.login({
       provider, client_type: "cli", bureau_id: input.bureau_id,
       redirect_uri: callback.redirect_uri, state: callback.state,
       code_challenge: callback.code_challenge, code_challenge_method: "S256",
@@ -234,11 +234,11 @@ async function oauth_auth(
 }
 
 async function input_auth(
-  input: EmbassyLoginInput,
+  input: FederationLoginInput,
   provider: string,
-): Promise<EmbassyUserSession | null> {
-  const embassy = new Embassy({ federation_url: input.federation_url });
-  const result = await embassy.user.account.login({
+): Promise<FederationUserSession | null> {
+  const federation = new Federation({ url: input.federation_url });
+  const result = await federation.user.account.login({
     provider,
     client_type: "cli",
     bureau_id: input.bureau_id,
@@ -253,21 +253,21 @@ async function input_auth(
 }
 
 function read_done_login_result(
-  result: EmbassyAccountLoginResult,
+  result: FederationAccountLoginResult,
   operation: string,
-): EmbassyAccountDoneResult & { user_token: string } {
+): FederationAccountDoneResult & { user_token: string } {
   if (result.error) throw new Error(result.error);
   if (result.status !== "done" || !result.user_token) {
     throw new Error(`${operation} failed: no user token`);
   }
-  return result as EmbassyAccountDoneResult & { user_token: string };
+  return result as FederationAccountDoneResult & { user_token: string };
 }
 
-function build_user_session(input: EmbassyLoginInput & {
+function build_user_session(input: FederationLoginInput & {
   user_token: string;
   user_id?: string;
   user_label?: string;
-}): EmbassyUserSession {
+}): FederationUserSession {
   return {
     federation_url: input.federation_url,
     bureau_id: input.bureau_id,
@@ -278,11 +278,11 @@ function build_user_session(input: EmbassyLoginInput & {
   };
 }
 
-async function build_verified_user_session(input: EmbassyLoginInput & {
+async function build_verified_user_session(input: FederationLoginInput & {
   user_token: string;
   user_id?: string;
   user_label?: string;
-}): Promise<EmbassyUserSession> {
+}): Promise<FederationUserSession> {
   const verified = await read_user_session_from_token(input);
   return build_user_session({
     ...input,
@@ -292,18 +292,18 @@ async function build_verified_user_session(input: EmbassyLoginInput & {
   });
 }
 
-async function read_user_session_from_token(input: EmbassyLoginInput & {
+async function read_user_session_from_token(input: FederationLoginInput & {
   user_token: string;
 }): Promise<{
   bureau_id: string;
   user_id?: string;
   user_label?: string;
 }> {
-  const embassy = new Embassy({
-    federation_url: input.federation_url,
+  const federation = new Federation({
+    url: input.federation_url,
     user_token: input.user_token,
   });
-  const result = await embassy.user.current();
+  const result = await federation.user.current();
   const bureau_id = typeof result.user.bureau_id === "string"
     ? result.user.bureau_id
     : "";
@@ -334,11 +334,11 @@ function format_provider_label(provider: string): string {
 }
 
 /**
- * 执行 Embassy 用户登录。
+ * 执行 Federation 用户登录。
  */
-export async function perform_embassy_user_login(
-  input: EmbassyLoginInput,
-): Promise<EmbassyUserSession | null> {
+export async function perform_federation_user_login(
+  input: FederationLoginInput,
+): Promise<FederationUserSession | null> {
   if (typeof input.bureau_id !== "string" || input.bureau_id.length === 0) {
     throw new TypeError("bureau_id is required");
   }

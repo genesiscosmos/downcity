@@ -5,6 +5,7 @@
  * 只接收已经创建完成的 Agent，不参与任何装配决策。
  */
 
+import type { Federation } from "@downcity/federation";
 import { SshWorkspace } from "@downcity/workspace-ssh";
 import type { WorkspaceRuntime } from "@downcity/type/workspace";
 
@@ -57,10 +58,12 @@ export async function create_cli_agent(input: {
   config: LocalAgentConfig;
   /** 可选的 Downcity 用户级数据根目录。 */
   root_path?: string;
+  /** 与 City Power 共用的服务入口，由宿主拥有。 */
+  federation?: Federation;
 }): Promise<Agent> {
   resolve_local_root_path(input.root_path);
   const [model, tools] = await Promise.all([
-    Promise.resolve(create_cli_agent_model(input.config, process_environment())),
+    Promise.resolve(create_cli_agent_model(input.config, process_environment(), input.federation)),
     Promise.resolve(create_cli_agent_tools()),
   ]);
   return new Agent({
@@ -72,7 +75,7 @@ export async function create_cli_agent(input: {
     tools,
     resolve_work_model: async (model_id, workspace) =>
       await resolve_cli_agent_model(model_id, workspace?.get_env() ?? process_environment(),
-        model_id === input.config.execution?.model_id ? read_reasoning_effort(input.config.execution) : undefined),
+        model_id === input.config.execution?.model_id ? read_reasoning_effort(input.config.execution) : undefined, input.federation),
   });
 }
 
@@ -114,10 +117,11 @@ function process_environment(): Record<string, string> {
 export function create_cli_agent_model(
   config: LocalAgentConfig,
   env: Readonly<Record<string, string>>,
+  federation?: Federation,
 ): ModelClient | undefined {
   const model_id = read_model_id(config.execution);
   return model_id
-    ? new LazyCliModelClient(model_id, async () => await resolve_cli_agent_model(model_id, env, read_reasoning_effort(config.execution)))
+    ? new LazyCliModelClient(model_id, async () => await resolve_cli_agent_model(model_id, env, read_reasoning_effort(config.execution), federation))
     : undefined;
 }
 
@@ -126,10 +130,11 @@ export async function resolve_cli_agent_model(
   model_id_input: string,
   env: Readonly<Record<string, string>>,
   reasoning_effort?: string,
+  federation?: Federation,
 ): Promise<ModelClient> {
   const model_id = String(model_id_input || "").trim();
   if (!model_id) throw new Error("model_id is required");
-  const model = await create_city_ai_model_client({ modelId: model_id, env: { ...env } });
+  const model = await create_city_ai_model_client({ modelId: model_id, env: { ...env }, federation });
   const reasoning = (model as ModelClient & Pick<CityModelDescriptor, "reasoning">).reasoning;
   if (!reasoning_effort || !reasoning?.efforts.some((effort) => effort.id === reasoning_effort)) return model;
   return {
@@ -163,10 +168,9 @@ export function reload_cli_workspace_env(
   });
 }
 
-/** 首次模型调用时解析并缓存真实 Federation 模型。 */
+/** 在模型请求边界重新解析身份与模型，避免持有过期 Token。 */
 class LazyCliModelClient implements ModelClient {
   readonly id: string;
-  private model_promise?: Promise<ModelClient>;
 
   constructor(
     model_id: string,
@@ -180,13 +184,11 @@ class LazyCliModelClient implements ModelClient {
   }
 
   private async model(): Promise<ModelClient> {
-    this.model_promise ??= this.resolve_model().then((model) => {
-      if (!model || typeof model.stream !== "function") {
-        throw new Error(`Resolved model does not implement ModelClient: ${this.id}`);
-      }
-      return model;
-    });
-    return await this.model_promise;
+    const model = await this.resolve_model();
+    if (!model || typeof model.stream !== "function") {
+      throw new Error(`Resolved model does not implement ModelClient: ${this.id}`);
+    }
+    return model;
   }
 }
 

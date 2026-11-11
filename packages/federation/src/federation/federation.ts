@@ -1,7 +1,7 @@
 /**
- * Federation 主模块。
+ * Federation 包内服务运行时。
  *
- * Federation 是城市基础设施运行容器，负责协调：
+ * 本模块由统一 Federation 入口持有，负责业务服务的执行资源：
  * - service 注册
  * - runtime 初始化
  * - 鉴权器访问
@@ -10,6 +10,7 @@
  * 具体初始化、路由构建、instruction 聚合等实现已拆到独立模块。
  */
 
+import { track_response } from "../access/response-lifetime.js";
 import type { Hono, ExecutionContext as HonoExecutionContext } from "hono";
 import { Service, maintain_service } from "../service/service.js";
 import { UserTokenRevocationStore } from "./auth/user-token-revocation-store.js";
@@ -25,7 +26,7 @@ import { FederationQueue } from "./queue.js";
 import { run_federation_middlewares } from "./federation-middleware.js";
 import { execute_federation_http } from "./http/http-execution.js";
 import { resolve_http_policy, type ResolvedFederationHttpPolicy } from "./http/http-policy.js";
-import type { FederationOptions, FederationHealthStatus, FederationFetchOptions } from "./types.js";
+import type { FederationRuntimeOptions, FederationHealthStatus, FederationFetchOptions } from "./types.js";
 import type { FederationStorage } from "./storage.js";
 import type { Authenticator } from "./auth/authenticator.js";
 import type { Runtime } from "./runtime.js";
@@ -34,9 +35,9 @@ import type { BureauStore } from "../service/bureaus/bureau-store.js";
 import type { BureauRecord } from "../types/Bureau.js";
 import type { FederationMiddleware, FederationMiddlewareContext } from "../types/FederationMiddleware.js";
 
-export class Federation {
+export class FederationRuntime {
   private readonly runtime: Runtime;
-  private readonly options: FederationOptions;
+  private readonly options: FederationRuntimeOptions;
   /** 构造期校验并补齐的服务端 HTTP 策略。 */
   private readonly http_policy: ResolvedFederationHttpPolicy;
   readonly queue: FederationQueue;
@@ -48,14 +49,21 @@ export class Federation {
   private hono?: Hono;
   private authenticator?: Authenticator;
   private bureau_store?: BureauStore;
+  /** 活跃前台请求与流；关闭时统一撤销。 */
+  private readonly requests = new Set<AbortController>();
+  /** 已进入的前台业务、队列与维护执行；取消响应不代表业务已经停止。 */
+  private readonly executions = new Set<Promise<unknown>>();
+  private disposed = false;
+  private dispose_promise?: Promise<void>;
 
-  constructor(options: FederationOptions) {
+  constructor(options: FederationRuntimeOptions) {
     this.options = options;
     this.http_policy = resolve_http_policy(options.http);
     this.runtime = create_federation_runtime(options);
     this.queue = new FederationQueue({
-      ensure_ready: () => this.ensure_ready(),
-      get_services: () => this.getServices(),
+      ensure_ready: () => this.ready(),
+      execute: (handler) => this.run_execution(handler),
+      get_services: () => this.get_services(),
       get_table_map: () => {
         if (!this.table_map) throw new Error("Federation init has not completed yet");
         return this.table_map;
@@ -72,6 +80,7 @@ export class Federation {
    * 注册 Federation 默认存储后端。
    */
   storage(storage: FederationStorage): this {
+    this.assert_configuring();
     this.runtime.storage = storage;
     return this;
   }
@@ -80,9 +89,11 @@ export class Federation {
    * 注册 service。
    */
   use(service_input: Service | ServiceDefinition): this {
+    this.assert_configuring();
     const service = "install" in service_input && !("get" in service_input)
       ? asInstallableService(service_input)
       : service_input;
+    if (this.services.has((service as Service).id)) throw new Error(`Duplicate Federation service: ${(service as Service).id}`);
     this.services.set((service as Service).id, service as Service);
     return this;
   }
@@ -96,6 +107,7 @@ export class Federation {
    * - 不用于依赖 `ctx.user` / `ctx.bureau` 的业务生命周期逻辑。
    */
   middle(...middlewares: FederationMiddleware[]): this {
+    this.assert_configuring();
     this.middlewares.push(...middlewares);
     return this;
   }
@@ -103,22 +115,22 @@ export class Federation {
   /**
    * 获取单个 service。
    */
-  getService(id: string): Service | undefined {
+  get_service(id: string): Service | undefined {
     return this.services.get(id);
   }
 
   /**
    * 获取所有已注册 service。
    */
-  getServices(): Service[] {
+  get_services(): Service[] {
     return [...this.services.values()];
   }
 
   /**
    * 获取鉴权器。
    */
-  async getAuthenticator(): Promise<Authenticator> {
-    await this.ensure_ready();
+  async get_authenticator(): Promise<Authenticator> {
+    await this.ready();
     return this.authenticator!;
   }
 
@@ -128,7 +140,7 @@ export class Federation {
   async table<TRow extends Record<string, unknown> = Record<string, unknown>>(
     name: string,
   ): Promise<CityTableApi<TRow>> {
-    await this.ensure_ready();
+    await this.ready();
     const api = this.table_map?.get(name);
     if (!api) throw new Error(`Unknown schema table: ${name}`);
     return api as CityTableApi<TRow>;
@@ -138,9 +150,16 @@ export class Federation {
    * 处理 HTTP 请求。
    */
   readonly fetch = async (request: Request, options: FederationFetchOptions = {}): Promise<Response> => {
-    return execute_federation_http(request, this.http_policy, async (prepared_request, request_id) => {
+    if (this.disposed) throw new Error("federation_disposed");
+    const controller = new AbortController();
+    const tracked_request = new Request(request, { signal: controller.signal });
+    const abort = () => controller.abort(request.signal.reason);
+    if (request.signal.aborted) abort();
+    else request.signal.addEventListener("abort", abort, { once: true });
+    this.requests.add(controller);
+    const response = await execute_federation_http(tracked_request, this.http_policy, async (prepared_request, request_id) => {
       // 初始化也受前台执行期限约束；共享初始化不会因单个客户端取消而被撤销。
-      await this.ensure_ready();
+      await this.ready();
       if (prepared_request.signal.aborted) throw prepared_request.signal.reason;
       const ctx: FederationMiddlewareContext = {
         request: prepared_request,
@@ -148,10 +167,10 @@ export class Federation {
         abort_signal: prepared_request.signal,
         execution: options.execution,
         runtime: this.runtime,
-        federation: { services: () => this.getServices() },
+        federation: { services: () => this.get_services() },
         locals: { request_id },
       };
-      return run_federation_middlewares(this.middlewares, ctx, () => {
+      return this.run_execution(() => run_federation_middlewares(this.middlewares, ctx, () => {
         if (ctx.abort_signal.aborted) throw ctx.abort_signal.reason;
         return Promise.resolve(this.hono!.fetch(
           ctx.request,
@@ -159,8 +178,13 @@ export class Federation {
             federation_request_id: request_id, abort_signal: ctx.abort_signal },
           options.execution as HonoExecutionContext | undefined,
         ));
-      });
+      }));
     });
+    const finish = () => {
+      this.requests.delete(controller);
+      request.signal.removeEventListener("abort", abort);
+    };
+    return track_response(response, controller.signal, finish);
   };
 
   /**
@@ -171,8 +195,8 @@ export class Federation {
    *   而不必等到第一次任务入队失败。
    */
   async health(): Promise<FederationHealthStatus> {
-    await this.ensure_ready();
-    const services = this.getServices();
+    await this.ready();
+    const services = this.get_services();
     return {
       ok: true,
       name: "downcity",
@@ -187,8 +211,8 @@ export class Federation {
    * 聚合 instruction 文档。
    */
   async instruction(): Promise<string> {
-    await this.ensure_ready();
-    return build_federation_instruction(this.getServices());
+    await this.ready();
+    return build_federation_instruction(this.get_services());
   }
 
   /**
@@ -197,7 +221,7 @@ export class Federation {
   private async initialize(prepare_database: boolean): Promise<void> {
     const state = await initialize_federation({
       runtime: this.runtime,
-      services: this.getServices(),
+      services: this.get_services(),
       require_ready: () => this.require_ready(),
       queue: this.queue,
       prepare_database,
@@ -209,9 +233,10 @@ export class Federation {
     this.authenticator = state.authenticator;
     this.hono = build_federation_router({
       runtime: this.runtime,
-      services: this.getServices(),
+      services: this.get_services(),
       authenticator: state.authenticator,
       admin_store: state.admin_store,
+      queue_available: () => this.queue.is_available(),
       table_map: state.table_map,
     });
   }
@@ -219,7 +244,8 @@ export class Federation {
   /**
    * 确保初始化完成。
    */
-  private async ensure_ready(): Promise<void> {
+  async ready(): Promise<void> {
+    if (this.disposed) throw new Error("federation_disposed");
     if (!this.init_promise) {
       this.init_promise = measure_startup("total", () => this.initialize(
         this.options.database_initialization !== "prepared",
@@ -234,7 +260,7 @@ export class Federation {
    */
   async prepare_schema(): Promise<void> {
     if (this.init_promise) throw new Error("Schema preparation requires a fresh Federation instance");
-    await prepare_federation_schema(this.runtime, this.getServices());
+    await prepare_federation_schema(this.runtime, this.get_services());
   }
 
   /**
@@ -248,19 +274,49 @@ export class Federation {
   }
 
   /** 周期清理过期凭证；运行入口由宿主调度，不由用户请求触发。 */
-  async maintenance(): Promise<void> {
-    await this.ensure_ready();
-    const revocations = new UserTokenRevocationStore(
-      this.runtime.database.table(this.runtime.builtinTables.federation_user_token_revocations),
-      this.runtime.database,
-    );
-    await revocations.cleanup_expired();
-    for (const service of this.getServices()) await maintain_service(service);
+  maintenance(): Promise<void> {
+    return this.run_execution(async () => {
+      await this.ready();
+      const revocations = new UserTokenRevocationStore(
+        this.runtime.database.table(this.runtime.builtinTables.federation_user_token_revocations),
+        this.runtime.database,
+      );
+      await revocations.cleanup_expired();
+      for (const service of this.get_services()) await maintain_service(service);
+    });
   }
 
   /** 幂等释放 Federation 持有的资源。 */
   async dispose(): Promise<void> {
-    await this.runtime.database.dispose();
+    if (!this.dispose_promise) {
+      this.disposed = true;
+      for (const controller of this.requests) controller.abort(new Error("Federation is disposed"));
+      this.requests.clear();
+      this.dispose_promise = (async () => {
+        // 初始化和已进入业务的请求必须结束后才能关闭数据库。
+        await this.init_promise?.catch(() => {});
+        // 停止接收新执行后排空同一个登记表，覆盖 HTTP、队列和维护的完整业务阶段。
+        await Promise.allSettled([...this.executions]);
+        await this.runtime.database.dispose();
+      })();
+    }
+    await this.dispose_promise;
+  }
+
+  /** 同步登记执行的完整生命周期，关闭门禁与排空只使用这一份事实源。 */
+  private async run_execution<TResult>(handler: () => Promise<TResult>): Promise<TResult> {
+    if (this.disposed) throw new Error("federation_disposed");
+    // 立即进入 handler，使初始化在本次已接受的调用内开始；跨越 await 前完成登记。
+    const execution = handler();
+    this.executions.add(execution);
+    try { return await execution; }
+    finally { this.executions.delete(execution); }
+  }
+
+  /** Service 装配在初始化前完成，避免路由与注册表形成两份事实。 */
+  private assert_configuring(): void {
+    if (this.disposed) throw new Error("federation_disposed");
+    if (this.init_promise) throw new Error("Federation configuration is frozen after initialization begins");
   }
 
   /**
@@ -269,7 +325,7 @@ export class Federation {
   private async require_ready(): Promise<{
     bureau: { get(id: string): Promise<BureauRecord | undefined> };
   }> {
-    await this.ensure_ready();
+    await this.ready();
     return {
       bureau: this.bureau_store ?? { get: () => Promise.resolve(undefined) },
     };

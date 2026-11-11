@@ -1,20 +1,20 @@
 /**
- * CLI 当前 Embassy 用户身份类型。
+ * CLI 当前 Federation 用户身份类型。
  *
  * 关键点（中文）
- * - 这些类型描述 CLI 当前通过 Embassy 使用的 Federation 用户身份。
+ * - 这些类型描述 CLI 当前通过 Federation 使用的 Federation 用户身份。
  * - 环境变量覆盖与 `city federation login` 保存的 Session 会归一到同一个身份结构。
  */
 
 /**
- * Embassy 用户身份来源。
+ * Federation 用户身份来源。
  */
-export type EmbassyUserSource = "embassy-session" | "env";
+export type FederationUserSource = "federation-session" | "env";
 
 /**
- * Embassy 用户环境变量覆盖情况。
+ * Federation 用户环境变量覆盖情况。
  */
-export interface EmbassyUserEnvOverrides {
+export interface FederationUserEnvOverrides {
   /**
    * Federation URL 是否来自环境变量。
    */
@@ -27,9 +27,9 @@ export interface EmbassyUserEnvOverrides {
 }
 
 /**
- * 当前有效 Embassy 用户身份。
+ * 当前有效 Federation 用户身份。
  */
-export interface ResolvedEmbassyUser {
+export interface ResolvedFederationUser {
   /**
    * Federation URL。
    */
@@ -58,12 +58,12 @@ export interface ResolvedEmbassyUser {
   /**
    * 当前身份来源。
    */
-  source: EmbassyUserSource;
+  source: FederationUserSource;
 
   /**
    * 环境变量覆盖情况。
    */
-  env_overrides: EmbassyUserEnvOverrides;
+  env_overrides: FederationUserEnvOverrides;
 
   /**
    * 诊断提示。
@@ -72,9 +72,9 @@ export interface ResolvedEmbassyUser {
 }
 
 /**
- * Embassy 用户身份解析参数。
+ * Federation 用户身份解析参数。
  */
-export interface ResolveEmbassyUserInput {
+export interface ResolveFederationUserInput {
   /**
    * 用于读取显式覆盖项的环境变量。
    */

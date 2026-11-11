@@ -23,7 +23,7 @@ CLI 与 Desktop 通过 `@downcity/city` 读取宿主配置并显式装配 `Agent
   - Agent、Group、Session
   - Session SDK、Executor 内核和中性执行端口
 - `@downcity/city`
-  - City 组合根、Workspace/Embassy 装配、RemoteAgent 与 HTTP/RPC transport
+  - City 组合根、Workspace/Federation 装配、RemoteAgent 与 HTTP/RPC transport
   - Plugin Registry、Hook 调度、唯一实例和生命周期
   - `@downcity/city/local` 提供本地数据库、配置 Repository 与 Plugin Loader
 - `@downcity/city/plugin`

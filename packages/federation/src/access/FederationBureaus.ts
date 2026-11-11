@@ -1,5 +1,5 @@
 /**
- * Embassy Bureau 管理域。
+ * Federation Bureau 管理域。
  *
  * tokens 管理长期 Bureau 机器凭证，route 管理产品业务服务入口。
  */
@@ -15,7 +15,7 @@ import type {
 } from "../types/Bureau.js";
 
 /** Bureau Token 注册表访问器。 */
-export class EmbassyBureauTokens {
+export class FederationBureauTokens {
   constructor(private readonly bureaus: BureausInvoker) {}
 
   /** 由 Federation 签发 Bureau Token；明文只在本次响应返回。 */
@@ -35,7 +35,7 @@ export class EmbassyBureauTokens {
 }
 
 /** Bureau 可信业务路由访问器。 */
-export class EmbassyBureauRoute {
+export class FederationBureauRoute {
   constructor(private readonly bureaus: BureausInvoker) {}
 
   /** 更新 Bureau 的可信业务服务入口。 */
@@ -44,17 +44,17 @@ export class EmbassyBureauRoute {
   }
 }
 
-/** Embassy 管理员的 Bureau 管理域。 */
-export class EmbassyBureaus {
+/** Federation 管理员的 Bureau 管理域。 */
+export class FederationBureaus {
   /** Bureau Token 注册表。 */
-  readonly tokens: EmbassyBureauTokens;
+  readonly tokens: FederationBureauTokens;
 
   /** Bureau 可信业务服务路由。 */
-  readonly route: EmbassyBureauRoute;
+  readonly route: FederationBureauRoute;
 
   constructor(private readonly bureaus: BureausInvoker) {
-    this.tokens = new EmbassyBureauTokens(bureaus);
-    this.route = new EmbassyBureauRoute(bureaus);
+    this.tokens = new FederationBureauTokens(bureaus);
+    this.route = new FederationBureauRoute(bureaus);
   }
 
   /** 列出全部 Bureau。 */

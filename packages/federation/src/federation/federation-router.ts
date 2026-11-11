@@ -67,6 +67,8 @@ export function build_federation_router(params: {
   table_map: Map<string, CityTableApi>;
   /** Federation 管理员身份与会话 Store。 */
   admin_store: FederationAdminStore;
+  /** 当前队列是否已配置。 */
+  queue_available: () => boolean;
 }): Hono {
   const { runtime, services, authenticator, table_map, admin_store } = params;
   const app = new Hono();
@@ -83,6 +85,7 @@ export function build_federation_router(params: {
   app.get("/health", (c) => c.json({
     ok: true,
     name: "downcity",
+    queue: params.queue_available(),
     checked_at: new Date().toISOString(),
     services: services.map((service) => service.id),
     service_list: services.map((service) => ({ id: service.id, name: service.name })),

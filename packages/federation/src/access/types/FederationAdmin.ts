@@ -1,9 +1,9 @@
 /**
- * Embassy 管理员账户类型。
+ * Federation 管理员账户类型。
  */
 
 /** Federation 管理员登录输入。 */
-export interface EmbassyAdminLoginInput {
+export interface FederationAdminLoginRequest {
   /** fed deploy admin-reset 配置的管理员 ID。 */
   admin_id: string;
 
@@ -12,7 +12,7 @@ export interface EmbassyAdminLoginInput {
 }
 
 /** Federation 管理员登录结果。 */
-export interface EmbassyAdminSession {
+export interface FederationAdminSession {
   /** 当前管理员 ID。 */
   admin_id: string;
 
@@ -24,7 +24,7 @@ export interface EmbassyAdminSession {
 }
 
 /** Federation 当前管理员 Session。 */
-export interface EmbassyCurrentAdmin {
+export interface FederationCurrentAdmin {
   /** 当前请求是否已经认证。 */
   authenticated: true;
 

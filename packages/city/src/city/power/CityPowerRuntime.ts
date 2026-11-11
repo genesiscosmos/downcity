@@ -472,7 +472,7 @@ export class CityPowerRuntime implements PowerRuntimeHost {
       call,
       config: freeze_power_config(this.options.host?.config?.(power_id).get() ?? {}),
       logger: agent.get_logger(),
-      embassy: this.options.embassy,
+      federation: this.options.federation ? { user: this.options.federation.user } : undefined,
       notifications: this.notifications.publisher({ source_kind: "power", power_id, agent_id }),
       get_workspace_env: () => workspace?.get_env() ?? {},
       get_instructions: () => agent.get_instructions(),
@@ -739,7 +739,7 @@ export class CityPowerRuntime implements PowerRuntimeHost {
       },
     };
     return Object.freeze({
-      ...(this.options.embassy ? { embassy: this.options.embassy } : {}),
+      ...(this.options.federation ? { federation: { user: this.options.federation.user } } : {}),
       power: Object.freeze({
         id: power_id,
         action: (action: PowerHostAction) =>

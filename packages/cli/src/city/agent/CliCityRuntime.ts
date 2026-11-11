@@ -13,7 +13,7 @@ import {
   register_city_host,
   unregister_city_host,
 } from "@downcity/city";
-import { EmbassySessionResolver } from "@/city/shared/EmbassySessionResolver.js";
+import { FederationSessionResolver } from "@/city/shared/FederationSessionResolver.js";
 import type { CityDaemonOptions } from "@/city/process/daemon/Types.js";
 import { create_agent_http_gateway_app } from "@/city/agent/AgentHttpGateway.js";
 import { AuthService } from "@/city/runtime/auth/AuthService.js";
@@ -86,6 +86,7 @@ export class CliCityRuntime {
     results.push(...await Promise.allSettled([this.management.close()]));
     this.resources.dispose();
     results.push(...await Promise.allSettled([this.city.close()]));
+    results.push(...await Promise.allSettled([this.city.federation?.dispose()]));
     results.push(...await Promise.allSettled([
       Promise.resolve().then(() => this.data.database.close()),
       unregister_city_host(this.host_instance_id, this.data.root_path),
@@ -125,10 +126,10 @@ export class CliCityRuntime {
       power_repository: data.powers,
     });
     const power_registrations = await power_loader.list_registrations();
-    const { embassy } = await new EmbassySessionResolver().create_user_client();
+    const { federation } = await new FederationSessionResolver().create_user_client();
     const city = new City({
       storage: new LocalStorageProvider(data.root_path),
-      embassy,
+      federation,
       powers: power_registrations,
       power_host: {
         config: (power_id) => ({
@@ -164,6 +165,8 @@ export class CliCityRuntime {
           await resolve_cli_agent_model(
             model_id,
             workspace.get_env(),
+            undefined,
+            federation,
           ),
         create_agent_extension: ({ agent, workspace, powers, sdk_router }) => {
           const auth_service = new AuthService({
@@ -205,6 +208,8 @@ export class CliCityRuntime {
           await resolve_cli_agent_model(
             model_id,
             workspace.get_env(),
+            undefined,
+            federation,
           ),
         reload_workspace_env: async ({ workspace }) => {
           const env = reload_cli_workspace_env(workspace.path, data.root_path);
@@ -220,6 +225,7 @@ export class CliCityRuntime {
       for (const config of data.agents.list()) {
         const agent = await create_cli_agent({
           config,
+          federation,
         });
         agents.push(agent);
         city.agents.add(agent);
@@ -227,6 +233,9 @@ export class CliCityRuntime {
       await Promise.all(agents.map(async (agent) => await agent.resume_work()));
     } catch (error) {
       await Promise.allSettled(agents.map(async (agent) => await city.agents.remove(agent.id)));
+      resources.dispose();
+      await city.close().catch(() => undefined);
+      await federation.dispose().catch(() => undefined);
       data.database.close();
       throw error;
     }
@@ -262,6 +271,7 @@ export class CliCityRuntime {
       await management?.close().catch(() => undefined);
       resources.dispose();
       await city.close().catch(() => undefined);
+      await federation.dispose().catch(() => undefined);
       data.database.close();
       throw error;
     }

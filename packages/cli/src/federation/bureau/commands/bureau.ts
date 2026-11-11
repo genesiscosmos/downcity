@@ -7,8 +7,8 @@
  */
 
 import {
-  Embassy,
-  type EmbassyAdmin,
+  Federation,
+  type FederationAdmin,
   type BureauTokenIssueResult,
   type BureauTokenSummary,
 } from "@downcity/federation";
@@ -146,7 +146,7 @@ export async function revoke_federation_bureau_token_record(
 }
 
 /** 校验显式实例的管理员 Session，并为该实例构造管理客户端。 */
-function create_federation_admin(server: ServerProfile): EmbassyAdmin {
+function create_federation_admin(server: ServerProfile): FederationAdmin {
   if (!server.admin_session_token?.trim() || Date.parse(server.admin_session_expires_at ?? "") <= Date.now()) {
     throw new CliError({
       title: t({
@@ -158,8 +158,8 @@ function create_federation_admin(server: ServerProfile): EmbassyAdmin {
         : `fed server manage --name ${JSON.stringify(server.name)}`,
     });
   }
-  return new Embassy({
-    federation_url: server.base_url,
+  return new Federation({
+    url: server.base_url,
     admin_token: server.admin_session_token!,
   }).admin;
 }

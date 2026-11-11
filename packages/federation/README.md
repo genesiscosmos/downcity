@@ -1,6 +1,6 @@
 # @downcity/federation
 
-@downcity/federation 提供 Downcity Federation 服务端运行时、Embassy 客户端和 Bureau 业务服务客户端。
+@downcity/federation 提供 Downcity Federation 服务端运行时、Federation 客户端和 Bureau 业务服务客户端。
 
 ## 安装
 
@@ -8,27 +8,27 @@
 pnpm add @downcity/federation
 ~~~
 
-## Embassy
+## 远端访问
 
 ~~~ts
-import { Embassy } from "@downcity/federation";
+import { Federation } from "@downcity/federation";
 
-const embassy = new Embassy({
-  federation_url: "https://fed.example.com",
+const federation = new Federation({
+  url: "https://fed.example.com",
 });
 
-const providers = await embassy.user.account.providers();
+const providers = await federation.user.account.providers();
 ~~~
 
-Embassy 只有两个身份子域：
+Federation 只有两个身份子域：
 
-- embassy.user：用户登录、AI、Payment、Service 和 Bureau 业务请求。
-- embassy.admin：管理员 Session 和 Federation 管理。
+- federation.user：用户登录、AI、Payment、Service 和 Bureau 业务请求。
+- federation.admin：管理员 Session 和 Federation 管理。
 
-用户登录成功后，当前 Embassy 实例会立即使用新 User Token：
+用户登录成功后，当前 Federation 实例会立即使用新 User Token：
 
 ~~~ts
-await embassy.user.account.login({
+await federation.user.account.login({
   provider: "email",
   bureau_id: "product-web",
   input: {
@@ -37,24 +37,24 @@ await embassy.user.account.login({
   },
 });
 
-const current_user = await embassy.user.current();
+const current_user = await federation.user.current();
 ~~~
 
 管理员使用用户名和密码获得有期限的 Admin Session：
 
 ~~~ts
-await embassy.admin.login({
+await federation.admin.login({
   admin_id: "owner",
   password: "password",
 });
 
-const bureaus = await embassy.admin.bureaus.list();
+const bureaus = await federation.admin.bureaus.list();
 ~~~
 
 Admin Session 可以授权 Federation 签发长期 Bureau Token。Token 明文由 Federation 生成且只返回一次，数据库只保存 hash：
 
 ~~~ts
-const issued = await embassy.admin.bureaus.tokens.issue({
+const issued = await federation.admin.bureaus.tokens.issue({
   bureau_id: "product-web",
   purpose: "production backend",
 });
@@ -75,9 +75,33 @@ const identity = await bureau.identify(request);
 const user = await bureau.user(request);
 ~~~
 
-`Bureau` 与 `Embassy` 完全解耦。Bureau Token 只能证明业务服务机器身份、读取自身注册信息和本地验证 Federation User Token，不能签发 User Token。User Token 的签发权威始终是 Federation。
+`Bureau` 与 `Federation` 完全解耦。Bureau Token 只能证明业务服务机器身份、读取自身注册信息和本地验证 Federation User Token，不能签发 User Token。User Token 的签发权威始终是 Federation。
 
-## Federation
+## 进程内运行与 City 装配
+
+~~~ts
+import { Federation, AIService } from "@downcity/federation";
+import { Database } from "@downcity/database-sqlite";
+import { AccountsService } from "@downcity/services";
+import { City } from "@downcity/city";
+
+const federation = new Federation({
+  database: new Database({ filename: "/absolute/data/federation.sqlite" }),
+});
+federation.use(new AccountsService({ local_login: true }));
+federation.use(new AIService()); // 在 ready 前注册模型渠道。
+await federation.ready();
+// 完成 Bureau 初始化和账户登录后即可通过 user 访问业务。
+const city = new City({ federation });
+await city.close();
+await federation.dispose();
+~~~
+
+`database` 与 `url` 互斥，无需额外的 mode 参数。本地请求直接进入运行时，不监听端口、不回落到网络。默认只注册 Env 与 Bureaus，账户、AI、队列和媒体存储由宿主显式装配。数据库通过 Federation 持有并释放；City 只借用，关闭 City 不会释放 Federation。
+
+本地 `fetch(request, options?)` 是服务端入口，使用请求自己的身份，不继承 `user` 或 `admin` 的 Token。可信宿主初始化可通过第二参数传入 `trusted_identity`。普通用户和管理员凭证相互独立。
+
+以下配置可调整本地 HTTP 边界；同样适用于进程内业务请求。
 
 ~~~ts
 import { Federation } from "@downcity/federation";
@@ -101,7 +125,7 @@ Federation 负责账户、Token、Admin Session、Service、BureauRecord、可�
 
 ## HTTP 边界与期限
 
-`Federation.fetch()` 默认在 middleware 和 Router 之前启用 HTTP 边界，有界读取原始正文后再进入业务。`FederationOptions.http` 可部分覆盖 `ordinary`、`webhook`、`media`、`model_stream` 的 `max_body_bytes`、`body_timeout_ms`、`execution_timeout_ms`；省略字段使用所属类别的默认值。
+`Federation.fetch()` 默认在 middleware 和 Router 之前启用 HTTP 边界，有界读取原始正文后再进入业务。`LocalFederationOptions.http` 可部分覆盖 `ordinary`、`webhook`、`media`、`model_stream` 的 `max_body_bytes`、`body_timeout_ms`、`execution_timeout_ms`；省略字段使用所属类别的默认值。
 
 | 类别 | 精确路径 | 正文上限 | 正文读取总期限 | 执行期限 / 等待响应头 |
 | --- | --- | --- | --- | --- |
@@ -204,16 +228,16 @@ Provider open 未返回时抛出 504，如 `MODEL_FIRST_OUTPUT_TIMEOUT` 或 `MOD
 `new AIService({ relay: true, credits }).use(models)` 启用持久化模型、渠道、部署和 route 配置、独立 API Key、`priority_weighted` 路由、共享健康冷却及请求/尝试日志。标准 `GET /v1/models`、`POST /v1/chat/completions` 与原生模型流复用 AIService 和可靠结算。
 
 ~~~ts
-const issued = await embassy.user.relay.create_key({
+const issued = await federation.user.relay.create_key({
   name: "Editor",
   allowed_models: ["deepseek-v4-flash"],
   spend_limit: 10000,
   expires_at: null,
 });
-const requests = await embassy.user.relay.list_requests({ limit: 50 });
-const snapshot = await embassy.admin.relay.catalog();
-const metadata = await embassy.admin.relay.metadata(); // 已安装模板与适配器，不含凭据
-const health = await embassy.admin.relay.health(); // 共享冷却快照，不执行模型探测
+const requests = await federation.user.relay.list_requests({ limit: 50 });
+const snapshot = await federation.admin.relay.catalog();
+const metadata = await federation.admin.relay.metadata(); // 已安装模板与适配器，不含凭据
+const health = await federation.admin.relay.health(); // 共享冷却快照，不执行模型探测
 ~~~
 
 Key 管理使用登录身份；调用 Key 不获得通用 user 权限，明文只在签发时返回。消费额度按已完成结算检查，是允许并发在途超出的 Credits 软上限，不预占资金。渠道配置只持有凭据环境变量引用。日志不保存正文或凭据。

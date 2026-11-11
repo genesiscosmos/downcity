@@ -109,7 +109,7 @@ export interface FederationStartupTiming {
 }
 
 /** 创建 Federation 实例的配置；连接、事务及释放由唯一的 Database Adapter 负责。 */
-export interface FederationOptions {
+export interface FederationRuntimeOptions {
   /** Federation 唯一主数据库 Adapter。 */
   database: Database;
   /** 服务端 HTTP 正文与执行策略，未配置时采用分类默认限额，不影响队列调用。 */

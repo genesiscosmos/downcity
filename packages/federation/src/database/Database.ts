@@ -26,6 +26,8 @@ export abstract class Database<TDrizzle extends DrizzleDatabase = DrizzleDatabas
   protected readonly drizzle: TDrizzle;
 
   private disposed = false;
+  /** 并发 dispose 必须共同等待 Adapter 的实际关闭，不能提前报告释放完成。 */
+  private dispose_promise?: Promise<void>;
 
   protected constructor(input: { schema_id: string; drizzle: TDrizzle }) {
     const schema_id = String(input.schema_id ?? "").trim();
@@ -92,11 +94,13 @@ export abstract class Database<TDrizzle extends DrizzleDatabase = DrizzleDatabas
     });
   }
 
-  /** 幂等释放 Adapter 拥有的资源。 */
-  async dispose(): Promise<void> {
-    if (this.disposed) return;
-    this.disposed = true;
-    await this.on_dispose();
+  /** 幂等释放 Adapter；所有调用者等待同一个实际关闭结果。 */
+  dispose(): Promise<void> {
+    if (!this.dispose_promise) {
+      this.disposed = true;
+      this.dispose_promise = this.on_dispose();
+    }
+    return this.dispose_promise;
   }
 
   /** 创建当前 Adapter 的普通 Table API。 */

@@ -1,15 +1,15 @@
 /**
- * Embassy 用户会话类型。
+ * Federation 用户会话类型。
  *
  * 关键点（中文）
- * - 这些类型只描述 Downcity CLI 通过 Embassy 保存的用户登录态。
+ * - 这些类型只描述 Downcity CLI 通过 Federation 保存的用户登录态。
  * - Federation 管理员配置不使用这些类型。
  */
 
 /**
- * Downcity 保存的 Embassy User Session。
+ * Downcity 保存的 Federation User Session。
  */
-export interface EmbassyUserSession {
+export interface FederationUserSession {
   /**
    * Federation 地址。
    */
@@ -46,9 +46,9 @@ export interface EmbassyUserSession {
 }
 
 /**
- * Embassy 用户登录输入。
+ * Federation 用户登录输入。
  */
-export interface EmbassyLoginInput {
+export interface FederationLoginInput {
   /**
    * Federation 地址。
    */

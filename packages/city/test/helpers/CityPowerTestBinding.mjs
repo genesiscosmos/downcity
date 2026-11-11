@@ -69,7 +69,7 @@ export function create_test_power_context(options = {}) {
   };
   return {
     city: {
-      ...(options.embassy ? { embassy: options.embassy } : {}),
+      ...(options.federation ? { federation: options.federation } : {}),
       powers,
     },
     agent: {

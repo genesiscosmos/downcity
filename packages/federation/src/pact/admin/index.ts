@@ -17,12 +17,12 @@ import {
   type CityRequester,
 } from "../requester.js";
 import type {
-  FederationAdminOptions,
+  AdminPactAccessOptions,
   AdminModelRecord,
   AdminServiceSummary,
 } from "./types.js";
 
-export class FederationAdmin {
+export class AdminPactAccess {
   readonly credits: CreditsInvoker;
   readonly bureaus: BureausInvoker;
   readonly env: EnvInvoker;
@@ -31,9 +31,9 @@ export class FederationAdmin {
   private readonly secret: string | undefined;
   private readonly requester: CityRequester;
 
-  constructor(options: FederationAdminOptions) {
+  constructor(options: AdminPactAccessOptions) {
     if (!options || typeof options !== "object") {
-      throw new TypeError("FederationAdmin options are required");
+      throw new TypeError("AdminPactAccess options are required");
     }
 
     this.base_url = requiredString(options.base_url, "base_url").replace(/\/+$/, "");

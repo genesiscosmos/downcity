@@ -7,7 +7,7 @@
  * - Config 与 Storage 均由 City 按当前 Power 绑定，Power 不能越过自身命名空间。
  */
 
-import type { Embassy } from "@downcity/federation";
+import type { Federation } from "@downcity/federation";
 import type { SessionUserContent } from "@downcity/type";
 import type { WorkspaceShell } from "@/workspace/index.js";
 import type { FileSystem } from "@downcity/type";
@@ -200,8 +200,8 @@ export interface PowerCityPowers {
 
 /** Power 可直接调用的 City 受限句柄。 */
 export interface PowerCityHandle {
-  /** City 的 Federation Embassy；未配置时为空。 */
-  readonly embassy?: Embassy;
+  /** City 的 Federation；未配置时为空。 */
+  readonly federation?: Pick<Federation, "user">;
   /** 当前调用绑定的 City Power 端口。 */
   readonly powers: PowerCityPowers;
 }

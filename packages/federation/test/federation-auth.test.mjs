@@ -11,7 +11,6 @@ import { decodeJwt } from "jose"
 
 import {
   Bureau,
-  Embassy,
   Federation,
   base64UrlDecode,
   base64UrlEncode,
@@ -105,7 +104,7 @@ test("Federation 注册 Bureau 服务入口并按 User Token 解析当前 Bureau
     })
     assert.equal(updated.server.server_url, "https://new-bureau.example.com")
 
-    const issued = await (await federation.getAuthenticator()).createToken({
+    const issued = await (await federation.runtime.get_authenticator()).createToken({
       bureau_id: created.bureau_id,
       user_id: "user_1",
       ttl: "1h",
@@ -116,7 +115,7 @@ test("Federation 注册 Bureau 服务入口并按 User Token 解析当前 Bureau
     assert.equal(response.status, 200)
     assert.equal((await response.json()).bureau.server.server_url, "https://new-bureau.example.com")
 
-    const migrated_id_token = await (await federation.getAuthenticator()).createToken({
+    const migrated_id_token = await (await federation.runtime.get_authenticator()).createToken({
       bureau_id: opaque_bureau_id,
       user_id: "user_2",
       ttl: "1h",
@@ -157,7 +156,7 @@ test("Federation 不默认创建 Bureau Token，Bureau 使用 JWKS 验签并在�
     assert.equal(unauthorized.status, 401)
 
     const credential = await register_bureau(admin, bureau_record.bureau_id)
-    const user_token = await (await federation.getAuthenticator()).createToken({
+    const user_token = await (await federation.runtime.get_authenticator()).createToken({
       bureau_id: "downcity",
       user_id: "user_1",
       metadata: { plan: "pro" },
@@ -203,7 +202,7 @@ test("Federation 不默认创建 Bureau Token，Bureau 使用 JWKS 验签并在�
     ])
     assert.equal(requested_paths.includes("/v1/accounts/identify"), false)
 
-    const legacy_token = await (await federation.getAuthenticator()).create_service_token({
+    const legacy_token = await (await federation.runtime.get_authenticator()).create_service_token({
       audience: "downcity:federation",
       subject: "user_legacy",
       prefix: "ub_",
@@ -250,7 +249,7 @@ test("Bureau 拒绝签给另一个 Bureau 的有效 user_token", async () => {
     const primary_bureau = await admin.bureaus.create({ bureau_id: "downcity", name: "Primary Product", server_url: "https://primary.example.com" })
     const other_bureau = await admin.bureaus.create({ name: "Other Product", server_url: "https://other.example.com" })
     const credential = await register_bureau(admin, primary_bureau.bureau_id)
-    const user_token = await (await federation.getAuthenticator()).createToken({
+    const user_token = await (await federation.runtime.get_authenticator()).createToken({
       bureau_id: other_bureau.bureau_id,
       user_id: "user_1",
       ttl: "1h",
@@ -275,7 +274,7 @@ test("Bureau 拒绝被修改签名的 user_token", async () => {
     const admin = await create_admin(federation)
     const bureau_record = await admin.bureaus.create({ bureau_id: "downcity", name: "Downcity", server_url: "https://bureau.example.com" })
     const credential = await register_bureau(admin, bureau_record.bureau_id)
-    const user_token = await (await federation.getAuthenticator()).createToken({
+    const user_token = await (await federation.runtime.get_authenticator()).createToken({
       bureau_id: "downcity",
       user_id: "user_1",
       ttl: "1h",
@@ -382,7 +381,7 @@ test("Federation 启动时将历史多 active signing key 自动收敛为最早�
     assert.equal(retired_rows.length, 2)
     assert.ok(retired_rows.every((row) => typeof row.retired_at === "string" && row.retired_at.length > 0))
 
-    const authenticator = await recovered.getAuthenticator()
+    const authenticator = await recovered.runtime.get_authenticator()
     const admin = await create_admin(recovered)
     await admin.bureaus.create({ bureau_id: "downcity", name: "Downcity", server_url: "https://bureau.example.com" })
     const issued = await authenticator.createToken({
@@ -412,8 +411,8 @@ function create_bureau(federation, bureau_token) {
 }
 
 async function create_admin(federation) {
-  return new Embassy({
-    federation_url: "http://localhost",
+  return new Federation({
+    url: "http://localhost",
     admin_token: await create_test_admin_session(federation),
     fetch: (input, init) => federation.fetch(new Request(input, init)),
   }).admin

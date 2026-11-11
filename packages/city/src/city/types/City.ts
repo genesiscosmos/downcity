@@ -8,7 +8,7 @@ import type { CityCreateAgent } from "@/city/types/CityCreateAgent.js";
 import type { CityHttpRuntimeOptions } from "@/city/transport/types/CityHttpRuntime.js";
 import type { CityRpcRuntimeOptions } from "@/city/transport/types/CityRpcRuntime.js";
 import type { Agent } from "@downcity/agent";
-import type { Embassy } from "@downcity/federation";
+import type { Federation } from "@downcity/federation";
 import type { WorkspaceRuntime } from "@/workspace/index.js";
 import type { StorageProvider } from "@/workspace/index.js";
 import type { Group } from "@downcity/agent";
@@ -19,8 +19,8 @@ export interface CityOptions {
   /** City 为 Agent 提供的底层存储；省略时使用进程内存储。 */
   storage?: StorageProvider;
 
-  /** City 使用的 Federation Embassy；Power 只通过窄服务借用其能力。 */
-  embassy?: Embassy;
+  /** City 使用的 Federation；Power 只通过窄服务借用其能力。 */
+  federation?: Federation;
 
   /** City 持有的 Workspace 资源集合；每个 Workspace ID 必须唯一。 */
   workspaces?: readonly WorkspaceRuntime[] | Readonly<Record<string, WorkspaceRuntime>>;

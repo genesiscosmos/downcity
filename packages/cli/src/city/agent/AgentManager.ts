@@ -120,8 +120,8 @@ async function build_agent_options(
             label: "Federation",
             value: "federation",
             hint: t({
-              zh: "配置 Embassy 登录、当前 Federation 与账户",
-              en: "Configure Embassy login, the current Federation, and account",
+              zh: "配置 Federation 登录、当前 Federation 与账户",
+              en: "Configure Federation login, the current Federation, and account",
             }),
           },
           {

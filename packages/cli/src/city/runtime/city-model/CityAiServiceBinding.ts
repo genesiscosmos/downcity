@@ -4,14 +4,14 @@
  * 关键点（中文）
  * - City 不拥有模型池，也不解析 provider / apiKey / baseURL。
  * - 模型目录唯一来源是 City 的 AIService：`/v1/ai/models`。
- * - 运行时模型通过 Downcity 保存的 Embassy User Session 构造。
+ * - 运行时模型通过 Downcity 保存的 Federation User Session 构造。
  */
 
-import { Embassy } from "@downcity/federation";
+import { Federation } from "@downcity/federation";
 import type { CityModelDescriptor, ModelClient } from "@downcity/type";
-import { EmbassySessionResolver } from "@/city/shared/EmbassySessionResolver.js";
+import { FederationSessionResolver } from "@/city/shared/FederationSessionResolver.js";
 
-const embassy_session_resolver = new EmbassySessionResolver();
+const federation_session_resolver = new FederationSessionResolver();
 const agent_execution_modalities = new Set(["text", "stream", "openai"]);
 
 /**
@@ -40,19 +40,19 @@ export interface CityAiModelChoice {
 export async function listCityAiServiceModelsForAdmin(
   env: NodeJS.ProcessEnv = process.env,
 ): Promise<CityModelDescriptor[]> {
-  const user = await embassy_session_resolver.resolve_current_user({
+  const user = await federation_session_resolver.resolve_current_user({
     env,
     require_user_token: false,
     verify_user: false,
   });
-  const admin_session_token = embassy_session_resolver.read_admin_session(user.federation_url);
+  const admin_session_token = federation_session_resolver.read_admin_session(user.federation_url);
   if (!admin_session_token) {
     throw new Error(
       "A valid Federation administrator session is required to list admin models. Log in with `fed manage`.",
     );
   }
-  const admin = new Embassy({
-    federation_url: user.federation_url,
+  const admin = new Federation({
+    url: user.federation_url,
     admin_token: admin_session_token,
   }).admin;
   return await admin.list_models();
@@ -64,10 +64,10 @@ export async function listCityAiServiceModelsForAdmin(
 export async function listCityAiServiceModelsForUser(
   env: NodeJS.ProcessEnv = process.env,
 ): Promise<CityModelDescriptor[]> {
-  const { embassy_user } = await embassy_session_resolver.create_user_client({
+  const { federation_user } = await federation_session_resolver.create_user_client({
     env,
   });
-  const catalog = await embassy_user.ai.catalog();
+  const catalog = await federation_user.ai.catalog();
   return catalog.all();
 }
 
@@ -131,13 +131,14 @@ export async function create_city_ai_model_client(input: {
    * 宿主环境变量。
    */
   env?: NodeJS.ProcessEnv;
+  /** 当前 City 借用的唯一 Federation；本地实例不读取网络配置。 */
+  federation?: Federation;
 }): Promise<ModelClient> {
   const modelId = String(input.modelId || "").trim();
   if (!modelId) throw new Error("modelId cannot be empty");
-  const { embassy_user } = await embassy_session_resolver.create_user_client({
-    env: input.env ?? process.env,
-  });
-  const catalog = await embassy_user.ai.catalog();
+  const federation_user = input.federation?.mode === "local" ? input.federation.user
+    : (await federation_session_resolver.create_user_client({ env: input.federation ? process.env : input.env ?? process.env }, input.federation)).federation_user;
+  const catalog = await federation_user.ai.catalog();
   const model = catalog.get(modelId);
   if (!model || !is_city_ai_execution_model(model)) {
     throw new Error(`Agent execution model not found in Federation: ${modelId}`);

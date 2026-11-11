@@ -1,11 +1,11 @@
 /**
- * Embassy 当前用户类型。
+ * Federation 当前用户类型。
  */
 
 import type { UserProfile } from "../../types/User.js";
 
 /** Federation 当前用户的可信身份。 */
-export interface EmbassyCurrentUserIdentity extends Record<string, unknown> {
+export interface FederationCurrentUserIdentity extends Record<string, unknown> {
   /** Federation 用户 ID。 */
   user_id: string;
 
@@ -13,10 +13,10 @@ export interface EmbassyCurrentUserIdentity extends Record<string, unknown> {
   bureau_id: string;
 }
 
-/** embassy.user.current 返回结果。 */
-export interface EmbassyCurrentUser {
+/** federation.user.current 返回结果。 */
+export interface FederationCurrentUser {
   /** 已由 Federation 验证的用户身份。 */
-  user: EmbassyCurrentUserIdentity;
+  user: FederationCurrentUserIdentity;
 
   /** Federation 中保存的用户资料。 */
   profile: UserProfile | null;

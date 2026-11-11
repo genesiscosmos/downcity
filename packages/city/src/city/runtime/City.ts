@@ -1,9 +1,9 @@
 /**
- * City：Workspace、Embassy 与统一 transport 的资源容器。
+ * City：Workspace、Federation 与统一 transport 的资源容器。
  *
  * City 不创建 Agent 或 Session。应用创建 Agent 后通过 `city.agents.add(agent)` 加入
  * 当前容器；City 持有 Power 唯一实例、配置投影与生命周期，并管理 Agent 集合、
- * Workspace/Embassy 资源和统一 transport。
+ * Workspace/Federation 资源和统一 transport。
  */
 
 import { Agent, Group } from "@downcity/agent";
@@ -70,8 +70,8 @@ export class City implements CityRuntime {
   /** 同一 Workspace 的切换队列，不阻塞其他 Workspace。 */
   private readonly workspace_transitions = new Map<string, Promise<WorkspaceRuntime>>();
 
-  /** City 绑定的 Embassy 服务入口。 */
-  readonly embassy?: CityOptions["embassy"];
+  /** City 绑定的 Federation 服务入口。 */
+  readonly federation?: CityOptions["federation"];
 
   /** 宿主提供的按需 Workspace 创建能力。 */
   private readonly resolve_workspace?: CityRuntimeOptions["resolve_workspace"];
@@ -98,7 +98,7 @@ export class City implements CityRuntime {
 
   constructor(options: CityOptions = {}) {
     this.storage = options.storage || new MemoryStorageProvider();
-    this.embassy = options.embassy;
+    this.federation = options.federation;
     this.runtime_access = Object.freeze({
       get_agent: (agent_id) => this.get_agent(agent_id),
       list_agents: () => this.list_agents(),
@@ -126,7 +126,7 @@ export class City implements CityRuntime {
     });
     this.power_runtime = new CityPowerRuntime({
       storage: this.storage,
-      ...(this.embassy ? { embassy: this.embassy } : {}),
+      ...(this.federation ? { federation: this.federation } : {}),
       runtime_access: this.runtime_access,
       ...(options.power_host ? { host: options.power_host } : {}),
     });
@@ -210,7 +210,7 @@ export class City implements CityRuntime {
       access: this.runtime_access,
       files_for: (agent_id: string, group_id: string) =>
         this.storage.open_scope(["agents", agent_id, "powers", group_id]).files,
-      ...(this.embassy ? { embassy: this.embassy } : {}),
+      ...(this.federation ? { federation: { user: this.federation.user } } : {}),
     };
     return [new ContextPower(options), new AiPower(options), new AgentPower(options, create_agent), new SessionPower(options)];
   }

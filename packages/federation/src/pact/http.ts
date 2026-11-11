@@ -76,7 +76,7 @@ export async function requestJSON<T>(params: {
   url: string;
   init: RequestInitLike;
 }): Promise<T> {
-  const response = await fetchWithDiagnostics(params);
+  const response = await fetch_with_diagnostics(params);
   if (!response.ok) throw await httpError(response);
   return response.json() as Promise<T>;
 }
@@ -87,7 +87,7 @@ export async function requestRaw(params: {
   url: string;
   init: RequestInitLike;
 }): Promise<FetchResponseLike> {
-  const response = await fetchWithDiagnostics(params);
+  const response = await fetch_with_diagnostics(params);
   if (!response.ok) throw await httpError(response);
   return response;
 }
@@ -98,7 +98,7 @@ export async function requestText(params: {
   url: string;
   init: RequestInitLike;
 }): Promise<string> {
-  const response = await fetchWithDiagnostics(params);
+  const response = await fetch_with_diagnostics(params);
   if (!response.ok) throw await httpError(response);
   return response.text();
 }
@@ -135,48 +135,17 @@ async function httpError(response: FetchResponseLike): Promise<Error> {
   return Object.assign(new Error(`Downcity request failed with ${response.status}`), { status: response.status });
 }
 
-/**
- * fetch 重试 / 诊断包装。
- *
- * 关键点（中文）
- * - 捕获 transient 错（`TypeError: fetch failed` / undici `UND_ERR_*` / 常见 socket 错）后做指数退避重试。
- * - 重试全部用尽仍失败时，把 `error.cause` 展开成可读字符串再抛出，避免上层只看到 "fetch failed"。
- * - 网络层重试只针对真正的传输错误，HTTP 4xx/5xx 仍然通过 `httpError` 走业务错误链路。
- */
-const FETCH_RETRY_DELAYS_MS = [250, 1_000];
-
-async function fetchWithDiagnostics(params: {
+/** 单次发送请求并补充诊断；业务写入和模型调用不透明重试。 */
+async function fetch_with_diagnostics(params: {
+  /** 当前传输实现，本地和远端共用调用协议。 */
   fetch: FetchLike;
+  /** 当前调用的目标地址。 */
   url: string;
+  /** 已确定身份的请求快照。 */
   init: RequestInitLike;
 }): Promise<FetchResponseLike> {
-  const attempts = FETCH_RETRY_DELAYS_MS.length + 1;
-  let last_error: unknown;
-  for (let attempt = 0; attempt < attempts; attempt += 1) {
-    try {
-      return await params.fetch(params.url, params.init);
-    } catch (error) {
-      last_error = error;
-      if (!is_transient_fetch_error(error) || attempt === attempts - 1) {
-        throw enrich_fetch_error(error, params);
-      }
-      const delay_ms = FETCH_RETRY_DELAYS_MS[attempt] ?? 1_000;
-      await sleep(delay_ms);
-    }
-  }
-  // 不会真的走到这里，但 TS 需要兜底。
-  throw enrich_fetch_error(last_error, params);
-}
-
-/**
- * 判定是否属于值得重试的瞬时网络错误。
- */
-function is_transient_fetch_error(error: unknown): boolean {
-  if (!(error instanceof Error)) return false;
-  const message = `${error.message} ${describe_error_cause(error)}`;
-  return /fetch failed|UND_ERR|ECONN(RESET|REFUSED|ABORTED)|ETIMEDOUT|EAI_AGAIN|ENOTFOUND|socket hang up/i.test(
-    message,
-  );
+  try { return await params.fetch(params.url, params.init); }
+  catch (error) { throw enrich_fetch_error(error, params); }
 }
 
 /**
@@ -222,8 +191,4 @@ function describe_error_cause(error: Error): string {
     depth += 1;
   }
   return parts.filter(Boolean).join(" -> ");
-}
-
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, Math.max(0, ms)));
 }

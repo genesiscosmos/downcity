@@ -96,7 +96,8 @@ export class Database extends CityDatabase {
   }
 
   protected async on_dispose(): Promise<void> {
-    this.client.close();
+    // 与事务使用同一协调器，确保 COMMIT / ROLLBACK 结束后再释放原生连接。
+    await this.coordinator.close(() => this.client.close());
   }
 }
 

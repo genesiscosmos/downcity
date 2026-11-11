@@ -43,7 +43,7 @@ const HELP_ITEMS = [
   {
     name: "build:federation",
     summary: "只构建 @downcity/federation 包。",
-    detail: "先构建 @downcity/type，再构建 Federation runtime 与 Embassy SDK。",
+    detail: "先构建 @downcity/type，再构建 Federation runtime 与 Federation SDK。",
   },
   {
     name: "build:city",

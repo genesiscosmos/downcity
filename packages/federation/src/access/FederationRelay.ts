@@ -1,5 +1,5 @@
 /**
- * Embassy 中转管理 SDK。
+ * Federation 中转管理 SDK。
  * 用户入口沿用当前登录身份，管理员入口沿用 Admin Session。签发结果包含一次性
  * 明文，列表和更新只返回可展示信息。外部推理客户端使用标准 /v1 接口。
  */
@@ -11,7 +11,7 @@ import type {
 } from "../types/Relay.js";
 
 /** 登录用户自己的 Key 与调用日志。 */
-export class EmbassyRelay {
+export class FederationRelay {
   constructor(private readonly service: () => ServiceClient) {}
 
   create_key(input: RelayKeyPolicy): Promise<RelayKeyIssued> {
@@ -40,7 +40,7 @@ export class EmbassyRelay {
 }
 
 /** 管理员目录与全局请求查询，不持有渠道明文凭据。 */
-export class EmbassyRelayAdmin {
+export class FederationRelayAdmin {
   constructor(private readonly service: () => ServiceClient) {}
 
   metadata(): Promise<RelayAdminMetadata> {

@@ -3,7 +3,7 @@
  *
  * 关键点（中文）
  * - 三个动作：`sound.models`、`sound.asr`、`sound.tts`；读模型是 read，转写与合成是 write。
- * - 语音 AI 来自 City 持有的 Embassy；本地音频读取以当前 Workspace 为根。
+ * - 语音 AI 来自 City 持有的 Federation；本地音频读取以当前 Workspace 为根。
  * - `tts` 只返回已落盘的本地音频路径，不注入 Agent 消息。
  * - `asr` 同时服务模型调用与其它 power 的程序化调用（例如 chat 入站音频自动转写），
  *   因此不再需要单独的非模型侧动作或 `invoke` 入口。
@@ -30,13 +30,13 @@ import {
 import { CityAction, CityActionError } from "@/city/power/builtin/CityAction.js";
 import { CityActionGroup } from "@/city/power/builtin/CityActionGroup.js";
 
-/** 从 City 注入的 Embassy 获取语音 AI 服务。 */
+/** 从 City 注入的 Federation 获取语音 AI 服务。 */
 function require_sound_ai(context: CityPowerContext): SoundAiService {
-  const service = context.embassy?.user.ai;
+  const service = context.federation?.user.ai;
   if (!service) {
     throw new CityActionError({
       code: "unsupported_action",
-      message: "sound actions require a City Embassy user AI service, and none is configured.",
+      message: "sound actions require a City Federation user AI service, and none is configured.",
     });
   }
   return {

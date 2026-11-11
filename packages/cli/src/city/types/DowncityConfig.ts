@@ -2,11 +2,11 @@
  * Downcity 本地配置类型。
  *
  * 关键点（中文）
- * - 只描述 Downcity 保存的 Federation 与 Embassy Session 索引。
+ * - 只描述 Downcity 保存的 Federation 与 Federation Session 索引。
  * - Federation 管理员配置只作为弱发现来源读取。
  */
 
-import type { EmbassyUserSession } from "@/city/types/EmbassySession.js";
+import type { FederationUserSession } from "@/city/types/FederationSession.js";
 import type { CliLocale } from "@/shared/types/CliLocale.js";
 
 /**
@@ -69,7 +69,7 @@ export interface DowncityConfig {
   profiles?: DowncityFederationProfile[];
 
   /**
-   * 按 Federation URL 索引的 Embassy User Session。
+   * 按 Federation URL 索引的 Federation User Session。
    */
-  sessions?: Record<string, EmbassyUserSession>;
+  sessions?: Record<string, FederationUserSession>;
 }

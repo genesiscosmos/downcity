@@ -454,7 +454,7 @@ Downcity 的安全边界负责防止意外逃逸、路径混乱和未审批的�
 
 **City Power**：
 
-- 能力来源是 City 自己持有的资源：Federation Embassy、当前 Workspace、Session。
+- 能力来源是 City 自己持有的资源：Federation、当前 Workspace、Session。
 - 不需要账号、凭据、第三方安装与设置页。
 - 以 `context` / `ai` / `agent` 三个领域 power 暴露给模型，动作 id 为 `组名.动作名`，说明文本统一注入 session system。
 - 只读事实（`env`、`sandbox` 等）与会写的能力（`image`、`sound`）用同一套契约，区别在各自动作声明了 `read` 还是 `write`。

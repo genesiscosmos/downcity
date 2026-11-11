@@ -3,7 +3,7 @@
  *
  * 关键点（中文）
  * - 三个动作：`image.models`、`image.create`、`image.result`；写文件或消耗额度的动作声明为 write。
- * - 图片 AI 来自 City 持有的 Embassy；本地图片读取以当前 Workspace 为根。
+ * - 图片 AI 来自 City 持有的 Federation；本地图片读取以当前 Workspace 为根。
  * - `result` 把远端图片落到动作组私有目录，只返回本地路径，不注入 Agent 消息。
  */
 
@@ -39,13 +39,13 @@ const DEFAULT_WAIT_MS = 60_000;
 const DEFAULT_POLL_MS = 1_500;
 const MAX_WAIT_MS = 10 * 60_000;
 
-/** 从 City 注入的 Embassy 获取图片 AI 服务。 */
+/** 从 City 注入的 Federation 获取图片 AI 服务。 */
 function require_image_ai(context: CityPowerContext): ImageAiService {
-  const service = context.embassy?.user.ai;
+  const service = context.federation?.user.ai;
   if (!service) {
     throw new CityActionError({
       code: "unsupported_action",
-      message: "image actions require a City Embassy user AI service, and none is configured.",
+      message: "image actions require a City Federation user AI service, and none is configured.",
     });
   }
   return {

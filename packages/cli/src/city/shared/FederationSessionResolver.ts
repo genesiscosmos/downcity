@@ -1,35 +1,35 @@
 /**
- * CLI 当前 Embassy 用户会话解析器。
+ * CLI 当前 Federation 用户会话解析器。
  *
  * 关键点（中文）
  * - 这是 CLI 和 Agent 宿主访问 Federation 用户能力的唯一身份入口。
- * - env 覆盖优先级、本地 Embassy Session 回退和 Token 实际用户校验都集中在这里。
+ * - env 覆盖优先级、本地 Federation Session 回退和 Token 实际用户校验都集中在这里。
  * - 业务模块只消费解析后的身份，避免余额、Agent、模型目录各自拼接身份。
  */
 
-import { Embassy, type EmbassyUser } from "@downcity/federation";
+import { Federation, type FederationUser } from "@downcity/federation";
 import {
   DEFAULT_FEDERATION_URL,
   DEFAULT_BUREAU_ID,
   normalize_federation_url,
   read_federation_admin_session_for_url,
-  read_current_embassy_session,
-  read_embassy_session_for_federation,
+  read_current_federation_session,
+  read_federation_session_for_federation,
 } from "@/city/shared/DowncityConfigStore.js";
 import type {
-  ResolvedEmbassyUser,
-  ResolveEmbassyUserInput,
-  EmbassyUserEnvOverrides,
-} from "@/city/types/EmbassyUser.js";
+  ResolvedFederationUser,
+  ResolveFederationUserInput,
+  FederationUserEnvOverrides,
+} from "@/city/types/FederationUser.js";
 
 /**
- * CLI 当前 Embassy 用户会话解析器。
+ * CLI 当前 Federation 用户会话解析器。
  */
-export class EmbassySessionResolver {
+export class FederationSessionResolver {
   /**
    * 解析当前有效 Federation 用户。
    */
-  async resolve_current_user(input: ResolveEmbassyUserInput = {}): Promise<ResolvedEmbassyUser> {
+  async resolve_current_user(input: ResolveFederationUserInput = {}): Promise<ResolvedFederationUser> {
     const env = input.env ?? process.env;
     const allow_env_override = input.allow_env_override !== false;
     const require_user_token = input.require_user_token !== false;
@@ -40,19 +40,19 @@ export class EmbassySessionResolver {
     const env_user_token = allow_env_override
       ? read_first_env(env, ["DOWNCITY_USER_TOKEN"])
       : "";
-    const selected_session = read_current_embassy_session();
+    const selected_session = read_current_federation_session();
     const federation_url = normalize_federation_url(env_federation_url || selected_session?.federation_url || DEFAULT_FEDERATION_URL);
     const session = env_user_token
       ? selected_session
-      : read_embassy_session_for_federation(federation_url);
+      : read_federation_session_for_federation(federation_url);
 
-    const env_overrides: EmbassyUserEnvOverrides = {
+    const env_overrides: FederationUserEnvOverrides = {
       federation_url: Boolean(env_federation_url),
       user_token: Boolean(env_user_token),
     };
     const bureau_id = session?.bureau_id ?? DEFAULT_BUREAU_ID;
     const user_token = env_user_token || session?.user_token || "";
-    const source = env_user_token ? "env" : "embassy-session";
+    const source = env_user_token ? "env" : "federation-session";
     const warnings: string[] = [];
 
     if (!federation_url) {
@@ -62,13 +62,13 @@ export class EmbassySessionResolver {
       throw new Error("Federation user token is required. Run `city federation login` first.");
     }
     if (env_user_token && selected_session?.user_id) {
-      warnings.push("DOWNCITY_USER_TOKEN overrides the saved Embassy session.");
+      warnings.push("DOWNCITY_USER_TOKEN overrides the saved Federation session.");
     }
     if (env_federation_url && !env_user_token && !session?.user_token) {
       warnings.push("DOWNCITY_FEDERATION_URL selected a Federation without a saved user session.");
     }
 
-    const resolved: ResolvedEmbassyUser = {
+    const resolved: ResolvedFederationUser = {
       federation_url,
       bureau_id,
       user_token,
@@ -86,37 +86,42 @@ export class EmbassySessionResolver {
   }
 
   /**
-   * 创建当前有效 Embassy user 子域。
+   * 创建当前有效 Federation user 子域。
    */
-  async create_user_client(input: ResolveEmbassyUserInput = {}): Promise<{
+  async create_user_client(input: ResolveFederationUserInput = {}, current?: Federation): Promise<{
     /**
      * 当前有效身份。
      */
-    user: ResolvedEmbassyUser;
+    user: ResolvedFederationUser;
 
     /**
      * 绑定当前用户身份的 Federation 用户访问器。
      */
-    embassy_user: EmbassyUser;
+    federation_user: FederationUser;
 
-    /** 绑定当前用户身份的完整 Embassy 客户端。 */
-    embassy: Embassy;
+    /** 绑定当前用户身份的完整 Federation 客户端。 */
+    federation: Federation;
   }> {
     const user = await this.resolve_current_user({
       ...input,
-      require_user_token: input.require_user_token !== false,
+      require_user_token: false,
+      verify_user: false,
     });
     if (!user.user_token) {
+      current?.user.clear_credentials();
       throw new Error("Federation user token is required. Run `city federation login` first.");
     }
-    const embassy = new Embassy({
-      federation_url: user.federation_url,
-      user_token: user.user_token,
-    });
+    if (current && current.url !== user.federation_url) {
+      current.user.clear_credentials();
+      throw new Error("Federation target changed. Reopen the City host to use the selected target.");
+    }
+    const federation = current ?? new Federation({ url: user.federation_url, user_token: user.user_token });
+    federation.user.set_token(user.user_token);
+    const verified_user = input.verify_user === false ? user : await this.verify_current_user(user, user.user_id, federation);
     return {
-      user,
-      embassy,
-      embassy_user: embassy.user,
+      user: verified_user,
+      federation,
+      federation_user: federation.user,
     };
   }
 
@@ -126,14 +131,15 @@ export class EmbassySessionResolver {
   }
 
   private async verify_current_user(
-    user: ResolvedEmbassyUser,
+    user: ResolvedFederationUser,
     session_user_id?: string,
-  ): Promise<ResolvedEmbassyUser> {
-    const embassy = new Embassy({
-      federation_url: user.federation_url,
+    current?: Federation,
+  ): Promise<ResolvedFederationUser> {
+    const federation = current ?? new Federation({
+      url: user.federation_url,
       user_token: user.user_token,
     });
-    const result = await embassy.user.current();
+    const result = await federation.user.current();
     const token_user_id = read_string(result.user.user_id);
     const token_bureau_id = typeof result.user.bureau_id === "string"
       ? result.user.bureau_id
@@ -146,7 +152,7 @@ export class EmbassySessionResolver {
     }
     if (session_user_id && !user.env_overrides.user_token && session_user_id !== token_user_id) {
       throw new Error([
-        "Embassy session user does not match the authenticated token.",
+        "Federation session user does not match the authenticated token.",
         `session=${session_user_id}`,
         `token=${token_user_id}`,
         "Run `city federation logout` and then `city federation login`.",

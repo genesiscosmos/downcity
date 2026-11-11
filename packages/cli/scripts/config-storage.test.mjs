@@ -138,12 +138,12 @@ test("Agent 文件定义与 Workspace 数据库索引独立管理", async () => 
   }
 });
 
-test("Embassy 只接受新的 Federation 身份环境变量", async () => {
+test("Federation 只接受新的 Federation 身份环境变量", async () => {
   const platform_root = create_temp_root();
   process.env.DC_PLATFORM_ROOT = platform_root;
   try {
-    const { EmbassySessionResolver } = await import("../bin/city/shared/EmbassySessionResolver.js");
-    const resolver = new EmbassySessionResolver();
+    const { FederationSessionResolver } = await import("../bin/city/shared/FederationSessionResolver.js");
+    const resolver = new FederationSessionResolver();
     const current = await resolver.resolve_current_user({
       env: {
         DOWNCITY_FEDERATION_URL: "https://federation.example.com/",

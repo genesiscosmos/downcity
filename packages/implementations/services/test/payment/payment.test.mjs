@@ -59,7 +59,7 @@ test("PaymentService owns orders and tops up Credits after paid webhook", async 
       name: "Test",
       server_url: "https://bureau.example.com",
     }))).json()
-    const token = await (await federation.getAuthenticator()).createToken({
+    const token = await (await federation.runtime.get_authenticator()).createToken({
       bureau_id: city.bureau_id,
       user_id: "user_1",
     })

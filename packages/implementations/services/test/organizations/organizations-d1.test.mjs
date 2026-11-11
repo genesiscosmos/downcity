@@ -145,6 +145,6 @@ async function json_request(federation, request) {
 
 async function issue_user_token(federation, secret, bureau_id, user_id) {
   void secret
-  const result = await (await federation.getAuthenticator()).createToken({ bureau_id, user_id })
+  const result = await (await federation.runtime.get_authenticator()).createToken({ bureau_id, user_id })
   return result.user_token
 }

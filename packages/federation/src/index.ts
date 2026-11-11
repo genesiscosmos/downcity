@@ -1,16 +1,15 @@
 /**
  * @downcity/federation 公共入口。
- *
- * Federation 是远程权威服务，Embassy 是统一客户端入口，Bureau 是产品或
- * 业务分区由 Bureau 表达；低层实现只通过稳定的 Federation、Embassy 和 Bureau API 组合。
+ * Federation 统一提供本地运行与远端业务访问；Bureau 表达独立业务机器身份。
+ * 平台数据库 Adapter 由宿主注入，包根入口不加载 Node 原生数据库。
  */
 
-export { Embassy } from "./embassy/Embassy.js";
-export { EmbassyUser } from "./embassy/EmbassyUser.js";
-export { EmbassyAdmin } from "./embassy/EmbassyAdmin.js";
-export { EmbassyAccount } from "./embassy/EmbassyAccount.js";
+export { Federation } from "./access/Federation.js";
+export { FederationUser } from "./access/FederationUser.js";
+export { FederationAdmin } from "./access/FederationAdmin.js";
+export { FederationAccount } from "./access/FederationAccount.js";
 export type { RelayAdminMetadata, RelayAdminTemplate, RelayAdminHealth, RelayAdminDeploymentHealth } from "./types/RelayAdmin.js";
-export { EmbassyRelay, EmbassyRelayAdmin } from "./embassy/EmbassyRelay.js";
+export { FederationRelay, FederationRelayAdmin } from "./access/FederationRelay.js";
 export type {
   RelayCatalog, RelayChannel, RelayDeployment, RelayModel, RelayRoute,
   RelayKeyPolicy, RelayKeyInfo, RelayKeyIssued, RelayKeyUpdate,
@@ -18,44 +17,43 @@ export type {
   RelayKeyList, RelayRequestPage, RelayAttemptList, RelayCatalogSnapshot, RelayCatalogUpdated,
 } from "./types/Relay.js";
 export {
-  EmbassyBureauTokens,
-  EmbassyBureauRoute,
-  EmbassyBureaus,
-} from "./embassy/EmbassyBureaus.js";
-export type { EmbassyOptions } from "./embassy/types/EmbassyOptions.js";
+  FederationBureauTokens,
+  FederationBureauRoute,
+  FederationBureaus,
+} from "./access/FederationBureaus.js";
+export type { FederationOptions, LocalFederationOptions, RemoteFederationOptions } from "./access/types/FederationOptions.js";
 export type {
-  EmbassyAccountContinueInput,
-  EmbassyAccountExchangeInput,
-  EmbassyAccountDoneResult,
-  EmbassyAccountInputField,
-  EmbassyAccountInputRequiredResult,
-  EmbassyAccountLoginBaseResult,
-  EmbassyAccountLoginOptions,
-  EmbassyAccountLoginResult,
-  EmbassyAccountLoginStartInput,
-  EmbassyAccountPendingResult,
-  EmbassyAccountProvider,
-  EmbassyAccountRedirectResult,
-} from "./embassy/types/EmbassyAccount.js";
+  FederationAccountContinueInput,
+  FederationAccountExchangeInput,
+  FederationAccountDoneResult,
+  FederationAccountInputField,
+  FederationAccountInputRequiredResult,
+  FederationAccountLoginBaseResult,
+  FederationAccountLoginOptions,
+  FederationAccountLoginResult,
+  FederationAccountLoginStartInput,
+  FederationAccountPendingResult,
+  FederationAccountProvider,
+  FederationAccountRedirectResult,
+} from "./access/types/FederationAccount.js";
 export type {
-  EmbassyCurrentUser,
-  EmbassyCurrentUserIdentity,
-} from "./embassy/types/EmbassyUser.js";
+  FederationCurrentUser,
+  FederationCurrentUserIdentity,
+} from "./access/types/FederationUser.js";
 export type {
-  EmbassyAdminLoginInput,
-  EmbassyAdminSession,
-  EmbassyCurrentAdmin,
-} from "./embassy/types/EmbassyAdmin.js";
+  FederationAdminLoginRequest,
+  FederationAdminSession,
+  FederationCurrentAdmin,
+} from "./access/types/FederationAdmin.js";
 export { Bureau, BureauUser } from "./client/bureau.js";
 
 // ===========================================================================
 // 场景 1：创建 Federation 实例
 // ===========================================================================
 
-export { Federation } from "./federation/federation.js";
+
 export type { FederationHttpLimits, FederationHttpPolicy, FederationHttpRoutePolicy } from "./types/FederationHttp.js";
 export type {
-  FederationOptions,
   FederationStartupTiming,
   FederationHealthStatus,
 } from "./federation/types.js";

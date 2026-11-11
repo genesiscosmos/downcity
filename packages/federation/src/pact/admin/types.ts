@@ -7,7 +7,7 @@ import type { CityModelDescriptor } from "@downcity/type";
 import type { UserServiceSummary } from "../user/types.js";
 
 /** Federation 管理员访问层构造参数。 */
-export interface FederationAdminOptions {
+export interface AdminPactAccessOptions {
   /** Federation 管理端入口地址，支持 `http(s)://`。 */
   base_url: string;
 

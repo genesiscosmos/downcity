@@ -10,28 +10,28 @@
 
 import { emitCliBlock, emitCliList } from "@/shared/CliReporter.js";
 import { printResult } from "@/city/utils/cli/CliOutput.js";
-import { perform_embassy_user_login } from "@/city/shared/EmbassyUserLogin.js";
+import { perform_federation_user_login } from "@/city/shared/FederationUserLogin.js";
 import { open_city_manager_tui } from "@/city/tui/FederationManagerTui.js";
 import prompts from "@/city/tui/Prompts.js";
-import { EmbassySessionResolver } from "@/city/shared/EmbassySessionResolver.js";
+import { FederationSessionResolver } from "@/city/shared/FederationSessionResolver.js";
 import type {
   FederationMembershipState,
   FederationProfile,
 } from "@/city/types/FederationMembership.js";
-import type { EmbassyUserSession } from "@/city/types/EmbassySession.js";
+import type { FederationUserSession } from "@/city/types/FederationSession.js";
 import {
   DEFAULT_FEDERATION_URL,
   DEFAULT_BUREAU_ID,
   list_federations,
   normalize_federation_url,
   read_federation_admin_session_for_url,
-  read_current_embassy_session,
+  read_current_federation_session,
   read_downcity_config,
   resolve_selected_federation_url,
   upsert_federation_profile,
   write_downcity_config,
 } from "@/city/shared/DowncityConfigStore.js";
-const embassy_session_resolver = new EmbassySessionResolver();
+const federation_session_resolver = new FederationSessionResolver();
 
 export function read_city_admin_session_for_federation(federation_url: string): string | undefined {
   return read_federation_admin_session_for_url(federation_url);
@@ -58,7 +58,7 @@ export function read_federation_membership_state(): FederationMembershipState {
       federation_url,
       bureau_id: session.bureau_id,
       has_user_token: true,
-      source: "embassy-session",
+      source: "federation-session",
       user_id: session.user_id,
       user_label: session.user_label,
     };
@@ -112,7 +112,7 @@ export function emit_federation_status(options?: { as_json?: boolean }): void {
 
 export async function emitCityUserWhoami(options?: { as_json?: boolean }): Promise<void> {
   try {
-    const user = await embassy_session_resolver.resolve_current_user();
+    const user = await federation_session_resolver.resolve_current_user();
     if (options?.as_json === true) {
       printResult({
         type: "block",
@@ -274,7 +274,7 @@ export async function run_federation_use_command(params: {
   });
 }
 
-function save_federation_user_session(session: EmbassyUserSession): void {
+function save_federation_user_session(session: FederationUserSession): void {
   const state = upsert_federation_profile(read_downcity_config(), {
     federation_url: session.federation_url,
   });
@@ -303,9 +303,9 @@ export async function run_federation_login_command(params: {
   const state = read_downcity_config();
   const federation_url = resolve_selected_federation_url(state);
   const bureau_id = params.bureau_id
-    ?? read_current_embassy_session()?.bureau_id
+    ?? read_current_federation_session()?.bureau_id
     ?? DEFAULT_BUREAU_ID;
-  const session = await perform_embassy_user_login({
+  const session = await perform_federation_user_login({
     federation_url,
     bureau_id,
   });
