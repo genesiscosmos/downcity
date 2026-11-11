@@ -51,6 +51,8 @@ export class McpRuntime {
 
   /** 注册配置与状态动作，只读取独立定义，不执行 Server。 */
   async initialize(context: PowerLifecycleContext): Promise<void> {
+    context.abort_signal.throwIfAborted();
+    this.disposed = false;
     this.lifecycle_context = context;
     this.config_path = context.config.path
       ? join(dirname(dirname(context.config.path)), "mcp", "config.toml")
@@ -174,18 +176,26 @@ export class McpRuntime {
       return await pending;
     } });
     await this.reload_all();
+    context.abort_signal.throwIfAborted();
   }
 
   /** 关闭全部 MCP 连接。 */
   async dispose(): Promise<void> {
     this.disposed = true;
     await this.exclusive(async () => {
-      const runtimes = [...this.runtimes.values()];
-      this.runtimes.clear();
-      for (const provider of this.providers.values()) provider.close();
-      this.providers.clear();
+      const errors: unknown[] = [];
+      for (const [id, provider] of this.providers) {
+        try { provider.close(); this.providers.delete(id); } catch (error) { errors.push(error); }
+      }
+      // 先关闭连接以打断在途请求，再等待其回调，不能先等待连接本身结算。
+      const results = await Promise.allSettled([...this.runtimes.entries()].map(async ([id, runtime]) => {
+        await runtime.connection?.close();
+        if (this.runtimes.get(id) === runtime) this.runtimes.delete(id);
+      }));
+      await Promise.allSettled([...this.connecting.values()]);
+      errors.push(...results.flatMap((result) => result.status === "rejected" ? [result.reason] : []));
+      if (errors.length) throw new AggregateError(errors, "MCP resources still require cleanup");
       this.connecting.clear();
-      await Promise.allSettled(runtimes.map(async (runtime) => await runtime.connection?.close()));
     });
   }
 

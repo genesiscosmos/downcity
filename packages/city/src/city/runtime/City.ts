@@ -455,28 +455,39 @@ export class City implements CityRuntime {
         ]));
         // 等待已开始的配置工厂退出，禁止 Storage 释放后再写入或绑定新实例。
         await Promise.allSettled([...this.workspace_transitions.values()]);
-        results.push(...await Promise.allSettled(
-          [...this.groups_by_id.values()].map(async (group) => await this.release_group(group)),
-        ));
-        results.push(...await Promise.allSettled(
-          [...this.agents_by_id.values()].map(async (agent) => await this.remove_agent(agent.id)),
-        ));
-        // Agent dispose 会先停止 Session 并释放 Hook execution lease；因此 Power
-        // Runtime 必须在 Agent 之后释放 City 级实例。
+        const assert_settled = () => {
+          const errors = results.flatMap((result) => result.status === "rejected" ? [result.reason] : []);
+          if (errors.length) {
+            this.city_status = "failed";
+            throw new AggregateError(errors, "City resource cleanup failed");
+          }
+        };
+        assert_settled();
+        // 关闭期间保留失败主体，只在实际释放成功后移除，重试不会重复处理成功项。
+        results.push(...await Promise.allSettled([...this.groups_by_id.values()].map(async (group) => {
+          await group.unbind();
+          await group.dispose();
+          this.power_runtime.detach_group_notifications(group);
+          this.groups_by_id.delete(group.id);
+        })));
+        assert_settled();
+        results.push(...await Promise.allSettled([...this.agents_by_id.values()].map(async (agent) => {
+          agent.unbind();
+          await agent.dispose();
+          this.power_runtime.detach_agent_notifications(agent);
+          this.agents_by_id.delete(agent.id);
+        })));
+        assert_settled();
+        // Session 停止后再清理 Power；失败实例依然可能需要 Workspace 和 Storage。
         results.push(...await Promise.allSettled([this.power_runtime.dispose()]));
-        results.push(...await Promise.allSettled(
-          [...this.workspaces_by_id.values()].map(async (workspace) => await workspace.dispose()),
-        ));
-        results.push(...await Promise.allSettled([
-          this.storage.dispose?.() ?? Promise.resolve(),
-        ]));
-        const errors = results.flatMap((result) =>
-          result.status === "rejected" ? [result.reason] : [],
-        );
-        if (errors.length > 0) {
-          this.city_status = "failed";
-          throw new AggregateError(errors, "City transport close failed");
-        }
+        assert_settled();
+        results.push(...await Promise.allSettled([...this.workspaces_by_id.values()].map(async (workspace) => {
+          await workspace.dispose();
+          this.workspaces_by_id.delete(workspace.id);
+        })));
+        assert_settled();
+        results.push(...await Promise.allSettled([this.storage.dispose?.() ?? Promise.resolve()]));
+        assert_settled();
         this.agents_by_id.clear();
         this.groups_by_id.clear();
         this.workspaces_by_id.clear();

@@ -8,7 +8,7 @@
 import type { DatabaseSync } from "node:sqlite";
 import { open_session_read_database } from "./SessionReadDatabase.js";
 import type { AgentSessionInfo } from "@/types/agent/SessionTypes.js";
-import type { SessionBrowseBaseInput, SessionBrowseStateRow } from "@/types/store/SessionBrowse.js";
+import type { SessionBrowseBaseInput, SessionBrowseReadOptions, SessionBrowseStateRow } from "@/types/store/SessionBrowse.js";
 import type { SessionHistoryMeta } from "@/types/store/SessionHistoryMeta.js";
 import { resolve_session_message_preview } from "@/session/storage/SessionMessagePreview.js";
 import { restore_session_origin } from "@downcity/type";
@@ -50,12 +50,7 @@ export function build_session_info(input: SessionBrowseBaseInput): AgentSessionI
 export function read_session_metadata_from_database(
   database_path: string,
   fallback_category: string,
-  read_options?: {
-    /** 调用方持有离线读取租约，拒绝待恢复 WAL 并避免创建 sidecar。 */
-    immutable?: boolean;
-    /** 新公开浏览接口需要报告权限/schema/I/O 错误；兼容内部列表的可选投影。 */
-    strict?: boolean;
-  },
+  read_options?: SessionBrowseReadOptions,
 ): SessionHistoryMeta | null {
   let database: DatabaseSync | null = null;
   try {

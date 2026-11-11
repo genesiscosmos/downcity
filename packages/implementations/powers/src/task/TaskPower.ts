@@ -333,6 +333,7 @@ export class TaskPower extends Power {
 
   /** 注册宿主管理 actions，并从统一 Store 恢复 schedule。 */
   async initialize(context: PowerLifecycleContext): Promise<void> {
+    context.abort_signal.throwIfAborted();
     this.lifecycle_context = context;
     const definitions = new TaskDefinitionRepository(
       context.storage,
@@ -370,34 +371,31 @@ export class TaskPower extends Power {
       reconcile: async (task_id) => await this.reconcile(task_id),
     }, async (input) => await this.generate_task(generate_schema.parse(input)));
     await recover_task_executions(definitions);
+    context.abort_signal.throwIfAborted();
     await scheduler.initialize();
+    context.abort_signal.throwIfAborted();
     await preparation.initialize();
+    context.abort_signal.throwIfAborted();
   }
 
   /** 停止新增定时触发，并等待已经受理的 Task 执行收口。 */
   async dispose(): Promise<void> {
     const scheduler = this.scheduler;
-    this.scheduler = undefined;
+    const preparation = this.preparation;
     const errors: unknown[] = [];
-    try { await this.preparation?.dispose(); } catch (error) { errors.push(error); }
-    this.preparation = undefined;
     try {
-      if (scheduler) await scheduler.dispose();
-    } catch (error) {
-      errors.push(error);
-    }
+      await preparation?.dispose();
+      if (this.preparation === preparation) this.preparation = undefined;
+    } catch (error) { errors.push(error); }
     try {
-      await this.executions.settle();
-    } catch (error) {
-      errors.push(error);
-    } finally {
-      this.workspace_actions = undefined;
-      this.definitions = undefined;
-      this.lifecycle_context = undefined;
-    }
-    if (errors.length > 0) {
-      throw new AggregateError(errors, "TaskPower disposal failed");
-    }
+      await scheduler?.dispose();
+      if (this.scheduler === scheduler) this.scheduler = undefined;
+    } catch (error) { errors.push(error); }
+    try { await this.executions.settle(); } catch (error) { errors.push(error); }
+    if (errors.length) throw new AggregateError(errors, "TaskPower disposal failed");
+    this.workspace_actions = undefined;
+    this.definitions = undefined;
+    this.lifecycle_context = undefined;
   }
 
   /** 在定义 mutation 后增量更新一个 Task 的 schedule。 */

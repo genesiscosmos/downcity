@@ -64,6 +64,8 @@ export interface CityPowerRecord {
   readonly host_actions: Map<string, PowerHostAction>;
   /** Power 唯一配置 action。 */
   readonly config_actions: Map<string, PowerConfigAction>;
+  /** 本次初始化的可取消句柄，提交时即登记以覆盖排队中的初始化。 */
+  readonly initialization_abort: AbortController;
   /** Power 初始化完成的唯一 Promise。 */
   ready: Promise<void>;
   /** 当前仍在执行的宿主管理 action 数量。 */
@@ -75,11 +77,15 @@ export interface CityPowerRecord {
   /** Power 是否已经进入需要释放的生命周期。 */
   lifecycle_active: boolean;
   /** Power 当前可观察状态。 */
-  state: "initializing" | "ready" | "error";
+  state: "initializing" | "ready" | "error" | "disposing" | "cleanup_failed";
   /** Power 加入 City 的时间戳。 */
   readonly registered_at: number;
   /** Power 状态最近更新时间戳。 */
   updated_at: number;
   /** Power 最近一次初始化错误。 */
   last_error?: string;
+  /** 初始化原始失败；后续清理失败仍保留该原因。 */
+  initialization_error?: unknown;
+  /** 首次清理失败的原始异常，实例及存储上下文继续保留以便重试。 */
+  cleanup_error?: unknown;
 }

@@ -49,8 +49,11 @@ export interface CityPowers {
    */
   refresh(input: CityPowerInput): Promise<void>;
 
-  /** 从 City 移除 Power，并等待正在执行的 Hook/Action 收口。 */
+  /** 立即请求初始化取消，撤销新调用能力，再等待初始化和宿主管理调用及清理结算。 */
   remove(power_id: string): Promise<boolean>;
+
+  /** 队列外同步请求指定或全部在途初始化取消；仍须等待 add/remove/close 的真实结算。 */
+  cancel_initialization(power_id?: string): void;
 
   /** 返回 City 当前全部 Power 状态快照。 */
   snapshots(): PowerSnapshot[];

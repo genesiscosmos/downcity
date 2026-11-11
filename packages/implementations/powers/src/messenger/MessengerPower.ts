@@ -68,19 +68,21 @@ export class MessengerPower extends Power {
 
   /** 从 City 唯一配置恢复全部 enabled Bot Account 和可靠 Worker。 */
   async initialize(context: PowerLifecycleContext): Promise<void> {
+    context.abort_signal.throwIfAborted();
     const config = read_messenger_accounts_config(context.config.get());
     const runtime = new MessengerRuntime(context);
     this.runtime = runtime;
     register_messenger_account_host_actions(context, () => this.require_runtime(), this.feishu_registration);
     await runtime.initialize(config.accounts);
+    context.abort_signal.throwIfAborted();
   }
 
   /** 释放 Worker、在途 Turn、Connector 和 Store。 */
   async dispose(): Promise<void> {
     const runtime = this.runtime;
-    this.runtime = undefined;
     this.feishu_registration.dispose();
     if (runtime) await runtime.dispose();
+    if (this.runtime === runtime) this.runtime = undefined;
   }
 
   /** 返回 initialize 后可用的唯一 Runtime。 */

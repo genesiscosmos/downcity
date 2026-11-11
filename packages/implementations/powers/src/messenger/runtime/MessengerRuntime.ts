@@ -126,6 +126,7 @@ export class MessengerRuntime {
     // 关键点（中文）：旧 Work 历史仍归原 Agent 所有，外部聊天从新 Channel Session 继续。
     // 每条路由独立提交，启动中断后仅重试尚未完成的升级。
     for (const conversation of this.store.list_pending_channel_conversations()) {
+      this.context.abort_signal.throwIfAborted();
       const account = configured_accounts.find((item) => item.account_id === conversation.account_id);
       const session = await this.context.system.create_agent_session({
         agent_id: conversation.agent_id,
@@ -140,8 +141,10 @@ export class MessengerRuntime {
           ...(conversation.title ? { chat_title: conversation.title } : {}),
         },
       });
+      this.context.abort_signal.throwIfAborted();
       this.store.complete_channel_session_upgrade(conversation.conversation_id, session.session_id);
     }
+    this.context.abort_signal.throwIfAborted();
     if (this.disposed) return;
     this.account_lifecycle.initialize(configured_accounts);
     this.start_workers();
@@ -281,7 +284,11 @@ export class MessengerRuntime {
 
   /** 关闭可靠 Worker、在途 Turn、Connector 与 Store。 */
   dispose(): Promise<void> {
-    this.dispose_promise ??= this.run_dispose();
+    if (!this.dispose_promise) {
+      const operation = this.run_dispose();
+      this.dispose_promise = operation;
+      void operation.catch(() => { if (this.dispose_promise === operation) this.dispose_promise = undefined; });
+    }
     return this.dispose_promise;
   }
 
@@ -303,9 +310,9 @@ export class MessengerRuntime {
     await Promise.allSettled([...this.active_inbox_tasks]);
     await Promise.allSettled([...this.worker_tasks]);
     const results = await account_shutdown;
-    this.store.close();
     const errors = results.flatMap((result) => result.status === "rejected" ? [result.reason] : []);
     if (errors.length) throw new AggregateError(errors, "Messenger shutdown failed");
+    this.store.close();
   }
 
   /** 根据 Account Provider 创建平台 Connector。 */

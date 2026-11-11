@@ -253,7 +253,9 @@ export class SkillPower extends Power {
 
   /** 注册 Skill Power 的宿主管理 actions。 */
   async initialize(context: PowerLifecycleContext): Promise<void> {
+    context.abort_signal.throwIfAborted();
     await this.mcp_runtime.initialize(context);
+    context.abort_signal.throwIfAborted();
     Object.assign(this.actions, this.mcp_runtime.actions);
     register_skill_power_host_actions(context, {
       agents_root: resolve_agents_root(context.data_root_path),

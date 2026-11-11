@@ -2,7 +2,8 @@
  * 文件型 Power 定义与唯一配置仓储。
  *
  * 每个 Power 使用自己的稳定 ID 目录。第三方描述保存在 `power.json`，全部用户配置
- * 以明文 TOML 保存在 `config.toml`；数据库不保存 Power 的任何副本。
+ * 以明文 TOML 保存在 `config.toml`；数据库不保存 Power 的任何副本。定义枚举可逐项
+ * 返回读取失败，严格列表接口则在任一项失败时抛出聚合异常。
  */
 
 import path from "node:path";
@@ -17,6 +18,7 @@ import {
 import { normalize_power_id } from "@/local/repositories/AgentRepository.js";
 import type {
   LocalInstalledPowerDefinition,
+  LocalInstalledPowerListResult,
   LocalPowerConfig,
 } from "@/local/types/LocalPower.js";
 
@@ -32,15 +34,41 @@ export class PowerRepository {
     this.root_path = resolve_local_root_path(root_path_input);
   }
 
-  /** 列出全部第三方 Power 定义。 */
+  /** 列出全部第三方 Power 定义；任一项读取失败时以聚合异常拒绝请求。 */
   list_installed(): LocalInstalledPowerDefinition[] {
+    const result = this.list_installed_results();
+    if (result.failures.length > 0) {
+      throw new AggregateError(
+        result.failures.map((failure) => failure.error),
+        `Failed to read installed Powers: ${result.failures.map((failure) => failure.power_id).join(", ")}`,
+      );
+    }
+    return result.definitions;
+  }
+
+  /**
+   * 逐目录读取第三方定义，隔离单个 power.json 的读取与校验失败。
+   *
+   * 成功定义与失败记录分别按稳定 ID 排序；根目录枚举失败仍向调用方抛出。
+   * 缺少 power.json 的目录沿用单项读取语义，不产生定义或失败记录。
+   */
+  list_installed_results(): LocalInstalledPowerListResult {
+    const result: LocalInstalledPowerListResult = { definitions: [], failures: [] };
     const powers_path = get_local_powers_path(this.root_path);
-    if (!fs.pathExistsSync(powers_path)) return [];
-    return fs.readdirSync(powers_path, { withFileTypes: true })
-      .filter((entry) => entry.isDirectory() && !entry.name.startsWith("."))
-      .map((entry) => this.get_installed(entry.name))
-      .filter((item): item is LocalInstalledPowerDefinition => item !== null)
-      .sort((left, right) => left.id.localeCompare(right.id));
+    if (!fs.pathExistsSync(powers_path)) return result;
+    const entries = fs.readdirSync(powers_path, { withFileTypes: true })
+      .filter((entry) => entry.isDirectory() && !entry.name.startsWith("."));
+    for (const entry of entries) {
+      try {
+        const definition = this.get_installed(entry.name);
+        if (definition !== null) result.definitions.push(definition);
+      } catch (error) {
+        result.failures.push({ power_id: entry.name, error });
+      }
+    }
+    result.definitions.sort((left, right) => left.id.localeCompare(right.id));
+    result.failures.sort((left, right) => left.power_id.localeCompare(right.power_id));
+    return result;
   }
 
   /** 按 Power ID 读取第三方定义；内置 Power 没有该文件。 */

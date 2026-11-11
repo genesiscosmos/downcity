@@ -268,6 +268,8 @@ export interface PowerSelf {
 
 /** Power 加入 City 后在完整 City 生命周期内持有的稳定上下文。 */
 export interface PowerLifecycleContext {
+  /** 本次初始化的取消信号；移除与关闭即时触发，扩展应传播到 I/O 并等待实际清理结算。 */
+  readonly abort_signal: AbortSignal;
   /** 宿主提供的 Federation 访问入口，用于后台调用模型。 */
   readonly federation?: Pick<Federation, "user">;
   /** 当前 Power 的自身能力。 */

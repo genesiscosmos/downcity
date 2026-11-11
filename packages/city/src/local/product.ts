@@ -38,8 +38,11 @@ export type {
 } from "./types/LocalConfig.js";
 export type {
   LocalInstalledPowerDefinition,
+  LocalInstalledPowerListResult,
   LocalPowerConfig,
   LocalPowerDefinition,
+  LocalPowerLoadFailure,
+  LocalPowerLoadResult,
   LocalPowerRendererDefinition,
   LocalPowerRegistration,
 } from "./types/LocalPower.js";

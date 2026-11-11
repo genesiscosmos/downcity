@@ -99,6 +99,14 @@ export interface SessionBrowseCursor {
   offset: number;
 }
 
+/** 单次数据库元数据读取策略；省略时沿用常规列表的容错只读行为。 */
+export interface SessionBrowseReadOptions {
+  /** 调用方持有离线共享读取租约；拒绝未恢复 WAL，并避免创建 sidecar。 */
+  immutable?: boolean;
+  /** 权限、schema、I/O 或缺失状态均应报错，禁止跳过损坏数据库。 */
+  strict?: boolean;
+}
+
 /** Worker 单步请求；客户端每次只允许一条挂起消息。 */
 export interface SessionBrowseRequest {
   /** 请求序号。 */
@@ -113,6 +121,8 @@ export interface SessionBrowseRequest {
   cursor?: string;
   /** 有背压的候选批次。 */
   candidates?: SessionBrowseCandidate[];
+  /** 当前批次的只读策略，不跨请求保存，避免公共与常规浏览互相影响。 */
+  read_options?: SessionBrowseReadOptions;
 }
 
 /** 立即发送的清理控制消息，与普通 RPC 共用 FIFO，在途最多 128 条。 */

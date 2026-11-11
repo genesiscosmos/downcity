@@ -73,6 +73,7 @@ function create_power_context(agent_id = "memory_test_agent") {
 /** 创建 MemoryPower 生命周期测试使用的最小 City 上下文。 */
 function create_start_context(storage_path) {
   return {
+    abort_signal: new AbortController().signal,
     storage: { path: storage_path, files: {} },
     config: { path: "", get: () => ({}), set: async () => {} },
     power: { id: "memory", action() {}, config_action() {} },

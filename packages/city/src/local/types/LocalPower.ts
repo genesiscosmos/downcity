@@ -45,6 +45,30 @@ export interface LocalPowerDefinition {
 /** 内置与第三方 Power 共享的 City 注册协议。 */
 export type LocalPowerRegistration = CityPowerRegistration;
 
+/** 单个第三方 Power 定义读取或注册加载失败，保留稳定 ID 与原始异常。 */
+export interface LocalPowerLoadFailure {
+  /** 加载失败的已安装 Power 稳定 ID，供宿主定位与展示故障。 */
+  power_id: string;
+  /** 定义读取、完整性校验或模块加载抛出的原始值，未经字符串化或替换。 */
+  error: unknown;
+}
+
+/** 逐目录读取已安装定义的结果，成功定义与失败记录分别按稳定 ID 排序。 */
+export interface LocalInstalledPowerListResult {
+  /** 成功读取并通过定义校验的已安装 Power，按稳定 ID 排序。 */
+  definitions: LocalInstalledPowerDefinition[];
+  /** 读取或校验失败的目录 ID 与原始异常，按目录 ID 排序。 */
+  failures: LocalPowerLoadFailure[];
+}
+
+/** 一次逐项隔离加载的结果，定义读取失败在前，随后为注册加载失败。 */
+export interface LocalPowerLoadResult {
+  /** 内置注册在前，随后为成功加载且提供 main 的已安装 Power 注册。 */
+  registrations: CityPowerRegistration[];
+  /** 每个加载失败的已安装 Power 及其原始异常；失败不影响其他注册。 */
+  failures: LocalPowerLoadFailure[];
+}
+
 /** powers/<power_id>/power.json 中的第三方 Power 定义。 */
 export interface LocalInstalledPowerDefinition extends Omit<
   LocalPowerDefinition,

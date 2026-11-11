@@ -69,6 +69,7 @@ test("配置读取不回显 API Key，空输入保留密钥，显式清除才删
   };
   const power = new WebPower();
   power.initialize({
+    abort_signal: new AbortController().signal,
     power: {
       id: "web",
       action(action) { actions.set(action.id, action); },
@@ -108,6 +109,7 @@ test("配置保存是字段级增量：只改提交的字段，其余字段保�
   };
   const power = new WebPower();
   power.initialize({
+    abort_signal: new AbortController().signal,
     power: {
       id: "web",
       action(action) { actions.set(action.id, action); },
@@ -294,6 +296,7 @@ test("保存配置后释放旧浏览器 Provider，并在下一次调用惰性�
     },
   });
   power.initialize({
+    abort_signal: new AbortController().signal,
     power: {
       id: "web",
       action(action) { actions.set(action.id, action); },

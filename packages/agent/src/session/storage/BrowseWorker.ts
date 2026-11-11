@@ -32,8 +32,13 @@ port.on("message", (request: SessionBrowseRequest | SessionBrowseClearRequest) =
           throw new Error("session_list_worker_failed: Invalid candidate batch");
         }
         for (const candidate of request.candidates) {
-          const metadata = read_session_metadata_from_database(candidate.database_path, request.query.category);
-          if (!metadata) continue; // 保留损坏或已删除数据库的原有跳过语义。
+          const metadata = read_session_metadata_from_database(
+            candidate.database_path, request.query.category, request.read_options,
+          );
+          if (!metadata) {
+            if (request.read_options?.strict) throw new Error("session_schema_invalid: Missing Session state");
+            continue; // 常规列表仍跳过损坏或已删除的数据库。
+          }
           snapshots.append({
             project_root: "", agent_id: request.query.agent_id,
             session_id: candidate.session_id, metadata,

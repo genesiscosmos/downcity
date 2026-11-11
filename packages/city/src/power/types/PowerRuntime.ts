@@ -274,7 +274,7 @@ export interface CityPowerRegistration {
 }
 
 /** PowerDefinition 当前运行状态。 */
-export type PowerState = "initializing" | "ready" | "error";
+export type PowerState = "initializing" | "ready" | "error" | "disposing" | "cleanup_failed";
 
 /** PowerDefinition 可观察快照。 */
 export interface PowerSnapshot {
@@ -285,6 +285,8 @@ export interface PowerSnapshot {
   /** 注册时间戳。 */ readonly registered_at: number;
   /** 最近更新时间戳。 */ readonly updated_at: number;
   /** 最近错误。 */ readonly last_error?: string;
+  /** 初始化失败的原始可展示原因；清理失败不会覆盖此原因。 */ readonly initialization_error?: string;
+  /** 尚未成功释放的资源原因；实例继续由 City 持有直到清理完成。 */ readonly cleanup_error?: string;
 }
 
 /** PowerDefinition 概览。 */

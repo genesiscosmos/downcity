@@ -48,8 +48,16 @@ interface ManagementRequest {
 export class ManagementChannel {
   /** 向 host 描述发布的 socket / named pipe 地址。 */
   readonly endpoint: string;
-  /** 已连接客户端，关闭时只断连接，不停止它们已提交的 Turn。 */
+  /** 已连接客户端；关闭时保留已接受请求的连接直到响应结算。 */
   private readonly sockets = new Set<Socket>();
+  /** 正在处理请求的连接，不把客户端断开误认为业务操作完成。 */
+  private readonly active_sockets = new Set<Socket>();
+  /** 已接受请求的结算边界，包含 dispatch 与响应编码。 */
+  private readonly pending = new Set<Promise<void>>();
+  /** 关闭开始后不再接受新的请求帧。 */
+  private closing = false;
+  /** 并发与重复 close 共享同一次关闭结果。 */
+  private close_promise?: Promise<void>;
 
   private constructor(private readonly server: Server, endpoint: string, private readonly credential_path?: string) { this.endpoint = endpoint; }
 
@@ -75,6 +83,7 @@ export class ManagementChannel {
     const server = createServer();
     const channel = new ManagementChannel(server, endpoint, auth_key ? path.join(root_path, "runtimes", "city", "management-auth", `${state.instance_id}.key`) : undefined);
     server.on("connection", (socket) => {
+      if (channel.closing) { socket.destroy(); return; }
       channel.sockets.add(socket);
       socket.once("close", () => channel.sockets.delete(socket));
       socket.on("error", () => socket.destroy());
@@ -83,13 +92,15 @@ export class ManagementChannel {
       socket.setTimeout(30_000, () => { if (!received) socket.destroy(); });
       socket.on("data", (chunk) => {
         if (received) return;
+        if (channel.closing) { socket.destroy(); return; }
         buffer += chunk.toString("utf8");
         if (Buffer.byteLength(buffer) > MAX_FRAME_BYTES) { socket.destroy(); return; }
         const newline = buffer.indexOf("\n");
         if (newline < 0) return;
         received = true;
         socket.setTimeout(0);
-        void (async () => {
+        channel.active_sockets.add(socket);
+        const pending = Promise.resolve().then(async () => {
           let id: unknown = null;
           try {
             const request = decode_management_frame(buffer.slice(0, newline), auth_key) as ManagementRequest;
@@ -114,23 +125,61 @@ export class ManagementChannel {
             const failure = as_resource_error(error);
             socket.end(`${encode_management_frame({ id, success: false, error: { code: failure.code, message: failure.message, exit_code: failure.exit_code, retryable: failure.retryable, details: failure.details } }, auth_key)}\n`);
           }
-        })();
+        });
+        channel.pending.add(pending);
+        // 响应编码或连接异常也必须结算，避免未处理的 rejection 脱离关闭所有权。
+        void pending.then(() => {
+          channel.pending.delete(pending);
+          channel.active_sockets.delete(socket);
+        }, () => {
+          channel.pending.delete(pending);
+          channel.active_sockets.delete(socket);
+          socket.destroy();
+        });
       });
     });
-    await new Promise<void>((resolve, reject) => {
-      server.once("error", reject);
-      server.listen(endpoint, () => { server.off("error", reject); resolve(); });
-    });
-    if (process.platform !== "win32") await fs.chmod(endpoint, 0o600);
-    return channel;
+    try {
+      await new Promise<void>((resolve, reject) => {
+        server.once("error", reject);
+        server.listen(endpoint, () => { server.off("error", reject); resolve(); });
+      });
+      if (process.platform !== "win32") await fs.chmod(endpoint, 0o600);
+      return channel;
+    } catch (error) {
+      // 监听成功后权限收敛仍可能失败，不能把已取得的句柄留给下一次启动。
+      if (server.listening) {
+        try { await channel.close(); }
+        catch (cleanup_error) { throw new AggregateError([error, cleanup_error], "Management startup rollback failed"); }
+      } else if (channel.credential_path) await fs.rm(channel.credential_path, { force: true });
+      throw error;
+    }
   }
 
-  /** 停止接收请求并关闭客户端，宿主负责先等待/释放实际业务资源。 */
-  async close(): Promise<void> {
+  /**
+   * 同步关闭接收门禁，等待已接受 dispatch 后关闭连接与本机凭据。
+   * 宿主应从请求处理函数外调用，且在本方法结算后再释放业务数据库。
+   */
+  close(): Promise<void> {
+    if (this.close_promise) return this.close_promise;
+    this.closing = true;
+    this.close_promise = this.finish_close();
+    return this.close_promise;
+  }
+
+  /** 停止监听与业务结算分开等待，空闲客户端不能阻塞退出。 */
+  private async finish_close(): Promise<void> {
+    const listener_closed = new Promise<Error | undefined>((resolve) => {
+      this.server.close((error) => resolve(error));
+    });
+    for (const socket of this.sockets) {
+      if (!this.active_sockets.has(socket)) socket.destroy();
+    }
+    await Promise.allSettled([...this.pending]);
     for (const socket of this.sockets) socket.destroy();
-    await new Promise<void>((resolve, reject) => this.server.close((error) => error ? reject(error) : resolve()));
+    const listener_error = await listener_closed;
     if (process.platform !== "win32") await fs.rm(this.endpoint, { force: true });
     if (this.credential_path) await fs.rm(this.credential_path, { force: true });
+    if (listener_error) throw listener_error;
   }
 }
 

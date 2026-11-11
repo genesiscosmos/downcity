@@ -183,6 +183,7 @@ export class MemoryPower extends Power {
 
   /** 启动当前 City 唯一的 Memory Provider，并注册界面管理 actions。 */
   async initialize(context: PowerLifecycleContext): Promise<void> {
+    context.abort_signal.throwIfAborted();
     const platform_root = this.platform_root_path ?? context.data_root_path;
     const users = new UserRepository(platform_root);
     users.get();
@@ -197,6 +198,7 @@ export class MemoryPower extends Power {
       return { ...users.update({ display_name }) };
     } });
     await this.provider.initialize();
+    context.abort_signal.throwIfAborted();
     const config = context.config.get();
     const model_id = this.options.model_id ?? (typeof config.model_id === "string" ? config.model_id : undefined);
     register_memory_power_host_actions(context, this.provider, model_id);
@@ -220,7 +222,9 @@ export class MemoryPower extends Power {
       async (scope) => ({ agent_id: scope.agent_id, workspace_id: scope.workspace_id, city_memory_available: true, exclude_city: true }),
       this.options.dreaming);
     await this.coordinator.initialize();
+    context.abort_signal.throwIfAborted();
     await this.dreaming.initialize();
+    context.abort_signal.throwIfAborted();
     register_memory_dream_host_actions(context, this.dreaming);
     register_memory_record_host_actions(context, this.service, jobs, this.dreaming);
     this.delivery.initialize();

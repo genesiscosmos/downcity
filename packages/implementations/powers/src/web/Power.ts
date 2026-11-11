@@ -119,6 +119,8 @@ export class WebPower extends Power {
 
   /** 按 Agent 与 Workspace 执行作用域持有的浏览器 Provider。 */
   private readonly browser_providers = new Map<string, Promise<BrowserProvider>>();
+  /** 已成功释放的注入 Provider，不因另一个资源失败而重复释放。 */
+  private readonly released_providers = new WeakSet<WebSearchProvider | WebDocumentProvider>();
 
   constructor(options: WebPowerOptions = {}) {
     super();
@@ -138,6 +140,7 @@ export class WebPower extends Power {
 
   /** 注册 Web Power 的状态与配置 actions。 */
   initialize(context: import("@downcity/city/power").PowerLifecycleContext): void {
+    context.abort_signal.throwIfAborted();
     register_web_power_config_actions(context, {
       after_save: async () => await this.dispose_all_browser_providers(),
     });
@@ -152,7 +155,11 @@ export class WebPower extends Power {
     ]);
     const results = await Promise.allSettled([
       this.dispose_all_browser_providers(),
-      ...[...providers].map(async (provider) => await provider.dispose?.()),
+      ...[...providers].map(async (provider) => {
+        if (this.released_providers.has(provider)) return;
+        await provider.dispose?.();
+        this.released_providers.add(provider);
+      }),
     ]);
     const errors = rejected_reasons(results);
     if (errors.length > 0) {
@@ -162,11 +169,17 @@ export class WebPower extends Power {
 
   /** 关闭全部按旧配置创建的浏览器 provider。 */
   private async dispose_all_browser_providers(): Promise<void> {
-    const providers = [...this.browser_providers.values()];
-    this.browser_providers.clear();
-    const results = await Promise.allSettled(providers.map(async (provider_promise) => {
-      const provider = await provider_promise;
+    const providers = [...this.browser_providers.entries()];
+    const results = await Promise.allSettled(providers.map(async ([key, provider_promise]) => {
+      let provider: BrowserProvider;
+      try { provider = await provider_promise; }
+      catch (error) {
+        // 创建失败没有可释放实例，不让已拒绝的缓存阻挡后续重新创建。
+        if (this.browser_providers.get(key) === provider_promise) this.browser_providers.delete(key);
+        throw error;
+      }
       await provider.dispose();
+      if (this.browser_providers.get(key) === provider_promise) this.browser_providers.delete(key);
     }));
     const errors = rejected_reasons(results);
     if (errors.length > 0) {

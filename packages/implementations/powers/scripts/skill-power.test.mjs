@@ -62,6 +62,7 @@ function create_skill_context(workspace_path, data_root_path, agent_id = "agent-
 async function start_power(data_root_path) {
   const power = new SkillPower();
   await power.initialize({
+    abort_signal: new AbortController().signal,
     power: { id: "skill", action() {}, config_action() {} },
     config: { get: () => ({}), set: async () => {} },
     storage: { path: data_root_path, files: {} },
@@ -218,6 +219,7 @@ test("ignore 规则同时过滤 id 与 name", async () => {
   const fixture = create_fixture();
   const power = new SkillPower({ ignore: ["own"] });
   await power.initialize({
+    abort_signal: new AbortController().signal,
     power: { id: "skill", action() {}, config_action() {} },
     config: { get: () => ({}), set: async () => {} },
     storage: { path: fixture.base, files: {} },

@@ -2,7 +2,8 @@
  * 本地 City Power Loader。
  *
  * Loader 只解析内置或第三方统一注册。Power 实例不由 Loader 创建；同一个入口
- * 导出的实例直接交给 City，由 City 统一持有生命周期。
+ * 导出的实例直接交给 City，由 City 统一持有生命周期。逐项加载结果保留成功注册
+ * 与原始失败，严格列表接口则在存在失败时拒绝整批请求。
  */
 
 import path from "node:path";
@@ -15,6 +16,7 @@ import type {
 } from "@/power/index.js";
 import type {
   LocalInstalledPowerDefinition,
+  LocalPowerLoadResult,
   LocalPowerRegistration,
 } from "@/local/types/LocalPower.js";
 import type { LocalPowerLoaderOptions } from "@/local/types/LocalRuntime.js";
@@ -35,16 +37,41 @@ export class LocalPowerLoader {
     return await this.load_installed_registration(power_id);
   }
 
-  /** 列出当前本地宿主能够解析的全部 Power 注册。 */
-  async list_registrations(): Promise<CityPowerRegistration[]> {
-    const installed = await Promise.all(
-      this.options.power_repository.list_installed()
-        .map(async (definition) => await this.load_installed_registration(definition.id)),
+  /**
+   * 逐项加载 Power 注册，完整保留各项失败，供宿主按 Power 隔离故障。
+   *
+   * 内置注册始终保留；已安装 Power 的定义读取、校验与导入互不影响。目录枚举自身失败
+   * 仍向调用方抛出；未提供 main 的 Power 沿用单项加载语义，不产生注册。
+   */
+  async load_registrations(): Promise<LocalPowerLoadResult> {
+    const { definitions, failures } = this.options.power_repository.list_installed_results();
+    const installed = await Promise.allSettled(
+      definitions.map(async (definition) => await this.load_installed_registration(definition.id)),
     );
-    return [
-      ...this.builtin_registrations,
-      ...installed.filter((item): item is CityPowerRegistration => item !== null),
-    ];
+    const result: LocalPowerLoadResult = {
+      registrations: [...this.builtin_registrations],
+      failures: [...failures],
+    };
+    for (const [index, item] of installed.entries()) {
+      if (item.status === "rejected") {
+        result.failures.push({ power_id: definitions[index]!.id, error: item.reason });
+      } else if (item.value !== null) {
+        result.registrations.push(item.value);
+      }
+    }
+    return result;
+  }
+
+  /** 列出全部 Power 注册；任一已安装 Power 加载失败时以聚合异常拒绝请求。 */
+  async list_registrations(): Promise<CityPowerRegistration[]> {
+    const result = await this.load_registrations();
+    if (result.failures.length > 0) {
+      throw new AggregateError(
+        result.failures.map((failure) => failure.error),
+        `Failed to load installed Powers: ${result.failures.map((failure) => failure.power_id).join(", ")}`,
+      );
+    }
+    return result.registrations;
   }
 
   /** 从第三方 Power 根目录加载并校验统一 main 模块。 */

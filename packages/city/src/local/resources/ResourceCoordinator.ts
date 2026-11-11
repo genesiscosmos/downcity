@@ -27,6 +27,8 @@ export class ResourceCoordinator {
   private tail: Promise<unknown> = Promise.resolve();
   /** 同一配置 action 的下层 config.set 可重入；操作结束后继承上下文也失效。 */
   private readonly ownership = new AsyncLocalStorage<{ /** 当前短事务尚未结束，不能把权限传给后续后台 Timer。 */ active: boolean }>();
+  /** 关闭门禁只限制外部提交，已接受事务的嵌套操作仍归原事务所有。 */
+  private closing = false;
   /** 已保存但尚未成功应用的 Agent，禁止新执行。 */
   readonly blocked_agents = new Set<string>();
   /** 正在释放或释放失败的 Workspace，懒解析也必须拒绝进入。 */
@@ -35,6 +37,7 @@ export class ResourceCoordinator {
   /** 调用方必须已经持有进程级 root 写租约。 */
   async mutate<T>(operation: () => Promise<T> | T): Promise<T> {
     if (this.ownership.getStore()?.active) return await operation();
+    if (this.closing) throw new ResourceError("runtime_closing", "Resource mutations are shutting down", 4);
     const run = async (): Promise<T> => {
       const scope = { active: true };
       return await this.ownership.run(scope, async () => {
@@ -44,6 +47,22 @@ export class ResourceCoordinator {
     const result = this.tail.then(run, run);
     this.tail = result.then(() => undefined, () => undefined);
     return await result;
+  }
+
+  /** 同步停止接受外部变更；调用方随后关闭入口并等待已接受事务结算。 */
+  begin_shutdown(): void {
+    this.closing = true;
+  }
+
+  /**
+   * 等待调用前已接受的事务结算；关闭流程应先调用 begin_shutdown 固定队列。
+   * 事务内部等待自身队尾会死锁，因此明确拒绝这种调用，交由外层生命周期所有者排空。
+   */
+  async drain(): Promise<void> {
+    if (this.ownership.getStore()?.active) {
+      throw new ResourceError("resource_busy", "Cannot drain resource mutations from inside a mutation", 4);
+    }
+    await this.tail;
   }
 
   /** 在宿主懒解析/执行入口共享同一门禁。 */
