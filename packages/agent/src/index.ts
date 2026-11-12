@@ -27,6 +27,7 @@ export type { SessionReadView } from "./types/store/SessionReadView.js";
 
 // Agent 入口
 export { Agent } from "./agent/Agent.js";
+export { DeferredModelClient } from "./model/DeferredModelClient.js";
 export { SessionBusyError } from "./session/SessionBusyError.js";
 export type { SessionPromptActor } from "./types/sdk/SessionPromptActor.js";
 export {
