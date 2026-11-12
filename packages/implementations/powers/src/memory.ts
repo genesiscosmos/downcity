@@ -40,6 +40,8 @@ export type {
 } from "./memory/types/Memory.js";
 export type {
   MemoryAccessContext,
+  MemoryKnowledgeAccess,
+  MemoryUserAccessContext,
   MemoryOwner,
   MemorySubject,
   MemorySubjectKind,

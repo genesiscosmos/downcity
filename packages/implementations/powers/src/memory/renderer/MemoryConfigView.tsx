@@ -2,7 +2,6 @@
 import { useEffect, useState } from "react";
 import type { PowerMainviewComponentProps } from "@downcity/city/power/react";
 import type { MemoryConfigSnapshot } from "../types/MemoryManagement.js";
-import { memory_dream_settings as MemoryDreamSettings } from "./MemoryDreamSettings.js";
 
 /** Sidebar 和 Provider 页共用无范围的状态读取契约，卸载后忽略迟到响应。 */
 export function use_memory_config({ power, ui }: Pick<PowerMainviewComponentProps, "power" | "ui">) {
@@ -43,7 +42,7 @@ export function memory_config_view(props: PowerMainviewComponentProps) {
   ] as const;
   const storage = status.details?.storage_adapter;
   return <Page>
-    <Toolbar title="配置" description="知识后端、记忆处理与后台整理" actions={<Inline>
+    <Toolbar title="设置" description="知识后端与记忆处理" actions={<Inline>
       <Button on_click={ui.invalidate}>刷新</Button>
     </Inline>} />
     {error ? <Callout tone="danger">{error}</Callout> : null}
@@ -67,6 +66,8 @@ export function memory_config_view(props: PowerMainviewComponentProps) {
       <Row label="处理方式" description="专用 Memory Session 提炼与修订，提交结果由 Power 确认。" />
       <Row label="核心记忆" description="User 与 Agent Profile 由 Downcity 独立管理，构建会话上下文时读取。" />
     </Group>
-    <MemoryDreamSettings power={props.power} ui={ui} />
+    <Group label="自动整理">
+      <Row label="用户记忆" description="通过明确保存与修订维护；后台整理不会自动写入用户记忆。" />
+    </Group>
   </Page>;
 }

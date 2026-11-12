@@ -93,6 +93,9 @@ export interface PowerRendererSidebarProps {
 
   /** 固定在 Header 下方、滚动列表之外的搜索或筛选控件，与列表共用左右对齐线。 */
   readonly toolbar?: ReactNode;
+
+  /** 固定在侧栏底部、独立于内容滚动区的次要入口，如设置。 */
+  readonly footer?: ReactNode;
 }
 
 /** Power Sidebar 分区属性。 */

@@ -20,8 +20,8 @@ export function InboxList({ entries, selected_key, busy, choose, update_notifica
   return <>{entries.map((entry) => {
     const needs_attention = entry.unread && (!entry.pending || entry.pending.interaction.can_respond);
     return <SidebarItem key={entry.key}
-    label={entry.title}
-    description={<span className="inbox-list-meta"><span>{entry.source}</span><span aria-hidden="true">·</span><time dateTime={new Date(entry.created_at).toISOString()} title={full_time(entry.created_at)}>{relative_time(entry.created_at)}</time></span>}
+    label={<span className="inbox-item-title" data-unread={needs_attention} title={entry.title}>{entry.title}</span>}
+    description={<span className="inbox-list-meta"><span title={entry.source}>{entry.source}</span><time dateTime={new Date(entry.created_at).toISOString()} title={full_time(entry.created_at)}>{relative_time(entry.created_at)}</time></span>}
     leading={<InboxAvatar entry={entry} size="list" options={options} />}
     active={selected_key === entry.key}
     on_select={() => void choose(entry)}

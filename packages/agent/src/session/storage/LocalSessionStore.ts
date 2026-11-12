@@ -9,7 +9,8 @@
 
 import { isDeepStrictEqual } from "node:util";
 import type { AgentInteraction } from "@/types/agent/AgentInteractions.js";
-import { collect_pending_interactions, project_agent_interaction, read_file_pending_interactions } from "./SessionInteractionReader.js";
+import { collect_pending_interactions, project_agent_interaction } from "./SessionInteractionReader.js";
+import { SessionInteractionClient } from "./SessionInteractionClient.js";
 import type { SessionReadView } from "@/types/store/SessionReadView.js";
 import { create_session_read_view, read_file_session_history } from "./SessionHistoryReader.js";
 import { normalize_session_id } from "@/session/SessionIdentity.js";
@@ -30,7 +31,6 @@ import {
   get_agent_archived_session_path,
   get_agent_archived_sessions_path,
   get_agent_session_database_path,
-  get_agent_session_categories_path,
   get_agent_session_path,
 } from "@/session/storage/LocalStorePaths.js";
 import {
@@ -78,12 +78,20 @@ export class LocalSessionStore implements SessionStore {
   /** 列表专用生命周期、世代与共享 Worker 接入。 */
   private readonly browse: SessionBrowseClient;
 
+  /** 文件交互扫描使用独立共享 Worker，内存 Store 不注册线程 owner。 */
+  private readonly interaction_query?: SessionInteractionClient;
+
   constructor(options: LocalSessionStoreOptions) {
     this.files = options.files;
     this.agent_id = options.agent_id;
     this.workspace_id = options.workspace_id;
     this.storage_root_path = options.storage_root_path;
     this.database_location = options.database_location;
+    if (this.database_location.type !== "memory") {
+      this.interaction_query = new SessionInteractionClient({
+        files: this.files, storage_root_path: this.storage_root_path, agent_id: this.agent_id,
+      });
+    }
     this.browse = new SessionBrowseClient({
       files: this.files,
       project_root: this.storage_root_path,
@@ -206,22 +214,7 @@ export class LocalSessionStore implements SessionStore {
       }
       return result;
     }
-    const root = get_agent_session_categories_path(this.storage_root_path);
-    if (!(await this.files.path_exists(root))) return result;
-    for (const partition of await this.files.read_directory(root)) {
-      if (!partition.is_directory) continue;
-      const category = decode_session_id(partition.name);
-      const partition_path = `${root}/${partition.name}`;
-      for (const entry of await this.files.read_directory(partition_path)) {
-        if (!entry.is_directory) continue;
-        const session_id = decode_session_id(entry.name);
-        const database_path = get_agent_session_database_path(this.storage_root_path, category, session_id);
-        if (!(await this.files.path_exists(database_path))) continue;
-        const interactions = read_file_pending_interactions(database_path, this.agent_id, session_id, category);
-        result.push(...interactions);
-      }
-    }
-    return result;
+    return await this.interaction_query!.list();
   }
 
   /** 判断活动 Session 是否存在。 */
@@ -241,7 +234,7 @@ export class LocalSessionStore implements SessionStore {
 
   /** 永久删除活动 Session。 */
   async remove_session(session_id: string, category = SESSION_ORIGIN_CATEGORY_WORK): Promise<boolean> {
-    return await this.browse.mutate(() => this.remove_session_data(session_id, category));
+    return await this.mutate_queries(() => this.remove_session_data(session_id, category));
   }
 
   /** 执行永久删除；外层浏览世代覆盖所有异步阶段。 */
@@ -268,7 +261,7 @@ export class LocalSessionStore implements SessionStore {
 
   /** 清空活动 Session Message 数据。 */
   async clear_session_messages(session_id: string, category = SESSION_ORIGIN_CATEGORY_WORK): Promise<boolean> {
-    return await this.browse.mutate(() => this.clear_session_message_data(session_id, category));
+    return await this.mutate_queries(() => this.clear_session_message_data(session_id, category));
   }
 
   /** 执行消息清空。 */
@@ -293,7 +286,7 @@ export class LocalSessionStore implements SessionStore {
 
   /** 将活动 Session 迁入归档区。 */
   async archive_session(session_id: string, category = SESSION_ORIGIN_CATEGORY_WORK): Promise<AgentArchiveSessionResult> {
-    return await this.browse.mutate(() => this.archive_session_data(session_id, category));
+    return await this.mutate_queries(() => this.archive_session_data(session_id, category));
   }
 
   /** 执行活动到归档的移动，内存模式同样受世代保护。 */
@@ -348,7 +341,7 @@ export class LocalSessionStore implements SessionStore {
 
   /** 永久删除全部归档 Session。 */
   async clean_archive(): Promise<AgentCleanArchiveResult> {
-    return await this.browse.mutate(() => this.clean_archive_data());
+    return await this.mutate_queries(() => this.clean_archive_data());
   }
 
   /** 执行归档清理，部分失败仍会失效已有快照。 */
@@ -390,10 +383,17 @@ export class LocalSessionStore implements SessionStore {
   /** 关闭全部 Session SQLite 连接并清空缓存。 */
   async dispose(): Promise<void> {
     const browse_disposal = this.browse.dispose();
+    const interaction_disposal = this.interaction_query?.dispose();
     const storages = [...this.sessions.values(), ...this.archived_sessions.values()];
     this.sessions.clear();
     this.archived_sessions.clear();
-    await Promise.all([browse_disposal, ...storages.map(async (storage) => await storage.dispose())]);
+    await Promise.all([browse_disposal, interaction_disposal, ...storages.map(async (storage) => await storage.dispose())]);
+  }
+
+  /** 破坏性修改前后同时失效浏览和交互读取，包含部分失败的操作。 */
+  private async mutate_queries<T>(action: () => Promise<T>): Promise<T> {
+    const mutate = () => this.browse.mutate(action);
+    return await (this.interaction_query ? this.interaction_query.mutate(mutate) : mutate());
   }
 
   /** 返回活动 Session 物理目录，仅供本地实现内部使用。 */

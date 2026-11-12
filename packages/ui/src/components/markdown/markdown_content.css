@@ -1,11 +1,15 @@
-/* MarkdownView 的代码、表格、图片与公式；宽内容只在自身区域滚动。 */
+/*
+ * MarkdownView 的代码、表格、图片与公式；宽内容只在自身区域滚动。
+ * 背景角色允许宿主容器局部覆盖，未提供时使用 SDK 自有默认值。
+ * 透明叠色、排版、代码画布及 Shiki 高亮规则由本模块保持独立。
+ */
 .markdown-view code:not(pre code) {
   display: inline;
   max-width: 100%;
   padding: 0.1em 0.3em;
   border-radius: 4px;
   color: inherit;
-  background: color-mix(in srgb, var(--foreground) 5%, var(--background) 95%) !important;
+  background: var(--markdown-inline-code-background, color-mix(in srgb, var(--foreground) 5%, var(--background) 95%)) !important;
   font-family: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, Consolas, monospace);
   font-size: 0.875em;
   overflow-wrap: anywhere;
@@ -23,7 +27,7 @@
   overflow: hidden;
   border: 1px solid color-mix(in srgb, var(--foreground) 8%, var(--background) 92%) !important;
   border-radius: 8px !important;
-  background: var(--surface-subtle, color-mix(in srgb, var(--foreground) 3%, var(--background) 97%)) !important;
+  background: var(--markdown-code-background, var(--surface-subtle, color-mix(in srgb, var(--foreground) 3%, var(--background) 97%))) !important;
   box-shadow: none;
 }
 .markdown-view [data-streamdown="code-block-header"] {
@@ -148,7 +152,7 @@
 }
 .markdown-view [data-streamdown="table-header-cell"] {
   color: var(--markdown-text) !important;
-  background: var(--surface-subtle, color-mix(in srgb, var(--foreground) 3%, var(--background) 97%)) !important;
+  background: var(--markdown-table-header-background, var(--surface-subtle, color-mix(in srgb, var(--foreground) 3%, var(--background) 97%))) !important;
   font-weight: 500 !important;
   white-space: nowrap;
 }

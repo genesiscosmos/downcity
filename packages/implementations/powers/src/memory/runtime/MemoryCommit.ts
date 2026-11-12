@@ -113,7 +113,7 @@ export async function commit_memory_changes(
   }
   const request_hash = hash_value(canonical_json({
     scope_prefix: address.prefix, target: request.target,
-    requested_by: request.access.agent_id, request_id: request.request_id ?? commit_id,
+    requested_by: "authority" in request.access ? `user:${request.access.user_id}` : request.access.agent_id, request_id: request.request_id ?? commit_id,
     expected_scope_version: request.expected_scope_version, changes: request.changes,
   }));
   return await storage.with_scope_lock(manifest_key(address.prefix), async () => {

@@ -38,6 +38,7 @@ export class AgentInteractions implements AgentInteractionCollection {
       throw new Error("Agent interactions limit must be a positive integer");
     }
     const items = await this.options.get_store().list_pending_interactions();
+    this.assert_active();
     const sessions = this.options.sessions.list_cached_sessions();
     for (const item of items) {
       const session = sessions.find((candidate) => candidate.id === item.reference.session_id

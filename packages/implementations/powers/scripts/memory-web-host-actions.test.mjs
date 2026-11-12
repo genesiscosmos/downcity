@@ -9,7 +9,7 @@
  */
 
 import assert from "node:assert/strict";
-import { createHash } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -35,6 +35,7 @@ async function start_memory_power(context, options = {}) {
     finally { fs.rmSync(platform_root, { recursive: true, force: true }); }
   });
   await power.initialize({
+    abort_signal: new AbortController().signal,
     config: { get: () => structuredClone(options.config ?? {}), set: async () => {}, path: "" },
     power: {
       id: "memory",
@@ -97,7 +98,8 @@ async function start_web_power(options = {}) {
   const invocations = create_invocation_log();
   let stored_config = options.config ?? {};
   const power = new WebPower();
-  power.initialize({
+  await power.initialize({
+    abort_signal: new AbortController().signal,
     power: {
       id: "web",
       action(action) { actions.set(action.id, action); },
@@ -657,4 +659,67 @@ test("Web 控制台跳转只接受已知凭据项，地址由服务端映射决�
     /Unknown credential target/u,
   );
   assert.equal(opened.length, 1);
+});
+
+/** Ownership filters do not require a live executor for historical user records. */
+test("User records stay separate from Agent records after an executor is removed", async (context) => {
+  const agents = [{ agent_id: "agent-a", name: "Agent A" }];
+  const { actions, storage_root } = await start_memory_power(context, { agents, workspaces: [] });
+  const user_job = write_memory_job(storage_root, "a", { target: "user" });
+  const agent_job = write_memory_job(storage_root, "b");
+  assert.deepEqual((await actions.get("memory.records.list").run({ target: "user" })).items.map((item) => item.job_id), [user_job.job_id]);
+  assert.deepEqual((await actions.get("memory.records.list").run({ target: "agent", agent_id: "agent-a" })).items.map((item) => item.job_id), [agent_job.job_id]);
+  agents.length = 0;
+  assert.deepEqual((await actions.get("memory.records.list").run({ target: "user" })).items.map((item) => item.job_id), [user_job.job_id]);
+  assert.equal((await actions.get("memory.records.detail").run({ job_id: user_job.job_id })).job.target, "user");
+  await assert.rejects(actions.get("memory.records.retry").run({ job_id: user_job.job_id }), /management scope/);
+});
+
+/** User Profile management is independent of Agent creation and uses versioned replay. */
+test("User Profile append is available without Agents and preserves idempotency", async (context) => {
+  const { actions } = await start_memory_power(context, { agents: [], workspaces: [] });
+  const read = () => actions.get("memory.profile_read").run({ target: "user" });
+  const before = await read();
+  const input = { target: "user", content: "Use concise answers.", version: before.version, request_id: randomUUID() };
+  const receipt = await actions.get("memory.profile_append").run(input);
+  assert.deepEqual(await actions.get("memory.profile_append").run(input), receipt);
+  assert.equal((await read()).content.match(/Use concise answers/g).length, 1);
+  await assert.rejects(actions.get("memory.profile_append").run({ ...input, content: "Changed request" }), /reused/);
+  await assert.rejects(actions.get("memory.profile_append").run({ ...input, request_id: randomUUID() }), /version changed/);
+});
+
+/** Zero-Agent user operations must remain scoped, versioned and idempotent. */
+test("User knowledge is manageable without Agents and rejects foreign owners", async (context) => {
+  const { actions, power, invocations } = await start_memory_power(context, { agents: [], workspaces: [] });
+  const list = (query = "", extra = {}) => actions.get("memory.user_knowledge.list").run({ query, ...extra });
+  assert.deepEqual(await list(), { items: [], total: 0 });
+  const input = { content: "User background alpha", request_id: randomUUID() };
+  const created = await actions.get("memory.user_knowledge.create").run(input);
+  assert.deepEqual(await actions.get("memory.user_knowledge.create").run(input), created);
+  assert.equal((await list()).total, 1);
+  await assert.rejects(actions.get("memory.user_knowledge.create").run({ ...input, content: "changed payload" }), /reused/);
+  const memory_id = created.changes[0].memory_id;
+  const read = () => actions.get("memory.user_knowledge.read").run({ memory_id });
+  const before = (await read()).memory;
+  assert.equal(before.owner.kind, "user");
+  assert.equal(before.subject.kind, "user");
+  const update = { memory_id, version: before.version, content: "User background beta", request_id: randomUUID() };
+  const updated = await actions.get("memory.user_knowledge.update").run(update);
+  assert.deepEqual(await actions.get("memory.user_knowledge.update").run(update), updated);
+  await assert.rejects(actions.get("memory.user_knowledge.update").run({ ...update, request_id: randomUUID() }), /version changed/);
+  assert.equal((await list("alpha")).total, 0);
+  assert.equal((await list("beta")).total, 1);
+  const foreign = await power.provider.transactions.commit({ access: { agent_id: "foreign_agent", city_memory_available: true }, target: "agent",
+    commit_id: "seed-foreign", changes: [{ operation: "create", content: "Foreign Agent secret", source_refs: [{ source_id: "original", source_type: "manual" }] }] });
+  const foreign_id = foreign.changes[0].memory_id;
+  await assert.rejects(actions.get("memory.user_knowledge.read").run({ memory_id: foreign_id }), /outside/);
+  await assert.rejects(actions.get("memory.user_knowledge.update").run({ ...update, memory_id: foreign_id, request_id: randomUUID() }), /outside/);
+  assert.equal((await list("secret")).total, 0);
+  const current = (await read()).memory;
+  const deletion = { memory_id, version: current.version, request_id: randomUUID() };
+  const deleted = await actions.get("memory.user_knowledge.forget").run(deletion);
+  assert.deepEqual(await actions.get("memory.user_knowledge.forget").run(deletion), deleted);
+  assert.equal((await read()).memory, null);
+  assert.equal((await list()).total, 0);
+  assert.equal(invocations.length, 0);
 });

@@ -9,6 +9,7 @@ import { MarkdownStreamingProvider } from "./markdown_stream_context";
 import { MarkdownDocumentContext } from "./markdown_document_context";
 import { use_markdown_export } from "./markdown_export_context";
 import { markdown_components } from "./markdown_components";
+import { handle_markdown_anchor_click } from "./markdown_anchors";
 import { markdown_rehype_plugins, markdown_remark_plugins } from "./markdown_plugins";
 import { exceeds_markdown_limits } from "./markdown_render_limits";
 import { normalize_markdown_math } from "./normalize_markdown_math";
@@ -31,7 +32,7 @@ export const MarkdownView = memo(function markdown_view({ text, mode = "static",
     return { plain, text: plain ? text : normalize_markdown_math(text) };
   }, [text]);
 
-  return <div className={cn("markdown-view-layout", class_name)} style={layout_style} data-markdown-layout={layout} data-markdown-export={export_mode ? "" : undefined}>
+  return <div className={cn("markdown-view-layout", class_name)} style={layout_style} data-markdown-layout={layout} data-markdown-export={export_mode ? "" : undefined} data-markdown-document-url={document_url} onClick={handle_markdown_anchor_click}>
     <MarkdownDocumentContext.Provider value={document_url}>
       <MarkdownStreamingProvider value={!prepared.plain && mode === "streaming"}>
         {prepared.plain ? <div className="markdown-view markdown-view-plain" data-markdown-fallback="plain">{prepared.text}</div> :

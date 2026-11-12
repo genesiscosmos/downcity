@@ -27,7 +27,7 @@ import type {
   MemoryStatusResult,
 } from "@/memory/types/Memory.js";
 import type {
-  MemoryAccessContext,
+  MemoryKnowledgeAccess,
   MemoryWriteTarget,
 } from "@/memory/types/MemoryAccess.js";
 import type {
@@ -176,9 +176,9 @@ export class BuiltinMemoryProvider implements MemoryProvider {
   }
 
   /** 返回 Provider 状态与可重建统计。 */
-  async status(access: MemoryAccessContext): Promise<MemoryStatusResult> {
+  async status(access: MemoryKnowledgeAccess): Promise<MemoryStatusResult> {
     this.assert_access(access);
-    const address = resolve_writable_memory_address(access, "agent");
+    const address = resolve_writable_memory_address(access, "authority" in access ? "user" : "agent");
     const manifest = await read_memory_manifest(this.active_storage, address.prefix);
     const records = active_memory_records(manifest);
     const legacy_entries = await this.active_storage.list(`${address.prefix}/wiki`);
@@ -347,9 +347,9 @@ export class BuiltinMemoryProvider implements MemoryProvider {
   }
 
   /** 校验访问上下文完整，并且没有伪造 City 能力。 */
-  private assert_access(access: MemoryAccessContext): void {
+  private assert_access(access: MemoryKnowledgeAccess): void {
     if (!this.initialized) throw new Error("BuiltinMemoryProvider is not initialized");
-    if (!String(access.agent_id || "").trim()) throw new Error("Memory access requires agent_id");
+    resolve_readable_memory_addresses(access);
     if (access.city_memory_available && !this.city_memory_available) {
       throw new Error("Memory access cannot enable an unavailable City Store");
     }
@@ -357,7 +357,7 @@ export class BuiltinMemoryProvider implements MemoryProvider {
 
   /** revise/forget 只允许当前 Agent 与当前 Workspace 共享记忆，拒绝直接修改其他范围。 */
   private assert_address_writable(
-    access: MemoryAccessContext,
+    access: MemoryKnowledgeAccess,
     address: MemorySubjectAddress,
   ): void {
     const targets: MemoryWriteTarget[] = ["agent", "user", "current_workspace"];

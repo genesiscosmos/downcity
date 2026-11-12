@@ -84,3 +84,24 @@ export interface MemoryAccessContext {
   /** 宿主是否为 MemoryPower 提供了 City 共享 Store。 */
   city_memory_available: boolean;
 }
+
+/** Trusted host access is bound to the one local User, never an execution Agent. */
+export interface MemoryUserAccessContext {
+  /** Distinguishes host ownership from ordinary Agent execution access. */
+  authority: "local_user";
+  /** The local User identity verified by the host. */
+  user_id: string;
+  /** User management has no execution Agent. */
+  agent_id?: never;
+  /** User management cannot select a Workspace. */
+  workspace_id?: never;
+  /** Host User access never enables City legacy storage. */
+  city_memory_available: false;
+  /** Host User access excludes City legacy records. */
+  exclude_city: true;
+  /** Host operations are not conversation requests. */
+  session_id?: never;
+}
+
+/** Knowledge backends accept execution access or explicitly bound local User access. */
+export type MemoryKnowledgeAccess = MemoryAccessContext | MemoryUserAccessContext;

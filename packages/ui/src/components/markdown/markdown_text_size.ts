@@ -1,10 +1,11 @@
 /** Markdown 的受控字号档位；宿主输入框可读取同一组 rem 值以保持对话尺度一致。 */
 
-/** 组件提供的四档阅读字号，不接受任意数字或 CSS 字符串。 */
-export type MarkdownViewTextSize = "small" | "medium" | "large" | "extra_large";
+/** 受控阅读字号；compact 用于过程详情，不接受任意数字或 CSS 字符串。 */
+export type MarkdownViewTextSize = "compact" | "small" | "medium" | "large" | "extra_large";
 
 /** 档位值仅在组件内部定义，均随根字号缩放。 */
 const text_sizes: Readonly<Record<MarkdownViewTextSize, string>> = {
+  compact: "0.6875rem",
   small: "0.8125rem",
   medium: "0.875rem",
   large: "0.9375rem",

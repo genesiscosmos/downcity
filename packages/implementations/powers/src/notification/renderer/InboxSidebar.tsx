@@ -7,6 +7,7 @@ import { InboxStore } from "./InboxStore.js";
 import { use_inbox } from "./InboxContext.js";
 import { inbox_entries } from "./InboxEntries.js";
 import { InboxList } from "./InboxList.js";
+import { InboxIcon } from "./InboxIcon.js";
 
 /** 侧栏与详情借用同一个Store，避免重复轮询及选择分叉。 */
 export function InboxSidebar({ store, options, ...props }: PowerSidebarComponentProps & {
@@ -14,7 +15,7 @@ export function InboxSidebar({ store, options, ...props }: PowerSidebarComponent
   /** 与详情共用的宿主头像和关注状态适配。 */ options: NotificationRendererOptions;
 }) {
   const { state, choose } = use_inbox(store, props);
-  const { Sidebar, SidebarSection, SidebarSubText, ItemMenu } = props.ui.components;
+  const { Sidebar, SidebarSection, SidebarSubText, ItemMenu, EmptyState, LoadingState } = props.ui.components;
   const data = state.data;
   const list_region = useRef<HTMLDivElement>(null);
   const previous_selection = useRef(state.selected?.key);
@@ -42,11 +43,13 @@ export function InboxSidebar({ store, options, ...props }: PowerSidebarComponent
   }>
     <div ref={list_region} tabIndex={-1} className="inbox-sidebar-items" role="region" aria-label="收件箱事项">
       {state.update_error ? <SidebarSubText><span className="inbox-inline-error" role="alert" title={state.update_error}>通知整理失败，请重试。</span></SidebarSubText> : null}
-      {state.loading ? <SidebarSubText><span role="status">正在读取收件箱…</span></SidebarSubText>
-        : !data ? <SidebarSubText><span role="status">暂时无法读取收件箱，请再次点击 Inbox。</span></SidebarSubText> : groups.map((group) => <SidebarSection key={group.key} label={<span className="inbox-group-label">{group.label}{group.count > 0 ? <span>{group.count}</span> : null}</span>}>
-          {group.entries.length ? <InboxList entries={group.entries} selected_key={state.selected?.key} busy={busy} choose={choose} update_notifications={update_notifications} props={props} options={options} />
-            : <SidebarSubText>{group.key === "pending" ? "暂无待处理事项" : "暂无通知"}</SidebarSubText>}
-        </SidebarSection>)}
+      {state.loading || !data || !entries.length ? <div className="inbox-sidebar-placeholder" role="status">
+        {state.loading ? <LoadingState label="正在读取收件箱…" />
+          : !data ? <EmptyState size="compact" title="暂时无法读取" description="再次点击 Inbox 重试" icon={<span className="inbox-empty-icon"><InboxIcon kind="failure" /></span>} />
+            : <EmptyState size="compact" title="暂无通知" icon={<span className="inbox-empty-icon"><InboxIcon kind="inbox" /></span>} />}
+      </div> : groups.filter((group) => group.entries.length).map((group) => <SidebarSection key={group.key} spacing="comfortable" label={<span className="inbox-group-label">{group.label}{group.count > 0 ? <span>{group.count}</span> : null}</span>}>
+        <InboxList entries={group.entries} selected_key={state.selected?.key} busy={busy} choose={choose} update_notifications={update_notifications} props={props} options={options} />
+      </SidebarSection>)}
     </div>
   </Sidebar>;
 }

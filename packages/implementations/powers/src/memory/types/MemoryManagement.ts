@@ -11,6 +11,8 @@ export type { MemoryDreamSummary } from "./MemoryDream.js";
 
 /** 宿主全局处理记录的可选筛选与分页；不作为普通 Agent 的访问身份。 */
 export interface MemoryRecordListInput {
+  /** 按知识或持续约定的归属过滤；界面分别固定用户目标或指定 Agent 私有目标。 */
+  target?: "user" | "agent";
   /** 只显示指定 Agent 的记录；省略时显示所有当前可管理 Agent。 */
   agent_id?: string;
   /** 指定项目；空串明确筛选无项目，省略时包含所有当前可管理项目及无项目记录。 */

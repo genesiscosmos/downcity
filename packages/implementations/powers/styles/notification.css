@@ -1,14 +1,22 @@
 /** Inbox 展示样式：行与页面骨架归宿主，仅定义来源元信息、单列阅读内容和紧凑状态。 */
 .inbox-workspace { display: flex; flex: 1; flex-direction: column; min-width: 0; min-height: 0; color: var(--foreground); }
 .inbox-workspace:focus, .inbox-sidebar-items:focus { outline: none; }
-.inbox-sidebar-items { min-width: 0; }
-.inbox-group-label { display: flex; align-items: center; gap: .5rem; }
-.inbox-group-label > span { font-variant-numeric: tabular-nums; }
-.inbox-list-meta { display: flex; align-items: center; gap: .375rem; min-width: 0; }
+.inbox-sidebar-items { display: flex; flex: 1; flex-direction: column; min-width: 0; }
+/* 占满宿主滚动区的剩余高度，空态沿两个轴居中；列表仍由宿主统一滚动。 */
+.inbox-sidebar-placeholder { display: flex; flex: 1; align-items: center; justify-content: center; min-width: 0; padding-block: 1.5rem; }
+.inbox-empty-icon { display: inline-flex; width: 1.25rem; height: 1.25rem; }
+.inbox-empty-icon > svg { width: 100%; height: 100%; }
+/* 分组标题与条目左缘共线，数量保持次要层级，组内行距由宿主 comfortable 规格提供。 */
+.inbox-group-label { display: flex; align-items: baseline; gap: .5rem; padding-block: .375rem .25rem; font-size: var(--text-xs, .75rem); font-weight: 500; line-height: var(--text-xs--line-height, 1rem); color: var(--muted-foreground); }
+.inbox-group-label > span { font-size: var(--text-2xs, .6875rem); font-weight: 400; font-variant-numeric: tabular-nums; }
+.inbox-item-title { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 400; }
+.inbox-item-title[data-unread="true"] { font-weight: 500; }
+/* 来源与时间紧凑相邻，沿用宿主副文字字号和颜色，长名称为完整时间让出空间。 */
+.inbox-list-meta { display: flex; align-items: baseline; gap: .5rem; min-width: 0; max-width: 100%; }
 .inbox-list-meta > span:first-child { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .inbox-list-meta > time { flex-shrink: 0; white-space: nowrap; font-variant-numeric: tabular-nums; }
 .inbox-avatar { display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; color: var(--muted-foreground); }
-.inbox-avatar[data-size="list"] { width: 1.25rem; height: 1.25rem; }
+.inbox-avatar[data-size="list"] { width: 2rem; height: 2rem; }
 .inbox-avatar[data-size="detail"] { width: 1.125rem; height: 1.125rem; }
 .inbox-avatar > :is(svg, img) { width: 100%; height: 100%; }
 .inbox-attention-dot { display: inline-block; flex: 0 0 6px; width: 6px; height: 6px; border-radius: 50%; }

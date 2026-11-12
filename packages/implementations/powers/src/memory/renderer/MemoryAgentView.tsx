@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import type { PowerAgentConfigComponentProps } from "@downcity/city/power/react";
 import type { ProfileDocument } from "@/memory/types/Profile.js";
 import { Memory_knowledge_content } from "./MemoryKnowledgeView.js";
+import { MemoryJobs } from "./MemoryJobs.js";
 
 /** 宿主切换 Agent 时重新建立私有范围，子分区切换保留已访问内容。 */
 export function memory_agent_view(props: PowerAgentConfigComponentProps) {
@@ -15,19 +16,25 @@ function Memory_agent_content({ agent_id, power, ui }: PowerAgentConfigComponent
   const { Page, Stack, Tabs } = ui.components;
   const [section, set_section] = useState("profile");
   const [knowledge_visited, set_knowledge_visited] = useState(false);
+  const [records_visited, set_records_visited] = useState(false);
   return <Page>
     <Tabs value={section} label="Agent 私有记忆" variant="segmented" items={[
       { value: "profile", label: "持续约定" },
       { value: "knowledge", label: "知识" },
+      { value: "records", label: "处理记录" },
     ]} on_value_change={(value) => {
       set_section(value);
       if (value === "knowledge") set_knowledge_visited(true);
+      if (value === "records") set_records_visited(true);
     }} />
     <div hidden={section !== "profile"}>
       <Stack><Agent_profile_content agent_id={agent_id} power={power} ui={ui} /></Stack>
     </div>
     {knowledge_visited ? <div hidden={section !== "knowledge"}>
       <Stack><Memory_knowledge_content power={power} ui={ui} notifications={[]} navigation={{ route: { scope: "agent", agent_id }, navigate: () => undefined }} /></Stack>
+    </div> : null}
+    {records_visited ? <div hidden={section !== "records"}>
+      <Stack><MemoryJobs power={power} ui={ui} target="agent" agent_id={agent_id} embedded /></Stack>
     </div> : null}
   </Page>;
 }

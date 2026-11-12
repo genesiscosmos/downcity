@@ -28,6 +28,17 @@ export function register_profile_host_actions(context: PowerLifecycleContext, pr
     await assert_scope(scope);
     return { ...await profile.read(scope) };
   } });
+  context.power.action({ id: "memory.profile_append", run: async (input) => {
+    const scope = scope_schema.parse(input);
+    const { content, version, request_id } = z.object({ content: z.string().trim().min(1).max(24000),
+      version: z.string().min(1), request_id: z.uuid() }).parse(input);
+    await assert_scope(scope);
+    const request_hash = createHash("sha256").update(JSON.stringify([scope, request_id])).digest("hex");
+    return { ...await profile.append(scope, content, {
+      source_key: `host:profile_append:${request_hash}`,
+      source_refs: [`host:memory.profile_append:${request_id}`],
+    }, version) };
+  } });
   context.power.action({ id: "memory.profile_status", run: async (input) => {
     const scope = scope_schema.parse(input);
     await assert_scope(scope);

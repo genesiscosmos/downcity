@@ -11,6 +11,7 @@
 import { LOCAL_USER_ID } from "@downcity/city/local";
 import type {
   MemoryAccessContext,
+  MemoryKnowledgeAccess,
   MemoryOwner,
   MemorySubject,
   MemoryWriteTarget,
@@ -33,8 +34,9 @@ export interface MemorySubjectAddress {
 
 /** 返回当前调用允许读取的 Subject 地址，顺序同时表达默认上下文优先级。 */
 export function resolve_readable_memory_addresses(
-  access: MemoryAccessContext,
+  access: MemoryKnowledgeAccess,
 ): MemorySubjectAddress[] {
+  if (is_user_access(access)) return [create_shared_address("user", access.user_id)];
   assert_access_agent(access);
   const addresses: MemorySubjectAddress[] = [create_agent_address(access.agent_id)];
   addresses.push(create_shared_address("user", LOCAL_USER_ID));
@@ -49,9 +51,13 @@ export function resolve_readable_memory_addresses(
  * 共享范围由可信访问上下文解析，模型无法指定任意用户或项目。
  */
 export function resolve_writable_memory_address(
-  access: MemoryAccessContext,
+  access: MemoryKnowledgeAccess,
   target: MemoryWriteTarget,
 ): MemorySubjectAddress {
+  if (is_user_access(access)) {
+    if (target !== "user") throw new Error("User management cannot access another memory scope");
+    return create_shared_address("user", access.user_id);
+  }
   assert_access_agent(access);
   if (target === "agent") return create_agent_address(access.agent_id);
   if (target === "user") {
@@ -71,7 +77,7 @@ export function resolve_writable_memory_address(
 
 /** 从完整 memory_id 解析 owner/subject，并校验当前调用可读取。 */
 export function resolve_readable_memory_address(
-  access: MemoryAccessContext,
+  access: MemoryKnowledgeAccess,
   memory_id: string,
 ): MemorySubjectAddress {
   const normalized = String(memory_id || "")
@@ -123,8 +129,18 @@ function normalize_agent_segment(value: string): string {
 }
 
 /** 保证 AccessContext 与当前 Agent 绑定。 */
-function assert_access_agent(access: MemoryAccessContext): void {
+function assert_access_agent(access: MemoryKnowledgeAccess): void {
   if (!String(access.agent_id || "").trim()) {
     throw new Error("Memory access requires agent_id");
   }
+}
+
+/** Only the platform local User can use host ownership; no Agent identity is synthesized. */
+function is_user_access(access: MemoryKnowledgeAccess): access is import("../types/MemoryAccess.js").MemoryUserAccessContext {
+  if (!("authority" in access)) return false;
+  if (access.authority !== "local_user" || access.user_id !== LOCAL_USER_ID || access.agent_id !== undefined
+    || access.workspace_id !== undefined || access.city_memory_available !== false || access.exclude_city !== true) {
+    throw new Error("Invalid local User memory access");
+  }
+  return true;
 }

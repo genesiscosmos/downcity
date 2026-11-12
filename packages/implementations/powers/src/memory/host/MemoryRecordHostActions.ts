@@ -14,6 +14,7 @@ import { memory_job_view } from "../types/MemoryJob.js";
 
 /** 缺省枚举全部可管理范围；空 Workspace 明确筛选无项目。 */
 const list_schema = z.object({
+  target: z.enum(["user", "agent"]).optional(),
   agent_id: z.string().trim().min(1).optional(),
   workspace_id: z.string().trim().optional(),
   limit: z.number().int().min(1).max(100).optional(),
@@ -37,17 +38,17 @@ export function register_memory_record_host_actions(
     ]);
     const agent_ids = new Set(agents.map((agent) => agent.agent_id));
     const workspace_ids = new Set(workspaces.map((workspace) => workspace.workspace_id));
-    return (job: MemoryJob): boolean => agent_ids.has(job.access.agent_id)
-      && (job.access.workspace_id === undefined || workspace_ids.has(job.access.workspace_id));
+    return (job: MemoryJob, retry = false): boolean => !retry && job.target === "user"
+      || agent_ids.has(job.access.agent_id) && (job.access.workspace_id === undefined || workspace_ids.has(job.access.workspace_id));
   };
 
   /** 读取原始 Job 并校验当前权限；不信任 UI 提供的任何范围。 */
-  const read_managed_job = async (input: PowerJsonValue | undefined): Promise<MemoryJob> => {
+  const read_managed_job = async (input: PowerJsonValue | undefined, retry = false): Promise<MemoryJob> => {
     const { job_id } = job_schema.parse(input);
     const can_manage = await read_permission();
     const job = await jobs.read(job_id);
     if (!job) throw new Error("Memory Job not found");
-    if (!can_manage(job)) throw new Error("Memory Job is outside the current host management scope");
+    if (!can_manage(job, retry)) throw new Error("Memory Job is outside the current host management scope");
     return job;
   };
 
@@ -55,6 +56,7 @@ export function register_memory_record_host_actions(
     const filter = list_schema.parse(input ?? {});
     const can_manage = await read_permission();
     const records = (await jobs.list()).filter((job) => can_manage(job)
+      && (filter.target === undefined || job.target === filter.target)
       && (filter.agent_id === undefined || job.access.agent_id === filter.agent_id)
       && (filter.workspace_id === undefined || job.access.workspace_id === (filter.workspace_id || undefined)))
       .sort((left, right) => right.updated_at.localeCompare(left.updated_at) || left.job_id.localeCompare(right.job_id));
@@ -70,7 +72,7 @@ export function register_memory_record_host_actions(
     return await service.job_detail(job.access, job.job_id) as unknown as PowerJsonValue;
   } });
   host.power.action({ id: "memory.records.retry", run: async (input) => {
-    const job = await read_managed_job(input);
+    const job = await read_managed_job(input, true);
     return (job.kind === "dream"
       ? await dreaming.retry_job(job)
       : await service.retry(job.access, job.job_id)) as unknown as PowerJsonValue;

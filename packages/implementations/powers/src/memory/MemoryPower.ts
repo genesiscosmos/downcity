@@ -75,6 +75,7 @@ import { MemoryDreaming } from "./application/MemoryDreaming.js";
 import { can_run_memory_background } from "./application/MemoryMaintenanceGate.js";
 import { register_memory_dream_host_actions } from "./host/MemoryDreamHostActions.js";
 import { register_memory_record_host_actions } from "./host/MemoryRecordHostActions.js";
+import { register_memory_user_knowledge_host_actions } from "./host/MemoryUserKnowledgeHostActions.js";
 
 /** Agent 长期记忆 Power。 */
 export class MemoryPower extends Power {
@@ -202,6 +203,7 @@ export class MemoryPower extends Power {
     const config = context.config.get();
     const model_id = this.options.model_id ?? (typeof config.model_id === "string" ? config.model_id : undefined);
     register_memory_power_host_actions(context, this.provider, model_id);
+    register_memory_user_knowledge_host_actions(context, this.provider);
     this.profile_runtime = new MemoryProfile(context, platform_root, this.options.on_changed);
     const jobs = new MemoryJobStore(path.join(context.storage.path, "processing"));
     const signals = new MemorySignalStore(path.join(platform_root, "memory", "dreaming"));

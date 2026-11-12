@@ -4,6 +4,7 @@ import type { ComponentProps } from "react";
 import { defaultRehypePlugins, defaultRemarkPlugins, Streamdown } from "streamdown";
 import rehype_sanitize, { defaultSchema as default_schema } from "rehype-sanitize";
 import { rehype_markdown_urls } from "./rehype_markdown_urls.ts";
+import { rehype_markdown_anchors } from "./markdown_anchors.ts";
 // 纯函数模块使用显式扩展名，支持构建器与 Node 源码检查直接加载。
 import { rehype_mermaid_blocks } from "./rehype_mermaid_blocks.ts";
 import { rehype_svg_blocks } from "./rehype_svg_blocks.ts";
@@ -41,6 +42,7 @@ export const markdown_rehype_plugins: NonNullable<ComponentProps<typeof Streamdo
     macros: { "\\boxed": "{#1}" },
   }],
   rehype_markdown_urls,
+  rehype_markdown_anchors,
   rehype_mermaid_blocks,
   rehype_svg_blocks,
 ];

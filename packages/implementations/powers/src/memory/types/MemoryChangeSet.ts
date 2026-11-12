@@ -1,5 +1,5 @@
 /** 确定性知识变更协议；一个提交只作用于一个可信 target，Provider 不调用模型。 */
-import type { MemoryAccessContext, MemoryWriteTarget } from "./MemoryAccess.js";
+import type { MemoryKnowledgeAccess, MemoryWriteTarget } from "./MemoryAccess.js";
 import type { MemoryRecord, MemorySourceReference, MemoryType } from "./Memory.js";
 
 /** 知识记录当前的有效状态；删除仅表示逻辑退出，不承诺清除历史副本。 */
@@ -32,7 +32,7 @@ export interface MemoryChange {
 /** 同一 target 的原子变更集；权限来自 access，不来自模型内容。 */
 export interface MemoryChangeSet {
   /** 当前可信访问上下文。 */
-  access: MemoryAccessContext;
+  access: MemoryKnowledgeAccess;
   /** 唯一写入目标范围。 */
   target: MemoryWriteTarget;
   /** 稳定提交幂等键；相同键不同请求必须失败。 */
@@ -94,7 +94,7 @@ export interface MemorySuppression {
 /** 查询一个可写 target 当前版本与抑制信息。 */
 export interface MemoryVersionInput {
   /** 当前可信访问上下文。 */
-  access: MemoryAccessContext;
+  access: MemoryKnowledgeAccess;
   /** 唯一目标范围。 */
   target: MemoryWriteTarget;
 }

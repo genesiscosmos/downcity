@@ -11,6 +11,7 @@ import type { PowerJsonObject, PowerJsonValue } from "@downcity/city/power";
 import type { MemoryCommitProvider } from "./MemoryChangeSet.js";
 import type {
   MemoryAccessContext,
+  MemoryKnowledgeAccess,
   MemoryOwner,
   MemorySubject,
   MemorySubjectKind,
@@ -147,7 +148,7 @@ export interface MemoryRecallInput {
   query: string;
 
   /** 当前召回请求使用的可信访问上下文。 */
-  access: MemoryAccessContext;
+  access: MemoryKnowledgeAccess;
 
   /** 可选最大返回条数。 */
   max_results?: number;
@@ -189,7 +190,7 @@ export interface MemoryReadInput {
   memory_id: string;
 
   /** 当前读取请求使用的可信访问上下文。 */
-  access: MemoryAccessContext;
+  access: MemoryKnowledgeAccess;
 
   /** 可选起始行号，使用 1-based 语义。 */
   from_line?: number;
@@ -210,7 +211,7 @@ export interface MemoryReadResult {
 /** 枚举长期记忆的输入。 */
 export interface MemoryListInput {
   /** 当前枚举请求使用的可信访问上下文。 */
-  access: MemoryAccessContext;
+  access: MemoryKnowledgeAccess;
 
   /** 只返回这些 Subject 类别的记忆；不传时返回全部可读 Subject。 */
   subject_kinds?: MemorySubjectKind[];
@@ -284,7 +285,7 @@ export interface MemoryRememberInput {
   content: string;
 
   /** 当前写入请求使用的可信访问上下文。 */
-  access: MemoryAccessContext;
+  access: MemoryKnowledgeAccess;
 
   /** 有限语义写入目标；Provider 负责解析真实 owner 与 subject。 */
   target: MemoryWriteTarget;
@@ -347,7 +348,7 @@ export interface MemoryForgetInput {
   memory_id: string;
 
   /** 当前删除请求使用的可信访问上下文。 */
-  access: MemoryAccessContext;
+  access: MemoryKnowledgeAccess;
 }
 
 /** 删除或失效一条记忆的结果。 */
@@ -376,7 +377,7 @@ export interface MemoryProvider {
   inspect(): Promise<MemoryStatusResult>;
 
   /** 读取当前访问范围内的 Provider 状态与统计。 */
-  status(access: MemoryAccessContext): Promise<MemoryStatusResult>;
+  status(access: MemoryKnowledgeAccess): Promise<MemoryStatusResult>;
 
   /** 按查询与作用域召回长期记忆。 */
   recall(input: MemoryRecallInput): Promise<MemoryRecallResult>;
