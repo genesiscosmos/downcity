@@ -326,7 +326,7 @@ export interface AgentSessionSummary {
   preview_text?: string;
   /** 当前 session 首次创建时间（ms）。 */
   created_at?: number;
-  /** 当前 session 最近一次更新时间（ms）。 */
+  /** 会话活动时间（ms）：初始为创建时间，仅由 User 消息创建或 Agent 消息首次终态推进。 */
   updated_at?: number;
   /** 当前 session 已落盘消息数。 */
   message_count: number;

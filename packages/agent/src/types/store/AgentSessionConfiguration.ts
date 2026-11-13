@@ -29,8 +29,6 @@ export interface AgentSessionConfigurationUpdate {
   execution_profile?: SessionExecutionProfileReference;
   /** 省略保留，null 移除显式快照；非空内容不得隐式截断。 */
   system_snapshot?: string | null;
-  /** 修改时间戳毫秒；目录时间采用单调最大值。 */
-  updated_at: number;
 }
 
 /** Composer 私有命名空间内的累计摘要插入。 */

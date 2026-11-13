@@ -464,7 +464,7 @@ export class SessionAgentMessageState {
     });
     // 只有收口快照持久化成功才释放 writer；失败时保留 held 与运行投影供重试。
     // 先在 held 状态接受快照，再同步驱逐；发布失败时缓存仍可供 Writer 重试。
-    this.options.cache.accept(message, options?.publish_mutation !== false);
+    this.options.cache.accept(message, options?.publish_mutation !== false, persisted);
     if (options?.held_by_writer === false) this.options.cache.release_held(message_id);
   }
 

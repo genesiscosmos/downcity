@@ -34,11 +34,11 @@ export class AgentSessionConfiguration {
         throw new Error("session_system_snapshot_empty");
       }
       database.prepare(`UPDATE sessions SET workspace_id = ?, title = ?, model_label = ?, timezone = ?,
-        revision = revision + 1, updated_at = MAX(updated_at, ?) WHERE session_key = ?`)
+        revision = revision + 1 WHERE session_key = ?`)
         .run(input.workspace_id === undefined ? record.workspace_id : input.workspace_id,
           input.title === undefined ? record.title : input.title,
           input.model_label === undefined ? record.model_label : input.model_label,
-          input.timezone ?? record.timezone, input.updated_at, record.session_key);
+          input.timezone ?? record.timezone, record.session_key);
       database.prepare(`UPDATE session_configuration SET model_binding = ?, approval_mode = ?, execution_profile = ?, system_snapshot = ?
         WHERE session_key = ?`).run(
         input.model_binding === undefined ? configuration.model_binding : JSON.stringify(input.model_binding),

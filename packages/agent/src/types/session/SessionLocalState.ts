@@ -53,7 +53,7 @@ export interface SessionLocalState {
    */
   created_at: number;
 
-  /** 当前 session 最近一次更新时间（毫秒时间戳）；尚未写入时为空。 */
+  /** 会话活动时间（ms）：User 消息创建或 Agent 首次终态推进；初始化前可为空。 */
   updated_at?: number;
 
   /** 当前 session 的用户可见标题；未生成时为空。 */

@@ -137,10 +137,8 @@ export class SessionState {
         });
         this.state.created_at = created_at;
         this.state.timezone = timezone;
-        this.state.updated_at =
-          typeof metadata.updated_at === "number" && metadata.updated_at > 0
-            ? metadata.updated_at
-            : undefined;
+        // 初始化与中断消息恢复并行，保留恢复提交已推进的活动时间。
+        this.state.updated_at = Math.max(this.state.updated_at ?? 0, metadata.updated_at ?? created_at);
         this.state.title = normalize_session_title(metadata.title);
         this.state.session_config = {
           ...(metadata.model_label ? { model_label: metadata.model_label } : {}),
@@ -200,14 +198,11 @@ export class SessionState {
         await this.store.write_metadata({
           ...metadata,
           agent_id: this.agent_id,
-          updated_at: Date.now(),
           ...(next_model_label ? { model_label: next_model_label } : {}),
         });
       });
-      this.state.updated_at = Date.now();
     }
     this.state.session_config = next_config;
-    this.state.updated_at = Date.now();
     return { config: next_config, changed };
   }
 
@@ -219,7 +214,6 @@ export class SessionState {
       await this.store.write_metadata({
         ...metadata,
         agent_id: this.agent_id,
-        updated_at: Date.now(),
         approval_mode: mode,
       });
     });
@@ -239,13 +233,11 @@ export class SessionState {
         ...metadata,
         agent_id: this.agent_id,
         title,
-        updated_at: Date.now(),
       });
       return true;
     });
     if (changed) {
       this.state.title = title;
-      this.state.updated_at = Date.now();
       this.publish_event({
         mutation_id: generate_id(),
         variant: "session",
@@ -277,7 +269,6 @@ export class SessionState {
       await this.store.write_metadata({
         ...rest,
         agent_id: this.agent_id,
-        updated_at: Date.now(),
         ...(next_workspace_id ? { workspace_id: next_workspace_id } : {}),
       });
       return true;

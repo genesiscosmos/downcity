@@ -23,6 +23,8 @@ import type {
 export interface SessionMessageCacheOptions {
   /** 当前缓存所属 Session 标识。 */
   session_id: string;
+  /** 已持久化的用户消息或 Agent 首次终态所产生的活动时间。 */
+  on_activity?: (activity_at: number) => void;
   /** 订阅方接收实时 Mutation 的发布函数。 */
   publish: (mutation: SessionMutation) => void;
 }
@@ -31,6 +33,7 @@ export interface SessionMessageCacheOptions {
 export class SessionMessageCache {
   private readonly session_id: string;
   private readonly publish: SessionMessageCacheOptions["publish"];
+  private readonly on_activity: SessionMessageCacheOptions["on_activity"];
   private readonly messages_by_id = new Map<string, SessionMessage>();
   /** 当前被未收口 writer 持有的 Message；同一时刻至多一条。 */
   private held_id: string | null = null;
@@ -38,6 +41,7 @@ export class SessionMessageCache {
   constructor(options: SessionMessageCacheOptions) {
     this.session_id = options.session_id;
     this.publish = options.publish;
+    this.on_activity = options.on_activity;
   }
 
   /** 读取一条已缓存的 Message。 */
@@ -81,10 +85,15 @@ export class SessionMessageCache {
    * 接受已持久化的完整快照。
    *
    * 发布形状由快照差异决定，调用方不需要描述「变化了什么」；
-   * publish_mutation 为 false 时只更新运行缓存。
+   * publish_mutation 为 false 时只更新运行缓存；persisted_previous 供非 writer 消息精确判断终态转换。
    */
-  accept(message: SessionMessage, publish_mutation = true): void {
+  accept(message: SessionMessage, publish_mutation = true, persisted_previous?: SessionMessage): void {
     const previous = this.get(message.message_id);
+    const before_commit = persisted_previous ?? previous;
+    if (message.role === "user") this.on_activity?.(message.created_at);
+    else if (message.state !== "streaming" && (message.revision === 1 || before_commit?.role === "agent" && before_commit.state === "streaming")) {
+      this.on_activity?.(message.updated_at);
+    }
     this.remember(message);
     if (!publish_mutation) return;
     const change = project_message_change(previous, message);

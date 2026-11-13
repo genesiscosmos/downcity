@@ -169,6 +169,7 @@ export class Session implements AgentSession {
       session_id: this.id,
       store: this.store,
       attachment_store: this.store.attachments,
+      on_activity: (activity_at) => { this.local_state.updated_at = Math.max(this.local_state.updated_at ?? this.local_state.created_at, activity_at); },
       publish: (mutation) => {
         this.events.publish(mutation);
       },
@@ -719,7 +720,6 @@ export class Session implements AgentSession {
       if (retained.length === messages.length) return this;
       this.dispose_title_generation();
       await this.session_messages.truncate_messages(retained.at(-1)?.sequence ?? 0);
-      this.local_state.updated_at = Date.now();
       return this;
     } finally {
       this.replacing_history = false;

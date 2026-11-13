@@ -95,7 +95,7 @@ export class AgentSessionStorage implements SessionStorage {
       || !is_deep_strict_equal(metadata.origin, this.origin)) throw new Error("session_storage_identity_conflict");
     await this.configure({ workspace_id: metadata.workspace_id ?? null, title: metadata.title ?? null,
       model_label: metadata.model_label ?? null, timezone: metadata.timezone ?? resolve_system_timezone(),
-      approval_mode: metadata.approval_mode ?? null, updated_at: metadata.updated_at });
+      approval_mode: metadata.approval_mode ?? null });
   }
 
   async read_model_binding(): Promise<SessionModelBinding | undefined> {
@@ -190,9 +190,9 @@ export class AgentSessionStorage implements SessionStorage {
   private async configuration(): Promise<AgentSessionConfigurationRow> {
     await this.initialize(); return await this.options.lease.read({ command: "configuration", storage_id: this.storage_id });
   }
-  private async configure(input: Omit<AgentSessionConfigurationUpdate, "operation_id" | "storage_id" | "updated_at"> & { updated_at?: number }): Promise<void> {
+  private async configure(input: Omit<AgentSessionConfigurationUpdate, "operation_id" | "storage_id">): Promise<void> {
     await this.initialize(); await this.options.lease.write(this.storage_id, { command: "configure", input: {
-      ...input, operation_id: random_uuid(), storage_id: this.storage_id, updated_at: input.updated_at ?? Date.now(),
+      ...input, operation_id: random_uuid(), storage_id: this.storage_id,
     } });
   }
 }

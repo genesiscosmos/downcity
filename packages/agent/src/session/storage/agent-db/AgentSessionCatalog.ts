@@ -105,8 +105,8 @@ export class AgentSessionCatalog {
       if (database.prepare("SELECT 1 FROM archive_operation_nodes WHERE storage_id = ? AND committed_at IS NULL LIMIT 1").get(record.storage_id)) {
         throw new Error("session_archive_plan_reserved");
       }
-      database.prepare("UPDATE sessions SET archived = 1, archived_at = ?, updated_at = ?, revision = revision + 1 WHERE session_key = ?")
-        .run(archived_at, archived_at, record.session_key);
+      database.prepare("UPDATE sessions SET archived = 1, archived_at = ?, revision = revision + 1 WHERE session_key = ?")
+        .run(archived_at, record.session_key);
       return { storage_id: record.storage_id };
     });
   }

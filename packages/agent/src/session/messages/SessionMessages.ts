@@ -80,6 +80,7 @@ export class SessionMessages {
     if (!this.session_id) throw new Error("SessionMessages requires session_id");
     this.cache = new SessionMessageCache({
       session_id: this.session_id,
+      on_activity: options.on_activity,
       publish: options.publish,
     });
     this.agent_state = new SessionAgentMessageState({
@@ -181,7 +182,7 @@ export class SessionMessages {
         changed_parts,
       });
       // 恢复不属于本次订阅范围，只更新内存事实，不发布 Mutation。
-      this.cache.accept(recovered, false);
+      this.cache.accept(recovered, false, message);
     }
   }
 
@@ -491,7 +492,7 @@ export class SessionMessages {
       expected_revision: current_message.revision,
       changed_parts: [next_action],
     });
-    this.cache.accept(message, options?.publish_mutation !== false);
+    this.cache.accept(message, options?.publish_mutation !== false, current_message);
     return message;
   }
 
@@ -548,7 +549,7 @@ export class SessionMessages {
         expected_revision: target.revision,
         changed_parts: [error_part],
       });
-      this.cache.accept(message);
+      this.cache.accept(message, true, target);
       return message;
     }
 

@@ -27,7 +27,7 @@ export type SessionHistoryMeta = {
   created_at?: number;
   /** 当前 session 初始化时解析到的系统时区。 */
   timezone?: string;
-  /** 最近一次更新元信息的时间戳（ms）。 */
+  /** 会话活动时间（ms）：初始为创建时间，仅由 User 消息创建或 Agent 消息首次终态推进。 */
   updated_at: number;
   /** 当前 session 持久化标题。 */
   title?: string;

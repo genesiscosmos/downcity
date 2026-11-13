@@ -92,8 +92,8 @@ export class AgentArchivePlans {
         const row = database.prepare("SELECT * FROM sessions WHERE storage_id = ?").get(node.storage_id) as unknown as AgentSessionRecord | undefined;
         if (!row || row.archived || row.session_id !== node.session_id || row.category !== node.category) throw new Error("session_archive_record_changed");
         const committed_at = Date.now();
-        database.prepare("UPDATE sessions SET archived = 1, archived_at = ?, updated_at = MAX(updated_at, ?), revision = revision + 1 WHERE storage_id = ? AND archived = 0")
-          .run(committed_at, committed_at, node.storage_id);
+        database.prepare("UPDATE sessions SET archived = 1, archived_at = ?, revision = revision + 1 WHERE storage_id = ? AND archived = 0")
+          .run(committed_at, node.storage_id);
         database.prepare("UPDATE archive_operation_nodes SET committed_at = ? WHERE operation_id = ? AND position = ? AND committed_at IS NULL")
           .run(committed_at, input.operation_id, input.position);
         if (input.position === plan.nodes.length) database.prepare("UPDATE archive_operations SET completed_at = ? WHERE operation_id = ?")

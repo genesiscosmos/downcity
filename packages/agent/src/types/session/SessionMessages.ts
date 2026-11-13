@@ -27,6 +27,8 @@ export interface SessionMessagesOptions {
   store: SessionStorage;
   /** 当前 Session 的附件持久化能力。 */
   attachment_store: SessionAttachmentStore;
+  /** 已提交用户消息或 Agent 终态的活动时间，用于同步 Session 内存时间。 */
+  on_activity?: (activity_at: number) => void;
   /** 持久化成功后的实时 Mutation 发布函数。 */
   publish: (mutation: SessionMutation) => void;
 }

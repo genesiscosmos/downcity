@@ -79,7 +79,7 @@ export class AgentSessionMessages {
         .run(row.turn_id, row.revision, row.state, row.stable_part_sequence, row.meta, row.updated_at,
           record.session_key, row.message_id, input.expected_revision);
       if (result.changes !== 1) throw new Error("session_message_revision_conflict");
-      this.update_projection(database, record, input.message, 0);
+      this.update_projection(database, record, input.message, 0, current);
       return { message_id: row.message_id, sequence: row.sequence, revision: row.revision };
     });
   }
@@ -136,8 +136,8 @@ export class AgentSessionMessages {
       const latest = database.prepare("SELECT * FROM messages WHERE session_key = ? ORDER BY sequence DESC LIMIT 1").get(record.session_key);
       const message = latest ? this.aggregates(database, record, [latest as unknown as SessionMessageRow])[0] : null;
       const message_count = Number(database.prepare("SELECT COUNT(*) AS n FROM messages WHERE session_key = ?").get(record.session_key)?.n ?? 0);
-      database.prepare(`UPDATE sessions SET message_count = ?, preview_text = ?, updated_at = ?, revision = revision + 1 WHERE session_key = ?`)
-        .run(message_count, message ? this.preview(message) : null, Date.now(), record.session_key);
+      database.prepare(`UPDATE sessions SET message_count = ?, preview_text = ?, revision = revision + 1 WHERE session_key = ?`)
+        .run(message_count, message ? this.preview(message) : null, record.session_key);
       return { message_count };
     });
   }
@@ -222,12 +222,15 @@ export class AgentSessionMessages {
       .run(session_key, row.part_id, row.message_id, row.sequence, row.step_id, row.type, row.content, row.created_at, row.updated_at);
   }
 
-  /** 每次已确认流更新都维护 revision/更新时间，预览和计数也处于同一事务。 */
-  private update_projection(database: DatabaseSync, record: AgentSessionRecord, message: SessionMessage, increment: number): void {
+  /** 每次提交维护 revision/预览；仅用户消息创建或 Agent 首次进入终态推进会话时间。 */
+  private update_projection(database: DatabaseSync, record: AgentSessionRecord, message: SessionMessage, increment: number, previous?: SessionMessage): void {
+    const activity_at = message.role === "user" ? message.created_at
+      : message.state !== "streaming" && (!previous || previous.role === "agent" && previous.state === "streaming")
+        ? message.updated_at : record.updated_at;
     database.prepare(`UPDATE sessions SET message_count = message_count + ?,
       preview_text = CASE WHEN (SELECT MAX(sequence) FROM messages WHERE session_key = ?) = ? THEN ? ELSE preview_text END,
       updated_at = MAX(updated_at, ?), revision = revision + 1 WHERE session_key = ?`)
-      .run(increment, record.session_key, message.sequence, this.preview(message), message.updated_at, record.session_key);
+      .run(increment, record.session_key, message.sequence, this.preview(message), activity_at, record.session_key);
   }
 
   private preview(message: SessionMessage): string | null {
