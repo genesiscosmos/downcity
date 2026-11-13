@@ -24,6 +24,7 @@ import type {
 } from "@/web/types/WebPower.js";
 import type { LocalBrowserProviderOptions } from "@/web/types/WebProviderOptions.js";
 import { PlaywrightBrowserProvider } from "@/web/providers/PlaywrightBrowserProvider.js";
+import { run_browser_operation, wait_for_browser } from "@/web/providers/BrowserOperation.js";
 import {
   local_browser_proxy_key,
   resolve_local_browser_proxy_args,
@@ -54,29 +55,42 @@ export class LocalBrowserProvider implements BrowserProvider {
     }
   }
 
-  async create_session(input: BrowserCreateSessionInput): Promise<BrowserObservation> {
-    return await (await this.ensure_delegate(true)).create_session(input);
+  async create_session(input: BrowserCreateSessionInput, signal?: AbortSignal): Promise<BrowserObservation> {
+    return await this.run_operation(signal, (delegate, operation_signal) => delegate.create_session(input, operation_signal), true);
   }
 
-  async observe(input: BrowserObserveInput): Promise<BrowserObservation> {
-    return await (await this.ensure_delegate()).observe(input);
+  async observe(input: BrowserObserveInput, signal?: AbortSignal): Promise<BrowserObservation> {
+    return await this.run_operation(signal, (delegate, operation_signal) => delegate.observe(input, operation_signal));
   }
 
-  async act(input: BrowserActInput): Promise<BrowserObservation> {
-    return await (await this.ensure_delegate()).act(input);
+  async act(input: BrowserActInput, signal?: AbortSignal): Promise<BrowserObservation> {
+    return await this.run_operation(signal, (delegate, operation_signal) => delegate.act(input, operation_signal));
   }
 
-  async extract(input: BrowserExtractInput): Promise<BrowserExtractResult> {
-    return await (await this.ensure_delegate()).extract(input);
+  async extract(input: BrowserExtractInput, signal?: AbortSignal): Promise<BrowserExtractResult> {
+    return await this.run_operation(signal, (delegate, operation_signal) => delegate.extract(input, operation_signal));
   }
 
-  async close_session(input: BrowserCloseSessionInput): Promise<void> {
-    await (await this.ensure_delegate()).close_session(input);
+  async close_session(input: BrowserCloseSessionInput, signal?: AbortSignal): Promise<void> {
+    await this.run_operation(signal, (delegate, operation_signal) => delegate.close_session(input, operation_signal));
   }
 
   /** 委托 CDP Provider 列出 session，不复制 session 状态。 */
-  async list_sessions(): Promise<BrowserListSessionsResult> {
-    return await (await this.ensure_delegate()).list_sessions();
+  async list_sessions(signal?: AbortSignal): Promise<BrowserListSessionsResult> {
+    return await this.run_operation(signal, (delegate, operation_signal) => delegate.list_sessions(operation_signal));
+  }
+
+  /** 初始化可以被多个调用共享；单个调用取消后不得继续创建页面或操作页面。 */
+  private async run_operation<T>(
+    upstream_signal: AbortSignal | undefined,
+    execute: (delegate: PlaywrightBrowserProvider, signal: AbortSignal) => Promise<T>,
+    refresh_proxy = false,
+  ): Promise<T> {
+    return await run_browser_operation(this.options.timeout_ms, upstream_signal, async (signal) => {
+      const delegate = await wait_for_browser(this.ensure_delegate(refresh_proxy), signal);
+      if (this.disposed) throw new Error("LocalBrowserProvider is disposed");
+      return await execute(delegate, signal);
+    });
   }
 
   async dispose(): Promise<void> {
@@ -152,6 +166,10 @@ export class LocalBrowserProvider implements BrowserProvider {
           await existing.dispose();
           throw new Error("The running Web Power browser has different or unknown proxy settings. Close that browser and retry.");
         }
+        if (this.disposed) {
+          await existing.dispose();
+          throw new Error("LocalBrowserProvider is disposed");
+        }
         this.proxy_key = proxy_key;
         this.delegate = existing;
         return existing;
@@ -159,6 +177,7 @@ export class LocalBrowserProvider implements BrowserProvider {
     }
 
     const executable_path = await resolve_browser_executable(this.options.executable_path);
+    if (this.disposed) throw new Error("LocalBrowserProvider is disposed");
     const browser_process = spawn(executable_path, [
       "--remote-debugging-port=0",
       `--user-data-dir=${profile_path}`,
@@ -185,6 +204,11 @@ export class LocalBrowserProvider implements BrowserProvider {
       if (this.browser_process === browser_process) this.browser_process = null;
       await stop_process(browser_process);
       throw error;
+    }
+    if (this.disposed) {
+      if (this.browser_process === browser_process) this.browser_process = null;
+      await stop_process(browser_process);
+      throw new Error("LocalBrowserProvider is disposed");
     }
     const delegate = this.create_delegate(endpoint);
     this.proxy_key = proxy_key;

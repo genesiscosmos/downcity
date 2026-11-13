@@ -35,6 +35,7 @@ import type {
 import { WEB_POWER_ACTIONS } from "@/web/types/WebPower.js";
 import { PlaywrightBrowserProvider } from "@/web/providers/PlaywrightBrowserProvider.js";
 import { LocalBrowserProvider } from "@/web/providers/LocalBrowserProvider.js";
+import { run_browser_operation, wait_for_browser } from "@/web/providers/BrowserOperation.js";
 import { TavilySearchProvider } from "@/web/providers/TavilySearchProvider.js";
 import { ExaSearchProvider } from "@/web/providers/ExaSearchProvider.js";
 import { DeepSeekSearchProvider } from "@/web/providers/DeepSeekSearchProvider.js";
@@ -184,6 +185,22 @@ export class WebPower extends Power {
     const errors = rejected_reasons(results);
     if (errors.length > 0) {
       throw new AggregateError(errors, "WebPower browser providers disposal failed");
+    }
+  }
+
+  /** 为 Provider 初始化和实际操作共用完整期限，并传播会话取消。 */
+  private async execute_browser_action(
+    context: import("@downcity/city/power").PowerContext,
+    execute: (provider: BrowserProvider, signal: AbortSignal) => Promise<PowerActionResult<PowerJsonObject>>,
+  ): Promise<PowerActionResult<PowerJsonObject>> {
+    try {
+      return await run_browser_operation(this.resolve_config(context).timeout_ms, context.abort_signal, async (signal) => {
+        const provider = await wait_for_browser(this.ensure_browser_provider(context), signal);
+        if (!provider) return failure_result("WebPower browser provider is not configured");
+        return await execute(provider, signal);
+      });
+    } catch (error) {
+      return failure_result(error);
     }
   }
 
@@ -415,20 +432,15 @@ export class WebPower extends Power {
         include_screenshot: z.boolean().optional(),
       }),
       examples: [{ title: "Open a page", payload: { url: "https://example.com" } }],
-      execute: async ({ context, input }) => {
-        const browser_provider = await this.ensure_browser_provider(context);
-        if (!browser_provider) {
-          return failure_result("WebPower browser provider is not configured");
+      execute: async ({ context, input }) => this.execute_browser_action(context, async (provider, signal) => {
+        const result = await provider.create_session(input as BrowserCreateSessionInput, signal);
+        if (signal.aborted) {
+          // 自定义 Provider 也可能迟到；禁止将迟到页面注册为可用结果。
+          void run_browser_operation(3_000, undefined, (cleanup_signal) => provider.close_session({ session_id: result.session_id }, cleanup_signal)).catch(() => undefined);
+          signal.throwIfAborted();
         }
-        try {
-          const result = await browser_provider.create_session(
-            input as BrowserCreateSessionInput,
-          );
-          return { success: true, data: result, message: "browser session created" };
-        } catch (error) {
-          return failure_result(error);
-        }
-      },
+        return { success: true, data: result, message: "browser session created" };
+      }),
     }),
 
     [WEB_POWER_ACTIONS.browser_observe]: create_action({
@@ -439,20 +451,11 @@ export class WebPower extends Power {
         session_id: SESSION_ID_SCHEMA,
         include_screenshot: z.boolean().optional(),
       }),
-      execute: async ({ context, input }) => {
-        const browser_provider = await this.ensure_browser_provider(context);
-        if (!browser_provider) {
-          return failure_result("WebPower browser provider is not configured");
-        }
-        try {
-          const result = await browser_provider.observe(
-            input as BrowserObserveInput,
-          );
-          return { success: true, data: result, message: "browser observed" };
-        } catch (error) {
-          return failure_result(error);
-        }
-      },
+      execute: async ({ context, input }) => this.execute_browser_action(context, async (provider, signal) => ({
+        success: true,
+        data: await provider.observe(input as BrowserObserveInput, signal),
+        message: "browser observed",
+      })),
     }),
 
     [WEB_POWER_ACTIONS.browser_act]: create_action({
@@ -471,18 +474,11 @@ export class WebPower extends Power {
           action: { type: "click", ref: "e1", observation_generation: 1 },
         },
       }],
-      execute: async ({ context, input }) => {
-        const browser_provider = await this.ensure_browser_provider(context);
-        if (!browser_provider) {
-          return failure_result("WebPower browser provider is not configured");
-        }
-        try {
-          const result = await browser_provider.act(input as BrowserActInput);
-          return { success: true, data: result, message: "browser action completed" };
-        } catch (error) {
-          return failure_result(error);
-        }
-      },
+      execute: async ({ context, input }) => this.execute_browser_action(context, async (provider, signal) => ({
+        success: true,
+        data: await provider.act(input as BrowserActInput, signal),
+        message: "browser action completed",
+      })),
     }),
 
     [WEB_POWER_ACTIONS.browser_semantic_act]: create_action({
@@ -501,22 +497,10 @@ export class WebPower extends Power {
           instruction: "Click the sign in button",
         },
       }],
-      execute: async ({ context, input }) => {
-        const browser_provider = await this.ensure_browser_provider(context);
-        if (!browser_provider?.semantic_act) {
-          return failure_result(
-            "WebPower semantic browser action provider is not configured",
-          );
-        }
-        try {
-          const result = await browser_provider.semantic_act(
-            input as BrowserSemanticActInput,
-          );
-          return { success: true, data: result, message: "semantic browser action completed" };
-        } catch (error) {
-          return failure_result(error);
-        }
-      },
+      execute: async ({ context, input }) => this.execute_browser_action(context, async (provider, signal) => {
+        if (!provider.semantic_act) return failure_result("WebPower semantic browser action provider is not configured");
+        return { success: true, data: await provider.semantic_act(input as BrowserSemanticActInput, signal), message: "semantic browser action completed" };
+      }),
     }),
 
     [WEB_POWER_ACTIONS.browser_extract]: create_action({
@@ -528,20 +512,11 @@ export class WebPower extends Power {
         selector: z.string().trim().min(1).optional(),
         max_chars: MAX_CHARS_SCHEMA,
       }),
-      execute: async ({ context, input }) => {
-        const browser_provider = await this.ensure_browser_provider(context);
-        if (!browser_provider) {
-          return failure_result("WebPower browser provider is not configured");
-        }
-        try {
-          const result = await browser_provider.extract(
-            input as BrowserExtractInput,
-          );
-          return { success: true, data: result, message: "browser content extracted" };
-        } catch (error) {
-          return failure_result(error);
-        }
-      },
+      execute: async ({ context, input }) => this.execute_browser_action(context, async (provider, signal) => ({
+        success: true,
+        data: await provider.extract(input as BrowserExtractInput, signal),
+        message: "browser content extracted",
+      })),
     }),
 
     [WEB_POWER_ACTIONS.browser_semantic_extract]: create_action({
@@ -553,22 +528,10 @@ export class WebPower extends Power {
         instruction: z.string().trim().min(1),
         max_chars: MAX_CHARS_SCHEMA,
       }),
-      execute: async ({ context, input }) => {
-        const browser_provider = await this.ensure_browser_provider(context);
-        if (!browser_provider?.semantic_extract) {
-          return failure_result(
-            "WebPower semantic browser extract provider is not configured",
-          );
-        }
-        try {
-          const result = await browser_provider.semantic_extract(
-            input as BrowserSemanticExtractInput,
-          );
-          return { success: true, data: result, message: "semantic browser content extracted" };
-        } catch (error) {
-          return failure_result(error);
-        }
-      },
+      execute: async ({ context, input }) => this.execute_browser_action(context, async (provider, signal) => {
+        if (!provider.semantic_extract) return failure_result("WebPower semantic browser extract provider is not configured");
+        return { success: true, data: await provider.semantic_extract(input as BrowserSemanticExtractInput, signal), message: "semantic browser content extracted" };
+      }),
     }),
 
     [WEB_POWER_ACTIONS.browser_close_session]: create_action({
@@ -576,24 +539,10 @@ export class WebPower extends Power {
       returns: "session_id, closed",
       access: "write",
       input_schema: z.object({ session_id: SESSION_ID_SCHEMA }),
-      execute: async ({ context, input }) => {
-        const browser_provider = await this.ensure_browser_provider(context);
-        if (!browser_provider) {
-          return failure_result("WebPower browser provider is not configured");
-        }
-        try {
-          await browser_provider.close_session(
-            input as BrowserCloseSessionInput,
-          );
-          return {
-            success: true,
-            data: { session_id: input.session_id, closed: true },
-            message: "browser session closed",
-          };
-        } catch (error) {
-          return failure_result(error);
-        }
-      },
+      execute: async ({ context, input }) => this.execute_browser_action(context, async (provider, signal) => {
+        await provider.close_session(input as BrowserCloseSessionInput, signal);
+        return { success: true, data: { session_id: input.session_id, closed: true }, message: "browser session closed" };
+      }),
     }),
 
     [WEB_POWER_ACTIONS.browser_list_sessions]: create_action({
@@ -601,20 +550,11 @@ export class WebPower extends Power {
       returns: "provider, sessions(session_id, url, title, observation_generation)",
       access: "read",
       input_schema: z.object({}).passthrough(),
-      execute: async ({ context }) => {
-        const browser_provider = await this.ensure_browser_provider(context);
-        if (!browser_provider) {
-          return failure_result("WebPower browser provider is not configured");
-        }
-        try {
-          const result = browser_provider.list_sessions
-            ? await browser_provider.list_sessions()
-            : { provider: browser_provider.name, sessions: [] };
-          return { success: true, data: result, message: "browser sessions listed" };
-        } catch (error) {
-          return failure_result(error);
-        }
-      },
+      execute: async ({ context }) => this.execute_browser_action(context, async (provider, signal) => ({
+        success: true,
+        data: provider.list_sessions ? await provider.list_sessions(signal) : { provider: provider.name, sessions: [] },
+        message: "browser sessions listed",
+      })),
     }),
   } as unknown as Power["actions"];
 }

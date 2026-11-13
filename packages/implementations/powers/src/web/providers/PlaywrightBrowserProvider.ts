@@ -24,9 +24,14 @@ import type {
   BrowserProvider,
 } from "@/web/types/WebPower.js";
 import type { PlaywrightBrowserProviderOptions } from "@/web/types/PlaywrightBrowserProvider.js";
+import { browser_timeout_ms, run_browser_operation, wait_for_browser } from "@/web/providers/BrowserOperation.js";
+
+/** 关闭当前操作拥有的页面；完整清理也有期限，防止 CDP 失联阻塞收尾。 */
+async function close_browser_page(page: Page): Promise<void> {
+  await run_browser_operation(3_000, undefined, async (signal) => wait_for_browser(page.close({ runBeforeUnload: false }), signal));
+}
 
 const DEFAULT_URL = "about:blank";
-const DEFAULT_TIMEOUT_MS = 30_000;
 const DEFAULT_MAX_CHARS = 12_000;
 const MAX_WAIT_MS = 60_000;
 const MAX_ELEMENT_REFS = 200;
@@ -77,12 +82,6 @@ interface BrowserElementMetadata {
 function normalize_max_chars(value: number | undefined, fallback: number): number {
   if (!Number.isFinite(value)) return fallback;
   return Math.min(100_000, Math.max(1, Math.floor(value ?? fallback)));
-}
-
-/** 把超时归一化到安全范围。 */
-function normalize_timeout_ms(value: number | undefined): number {
-  if (!Number.isFinite(value)) return DEFAULT_TIMEOUT_MS;
-  return Math.min(MAX_WAIT_MS, Math.max(1_000, Math.floor(value ?? DEFAULT_TIMEOUT_MS)));
 }
 
 /** 把错误转换成稳定文本。 */
@@ -136,6 +135,9 @@ export class PlaywrightBrowserProvider implements BrowserProvider {
   /** 当前 CDP 浏览器连接。 */
   private browser: Browser | null = null;
 
+  /** 并发首次操作共享连接，避免连接迟到时覆盖其他连接。 */
+  private connection: Promise<Browser> | null = null;
+
   /** 当前 provider 拥有的 session。 */
   private readonly sessions = new Map<string, PlaywrightBrowserSession>();
 
@@ -150,7 +152,7 @@ export class PlaywrightBrowserProvider implements BrowserProvider {
     this.options = {
       cdp_url,
       default_url: String(options.default_url || DEFAULT_URL),
-      timeout_ms: normalize_timeout_ms(options.timeout_ms),
+      timeout_ms: browser_timeout_ms(options.timeout_ms),
       max_observation_chars: normalize_max_chars(
         options.max_observation_chars,
         DEFAULT_MAX_CHARS,
@@ -159,12 +161,15 @@ export class PlaywrightBrowserProvider implements BrowserProvider {
   }
 
   /** 创建一个新的页面 session。 */
-  async create_session(
-    input: BrowserCreateSessionInput,
-  ): Promise<BrowserObservation> {
+  async create_session(input: BrowserCreateSessionInput, upstream_signal?: AbortSignal): Promise<BrowserObservation> {
+    return await run_browser_operation(this.options.timeout_ms, upstream_signal, (signal) => this.create_page_session(input, signal));
+  }
+
+  /** 创建页面并在发布观察前检查取消；迟到页面只进入清理，不进入 session 表。 */
+  private async create_page_session(input: BrowserCreateSessionInput, signal: AbortSignal): Promise<BrowserObservation> {
     let browser: Browser;
     try {
-      browser = await this.get_browser();
+      browser = await wait_for_browser(this.get_browser(), signal);
     } catch (error) {
       throw create_session_error(
         "connect",
@@ -183,10 +188,22 @@ export class PlaywrightBrowserProvider implements BrowserProvider {
       );
     }
 
+    let acquired_page: Page | undefined;
+    let cleanup: Promise<void> | undefined;
+    const close_page = () => acquired_page ? cleanup ??= close_browser_page(acquired_page) : Promise.resolve();
     let page: Page;
     try {
-      page = await context.newPage();
+      page = await wait_for_browser(context.newPage().then((created_page) => {
+        acquired_page = created_page;
+        if (signal.aborted || this.disposed) {
+          void close_page().catch(() => undefined);
+          throw signal.reason ?? new Error("PlaywrightBrowserProvider is disposed");
+        }
+        return created_page;
+      }), signal);
     } catch (error) {
+      // 页面可能恰好在等待被取消前返回，仍需由本次调用回收。
+      await close_page().catch(() => undefined);
       throw create_session_error(
         "create-page",
         this.options.cdp_url,
@@ -195,12 +212,15 @@ export class PlaywrightBrowserProvider implements BrowserProvider {
       );
     }
 
+    const on_abort = () => { void close_page().catch(() => undefined); };
+    signal.addEventListener("abort", on_abort, { once: true });
     try {
+      signal.throwIfAborted();
       page.setDefaultTimeout(this.options.timeout_ms);
       page.setDefaultNavigationTimeout(this.options.timeout_ms);
       const url = String(input.url || this.options.default_url).trim();
       if (url && url !== DEFAULT_URL) {
-        await page.goto(url, { waitUntil: "domcontentloaded" });
+        await wait_for_browser(page.goto(url, { waitUntil: "domcontentloaded" }), signal);
       }
       const session = {
         session_id: randomUUID(),
@@ -213,83 +233,85 @@ export class PlaywrightBrowserProvider implements BrowserProvider {
       const observation = await this.read_observation(
         session,
         input.include_screenshot,
+        signal,
       );
+      signal.throwIfAborted();
       this.sessions.set(session.session_id, session);
       return observation;
     } catch (error) {
-      await page.close().catch(() => undefined);
+      await close_page().catch(() => undefined);
       throw create_session_error(
         "initialize-page",
         this.options.cdp_url,
         "the new page could not be initialized.",
         error,
       );
+    } finally {
+      signal.removeEventListener("abort", on_abort);
     }
   }
 
-  /** 读取当前页面状态。 */
-  async observe(input: BrowserObserveInput): Promise<BrowserObservation> {
-    return await this.read_observation(
-      this.require_session(input.session_id),
-      input.include_screenshot,
-    );
+  /** 读取当前页面状态；取消只关闭本次操作的页面。 */
+  async observe(input: BrowserObserveInput, upstream_signal?: AbortSignal): Promise<BrowserObservation> {
+    return await this.run_session_operation(input.session_id, upstream_signal, (session, signal) =>
+      this.read_observation(session, input.include_screenshot, signal));
   }
 
   /** 执行确定性浏览器动作。 */
-  async act(input: BrowserActInput): Promise<BrowserObservation> {
-    const session = this.require_session(input.session_id);
-    const { page } = session;
-    const action = input.action;
+  async act(input: BrowserActInput, upstream_signal?: AbortSignal): Promise<BrowserObservation> {
+    return await this.run_session_operation(input.session_id, upstream_signal, async (session, signal) => {
+      signal.throwIfAborted();
+      const { page } = session;
+      const action = input.action;
 
-    if (action.type === "goto") {
-      await page.goto(action.url, { waitUntil: "domcontentloaded" });
-    } else if (action.type === "click") {
-      await this.resolve_action_locator(session, action).click();
-    } else if (action.type === "fill") {
-      await this.resolve_action_locator(session, action).fill(action.value);
-    } else if (action.type === "press") {
-      await this.resolve_action_locator(session, action).press(action.key);
-    } else if (action.type === "scroll") {
-      await page.evaluate(
-        ([x, y]) => globalThis.scrollBy(x, y),
-        [action.x ?? 0, action.y ?? 0] as [number, number],
-      );
-    } else {
-      const milliseconds = Math.min(
-        MAX_WAIT_MS,
-        Math.max(0, Math.floor(action.milliseconds ?? 500)),
-      );
-      await page.waitForTimeout(milliseconds);
-    }
+      if (action.type === "goto") {
+        await page.goto(action.url, { waitUntil: "domcontentloaded" });
+      } else if (action.type === "click") {
+        await this.resolve_action_locator(session, action).click();
+      } else if (action.type === "fill") {
+        await this.resolve_action_locator(session, action).fill(action.value);
+      } else if (action.type === "press") {
+        await this.resolve_action_locator(session, action).press(action.key);
+      } else if (action.type === "scroll") {
+        await page.evaluate(
+          ([x, y]) => globalThis.scrollBy(x, y),
+          [action.x ?? 0, action.y ?? 0] as [number, number],
+        );
+      } else {
+        const milliseconds = Math.min(MAX_WAIT_MS, Math.max(0, Math.floor(action.milliseconds ?? 500)));
+        await page.waitForTimeout(milliseconds);
+      }
 
-    return await this.read_observation(session, input.include_screenshot);
+      signal.throwIfAborted();
+      return await this.read_observation(session, input.include_screenshot, signal);
+    });
   }
 
   /** 从当前页面抽取文本。 */
-  async extract(input: BrowserExtractInput): Promise<BrowserExtractResult> {
-    const session = this.require_session(input.session_id);
-    const locator = input.selector
-      ? session.page.locator(input.selector)
-      : session.page.locator("body");
-    const content = (await locator.allTextContents()).join("\n");
-    const max_chars = normalize_max_chars(
-      input.max_chars,
-      this.options.max_observation_chars,
-    );
-    return {
-      provider: this.name,
-      session_id: session.session_id,
-      url: session.page.url(),
-      content: content.slice(0, max_chars),
-    };
+  async extract(input: BrowserExtractInput, upstream_signal?: AbortSignal): Promise<BrowserExtractResult> {
+    return await this.run_session_operation(input.session_id, upstream_signal, async (session, signal) => {
+      const locator = session.page.locator(input.selector || "body");
+      const content = (await wait_for_browser(locator.allTextContents(), signal)).join("\n");
+      const max_chars = normalize_max_chars(input.max_chars, this.options.max_observation_chars);
+      return {
+        provider: this.name,
+        session_id: session.session_id,
+        url: session.page.url(),
+        content: content.slice(0, max_chars),
+      };
+    });
   }
 
   /** 关闭指定 session 拥有的页面。 */
-  async close_session(input: BrowserCloseSessionInput): Promise<void> {
+  async close_session(input: BrowserCloseSessionInput, signal?: AbortSignal): Promise<void> {
+    signal?.throwIfAborted();
     const session = this.sessions.get(input.session_id);
     if (!session) return;
-    this.sessions.delete(input.session_id);
-    await session.page.close().catch(() => undefined);
+    const cleanup = close_browser_page(session.page).then(() => {
+      if (this.sessions.get(input.session_id) === session) this.sessions.delete(input.session_id);
+    });
+    if (signal) await wait_for_browser(cleanup, signal);
+    else await cleanup;
   }
 
   /**
@@ -298,7 +320,8 @@ export class PlaywrightBrowserProvider implements BrowserProvider {
    * 关键点（中文）：URL 与标题取最近一次观察的快照，因此读取本身不会触碰页面；
    * 未观察过的新 session 回退到页面当前状态。
    */
-  async list_sessions(): Promise<BrowserListSessionsResult> {
+  async list_sessions(signal?: AbortSignal): Promise<BrowserListSessionsResult> {
+    signal?.throwIfAborted();
     const sessions = await Promise.all([...this.sessions.values()].map(async (session) => ({
       session_id: session.session_id,
       url: session.last_url || session.page.url(),
@@ -313,14 +336,12 @@ export class PlaywrightBrowserProvider implements BrowserProvider {
     if (this.disposed) return;
     this.disposed = true;
     const session_ids = [...this.sessions.keys()];
-    await Promise.all(
-      session_ids.map(async (session_id) => {
-        await this.close_session({ session_id });
-      }),
-    );
+    await Promise.allSettled(session_ids.map((session_id) => this.close_session({ session_id })));
+    this.sessions.clear();
     const browser = this.browser;
     this.browser = null;
-    await browser?.close().catch(() => undefined);
+    if (browser) await run_browser_operation(3_000, undefined, async (signal) => wait_for_browser(browser.close(), signal)).catch(() => undefined);
+    // 连接中的实例由 get_browser 的 disposed 检查清理，不等待失联的连接。
   }
 
   /** 懒连接 CDP 浏览器。 */
@@ -329,17 +350,48 @@ export class PlaywrightBrowserProvider implements BrowserProvider {
       throw new Error("PlaywrightBrowserProvider is disposed");
     }
     if (this.browser?.isConnected()) return this.browser;
-    const browser = await chromium.connectOverCDP(this.options.cdp_url, {
+    if (this.connection) return await this.connection;
+    const connection = chromium.connectOverCDP(this.options.cdp_url, {
       timeout: this.options.timeout_ms,
       noDefaults: true,
+    }).then(async (browser) => {
+      if (this.disposed) {
+        await run_browser_operation(3_000, undefined, async (signal) => wait_for_browser(browser.close(), signal)).catch(() => undefined);
+        throw new Error("PlaywrightBrowserProvider is disposed");
+      }
+      this.browser = browser;
+      browser.on("disconnected", () => {
+        if (this.browser !== browser) return;
+        this.browser = null;
+        this.sessions.clear();
+      });
+      return browser;
     });
-    this.browser = browser;
-    browser.on("disconnected", () => {
-      if (this.browser !== browser) return;
-      this.browser = null;
-      this.sessions.clear();
+    this.connection = connection;
+    try { return await connection; }
+    finally { if (this.connection === connection) this.connection = null; }
+  }
+
+  /** 为已存在的页面绑定取消清理，避免取消后继续执行页面动作。 */
+  private async run_session_operation<T>(
+    session_id: string,
+    upstream_signal: AbortSignal | undefined,
+    execute: (session: PlaywrightBrowserSession, signal: AbortSignal) => Promise<T>,
+  ): Promise<T> {
+    return await run_browser_operation(this.options.timeout_ms, upstream_signal, async (signal) => {
+      const session = this.require_session(session_id);
+      const on_abort = () => {
+        if (this.sessions.get(session_id) === session) this.sessions.delete(session_id);
+        void close_browser_page(session.page).catch(() => undefined);
+      };
+      signal.addEventListener("abort", on_abort, { once: true });
+      try {
+        signal.throwIfAborted();
+        return await wait_for_browser(execute(session, signal), signal);
+      } finally {
+        signal.removeEventListener("abort", on_abort);
+      }
     });
-    return browser;
   }
 
   /** 读取 session，不存在时抛出稳定错误。 */
@@ -376,18 +428,21 @@ export class PlaywrightBrowserProvider implements BrowserProvider {
   private async read_observation(
     session: PlaywrightBrowserSession,
     include_screenshot: boolean | undefined,
+    signal: AbortSignal,
   ): Promise<BrowserObservation> {
+    signal.throwIfAborted();
     const page = session.page;
     const body = page.locator("body");
-    const [text, accessibility_snapshot, title] = await Promise.all([
+    const [text, accessibility_snapshot, title] = await wait_for_browser(Promise.all([
       body.innerText().catch(() => ""),
       body.ariaSnapshot().catch(() => ""),
       page.title().catch(() => ""),
-    ]);
-    const elements = await this.read_element_references(session);
+    ]), signal);
+    const elements = await this.read_element_references(session, signal);
     const screenshot_data_url = include_screenshot
-      ? `data:image/png;base64,${(await page.screenshot({ type: "png" })).toString("base64")}`
+      ? `data:image/png;base64,${(await wait_for_browser(page.screenshot({ type: "png" }), signal)).toString("base64")}`
       : undefined;
+    signal.throwIfAborted();
     session.last_url = page.url();
     session.last_title = title;
     return {
@@ -409,9 +464,11 @@ export class PlaywrightBrowserProvider implements BrowserProvider {
   /** 为当前页面生成仅在本次 observation 内有效的元素引用。 */
   private async read_element_references(
     session: PlaywrightBrowserSession,
+    signal: AbortSignal,
   ): Promise<BrowserElementReference[]> {
+    signal.throwIfAborted();
     const locator = session.page.locator(INTERACTIVE_SELECTOR);
-    const metadata = await locator.evaluateAll((elements, max_elements) =>
+    const metadata = await wait_for_browser(locator.evaluateAll((elements, max_elements) =>
       elements.slice(0, max_elements).map((element, index) => {
         const html_element = element as HTMLElement;
         const tag = element.tagName.toLowerCase();
@@ -435,7 +492,7 @@ export class PlaywrightBrowserProvider implements BrowserProvider {
           || "",
         ).replace(/\s+/gu, " ").trim().slice(0, 240);
         return { index, tag, role, name };
-      }), MAX_ELEMENT_REFS).catch(() => [] as BrowserElementMetadata[]);
+      }), MAX_ELEMENT_REFS).catch(() => [] as BrowserElementMetadata[]), signal);
 
     session.observation_generation += 1;
     session.element_refs.clear();

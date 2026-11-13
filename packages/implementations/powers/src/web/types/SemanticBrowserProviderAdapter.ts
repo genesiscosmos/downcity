@@ -22,9 +22,13 @@ export interface SemanticBrowserProviderAdapterOptions {
   /** 执行自然语言浏览器动作的回调。 */
   semantic_act: (
     input: BrowserSemanticActInput,
+    /** 本次动作的取消信号，必须传递给模型循环和底层浏览器操作。 */
+    signal?: AbortSignal,
   ) => Promise<BrowserObservation> | BrowserObservation;
   /** 执行自然语言页面抽取的回调。 */
   semantic_extract: (
     input: BrowserSemanticExtractInput,
+    /** 本次抽取的取消信号，必须传递给模型循环和底层浏览器操作。 */
+    signal?: AbortSignal,
   ) => Promise<BrowserExtractResult> | BrowserExtractResult;
 }

@@ -48,51 +48,56 @@ export class ComputerUseBrowserProviderAdapter
   /** 委托创建浏览器 session。 */
   async create_session(
     input: BrowserCreateSessionInput,
+    signal?: AbortSignal,
   ): Promise<BrowserObservation> {
-    return await this.browser.create_session(input);
+    return await this.browser.create_session(input, signal);
   }
 
   /** 委托观察页面。 */
-  async observe(input: BrowserObserveInput): Promise<BrowserObservation> {
-    return await this.browser.observe(input);
+  async observe(input: BrowserObserveInput, signal?: AbortSignal): Promise<BrowserObservation> {
+    return await this.browser.observe(input, signal);
   }
 
   /** 委托确定性动作。 */
-  async act(input: BrowserActInput): Promise<BrowserObservation> {
-    return await this.browser.act(input);
+  async act(input: BrowserActInput, signal?: AbortSignal): Promise<BrowserObservation> {
+    return await this.browser.act(input, signal);
   }
 
   /** 获取截图并运行一次 Computer Use 模型循环。 */
   async semantic_act(
     input: BrowserSemanticActInput,
+    signal?: AbortSignal,
   ): Promise<BrowserObservation> {
+    signal?.throwIfAborted();
     const observation = await this.browser.observe({
       session_id: input.session_id,
       include_screenshot: true,
-    });
+    }, signal);
+    signal?.throwIfAborted();
     return await this.run_callback({
       instruction: input.instruction,
       session_id: input.session_id,
       observation,
-    });
+    }, signal);
   }
 
   /** 委托页面文本抽取。 */
-  async extract(input: BrowserExtractInput): Promise<BrowserExtractResult> {
-    return await this.browser.extract(input);
+  async extract(input: BrowserExtractInput, signal?: AbortSignal): Promise<BrowserExtractResult> {
+    return await this.browser.extract(input, signal);
   }
 
   /** Computer Use adapter 不提供结构化语义抽取。 */
-  async close_session(input: BrowserCloseSessionInput): Promise<void> {
-    await this.browser.close_session(input);
+  async close_session(input: BrowserCloseSessionInput, signal?: AbortSignal): Promise<void> {
+    await this.browser.close_session(input, signal);
   }
 
   /** 委托基础 provider 列出 session。 */
-  async list_sessions(): Promise<BrowserListSessionsResult> {
+  async list_sessions(signal?: AbortSignal): Promise<BrowserListSessionsResult> {
+    signal?.throwIfAborted();
     if (!this.browser.list_sessions) {
       return { provider: this.name, sessions: [] };
     }
-    return await this.browser.list_sessions();
+    return await this.browser.list_sessions(signal);
   }
 
   /** 释放基础浏览器资源。 */

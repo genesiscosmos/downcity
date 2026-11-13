@@ -36,23 +36,25 @@ export interface ComputerUseBrowserProviderAdapterOptions {
   /** 执行一次 Computer Use 模型循环的回调。 */
   run: (
     input: ComputerUseBrowserRunInput,
+    /** 本次操作的取消信号，必须向模型循环和底层浏览器传播。 */
+    signal?: AbortSignal,
   ) => Promise<BrowserObservation> | BrowserObservation;
 }
 
 /** Computer Use adapter 的内部委托接口。 */
 export type ComputerUseBrowserProviderMethods = {
   /** 创建浏览器 session。 */
-  create_session(input: BrowserCreateSessionInput): Promise<BrowserObservation>;
+  create_session(input: BrowserCreateSessionInput, signal?: AbortSignal): Promise<BrowserObservation>;
   /** 观察浏览器页面。 */
-  observe(input: BrowserObserveInput): Promise<BrowserObservation>;
+  observe(input: BrowserObserveInput, signal?: AbortSignal): Promise<BrowserObservation>;
   /** 执行确定性浏览器动作。 */
-  act(input: BrowserActInput): Promise<BrowserObservation>;
+  act(input: BrowserActInput, signal?: AbortSignal): Promise<BrowserObservation>;
   /** 抽取页面文本。 */
-  extract(input: BrowserExtractInput): Promise<BrowserExtractResult>;
+  extract(input: BrowserExtractInput, signal?: AbortSignal): Promise<BrowserExtractResult>;
   /** 关闭浏览器 session。 */
-  close_session(input: BrowserCloseSessionInput): Promise<void>;
+  close_session(input: BrowserCloseSessionInput, signal?: AbortSignal): Promise<void>;
   /** 释放浏览器资源。 */
   dispose(): Promise<void>;
   /** 执行 Computer Use 语义动作。 */
-  semantic_act(input: BrowserSemanticActInput): Promise<BrowserObservation>;
+  semantic_act(input: BrowserSemanticActInput, signal?: AbortSignal): Promise<BrowserObservation>;
 };

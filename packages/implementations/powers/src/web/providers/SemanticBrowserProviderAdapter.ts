@@ -48,50 +48,56 @@ export class SemanticBrowserProviderAdapter implements BrowserProvider {
   /** 委托基础 provider 创建 session。 */
   async create_session(
     input: BrowserCreateSessionInput,
+    signal?: AbortSignal,
   ): Promise<BrowserObservation> {
-    return await this.browser.create_session(input);
+    return await this.browser.create_session(input, signal);
   }
 
   /** 委托基础 provider 观察页面。 */
-  async observe(input: BrowserObserveInput): Promise<BrowserObservation> {
-    return await this.browser.observe(input);
+  async observe(input: BrowserObserveInput, signal?: AbortSignal): Promise<BrowserObservation> {
+    return await this.browser.observe(input, signal);
   }
 
   /** 委托基础 provider 执行确定性动作。 */
-  async act(input: BrowserActInput): Promise<BrowserObservation> {
-    return await this.browser.act(input);
+  async act(input: BrowserActInput, signal?: AbortSignal): Promise<BrowserObservation> {
+    return await this.browser.act(input, signal);
   }
 
   /** 执行自然语言浏览器动作。 */
   async semantic_act(
     input: BrowserSemanticActInput,
+    signal?: AbortSignal,
   ): Promise<BrowserObservation> {
-    return await this.semantic_act_callback(input);
+    signal?.throwIfAborted();
+    return await this.semantic_act_callback(input, signal);
   }
 
   /** 委托基础 provider 抽取确定性文本。 */
-  async extract(input: BrowserExtractInput): Promise<BrowserExtractResult> {
-    return await this.browser.extract(input);
+  async extract(input: BrowserExtractInput, signal?: AbortSignal): Promise<BrowserExtractResult> {
+    return await this.browser.extract(input, signal);
   }
 
   /** 执行自然语言页面抽取。 */
   async semantic_extract(
     input: BrowserSemanticExtractInput,
+    signal?: AbortSignal,
   ): Promise<BrowserExtractResult> {
-    return await this.semantic_extract_callback(input);
+    signal?.throwIfAborted();
+    return await this.semantic_extract_callback(input, signal);
   }
 
   /** 委托基础 provider 关闭 session。 */
-  async close_session(input: BrowserCloseSessionInput): Promise<void> {
-    await this.browser.close_session(input);
+  async close_session(input: BrowserCloseSessionInput, signal?: AbortSignal): Promise<void> {
+    await this.browser.close_session(input, signal);
   }
 
   /** 委托基础 provider 列出 session，session 状态只由基础 provider 持有。 */
-  async list_sessions(): Promise<BrowserListSessionsResult> {
+  async list_sessions(signal?: AbortSignal): Promise<BrowserListSessionsResult> {
+    signal?.throwIfAborted();
     if (!this.browser.list_sessions) {
       return { provider: this.name, sessions: [] };
     }
-    return await this.browser.list_sessions();
+    return await this.browser.list_sessions(signal);
   }
 
   /** 委托基础 provider 释放全部浏览器资源。 */

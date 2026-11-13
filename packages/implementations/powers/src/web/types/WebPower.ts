@@ -305,26 +305,22 @@ export interface BrowserCloseSessionInput {
 export interface BrowserProvider {
   /** provider 稳定名称，用于结果和诊断。 */
   readonly name: string;
-  /** 创建浏览器 session 并返回初始观察结果。 */
-  create_session(
-    input: BrowserCreateSessionInput,
-  ): Promise<BrowserObservation>;
-  /** 读取指定 session 当前状态。 */
-  observe(input: BrowserObserveInput): Promise<BrowserObservation>;
-  /** 执行确定性动作并返回动作后的状态。 */
-  act(input: BrowserActInput): Promise<BrowserObservation>;
-  /** 可选的自然语言动作能力，由 Stagehand 或 Computer Use adapter 实现。 */
-  semantic_act?(input: BrowserSemanticActInput): Promise<BrowserObservation>;
-  /** 从指定 session 抽取文本。 */
-  extract(input: BrowserExtractInput): Promise<BrowserExtractResult>;
-  /** 可选的自然语言结构化抽取能力。 */
-  semantic_extract?(
-    input: BrowserSemanticExtractInput,
-  ): Promise<BrowserExtractResult>;
-  /** 关闭指定 session。 */
-  close_session(input: BrowserCloseSessionInput): Promise<void>;
-  /** 列出当前仍由 provider 拥有的 session；未实现时界面只能显示已关闭状态。 */
-  list_sessions?(): Promise<BrowserListSessionsResult>;
+  /** 创建浏览器 session；signal 取消时必须回收已创建及迟到的页面。 */
+  create_session(input: BrowserCreateSessionInput, signal?: AbortSignal): Promise<BrowserObservation>;
+  /** 读取指定 session 当前状态；signal 为本次操作的取消信号。 */
+  observe(input: BrowserObserveInput, signal?: AbortSignal): Promise<BrowserObservation>;
+  /** 执行确定性动作；signal 取消后不得继续动作或发布新的观察结果。 */
+  act(input: BrowserActInput, signal?: AbortSignal): Promise<BrowserObservation>;
+  /** 可选的自然语言动作能力；实现必须向模型循环和底层浏览器传播 signal。 */
+  semantic_act?(input: BrowserSemanticActInput, signal?: AbortSignal): Promise<BrowserObservation>;
+  /** 从指定 session 抽取文本；signal 为本次操作的取消信号。 */
+  extract(input: BrowserExtractInput, signal?: AbortSignal): Promise<BrowserExtractResult>;
+  /** 可选的自然语言结构化抽取能力；signal 为本次操作的取消信号。 */
+  semantic_extract?(input: BrowserSemanticExtractInput, signal?: AbortSignal): Promise<BrowserExtractResult>;
+  /** 关闭指定 session；signal 限制等待，资源清理仍需继续完成。 */
+  close_session(input: BrowserCloseSessionInput, signal?: AbortSignal): Promise<void>;
+  /** 列出仍由 provider 拥有的 session；signal 为本次操作的取消信号。 */
+  list_sessions?(signal?: AbortSignal): Promise<BrowserListSessionsResult>;
   /** 释放 provider 持有的浏览器连接和剩余 session。 */
   dispose(): Promise<void>;
 }
@@ -370,7 +366,7 @@ export interface WebPowerConfig {
   browser_executable_path?: string;
   /** 新建 Session 时使用的默认地址。 */
   default_url?: string;
-  /** 浏览器操作超时时间。 */
+  /** 浏览器完整操作期限（毫秒），覆盖初始化、动作和观察；默认 30 秒，范围 1–60 秒。 */
   timeout_ms?: number;
   /** 页面观察的最大字符数。 */
   max_observation_chars?: number;
