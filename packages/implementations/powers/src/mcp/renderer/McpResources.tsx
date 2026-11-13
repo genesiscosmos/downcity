@@ -104,7 +104,7 @@ export function mcp_resource_detail({ power, ui, server_id }: McpResourceDetailP
       {status ? <>
         <Group><Row label="配置目录" description={status.directory} /></Group>
         <Section title="连接状态">
-          {status.servers.length === 0 ? <Group><Row label="暂无配置的 MCP Server" /></Group> : status.servers.filter((server) => server.id === server_id).map((server) => <Group key={server.id} label={server.id}>
+          {status.servers.length === 0 ? <EmptyState size="compact" title="暂无配置的 MCP Server" /> : status.servers.filter((server) => server.id === server_id).map((server) => <Group key={server.id} label={server.id}>
             <Row label="状态" trailing={<Status tone={server.state === "ready" ? "success" : server.state === "error" ? "danger" : "warning"}>{server.state}</Status>} />
             <Row label="工具数量" trailing={<span>{String(server.tool_count)}</span>} />
             {server.can_authorize ? <Row label="OAuth" description={server.auth_state ?? "none"} trailing={<span>

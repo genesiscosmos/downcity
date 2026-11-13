@@ -4,7 +4,7 @@
  * 关键点（中文）
  * - City 不拥有模型池，也不解析 provider / apiKey / baseURL。
  * - 模型目录唯一来源是 City 的 AIService：`/v1/ai/models`。
- * - 运行时模型通过 Downcity 保存的 Federation User Session 构造。
+ * - 运行时模型只消费宿主显式传入的当前 City Federation 绑定。
  */
 
 import { Federation } from "@downcity/federation";
@@ -123,26 +123,20 @@ export async function assertCityAiModelReady(
  * 创建 Agent 可直接使用的 City 模型。
  */
 export async function create_city_ai_model_client(input: {
-  /**
-   * 目标 City AIService model id。
-   */
-  modelId: string;
-
-  /**
-   * 宿主环境变量。
-   */
-  env?: NodeJS.ProcessEnv;
-  /** 当前 City 借用的唯一 Federation；本地实例不读取网络配置。 */
-  federation?: Federation;
+  /** 目标 Federation 模型 ID。 */
+  model_id: string;
+  /** 请求开始时读取的 City 当前绑定；缺少绑定时明确失败。 */
+  federation: Federation | undefined;
 }): Promise<ModelClient> {
-  const modelId = String(input.modelId || "").trim();
-  if (!modelId) throw new Error("modelId cannot be empty");
-  const federation_user = input.federation?.mode === "local" ? input.federation.user
-    : (await federation_session_resolver.create_user_client({ env: input.federation ? process.env : input.env ?? process.env }, input.federation)).federation_user;
-  const catalog = await federation_user.with_city(resolve_local_city_id(resolve_resource_root())).ai.catalog();
-  const model = catalog.get(modelId);
+  const model_id = String(input.model_id || "").trim();
+  if (!model_id) throw new Error("model_id cannot be empty");
+  if (!input.federation) {
+    throw new Error("City has no Federation binding. Log in and bind a Federation before using models.");
+  }
+  const catalog = await input.federation.user.with_city(resolve_local_city_id(resolve_resource_root())).ai.catalog();
+  const model = catalog.get(model_id);
   if (!model || !is_city_ai_execution_model(model)) {
-    throw new Error(`Agent execution model not found in Federation: ${modelId}`);
+    throw new Error(`Agent execution model not found in Federation: ${model_id}`);
   }
   return model;
 }

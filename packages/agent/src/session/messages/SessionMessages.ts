@@ -223,7 +223,7 @@ export class SessionMessages {
         part_id: `${message_id}:part:${String(index + 1)}`,
       })),
       });
-    });
+    }, false, true, input.assert_receivable);
     if (message.role !== "user") {
       throw new Error(`User Message expected: ${message.message_id}`);
     }
@@ -239,7 +239,7 @@ export class SessionMessages {
       `agent:${this.session_id}:${generate_id()}`;
     // 先建立持有关系，创建消息时的首次接受才会被登记为可写 Message。
     const writer = new SessionAgentMessageWriter({
-      category: this.store.origin.category,
+      category: this.store.origin.category, storage_id: this.store.storage_id,
       message_id,
       state: this.agent_state,
       cache: this.cache,
@@ -626,7 +626,7 @@ export class SessionMessages {
   }
 
   /** 向当前 Session 导入 fork 来源 Message，并重新分配全部身份和顺序。 */
-  async import_messages(messages: SessionMessage[]): Promise<void> {
+  async import_messages(messages: SessionMessage[], source_storage_id: string): Promise<void> {
     const turn_ids = new Map<string, string>();
     const message_ids = new Map<string, string>();
     for (const source of [...messages].sort((a, b) => a.sequence - b.sequence)) {
@@ -643,7 +643,7 @@ export class SessionMessages {
         // 旧结果在分支复制时固定初始披露及来源引用，后续多级 fork 也复用本地事实。
         copied.parts = copied.parts.map((part) => {
           if (part.type !== "tool" || (part.state !== "completed" && part.state !== "failed") || part.result_ref) return part;
-          const location = { session_id: source.session_id, message_id: source.message_id, message_sequence: source.sequence, part_id: part.part_id };
+          const location = { storage_id: source_storage_id, session_id: source.session_id, message_id: source.message_id, message_sequence: source.sequence, part_id: part.part_id };
           return { ...part, result_ref: create_result_ref(location, tool_result_value(part)),
             model_output: disclosed_tool_result(part, location), disclosure_version: 1 };
         });
@@ -658,6 +658,7 @@ export class SessionMessages {
         created_at,
         updated_at: created_at,
         origin: {
+          storage_id: source_storage_id,
           session_id: source.session_id,
           message_id: source.message_id,
           ...(source.turn_id ? { turn_id: source.turn_id } : {}),
@@ -670,15 +671,15 @@ export class SessionMessages {
     factory: (sequence: number, created_at: number) => SessionMessage,
     draft = false,
     publish_mutation = true,
+    assert_receivable?: () => void,
   ): Promise<SessionMessage> {
     await this.ensure_initialized();
-    const message = await this.store.create_message((state) => {
-      const candidate = factory(state.message_sequence, Date.now());
-      if (draft && (candidate.role !== "agent" || candidate.state !== "streaming")) {
-        throw new Error("Draft Message must be a streaming Agent Message");
-      }
-      return candidate;
-    });
+    const candidate = factory(1, Date.now());
+    if (draft && (candidate.role !== "agent" || candidate.state !== "streaming")) {
+      throw new Error("Draft Message must be a streaming Agent Message");
+    }
+    const { sequence: _unallocated_sequence, ...input } = candidate;
+    const message = await this.store.create_message(input, { assert_receivable });
     this.cache.accept(message, publish_mutation);
     return message;
   }

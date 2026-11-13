@@ -17,10 +17,13 @@ import type {
 } from "@downcity/type";
 import type { SessionAttachmentStore } from "@/types/store/SessionAttachmentStore.js";
 
-/** 在 Message 创建事务中提供的稳定状态。 */
-export interface SessionMessageCreateState {
-  /** 新 Message 应使用的全局线性顺序。 */
-  message_sequence: number;
+/** 不含存储分配序号的新消息候选；Worker 提交后返回最终完整聚合。 */
+export type SessionMessageCreateInput = Omit<SessionUserMessage, "sequence"> | Omit<SessionAgentMessage, "sequence">;
+
+/** 消息创建的主线程派发检查点；不随候选正文传入 Worker。 */
+export interface SessionMessageCreateOptions {
+  /** 未派发前最终校验是否仍可接受输入，抛错不发送事务。 */
+  assert_receivable?: () => void;
 }
 
 /** Message 定向更新事务。 */
@@ -59,19 +62,21 @@ export interface SessionDerivedStoreTransaction {
 }
 
 /**
- * Composer 的派生表存储视图。
- *
- * 关键点（中文）：这里只暴露当前命名空间的派生表事务；canonical history 由宿主读取后
- * 以参数传给 Composer，因此 Composer 不可能改写或绕过 canonical Message。
+ * 单 Session、单 Composer 命名空间的可序列化派生能力。
+ * canonical history 由宿主传给 Composer；所有存储请求都是数据，不跨 Worker 传递 SQL 回调。
  */
 export interface SessionDerivedStore {
-  /** 在短事务中操作当前命名空间的派生表。 */
-  transaction<T>(operation: (transaction: SessionDerivedStoreTransaction) => T): Promise<T>;
+  /** 读取当前 namespace 和指定格式的最近累计摘要，不加载其他 Session。 */
+  read_checkpoint(schema_version: number): Promise<import("../session/ContextCheckpoint.js").ContextCheckpointRow | null>;
+  /** 原子提交累计摘要，存储端验证消息与完整稳定单元边界。 */
+  insert_checkpoint(checkpoint: import("../session/ContextCheckpoint.js").ContextCheckpointRow): Promise<void>;
 }
 
 /** 单个 Session 的结构化持久化能力。 */
 export interface SessionStorage {
-  /** 当前 Session 的稳定标识。 */
+  /** 当前持久化记录不可变身份，归档及逻辑地址重建后不变。 */
+  readonly storage_id: string;
+  /** 当前 Session 的逻辑标识。 */
   readonly session_id: string;
   /** 当前 Session 的不可变创建来源。 */
   readonly origin: SessionOrigin;
@@ -116,7 +121,8 @@ export interface SessionStorage {
   read_first_user_message(): Promise<SessionUserMessage | null>;
   /** 在事务中分配 sequence 并创建 Message。 */
   create_message(
-    build_message: (state: SessionMessageCreateState) => SessionMessage,
+    message: SessionMessageCreateInput,
+    options?: SessionMessageCreateOptions,
   ): Promise<SessionMessage>;
   /** 原子写入变化 Parts 后提交 envelope 与稳定水位；拒绝前缀修改、删除、越界及未终态边界。 */
   update_message(input: SessionMessageUpdate): Promise<void>;

@@ -248,8 +248,8 @@ Workspace A  [▶ 24]─4─名称    ＋  ⋯
 | 悬停 | 行底 `interaction-hover`；行内操作入口若默认隐藏，则在此显形 |
 | 键盘焦点 | `ring-2 ring-ring/30`，落点见 §2.6 |
 | 选中 | `aria-current`（`page` 用于导航项，`true` 用于会话）；底色 + 文字转 `foreground` |
-| 加载中 | 面板级 `SidebarEmptyState` + 旋转图标 + 「加载中…」；**不显示空态** |
-| 为空 | `SidebarEmptyState`：图标 + 状态陈述 + 可选主按钮，标题与按钮各说一件事 |
+| 加载中 | 面板级 `EmptyPlaceholder` + 旋转图标 + 「加载中…」；**不显示空态** |
+| 为空 | `EmptyPlaceholder`：居中的线性图标 + 状态陈述 + 可选操作；侧栏使用 `compact` 尺寸，面板空白时填满可用空间，Workspace 内的空会话分组使用紧凑留白 |
 | 失败 | Power 工作区显示 `Callout tone="danger"`；行级失败由右侧状态图标表达 |
 | 禁用 | `opacity-45` + 不响应 |
 | 展开中 | 仅树行：箭头旋转，子行（新建入口 + 两类会话）就地展开 |
@@ -375,10 +375,10 @@ Workspace A  [▶ 24]─4─名称    ＋  ⋯
 | `SidebarRow` | `SidebarItem.tsx` | 复合行的行底（底色 / 高度 / 缩进），**不带焦点环** |
 | `SidebarRowLabel` | `SidebarItem.tsx` | 复合行里可聚焦的标签区（标题 + 可选描述） |
 | `SidebarRowAction` | `SidebarItem.tsx` | 行右端的操作位（宽度固定，各行对齐） |
-| `SidebarSubText` | `SidebarItem.tsx` | 行外副文本（「加载中…」「暂无对话」），与同层行的文字对齐 |
+| `SidebarSubText` | `SidebarItem.tsx` | 行外副文本（加载或读取失败的说明），与同层行的文字对齐 |
 | `SidebarLeading` | `SidebarLeading.tsx` | 行首槽（16 / 32；头像模式不声明图标尺寸） |
 | `SidebarHeader` / `SidebarContent` / `SidebarPanel` | `SidebarHeader.tsx` / `SidebarPanel.tsx` | 面板骨架 |
-| `SidebarEmptyState` | `SidebarEmptyState.tsx` | 面板空态 / 加载态 |
+| `EmptyPlaceholder` | `components/ui/empty-placeholder.tsx` | Desktop 统一居中空态；侧栏、BayBar、任务、文件、模型列表与 Power 共用，支持紧凑与默认尺寸 |
 | `ShellPanel` | `../ShellPanel.tsx` | **窗口级面板外壳**：两侧面板共用的列结构、折叠动画与宽度持久化 |
 | `MainView` / `MainViewHeader` / `MainViewBody` | `../MainViewLayout.tsx` | 正文区、正文顶栏、正文列 |
 
@@ -663,7 +663,7 @@ Chat 的 Bot Account 列表和它自己的空态说的不是同一种视觉语�
 它以前写死 `text-base`，于是 Power 侧栏的空态比它上面那些行大一整档。
 判据是**组件看得到自己在哪个表面**（`surface`），不是一刀切。
 
-桌面自己的侧栏空态（`SidebarEmptyState`）同样是 `text-xs`——两处必须同档。
+桌面侧栏与 Power 侧栏均使用 `EmptyPlaceholder` 的 `compact` 尺寸，标题统一为 `text-xs`。
 
 ### 9.2 两个新接口
 

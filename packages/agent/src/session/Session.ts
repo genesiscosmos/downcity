@@ -673,7 +673,7 @@ export class Session implements AgentSession {
           include_message,
         })
       : messages;
-    const forked = this.create_fork_session(await this.allocate_session_id());
+    const forked = await this.create_fork_session(await this.allocate_session_id());
     await forked.initialize();
     const model_binding = await this.store.read_model_binding();
     if (model_binding) await forked.store.write_model_binding(model_binding);
@@ -686,7 +686,7 @@ export class Session implements AgentSession {
     await forked.state.set_approval_mode(approval_mode);
     forked.effective_approval_mode = approval_mode;
     const relocated_messages = await relocate_fork_message_files(fork_messages, this.store.attachments, forked.store.attachments);
-    await forked.session_messages.import_messages(relocated_messages);
+    await forked.session_messages.import_messages(relocated_messages, this.store.storage_id);
     await forked.session_messages.persist_action({
       action_id: `history-fork:${forked.id}:${Date.now()}:${nanoid(8)}`,
       action_type: "history-fork",
@@ -798,8 +798,9 @@ export class Session implements AgentSession {
   private read_workspace_env(): Record<string, string> {
     return { ...(this.local_state.current_workspace?.get_env() ?? {}) };
   }
-
-  private create_fork_session(session_id: string): this {
+  private async create_fork_session(session_id: string): Promise<this> {
+    const store = this.create_session_store(session_id);
+    await store.initialize();
     return this.create_child_session({
       completions: this.completions,
       child_work: this.child_work,
@@ -812,7 +813,7 @@ export class Session implements AgentSession {
         ? { workspace: this.local_state.current_workspace }
         : {}),
       origin: this.origin,
-      store: this.create_session_store(session_id),
+      store,
       create_session_store: this.create_session_store,
       read_result_session: this.read_result_session,
       allocate_session_id: this.allocate_session_id,

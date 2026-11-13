@@ -3,6 +3,7 @@
  * 公开模型决定能力与售价，渠道决定协议和凭据来源，部署决定上游映射，route
  * 决定可调用入口。调用凭据始终独立于 Federation 登录身份。
  */
+import type { ModelStreamPolicy } from "@downcity/type";
 import type { AIModelDefinition } from "./AI.js";
 import type { CityTableApi } from "../store/table-api.js";
 import type { ServiceDatabaseContext } from "./database/Database.js";
@@ -28,8 +29,10 @@ export interface RelayChannel {
   base_url?: string;
   /** Federation 环境变量中的凭据名称。 */
   credential_env?: string;
-  /** 单次上游尝试的总期限毫秒，包含读取流，默认 120000；超时结果按未知处理。 */
+  /** 建立流、首输出及有效输出空闲预算的默认毫秒值；默认 120000，不限制持续正常输出总时长。 */
   timeout_ms?: number;
+  /** 渠道模型流期限的精确覆盖；总期限默认 900000，仍受服务端整体期限约束。 */
+  model_stream?: Partial<ModelStreamPolicy>;
 }
 /** 一个公开模型在某渠道的具体部署。 */
 export interface RelayDeployment {

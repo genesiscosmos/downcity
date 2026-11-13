@@ -13,7 +13,7 @@ const create_route = (provider: MessengerProvider) => ({ view: "create", provide
 /** Messenger Power Renderer 定义。 */
 export const MESSENGER_POWER_RENDERER = define_power_renderer({
   sidebar: function MessengerPowerSidebar({ power, navigation, ui }) {
-    const { Callout, LoadingState, Sidebar, SidebarCreateMenu, SidebarItem, SidebarSection, SidebarSubText, Status } = ui.components;
+    const { Callout, EmptyState, LoadingState, Sidebar, SidebarCreateMenu, SidebarItem, SidebarSection, Status } = ui.components;
     const [snapshot, set_snapshot] = useState<MessengerDesktopSnapshot>();
     const [error, set_error] = useState("");
     const selected_account_id = read_route(navigation.route.account_id);
@@ -46,7 +46,7 @@ export const MESSENGER_POWER_RENDERER = define_power_renderer({
           on_select={() => navigation.navigate(account_route(account.account_id))}
         />)}
         {!snapshot ? <LoadingState label="正在读取 Messengers…" /> : null}
-        {snapshot && snapshot.accounts.length === 0 ? <SidebarSubText>还没有 Bot Account</SidebarSubText> : null}
+        {snapshot && snapshot.accounts.length === 0 ? <EmptyState size="compact" title="还没有 Bot Account" /> : null}
       </SidebarSection>
       {error ? <Callout tone="danger">{error}</Callout> : null}
     </Sidebar>;

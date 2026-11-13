@@ -10,7 +10,9 @@ import { disclose_result } from "./ResultDisclosure.js";
 
 /** 结果引用定位的不可变 canonical 身份。 */
 export interface ResultLocation {
-  /** 源会话稳定 ID。 */
+  /** 新引用携带源存储UUID；旧引用缺失时仅允许本地复制事实或活动地址，不猜归档。 */
+  storage_id?: string;
+  /** 源会话逻辑 ID。 */
   session_id: string;
   /** 源消息稳定 ID；分支另分配消息 ID，并在复制的 Part 中保留此引用。 */
   message_id: string;
@@ -46,7 +48,8 @@ export function parse_result_ref(result_ref: string): ResultSnapshot {
   catch { throw new Error("result_ref_invalid"); }
   if (!value || typeof value.session_id !== "string" || typeof value.message_id !== "string" || typeof value.part_id !== "string"
     || typeof value.digest !== "string" || !Number.isSafeInteger(value.message_sequence) || value.message_sequence < 1
-    || (value.category !== undefined && typeof value.category !== "string")) throw new Error("result_ref_invalid");
+    || (value.category !== undefined && typeof value.category !== "string")
+    || (value.storage_id !== undefined && (typeof value.storage_id !== "string" || !/^[0-9a-f-]{36}$/iu.test(value.storage_id)))) throw new Error("result_ref_invalid");
   return value;
 }
 

@@ -30,11 +30,8 @@ function create_session(overrides = {}) {
     list_recoverable_agent_messages: async () => [],
     message_stats: async () => ({ message_count: 0, storage_bytes: 0, latest_message: null }),
     derived_store: () => ({
-      transaction: async (operation) => operation({
-        execute: () => {},
-        get: () => null,
-        all: () => [],
-      }),
+      read_checkpoint: async () => null,
+      insert_checkpoint: async () => {},
     }),
     read_instruction: async () => {
       calls.read_instruction += 1;

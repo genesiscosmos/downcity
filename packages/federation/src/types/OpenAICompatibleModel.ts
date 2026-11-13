@@ -2,6 +2,8 @@
  * OpenAI-compatible Provider Adapter 配置类型模块。
  */
 
+import type { ModelStreamPolicy } from "@downcity/type";
+
 /** OpenAI-compatible Provider Adapter 的显式连接配置。 */
 export interface OpenAICompatibleModelAdapterOptions {
   /** 上游 API 根地址，例如 `https://api.deepseek.com/v1`。 */
@@ -20,4 +22,6 @@ export interface OpenAICompatibleModelClientOptions extends OpenAICompatibleMode
   id: string;
   /** 上游请求实际使用的模型 ID。 */
   upstream_model: string;
+  /** 进程内调用的模型流期限；由宿主配置，默认建立流/首输出/空闲 120 秒、总执行 900 秒。 */
+  model_stream?: Partial<ModelStreamPolicy>;
 }

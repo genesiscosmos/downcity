@@ -2,13 +2,15 @@
  * SessionHistoryMeta：随 session_id 持久化的元信息。
  *
  * 关键点（中文）
- * - 存储位置：Session SQLite 的 `session_state` 表
+ * - 运行事实源：Agent SQLite 的 sessions 与 session_configuration 表
  * - 用于保存 session 列表、详情和索引所需的轻量元信息
  */
 
 import type { SessionOrigin } from "@downcity/type";
 
 export type SessionHistoryMeta = {
+  /** 目标 Agent DB 的不可变记录身份；离线历史输入尚未映射时缺省，运行投影必须验证存在。 */
+  storage_id?: string;
   /** 宿主专用执行配置身份；存在时恢复必须精确匹配注册项。 */
   execution_profile?: import("@/types/agent/SessionExecutionProfile.js").SessionExecutionProfileReference;
   /** schema 版本。 */

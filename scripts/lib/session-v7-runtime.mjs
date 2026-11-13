@@ -9,21 +9,24 @@
 import fs from "node:fs";
 import { fail } from "./session-v7-database.mjs";
 import path from "node:path";
-import { registerHooks as register_hooks, stripTypeScriptTypes as strip_types } from "node:module";
+import { registerHooks as register_hooks, stripTypeScriptTypes as strip_types, createRequire as create_require } from "node:module";
 import { fileURLToPath as file_url_to_path, pathToFileURL as path_to_file_url } from "node:url";
 
 const public_root = path.resolve(path.dirname(file_url_to_path(import.meta.url)), "../..");
 const agent_source = path.join(public_root, "packages/agent/src/");
 const type_source = path.join(public_root, "packages/type/src/");
+const city_source = path.join(public_root, "packages/city/src/");
 
 /** Import only pure runtime modules, with source-local aliases and TS transformation. */
-export async function load_runtime() {
+export async function load_runtime(agent_database = false) {
+  // City 的错误类使用 TS 参数属性；由已安装编译器转换，避免依赖 Node 的实验转换模式。
+  const typescript = agent_database ? create_require(path.join(city_source, "offline.cjs"))("typescript") : undefined;
   const hook = register_hooks({
     resolve(specifier, context, next_resolve) {
       const parent_path = context.parentURL?.startsWith("file:") ? file_url_to_path(context.parentURL) : "";
-      if (parent_path.startsWith(agent_source) || parent_path.startsWith(type_source)) {
+      if ([agent_source, type_source, city_source].some(root => parent_path.startsWith(root))) {
         let target;
-        if (specifier.startsWith("@/")) target = path.join(agent_source, specifier.slice(2));
+        if (specifier.startsWith("@/")) target = path.join(parent_path.startsWith(city_source) ? city_source : agent_source, specifier.slice(2));
         else if (specifier === "@downcity/type") target = path.join(type_source, "index.ts");
         else if (specifier.startsWith("@downcity/type/")) target = path.join(type_source, `${specifier.slice(15)}.ts`);
         else if (specifier.startsWith(".")) target = path.resolve(path.dirname(parent_path), specifier);
@@ -34,8 +37,11 @@ export async function load_runtime() {
     },
     load(url, context, next_load) {
       const file_path = url.startsWith("file:") ? file_url_to_path(url) : "";
-      if (file_path.endsWith(".ts") && (file_path.startsWith(agent_source) || file_path.startsWith(type_source))) {
-        return { format: "module", source: strip_types(fs.readFileSync(file_path, "utf8"), { mode: "strip", sourceUrl: url }), shortCircuit: true };
+      if (file_path.endsWith(".ts") && [agent_source, type_source, city_source].some(root => file_path.startsWith(root))) {
+        const source = fs.readFileSync(file_path, "utf8");
+        return { format: "module", source: file_path.startsWith(city_source)
+          ? typescript.transpileModule(source, { compilerOptions: { target: typescript.ScriptTarget.ESNext, module: typescript.ModuleKind.ESNext } }).outputText
+          : strip_types(source, { mode: "strip", sourceUrl: url }), shortCircuit: true };
       }
       return next_load(url, context);
     },
@@ -51,6 +57,14 @@ export async function load_runtime() {
       load("session/storage/SessionMessagePreview.ts"),
       load("session/loop/SessionInputFacts.ts"),
     ]);
+    if (agent_database) modules.push(...await Promise.all([
+      load("session/storage/agent-db/AgentSessionSchema.ts"),
+      load("session/storage/ModelBindingCodec.ts"),
+      import(path_to_file_url(path.join(city_source, "local/resources/RootLease.ts")).href),
+      import(path_to_file_url(path.join(city_source, "local/resources/SessionStorageReadiness.ts")).href),
+      import(path_to_file_url(path.join(type_source, "types/session/SessionOrigin.ts")).href),
+      import(path_to_file_url(path.join(type_source, "types/workspace/AttachmentPolicy.ts")).href),
+    ]));
     return Object.assign({}, schema, ...modules);
   } finally { hook.deregister(); }
 }

@@ -46,7 +46,7 @@ export async function read_session_agent_references(root_path: string, agent_ids
           cursor = page.next_cursor;
         } while (cursor);
       }
-    } finally { browser.dispose(); }
+    } finally { await browser.dispose(); }
   }
   return references;
 }
@@ -60,7 +60,7 @@ export async function count_workspace_sessions(root_path: string, agent_ids: rea
       for (const archived of [false, true]) for (const category of await browser.categories(archived)) {
         total += (await browser.list({ category, workspace_id, limit: 1 }, archived)).total;
       }
-    } finally { browser.dispose(); }
+    } finally { await browser.dispose(); }
   }
   return total;
 }

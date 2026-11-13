@@ -54,8 +54,8 @@ export async function generate_model(
     abort_signal: options.signal,
     on_failure: options.on_failure,
     ...(options.retry === false ? { should_retry: () => false } : {}),
-    execute_attempt: async () =>
-      await generate_model_once(model, call, options.signal),
+    execute_attempt: async (signal) =>
+      await generate_model_once(model, call, signal),
   });
 }
 

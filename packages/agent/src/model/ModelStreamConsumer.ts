@@ -8,6 +8,8 @@
 
 import {
   ModelStreamValidator,
+  guard_model_stream,
+  resolve_model_stream_policy,
   read_model_error,
   type ModelError,
   type ModelCall,
@@ -72,7 +74,9 @@ export async function consume_model_stream(
     const validator = new ModelStreamValidator();
     let stream: ReadableStream<ModelStreamEvent>;
     try {
-      stream = await model.stream(call, abort_signal);
+      const guarded = await guard_model_stream(async (signal) => ({ stream: await model.stream(call, signal) }), abort_signal,
+        resolve_model_stream_policy(model.model_stream_policy));
+      stream = guarded.stream;
     } catch (error) {
       throw normalize_model_invocation_failure(error, false, abort_signal);
     }

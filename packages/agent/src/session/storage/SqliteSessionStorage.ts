@@ -6,6 +6,7 @@
  */
 
 import path from "node:path";
+import { randomUUID as random_uuid } from "node:crypto";
 import { isDeepStrictEqual as is_deep_strict_equal } from "node:util";
 import { decode_model_binding } from "./ModelBindingCodec.js";
 import { assert_persisted_stable_prefix, validate_session_stable_prefix } from "./SessionStablePrefix.js";
@@ -40,7 +41,7 @@ import {
 import type {
   SessionDerivedStore,
   SessionDerivedStoreTransaction,
-  SessionMessageCreateState,
+  SessionMessageCreateInput,
   SessionMessageStorageStats,
   SessionMessageUpdate,
   SessionStorage,
@@ -70,6 +71,7 @@ export interface SqliteSessionStorageOptions {
 
 /** 单个 Session 的 SQLite 存储。 */
 export class SqliteSessionStorage implements SessionStorage {
+  readonly storage_id = random_uuid();
   readonly session_id: string;
   readonly origin: SessionOrigin;
   readonly attachments: SessionAttachmentStore;
@@ -303,16 +305,16 @@ export class SqliteSessionStorage implements SessionStorage {
 
   /** 分配全局 sequence 并创建完整 Message 聚合。 */
   async create_message(
-    build_message: (state: SessionMessageCreateState) => SessionMessage,
+    candidate: SessionMessageCreateInput,
+    options?: import("@/types/store/SessionStorage.js").SessionMessageCreateOptions,
   ): Promise<SessionMessage> {
     await this.initialize();
     return this.run_transaction(() => {
       const sequence_row = this.require_database().prepare(
         "SELECT COALESCE(MAX(sequence), 0) + 1 AS next_sequence FROM messages",
       ).get() as { next_sequence: number };
-      const message = build_message({
-        message_sequence: sequence_row.next_sequence,
-      });
+      options?.assert_receivable?.();
+      const message = { ...candidate, sequence: sequence_row.next_sequence } as SessionMessage;
       this.validate_new_message(message, sequence_row.next_sequence);
       this.insert_message_unsafe(message);
       this.update_message_projection_unsafe(message, true);
@@ -464,24 +466,29 @@ export class SqliteSessionStorage implements SessionStorage {
   /** 创建只允许当前 namespace 派生表的 Composer 派生存储。 */
   derived_store(namespace: string): SessionDerivedStore {
     const normalized_namespace = normalize_derived_namespace(namespace);
-    const table_prefix = `composer_${normalized_namespace}_`;
+    const table = `composer_${normalized_namespace}_checkpoints`;
+    const initialize_table = async () => {
+      await this.initialize();
+      this.require_database().exec(`CREATE TABLE IF NOT EXISTS ${table} (
+        checkpoint_id TEXT PRIMARY KEY,
+        through_message_id TEXT NOT NULL REFERENCES messages(message_id) ON DELETE CASCADE,
+        through_message_sequence INTEGER NOT NULL, through_part_sequence INTEGER NOT NULL,
+        summary TEXT NOT NULL, schema_version INTEGER NOT NULL, created_at INTEGER NOT NULL,
+        UNIQUE(through_message_sequence, through_part_sequence, schema_version))`);
+    };
     return {
-      transaction: async <T>(operation: (transaction: SessionDerivedStoreTransaction) => T) => {
-        await this.initialize();
-        return this.run_transaction(() => operation({
-          execute: (sql, parameters) => {
-            assert_derived_sql(sql, table_prefix);
-            this.run_statement(sql, parameters);
-          },
-          get: <TRow>(sql: string, parameters?: readonly SessionStorageValue[]) => {
-            assert_derived_sql(sql, table_prefix);
-            return (this.get_statement(sql, parameters) as TRow | undefined) ?? null;
-          },
-          all: <TRow>(sql: string, parameters?: readonly SessionStorageValue[]) => {
-            assert_derived_sql(sql, table_prefix);
-            return this.all_statement(sql, parameters) as TRow[];
-          },
-        }));
+      read_checkpoint: async (version) => {
+        await initialize_table();
+        return (this.require_database().prepare(`SELECT * FROM ${table} WHERE schema_version = ?
+          ORDER BY through_message_sequence DESC, through_part_sequence DESC LIMIT 1`).get(version) as unknown as import("@/types/session/ContextCheckpoint.js").ContextCheckpointRow | undefined) ?? null;
+      },
+      insert_checkpoint: async (checkpoint) => {
+        await initialize_table();
+        this.run_transaction(() => this.require_database().prepare(`INSERT INTO ${table}
+          (checkpoint_id, through_message_id, through_message_sequence, through_part_sequence, summary, schema_version, created_at)
+          VALUES (?, ?, ?, ?, ?, ?, ?)`).run(checkpoint.checkpoint_id, checkpoint.through_message_id,
+          checkpoint.through_message_sequence, checkpoint.through_part_sequence, checkpoint.summary,
+          checkpoint.schema_version, checkpoint.created_at));
       },
     };
   }

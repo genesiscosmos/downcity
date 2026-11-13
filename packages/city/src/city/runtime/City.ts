@@ -9,7 +9,7 @@
 import { Agent, Group } from "@downcity/agent";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
-import type { FederationUser } from "@downcity/federation";
+import { CityFederation } from "./CityFederation.js";
 import { create_shell_completion_handler } from "./ShellCompletionBridge.js";
 import { CityPowerRuntime } from "@/city/power/CityPowerRuntime.js";
 import { AiPower } from "@/city/power/builtin/AiPower.js";
@@ -40,8 +40,6 @@ import type { CityRuntimeAccess } from "@/city/types/CityRuntimeAccess.js";
 export class City implements CityRuntime {
   /** 当前 City 的稳定来源标签，不承担身份或权限证明。 */
   readonly city_id: string;
-  /** 带本 City 不可变来源的用户视图，与宿主共享凭据但不共享来源状态。 */
-  readonly federation_user?: FederationUser;
   /** City 持有的底层 Storage；默认是进程内存储。 */
   readonly storage: StorageProvider;
 
@@ -76,8 +74,8 @@ export class City implements CityRuntime {
   /** 同一 Workspace 的切换队列，不阻塞其他 Workspace。 */
   private readonly workspace_transitions = new Map<string, Promise<WorkspaceRuntime>>();
 
-  /** City 绑定的 Federation 服务入口。 */
-  readonly federation?: CityOptions["federation"];
+  /** City 的当前 Federation 内存绑定；宿主通过 set 更新身份。 */
+  readonly federation: CityFederation;
 
   /** 宿主提供的按需 Workspace 创建能力。 */
   private readonly resolve_workspace?: CityRuntimeOptions["resolve_workspace"];
@@ -106,8 +104,9 @@ export class City implements CityRuntime {
     this.city_id = options.city_id ?? `city_${randomUUID()}`;
     if (!/^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/u.test(this.city_id)) throw new TypeError("Invalid city_id");
     this.storage = options.storage || new MemoryStorageProvider();
-    this.federation = options.federation;
-    this.federation_user = this.federation?.user.with_city(this.city_id);
+    this.federation = new CityFederation(this.city_id);
+    this.federation.set(options.federation);
+    const federation = this.federation;
     this.runtime_access = Object.freeze({
       get_agent: (agent_id) => this.get_agent(agent_id),
       list_agents: () => this.list_agents(),
@@ -135,7 +134,7 @@ export class City implements CityRuntime {
     });
     this.power_runtime = new CityPowerRuntime({
       storage: this.storage,
-      ...(this.federation_user ? { federation: { user: this.federation_user } } : {}),
+      get federation() { return federation.user ? { user: federation.user } : undefined; },
       runtime_access: this.runtime_access,
       ...(options.power_host ? { host: options.power_host } : {}),
     });
@@ -219,7 +218,6 @@ export class City implements CityRuntime {
       access: this.runtime_access,
       files_for: (agent_id: string, group_id: string) =>
         this.storage.open_scope(["agents", agent_id, "powers", group_id]).files,
-      ...(this.federation_user ? { federation: { user: this.federation_user } } : {}),
     };
     return [new ContextPower(options), new AiPower(options), new AgentPower(options, create_agent), new SessionPower(options)];
   }

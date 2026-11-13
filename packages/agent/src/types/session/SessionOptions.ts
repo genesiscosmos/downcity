@@ -55,7 +55,7 @@ export interface AgentManagedSession extends AgentSession {
  */
 export interface SessionOptions {
   /** 当前 Agent 已授权会话的只读访问；包含归档，不恢复执行器。 */
-  read_result_session?: (session_id: string, category: string) => Promise<import("@/types/store/SessionReadView.js").SessionReadView>;
+  read_result_session?: (session_id: string, category: string, storage_id?: string) => Promise<import("@/types/store/SessionReadView.js").SessionReadView>;
   /** 专用配置存活校验；存在时禁止修改模型、Workspace、Prompt Powers 和分叉执行。 */
   assert_execution_profile?: () => void;
   /** Agent 的完成事件写前日志；在 canonical Turn 终态之前必须提交成功。 */

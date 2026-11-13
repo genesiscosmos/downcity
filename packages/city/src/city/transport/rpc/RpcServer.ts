@@ -68,9 +68,12 @@ export async function start_rpc_server(
     const write_error = (id: string, error: unknown): void => {
       const busy = error instanceof Error && "code" in error && error.code === "session_busy"
         ? error as import("@downcity/agent").SessionBusyError : undefined;
+      const archive = error instanceof Error && "code" in error && error.code === "session_archive_incomplete"
+        ? error as Error & { /** 原操作UUID。 */ operation_id?: string; /** 原根UUID。 */ root_storage_id?: string; /** 原计划摘要。 */ plan_fingerprint?: string } : undefined;
       write_frame({
         id,
         success: false,
+        ...(archive ? { code: "session_archive_incomplete", operation_id: archive.operation_id, root_storage_id: archive.root_storage_id, plan_fingerprint: archive.plan_fingerprint } : {}),
         error: error instanceof Error ? error.message : String(error),
         ...(busy ? { code: busy.code, session_id: busy.session_id, turn_id: busy.turn_id, occupied_by: busy.occupied_by } : {}),
       });

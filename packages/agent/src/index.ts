@@ -21,9 +21,11 @@ export type {
 export { read_agent_pending_references, has_delivered_session_turn } from "./session/storage/AgentPendingReferences.js";
 export type { AgentPendingReference } from "./session/storage/AgentPendingReferences.js";
 export { AgentSessionBrowser } from "./session/storage/AgentSessionBrowser.js";
-export type { AgentSessionBrowserOptions } from "./session/storage/AgentSessionBrowser.js";
+export type { AgentSessionBrowserOptions, AgentArchivedSessionAddress } from "./types/store/AgentSessionBrowser.js";
 export type { SessionModelBinding } from "./types/store/SessionModelBinding.js";
 export type { SessionReadView } from "./types/store/SessionReadView.js";
+export type { SessionReadConfiguration } from "./types/store/SessionReadConfiguration.js";
+export type { SessionArchivedSnapshot } from "./types/store/SessionArchivedSnapshot.js";
 
 // Agent 入口
 export { Agent } from "./agent/Agent.js";

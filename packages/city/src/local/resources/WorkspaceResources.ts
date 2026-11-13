@@ -146,7 +146,7 @@ export class WorkspaceResources {
         for (const reference of unsettled) {
           const browser = new (await import("@downcity/agent")).AgentSessionBrowser({ agent_id, storage_root_path: path.join(this.dependencies.root_path, "agents", agent_id), immutable: this.dependencies.immutable });
           try { if ((await browser.get(String(reference.session_id), String(reference.category))).metadata.workspace_id === workspace_id) throw new ResourceError("resource_busy", "Workspace has unsettled persisted execution", 4); }
-          finally { browser.dispose(); }
+          finally { await browser.dispose(); }
         }
       }
       const retained_session_count = await this.session_count(workspace_id);

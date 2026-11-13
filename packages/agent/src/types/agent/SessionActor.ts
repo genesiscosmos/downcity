@@ -68,6 +68,12 @@ export interface AgentSessions<TSession extends AgentSessionActor = AgentSession
   /** 列出已归档的 session 摘要页。 */
   archived(input?: AgentArchiveSessionsInput): Promise<AgentArchiveSessionsResult>;
 
+  /** 精确归档历史只读视图，不返回可执行actor。 */
+  read_archived(storage_id: string): Promise<import("../store/SessionReadView.js").SessionReadView>;
+
+  /** 删除指定归档记录，不能按逻辑ID猜测记录。 */
+  remove_archived(storage_id: string): Promise<boolean>;
+
   /** 永久清空已归档 session。 */
   clean_archive(): Promise<AgentCleanArchiveResult>;
 }

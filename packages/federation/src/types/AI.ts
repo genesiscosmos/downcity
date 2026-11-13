@@ -190,14 +190,7 @@ export interface AIModelDefinition extends Omit<AIModelSpec, "provider_options">
 export type AIModelEnvRequirement = CityModelEnvRequirement;
 
 /** 模型事件执行的服务端期限，单位毫秒；单次客户端请求不能覆盖。 */
-export interface AIModelStreamPolicy {
-  /** 等待首个有效输出的累计上游等待预算，默认 120 秒，包含建立 provider 流的等待。 */
-  first_output_timeout_ms: number;
-  /** 有效输出之间累计上游等待预算，默认 120 秒；消费端背压不消耗此预算。 */
-  idle_timeout_ms: number;
-  /** 整次模型执行的墙钟硬期限，默认 15 分钟，不因元数据、输出或背压延期。 */
-  total_timeout_ms: number;
-}
+export type AIModelStreamPolicy = import("@downcity/type").ModelStreamPolicy;
 
 /** AIService 配置。 */
 export interface AIServiceOptions {

@@ -12,7 +12,6 @@
  * - 动作 id 在构造期一次性展开，注册后不再变化。
  */
 
-import type { Federation } from "@downcity/federation";
 import { resolve_runtime_timezone } from "@downcity/type";
 import type {
   PowerAction,
@@ -35,8 +34,6 @@ export interface CityGroupPowerOptions {
   readonly access: Pick<CityRuntimeAccess, "list_agents" | "list_workspaces">;
   /** 按 Agent 与动作组分配私有文件端口。 */
   readonly files_for: (agent_id: string, group_id: string) => FileSystem;
-  /** City 持有的 Federation；未配置时省略。 */
-  readonly federation?: Pick<Federation, "user">;
 }
 
 /**
@@ -195,7 +192,8 @@ function build_city_context(
     files: options.files_for(power_context.agent.id, input.group_id),
     tool_call_id: power_context.call.tool_call_id ?? null,
     interactions: power_context.call.interactions,
-    ...(options.federation ? { federation: options.federation } : {}),
+    // 领域动作沿用本次 Power 调用解析的身份，不捕获注册时的客户端。
+    ...(power_context.city.federation ? { federation: power_context.city.federation } : {}),
     ...(abort_signal ? { abort_signal } : {}),
   };
 }

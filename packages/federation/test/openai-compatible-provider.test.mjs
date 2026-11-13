@@ -165,9 +165,13 @@ test("Provider Adapter forwards cancellation to the upstream request", async () 
   const pending = model.stream({
     messages: [{ role: "user", content: [{ type: "text", text: "hello" }] }],
   }, controller.signal)
+  // 等待请求真正进入 fetch，再验证派生期限信号仍保留用户取消原因。
+  await new Promise((resolve) => setImmediate(resolve))
+  assert.ok(upstream_signal instanceof AbortSignal)
   controller.abort(new DOMException("cancelled", "AbortError"))
   await assert.rejects(pending, /cancelled/)
-  assert.equal(upstream_signal, controller.signal)
+  assert.equal(upstream_signal.aborted, true)
+  assert.equal(upstream_signal.reason, controller.signal.reason)
 })
 
 test("Provider Adapter reports missing usage as a model_error terminal event", async () => {

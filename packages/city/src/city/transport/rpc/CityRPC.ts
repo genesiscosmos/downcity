@@ -35,6 +35,11 @@ const DEFAULT_RPC_PORT = 15314;
 const AGENT_SCOPED_READ_METHODS: ReadonlySet<string> = new Set([
   "sdk.sessions.list",
   "sdk.sessions.archived.list",
+  "sdk.sessions.archived.get",
+  "sdk.sessions.archived.messages",
+  "sdk.sessions.archived.configuration",
+  "sdk.sessions.archived.interactions",
+  "sdk.sessions.archived.remove",
   "sdk.interactions.list",
   "sdk.interactions.subscribe",
   "sdk.interactions.unsubscribe",
@@ -97,6 +102,11 @@ export class CityRPC {
           }
           const agent_id = String(request.agent_id || "").trim();
           if (!agent_id) throw new Error("CityRPC request requires agent_id");
+          if (request.method.startsWith("sdk.sessions.archived.") && AGENT_SCOPED_READ_METHODS.has(request.method)) {
+            const agent = this.runtime_access.get_agent(agent_id);
+            if (!agent) throw new Error(`Agent not found: ${agent_id}`);
+            return { sessions: agent.sessions, agent, instance_id: this.runtime_options.instance_id };
+          }
           const workspace_id = String(request.workspace_id || "").trim();
           if (!workspace_id) {
             if (!AGENT_SCOPED_READ_METHODS.has(request.method)) {
@@ -172,6 +182,8 @@ function create_unavailable_sessions(): AgentSessions {
     list: unavailable,
     archive: unavailable,
     archived: unavailable,
+    read_archived: unavailable,
+    remove_archived: unavailable,
     clean_archive: unavailable,
   };
 }

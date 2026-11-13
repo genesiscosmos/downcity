@@ -7,6 +7,7 @@
  * - Session 对象创建细节集中在这里，避免 facade 和 lifecycle 重复依赖 Session 构造逻辑。
  */
 
+import { read_result_session } from "@/session/storage/ReadResultSession.js";
 import { SessionLifecycle } from "./SessionLifecycle.js";
 import { archive_session_subtree } from "./SessionArchive.js";
 import { createHash } from "node:crypto";
@@ -623,15 +624,17 @@ export class AgentSessions implements AgentSessionsContract<AgentSession> {
     }
     cached?.dispose_title_generation?.();
     cached?.clear_secrets();
-    const existed = await this.resolve_session_context().store.remove_session(
+    const store = this.resolve_session_context().store;
+    const existing_record = await store.has_session(resolved_session_id, resolved_category) ? await store.read_session(resolved_session_id, resolved_category) : undefined;
+    const existed = await store.remove_session(
       resolved_session_id,
       resolved_category,
     );
     this.delete_cached_session(cache_key);
     if (existed) await this.notify_removed({
-      type: "deleted", session_id: resolved_session_id,
-      category: resolved_category, origin_type: cached?.origin.type ?? SESSION_ORIGIN_TYPE_WORK,
-      workspace_id: cached?.workspace_id,
+      type: "deleted", storage_id: existing_record?.storage_id, session_id: resolved_session_id,
+      category: resolved_category, origin_type: existing_record?.metadata.origin.type ?? cached?.origin.type ?? SESSION_ORIGIN_TYPE_WORK,
+      workspace_id: existing_record?.metadata.workspace_id ?? cached?.workspace_id,
     });
     return existed;
   }
@@ -714,6 +717,18 @@ export class AgentSessions implements AgentSessionsContract<AgentSession> {
     return await this.resolve_session_context().store.list_archived_sessions(input);
   }
 
+  /** 精确读取归档记录，只取得历史能力，不恢复执行或模型。 */
+  async read_archived(storage_id: string): Promise<import("@/types/store/SessionReadView.js").SessionReadView> {
+    return await this.resolve_session_context().store.read_archived_session(storage_id);
+  }
+
+  /** 永久删除一条归档记录，稳定身份避免误删重建后的活动主会话。 */
+  async remove_archived(storage_id: string): Promise<boolean> {
+    const result = await this.lifecycle.clean_archive(() => this.resolve_session_context().store.remove_archived_session(storage_id));
+    this.notify_directory_changed();
+    return result;
+  }
+
   /**
    * 永久清空已归档 session。
    */
@@ -771,7 +786,7 @@ export class AgentSessions implements AgentSessionsContract<AgentSession> {
     // 默认模型是本实例创建时的快照，Agent.reconfigure 不改变已打开 Session。
     const default_model = input && Object.hasOwn(input, "restored_model") ? input.restored_model : this.get_agent_model();
     const created = new this.session_class({
-      read_result_session: (session_id, category) => context.store.read_session(session_id, category),
+      read_result_session: (session_id, category, storage_id) => read_result_session(context.store, session_id, category, storage_id),
       ...(profile ? { assert_execution_profile: assert_profile } : {}),
       agent_id: this.agent_id,
       get_agent_name: this.get_agent_name,

@@ -25,8 +25,33 @@ export function canonical_json(value) {
   return JSON.stringify(value);
 }
 
-/** Hash logical contents rather than the mutable SQLite page layout. */
-export function digest(value) { return create_hash("sha256").update(canonical_json(value)).digest("hex"); }
+/** 分块写入相同的规范 JSON 字节，避免大库拼接巨型字符串；既有指纹保持不变。 */
+export function digest(value) {
+  const hash = create_hash("sha256");
+  function update(item, context = "root") {
+    if (Array.isArray(item)) {
+      hash.update("[");
+      for (let index = 0; index < item.length; index++) {
+        if (index) hash.update(",");
+        update(item[index], "array");
+      }
+      hash.update("]");
+    } else if (item && typeof item === "object") {
+      hash.update("{");
+      for (const [index, key] of Object.keys(item).sort().entries()) {
+        if (index) hash.update(",");
+        hash.update(`${JSON.stringify(key)}:`); update(item[key], "object");
+      }
+      hash.update("}");
+    } else {
+      const encoded = JSON.stringify(item);
+      if (encoded !== undefined || context === "root") hash.update(encoded);
+      else if (context === "object") hash.update("undefined");
+    }
+  }
+  update(value);
+  return hash.digest("hex");
+}
 
 /** Keep source connections read-only; do not checkpoint, recover or set journal_mode. */
 export function open_readonly(database_path) {

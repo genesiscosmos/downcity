@@ -44,7 +44,16 @@ export class DeferredModelClient implements ModelClient {
   }
 }
 
-/** 执行边界解析占位客户端，普通客户端保持同一实例与宿主覆盖设置。 */
+/** 执行边界逐层解析宿主与历史恢复的占位句柄，确保预算取得真实模型元数据。 */
 export async function resolve_model_client(model: ModelClient | undefined): Promise<ModelClient | undefined> {
-  return model instanceof DeferredModelClient ? await model.resolve() : model;
+  const visited = new Set<ModelClient>();
+  let current = model;
+  while (current instanceof DeferredModelClient) {
+    if (visited.has(current)) throw new Error(`Circular deferred Session model: ${current.id}`);
+    visited.add(current);
+    const resolved = await current.resolve();
+    if (resolved.id !== current.id) throw new Error(`Host resolved a different Session model: ${current.id}`);
+    current = resolved;
+  }
+  return current;
 }

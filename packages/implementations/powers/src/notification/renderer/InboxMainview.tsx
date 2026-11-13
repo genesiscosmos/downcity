@@ -14,7 +14,7 @@ export function InboxMainview({ store, options, ...props }: PowerMainviewCompone
   /** 宿主表单、私密提交和来源导航适配。 */ options: NotificationRendererOptions;
 }) {
   const { state, choose, close } = use_inbox(store, props);
-  const { Page } = props.ui.components;
+  const { Page, EmptyState } = props.ui.components;
   const detail_region = useRef<HTMLDivElement>(null);
   const data = state.data;
   const entries = inbox_entries(data, "all");
@@ -30,10 +30,11 @@ export function InboxMainview({ store, options, ...props }: PowerMainviewCompone
       {selected ? <InboxEntryDetail key={selected.key} entry={selected} current={entries.find((entry) => entry.key === selected.key)}
         handled={state.handled.has(selected.key)} store={store} options={options} props={props}
         unavailable={unavailable} next={next} choose={choose} on_close={close} can_read={true} />
-        : <div className="inbox-empty" role="status"><InboxIcon kind={!state.loading && data && !entries.length ? "check" : "inbox"} />
-          <h2>{state.loading ? "正在读取收件箱…" : loading_failed ? "暂时无法读取收件箱" : entries.length ? "选择一个事项" : "暂无事项"}</h2>
-          {entries.length ? <p>从侧栏选择事项，查看详情或完成处理。</p> : null}
-        </div>}
+        : <EmptyState
+          icon={<InboxIcon kind={!state.loading && data && !entries.length ? "check" : "inbox"} />}
+          title={state.loading ? "正在读取收件箱…" : loading_failed ? "暂时无法读取收件箱" : entries.length ? "选择一个事项" : "暂无事项"}
+          description={entries.length ? "从侧栏选择事项，查看详情或完成处理。" : undefined}
+        />}
     </div>
   </Page>;
 }

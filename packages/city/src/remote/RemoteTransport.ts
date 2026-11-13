@@ -109,6 +109,16 @@ export type RemoteSessionTransport = {
  * RemoteAgent 顶层 transport 能力。
  */
 export type RemoteAgentTransport = RemoteSessionTransport & import("@/types/remote/RemoteAgentInteractions.js").RemoteAgentInteractionTransport & {
+  /** 读取精确归档记录元数据，不获取可执行actor。 */
+  archived_snapshot(storage_id: string): Promise<import("@downcity/agent").SessionArchivedSnapshot>;
+  /** 分页读取该UUID的canonical历史。 */
+  archived_messages(storage_id: string, input?: ListSessionMessagesInput): Promise<SessionMessagePage>;
+  /** 独立读取该UUID的持久化配置。 */
+  archived_configuration(storage_id: string): Promise<import("@downcity/agent").SessionReadConfiguration>;
+  /** 读取该UUID的pending信息，不授予响应权限。 */
+  archived_interactions(storage_id: string): Promise<SessionInteractionRequest[]>;
+  /** 删除精确归档记录，执行端仍执行宿主权限校验。 */
+  remove_archived(storage_id: string): Promise<boolean>;
   /** 新建 session。 */
   create_session(input?: AgentCreateSessionInput): Promise<AgentSessionInfo>;
   /** 列出 sessions。 */

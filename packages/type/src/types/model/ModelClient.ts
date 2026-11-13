@@ -4,6 +4,7 @@
  * 客户端只暴露标准流调用，不继承任何 Provider 的模型接口。
  */
 
+import type { ModelStreamPolicy } from "./ModelStreamPolicy.js";
 import type { ModelCall } from "./ModelCall.js";
 import type { ModelStreamEvent } from "./ModelStreamEvent.js";
 
@@ -15,6 +16,8 @@ export interface ModelClient {
   readonly name?: string;
   /** 模型支持的总上下文窗口，单位为 token。 */
   readonly context_window?: number;
+  /** 宿主设置的模型流期限；Agent 使用相同策略守护自定义客户端，未提供时使用默认值。 */
+  readonly model_stream_policy?: Partial<ModelStreamPolicy>;
   /** 使用标准 Downcity 协议执行一个模型 step。 */
   stream(call: ModelCall, signal?: AbortSignal): Promise<ReadableStream<ModelStreamEvent>>;
 }

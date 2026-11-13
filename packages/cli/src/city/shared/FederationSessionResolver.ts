@@ -85,7 +85,7 @@ export class FederationSessionResolver {
   /**
    * 创建当前有效 Federation user 子域。
    */
-  async create_user_client(input: ResolveFederationUserInput = {}, current?: Federation): Promise<{
+  async create_user_client(input: ResolveFederationUserInput = {}): Promise<{
     /**
      * 当前有效身份。
      */
@@ -107,17 +107,21 @@ export class FederationSessionResolver {
     if (!user.user_token) {
       throw new Error("Federation user token is required. Run `city federation login` first.");
     }
-    if (current && current.url !== user.federation_url) {
-      throw new Error("Federation target changed. Reopen the City host to use the selected target.");
-    }
-    const federation = current ?? new Federation({ url: user.federation_url, user_token: user.user_token });
-    federation.user.set_token(user.user_token);
+    const federation = new Federation({ url: user.federation_url, user_token: user.user_token });
     const verified_user = input.verify_user === false ? user : await this.verify_current_user(user, user.user_id, federation);
     return {
       user: verified_user,
       federation,
       federation_user: federation.user,
     };
+  }
+
+  /** 宿主启动时仅从已存身份离线构建绑定；未登录时保持本地运行。 */
+  async create_runtime_client(): Promise<Federation | undefined> {
+    const user = await this.resolve_current_user({ require_user_token: false, verify_user: false });
+    return user.user_token
+      ? new Federation({ url: user.federation_url, user_token: user.user_token })
+      : undefined;
   }
 
   /** 读取 `fed` 为当前 Federation 保存的有效管理员 Session。 */

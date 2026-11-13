@@ -18,7 +18,7 @@ const delegate_input = session_start_input.extend({
 /** 创建跨 Agent 的单次委派入口，复用目标 Agent 的工作服务。 */
 export function create_agent_delegate_action(options: CityGroupPowerOptions): PowerAction {
   return {
-    description: "Delegate a self-contained project task to another agent from agent.list. Requires agent_id, workspace_id and query; optional model_id and title. Returns a delegation receipt immediately; completion returns automatically. Does not grant access to the target agent's sessions. Do not poll.",
+    description: "Delegate a self-contained project task to another agent from agent.list. A Work Main must first understand the complete task and dependencies, then delegate a bounded thread with a specific goal, context, scope, expected output, and completion criteria. Retain substantive execution, integration, and verification; do not forward the entire Main assignment. Requires agent_id, workspace_id and query; optional model_id and title. Returns a delegation receipt immediately; completion returns automatically. Does not grant access to the target agent's sessions. Do not poll.",
     returns: "agent_id, delegation_id, status=delegated; completion returns automatically to the calling conversation",
     access: "write",
     input_schema: { zod: delegate_input, json_schema: z.toJSONSchema(delegate_input) as PowerJsonObject },

@@ -5,7 +5,7 @@
  * 返回、可确认未生成的拒绝响应允许切换；网络异常、5xx 和流中断保持未知，
  * 绝不透明重新生成。每次尝试在发起上游请求前落库。
  */
-import { read_model_error, type ModelCall, type ModelStreamEvent } from "@downcity/type";
+import { guard_model_stream, resolve_model_stream_policy, read_model_error, type ModelCall, type ModelError, type ModelStreamEvent } from "@downcity/type";
 import { query_service_database } from "../ai/database-sql.js";
 import type { Context } from "../service.js";
 import type { AIChannelStreamResult, AIModelDefinition } from "../../types/AI.js";
@@ -125,6 +125,7 @@ export class RelayRouter {
     const cooling = new Set(health.rows.map((row) => row.deployment_id));
     candidates = candidates.filter((item) => !cooling.has(item.id));
     let last_status = 503;
+    let last_model_error: ModelError | undefined;
     // 每次尝试都从入口信号合并，避免把前一次 provider 的截止时间带进下一次尝试。
     const request_abort_signal = ctx.abort_signal;
     for (let index = 0; index < max_attempts && candidates.length; index += 1) {
@@ -149,24 +150,28 @@ export class RelayRouter {
         },
       };
       try {
-        const deadline = AbortSignal.timeout(channel.timeout_ms ?? 120_000);
-        ctx.abort_signal = AbortSignal.any([
-          ...(request_abort_signal ? [request_abort_signal] : []),
-          ...(ctx.request ? [ctx.request.signal] : []),
-          deadline,
-        ]);
-        ctx.abort_signal.throwIfAborted();
+        const parents = [request_abort_signal, ctx.request?.signal].filter((signal): signal is AbortSignal => signal !== undefined);
+        const channel_timeout_ms = channel.timeout_ms ?? 120_000;
+        const channel_policy = resolve_model_stream_policy({
+          first_output_timeout_ms: channel_timeout_ms, idle_timeout_ms: channel_timeout_ms,
+          ...channel.model_stream,
+        });
         const reasoning = read_resolved_reasoning(ctx);
-        const result = channel.adapter === "registered"
+        const result = await guard_model_stream(async (signal) => {
+          ctx.abort_signal = signal;
+          signal.throwIfAborted();
+          return channel.adapter === "registered"
           ? await this.dependencies.models.find((item) => item.id === deployment.runtime_model_id)!.runtime.stream!(ctx, call)
           : await stream_openai_compatible_model({
               call, model: { id: requested_model, upstream_model: deployment.upstream_model }, env: ctx.env,
               ...(reasoning ? { reasoning } : {}),
               abort_signal: ctx.abort_signal,
             }, { base_url: channel.base_url!, api_key: ctx.env(channel.credential_env!)! });
+        }, parents.length ? AbortSignal.any(parents) : undefined, channel_policy);
         return { ...result, stream: this.observe_stream(ctx, result.stream, attempt, started_at) };
       } catch (error) {
         const detail: RelayUpstreamFailure = error && typeof error === "object" ? error : {};
+        last_model_error = error && typeof error === "object" && "model_error" in error ? read_model_error(error.model_error) : undefined;
         const abort_status = read_abort_status(ctx);
         const status = abort_status ?? detail.statusCode;
         const safe_retry = abort_status === undefined && detail.upstream_rejected === true
@@ -184,7 +189,7 @@ export class RelayRouter {
         if (!safe_retry) {
           await this.finish_request(request_id, cancelled ? "cancelled" : abort_status !== undefined ? "unknown"
             : detail.upstream_rejected ? "failed" : "unknown");
-          const model_error = abort_status === undefined && error && typeof error === "object" && "model_error" in error
+          const model_error = !cancelled && error && typeof error === "object" && "model_error" in error
             ? read_model_error(error.model_error) : undefined;
           if (model_error) throw Object.assign(httpError(last_status, model_error.message), { model_error, code: model_error.code });
           throw httpError(abort_status ?? last_status, cancelled ? "Request cancelled"
@@ -196,6 +201,9 @@ export class RelayRouter {
     }
     const abort_status = read_abort_status(ctx);
     await this.finish_request(request_id, abort_status === 499 ? "cancelled" : "failed");
+    if (abort_status === undefined && last_model_error?.status_code === last_status) {
+      throw Object.assign(httpError(last_status, last_model_error.message), { model_error: last_model_error });
+    }
     throw httpError(abort_status ?? last_status, abort_status === 499 ? "Request cancelled"
       : abort_status === 504 ? "Request timed out" : abort_status !== undefined ? "Request aborted" : "No available relay deployment");
   }

@@ -51,6 +51,25 @@ export async function handle_sdk_session_rpc_request(params: {
     await options.sessions.get(session_id, category, session_context);
 
   switch (request.method) {
+    case "sdk.sessions.archived.get":
+    case "sdk.sessions.archived.messages":
+    case "sdk.sessions.archived.configuration":
+    case "sdk.sessions.archived.interactions":
+    case "sdk.sessions.archived.remove": {
+      const storage_id = request.params.storage_id;
+      if (!/^[0-9a-f-]{36}$/iu.test(storage_id)) throw new Error("session_validation_error");
+      if (request.method === "sdk.sessions.archived.remove") {
+        write_success(request.id, { data: await options.sessions.remove_archived(storage_id) });
+        return true;
+      }
+      const view = await options.sessions.read_archived(storage_id);
+      const data = request.method === "sdk.sessions.archived.messages" ? await view.messages(request.params.input)
+        : request.method === "sdk.sessions.archived.configuration" ? await view.configuration()
+        : request.method === "sdk.sessions.archived.interactions" ? await view.interactions()
+        : { storage_id: view.storage_id, metadata: view.metadata, archived: true };
+      write_success(request.id, { data });
+      return true;
+    }
     case "sdk.powers.open": {
       const session = await get_session(request.params.session_id, request.params.category);
       const subscription_id = request.params.subscription_id;
@@ -199,10 +218,9 @@ export async function handle_sdk_session_rpc_request(params: {
       return true;
     }
     case "sdk.sessions.archive": {
-      await get_session(request.params.session_id, request.params.category);
       const result = await options.sessions.archive({
-        id: request.params.session_id,
-        category: request.params.category,
+        id: request.params.session_id, operation_id: request.params.operation_id,
+        root_storage_id: request.params.root_storage_id, category: request.params.category,
       });
       write_success(request.id, { result });
       return true;

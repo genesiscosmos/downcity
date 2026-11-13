@@ -23,7 +23,9 @@ import type { SessionPromptActor } from "./SessionPromptActor.js";
 
 /** 从其他 Session 导入时保留的来源身份。 */
 export interface SessionMessageOrigin {
-  /** 来源 Session 标识。 */
+  /** 来源持久化记录的稳定 UUID，归档与逻辑主会话重建后仍精确指向原记录。 */
+  storage_id: string;
+  /** 来源 Session 逻辑标识，仅作展示与交叉校验。 */
   session_id: string;
   /** 来源 Message 标识。 */
   message_id: string;

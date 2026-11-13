@@ -47,7 +47,3 @@
 .inbox-inline-error button { text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
 .inbox-inline-error { color: var(--destructive); font-size: var(--text-2xs, 12px); line-height: 1.6; padding-bottom: 12px; }
 .inbox-inline-error button { margin-left: 8px; }
-.inbox-empty { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: .625rem; padding: 2.5rem 1.5rem; text-align: center; }
-.inbox-empty > svg { width: 1.75rem; height: 1.75rem; color: var(--muted-foreground); margin-bottom: .25rem; }
-.inbox-empty h2 { margin: 0; font-size: var(--text-sm, 14px); font-weight: 500; }
-.inbox-empty p { margin: 0; max-width: 310px; font-size: var(--text-2xs, 12px); line-height: 1.7; color: var(--muted-foreground); }

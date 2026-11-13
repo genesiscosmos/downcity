@@ -5,26 +5,35 @@
 import type { SessionMessage } from "@downcity/type";
 import { latest_session_input, session_input_facts } from "@/session/loop/SessionInputFacts.js";
 import type { SessionStore } from "@/types/store/SessionStore.js";
-import type { AgentSession } from "@/types/agent/SessionActor.js";
+import type { SessionBackgroundRecoveryContext, SessionBackgroundRecoveryOptions } from "@/types/agent/SessionBackgroundRecovery.js";
 
 /** 扫描持久化消息，仅为受信后台续轮恢复 Session，让其现有初始化逻辑收口中断。 */
 export async function recover_background_sessions(
-  store: SessionStore,
-  restore: (session_id: string, category: string) => Promise<AgentSession>,
-  report_error: (error: unknown) => void,
+  store: Pick<SessionStore, "list_sessions" | "read_session">,
+  options: SessionBackgroundRecoveryOptions,
 ): Promise<void> {
   for (const category of ["chat", "work"]) {
     let cursor: string | undefined;
     do {
-      const page = await store.list_sessions({ category, limit: 100, ...(cursor ? { cursor } : {}) }, new Set());
+      const page = await store.list_sessions({ category, limit: 100, ...(cursor ? { cursor } : {}) }, new Set())
+        .catch(error => {
+          options.report_error(error, { category, phase: "list_sessions" });
+          throw error;
+        });
       for (const entry of page.items) {
+        const context: SessionBackgroundRecoveryContext = {
+          session_id: entry.session_id, category, storage_id: entry.storage_id, phase: "read_session",
+        };
         try {
           const view = await store.read_session(entry.session_id, category);
+          context.storage_id = view.storage_id;
           let before_sequence: number | undefined;
           let latest: SessionMessage | undefined;
           for (;;) {
+            context.phase = "read_messages";
             const messages = await view.messages({ limit: 100, ...(before_sequence === undefined ? {} : { before_sequence }) });
             latest ??= latest_session_input(messages.items)?.message;
+            context.turn_id = latest?.turn_id;
             if (latest?.origin) break;
             // Tool inbox 可以没有 meta；只向前翻到该 Turn 最近的可信输入，不加载整个会话。
             const turn_id = latest?.turn_id;
@@ -33,14 +42,23 @@ export async function recover_background_sessions(
             const actor = owner && owner.meta?.from;
             if (actor) {
               if (actor.kind === "runtime" && actor.namespace === "session_background") {
-                await (await restore(entry.session_id, category)).status();
+                context.phase = "read_completion";
+                // 完成日志是执行终态事实；通知尚在重试也不需要重新装配执行对象。
+                if (await options.is_completed(entry.session_id, turn_id)) {
+                  context.phase = "read_recoverable_messages";
+                  if (!(await options.has_recoverable_messages(entry.session_id, category))) break;
+                }
+                context.phase = "restore_session";
+                const session = await options.restore(entry.session_id, category);
+                context.phase = "restore_status";
+                await session.status();
               }
               break;
             }
             if (!messages.has_more || !messages.next_before_sequence) break;
             before_sequence = messages.next_before_sequence;
           }
-        } catch (error) { report_error(error); }
+        } catch (error) { options.report_error(error, { ...context }); }
       }
       cursor = page.next_cursor;
     } while (cursor);

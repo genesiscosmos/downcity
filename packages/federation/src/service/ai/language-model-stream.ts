@@ -200,7 +200,10 @@ export function create_model_stream_execution_error(error: unknown, usage?: Mode
   if (status_code === 504 || code === "MODEL_FIRST_OUTPUT_TIMEOUT" || code === "MODEL_IDLE_TIMEOUT" || code === "MODEL_EXECUTION_TIMEOUT") {
     const message = code === "MODEL_FIRST_OUTPUT_TIMEOUT" ? "Model first output timed out"
       : code === "MODEL_IDLE_TIMEOUT" ? "Model output stalled" : "Model execution timed out";
-    return new ModelStreamExecutionError({ code: "provider_timeout", status_code: 504, retryable: false, message }, usage);
+    const timeout_phase = code === "MODEL_FIRST_OUTPUT_TIMEOUT" ? "first_output"
+      : code === "MODEL_IDLE_TIMEOUT" ? "idle" : "total";
+    return new ModelStreamExecutionError({ code: "provider_timeout", status_code: 504,
+      timeout_phase, retryable: timeout_phase === "first_output", message }, usage);
   }
   return new ModelStreamExecutionError({
     code: "provider_error", status_code: 502, retryable: false, message: "Model execution failed",

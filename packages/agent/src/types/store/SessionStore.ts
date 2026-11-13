@@ -27,8 +27,14 @@ export interface SessionStore {
   /** 打开一个已有 Session；完整来源必须从数据库状态恢复。 */
   open_session(session_id: string, category?: string): Promise<SessionStorage>;
 
-  /** 读取当前 Agent 的活动或归档历史，不恢复执行器或修改生命周期。 */
+  /** 读取活动逻辑地址，不回落归档，不恢复执行器或修改生命周期。 */
   read_session(session_id: string, category: string): Promise<SessionReadView>;
+
+  /** 通过稳定记录 UUID 精确读取归档，不猜同逻辑 ID 的任意归档记录。 */
+  read_archived_session(storage_id: string): Promise<SessionReadView>;
+
+  /** 永久删除一条精确归档记录，并在同一事务登记附件清理。 */
+  remove_archived_session(storage_id: string): Promise<boolean>;
 
   /** 只读查询所有来源的活动 pending 交互；不恢复 Session 或扫描完整历史。 */
   list_pending_interactions(): Promise<AgentInteraction[]>;
@@ -47,6 +53,13 @@ export interface SessionStore {
     input: AgentListSessionsInput | undefined,
     executing_session_ids: ReadonlySet<string>,
   ): Promise<AgentSessionSummaryPage>;
+
+  /** 创建或恢复原持久化后序UUID归档计划，不重扫已有操作。 */
+  prepare_archive(input: import("./AgentArchivePlan.js").AgentArchivePlanInput): Promise<import("./AgentArchivePlan.js").AgentArchivePlan>;
+  /** 按原计划位置原子归档节点并推进持久进度。 */
+  commit_archive_node(input: import("./AgentArchivePlan.js").AgentArchiveNodeCommit): Promise<import("./AgentArchivePlan.js").AgentArchivePlan>;
+  /** 读取原操作计划，用于重入和可信权限核对。 */
+  read_archive_plan(operation_id: string): Promise<import("./AgentArchivePlan.js").AgentArchivePlan | null>;
 
   /** 将活动 Session 原子迁入归档区。 */
   archive_session(session_id: string, category?: string): Promise<AgentArchiveSessionResult>;

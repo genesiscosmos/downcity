@@ -21,7 +21,7 @@ export interface CityOptions {
   /** City 为 Agent 提供的底层存储；省略时使用进程内存储。 */
   storage?: StorageProvider;
 
-  /** City 使用的 Federation；Power 只通过窄服务借用其能力。 */
+  /** 可选初始绑定；宿主通过 city.federation.set 更新身份并负责客户端释放，City 不访问账户库。 */
   federation?: Federation;
 
   /** City 持有的 Workspace 资源集合；每个 Workspace ID 必须唯一。 */

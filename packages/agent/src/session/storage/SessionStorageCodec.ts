@@ -38,6 +38,8 @@ export interface SessionMessageRow {
   stable_part_sequence: number;
   /** 本条用户消息携带的请求记账 JSON；Agent 消息固定为空。 */
   meta: string | null;
+  /** Fork 来源不可变记录身份；离线分库源缺失时由转换工具显式补齐。 */
+  origin_storage_id?: string | null;
   /** Fork 来源 Session。 */
   origin_session_id: string | null;
   /** Fork 来源 Message。 */
@@ -81,6 +83,7 @@ export function encode_session_message_row(message: SessionMessage): SessionMess
     state: message.role === "agent" ? message.state : null,
     stable_part_sequence: message.role === "agent" ? message.stable_part_sequence : 0,
     meta: message.role === "user" && message.meta ? JSON.stringify(message.meta) : null,
+    origin_storage_id: message.origin?.storage_id ?? null,
     origin_session_id: message.origin?.session_id ?? null,
     origin_message_id: message.origin?.message_id ?? null,
     origin_turn_id: message.origin?.turn_id ?? null,
@@ -117,8 +120,12 @@ export function decode_session_message(
   part_rows: readonly SessionMessagePartRow[],
   session_id: string,
 ): SessionMessage {
+  if (row.origin_session_id && row.origin_message_id && !row.origin_storage_id) {
+    throw new Error("session_fork_origin_storage_required");
+  }
   const origin = row.origin_session_id && row.origin_message_id
     ? {
+        storage_id: row.origin_storage_id!,
         session_id: row.origin_session_id,
         message_id: row.origin_message_id,
         ...(row.origin_turn_id ? { turn_id: row.origin_turn_id } : {}),

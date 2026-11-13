@@ -13,7 +13,7 @@ import { Skill_document } from "./SkillDocument.js";
 
 /** Load each resource family independently so one unavailable source does not hide the other. */
 export function skill_resource_sidebar({ power, navigation, ui }: PowerSidebarComponentProps) {
-  const { Sidebar, SidebarSection, SidebarItem, SidebarSubText, Tabs, Input, StatusDot, Callout, LoadingState } = ui.components;
+  const { Sidebar, SidebarSection, SidebarItem, EmptyState, Tabs, Input, StatusDot, Callout, LoadingState } = ui.components;
   const [snapshot, set_snapshot] = useState<SkillMainviewSnapshot>();
   const [mcp, set_mcp] = useState<McpStatusResult>();
   const [skill_error, set_skill_error] = useState("");
@@ -60,12 +60,12 @@ export function skill_resource_sidebar({ power, navigation, ui }: PowerSidebarCo
         {!snapshot && !skill_error ? <LoadingState label="正在读取 Skills…" /> : null}
         {skill_error ? <Callout tone="danger">{skill_error}</Callout> : null}
         {resources.map((item) => <SidebarItem key={item.route_id} resource_kind="skill" label={item.name} active={selected_skill?.resource_id === item.resource_id} on_select={() => select_resource(item.route_id)} />)}
-        {snapshot && !resources.length ? <SidebarSubText>{normalized_query ? "没有匹配的 Skill" : "还没有 Skill"}</SidebarSubText> : null}
+        {snapshot && !resources.length ? <EmptyState size="compact" title={normalized_query ? "没有匹配的 Skill" : "还没有 Skill"} /> : null}
       </> : <>
         {!mcp && !mcp_error ? <LoadingState label="正在读取 MCP…" /> : null}
         {mcp_error ? <Callout tone="danger">{mcp_error}</Callout> : null}
         {servers.map((server) => <SidebarItem key={server.id} resource_kind="mcp" label={server.id} trailing={<StatusDot tone={server.state === "ready" ? "success" : server.state === "error" ? "danger" : server.state === "idle" || server.state === "disabled" ? "muted" : "warning"} label={server.state} />} active={resource_id === server.id} on_select={() => select_resource(server.id)} />)}
-        {mcp && !servers.length ? <SidebarSubText>{normalized_query ? "没有匹配的 MCP Server" : "还没有 MCP Server"}</SidebarSubText> : null}
+        {mcp && !servers.length ? <EmptyState size="compact" title={normalized_query ? "没有匹配的 MCP Server" : "还没有 MCP Server"} /> : null}
       </>}
     </SidebarSection>
   </Sidebar>;

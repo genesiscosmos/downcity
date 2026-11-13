@@ -35,11 +35,10 @@ async function create_storage(directory_path) {
 
 /** 创建一条包含 Tool Part 的 Agent Message。 */
 async function create_agent_message(storage) {
-  await storage.create_message((state) => ({
+  await storage.create_message({
     message_id: "agent-1",
     session_id: "session-1",
     turn_id: "turn-1",
-    sequence: state.message_sequence,
     revision: 1,
     stable_part_sequence: 0,
     role: "agent",
@@ -59,7 +58,7 @@ async function create_agent_message(storage) {
         input: { cmd: "ls" },
       },
     ],
-  }));
+  });
 }
 
 /** 尝试写入独立 Interaction，验证当前数据库约束。 */

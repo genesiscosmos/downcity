@@ -19,4 +19,6 @@ export interface ModelRequestFailureNotice extends ModelError {
   max_attempts: number;
   /** 当前失败后是否还会自动重试。 */
   will_retry: boolean;
+  /** 已安排下一次调用的 Unix 毫秒时间；只在 will_retry=true 时提供。 */
+  next_retry_at_ms?: number;
 }

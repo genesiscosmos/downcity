@@ -22,6 +22,12 @@ const catalog_schema = z.object({
     base_url: z.string().url().max(2048).optional(),
     credential_env: z.string().regex(/^[A-Z][A-Z0-9_]*$/).max(160).optional(),
     timeout_ms: z.number().int().min(1000).max(300000).optional(),
+    model_stream: z.object({
+      connect_timeout_ms: z.number().int().min(1).max(2_147_483_647).optional(),
+      first_output_timeout_ms: z.number().int().min(1).max(2_147_483_647).optional(),
+      idle_timeout_ms: z.number().int().min(1).max(2_147_483_647).optional(),
+      total_timeout_ms: z.number().int().min(1).max(2_147_483_647).optional(),
+    }).strict().optional(),
   }).strict()).max(500),
   deployments: z.array(z.object({
     id: id_schema, model_id: id_schema, channel_id: id_schema,

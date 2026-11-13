@@ -69,7 +69,7 @@ export class ResourceService implements ResourceDispatcher {
       const code = error instanceof Error ? error.message.split(":", 1)[0] : "";
       const mapping: Record<string, [string, number]> = {
         session_not_found: ["resource_not_found", 3], session_address_conflict: ["dependency_conflict", 4],
-        session_list_cursor_expired: ["cursor_expired", 4], session_pagination_unavailable: ["capability_missing", 5],
+        session_list_cursor_invalid: ["cursor_expired", 4], session_address_changed: ["dependency_conflict", 4], session_storage_not_found: ["resource_not_found", 3], session_migration_required: ["migration_required", 5], session_list_cursor_expired: ["cursor_expired", 4], session_pagination_unavailable: ["capability_missing", 5],
         session_recovery_required: ["migration_required", 5], session_validation_error: ["validation_error", 2],
       };
       const mapped = mapping[code ?? ""];
@@ -79,5 +79,5 @@ export class ResourceService implements ResourceDispatcher {
   }
 
   /** 只释放浏览快照；City/DB/租约按组合根逆序释放。 */
-  dispose(): void { this.sessions.dispose(); }
+  async dispose(): Promise<void> { await this.sessions.dispose(); }
 }

@@ -18,6 +18,7 @@ import { fileURLToPath as file_url_to_path } from "node:url";
 import { load_runtime } from "./lib/session-v7-runtime.mjs";
 import { fail, open_readonly, snapshot_file, target_descriptor, validate_target, validate_plan, import_plan } from "./lib/session-v7-database.mjs";
 import { plan_snapshot } from "./lib/session-v7-plan.mjs";
+import { load_repair_manifest } from "./lib/session-v7-repairs.mjs";
 
 const help_text = `Session offline migration (fixed target v7; Node >= 22.18)
 node scripts/migrate-session-sqlite-v7.mjs [--dry-run | --apply] [options]
@@ -27,6 +28,7 @@ node scripts/migrate-session-sqlite-v7.mjs [--dry-run | --apply] [options]
   --category NAME    Select one category in the selected partitions
   --partition NAME   sessions or archived-sessions (default: both)
   --backup-dir PATH  Mandatory for --apply; a fresh private batch is created here
+  --repair-manifest PATH  Private, reviewed exact repairs; stale/unused entries block
   --report PATH      Write a private JSON report; refuses an existing destination
   --help             Show this help without opening any database
 Default is dry-run. Apply only after ALL writers have exited. No backup bypass.
@@ -35,7 +37,7 @@ Any blocker, lock, failure or incomplete batch exits nonzero. No automatic resto
 /** Parse a closed CLI interface; typos and missing values cannot broaden selection. */
 export function parse_arguments(arguments_) {
   const input = { root_path: path.join(os.homedir(), ".downcity"), apply: false };
-  const names = { "--root": "root_path", "--agent": "agent_id", "--session": "session_id", "--category": "category", "--partition": "partition", "--backup-dir": "backup_directory", "--report": "report_path" };
+  const names = { "--root": "root_path", "--agent": "agent_id", "--session": "session_id", "--category": "category", "--partition": "partition", "--backup-dir": "backup_directory", "--report": "report_path", "--repair-manifest": "repair_manifest_path" };
   const seen = new Set();
   for (let index = 0; index < arguments_.length; index += 1) {
     const argument = arguments_[index];
@@ -142,12 +144,16 @@ async function prepare_backup(item, plan, batch_path, runtime, expected) {
 
 /** Execute default read-only planning, or explicitly requested offline application. */
 export async function migrate_session_sqlite_v7(input) {
+  const repairs = load_repair_manifest(input.repair_manifest_path);
   const runtime = await load_runtime();
   const expected = target_descriptor(runtime);
   const root_path = fs.realpathSync(path.resolve(input.root_path));
   if (input.apply && !input.backup_directory) fail("apply_requires_backup_directory");
   const result = { target_version: 7, mode: input.apply ? "apply" : "dry-run", root_path, complete: false, databases: [] };
   const items = find_databases(root_path, input);
+  const selected_paths = new Set(items.map(item => item.relative_path));
+  const unused_paths = [...repairs.keys()].filter(relative_path => !selected_paths.has(relative_path));
+  if (unused_paths.length) result.repair_errors = unused_paths.map(database_path => ({ database_path, reason: "unconsumed_repair_database" }));
   const plans = new Map();
   const identities = new Map();
   for (const item of items) {
@@ -165,7 +171,7 @@ export async function migrate_session_sqlite_v7(input) {
         fail("duplicate_session_identity");
       }
       identities.set(identity, record);
-      const plan = plan_snapshot(snapshot, item, runtime, expected);
+      const plan = plan_snapshot(snapshot, item, runtime, expected, repairs.get(item.relative_path));
       if (!plan) {
         const database = open_readonly(item.database_path);
         try { database.exec("BEGIN;"); validate_target(database, runtime, expected); }
@@ -185,7 +191,7 @@ export async function migrate_session_sqlite_v7(input) {
     input.report_path = path.resolve(input.report_path);
     write_private(input.report_path, result);
   }
-  const blocked = result.databases.some(record => record.status === "blocked");
+  const blocked = Boolean(result.repair_errors?.length) || result.databases.some(record => record.status === "blocked");
   if (input.apply && items.length && !blocked && plans.size) {
     const backup_root = path.resolve(input.backup_directory);
     fs.mkdirSync(backup_root, { recursive: true, mode: 0o700 });
@@ -200,7 +206,7 @@ export async function migrate_session_sqlite_v7(input) {
       try {
         const snapshot = snapshot_file(item.database_path);
         if (snapshot.fingerprint !== plans.get(item.database_path)) fail("source_changed_since_preflight");
-        const plan = plan_snapshot(snapshot, item, runtime, expected);
+        const plan = plan_snapshot(snapshot, item, runtime, expected, repairs.get(item.relative_path));
         item.record.backup = await prepare_backup(item, plan, batch_path, runtime, expected);
         item.record.status = "backup_work_verified";
         update_report(batch_report, result);

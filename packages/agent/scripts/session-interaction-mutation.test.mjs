@@ -174,8 +174,8 @@ test("Message 收口仍然整条发布，消费方才能收敛 state", async () 
       stored_messages.find((message) => message.message_id === message_id) ?? null,
     ),
     message_stats: async () => ({ message_count: 0, storage_bytes: 0, latest_message: null }),
-    create_message: async (build_message) => {
-      const message = build_message({ message_sequence: 1 });
+    create_message: async (candidate) => {
+      const message = { ...candidate, sequence: 1 };
       stored_messages.push(structuredClone(message));
       return structuredClone(message);
     },

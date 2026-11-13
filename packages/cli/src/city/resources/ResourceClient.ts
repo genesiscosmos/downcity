@@ -76,6 +76,9 @@ export class ResourceClient {
       });
       const data = await service.dispatch(method, input);
       return { data, meta: { root_path: this.root_path, host: null, source: "local", observed_at: new Date().toISOString() } };
-    } finally { service?.dispose(); store?.close(); lease.release(); }
+    } finally {
+      try { await service?.dispose(); }
+      finally { try { store?.close(); } finally { lease.release(); } }
+    }
   }
 }

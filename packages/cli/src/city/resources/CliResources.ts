@@ -15,8 +15,8 @@ export function create_cli_resources(data: CliLocalData, city: City, coordinator
     ],
     host: {
       city,
-      create_agent: async (config) => await create_cli_agent({ config, root_path: data.root_path }),
-      resolve_model: async (model_id) => model_id ? await resolve_cli_agent_model(model_id, Object.fromEntries(Object.entries(process.env).filter((entry): entry is [string, string] => typeof entry[1] === "string"))) : undefined,
+      create_agent: async (config) => await create_cli_agent({ config, root_path: data.root_path, resolve_federation: () => city.federation.current }),
+      resolve_model: async (model_id) => model_id ? await resolve_cli_agent_model(model_id, () => city.federation.current) : undefined,
       resolve_workspace: async (config) => {
         coordinator.assert_available(undefined, config.workspace_id);
         const existing = city.workspaces.get(config.workspace_id);

@@ -89,7 +89,8 @@ test("非交互模型请求复用统一重试策略", async () => {
 
   assert.equal(call_count, 2);
   assert.equal(result.text, "done");
-  assert.deepEqual(failures, [{
+  assert.ok(Number.isSafeInteger(failures[0].next_retry_at_ms));
+  assert.deepEqual(failures.map(({ next_retry_at_ms, ...notice }) => notice), [{
     request_kind: "session_title",
     code: "provider_timeout",
     message: "temporary timeout",

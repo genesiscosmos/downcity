@@ -165,6 +165,14 @@ export class CityHTTP {
     const agent = this.runtime_access.get_agent(agent_id);
     if (!agent) return context.json({ success: false, error: `Agent not found: ${agent_id}` }, 404);
     if (this.runtime_options.authorize_agent && !await this.authorize_agent(agent, context.req.raw)) return context.json({ success: false, error: "Agent access denied" }, 403);
+    const archive_url = new URL(context.req.url);
+    const archive_prefix = `/agents/${encodeURIComponent(agent_id)}/workspaces/${encodeURIComponent(workspace_id)}`;
+    if (archive_url.pathname.slice(archive_prefix.length).startsWith("/api/sdk/archived-sessions")) {
+      // 归档属于Agent存储，兼容已绑定Workspace的客户端URL也不能装配Shell。
+      archive_url.pathname = archive_url.pathname.slice(archive_prefix.length);
+      const archive_router = new AgentHTTP(agent).router();
+      return await authorized_response(new Request(archive_url, context.req.raw), () => this.authorize_agent(agent, context.req.raw), async request => await archive_router.fetch(request));
+    }
     const workspace = await this.runtime_access.enter_workspace(agent_id, workspace_id)
       .catch(() => null);
     if (!workspace) return context.json({

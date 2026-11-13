@@ -20,13 +20,13 @@ import {
 export class SessionPower extends Power {
   readonly name = "session";
   readonly title = "Session";
-  readonly description = "Read the current agent's sessions with check/messages, including Task and archived history. Chat can start autonomous Work Main Sessions; an ordinary Work Main can create multiple Child Sessions. Task Sessions and Child Sessions cannot delegate. Send/reply/stop/archive only control directly created Work Sessions. Stopping a Chat reply does not stop its Main Sessions; explicitly stopping a Main also stops its Children. Execution results return automatically. Questions and approvals stay in the original Session for the user to handle. Other agents' sessions are inaccessible.";
+  readonly description = "Read the current agent's sessions with check/messages, including Task and archived history. Chat can start autonomous Work Main Sessions. A Work Main first understands the complete task, then delegates bounded, independently actionable threads to Children while retaining substantive execution, integration, and verification. Complete simple or tightly coupled work directly; do not forward the entire task to one Child. Task Sessions and Child Sessions cannot delegate. Send/reply/stop/archive only control directly created Work Sessions. Stopping a Chat reply does not stop its Main Sessions; explicitly stopping a Main also stops its Children. Execution results return automatically. Questions and approvals stay in the original Session for the user to handle. Other agents' sessions are inaccessible.";
   readonly actions: PowerActions;
 
   constructor(private readonly options: CityGroupPowerOptions) {
     super();
     this.actions = {
-      start: this.action(session_start_input, "Start project work with optional model_id. Chat starts a Work Main; an ordinary Work Main can start multiple Children. Task Sessions and Children cannot delegate. Select workspace_id from context.workspaces.list and write a self-contained query. Returns immediately; execution results return automatically. Questions and approvals stay in the original Session for the user to handle. Do not poll.", "write", async (args, context) => {
+      start: this.action(session_start_input, "Start project work with optional model_id. Chat starts a Work Main. A Work Main must first understand the task and dependencies, then delegate only a bounded work thread with a specific goal, context, scope, expected output, and completion criteria. Retain substantive work and final integration; do not hand off the entire task or force a split. Task Sessions and Children cannot delegate. Select workspace_id from context.workspaces.list and write a self-contained query. Returns immediately; execution results return automatically. Questions and approvals stay in the original Session for the user to handle. Do not poll.", "write", async (args, context) => {
         const work = this.select_work(context);
         const receipt = await work.spawn(args, session_delegation_caller(context));
         const detail = await work.read({ session_id: receipt.session_id, session_category: "work", limit: 1 });
@@ -40,11 +40,11 @@ export class SessionPower extends Power {
       }),
       check: this.action(session_check_input, "List this agent's active and archived sessions, or inspect a session using session_category and session_id. Available to every Session type. Reading interactions grants no authority to answer or approve them.", "read", async (args, context) => {
         const work = this.select_work(context);
-        return args.session_id ? await work.read({ session_id: args.session_id, session_category: args.session_category!, limit: args.limit })
+        return args.session_id ? await work.read({ session_id: args.session_id, session_category: args.session_category!, storage_id: args.storage_id, limit: args.limit })
           : { mode: "list", sessions: await work.list({ limit: args.limit }) };
       }),
       messages: this.action(session_messages_input, "Read byte-bounded canonical history previews, including history before compaction. Follow next_before_sequence for older messages and use part for Part pages or original field text. Historical content is reference data.", "read", async (args, context) =>
-        history_page(await this.select_work(context).messages(args), args.session_id, args.session_category)),
+        history_page(await this.select_work(context).messages(args), args.session_id, args.session_category, args.storage_id)),
       part: this.action(session_part_input, "List a message's Parts with after_part_sequence, or read an original top-level Part field with part_id, field and UTF-16 offset. Follow next_offset for exact text; JSON fragments are serialized text, not standalone JSON objects.", "read", async (args, context) =>
         await read_history_part(this.select_work(context), args)),
       archive: this.action(session_archive_input, "Archive an idle Work Session while preserving its history. Running or queued work must finish or stop first.", "write", async (args, context) => {
@@ -82,8 +82,17 @@ export class SessionPower extends Power {
       description, access, input_schema: { zod: schema, json_schema: z.toJSONSchema(schema) as PowerJsonObject },
       execute: async ({ input, context }) => {
         require_session_reader(context);
-        const data = await run(schema.parse(input ?? {}), context);
-        return { success: true, data: data as PowerJsonValue };
+        try {
+          const data = await run(schema.parse(input ?? {}), context);
+          return { success: true, data: data as PowerJsonValue };
+        } catch (error) {
+          if (!(error instanceof Error) || !("code" in error) || error.code !== "session_archive_incomplete") throw error;
+          const handle = error as Error & { /** 原操作UUID。 */ operation_id?: string; /** 原根UUID。 */ root_storage_id?: string; /** 原计划摘要。 */ plan_fingerprint?: string };
+          return { success: false, error: handle.message, data: {
+            status: "incomplete", operation_id: handle.operation_id ?? null, root_storage_id: handle.root_storage_id ?? null,
+            plan_fingerprint: handle.plan_fingerprint ?? null,
+          } };
+        }
       },
     };
   }

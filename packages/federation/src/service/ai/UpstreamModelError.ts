@@ -23,6 +23,13 @@ const UPSTREAM_ERROR_CODES = new Map<string, ModelErrorCode>([
 /** 构造可跨 Federation 边界传递的诊断错误。 */
 export async function create_upstream_model_error(response: Response, api_key: string): Promise<Error> {
   const request_id = response.headers.get("x-request-id") ?? response.headers.get("request-id") ?? response.headers.get("cf-ray");
+  // 收到响应即固定服务端截止，读取错误正文和后续协议转换不能重新开始计时。
+  const retry_after = response.headers.get("retry-after");
+  const suggested_at = retry_after
+    ? (/^\d+(?:\.\d+)?$/.test(retry_after) ? Date.now() + Number(retry_after) * 1000 : Date.parse(retry_after))
+    : undefined;
+  const retry_at_ms = suggested_at !== undefined && Number.isSafeInteger(Math.ceil(suggested_at))
+    ? Math.max(0, Math.ceil(suggested_at)) : undefined;
   const text = await read_bounded_error_text(response.body);
   let detail: Record<string, unknown> = {};
   try {
@@ -32,10 +39,8 @@ export async function create_upstream_model_error(response: Response, api_key: s
   } catch { /* 未知或截断正文不推测其拒绝原因。 */ }
   const model_error = classify_upstream_model_error(detail, response.status, request_id, api_key);
   const error = new Error(model_error.message);
-  const retry_after = response.headers.get("retry-after");
-  const retry_after_ms = retry_after
-    ? (/^\d+(?:\.\d+)?$/.test(retry_after) ? Number(retry_after) * 1000 : Date.parse(retry_after) - Date.now())
-    : undefined;
+  const retry_after_ms = retry_at_ms === undefined ? undefined : Math.max(0, retry_at_ms - Date.now());
+  if (retry_at_ms !== undefined) model_error.retry_at_ms = retry_at_ms;
   return Object.assign(error, {
     statusCode: response.status, code: model_error.code, model_error,
     // 4xx（排除结果可能未知的 408）可确认拒绝；Router 仅重试其中的认证与限流错误。

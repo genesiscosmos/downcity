@@ -73,7 +73,11 @@ test("运行和占用中的工作不能归档，结束后 SDK session.archive �
     const work = await f.create_work();
     const turn = await work.prompt({ actor: { kind: "user", user_id: "local" }, query: "work" });
     await started;
-    await assert.rejects(work.archive(), /executing|queued/);
+    let archive_handle;
+    await assert.rejects(work.archive(), error => {
+      archive_handle = { operation_id: error.operation_id, root_storage_id: error.root_storage_id };
+      return /executing|queued/.test(error.message) && Boolean(error.operation_id);
+    });
     const busy = await f.tool.execute({ action: "archive", args: { session_id: work.id } }, f.context);
     assert.equal(busy.output.success, false);
     assert.match(busy.output.error, /session_subtree_busy|executing|queued/);
@@ -81,11 +85,11 @@ test("运行和占用中的工作不能归档，结束后 SDK session.archive �
     await turn.finished;
     // finished 与队列消费者释放处于相邻 microtask，等待本轮事件循环收口。
     await new Promise((resolve) => setImmediate(resolve));
-    await work.archive();
+    await f.agent.sessions.archive({ id: work.id, category: "work", ...archive_handle });
     await assert.rejects(work.prompt({ actor: { kind: "user", user_id: "local" }, query: "must reject" }), /archived/);
     const self = await f.tool.execute({ action: "archive", args: { session_id: f.main.id } }, f.context);
     assert.equal(self.output.success, false);
-    assert.match(self.output.error, /session_target_forbidden/);
+    assert.match(self.output.error, /session_not_found/);
   } finally { release(); await f.city.close(); }
 });
 

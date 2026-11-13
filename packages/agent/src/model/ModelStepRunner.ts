@@ -79,6 +79,8 @@ export interface RunModelStepInput {
   tools: Record<string, BoundAgentTool>;
   /** 当前取消信号。 */
   abort_signal: AbortSignal;
+  /** 仅约束模型请求的恢复信号；工具执行继续使用原始 turn 取消信号。 */
+  model_abort_signal?: AbortSignal;
   /** canonical Assistant 输出端口。 */
   assistant_output?: SessionAssistantOutput;
   /** 可选模型流阶段诊断；只传递时序和事件类型，不包含请求正文。 */
@@ -97,7 +99,7 @@ export async function run_model_step(input: RunModelStepInput): Promise<{
   await consume_model_stream(
     input.model,
     call,
-    input.abort_signal,
+    input.model_abort_signal ?? input.abort_signal,
     () => collector.has_partial_output(),
     async (event) => {
       await input.assistant_output?.write_model_event(event);

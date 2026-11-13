@@ -22,11 +22,13 @@ function truncate_text(input: string, max_chars: number): string {
 
 /** 基于 metadata 与可选 Message 构建 SDK Session 详情。 */
 export function build_session_info(input: SessionBrowseBaseInput): AgentSessionInfo {
+  if (!input.metadata.storage_id) throw new Error("session_migration_required");
   const latest_message = input.messages?.at(-1);
   const preview_text = latest_message
     ? truncate_text(resolve_session_message_preview(latest_message), 180)
     : input.metadata.preview_text;
   return {
+    storage_id: input.metadata.storage_id,
     agent_id: input.agent_id,
     session_id: input.session_id,
     ...(input.metadata.title?.trim() ? { title: input.metadata.title.trim() } : {}),

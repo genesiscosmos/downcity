@@ -35,7 +35,7 @@ import { AgentSessions } from "@/agent/AgentSessions.js";
 import { AgentInteractions } from "@/agent/AgentInteractions.js";
 import type { AgentInteractionCollection } from "@/types/agent/AgentInteractions.js";
 import { AgentMemoryStorageProvider } from "@/agent/AgentMemoryStorage.js";
-import { LocalSessionStore } from "@/session/storage/LocalSessionStore.js";
+import { AgentSessionStore } from "@/session/storage/agent-db/AgentSessionStore.js";
 import { EMPTY_TOOL_HOOK_SET, SESSION_HOOK_POINTS } from "@downcity/type";
 import type { SessionTurnCommittedHookValue } from "@downcity/type";
 import { compile_session_callbacks } from "@/agent/SessionCallbacks.js";
@@ -54,6 +54,7 @@ import { SessionWork } from "@/agent/SessionWork.js";
 import type { SessionWorkContract } from "@/types/agent/SessionWork.js";
 import { SessionDelegations } from "@/agent/SessionDelegations.js";
 import { recover_background_sessions } from "@/agent/SessionBackgroundRecovery.js";
+import { AgentSessionStorageError } from "@/session/storage/agent-db/AgentSessionErrors.js";
 import { LocalSessionDelegationStore } from "@/agent/LocalSessionDelegationStore.js";
 import { normalize_session_origin_category, SESSION_ORIGIN_CATEGORY_WORK, type SessionOrigin } from "@downcity/type";
 import type { AgentWorkHost } from "@/types/agent/AgentWorkHost.js";
@@ -362,9 +363,18 @@ export class Agent {
   async resume_work(): Promise<void> {
     if (this.dispose_promise) throw new Error("Agent is disposing");
     await this.resolve_completions().resume();
-    await recover_background_sessions(this.resolve_storage().sessions,
-      async (session_id, category) => await this.restore_work_session(session_id, category),
-      (error) => this.logger.error("Background follow-up recovery failed", { error: String(error) }));
+    await recover_background_sessions(this.resolve_storage().sessions, {
+      restore: async (session_id, category) => await this.restore_work_session(session_id, category),
+      is_completed: async (session_id, turn_id) => Boolean(await this.resolve_completions().read(session_id, turn_id)),
+      has_recoverable_messages: async (session_id, category) => {
+        const storage = await this.resolve_storage().sessions.open_session(session_id, category);
+        return (await storage.list_recoverable_agent_messages()).length > 0;
+      },
+      report_error: (error, context) => this.logger.error("Background follow-up recovery failed", {
+        agent_id: this.id, ...context, error: String(error),
+        ...(error instanceof AgentSessionStorageError ? { storage_command: error.command, sqlite_code: error.sqlite_code } : {}),
+      }),
+    });
     await this.resolve_delegations().resume();
   }
 
@@ -494,7 +504,7 @@ export class Agent {
       files: scope.files,
       database_location: scope.database_location,
       delegations: new LocalSessionDelegationStore(scope.files),
-      sessions: new LocalSessionStore({
+      sessions: new AgentSessionStore({
         files: scope.files,
         storage_root_path: scope.root_path,
         agent_id: this.id,
@@ -547,6 +557,9 @@ export class Agent {
       },
       is_executing: (session_id, category) => this.session_manager.list_executing_session_ids(undefined, category).includes(session_id),
       read_session: async (session_id, category) => await this.resolve_storage().sessions.read_session(session_id, category),
+      read_archived_session: async (storage_id) => await this.resolve_storage().sessions.read_archived_session(storage_id),
+      read_archive_plan: async operation_id => await this.resolve_storage().sessions.read_archive_plan(operation_id),
+      archive_session: async input => await this.session_manager.archive(input),
       get_session: async (session_id, category) => await this.restore_work_session(session_id, category),
       delegations: this.resolve_delegations(),
     });

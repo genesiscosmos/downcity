@@ -61,7 +61,7 @@ export interface CreatePowerContextInput {
   readonly config: PowerJsonObject;
   /** 当前执行范围日志器。 */
   readonly logger: PowerLogger;
-  /** City 可选 Federation。 */
+  /** 本次动作开始时解析的 Federation 身份快照；下一次动作重新读取当前绑定。 */
   readonly federation?: Pick<Federation, "user">;
   /** 当前 Power 通知端口。 */
   readonly notifications?: PowerNotificationPublisher;

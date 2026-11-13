@@ -40,6 +40,8 @@ export interface SessionAgentMessageWriterOptions {
   cache: SessionMessageCache;
   /** canonical 存储分类，保证 internal 等分区可精确定位。 */
   category?: string;
+  /** canonical存储记录UUID，归档后仍精确定位同一结果。 */
+  storage_id?: string;
 }
 
 /** 单个 Assistant Message 的流式 Writer。 */
@@ -50,6 +52,7 @@ export class SessionAgentMessageWriter {
   private readonly state: SessionAgentMessageState;
   private readonly cache: SessionMessageCache;
   private readonly category?: string;
+  private readonly storage_id?: string;
   private readonly content_part_ids = new Map<string, string>();
   private readonly tool_call_ids = new Map<string, string>();
   private readonly current_step_part_ids = new Set<string>();
@@ -64,6 +67,7 @@ export class SessionAgentMessageWriter {
     this.state = options.state;
     this.cache = options.cache;
     this.category = options.category;
+    this.storage_id = options.storage_id;
     this.message_id = options.message_id;
   }
 
@@ -122,7 +126,7 @@ export class SessionAgentMessageWriter {
       const message = this.current_message();
       const output = to_session_json_value(result.output);
       const readable = project_tool_result(output);
-      const result_ref = create_result_ref({ session_id: message.session_id, message_id: message.message_id,
+      const result_ref = create_result_ref({ storage_id: this.storage_id, session_id: message.session_id, message_id: message.message_id,
         message_sequence: message.sequence, part_id: tool.part_id, category: this.category }, readable);
       const model_output = result.disclosed ? readable : disclose_result(readable, result_ref, result.succeeded ? "completed" : "failed");
       if (result_bytes(model_output) > RESULT_BYTES) throw new Error("result_disclosure_budget_exceeded");

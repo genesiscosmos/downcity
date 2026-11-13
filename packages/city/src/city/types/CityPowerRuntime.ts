@@ -22,7 +22,7 @@ import type { StorageProvider } from "@/workspace/index.js";
 export interface CityPowerRuntimeOptions {
   /** City 为 Power 私有数据提供的底层存储。 */
   readonly storage: StorageProvider;
-  /** City 为 Power Context 提供的 Federation。 */
+  /** 通过 getter 读取 City 当前绑定；动作创建时解析，生命周期上下文按访问解析。 */
   readonly federation?: Pick<Federation, "user">;
   /** Power Runtime 所需的 City 内部事实源访问能力。 */
   readonly runtime_access: Pick<

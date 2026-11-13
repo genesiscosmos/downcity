@@ -99,6 +99,12 @@ export interface AgentSessionCollection {
   /** 列出已归档 Session。 */
   archived(input?: AgentArchiveSessionsInput): Promise<AgentArchiveSessionsResult>;
 
+  /** 按稳定记录 UUID 只读访问归档，不恢复执行。 */
+  read_archived(storage_id: string): Promise<import("../store/SessionReadView.js").SessionReadView>;
+
+  /** 按稳定记录 UUID 删除单条归档，不能误删同逻辑 ID 的新活动会话。 */
+  remove_archived(storage_id: string): Promise<boolean>;
+
   /** 清空已归档 Session。 */
   clean_archive(): Promise<AgentCleanArchiveResult>;
 

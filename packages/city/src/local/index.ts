@@ -35,6 +35,7 @@ export {
 
 export * from "./product.js";
 export { RootLease, resolve_resource_root, get_root_identity, resource_root_exists } from "./resources/RootLease.js";
+export { assert_session_storage_ready, SESSION_STORAGE_MARKER } from "./resources/SessionStorageReadiness.js";
 export { ResourceError, as_resource_error } from "./resources/ResourceError.js";
 export { ManagementChannel, request_management, MANAGEMENT_VERSION } from "./resources/ManagementChannel.js";
 export type { ResourceDispatcher } from "./resources/ManagementChannel.js";

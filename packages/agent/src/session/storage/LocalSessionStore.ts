@@ -54,6 +54,16 @@ function decode_session_id(input: string): string {
 
 /** 默认本地 Agent Store。 */
 export class LocalSessionStore implements SessionStore {
+  /** 分库不提供持久化归档计划，运行入口必须先显式转换。 */
+  async prepare_archive(_input: import("@/types/store/AgentArchivePlan.js").AgentArchivePlanInput): Promise<import("@/types/store/AgentArchivePlan.js").AgentArchivePlan> { throw new Error("session_migration_required"); }
+  /** 不以逻辑ID模拟目标计划的节点提交。 */
+  async commit_archive_node(_input: import("@/types/store/AgentArchivePlan.js").AgentArchiveNodeCommit): Promise<import("@/types/store/AgentArchivePlan.js").AgentArchivePlan> { throw new Error("session_migration_required"); }
+  /** 旧分库不存在可验证的归档计划。 */
+  async read_archive_plan(_operation_id: string): Promise<import("@/types/store/AgentArchivePlan.js").AgentArchivePlan | null> { throw new Error("session_migration_required"); }
+  /** 分库没有不可变归档地址，必须先显式转换到目标存储。 */
+  async read_archived_session(_storage_id: string): Promise<SessionReadView> { throw new Error("session_migration_required"); }
+  /** 不对没有稳定记录身份的分库执行猜测性删除。 */
+  async remove_archived_session(_storage_id: string): Promise<boolean> { throw new Error("session_migration_required"); }
   /** 当前 Agent 内部数据文件能力。 */
   private readonly files: FileSystem;
 

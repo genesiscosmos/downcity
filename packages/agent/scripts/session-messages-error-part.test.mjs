@@ -31,10 +31,8 @@ function create_fixture(initial_messages = []) {
         .sort((left, right) => right.sequence - left.sequence)[0] ?? null,
     ),
     message_stats: async () => ({ message_count: stored_messages.length, storage_bytes: 0, latest_message: structuredClone(stored_messages.at(-1) ?? null) }),
-    create_message: async (build_message) => {
-      const message = build_message({
-        message_sequence: next_message_sequence(stored_messages),
-      });
+    create_message: async (candidate) => {
+      const message = { ...candidate, sequence: next_message_sequence(stored_messages) };
       stored_messages.push(structuredClone(message));
       return structuredClone(message);
     },

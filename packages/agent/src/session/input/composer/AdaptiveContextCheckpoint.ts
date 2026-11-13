@@ -27,23 +27,9 @@ export async function initialize_checkpoint_schema(
   derived: SessionDerivedStore,
   composer_name: string,
 ): Promise<void> {
-  const table = checkpoint_table(composer_name);
-  const compatible = await has_compatible_schema(derived, table);
-  await derived.transaction((transaction) => {
-    if (!compatible) transaction.execute(`DROP TABLE IF EXISTS ${table}`);
-    transaction.execute(`
-      CREATE TABLE IF NOT EXISTS ${table} (
-        checkpoint_id TEXT PRIMARY KEY,
-        through_message_id TEXT NOT NULL REFERENCES messages(message_id) ON DELETE CASCADE,
-        through_message_sequence INTEGER NOT NULL,
-        through_part_sequence INTEGER NOT NULL,
-        summary TEXT NOT NULL,
-        schema_version INTEGER NOT NULL,
-        created_at INTEGER NOT NULL,
-        UNIQUE(through_message_sequence, through_part_sequence, schema_version)
-      )
-    `);
-  });
+  // schema 归存储拥有者，Composer 初始化仅验证其 namespace 能力可用。
+  void composer_name;
+  await derived.read_checkpoint(CHECKPOINT_SCHEMA_VERSION);
 }
 
 /** 读取当前版本位置最靠后的累计 checkpoint。 */
@@ -51,17 +37,8 @@ export async function read_latest_checkpoint(
   derived: SessionDerivedStore,
   composer_name: string,
 ): Promise<ContextCheckpointRow | null> {
-  const table = checkpoint_table(composer_name);
-  return await derived.transaction((transaction) =>
-    transaction.get<ContextCheckpointRow>(`
-      SELECT checkpoint_id, through_message_id, through_message_sequence,
-             through_part_sequence, summary, schema_version, created_at
-      FROM ${table}
-      WHERE schema_version = ?
-      ORDER BY through_message_sequence DESC, through_part_sequence DESC
-      LIMIT 1
-    `, [CHECKPOINT_SCHEMA_VERSION])
-  );
+  void composer_name;
+  return await derived.read_checkpoint(CHECKPOINT_SCHEMA_VERSION);
 }
 
 /** 追加一条累计 checkpoint。 */
@@ -79,37 +56,9 @@ export async function insert_checkpoint(
     summary: string;
   },
 ): Promise<void> {
-  const table = checkpoint_table(composer_name);
-  await derived.transaction((transaction) => {
-    transaction.execute(`
-      INSERT INTO ${table} (
-        checkpoint_id, through_message_id, through_message_sequence,
-        through_part_sequence, summary, schema_version, created_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?)
-    `, [
-      `checkpoint:${generate_id()}`,
-      input.through_message_id,
-      input.through_message_sequence,
-      input.through_part_sequence,
-      input.summary,
-      CHECKPOINT_SCHEMA_VERSION,
-      Date.now(),
-    ]);
+  void composer_name;
+  await derived.insert_checkpoint({
+    ...input, checkpoint_id: `checkpoint:${generate_id()}`,
+    schema_version: CHECKPOINT_SCHEMA_VERSION, created_at: Date.now(),
   });
-}
-
-/** 探测现有派生表是否具备当前列结构。 */
-async function has_compatible_schema(
-  derived: SessionDerivedStore,
-  table: string,
-): Promise<boolean> {
-  try {
-    await derived.transaction((transaction) =>
-      transaction.get(`SELECT schema_version FROM ${table} LIMIT 1`)
-    );
-    return true;
-  } catch {
-    // 表缺失或列结构不兼容都由建表语句一次性收敛。
-    return false;
-  }
 }

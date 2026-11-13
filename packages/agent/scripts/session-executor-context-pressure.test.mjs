@@ -158,7 +158,8 @@ test("Provider 在输出前发生可重试流错误时自动重试", async () =>
   assert.equal(call_count, 2);
   assert.equal(result.success, true);
   assert.equal(result.text, "done");
-  assert.deepEqual(warnings, [{
+  assert.ok(Number.isSafeInteger(warnings[0].next_retry_at_ms));
+  assert.deepEqual(warnings.map(({ next_retry_at_ms, ...notice }) => notice), [{
     request_kind: "turn",
     code: "transport_error",
     message: "temporary disconnect",

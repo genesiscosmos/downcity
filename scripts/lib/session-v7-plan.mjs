@@ -8,6 +8,8 @@
  */
 import { digest, fail, canonical_tables, derived_tables, validate_source_structure, group_parts_by_message } from "./session-v7-database.mjs";
 
+import { repair_snapshot } from "./session-v7-repairs.mjs";
+
 const background_tags = new Set(["background_source", "delegation_result", "delegation_interaction", "shell_result", "task_result"]);
 
 /** Read a JSON object without exposing raw parser diagnostics. */
@@ -97,8 +99,9 @@ function fold_interactions(parts, mapping) {
 }
 
 /** Build a complete single-library plan; source rows remain available only in private memory. */
-export function plan_snapshot(snapshot, selection, runtime, expected) {
-  validate_source_structure(snapshot, expected);
+export function plan_snapshot(source, selection, runtime, expected, repair_entry) {
+  validate_source_structure(source, expected);
+  const { snapshot, inbox_messages, audit } = repair_snapshot(source, repair_entry);
   const state = snapshot.tables.session_state[0];
   if (state.agent_id !== selection.agent_id || state.session_id !== selection.session_id) fail("path_session_identity_mismatch");
   if (snapshot.version === 7) return null;
@@ -106,7 +109,7 @@ export function plan_snapshot(snapshot, selection, runtime, expected) {
     ["messages", "message_parts"].includes(table) ? [] : structuredClone(snapshot.tables[table] ?? []),
   ]));
   const grouped_parts = group_parts_by_message(snapshot.tables.message_parts);
-  const source_parts_by_id = new Map(snapshot.tables.message_parts.map(part => [part.part_id, part]));
+  const source_parts_by_id = new Map(source.tables.message_parts.map(part => [part.part_id, part]));
   tables.messages = [];
   tables.message_parts = [];
   const watermarks = [];
@@ -133,7 +136,7 @@ export function plan_snapshot(snapshot, selection, runtime, expected) {
     if (parts.some(part => typeof part.part_id !== "string" || !part.part_id)) fail("invalid_part_identity");
     if (parts.some((part, index) => part.sequence !== index + 1)) fail("non_contiguous_source_parts");
     if (parts.some(part => part.type === "inbox")) fail("unexpected_inbox_in_legacy_schema");
-    const convert = row.role === "user" && (original.visibility === "internal" || ["session", "runtime"].includes(meta?.from.kind));
+    const convert = row.role === "user" && (original.visibility === "internal" || ["session", "runtime"].includes(meta?.from.kind) || inbox_messages.has(row.message_id));
     if (row.role === "user" && !meta && !convert && has_background_structure(parts)) fail("visible_unaccounted_background_input");
     const mapping = { source_message_id: row.message_id, target_message_id: row.message_id, source_visibility: original.visibility, actor_kind: meta?.from.kind ?? null, relation: convert ? "inbox_carrier" : "preserved", source_sequence: row.sequence, source_turn_id: row.turn_id };
     if (convert) {
@@ -149,7 +152,7 @@ export function plan_snapshot(snapshot, selection, runtime, expected) {
       const source = causal_source(parts);
       const content = { inbox_id, kind: input_kind(parts, meta), ...(source ? { source } : {}), content: inbox_content(parts), created_at: row.created_at, ...(meta ? { meta } : {}) };
       for (const [index, part] of parts.entries()) {
-        part_mapping.push({ source_part_id: part.part_id, target_part_id: part_id, relation: "inbox_content", target_sequence: 1, content_index: index, source_sequence: part.sequence, source_step_id: part.step_id, source_created_at: part.created_at, source_updated_at: part.updated_at, source_content_sha256: digest(json_object(part.content)) });
+        part_mapping.push({ source_part_id: part.part_id, target_part_id: part_id, relation: "inbox_content", target_sequence: 1, content_index: index, source_sequence: source_parts_by_id.get(part.part_id).sequence, source_step_id: part.step_id, source_created_at: part.created_at, source_updated_at: part.updated_at, source_content_sha256: digest(json_object(source_parts_by_id.get(part.part_id).content)) });
       }
       parts = [{ part_id, message_id: row.message_id, sequence: 1, step_id: null, type: "inbox", content: JSON.stringify(content), created_at: row.created_at, updated_at: row.updated_at }];
       row.role = "agent";
@@ -179,10 +182,11 @@ export function plan_snapshot(snapshot, selection, runtime, expected) {
   tables.session_state[0].message_count = rows.length;
   tables.session_state[0].preview_text = last_message ? runtime.resolve_session_message_preview(last_message).trim().slice(0, 180) || null : null;
   const manifest = {
-    from_version: snapshot.version, target_version: 7, source_fingerprint: snapshot.fingerprint,
+    from_version: source.version, target_version: 7, source_fingerprint: source.fingerprint,
+    ...(audit.length ? { repairs: audit, repair_entry_sha256: digest(repair_entry) } : {}),
     message_count: rows.length, source_part_count: snapshot.tables.message_parts.length, target_part_count: tables.message_parts.length,
     inbox_count, interaction_count, cleared_derived_tables: derived_tables.filter(table => snapshot.tables[table]),
     message_mapping, part_mapping, stable_prefixes: watermarks.map(([message_id, sequence]) => ({ message_id, stable_part_sequence: sequence })),
   };
-  return { source: snapshot, source_fingerprint: snapshot.fingerprint, tables, watermarks, manifest };
+  return { source, source_fingerprint: source.fingerprint, tables, watermarks, manifest };
 }

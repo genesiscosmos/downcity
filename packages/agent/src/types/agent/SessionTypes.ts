@@ -61,10 +61,10 @@ export interface AgentListSessionsInput {
   limit?: number;
 
   /**
-   * 绑定 Store 与查询条件的不透明快照游标。
+   * 绑定 Agent、存储世代和完整过滤条件的不透明 keyset 游标。
    *
-   * 本地快照两分钟后过期，也可能因容量淘汰、删除、归档、清空或 Store 释放提前失效。
-   * 调用方仅原样透传，不解析或持久化；收到 session_list_cursor_expired 时从首页重启。
+   * 翻页间不冻结快照；更新后的记录可能移到前页，调用方按 storage_id 去重。
+   * 原样透传，收到 session_list_cursor_invalid 时从首页重新查询。
    */
   cursor?: string;
 
@@ -301,6 +301,8 @@ export interface AgentSessionSystemSnapshot {
  * Session 摘要。
  */
 export interface AgentSessionSummary {
+  /** 记录不可变 UUID；归档读取、删除和导出必须使用，不能由逻辑 ID 猜测。 */
+  storage_id: string;
   /** 当前 session 所属 agent_id。 */
   agent_id: string;
   /** 当前 session 唯一标识。 */
@@ -360,7 +362,7 @@ export interface AgentSessionSummaryPage {
    * - 对分页 UI、结果统计和空态判断更友好。
    */
   total: number;
-  /** 同一查询快照的下一页不透明游标；末页省略。 */
+  /** 当前查询的下一页不透明 keyset 游标；末页省略，不承诺跨页冻结快照。 */
   next_cursor?: string;
   /** 是否仍有更多结果。 */
   has_more: boolean;
@@ -397,6 +399,10 @@ export interface AgentSessionForkInput {
  * 归档 Session 及当前 Agent 下全部后代 Work Session 的输入参数。
  */
 export interface AgentArchiveSessionInput {
+  /** 归档操作UUID，省略创建新操作；失败后必须复用原ID恢复原计划。 */
+  operation_id?: string;
+  /** 可选原根UUID，提供时与持久化计划核对，不按逻辑新记录替代。 */
+  root_storage_id?: string;
   /**
    * 要归档的 session id。
    *
@@ -433,10 +439,9 @@ export interface AgentArchiveSessionsInput {
   limit?: number;
 
   /**
-   * 绑定 Store 与归档查询条件的不透明快照游标。
+   * 绑定 Agent、存储世代和归档过滤条件的不透明 keyset 游标。
    *
-   * 本地快照两分钟后过期，也可能提前淘汰或失效；仅原样透传，不解析或持久化。
-   * 收到 session_list_cursor_expired 时丢弃部分结果并从首页重新查询。
+   * 仅原样透传；归档条目以 storage_id 去重，恢复数据库后旧游标失效。
    */
   cursor?: string;
 
@@ -454,6 +459,12 @@ export interface AgentArchiveSessionsInput {
  * 归档单个 session 的结果。
  */
 export interface AgentArchiveSessionResult {
+  /** 原操作UUID，允许确认丢失或部分失败后恢复固定计划。 */
+  operation_id?: string;
+  /** 原根不可变UUID。 */
+  root_storage_id?: string;
+  /** 已持久化后序计划SHA-256，用于核对恢复句柄。 */
+  plan_fingerprint?: string;
   /** 被归档的 session id。 */
   session_id: string;
   /** 本次实际移动根节点的归档时间戳（ms）；根已归档的幂等重试省略，不伪造原始时间。 */

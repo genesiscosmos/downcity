@@ -190,6 +190,8 @@ export class CityPowerRuntime implements PowerRuntimeHost {
       abort_signal: site.abort_signal ?? new AbortController().signal,
       label: `power:${power_id}`,
     });
+    // 动作和已挂载 HTTP 路由每次调用都取得当前身份，同次调用保持稳定引用。
+    const federation = this.options.federation;
     return create_power_context({
       host: this,
       site,
@@ -211,7 +213,7 @@ export class CityPowerRuntime implements PowerRuntimeHost {
       call,
       config: freeze_power_config(this.options.host?.config?.(power_id).get() ?? {}),
       logger: agent.get_logger(),
-      federation: this.options.federation ? { user: this.options.federation.user } : undefined,
+      federation,
       notifications: this.notifications.publisher({ source_kind: "power", power_id, agent_id }),
       get_workspace_env: () => workspace?.get_env() ?? {},
       get_instructions: () => agent.get_instructions(),
@@ -467,8 +469,10 @@ export class CityPowerRuntime implements PowerRuntimeHost {
         throw new Error("City does not provide Power config storage");
       },
     };
+    // 生命周期上下文可能被 Power 长期持有；每次读取都解析当前绑定。
+    const options = this.options;
     return Object.freeze({
-      ...(this.options.federation ? { federation: { user: this.options.federation.user } } : {}),
+      get federation() { return options.federation; },
       power: Object.freeze({
         id: power_id,
         action: (action: PowerHostAction) =>

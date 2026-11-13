@@ -19,6 +19,7 @@ import type {
 import type { AgentSessionCollection } from "@downcity/agent";
 import type { WorkspaceRuntime } from "@/workspace/index.js";
 import type { RemotePromptInput } from "@/types/remote/PromptPowerTransport.js";
+import { register_archived_session_routes } from "./ArchivedSessionRoutes.js";
 import { register_prompt_power_routes } from "./PromptPowerRoutes.js";
 import type { RespondSessionInteractionInput } from "@downcity/agent";
 import type { AgentHttpRuntimeOptions } from "@/city/transport/types/AgentHttpRuntime.js";
@@ -38,6 +39,7 @@ export function register_sdk_session_routes(
   workspace?: WorkspaceRuntime,
   runtime_options: AgentHttpRuntimeOptions = {},
 ): void {
+  register_archived_session_routes(app, sessions);
   const get_category = (input: unknown): string => String(input || SESSION_ORIGIN_CATEGORY_WORK).trim() || SESSION_ORIGIN_CATEGORY_WORK;
   const get_session = async (session_id: string, category?: string) => await sessions.get(
     session_id,
@@ -329,25 +331,21 @@ export function register_sdk_session_routes(
       if (!session_id) {
         return c.json({ success: false, error: "Missing session_id" }, 400);
       }
+      const body = await c.req.json().catch(() => ({})) as Partial<AgentArchiveSessionInput>;
       const input: AgentArchiveSessionInput = {
-        id: session_id,
-        category: get_category(c.req.query("category")),
+        id: session_id, category: get_category(c.req.query("category")),
+        ...(body.operation_id ? { operation_id: body.operation_id } : {}),
+        ...(body.root_storage_id ? { root_storage_id: body.root_storage_id } : {}),
       };
-      await get_session(session_id, input.category);
       const result = await sessions.archive(input);
       return c.json({
         success: true,
-        session_id: result.session_id,
-        archived_at: result.archived_at,
+        ...result,
       });
     } catch (error) {
-      return c.json(
-        {
-          success: false,
-          error: error instanceof Error ? error.message : String(error),
-        },
-        500,
-      );
+      const handle = error as { operation_id?: string; root_storage_id?: string; plan_fingerprint?: string };
+      return c.json({ success: false, error: error instanceof Error ? error.message : String(error),
+        operation_id: handle.operation_id, root_storage_id: handle.root_storage_id, plan_fingerprint: handle.plan_fingerprint }, 500);
     }
   });
 

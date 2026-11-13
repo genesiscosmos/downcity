@@ -1,7 +1,7 @@
 /**
  * @downcity/type 公共协议入口。
  *
- * 这里只导出跨 package 共享的稳定协议，具体运行时实现由各 SDK package 自己负责。
+ * 导出跨 package 的稳定协议与共享模型流期限，业务执行和恢复由各 SDK 负责。
  */
 
 export type { SessionPromptActor } from "./types/session/SessionPromptActor.js";
@@ -64,6 +64,9 @@ export type {
   ModelToolResultPart,
   ModelUsage,
 } from "./types/model/index.js";
+
+export { guard_model_stream, resolve_model_stream_policy, is_model_output_event, create_model_timeout_error } from "./ModelStreamGuard.js";
+export type { ModelStreamPolicy, ModelTimeoutPhase, ModelExecutionError } from "./types/model/ModelStreamPolicy.js";
 
 export {
   define_agent_tool,

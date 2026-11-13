@@ -394,12 +394,12 @@ test("已接收后台续轮重建后明确收口中断，保留结果并释放�
     const session = await agent.session();
     const storage = await agent.sessions.read_session_storage(session.id, "chat");
     const turn_id = "interrupted-background-turn";
-    await storage.create_message(({ message_sequence }) => ({
+    await storage.create_message({
       message_id: "received-background", session_id: session.id, turn_id,
-      role: "user", sequence: message_sequence, revision: 1, visibility: "internal", created_at: 1, updated_at: 1,
+      role: "user", revision: 1, visibility: "internal", created_at: 1, updated_at: 1,
       meta: { from: { kind: "runtime", namespace: "session_background", object_id: "received" } },
       parts: [{ part_id: "received-part", sequence: 1, type: "text", text: "already received Main result" }],
-    }));
+    });
     assert.equal(agent.sessions.release(session.id, "chat"), true);
     await agent.resume_work();
     const restored = await agent.sessions.get(session.id, "chat");

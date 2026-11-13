@@ -4,6 +4,7 @@ import fs from "node:fs/promises";
 import { randomUUID } from "node:crypto";
 import { AgentSessionBrowser, type AgentSession, type AgentSessionInfo } from "@downcity/agent";
 import { read_saved_session_model } from "./SavedSessionModel.js";
+import type { SessionReadView } from "@downcity/agent";
 import type { ResourceDependencies } from "./types.js";
 import { require_agent_id, require_resource_value, require_workspace_id, ResourceError } from "./ResourceError.js";
 
@@ -15,7 +16,12 @@ export class SessionResources {
   constructor(private readonly dependencies: ResourceDependencies) {}
 
   /** 释放快照资源，不操作 Session 生命周期。 */
-  dispose(): void { for (const browser of this.browsers.values()) browser.dispose(); this.browsers.clear(); }
+  async dispose(): Promise<void> {
+    const browsers = [...this.browsers.values()]; this.browsers.clear();
+    const results = await Promise.allSettled(browsers.map(browser => browser.dispose()));
+    const errors = results.filter((result): result is PromiseRejectedResult => result.status === "rejected").map(result => result.reason);
+    if (errors.length) throw new AggregateError(errors, "Session browse disposal failed");
+  }
 
   /** 新普通工作会话；不伪造执行来源、不提交 prompt。 */
   async create(input: Record<string, unknown>) {
@@ -40,7 +46,7 @@ export class SessionResources {
     require_resource_value(!(input.archived && input.origin_type !== undefined), "Archived lists do not support origin_type");
     const page = await this.browser(agent_id).list({ category, limit: integer_option(input.limit, 50, 1, 200), ...(typeof input.workspace === "string" ? { workspace_id: input.workspace } : {}), ...(typeof input.query === "string" ? { query: input.query } : {}), ...(typeof input.cursor === "string" ? { cursor: input.cursor } : {}), ...(typeof input.origin_type === "string" ? { origin_type: input.origin_type } : {}) }, input.archived === true);
     const runtime = this.dependencies.host?.city.agents.get(agent_id);
-    return { ...page, items: await Promise.all(page.items.map(async (info) => ({ ...project_session(info, input.archived === true), runtime: await this.observe(runtime?.sessions.peek(info.session_id, category)) }))), pagination_available: !this.dependencies.immutable, next_cursor: page.next_cursor ?? null };
+    return { ...page, items: await Promise.all(page.items.map(async (info) => ({ ...project_session(info, input.archived === true), runtime: await this.observe(runtime?.sessions.peek(info.session_id, category)) }))), pagination_available: true, next_cursor: page.next_cursor ?? null };
   }
 
   /** 历史/归档/孤儿会话均可读取，当前状态只观察已有内存实例。 */
@@ -48,17 +54,18 @@ export class SessionResources {
     const agent_id = this.agent_id(input);
     const category = this.category(input);
     const session_id = this.session_id(input);
-    const view = await this.browser(agent_id).get(session_id, category);
+    const view = await this.read_view(input);
     const metadata = view.metadata;
-    const cached = this.dependencies.host?.city.agents.get(agent_id)?.sessions.peek(session_id, category);
-    const model_binding = await this.browser(agent_id).model_binding(session_id, category);
-    const saved_model_id = this.dependencies.workspaces ? read_saved_session_model(this.dependencies.root_path, metadata, this.dependencies.immutable) : undefined;
+    const cached = view.archived ? undefined : this.dependencies.host?.city.agents.get(agent_id)?.sessions.peek(session_id, category);
+    const configuration = await this.browser(agent_id).configuration(view.storage_id);
+    const model_binding = configuration.model_binding ? JSON.parse(configuration.model_binding) as import("@downcity/agent").SessionModelBinding : undefined;
+    const saved_model_id = !view.archived && this.dependencies.workspaces ? read_saved_session_model(this.dependencies.root_path, metadata, this.dependencies.immutable) : undefined;
     return { session: { ...project_session(metadata, view.archived), model_binding: model_binding ?? null, saved_model_override: saved_model_id ?? null, model_selection_required: !(model_binding?.override_model_id ?? saved_model_id ?? model_binding?.default_model_id) }, runtime: await this.observe(cached), pending_interaction_count: (await view.interactions()).length };
   }
 
   /** canonical Message 页；直接贯通 SDK 解码，不展开附件。 */
   async history(input: Record<string, unknown>) {
-    const view = await this.browser(this.agent_id(input)).get(this.session_id(input), this.category(input));
+    const view = await this.read_view(input);
     return await view.messages({ limit: integer_option(input.limit, 50, 1, 200), ...(input.before_sequence !== undefined ? { before_sequence: integer_option(input.before_sequence, 1, 1, Number.MAX_SAFE_INTEGER) } : {}) });
   }
 
@@ -156,15 +163,21 @@ export class SessionResources {
     const session_id = this.session_id(input);
     const host = this.require_host();
     return await this.dependencies.coordinator.mutate(async () => {
-      const view = await this.browser(agent_id).get(session_id, category);
       const agent = host.city.agents.get(agent_id);
       if (!agent) throw new ResourceError("resource_not_found", `Agent not loaded: ${agent_id}`, 3);
       try {
-        const root_result = await agent.sessions.archive({ id: session_id, category });
-        return { session_address: { agent_id, category, session_id }, root_result: view.archived ? null : root_result, changed: root_result.changed ?? !view.archived };
+        const root_result = await agent.sessions.archive({ id: session_id, category,
+          ...(typeof input.operation_id === "string" ? { operation_id: input.operation_id } : {}),
+          ...(typeof input.root_storage_id === "string" ? { root_storage_id: input.root_storage_id } : {}),
+        });
+        return { session_address: { agent_id, category, session_id }, root_result, changed: root_result.changed ?? false };
       } catch (error) {
         if (error instanceof Error && "code" in error && error.code === "session_busy") throw new ResourceError("resource_busy", error.message, 4);
-        throw new ResourceError("partial_failure", "Session archive failed; reread the subtree before retrying", 9, false, { partial_state: "unknown", session_address: { agent_id, category, session_id } });
+        const handle = error as { operation_id?: string; root_storage_id?: string; plan_fingerprint?: string };
+        throw new ResourceError("partial_failure", "Session archive incomplete; resume the original operation_id", 9, false, {
+          partial_state: "unknown", session_address: { agent_id, category, session_id }, operation_id: handle.operation_id,
+          root_storage_id: handle.root_storage_id, plan_fingerprint: handle.plan_fingerprint,
+        });
       } finally { this.invalidate(agent_id); }
     });
   }
@@ -177,6 +190,19 @@ export class SessionResources {
       this.browsers.set(agent_id, browser);
     }
     return browser;
+  }
+
+  /** 归档参数必须显式携带稳定UUID；活动请求不回落归档。 */
+  private async read_view(input: Record<string, unknown>): Promise<SessionReadView> {
+    const browser = this.browser(this.agent_id(input));
+    if (input.archived === true) {
+      require_resource_value(typeof input.storage_id === "string" && input.storage_id.trim(), "Archived Session requires storage_id");
+      return await browser.get_archived({ storage_id: input.storage_id as string,
+        ...(typeof input.session_id === "string" ? { session_id: input.session_id } : {}),
+        ...(typeof input.category === "string" ? { category: this.category(input) } : {}),
+      });
+    }
+    return await browser.get(this.session_id(input), this.category(input));
   }
 
   private invalidate(agent_id: string): void { this.browsers.get(agent_id)?.invalidate(); }
@@ -210,7 +236,8 @@ export class SessionResources {
 
 /** SDK 时间戳只在资源 DTO 边界转换，canonical history 保持原格式。 */
 function project_session(info: Pick<AgentSessionInfo, "agent_id" | "session_id" | "origin"> & Partial<AgentSessionInfo>, archived: boolean) {
-  return { agent_id: info.agent_id, category: info.origin.category, session_id: info.session_id, origin: info.origin, workspace_id: info.workspace_id ?? null, title: info.title ?? null, preview_text: info.preview_text ?? null, message_count: info.message_count ?? 0, model_label: info.model_label ?? null, created_at: info.created_at === undefined ? null : new Date(info.created_at).toISOString(), updated_at: info.updated_at === undefined ? null : new Date(info.updated_at).toISOString(), timezone: info.timezone ?? null, archived };
+  if (!info.storage_id) throw new Error("session_migration_required");
+  return { storage_id: info.storage_id, agent_id: info.agent_id, category: info.origin.category, session_id: info.session_id, origin: info.origin, workspace_id: info.workspace_id ?? null, title: info.title ?? null, preview_text: info.preview_text ?? null, message_count: info.message_count ?? 0, model_label: info.model_label ?? null, created_at: info.created_at === undefined ? null : new Date(info.created_at).toISOString(), updated_at: info.updated_at === undefined ? null : new Date(info.updated_at).toISOString(), timezone: info.timezone ?? null, archived };
 }
 
 /** 严格参数校验，不静默截断页数或超时。 */

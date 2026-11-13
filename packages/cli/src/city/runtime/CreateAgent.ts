@@ -24,7 +24,7 @@ export async function create_cli_persistent_agent(
   });
   let agent: Agent | undefined;
   try {
-    agent = await create_cli_agent({ config, root_path: data.root_path });
+    agent = await create_cli_agent({ config, root_path: data.root_path, resolve_federation: () => city.federation.current });
     city.agents.add(agent);
     return agent;
   } catch (error) {

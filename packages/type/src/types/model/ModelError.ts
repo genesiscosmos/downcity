@@ -4,6 +4,8 @@
  * 错误只暴露稳定、安全且可操作的字段；供应商原始正文不跨越协议边界。
  */
 
+import type { ModelTimeoutPhase } from "./ModelStreamPolicy.js";
+
 /** Downcity 稳定模型错误代码。 */
 export type ModelErrorCode =
   | "invalid_request"
@@ -25,10 +27,14 @@ export interface ModelError {
   code: ModelErrorCode;
   /** 可安全展示给调用方的错误说明。 */
   message: string;
-  /** 调用方是否可以安全重试。 */
+  /** 故障是否具备暂时性恢复语义；调用方仍须检查已发布内容和副作用。 */
   retryable: boolean;
   /** 可选上游 HTTP 状态码。 */
   status_code?: number;
+  /** 超时所属阶段，恢复总预算耗尽与用户取消保持独立分类。 */
+  timeout_phase?: ModelTimeoutPhase;
+  /** 服务端建议的下一次尝试 Unix 毫秒时间，跨层传递时不得重新开始计时。 */
+  retry_at_ms?: number;
   /** 可选上游请求 ID。 */
   provider_request_id?: string;
   /** 上游结构化错误码；只允许有限长度的协议标识，不包含原始正文。 */
@@ -69,7 +75,12 @@ export function read_model_error(value: unknown): ModelError | undefined {
   const provider_error_param = read_error_identifier(record.provider_error_param);
   const provider_error_reason = typeof record.provider_error_reason === "string" && PROVIDER_ERROR_REASONS.has(record.provider_error_reason)
     ? record.provider_error_reason : undefined;
-  return { code, message: MODEL_ERROR_MESSAGES[code],
+  const timeout_phase = code === "provider_timeout" && ["connect", "first_output", "idle", "total", "recovery_budget"].includes(String(record.timeout_phase))
+    ? record.timeout_phase as ModelTimeoutPhase : undefined;
+  const retry_at_ms = Number.isSafeInteger(record.retry_at_ms) && Number(record.retry_at_ms) >= 0
+    ? Number(record.retry_at_ms) : undefined;
+  return { code, message: timeout_phase === "recovery_budget" ? "Model recovery budget exhausted" : MODEL_ERROR_MESSAGES[code],
+    ...(timeout_phase ? { timeout_phase } : {}), ...(retry_at_ms !== undefined ? { retry_at_ms } : {}),
     retryable: (code === "rate_limited" || code === "transport_error" || code === "provider_error" || code === "provider_timeout") && record.retryable === true,
     ...(status_code ? { status_code } : {}), ...(provider_request_id ? { provider_request_id } : {}),
     ...(provider_error_code ? { provider_error_code } : {}),

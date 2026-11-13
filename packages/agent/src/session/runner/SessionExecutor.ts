@@ -532,7 +532,7 @@ export class SessionExecutor implements SessionExecutorPort {
           });
         }
       },
-      execute_attempt: async () => {
+      execute_attempt: async (model_abort_signal) => {
         attempt += 1;
         const invocation_id = generate_id();
         await turn_context.output.assistant?.begin_step();
@@ -543,6 +543,7 @@ export class SessionExecutor implements SessionExecutorPort {
             messages: input.step_input.messages,
             tools: input.tools_override ?? input.step_input.tools,
             abort_signal: turn_context.lifecycle.abort_signal,
+            model_abort_signal,
             on_diagnostic: async (diagnostic) => {
               await this.logger.log("info", `[agent] model_request.${diagnostic.phase}`, {
                 session_id: this.session_id,

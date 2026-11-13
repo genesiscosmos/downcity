@@ -34,13 +34,10 @@ function create_fixture(initial_messages = []) {
       storage_bytes: 0,
       latest_message: structuredClone(stored_messages.at(-1) ?? null),
     }),
-    create_message: async (build_message) => {
-      const message = build_message({
-        message_sequence: stored_messages.reduce(
-          (maximum, candidate) => Math.max(maximum, candidate.sequence),
-          0,
-        ) + 1,
-      });
+    create_message: async (candidate) => {
+      const message = { ...candidate, sequence: stored_messages.reduce(
+        (maximum, item) => Math.max(maximum, item.sequence), 0,
+      ) + 1 };
       stored_messages.push(structuredClone(message));
       return structuredClone(message);
     },

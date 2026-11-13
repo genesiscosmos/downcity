@@ -18,9 +18,12 @@ export function create_session_read_view(
   archived: boolean,
   source: Pick<SessionStorage, "list_message_page" | "message_count" | "list_recoverable_agent_messages">,
 ): SessionReadView {
+  if (!metadata.storage_id) throw new Error("session_migration_required");
   return {
+    storage_id: metadata.storage_id,
     metadata: structuredClone(metadata),
     archived,
+    configuration: async () => { throw new Error("session_migration_required"); },
     messages: async (input) => {
       const before_sequence = input?.before_sequence;
       if (before_sequence !== undefined && (!Number.isInteger(before_sequence) || before_sequence <= 0)) {

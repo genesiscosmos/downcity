@@ -41,14 +41,14 @@ export function register_session_commands(program: Command): void {
     .action(async (options) => await execute_resource_command("session.create", options));
   common(session.command("list").option("--workspace <id>").option("--origin-type <type>").option("--query <text>").option("--archived").option("--limit <number>").option("--cursor <opaque>"))
     .action(async (options) => await execute_resource_command("session.list", options));
-  common(session.command("get <session_id>"))
+  common(session.command("get <session_id>").option("--archived", "Read one archived record; requires --storage-id").option("--storage-id <uuid>", "Exact immutable archived record identity"))
     .action(async (session_id, options) => await execute_resource_command("session.get", options, { session_id }));
-  common(session.command("history <session_id>").option("--before-sequence <number>").option("--limit <number>").option("--include-internal"))
+  common(session.command("history <session_id>").option("--archived", "Read one archived record; requires --storage-id").option("--storage-id <uuid>", "Exact immutable archived record identity").option("--before-sequence <number>").option("--limit <number>").option("--include-internal"))
     .action(async (session_id, options) => await execute_resource_command("session.history", options, { session_id }));
   common(session.command("send <session_id>").option("--message <text>").option("--message-file <path-or-dash>").option("--request-id <id>").option("--no-wait").option("--workspace <id>").option("--workspace-path <path>"))
     .action(async (session_id, options) => await execute_resource_command("session.send", { ...options, no_wait: options.wait === false }, { session_id }));
   common(session.command("stop <session_id>").option("--turn-id <id>"))
     .action(async (session_id, options) => await execute_resource_command("session.stop", options, { session_id }));
-  common(session.command("archive <session_id>"))
+  common(session.command("archive <session_id>").option("--operation-id <uuid>", "Resume the original persisted archive plan").option("--root-storage-id <uuid>", "Expected immutable root record identity"))
     .action(async (session_id, options) => await execute_resource_command("session.archive", options, { session_id }));
 }

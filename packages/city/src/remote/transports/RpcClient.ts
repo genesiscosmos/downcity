@@ -129,7 +129,7 @@ export class RpcClient {
     const data = await this.request<{ result: AgentArchiveSessionResult }>({
       method: "sdk.sessions.archive",
       params: {
-        session_id: input.id,
+        session_id: input.id, operation_id: input.operation_id, root_storage_id: input.root_storage_id,
         category: input.category || SESSION_ORIGIN_CATEGORY_WORK,
       },
     });
@@ -147,6 +147,14 @@ export class RpcClient {
       params: input,
     });
     return data.page;
+  }
+
+  /** 精确归档请求仅发送记录UUID，不能覆盖端点Agent或取得actor。 */
+  async archived_request<T>(action: "get" | "messages" | "configuration" | "interactions" | "remove", storage_id: string, input?: ListSessionMessagesInput): Promise<T> {
+    const response = await this.request<{ /** 固定动作的序列化结果。 */ data: T }>({
+      method: `sdk.sessions.archived.${action}`, params: { storage_id, ...(input ? { input } : {}) },
+    });
+    return response.data;
   }
 
   /**
@@ -691,6 +699,7 @@ export class RpcClient {
     }
     pending.reject(Object.assign(new Error(String(payload.error || "RPC request failed")), {
       code: payload.code, session_id: payload.session_id, turn_id: payload.turn_id, occupied_by: payload.occupied_by,
+      operation_id: payload.operation_id, root_storage_id: payload.root_storage_id, plan_fingerprint: payload.plan_fingerprint,
     }));
   }
 

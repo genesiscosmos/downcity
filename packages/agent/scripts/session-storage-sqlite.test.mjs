@@ -34,12 +34,11 @@ async function create_storage(directory_path, options = {}) {
 }
 
 /** 创建一条 User Message。 */
-function create_user_message(state) {
+function create_user_message() {
   return {
     message_id: "user-1",
     session_id: "session-1",
     turn_id: "turn-1",
-    sequence: state.message_sequence,
     revision: 1,
     role: "user",
     created_at: 10,
@@ -51,7 +50,7 @@ function create_user_message(state) {
 test("Message 与 Part 分表原子保存并刷新列表投影", async () => {
   const directory_path = await fs.mkdtemp(path.join(os.tmpdir(), "downcity-session-storage-"));
   const storage = await create_storage(directory_path);
-  const created = await storage.create_message(create_user_message);
+  const created = await storage.create_message(create_user_message());
   assert.equal(created.role, "user");
   const metadata = await storage.read_metadata();
   assert.equal(metadata.message_count, 1);
@@ -92,11 +91,10 @@ test("Message 与 Part 分表原子保存并刷新列表投影", async () => {
 test("Storage 只查询中断状态，不擅自解释领域恢复语义", async () => {
   const directory_path = await fs.mkdtemp(path.join(os.tmpdir(), "downcity-session-storage-"));
   const storage = await create_storage(directory_path);
-  await storage.create_message((state) => ({
+  await storage.create_message({
     message_id: "agent-1",
     session_id: "session-1",
     turn_id: "turn-1",
-    sequence: state.message_sequence,
     revision: 1,
     stable_part_sequence: 0,
     role: "agent",
@@ -108,7 +106,7 @@ test("Storage 只查询中断状态，不擅自解释领域恢复语义", async 
       { part_id: "tool-1", sequence: 2, step_id: "step-1", type: "tool", tool_call_id: "call-1", tool_name: "read", state: "running" },
       { part_id: "action-1", sequence: 3, type: "action", action_id: "action-1", action_type: "test", state: "running", title: "测试" },
     ],
-  }));
+  });
   await storage.dispose();
 
   const reopened = await create_storage(directory_path);
@@ -124,22 +122,15 @@ test("Storage 只查询中断状态，不擅自解释领域恢复语义", async 
 test("Composer 只能写自己的派生 namespace，clear 触发 FK 清理", async () => {
   const directory_path = await fs.mkdtemp(path.join(os.tmpdir(), "downcity-session-storage-"));
   const storage = await create_storage(directory_path);
-  await storage.create_message(create_user_message);
+  await storage.create_message(create_user_message());
   const policy = storage.derived_store("sequence");
-  await policy.transaction((transaction) => {
-    transaction.execute("CREATE TABLE composer_sequence_test (message_id TEXT REFERENCES messages(message_id) ON DELETE CASCADE)");
-    transaction.execute("INSERT INTO composer_sequence_test (message_id) VALUES (?)", ["user-1"]);
-  });
-  await assert.rejects(policy.transaction((transaction) => transaction.execute("UPDATE messages SET revision = 2")), /can only mutate/);
-  await assert.rejects(policy.transaction((transaction) => transaction.execute("ALTER TABLE messages ADD COLUMN invalid TEXT")), /cannot execute database control/);
-  await assert.rejects(
-    policy.transaction((transaction) => transaction.execute(
-      "CREATE INDEX composer_sequence_messages_index ON messages(sequence)",
-    )),
-    /cannot execute database control/,
-  );
+  assert.equal(policy.transaction, undefined);
+  await policy.insert_checkpoint({ checkpoint_id: "checkpoint-1", through_message_id: "user-1",
+    through_message_sequence: 1, through_part_sequence: 1, summary: "summary", schema_version: 2, created_at: 1 });
+  assert.equal((await policy.read_checkpoint(2)).summary, "summary");
+  assert.equal(await storage.derived_store("other").read_checkpoint(2), null);
   await storage.clear_messages();
-  assert.equal(await policy.transaction((transaction) => transaction.get("SELECT COUNT(*) AS count FROM composer_sequence_test")).then((row) => row.count), 0);
+  assert.equal(await policy.read_checkpoint(2), null);
   assert.equal((await storage.read_metadata()).preview_text, undefined);
   await storage.dispose();
 });
@@ -191,7 +182,7 @@ test("Codec 在损坏的 Part 内容进入领域层前失败", async () => {
   const directory_path = await fs.mkdtemp(path.join(os.tmpdir(), "downcity-session-storage-"));
   const database_path = path.join(directory_path, "session.db");
   const storage = await create_storage(directory_path);
-  await storage.create_message(create_user_message);
+  await storage.create_message(create_user_message());
   await storage.dispose();
 
   const database = new DatabaseSync(database_path);

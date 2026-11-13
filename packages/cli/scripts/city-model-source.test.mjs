@@ -9,7 +9,7 @@ import { Database } from "../../implementations/databases/sqlite/bin/index.js";
 import { resolve_local_city_id } from "@downcity/city/local";
 import { create_city_ai_model_client } from "../bin/city/runtime/city-model/CityAiServiceBinding.js";
 
-test("注入的本地 Federation 优先于远端环境，模型和用户视图使用宿主稳定来源", async () => {
+test("模型仅消费注入的 Federation，模型和用户视图使用宿主稳定来源", async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), "downcity-model-source-"));
   const previous_root = process.env.DC_PLATFORM_ROOT;
   const previous_fetch = globalThis.fetch;
@@ -25,7 +25,7 @@ test("注入的本地 Federation 优先于远端环境，模型和用户视图�
   const serve = federation.fetch;
   federation.fetch = (request, options) => serve(request, { ...options, trusted_identity: { level: "user", user: { user_id: "test-user" } } });
   try {
-    const model = await create_city_ai_model_client({ modelId: "test-model", federation, env: { DOWNCITY_FEDERATION_URL: "http://localhost:12314", DOWNCITY_USER_TOKEN: "unused" } });
+    const model = await create_city_ai_model_client({ model_id: "test-model", federation });
     assert.equal(model.id, "test-model");
     const city_id = resolve_local_city_id(root);
     await federation.user.with_city(city_id).ai.catalog();

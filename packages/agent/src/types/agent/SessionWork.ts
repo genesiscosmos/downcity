@@ -36,6 +36,8 @@ export interface SessionWorkContract {
     session_id: string;
     /** 目标所属分类，明确区分 chat/work 分区。 */
     session_category: "chat" | "work";
+    /** 精确归档记录UUID；省略时仅查询活动逻辑地址，不回落归档。 */
+    storage_id?: string;
     /** 返回的最近消息条数上限。 */
     limit?: number;
   }): Promise<SessionCheckDetailToolOutput>;
@@ -46,10 +48,14 @@ export interface SessionWorkContract {
     session_id: string;
     /** 目标所属分类。 */
     session_category: "chat" | "work";
+    /** 精确归档UUID，只授予已有Agent范围内的只读定位，不授予控制权。 */
+    storage_id?: string;
   }): Promise<SessionMessagePage>;
 
   /** 归档空闲会话，由 Session 集合拥有者管理存储与索引。 */
   archive(input: {
+    /** 原归档操作UUID；重入不创建新计划。 */ operation_id?: string;
+    /** 原根稳定UUID，与计划核对，不授予控制权限。 */ root_storage_id?: string;
     /** 目标会话稳定标识。 */
     session_id: string;
   }, caller: SessionDelegationCaller): Promise<AgentArchiveSessionResult>;

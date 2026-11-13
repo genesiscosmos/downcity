@@ -5,6 +5,7 @@
  * 并把上游 SSE 规范化为 ModelStreamEvent。路由、fallback、计费和工具执行不属于本模块。
  */
 
+import { guard_model_stream, resolve_model_stream_policy } from "@downcity/type";
 import { create_upstream_model_error, classify_upstream_model_error } from "./UpstreamModelError.js";
 import type {
   ModelContent,
@@ -29,18 +30,20 @@ import type {
 export function create_openai_compatible_model(
   options: OpenAICompatibleModelClientOptions,
 ): ModelClient {
+  const policy = resolve_model_stream_policy(options.model_stream);
   return {
     id: options.id,
+    model_stream_policy: policy,
     async stream(call, signal) {
-      const result = await stream_openai_compatible_model({
+      const result = await guard_model_stream((attempt_signal) => stream_openai_compatible_model({
         call,
         model: { id: options.id, upstream_model: options.upstream_model },
         env: () => undefined,
         ...(call.reasoning?.enabled && call.reasoning.effort
           ? { reasoning: { effort: call.reasoning.effort, source: "request" } }
           : {}),
-        ...(signal ? { abort_signal: signal } : {}),
-      }, options);
+        abort_signal: attempt_signal,
+      }, options), signal, policy);
       return result.stream;
     },
   };

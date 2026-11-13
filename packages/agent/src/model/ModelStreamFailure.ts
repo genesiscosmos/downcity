@@ -23,6 +23,10 @@ export class ModelStreamFailure extends Error {
 
   /** 保留 HTTP 拒绝状态供诊断；恢复策略优先使用 code。 */
   readonly status_code?: number;
+  /** 上游建议的下一次调用 Unix 毫秒时间；重试时保持原始截止。 */
+  readonly retry_at_ms?: number;
+  /** 具体超时阶段，用于区分恢复预算和调用方取消。 */
+  readonly timeout_phase?: ModelError["timeout_phase"];
   /** 上游结构化错误码。 */
   readonly provider_error_code?: string;
   /** 被拒绝的参数路径，不包含参数值。 */
@@ -37,6 +41,8 @@ export class ModelStreamFailure extends Error {
     this.retryable = error.retryable;
     this.has_partial_output = has_partial_output;
     this.status_code = error.status_code;
+    this.retry_at_ms = error.retry_at_ms;
+    this.timeout_phase = error.timeout_phase;
     this.provider_error_code = error.provider_error_code;
     this.provider_error_param = error.provider_error_param;
     this.provider_error_reason = error.provider_error_reason;
@@ -53,6 +59,11 @@ export function normalize_model_invocation_failure(
   abort_signal?: AbortSignal,
 ): ModelStreamFailure {
   if (error instanceof ModelStreamFailure) return error;
+  const abort_error = abort_signal?.aborted ? read_model_error(
+    abort_signal.reason && typeof abort_signal.reason === "object" && "model_error" in abort_signal.reason
+      ? abort_signal.reason.model_error : undefined,
+  ) : undefined;
+  if (abort_error) return new ModelStreamFailure(abort_error, has_partial_output);
   const cancelled = abort_signal?.aborted === true;
   const classified = error && typeof error === "object"
     ? read_model_error("model_error" in error ? error.model_error : error) : undefined;
