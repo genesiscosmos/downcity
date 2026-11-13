@@ -28,6 +28,6 @@ export function AgentChat({ session_messages }) {
 
 `ChatPanel` 负责消息、工具活动、运行时输入、Interaction、Changed Files、历史和输入区展示。Agent、Session、请求、持久化、文件读取及 Interaction 响应由宿主拥有。
 
-`session_message_to_chat_message` 按 canonical Part 顺序保留 `inbox`，使用独立的 `DowncityChatInboxPart` 展示协议。运行时输入在原消息内部默认折叠为一行，展开后显示原始文本、context 和附件名称。它保留事件类别、来源和时间，不包含 `meta`，附件展示不会自动读取文件。
+`session_message_to_chat_message` 按 canonical Part 顺序保留 `inbox`，使用独立的 `DowncityChatInboxPart` 展示协议。运行时输入在原消息内部复用普通工具和推理项的透明紧凑折叠行，显示语义标题、图标、弱化的非空文本或上下文段落及附件数量和展开箭头。展开后按需挂载原始文本、弱化的 context 标签和附件名称；命令输出使用等宽字体，其他正文使用阅读字体。展开内容复用工具详情容器的缩进、底色和圆角。长文本自动换行，在同一阅读区内滚动，高度不超过 240px；空输入显示明确提示。二级“来源”详情展示原始事件类型及可用的 Tool Call ID、Turn ID。它保留事件类别、来源和时间，不包含 `meta`，附件展示不会自动读取文件。
 
 `session_jsonl_to_chat_messages` 按 `message_id` 取最新 revision，再按 `sequence` 排列全部消息。
