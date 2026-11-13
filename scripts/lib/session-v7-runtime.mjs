@@ -59,7 +59,9 @@ export async function load_runtime(agent_database = false) {
     ]);
     if (agent_database) modules.push(...await Promise.all([
       load("session/storage/agent-db/AgentSessionSchema.ts"),
+      load("session/storage/agent-db/AgentSessionFileLease.ts"),
       load("session/storage/ModelBindingCodec.ts"),
+      load("model/results/ResultReference.ts"),
       import(path_to_file_url(path.join(city_source, "local/resources/RootLease.ts")).href),
       import(path_to_file_url(path.join(city_source, "local/resources/SessionStorageReadiness.ts")).href),
       import(path_to_file_url(path.join(type_source, "types/session/SessionOrigin.ts")).href),

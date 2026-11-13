@@ -75,6 +75,26 @@ export function attachment_inventory(directory, prefix = "") {
   return output;
 }
 
+/** 仅在本批私有复制区接管未完成文件；验证+同步后rename，正式路径绝不出现半份内容。 */
+export function copy_verified_file(source_path, target_path, sha256, workspace_path) {
+  ordinary(source_path);
+  if (exists(target_path)) {
+    if (file_hash(target_path) !== sha256) fail("attachment_copy_mismatch");
+    return;
+  }
+  fs.mkdirSync(workspace_path, { recursive: true, mode: 0o700 });
+  ordinary(workspace_path, true);
+  const pending_path = path.join(workspace_path, `${digest([target_path, sha256])}.pending`);
+  if (exists(pending_path) && file_hash(pending_path) !== sha256) fs.unlinkSync(pending_path);
+  if (!exists(pending_path)) fs.copyFileSync(source_path, pending_path, fs.constants.COPYFILE_EXCL);
+  fs.chmodSync(pending_path, 0o600);
+  if (file_hash(pending_path) !== sha256) fail("attachment_copy_mismatch");
+  sync_path(pending_path);
+  if (exists(target_path)) fail("output_already_exists");
+  fs.renameSync(pending_path, target_path);
+  sync_path(workspace_path); sync_path(path.dirname(target_path));
+}
+
 /** 复制后验证哈希并同步，绝不以硬链接把新旧附件绑定为同一可写文件。 */
 export function copy_attachments(source_path, target_path, inventory) {
   if (digest(attachment_inventory(source_path)) !== digest(inventory)) fail("attachments_changed");
@@ -87,10 +107,8 @@ export function copy_attachments(source_path, target_path, inventory) {
     const target = inside(target_path, item.relative_path);
     if (exists(target)) continue;
     fs.mkdirSync(path.dirname(target), { recursive: true, mode: 0o700 });
-    fs.copyFileSync(inside(source_path, item.relative_path), target, fs.constants.COPYFILE_EXCL);
-    fs.chmodSync(target, 0o600);
-    if (file_hash(target) !== item.sha256) fail("attachment_copy_mismatch");
-    sync_path(target); sync_path(path.dirname(target));
+    copy_verified_file(inside(source_path, item.relative_path), target, item.sha256,
+      path.join(path.dirname(target_path), ".session-migration-copies"));
   }
   sync_path(target_path);
 }
@@ -141,6 +159,7 @@ export function diagnostic(error) {
   if (error?.migration_code) return error.migration_code;
   if (/busy|locked/iu.test(String(error?.message))) return "database_locked";
   if (error?.code === "ENOENT") return "storage_file_missing";
+  if (error?.code === "ENOSPC") return "insufficient_space";
   return "operation_failed_details_redacted";
 }
 
