@@ -9,12 +9,14 @@ import { rehype_markdown_anchors } from "./markdown_anchors.ts";
 import { rehype_mermaid_blocks } from "./rehype_mermaid_blocks.ts";
 import { rehype_svg_blocks } from "./rehype_svg_blocks.ts";
 import { remark_gfm_without_autolink } from "./remark_gfm_without_autolink.ts";
+import { remark_math_currency } from "./remark_math_currency.ts";
 
 /** 开启常见的 `$...$` 行内公式语法，同时保留 Streamdown 的默认 Markdown 插件。 */
 const default_math_plugin = defaultRemarkPlugins.math as [any, ...any[]];
 export const markdown_remark_plugins: NonNullable<ComponentProps<typeof Streamdown>["remarkPlugins"]> = [
   remark_gfm_without_autolink,
   [default_math_plugin[0], { singleDollarTextMath: true }],
+  remark_math_currency,
   defaultRemarkPlugins.cjkFriendly,
   defaultRemarkPlugins.cjkFriendlyGfmStrikethrough,
 ];

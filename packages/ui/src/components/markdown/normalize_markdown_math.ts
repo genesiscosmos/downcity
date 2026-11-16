@@ -18,7 +18,8 @@ function normalize_math_expression(expression: string): string {
 function normalize_math_text(markdown_text: string): string {
   return markdown_text
     .replace(/\\\[([\s\S]*?)\\\]/g, (_match, expression: string) => `\n\n$$\n${normalize_math_expression(expression)}\n$$\n\n`)
-    .replace(/\\\(([^\n]*?)\\\)/g, (_match, expression: string) => `$${normalize_math_expression(expression)}$`)
+    // 显式 LaTeX 边界使用双美元行内语法，避免受金额消歧的单美元边界限制。
+    .replace(/\\\(([^\n]*?)\\\)/g, (_match, expression: string) => `$$${normalize_math_expression(expression)}$$`)
     .replace(/^([ \t]*)\[([^\n\]]+)\]([ \t]*)$/gm, (match, leading: string, expression: string, trailing: string) => {
       if (!math_expression_pattern.test(expression)) return match;
       return `${leading}$${normalize_math_expression(expression)}$${trailing}`;
