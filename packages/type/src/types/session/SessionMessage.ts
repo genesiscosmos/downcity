@@ -284,6 +284,8 @@ export interface SessionAgentErrorPart {
   message: string;
   /** 当前错误是否允许重试恢复。 */
   recoverable: boolean;
+  /** 运行时模型尝试的权威记录；仅供 UI 和诊断，禁止投影给模型。 */
+  retry?: import("./SessionModelRetry.js").SessionModelRetry;
 }
 
 /** 已持久化的 Power 回复内容，身份与顺序统一由 Session 分配。 */

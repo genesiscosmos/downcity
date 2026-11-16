@@ -2,20 +2,20 @@
  * SessionExecutor：核心模型请求与 tool-loop 执行器。
  *
  * 关键点（中文）
- * - 只回答「发请求」与「是否继续」：step 循环、续写恢复、撞顶收尾与最终汇总。
+ * - 只回答「发请求」与「是否继续」：step 循环、原请求恢复、撞顶收尾与最终汇总。
  * - 每个 Provider Step 的输入通过 `resolve_step_input` 回调取得，因此执行器不依赖
  *   Composer 或存储，可以被独立构造与验证。
  * - 不持有历史副本，也不修改 canonical Message。
  */
 
 import type { BoundAgentTool } from "@/types/tool/BoundAgentTool.js";
+import { execute_session_provider_step } from "./SessionProviderStep.js";
+import { ModelRetrySuperseded, type SessionModelRetryControl } from "./SessionModelRetry.js";
 import { fit_request } from "./RequestBudget.js";
 import { log_assistant_message_now } from "@/model/messages/SessionMessageLog.js";
 import {
-  MAX_INCOMPLETE_RESPONSE_RECOVERIES,
   MAX_TOOL_LOOP_STEPS,
   TOOL_LOOP_MAX_STEPS_ERROR_CODE,
-  build_incomplete_response_recovery_nudge,
   build_max_steps_error_text,
   build_max_steps_finalization_nudge,
 } from "@/session/runner/ToolLoopLimits.js";
@@ -35,12 +35,8 @@ import {
   resolve_model_error,
 } from "@/session/runner/ModelFailure.js";
 import {
-  run_model_step,
   type ModelStepResult,
-  type ModelStepToolCall,
 } from "@/model/ModelStepRunner.js";
-import { execute_model_request } from "@/model/ModelRequestRunner.js";
-import { ResultSaveFailure } from "@/model/results/ResultSaveFailure.js";
 import {
   resolve_usage_ratio,
   is_context_pressured,
@@ -51,7 +47,6 @@ import type {
 import { ContextRetry } from "@/session/runner/ContextRetry.js";
 import type { Logger } from "@/utils/logger/Logger.js";
 import type { SessionTurnContext } from "@/types/turn/SessionTurnContext.js";
-import { to_session_json_value } from "@/session/messages/SessionJsonValue.js";
 import type {
   SessionStepExecutionInput,
   SessionTurnExecutionResult,
@@ -71,6 +66,9 @@ export interface SessionExecutorOptions {
    * 当前 session 统一日志器。
    */
   logger: Logger;
+
+  /** Session 拥有的模型失败控制边界。 */
+  retry_control?: SessionModelRetryControl;
 
   /** 判断模型调用错误是否属于 Provider 上下文超限。 */
   is_context_limit: (error: unknown) => boolean;
@@ -124,8 +122,10 @@ export class SessionExecutor implements SessionExecutorPort {
   private readonly is_context_limit: SessionExecutorOptions["is_context_limit"];
   private readonly context_retry: ContextRetry;
   private executing = false;
+  private readonly retry_control?: SessionModelRetryControl;
 
   constructor(options: SessionExecutorOptions) {
+    this.retry_control = options.retry_control;
     this.session_id = String(options.session_id || "").trim();
     this.logger = options.logger;
     this.is_context_limit = options.is_context_limit;
@@ -210,7 +210,6 @@ export class SessionExecutor implements SessionExecutorPort {
         });
       };
 
-      let incomplete_response_recovery_count = 0;
       while (step_count < MAX_TOOL_LOOP_STEPS) {
         // 关键点（中文）：steer 与 command 在同一个 Session step 检查点执行。
         // 当前流与 tool callback 保持原执行视图，下一 step 再统一读取 effective 配置。
@@ -239,11 +238,14 @@ export class SessionExecutor implements SessionExecutorPort {
         });
 
         last_observed_stream_error = undefined;
-        const step = await this.execute_provider_step({
-          turn_context: input.turn_context,
-          step_input,
-          on_step_finish,
-        });
+        let step: Awaited<ReturnType<SessionExecutor["execute_provider_step"]>>;
+        try {
+          step = await this.execute_provider_step({ turn_context: input.turn_context, step_input, on_step_finish });
+        } catch (error) {
+          // 新输入或配置替代等待失败，回到现有检查点处理，不能重放旧请求。
+          if (error instanceof ModelRetrySuperseded) continue;
+          throw error;
+        }
         const step_assistant_parts = step.step_assistant_parts;
         const step_result = step.step_result;
         final_assistant_parts = merge_assistant_parts(
@@ -273,8 +275,8 @@ export class SessionExecutor implements SessionExecutorPort {
         });
         const loop_decision = decide_tool_loop({
           hasIncompleteResponse: incomplete_response !== null,
-          incompleteRecoveryCount: incomplete_response_recovery_count,
-          maxIncompleteRecoveries: MAX_INCOMPLETE_RESPONSE_RECOVERIES,
+          incompleteRecoveryCount: 0,
+          maxIncompleteRecoveries: 0,
           toolCallCount: step_result.tool_calls.length,
         });
 
@@ -286,38 +288,17 @@ export class SessionExecutor implements SessionExecutorPort {
             loop_decision.continueForIncompleteRecovery,
           decisionKind: loop_decision.kind,
           incompleteResponseReason: incomplete_response?.reason ?? null,
-          incompleteResponseRecoveryCount: incomplete_response_recovery_count,
           toolCallCount: step_result.tool_calls.length,
           toolResultCount: step_result.tool_results.length,
           finishReason: step_result.finish_reason,
           textPreview: to_inline_preview(step_result.text),
         });
 
-        if (
-          loop_decision.continueForIncompleteRecovery &&
-          incomplete_response
-        ) {
-          incomplete_response_recovery_count += 1;
-          await this.logger.log("warn", "[agent] incomplete_response.recover", {
-            session_id: session_id,
-            step_index: step_count,
-            recoveryCount: incomplete_response_recovery_count,
-            reason: incomplete_response.reason,
-            ...incomplete_response.details,
-          });
-          await input.turn_context.input.append_inbox({
-            kind: "incomplete_response_recovery",
-            content: [{ type: "text", text: build_incomplete_response_recovery_nudge(incomplete_response_recovery_count) }],
-          });
-          continue;
-        }
-
         if (incomplete_response) {
           await this.logger.log("error", "[agent] incomplete_response", {
             session_id: session_id,
             step_index: step_count,
             reason: incomplete_response.reason,
-            recoveryCount: incomplete_response_recovery_count,
             ...incomplete_response.details,
           });
           throw new Error(
@@ -326,7 +307,6 @@ export class SessionExecutor implements SessionExecutorPort {
         }
 
         if (loop_decision.continueForToolCalls) {
-          incomplete_response_recovery_count = 0;
           continue;
         }
 
@@ -339,7 +319,6 @@ export class SessionExecutor implements SessionExecutorPort {
             mergedUserMessageCount: tail_merged_message_count,
           })
         ) {
-          incomplete_response_recovery_count = 0;
           await this.logger.log("info", "[agent] loop.tail_merge_continue", {
             session_id: session_id,
             step_index: step_count,
@@ -505,76 +484,14 @@ export class SessionExecutor implements SessionExecutorPort {
     step_assistant_parts: SessionAgentMessagePart[];
   }> {
     const turn_context = input.turn_context;
-    let attempt = 0;
-    const result = await execute_model_request({
-      request_kind: "turn",
-      abort_signal: turn_context.lifecycle.abort_signal,
-      should_retry: (error) => !this.is_context_limit(error),
-      on_failure: async (notice, error) => {
-        const is_compact_error = this.is_context_limit(error);
-        turn_context.output.report_model_request_failure({
-          ...notice,
-          ...(is_compact_error
-            ? {
-                attempt: 1,
-                max_attempts: 1,
-                will_retry: false,
-              }
-            : {}),
-        });
-        if (notice.will_retry) {
-          await this.logger.log("warn", "[agent] model_stream.retry", {
-            session_id: this.session_id,
-            retry_count: notice.attempt,
-            error_code: notice.code,
-            error: notice.message,
-            provider_request_id: notice.provider_request_id ?? null,
-          });
-        }
-      },
-      execute_attempt: async (model_abort_signal) => {
-        attempt += 1;
-        const invocation_id = generate_id();
-        await turn_context.output.assistant?.begin_step();
-        try {
-          return await run_model_step({
-            model: input.step_input.model,
-            system: input.step_input.system,
-            messages: input.step_input.messages,
-            tools: input.tools_override ?? input.step_input.tools,
-            abort_signal: turn_context.lifecycle.abort_signal,
-            model_abort_signal,
-            on_diagnostic: async (diagnostic) => {
-              await this.logger.log("info", `[agent] model_request.${diagnostic.phase}`, {
-                session_id: this.session_id,
-                turn_id: turn_context.session.turn_id,
-                invocation_id,
-                attempt,
-                model_id: input.step_input.model.id,
-                context_window: input.step_input.context_window ?? null,
-                ...diagnostic,
-              });
-            },
-            ...(turn_context.output.assistant
-              ? { assistant_output: turn_context.output.assistant }
-              : {}),
-          });
-        } catch (error) {
-          try { await turn_context.output.assistant?.abort_step(); }
-          catch (cleanup_error) {
-            // 回滚也失败时仍保留“已执行、禁止重跑”的终态。
-            if (!(error instanceof ResultSaveFailure)) throw cleanup_error;
-          }
-          throw error;
-        }
-      },
+    const result = await execute_session_provider_step({
+      allow_empty_response: input.tools_override !== undefined,
+      turn_context, step_input: input.tools_override ? { ...input.step_input, tools: input.tools_override } : input.step_input,
+      retry_control: this.retry_control, is_context_limit: this.is_context_limit, logger: this.logger,
     });
 
     let step_assistant_parts = result.assistant_parts;
     await input.on_step_finish(result.step_result);
-    if (turn_context.output.assistant) {
-      await turn_context.output.assistant.finish_step(step_assistant_parts);
-    }
     for (const batch of turn_context.output.take_assistant_parts()) {
       const persisted_parts = batch.published_parts ?? (turn_context.output.assistant
         ? await turn_context.output.assistant.append_result_parts(batch.parts, batch.source_tool_call_id)

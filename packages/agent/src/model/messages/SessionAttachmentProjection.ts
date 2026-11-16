@@ -38,6 +38,7 @@ export async function project_session_attachment(
     path: inline ? null : file_path ?? part.url,
     media_type: part.media_type,
     size_bytes,
+    ...(current_version ? { content_version: current_version } : {}),
     status,
     content_delivery: "reference_only",
     instruction: remote ? "Use web tools to read this URL if needed."

@@ -28,6 +28,8 @@ export class SessionAssistantOutputAdapter implements SessionAssistantOutput {
   private writer_task: Promise<SessionAgentMessageWriter> | null = null;
   /** 已 begin 但尚未绑定 Writer 的 Step，消息边界不能丢弃它。 */
   private step_pending = false;
+  /** 显式模型步骤身份使内容、输入依据和尝试记录可以直接关联。 */
+  private pending_step_id?: string;
 
   constructor(options: {
     /** 当前输出所属 Turn 标识。 */
@@ -43,13 +45,14 @@ export class SessionAssistantOutputAdapter implements SessionAssistantOutput {
   }
 
   /** 开始当前模型 Step。 */
-  async begin_step(): Promise<void> {
+  async begin_step(step_id?: string): Promise<void> {
     if (this.writer_task) await this.writer_task;
     if (this.writer) {
-      await this.writer.begin_step();
+      await this.writer.begin_step(step_id);
       return;
     }
     this.step_pending = true;
+    this.pending_step_id = step_id;
   }
 
   /** 直接写入单个标准模型事件。 */
@@ -69,8 +72,8 @@ export class SessionAssistantOutputAdapter implements SessionAssistantOutput {
   }
 
   /** 使用模型聚合出的 canonical Parts 校验当前 Step。 */
-  async finish_step(parts: SessionAgentMessagePart[]): Promise<void> {
-    await (await this.ensure_writer()).finish_step(parts);
+  async finish_step(parts: SessionAgentMessagePart[], retry?: import("@downcity/type").SessionModelRetry): Promise<void> {
+    await (await this.ensure_writer()).finish_step(parts, retry);
   }
 
   /** 清理异常结束的 Step 作用域。 */
@@ -78,6 +81,16 @@ export class SessionAssistantOutputAdapter implements SessionAssistantOutput {
     if (this.writer_task) await this.writer_task;
     if (this.writer) await this.writer.abort_step();
     this.step_pending = false;
+  }
+
+  /** 原请求依据与错误尝试复用现有 canonical 存储。 */
+  async save_model_input(snapshot: import("@/types/session/SessionModelInput.js").SessionModelInputSnapshot): Promise<string> {
+    return await (await this.ensure_writer()).save_model_input(snapshot);
+  }
+
+  /** 将尝试记录持久化到同一个错误位置，不创建用户输入。 */
+  async save_model_retry(record: import("@downcity/type").SessionModelRetry): Promise<string> {
+    return await (await this.ensure_writer()).save_model_retry(record);
   }
 
   /**
@@ -161,7 +174,7 @@ export class SessionAssistantOutputAdapter implements SessionAssistantOutput {
     });
     this.writer = writer;
     if (this.step_pending) {
-      await writer.begin_step();
+      await writer.begin_step(this.pending_step_id);
       this.step_pending = false;
     }
     return writer;

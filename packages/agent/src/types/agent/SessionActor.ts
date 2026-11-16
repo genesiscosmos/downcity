@@ -95,6 +95,8 @@ export interface AgentSessionActor {
 
   /** 追加一条新的 prompt。 */
   prompt(input: AgentSessionPromptInput): Promise<AgentSessionTurnHandle>;
+  /** 以控制动作恢复原失败模型步骤；不创建用户输入。 */
+  retry_model_step(input: import("@downcity/type").SessionModelRetryInput): Promise<import("@downcity/type").SessionModelRetryResult>;
 
   /** 停止当前 turn，并取消尚未被吸收的排队 prompt。 */
   stop(expected_turn_id?: string): Promise<AgentSessionStopResult>;

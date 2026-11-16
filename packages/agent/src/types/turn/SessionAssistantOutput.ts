@@ -25,7 +25,7 @@ export interface SessionAssistantResultBatch {
 /** Executor 写入当前 Turn Assistant Message 的稳定能力。 */
 export interface SessionAssistantOutput {
   /** 开始一个模型 Step 的独立 Part 作用域。 */
-  begin_step(): Promise<void>;
+  begin_step(step_id?: string): Promise<void>;
   /** 直接写入单个标准模型流事件。 */
   write_model_event(event: ModelStreamEvent): Promise<void>;
   /** 在 Tool 审批或执行前提交完整输入。 */
@@ -33,9 +33,13 @@ export interface SessionAssistantOutput {
   /** 写入 Tool 执行终态。 */
   write_tool_result(result: SessionToolExecutionResult): Promise<import("@downcity/type").SessionAgentToolPart | void>;
   /** 使用模型流聚合出的 canonical Parts 校验当前 Step。 */
-  finish_step(parts: SessionAgentMessagePart[]): Promise<void>;
+  finish_step(parts: SessionAgentMessagePart[], retry?: import("@downcity/type").SessionModelRetry): Promise<void>;
   /** 放弃当前未完成 Step 的临时作用域。 */
   abort_step(): Promise<void>;
+  /** 将步骤尝试记录保存到原错误位置，返回所属消息身份。 */
+  save_model_retry?(record: import("@downcity/type").SessionModelRetry): Promise<string>;
+  /** 将原请求的脱敏快照持久化为隐藏 data Part。 */
+  save_model_input?(snapshot: import("@/types/session/SessionModelInput.js").SessionModelInputSnapshot): Promise<string>;
   /** 真人 User steer 持久化后关闭当前连续 Assistant Message。 */
   close_current_message(): Promise<void>;
   /**

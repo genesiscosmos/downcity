@@ -33,6 +33,7 @@ export {
 export type * from "./types/session/SessionContent.js";
 export { validate_session_power_content } from "./types/session/SessionPowerContent.js";
 export type * from "./types/session/SessionMessage.js";
+export type * from "./types/session/SessionModelRetry.js";
 export {
   MESSENGER_ENVIRONMENT_CONTEXT_TAG,
   MESSENGER_INFO_CONTEXT_TAG,

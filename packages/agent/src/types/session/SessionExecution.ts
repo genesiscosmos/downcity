@@ -85,6 +85,9 @@ export interface SessionStepExecutionInput {
    */
   tools: Record<string, BoundAgentTool>;
 
+  /** 校验当前配置仍与该步骤绑定一致；只校验静态语义，不重装动态上下文。 */
+  validate_retry?: () => Promise<void>;
+
   /** 当前模型支持的上下文窗口长度。 */
   context_window?: number;
 

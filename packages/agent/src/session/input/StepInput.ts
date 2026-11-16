@@ -8,6 +8,8 @@
  * - 不拥有 Message、Turn 或 Store 生命周期。
  */
 
+import { model_input_digest } from "../runner/SessionModelInput.js";
+import { build_model_step_call } from "@/model/ModelStepCall.js";
 import type {
   JsonValue,
   ModelClient,
@@ -138,6 +140,18 @@ export class StepInput {
       ...(compose_input.state.model_context_window !== undefined
         ? { context_window: compose_input.state.model_context_window }
         : {}),
+    };
+    const configured_model = this.options.get_model();
+    const config_digest = () => model_input_digest({
+      model_id: this.options.get_model()?.id, timezone: this.options.get_timezone(),
+      workspace: this.options.get_workspace_path(), instruction: this.instruction_blocks(),
+      tools: build_model_step_call([], [], this.options.get_tools() as Record<string, BoundAgentTool>).tools,
+    });
+    const original_config = config_digest();
+    request.validate_retry = async () => {
+      if (this.options.get_model() !== configured_model || config_digest() !== original_config) {
+        throw new Error("Model or tool configuration changed; start a new request");
+      }
     };
     const budget = measure_request(request);
     // 留出后续工具结果与引用协议开销；拒绝不能容纳的显式读取，避免成功回执后才超限。

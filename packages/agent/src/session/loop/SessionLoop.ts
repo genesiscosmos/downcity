@@ -8,7 +8,6 @@
  */
 
 import { create_deferred, create_active_session_turn_state, create_turn_handle, resolve_prompt_request_identity, create_completed_turn_handle } from "./SessionTurnHandles.js";
-import type { PromptRequestIdentity } from "@/types/session/SessionLoop.js";
 import { isDeepStrictEqual } from "node:util";
 import { nanoid } from "nanoid";
 import { z } from "zod";
@@ -45,6 +44,7 @@ import type {
 import { SessionAssistantOutputAdapter } from "@/session/messages/SessionAssistantOutputAdapter.js";
 import { SessionQueue } from "@/session/loop/SessionQueue.js";
 import type {
+  PromptRequestIdentity,
   ActiveSessionTurnState,
   SessionDeferred,
   SessionLoopOptions,
@@ -65,6 +65,7 @@ import {
 } from "@/session/loop/SessionTurnFileDiff.js";
 import type { SessionTurnCompletionOptions } from "@/types/session/SessionTurnCompletion.js";
 
+import { SessionModelRetryControl } from "../runner/SessionModelRetry.js";
 import { SessionOccupation } from "./SessionOccupation.js";
 import { SessionResultAcceptance } from "./SessionResultAcceptance.js";
 import { SessionChildWorkLifecycle } from "./SessionChildWorkLifecycle.js";
@@ -78,7 +79,6 @@ import { with_session_execution_state } from "./SessionExecutionState.js";
 import type { SessionBackgroundInput, SessionBackgroundReceipt } from "@/types/session/SessionBackgroundInput.js";
 
 import { accept_session_input, completion_unavailable, SessionInternalInput } from "./SessionInputAcceptance.js";
-
 const QUEUED_PROMPT_CANCELLED_MESSAGE =
   "Prompt cancelled because session was stopped";
 
@@ -141,6 +141,8 @@ export class SessionLoop {
   private readonly pending_power_descriptors = new Map<string, PromptPowerDescriptor[]>();
   private readonly pending_request_handles = new Map<string, Promise<AgentSessionTurnHandle>>();
 
+  /** 手动重试与输入接收共用 Session 的步骤检查点。 */
+  readonly model_retry: SessionModelRetryControl;
   private readonly acquire_execution?: () => () => void;
 
   constructor(options: SessionLoopOptions) {
@@ -160,6 +162,7 @@ export class SessionLoop {
     this.create_call_context = options.create_call_context;
     this.queue = options.queue;
     this.interactions = options.interactions;
+    this.model_retry = new SessionModelRetryControl(this.messages, () => this.queue.has_command() || this.stopping, () => this.has_pending_prompt());
     if (!this.session_id) {
       throw new Error("SessionLoop requires a non-empty session_id");
     }
@@ -170,6 +173,7 @@ export class SessionLoop {
         logger: this.logger,
         is_context_limit: is_provider_context_limit_error,
         advance_context: options.advance_context,
+        retry_control: this.model_retry,
       });
   }
 
@@ -293,11 +297,13 @@ export class SessionLoop {
         this.recovered_release = this.occupation.acquire(actor, this.session_id, latest.turn_id);
         return;
       }
-      if (actor.kind === "runtime" && actor.namespace === "session_background") {
+      if (history.some(message => message.turn_id === latest.turn_id && message.role === "agent"
+        && message.parts.some(part => part.type === "error" && part.retry?.status === "interrupted"))
+        || actor.kind === "runtime" && actor.namespace === "session_background") {
         const interrupted = create_active_session_turn_state(latest.turn_id);
         interrupted.turn_context = this.create_turn_context(interrupted);
         this.active_turn = interrupted;
-        await this.fail_active_turn(interrupted, new Error("Background follow-up was interrupted; its received result is preserved. Review before retrying."));
+        await this.fail_active_turn(interrupted, new Error("Execution was interrupted; saved input and completed results are preserved. Review before starting a new request."));
         await interrupted.deferred_finished.promise;
         this.closing = false;
         return;
@@ -447,6 +453,7 @@ export class SessionLoop {
   /** 追加 Command，并确保空闲 Session 也会主动消费维护操作。 */
   enqueue_command(command: SessionCommand): void {
     this.queue.enqueue_command(command);
+    this.model_retry.notify_input(command.kind === "prompt");
     if (command.kind === "prompt") this.child_work.notify_prompt();
     this.ensure_processing();
   }
@@ -601,9 +608,7 @@ export class SessionLoop {
     return this.queue.cancel();
   }
 
-  /**
-   * 在下一 Session step 检查点按入队顺序提交配置并持久化 steer。
-   */
+  /** 下一 Step 检查点按入队顺序提交配置与 steer。 */
   private async drain_queued_inputs(): Promise<void> {
     for (const command of this.queue.snapshot()) {
       if (!this.queue.take(command)) continue;
@@ -821,12 +826,13 @@ export class SessionLoop {
     // 执行器已退出，活跃 Step 已结束；停止也不得丢弃此前接受暂存的内部输入。
     await this.internal_inputs.get(input.active_turn.turn_id)?.flush();
 
-    if (!result.success && !turn_context.lifecycle.abort_signal.aborted && result.error) {
+    if (!result.success && !turn_context.lifecycle.abort_signal.aborted && result.error
+      && !(await this.messages.read_latest_agent_message(input.active_turn.turn_id))?.parts.some(part => part.type === "error" && part.retry?.status !== "succeeded")) {
       await assistant_output.append_error({
         scope: "turn",
         code: result.error_code || "turn_execution_failed",
         message: result.error,
-        recoverable: true,
+        recoverable: false,
       });
     }
 
@@ -866,11 +872,7 @@ export class SessionLoop {
     };
   }
 
-  /**
-   * 执行 Turn；上下文推进与重试由执行器内部负责。
-   *
-   * 关键点（中文）：每次重试都重新装配 Step 输入，保证读到刚推进的上下文。
-   */
+  /** 执行 Turn；模型失败重试复用原步骤，上下文推进才重新装配输入。 */
   private async run_turn_with_context_advance(
     turn_context: SessionTurnContext,
   ): Promise<SessionTurnExecutionResult> {
@@ -885,12 +887,7 @@ export class SessionLoop {
     }));
   }
 
-  /**
-   * 解析当前 Step 的输入。
-   *
-   * 关键点（中文）：注入执行器时本 Loop 不拥有输入装配能力；回调一旦被调用即说明注入契约
-   * 被破坏，因此直接报错而不是静默返回空输入。
-   */
+  /** 解析下一 Step 输入；自带执行器必须拥有自己的装配能力。 */
   private async require_step_input(
     turn_context: SessionTurnContext,
     advance_count: number,

@@ -23,8 +23,10 @@ import type {
   SessionAgentToolPart,
 } from "@downcity/type";
 import { consume_model_stream, type ModelStreamDiagnostic } from "@/model/ModelStreamConsumer.js";
+import { ModelStreamFailure } from "./ModelStreamFailure.js";
 import { validate_tool_input } from "@/model/ToolInputValidation.js";
 import { is_lookup_tool } from "./results/LookupTool.js";
+import { ModelResponseCommitFailure } from "./ModelResponseCommitFailure.js";
 import { ResultSaveFailure } from "./results/ResultSaveFailure.js";
 import { project_tool_result } from "./messages/ToolResultProjection.js";
 import { result_bytes, RESULT_BYTES } from "./results/ResultDisclosure.js";
@@ -69,6 +71,8 @@ export interface ModelStepResult {
 
 /** 执行一个模型 Step 的输入。 */
 export interface RunModelStepInput {
+  /** 工具循环达到上限的专用收尾允许空响应，由上层返回上限错误。 */
+  allow_empty_response?: boolean;
   /** 当前 Step 的模型客户端。 */
   model: ModelClient;
   /** 当前 System 消息。 */
@@ -83,6 +87,14 @@ export interface RunModelStepInput {
   model_abort_signal?: AbortSignal;
   /** canonical Assistant 输出端口。 */
   assistant_output?: SessionAssistantOutput;
+  /** 已经固定的完整请求；重试复用此值，不重新解析工具定义。 */
+  call?: ModelCall;
+  /** 接收通过协议校验的事件，用于隔离保存尝试草稿。 */
+  on_event?: (event: ModelStreamEvent) => void;
+  /** 完整响应与尝试终态必须在同一次 canonical 提交中保存。 */
+  prepare_response_commit?: () => import("@downcity/type").SessionModelRetry;
+  /** 完整模型响应可靠提交之后、任何工具执行之前调用。 */
+  on_response_committed?: () => Promise<void>;
   /** 可选模型流阶段诊断；只传递时序和事件类型，不包含请求正文。 */
   on_diagnostic?: (diagnostic: ModelStreamDiagnostic) => void | Promise<void>;
 }
@@ -94,7 +106,7 @@ export async function run_model_step(input: RunModelStepInput): Promise<{
   /** 当前 Step 的运行结果。 */
   step_result: ModelStepResult;
 }> {
-  const call: ModelCall = build_model_step_call(input.system, input.messages, input.tools);
+  const call: ModelCall = input.call ?? build_model_step_call(input.system, input.messages, input.tools);
   const collector = new StepEventCollector();
   await consume_model_stream(
     input.model,
@@ -104,10 +116,24 @@ export async function run_model_step(input: RunModelStepInput): Promise<{
     async (event) => {
       await input.assistant_output?.write_model_event(event);
       collector.accept(event);
+      input.on_event?.(event);
     },
     input.on_diagnostic,
   );
+  input.model_abort_signal?.throwIfAborted();
+  input.abort_signal.throwIfAborted();
   const collected = collector.finish();
+  if (collected.finish_reason === "unknown" || (!input.allow_empty_response && !collected.text.trim() && collected.tool_calls.length === 0)) {
+    throw new ModelStreamFailure({ code: "provider_error", message: "Model returned an incomplete or empty response", retryable: true }, collector.has_partial_output());
+  }
+  // 完整流先可靠提交，再允许任何工具开始执行；保存失败不进入请求自动重试。
+  if (input.assistant_output) {
+    try { await input.assistant_output.finish_step(collected.assistant_parts, input.prepare_response_commit?.()); }
+    catch { throw new ModelResponseCommitFailure(); }
+  }
+  input.abort_signal.throwIfAborted();
+  await input.on_response_committed?.();
+  input.abort_signal.throwIfAborted();
   const tool_results = await execute_tools(
     collected.tool_calls,
     input,

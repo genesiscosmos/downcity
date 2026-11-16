@@ -108,7 +108,9 @@ export async function consume_model_stream(
         } catch (error) {
           throw normalize_model_protocol_failure(error, has_partial_output());
         }
+        abort_signal?.throwIfAborted();
         await accept_event(result.value);
+        abort_signal?.throwIfAborted();
         if (result.value.type === "model_error") {
           throw new ModelStreamFailure(result.value.error, has_partial_output());
         }
@@ -123,6 +125,7 @@ export async function consume_model_stream(
     } catch (error) {
       throw normalize_model_protocol_failure(error, has_partial_output());
     }
+    abort_signal?.throwIfAborted();
     stage = "complete";
     await report("stream_end");
   } catch (error) {

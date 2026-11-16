@@ -87,7 +87,7 @@ export function normalize_model_invocation_failure(
   }, has_partial_output);
 }
 
-/** 把不合法的模型协议流归一为不可重试的 Provider 失败。 */
+/** 不完整协议响应属于有界恢复的 Provider 失败；工具尚未执行。 */
 export function normalize_model_protocol_failure(
   error: unknown,
   has_partial_output: boolean,
@@ -95,8 +95,8 @@ export function normalize_model_protocol_failure(
   if (error instanceof ModelStreamFailure) return error;
   return new ModelStreamFailure({
     code: "provider_error",
-    message: error instanceof Error ? error.message : String(error),
-    retryable: false,
+    message: "Invalid Downcity model stream: incomplete or invalid response",
+    retryable: true,
   }, has_partial_output);
 }
 
@@ -108,4 +108,10 @@ export function is_retryable_empty_model_stream_failure(
     error.retryable &&
     !error.has_partial_output &&
     error.code !== "cancelled";
+}
+
+/** 手动恢复允许丢弃未提交流；idle/total 超时不安全自动重放，但在工具未执行边界可手动重试。 */
+export function is_manually_retryable_model_failure(error: unknown): boolean {
+  const classified = read_model_error(error);
+  return Boolean(classified && (classified.retryable || classified.code === "provider_timeout"));
 }

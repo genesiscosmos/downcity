@@ -169,6 +169,8 @@ export interface AgentSessionStatus {
   session_id: string;
   /** Session 当前是否正在执行 Turn。 */
   state: "idle" | "running";
+  /** 原 Turn 正在等待失败模型步骤的手动恢复，仍可使用停止能力。 */
+  waiting_model_retry?: boolean;
   /** 当前正在执行的 Turn 标识；空闲时省略。 */
   active_turn_id?: string;
   /** 当前 Turn 的普通输入占用对象，空闲时为 null。 */

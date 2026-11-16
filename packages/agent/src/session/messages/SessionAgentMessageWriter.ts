@@ -67,14 +67,14 @@ export class SessionAgentMessageWriter {
   }
 
   /** 建立一个独立模型 Step 的 canonical Part 作用域。 */
-  async begin_step(): Promise<void> {
+  async begin_step(step_id?: string): Promise<void> {
     await this.enqueue_write(async () => {
       if (this.closed) throw new Error("Assistant Message writer is closed");
       if (this.step_active) {
         throw new Error("Assistant canonical step is already active");
       }
       this.step_index += 1;
-      this.current_step_id = `step:${this.message_id}:${this.step_index}`;
+      this.current_step_id = step_id ?? `step:${this.message_id}:${this.step_index}`;
       this.step_active = true;
       this.content_part_ids.clear();
       this.tool_call_ids.clear();
@@ -135,7 +135,7 @@ export class SessionAgentMessageWriter {
    *
    * 最终快照不能创建、删除或重排模型 Part；不一致意味着事件链不完整。
    */
-  async finish_step(parts: SessionAgentMessagePart[]): Promise<void> {
+  async finish_step(parts: SessionAgentMessagePart[], retry?: import("@downcity/type").SessionModelRetry): Promise<void> {
     await this.enqueue_write(async () => {
       if (!this.step_active) {
         throw new Error("Assistant canonical step is not active");
@@ -160,7 +160,10 @@ export class SessionAgentMessageWriter {
       }
       await this.state.commit_step(
         this.message_id,
-        current.parts.map((part) => merged_parts.get(part.part_id) ?? part),
+        current.parts.map((part) => part.type === "error" && retry && part.retry?.step_id === retry.step_id
+          ? { ...part, recoverable: false, retry: structuredClone(retry) }
+          : part.type === "data" && part.data_type === "model_request_attempts" && retry && part.data_id === retry.step_id
+            ? { ...part, data: to_session_json_value(retry) } : merged_parts.get(part.part_id) ?? part),
       );
       this.reset_step_state();
     });
@@ -174,6 +177,41 @@ export class SessionAgentMessageWriter {
         await this.state.rollback_projection(this.message_id);
         this.reset_step_state();
       }
+    });
+  }
+
+  /** 保存输入依据，不向模型历史、聊天正文或摘要投影。 */
+  async save_model_input(snapshot: import("@/types/session/SessionModelInput.js").SessionModelInputSnapshot): Promise<string> {
+    return await this.enqueue_write(async () => {
+      const part_id = `model-input:${snapshot.step_id}`;
+      await this.state.commit_parts(this.message_id, [{ part_id, sequence: this.next_part_sequence(), type: "data",
+        data_type: "model_request_input", data: to_session_json_value(snapshot) }]);
+      return part_id;
+    });
+  }
+
+  /** 只更新诊断 Part，完整模型输出和已完成工具保持原位。 */
+  async save_model_retry(record: import("@downcity/type").SessionModelRetry): Promise<string> {
+    return await this.enqueue_write(async () => {
+      const current = this.current_message();
+      const previous = current.parts.find(part => part.part_id === `model-attempts:${record.step_id}`);
+      const first_error = record.attempts.find(attempt => attempt.error)?.error;
+      if (!record.attempts.some(attempt => attempt.outcome === "failed") && record.status !== "interrupted" && record.status !== "stopped") {
+        await this.state.commit_parts(this.message_id, [{ part_id: previous?.part_id ?? `model-attempts:${record.step_id}`,
+          sequence: previous?.sequence ?? this.next_part_sequence(), type: "data", data_type: "model_request_attempts",
+          data_id: record.step_id, data: to_session_json_value(record) }]);
+        return this.message_id;
+      }
+      const part: SessionAgentErrorPart = {
+        part_id: previous?.part_id ?? `model-attempts:${record.step_id}`,
+        sequence: previous?.sequence ?? this.next_part_sequence(),
+        type: "error", scope: "turn", code: first_error?.code ?? "model_request_failed",
+        message: first_error?.message ?? "Model request failed",
+        recoverable: record.status === "failed" && record.recoverable,
+        retry: structuredClone(record),
+      };
+      await this.state.commit_parts(this.message_id, [part]);
+      return this.message_id;
     });
   }
 
@@ -448,8 +486,10 @@ export class SessionAgentMessageWriter {
       throw this.step_snapshot_error(`part ${index + 1} tool_call_id differs`);
     }
     if (current_part.type === "tool") {
-      assert_tool_terminal(current_part);
-      if (current_part.state === "completed" || current_part.state === "failed") return current_part;
+      if (current_part.state === "completed" || current_part.state === "failed") {
+        assert_tool_terminal(current_part);
+        return current_part;
+      }
     }
     return merge_same_part(current_part, final_part);
   }
