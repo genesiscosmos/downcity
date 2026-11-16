@@ -34,6 +34,19 @@ export {
 } from "./runtime/LocalPaths.js";
 
 export * from "./product.js";
+export { ExtensionRepository } from "./repositories/ExtensionRepository.js";
+export { ExtensionManager } from "./extensions/ExtensionManager.js";
+export { ExtensionPlatform } from "./extensions/ExtensionPlatform.js";
+export { ExtensionService } from "./extensions/ExtensionService.js";
+export { ExtensionHost } from "./extensions/ExtensionHost.js";
+export { ExtensionModelRegistry } from "./extensions/ExtensionModelRegistry.js";
+export { extension_browser_runtime_source } from "./extensions/ExtensionBrowserRuntime.js";
+export type { ExtensionPowerView, ExtensionRendererArtifact } from "./types/ExtensionRenderer.js";
+export { ExtensionFailure } from "./extensions/ExtensionError.js";
+export { resolve_extension_host_modules } from "./extensions/ExtensionModules.js";
+export { normalize_extension_source } from "./extensions/ExtensionSource.js";
+export type { ExtensionSource, ExtensionResult, ExtensionConfigurationView, ExtensionRecord, ExtensionSnapshot, ExtensionRuntime, ExtensionManagerOptions } from "./types/Extension.js";
+export type { ExtensionCatalog, ExtensionHostOptions } from "./types/ExtensionHost.js";
 export { RootLease, resolve_resource_root, get_root_identity, resource_root_exists } from "./resources/RootLease.js";
 export { assert_session_storage_ready, SESSION_STORAGE_MARKER } from "./resources/SessionStorageReadiness.js";
 export { ResourceError, as_resource_error } from "./resources/ResourceError.js";
@@ -43,4 +56,6 @@ export { validate_resource_input } from "./resources/ResourceInput.js";
 export { ResourceService } from "./resources/ResourceService.js";
 export { ResourceStore } from "./resources/ResourceStore.js";
 export { ResourceCoordinator } from "./resources/ResourceCoordinator.js";
+export { LocalHostClient, select_local_host } from "./resources/LocalHostClient.js";
+export type { LocalHostClientOptions, LocalHostCallOptions, LocalHostTransport, LocalHostSelection } from "./types/LocalHostClient.js";
 export type { ResourceDependencies, ResourceHost } from "./resources/types.js";

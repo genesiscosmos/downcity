@@ -6,6 +6,7 @@
  * 只有成功的释放步骤才标记完成。此处不抢占执行中的 Hook，也不提前放弃初始化。
  */
 import { get_logger } from "@downcity/agent";
+import type { CityPowerBatch } from "../types/CityPowerBatch.js";
 import type { CityPowerInput } from "@/city/types/CityPower.js";
 import type { CityPowerRecord, CityPowerRuntimeOptions } from "@/city/types/CityPowerRuntime.js";
 import type { CityPowerRegistration, PowerLifecycleContext, PowerSnapshot } from "@/power/index.js";
@@ -104,6 +105,62 @@ export class CityPowerLifecycle {
     return operation;
   }
 
+  /** 接管全部实例与清理上下文，初始化和目录发布由独立检查点控制。 */
+  prepare(inputs: readonly CityPowerInput[]): CityPowerBatch {
+    this.assert_active();
+    const registrations = inputs.map(normalize_registration);
+    const ids = new Set<string>();
+    for (const registration of registrations) {
+      const id = normalize_id(registration.power.name);
+      if (ids.has(id) || this.records.has(id)) throw new Error(`Power already exists in City: ${id}`);
+      ids.add(id);
+    }
+    const records = registrations.map((registration) => this.create_record(registration, new AbortController()));
+    for (const record of records) { record.staged = true; this.records.set(record.power_id, record); }
+    let initialization: Promise<void> | undefined;
+    let published = false;
+    return {
+      initialize: () => {
+        initialization ??= (async () => {
+          for (const record of records) { record.ready = this.initialize(record); await record.ready; }
+        })();
+        this.track(initialization);
+        return initialization;
+      },
+      publish: () => {
+        this.assert_active();
+        if (published) return;
+        for (const record of records) {
+          if (record.state !== "ready" || this.records.get(record.power_id) !== record) throw new Error("Power batch has not initialized");
+          record.initialization_abort.signal.throwIfAborted();
+        }
+        for (const record of records) record.staged = false;
+        this.options.registry.register_batch(records.map((record) => record.power));
+        published = true;
+        this.options.changed();
+      },
+      dispose: async () => {
+        for (const record of [...records].reverse()) {
+          if (this.records.get(record.power_id) !== record) continue;
+          await this.revoke(record); await this.cleanup(record);
+        }
+      },
+    };
+  }
+
+  /** 同步分配唯一生命周期上下文，尚未运行 initialize。 */
+  private create_record(registration: CityPowerRegistration, initialization_abort: AbortController): CityPowerRecord {
+    const power_id = normalize_id(registration.power.name);
+    const scope = this.options.runtime.storage.open_scope(["powers", power_id]);
+    const logger = get_logger();
+    logger.bind_storage(scope.files, scope.root_path);
+    const host_actions: CityPowerRecord["host_actions"] = new Map();
+    const config_actions: CityPowerRecord["config_actions"] = new Map();
+    const lifecycle_context = this.options.create_context({ power_id, logger, host_actions, config_actions, initialization_abort }, Object.freeze({ path: scope.root_path, files: scope.files }));
+    const current_time = Date.now();
+    return { power_id, registration, power: registration.power, logger, lifecycle_context, host_actions, config_actions, initialization_abort, ready: Promise.resolve(), active_host_calls: 0, lifecycle_active: true, state: "initializing", registered_at: current_time, updated_at: current_time };
+  }
+
   /** 等待真实初始化后发布；失败清理结算前始终保留实例所有权。 */
   private async add_power(power_id: string, registration: CityPowerRegistration, initialization_abort: AbortController): Promise<void> {
     const existing = this.records.get(power_id);
@@ -113,19 +170,7 @@ export class CityPowerLifecycle {
       throw new Error(`Power already exists in City: ${power_id}`);
     }
     this.failed_snapshots.delete(power_id);
-    const scope = this.options.runtime.storage.open_scope(["powers", power_id]);
-    const logger = get_logger();
-    logger.bind_storage(scope.files, scope.root_path);
-    const host_actions: CityPowerRecord["host_actions"] = new Map();
-    const config_actions: CityPowerRecord["config_actions"] = new Map();
-    const lifecycle_context = this.options.create_context({ power_id, logger, host_actions, config_actions, initialization_abort }, Object.freeze({ path: scope.root_path, files: scope.files }));
-    const current_time = Date.now();
-    const record: CityPowerRecord = {
-      power_id, registration, power: registration.power, logger, lifecycle_context,
-      host_actions, config_actions, initialization_abort, ready: Promise.resolve(),
-      active_host_calls: 0, lifecycle_active: true, state: "initializing",
-      registered_at: current_time, updated_at: current_time,
-    };
+    const record = this.create_record(registration, initialization_abort);
     this.records.set(power_id, record);
     record.ready = this.initialize(record);
     void record.ready.catch(() => undefined);
@@ -175,13 +220,13 @@ export class CityPowerLifecycle {
 
   /** 可查询状态始终来自 City；失败实例与纯诊断投影不会重复。 */
   snapshots(): PowerSnapshot[] {
-    return [...this.records.values()].map(to_power_snapshot).concat([...this.failed_snapshots.values()])
+    return [...this.records.values()].filter((record) => !record.staged).map(to_power_snapshot).concat([...this.failed_snapshots.values()])
       .sort((left, right) => left.name.localeCompare(right.name));
   }
 
   /** 当前实例只允许 ready 状态执行，失败清理不恢复可见性。 */
   assert_ready(record: CityPowerRecord): void {
-    if (record.state !== "ready") throw new Error(`Power is unavailable in City: ${record.power_id}: ${record.last_error || record.state}`);
+    if (record.staged || record.state !== "ready") throw new Error(`Power is unavailable in City: ${record.power_id}: ${record.last_error || record.state}`);
   }
 
   /** 失败关闭可重试；成功清理的记录已移除，不会重复调用 dispose。 */

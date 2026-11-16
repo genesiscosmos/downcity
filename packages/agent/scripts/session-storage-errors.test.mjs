@@ -28,14 +28,14 @@ for (const memory of [true, false]) {
     const directory = await fs.mkdtemp(path.join(os.tmpdir(), "session-storage-error-"));
     const database_path = memory ? ":memory:" : path.join(directory, "sessions.db");
     const lease = await acquire_agent_session_storage({ agent_id: "test", database_path, memory_scope: random_uuid(), allow_create: true }, false);
-    const storage_id = random_uuid();
+    const session_id = random_uuid();
     try {
       await lease.write("collection", { command: "create", operation_id: random_uuid(), input: {
-        storage_id, session_id: "session", origin: { category: "work", type: "work" }, timezone: "UTC", created_at: 1,
+        session_id, origin: { category: "work", type: "work" }, timezone: "UTC", created_at: 1,
       } });
-      const before = await lease.read({ command: "record", storage_id });
-      await assert.rejects(lease.write(storage_id, { command: "configure", input: {
-        operation_id: random_uuid(), storage_id, updated_at: 2, approval_mode: "private-invalid-value",
+      const before = await lease.read({ command: "record", session_id });
+      await assert.rejects(lease.write(session_id, { command: "configure", input: {
+        operation_id: random_uuid(), session_id, updated_at: 2, approval_mode: "private-invalid-value",
       } }), error => {
         assert.ok(error instanceof AgentSessionStorageError);
         assert.equal(error.message, "session_storage_constraint_failed");
@@ -43,11 +43,11 @@ for (const memory of [true, false]) {
         assert.equal(JSON.stringify(error).includes("private-invalid-value"), false);
         return true;
       });
-      assert.deepEqual(await lease.read({ command: "record", storage_id }), before);
-      await lease.write(storage_id, { command: "configure", input: {
-        operation_id: random_uuid(), storage_id, updated_at: 3, approval_mode: "ask",
+      assert.deepEqual(await lease.read({ command: "record", session_id }), before);
+      await lease.write(session_id, { command: "configure", input: {
+        operation_id: random_uuid(), session_id, updated_at: 3, approval_mode: "ask",
       } });
-      assert.equal((await lease.read({ command: "record", storage_id })).revision, before.revision + 1);
+      assert.equal((await lease.read({ command: "record", session_id })).revision, before.revision + 1);
     } finally { await lease.release(); await fs.rm(directory, { recursive: true, force: true }); }
   });
 }
@@ -57,21 +57,21 @@ test("真实文件锁争用返回 busy 数字码，仍可只读且不自动重�
   const database_path = path.join(directory, "sessions.db");
   const owner = new AgentSessionDatabase({ agent_id: "test", database_path, allow_create: true });
   const lease = await acquire_agent_session_storage({ agent_id: "test", database_path }, false);
-  const storage_id = random_uuid();
+  const session_id = random_uuid();
   try {
     await lease.write("collection", { command: "create", operation_id: random_uuid(), input: {
-      storage_id, session_id: "session", origin: { category: "work", type: "work" }, timezone: "UTC", created_at: 1,
+      session_id, origin: { category: "work", type: "work" }, timezone: "UTC", created_at: 1,
     } });
     owner.database.exec("BEGIN IMMEDIATE");
     const operation_id = random_uuid();
     try {
-      await assert.rejects(lease.write(storage_id, { command: "configure", input: { operation_id, storage_id, updated_at: 2, title: "changed" } }), error => {
+      await assert.rejects(lease.write(session_id, { command: "configure", input: { operation_id, session_id, updated_at: 2, title: "changed" } }), error => {
         assert.equal(error.message, "session_storage_busy"); assert.equal(error.command, "configure"); assert.equal(error.sqlite_code & 0xff, 5); return true;
       });
-      assert.equal((await lease.read({ command: "record", storage_id })).title, null);
+      assert.equal((await lease.read({ command: "record", session_id })).title, null);
     } finally { owner.database.exec("ROLLBACK"); }
     assert.equal(await lease.read({ command: "receipt", operation_id }), null);
-    assert.equal((await lease.read({ command: "record", storage_id })).title, null);
+    assert.equal((await lease.read({ command: "record", session_id })).title, null);
   } finally { await lease.release(); owner.close(); await fs.rm(directory, { recursive: true, force: true }); }
 });
 
@@ -81,7 +81,7 @@ test("只读配置查询遇到无效数据库时保留命令和数字码，不�
   await fs.writeFile(database_path, "private database content which must never cross IPC".repeat(10));
   const lease = await acquire_agent_session_storage({ agent_id: "test", database_path }, true);
   try {
-    await assert.rejects(lease.read({ command: "configuration", storage_id: random_uuid() }), error => {
+    await assert.rejects(lease.read({ command: "configuration", session_id: random_uuid() }), error => {
       assert.ok(error instanceof AgentSessionStorageError);
       assert.equal(error.message, "session_storage_not_database");
       assert.equal(error.command, "configuration"); assert.equal(error.sqlite_code & 0xff, 26);
@@ -114,4 +114,15 @@ test("首次只读 schema 探测也等待短暂锁释放，不能在设置 busy_
     assert.equal(reader.metadata.agent_id, "test");
     assert.equal(reader.metadata.first_business_write_at, null);
   } finally { reader?.close(); await holder.terminate(); await fs.rm(directory, { recursive: true, force: true }); }
+});
+
+test("已有空DB不得因allow_create被当成全新库初始化", async () => {
+  const directory = await fs.mkdtemp(path.join(os.tmpdir(), "session-storage-empty-existing-"));
+  const database_path = path.join(directory, "sessions.db");
+  try {
+    await fs.writeFile(database_path, "");
+    const before = await fs.readFile(database_path);
+    assert.throws(() => new AgentSessionDatabase({ agent_id: "test", database_path, allow_create: true }), /session_migration_required/);
+    assert.deepEqual(await fs.readFile(database_path), before);
+  } finally { await fs.rm(directory, { recursive: true, force: true }); }
 });

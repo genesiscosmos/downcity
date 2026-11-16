@@ -5,6 +5,7 @@
  */
 
 import { validate_session_power_content } from "@downcity/type";
+import { assert_tool_terminal, parse_result_ref } from "@/model/results/ResultReference.js";
 import { decode_session_inbox_part } from "./SessionInboxCodec.js";
 import { validate_session_stable_prefix } from "./SessionStablePrefix.js";
 import { session_prompt_actor_schema } from "@/types/sdk/SessionPromptActor.js";
@@ -38,8 +39,6 @@ export interface SessionMessageRow {
   stable_part_sequence: number;
   /** 本条用户消息携带的请求记账 JSON；Agent 消息固定为空。 */
   meta: string | null;
-  /** Fork 来源不可变记录身份；离线分库源缺失时由转换工具显式补齐。 */
-  origin_storage_id?: string | null;
   /** Fork 来源 Session。 */
   origin_session_id: string | null;
   /** Fork 来源 Message。 */
@@ -83,7 +82,6 @@ export function encode_session_message_row(message: SessionMessage): SessionMess
     state: message.role === "agent" ? message.state : null,
     stable_part_sequence: message.role === "agent" ? message.stable_part_sequence : 0,
     meta: message.role === "user" && message.meta ? JSON.stringify(message.meta) : null,
-    origin_storage_id: message.origin?.storage_id ?? null,
     origin_session_id: message.origin?.session_id ?? null,
     origin_message_id: message.origin?.message_id ?? null,
     origin_turn_id: message.origin?.turn_id ?? null,
@@ -97,6 +95,7 @@ export function encode_session_part_row(
   message: SessionMessage,
   part: SessionUserMessagePart | SessionAgentMessagePart,
 ): SessionMessagePartRow {
+  if (part.type === "tool") assert_tool_terminal(part);
   const { part_id, sequence, type, ...content } = part;
   const step_id = "step_id" in content && typeof content.step_id === "string"
     ? content.step_id
@@ -120,12 +119,8 @@ export function decode_session_message(
   part_rows: readonly SessionMessagePartRow[],
   session_id: string,
 ): SessionMessage {
-  if (row.origin_session_id && row.origin_message_id && !row.origin_storage_id) {
-    throw new Error("session_fork_origin_storage_required");
-  }
   const origin = row.origin_session_id && row.origin_message_id
     ? {
-        storage_id: row.origin_storage_id!,
         session_id: row.origin_session_id,
         message_id: row.origin_message_id,
         ...(row.origin_turn_id ? { turn_id: row.origin_turn_id } : {}),
@@ -167,6 +162,15 @@ export function decode_session_message(
     stable_part_sequence: row.stable_part_sequence,
     parts: agent_parts,
   };
+  for (const part of agent_parts) {
+    if (part.type !== "tool" || !part.result_ref) continue;
+    const location = parse_result_ref(part.result_ref);
+    if (location.session_id === session_id) {
+      if (location.message_id !== message.message_id || location.message_sequence !== message.sequence) {
+        throw new Error("tool_terminal_location_conflict");
+      }
+    } else if (!origin) throw new Error("tool_terminal_source_origin_required");
+  }
   validate_session_stable_prefix(message);
   return message;
 }
@@ -219,10 +223,10 @@ function decode_session_part(
         state: read_enum(content, "state", ["streaming", "done"], row),
         ...optional_string(content, "reasoning_signature", row),
       };
-    case "tool":
-      return {
+    case "tool": {
+      const part = {
         ...identity,
-        type: "tool",
+        type: "tool" as const,
         tool_call_id: read_string(content, "tool_call_id", row),
         tool_name: read_string(content, "tool_name", row),
         state: read_enum(
@@ -243,6 +247,9 @@ function decode_session_part(
           ? {}
           : { interactions: decode_tool_interactions(content.interactions, row) }),
       };
+      assert_tool_terminal(part);
+      return part;
+    }
     case "file":
       return {
         ...identity,

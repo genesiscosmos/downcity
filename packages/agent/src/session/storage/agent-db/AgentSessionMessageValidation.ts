@@ -53,6 +53,11 @@ export function validate_agent_db_update(current: SessionMessage, input: AgentSe
   for (const [index, part] of next.parts.entries()) {
     const old = current.parts[index];
     if (old && old.part_id !== part.part_id) throw new Error("session_part_identity_immutable");
+    if (old?.type === "tool" && (old.state === "completed" || old.state === "failed")) {
+      const { interactions: _old_interactions, ...fixed } = old;
+      const { interactions: _next_interactions, ...candidate } = part.type === "tool" ? part : { ...part, interactions: undefined };
+      if (!is_deep_strict_equal(fixed, candidate)) throw new Error("tool_terminal_snapshot_immutable");
+    }
     const declared = changed.get(part.part_id);
     if (declared && !is_deep_strict_equal(declared, part)) throw new Error("session_changed_parts_invalid");
     if ((!declared || part.sequence <= current_watermark) && !is_deep_strict_equal(old, part)) {

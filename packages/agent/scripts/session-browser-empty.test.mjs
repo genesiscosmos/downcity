@@ -39,14 +39,14 @@ test("空结果不缓存，首次真实写入后同一浏览对象立即可读",
     const storage_id = random_uuid();
     try {
       await writer.write("collection", { command: "create", operation_id: random_uuid(), input: {
-        storage_id, session_id: "first", origin: { category: "work", type: "work" },
+        session_id: storage_id, origin: { category: "work", type: "work" },
         workspace_id: "project", timezone: "UTC", created_at: 1,
       } });
       const page = await browser.list({ workspace_id: "project" });
       assert.equal(page.total, 1);
-      assert.equal(page.items[0].storage_id, storage_id);
+      assert.equal(page.items[0].session_id, storage_id);
       assert.deepEqual(await browser.categories(), ["work"]);
-      assert.equal((await browser.get("first")).storage_id, storage_id);
+      assert.equal((await browser.get(storage_id)).session_id, storage_id);
     } finally { await writer.release(); }
   });
 });

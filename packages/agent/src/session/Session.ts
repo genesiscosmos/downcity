@@ -10,9 +10,9 @@
 import {
   type ModelClient,
   read_model_context_window,
-  read_model_label,
   type AgentTool as Tool,
 } from "@downcity/type";
+import { submit_with_execution_lease } from "./SessionExecutionLease.js";
 import { SessionMessages } from "@/session/messages/SessionMessages.js";
 import { resolve_model_client } from "@/model/DeferredModelClient.js";
 import type {
@@ -55,7 +55,7 @@ import type { SessionComposer } from "@/types/session/SessionComposer.js";
 import { generate_id } from "@/utils/Id.js";
 import { generate_session_id, normalize_session_id } from "@/session/SessionIdentity.js";
 import { nanoid } from "nanoid";
-import { build_session_info } from "@/session/storage/Browse.js";
+import { read_session_information } from "./SessionInformation.js";
 import type { SessionStorage } from "@/types/store/SessionStorage.js";
 import type {
   AppendExternalSessionAgentMessageInput,
@@ -99,6 +99,8 @@ export class Session implements AgentSession {
   private readonly get_tools: SessionOptions["get_tools"];
   /** 可信配置撤销后同步封闭后续执行和能力变更。 */
   private readonly assert_execution_profile?: () => void;
+  /** 宿主执行租约，不影响只读历史。 */
+  private readonly acquire_execution?: () => () => void;
   private readonly logger: SessionOptions["logger"];
   private readonly composer: SessionComposer;
   private readonly session_messages: SessionMessages;
@@ -146,6 +148,7 @@ export class Session implements AgentSession {
     this.register_forked_session = options.register_forked_session;
     this.get_tools = options.get_tools;
     this.assert_execution_profile = options.assert_execution_profile;
+    this.acquire_execution = options.acquire_execution;
     this.logger = options.logger;
     this.get_agent_model = options.get_agent_model;
     this.get_hooks = options.get_hooks;
@@ -218,6 +221,7 @@ export class Session implements AgentSession {
       },
     });
     this.session_loop = new SessionLoop({
+      acquire_execution: this.acquire_execution,
       completions: options.completions,
       child_work: this.child_work,
       session_id: this.id,
@@ -463,6 +467,11 @@ export class Session implements AgentSession {
    * 追加一条新的 Session prompt。
    */
   async prompt(input: AgentSessionPromptInput): Promise<AgentSessionTurnHandle> {
+    return await submit_with_execution_lease(this.acquire_execution, () => this.submit_prompt(input));
+  }
+
+  /** 租约在调用本方法前已同步取得，覆盖初始化等待和排队。 */
+  private async submit_prompt(input: AgentSessionPromptInput): Promise<AgentSessionTurnHandle> {
     this.assert_execution_profile?.();
     if (this.assert_execution_profile && input.powers?.length) throw new Error("execution_profile_immutable: Prompt Powers are not allowed");
     input.abort_signal?.throwIfAborted();
@@ -488,10 +497,13 @@ export class Session implements AgentSession {
   /** 可信宿主的后台结果回投，归档与专用执行权限仍由 Session 校验。 */
   async accept_background_result(input: import("@/types/session/SessionBackgroundInput.js").SessionBackgroundInput): Promise<import("@/types/session/SessionBackgroundInput.js").SessionBackgroundReceipt> {
     if (this.archive_state !== "active") return "discarded";
-    this.assert_execution_profile?.();
-    await this.step_input.initialize();
-    if (this.archive_state !== "active" || this.replacing_history) return "discarded";
-    return await this.session_loop.accept_background_result(input);
+    const release = this.acquire_execution?.() ?? (() => {});
+    try {
+      this.assert_execution_profile?.();
+      await this.step_input.initialize();
+      if (this.archive_state !== "active" || this.replacing_history) return "discarded";
+      return await this.session_loop.accept_background_result(input);
+    } finally { release(); }
   }
 
   /** 归档委托给拥有者，不直接搬动 Session 数据。 */
@@ -595,21 +607,9 @@ export class Session implements AgentSession {
    * 读取当前 session 详情。
    */
   async get_info(): Promise<AgentSessionInfo> {
-    const metadata = await this.store.read_metadata();
-    const model_label = String(
-      metadata.model_label ||
-      read_model_label(this.get_selected_model()) ||
-      "",
-    ).trim();
-    return build_session_info({
-      project_root: this.get_workspace_path(),
-      agent_id: this.agent_id,
-      session_id: this.id,
-      metadata: {
-        ...metadata,
-        ...(model_label ? { model_label } : {}),
-      },
-      executing: this.is_executing(),
+    return await read_session_information({ store: this.store, model: this.get_selected_model(),
+      project_root: this.get_workspace_path(), agent_id: this.agent_id,
+      session_id: this.id, executing: this.is_executing(),
     });
   }
 
@@ -687,7 +687,7 @@ export class Session implements AgentSession {
     await forked.state.set_approval_mode(approval_mode);
     forked.effective_approval_mode = approval_mode;
     const relocated_messages = await relocate_fork_message_files(fork_messages, this.store.attachments, forked.store.attachments);
-    await forked.session_messages.import_messages(relocated_messages, this.store.storage_id);
+    await forked.session_messages.import_messages(relocated_messages);
     await forked.session_messages.persist_action({
       action_id: `history-fork:${forked.id}:${Date.now()}:${nanoid(8)}`,
       action_type: "history-fork",
@@ -841,7 +841,7 @@ export class Session implements AgentSession {
     const session_class = this.constructor as new (
       options: SessionOptions,
     ) => Session;
-    return new session_class(options) as this;
+    return new session_class({ ...options, acquire_execution: this.acquire_execution }) as this;
   }
 
   /**

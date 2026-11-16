@@ -8,22 +8,23 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 import { LocalFileSystem } from "@downcity/city";
-import { LocalSessionDataStore } from "../../agent/bin/session/storage/LocalSessionDataStore.js";
+import { create_session_storage } from "../../agent/scripts/helpers/SessionStorageFixture.mjs";
+const session_id = "5cf8cdf4-cc72-481e-bca8-957b25ac203e";
 import { SessionMessages } from "../../agent/bin/session/messages/SessionMessages.js";
 
 async function create_harness() {
   const root_path = await fs.mkdtemp(path.join(os.tmpdir(), "downcity-session-attachment-"));
   const files = new LocalFileSystem(root_path);
-  const store = new LocalSessionDataStore({
+  const store = await create_session_storage({
     files,
     storage_root_path: root_path,
     agent_id: "attachment-test-agent",
     database_location: { type: "file" },
-    session_id: "attachment-test-session",
+    session_id,
     origin: { category: "work", type: "work" },
   });
   const messages = new SessionMessages({
-    session_id: "attachment-test-session",
+    session_id,
     store,
     attachment_store: store.attachments,
     publish: () => {},
@@ -37,6 +38,7 @@ test("Data URL 落盘后保留用户文件名并保存相对路径", async () =>
   const result = await harness.messages.append_prompt_message({
     turn_id: "turn-1",
     prompt: {
+      actor: { kind: "user", user_id: "local" },
       query: [{
         type: "file",
         media_type: "image/png",
@@ -50,7 +52,7 @@ test("Data URL 落盘后保留用户文件名并保存相对路径", async () =>
   const part = result.parts[0];
   assert.equal(part.type, "file");
   assert.equal(path.isAbsolute(part.url), true);
-  assert.match(part.url, /sessions\/work\/attachment-test-session\/attachments\/att_/);
+  assert.match(part.url, /session-files\/5cf8cdf4-cc72-481e-bca8-957b25ac203e\/attachments\/att_/);
   assert.equal(part.url.endsWith(".png"), true);
   assert.equal(part.filename, "diagram.png");
   assert.equal(
@@ -65,6 +67,7 @@ test("视频 Data URL 使用 MIME 类型和扩展名落盘", async () => {
   const result = await harness.messages.append_prompt_message({
     turn_id: "turn-1",
     prompt: {
+      actor: { kind: "user", user_id: "local" },
       query: [{
         type: "file",
         media_type: "video/mp4",
@@ -89,6 +92,7 @@ test("无效 Data URL 不会写入 Session Message", async () => {
     harness.messages.append_prompt_message({
       turn_id: "turn-1",
       prompt: {
+        actor: { kind: "user", user_id: "local" },
         query: [{
           type: "file",
           media_type: "image/png",

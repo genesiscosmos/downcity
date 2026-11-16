@@ -6,9 +6,8 @@
  */
 
 import type { ModelStreamEvent } from "@downcity/type";
-import { project_tool_result } from "@/model/messages/ToolResultProjection.js";
-import { create_result_ref } from "@/model/results/ResultReference.js";
-import { disclose_result, DISCLOSURE_VERSION, result_bytes, RESULT_BYTES } from "@/model/results/ResultDisclosure.js";
+import { finalize_tool } from "@/model/results/ToolTerminal.js";
+import { assert_tool_terminal } from "@/model/results/ResultReference.js";
 import type { SessionAgentMessageState } from "@/session/messages/SessionAgentMessageState.js";
 import type { SessionMessageCache } from "@/session/messages/SessionMessageCache.js";
 import { to_session_json_value } from "@/session/messages/SessionJsonValue.js";
@@ -40,8 +39,6 @@ export interface SessionAgentMessageWriterOptions {
   cache: SessionMessageCache;
   /** canonical 存储分类，保证 internal 等分区可精确定位。 */
   category?: string;
-  /** canonical存储记录UUID，归档后仍精确定位同一结果。 */
-  storage_id?: string;
 }
 
 /** 单个 Assistant Message 的流式 Writer。 */
@@ -52,7 +49,6 @@ export class SessionAgentMessageWriter {
   private readonly state: SessionAgentMessageState;
   private readonly cache: SessionMessageCache;
   private readonly category?: string;
-  private readonly storage_id?: string;
   private readonly content_part_ids = new Map<string, string>();
   private readonly tool_call_ids = new Map<string, string>();
   private readonly current_step_part_ids = new Set<string>();
@@ -67,7 +63,6 @@ export class SessionAgentMessageWriter {
     this.state = options.state;
     this.cache = options.cache;
     this.category = options.category;
-    this.storage_id = options.storage_id;
     this.message_id = options.message_id;
   }
 
@@ -120,22 +115,17 @@ export class SessionAgentMessageWriter {
   async apply_tool_result(result: SessionToolExecutionResult): Promise<SessionAgentToolPart> {
     return await this.enqueue_write(async () => {
       const tool = this.require_tool(result.tool_call_id);
-      if (tool.state === "failed" && result.succeeded) return tool;
-      // 已持久化终态不可因重试覆盖快照或改变首次披露。
-      if (tool.disclosure_version === DISCLOSURE_VERSION) return tool;
       const message = this.current_message();
-      const output = to_session_json_value(result.output);
-      const readable = project_tool_result(output);
-      const result_ref = create_result_ref({ storage_id: this.storage_id, session_id: message.session_id, message_id: message.message_id,
-        message_sequence: message.sequence, part_id: tool.part_id, category: this.category }, readable);
-      const model_output = result.disclosed ? readable : disclose_result(readable, result_ref, result.succeeded ? "completed" : "failed");
-      if (result_bytes(model_output) > RESULT_BYTES) throw new Error("result_disclosure_budget_exceeded");
-      // 终态与可见包在同一事务提交，成功后才发布包含引用的 Mutation。
-      await this.state.commit_parts(this.message_id, [{
-        ...tool, tool_name: result.tool_name, state: result.succeeded ? "completed" : "failed", output,
-        model_output, disclosure_version: DISCLOSURE_VERSION, result_ref,
+      const terminal = finalize_tool(tool, {
+        location: { session_id: message.session_id, message_id: message.message_id,
+          message_sequence: message.sequence, part_id: tool.part_id, category: this.category },
+        state: result.succeeded ? "completed" : "failed", output: result.output,
+        disclosed: result.disclosed,
         ...(!result.succeeded ? { error: read_tool_error(result.output) } : {}),
-      }]);
+      });
+      if (terminal === tool) return tool;
+      // Terminal and first model view are committed atomically before publishing a reference.
+      await this.state.commit_parts(this.message_id, [{ ...terminal, tool_name: result.tool_name }]);
       return this.require_tool(result.tool_call_id);
     });
   }
@@ -456,6 +446,10 @@ export class SessionAgentMessageWriter {
     if (is_agent_part_type(current_part, "tool") && is_agent_part_type(final_part, "tool")
       && current_part.tool_call_id !== final_part.tool_call_id) {
       throw this.step_snapshot_error(`part ${index + 1} tool_call_id differs`);
+    }
+    if (current_part.type === "tool") {
+      assert_tool_terminal(current_part);
+      if (current_part.state === "completed" || current_part.state === "failed") return current_part;
     }
     return merge_same_part(current_part, final_part);
   }

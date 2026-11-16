@@ -2,6 +2,11 @@
  * MarkdownView 的统一阅读排版。所有尺寸与节奏由组件拥有，宿主只选择外层布局。
  * rem 随应用整体缩放，em 保持标题与正文的固定比例；主题颜色仅从宿主 token 派生。
  */
+/* 段落与宿主消息 Part 共用比例；使用方按各自正文的字号计算实际间距。 */
+:root {
+  --markdown-flow-ratio: 0.9;
+}
+
 .markdown-view-layout {
   box-sizing: border-box;
   width: 100%;
@@ -15,7 +20,7 @@
 
 .markdown-view {
   --markdown-font-family: var(--downcity-writing-font-family);
-  --markdown-flow-gap: 0.9em;
+  --markdown-flow-gap: calc(var(--markdown-flow-ratio) * 1em);
   --markdown-tight-gap: 0.25em;
   --markdown-block-gap: 1em;
   --markdown-heading-gap-before: 1.6em;

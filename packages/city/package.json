@@ -13,6 +13,10 @@
       "types": "./bin/index.d.ts",
       "import": "./bin/index.js"
     },
+    "./extensions": {
+      "types": "./bin/extensions.d.ts",
+      "import": "./bin/extensions.js"
+    },
     "./browser": {
       "types": "./bin/browser.d.ts",
       "import": "./bin/browser.js"
@@ -61,6 +65,9 @@
     "@downcity/workspace-ssh": "workspace:*",
     "commander": "^15.0.0",
     "dotenv": "^17.4.2",
+    "esbuild": "0.27.7",
+    "npm": "11.6.2",
+    "pnpm": "10.22.0",
     "fs-extra": "^11.3.5",
     "hono": "^4.12.23",
     "node-pty": "1.2.0-beta.14",

@@ -131,6 +131,7 @@ async function notify_turn_committed(
       .map((message) => structuredClone(message));
     const value: SessionTurnCommittedHookValue = {
       completion_id: `completion:${options.session_id}:${active_turn.turn_id}`,
+
       result: {
         text: active_turn.result?.text ?? "",
         success: active_turn.result?.success === true,

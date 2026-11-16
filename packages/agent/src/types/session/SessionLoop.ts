@@ -61,6 +61,8 @@ export interface ActiveSessionTurnState {
 
 /** SessionLoop 构造参数。 */
 export interface SessionLoopOptions {
+  /** Turn 实际执行（包括恢复）的宿主租约，覆盖完整收尾。 */
+  acquire_execution?: () => () => void;
   /** Turn 终态前的可靠写前日志；省略时只提供普通 Session Hook。 */
   completions?: SessionCompletionPort;
   /** Agent 提供的子工作等待与取消能力，不由 Loop 管理委派存储。 */

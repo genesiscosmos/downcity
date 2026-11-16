@@ -20,10 +20,13 @@ function rewrite_file(content, source, root_path, attachments) {
     if (/^(https?:|data:)/iu.test(url)) return item;
     // Workspace 引用不由 Session 持有，保持原地址和运行时权限，不复制或读取外部正文。
     if (!path.isAbsolute(url) && !url.startsWith("file:") && !url.startsWith("attachments/")) return item;
-    const source_directory = path.join(path.dirname(inside(root_path, source.relative_path)), "attachments");
-    const file_path = url.startsWith("file:") ? file_url_to_path(url) : path.resolve(path.dirname(inside(root_path, source.relative_path)), url);
-    const relative_path = path.relative(source_directory, file_path);
-    if (!relative_path || relative_path.startsWith("..") || path.isAbsolute(relative_path)) {
+    const logical_directory = path.dirname(inside(root_path, source.relative_path));
+    const file_path = url.startsWith("file:") ? file_url_to_path(url) : path.resolve(logical_directory, url);
+    // recovered库的正文可引用保留副本绝对路径；两种原地址均只在本来源完整附件清单内重绑。
+    const source_directories = [logical_directory, path.dirname(source_database_path(root_path, source))];
+    const relative_path = source_directories.map(directory => path.relative(path.join(directory, "attachments"), file_path))
+      .find(relative => relative && relative !== ".." && !relative.startsWith(`..${path.sep}`) && !path.isAbsolute(relative));
+    if (!relative_path) {
       // 其他 Session、Workspace 或已删除路径不属于当前迁移的附件所有权，保留原引用。
       // 只有当前 Session attachments/ 下的文件才复制并重写路径。
       return item;

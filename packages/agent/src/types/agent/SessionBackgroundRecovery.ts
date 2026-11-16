@@ -7,8 +7,6 @@ export interface SessionBackgroundRecoveryContext {
   category: string;
   /** 当前 Session 逻辑 ID；列表查询失败时尚未确定。 */
   session_id?: string;
-  /** 列表或视图确认的不可变记录 UUID。 */
-  storage_id?: string;
   /** 最新可信输入所属 Turn；消息读取前可能尚未确定。 */
   turn_id?: string;
   /** 区分目录查询、视图读取、消息读取、完成事实查询、装配和状态收口。 */

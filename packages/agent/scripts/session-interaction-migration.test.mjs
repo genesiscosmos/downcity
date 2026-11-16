@@ -6,7 +6,10 @@ import os from "node:os";
 import path from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import test from "node:test";
-import { SqliteSessionStorage } from "../bin/session/storage/SqliteSessionStorage.js";
+import { create_result_ref } from "../bin/model/results/ResultReference.js";
+import { create_session_storage } from "./helpers/SessionStorageFixture.mjs";
+
+const session_id = "a4aaa5a0-0741-4679-bfe6-cf2b86fe4ced";
 
 /** 创建测试用文件系统协议。 */
 function create_files() {
@@ -19,12 +22,12 @@ function create_files() {
 
 /** 创建一个文件型 SessionStorage。 */
 async function create_storage(directory_path) {
-  const storage = new SqliteSessionStorage({
-    session_id: "session-1",
+  const storage = await create_session_storage({
+    session_id,
     agent_id: "agent-1",
     workspace_id: "workspace-1",
     origin: { category: "work", type: "work" },
-    database_path: path.join(directory_path, "session.db"),
+    database_path: path.join(directory_path, "sessions.db"),
     database_location: { type: "file" },
     files: create_files(),
     attachments: {},
@@ -37,7 +40,7 @@ async function create_storage(directory_path) {
 async function create_agent_message(storage) {
   await storage.create_message({
     message_id: "agent-1",
-    session_id: "session-1",
+    session_id,
     turn_id: "turn-1",
     revision: 1,
     stable_part_sequence: 0,
@@ -56,6 +59,8 @@ async function create_agent_message(storage) {
         tool_name: "shell_exec",
         state: "completed",
         input: { cmd: "ls" },
+        output: null, model_output: null, disclosure_version: 1,
+        result_ref: create_result_ref({ session_id, message_id: "agent-1", message_sequence: 1, part_id: "tool:call-1", category: "work" }, null),
       },
     ],
   });
@@ -66,15 +71,15 @@ function insert_standalone_interaction(database_path) {
   const database = new DatabaseSync(database_path);
   try {
     database.prepare(
-      `INSERT INTO message_parts (part_id, message_id, sequence, step_id, type, content, created_at, updated_at)
-       VALUES ('standalone-interaction', 'agent-1', 3, NULL, 'interaction', '{}', 10, 10)`,
+      `INSERT INTO message_parts (session_key, part_id, message_id, sequence, step_id, type, content, created_at, updated_at)
+       SELECT session_key, 'standalone-interaction', 'agent-1', 3, NULL, 'interaction', '{}', 10, 10 FROM sessions WHERE session_id = '${session_id}'`,
     ).run();
   } finally { database.close(); }
 }
 
 test("当前 schema 拒绝独立 Interaction，Tool 内嵌交互读回后归属正确", async () => {
   const directory_path = await fs.mkdtemp(path.join(os.tmpdir(), "downcity-tool-interaction-"));
-  const database_path = path.join(directory_path, "session.db");
+  const database_path = path.join(directory_path, "sessions.db");
   const interaction = {
     interaction_id: "interaction:i-1",
     interaction_type: "approval",

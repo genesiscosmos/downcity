@@ -7,7 +7,8 @@ import assert from "node:assert/strict";
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { SqliteSessionStorage } from "../../agent/bin/session/storage/SqliteSessionStorage.js";
+import { create_session_storage } from "../../agent/scripts/helpers/SessionStorageFixture.mjs";
+const session_id = "db79987b-47b4-41eb-a968-b0c714df146a";
 import { LocalFileSystem } from "@downcity/city";
 import { SessionMessages } from "../../agent/bin/session/messages/SessionMessages.js";
 import { SessionInteractions } from "../../agent/bin/session/messages/SessionInteractions.js";
@@ -37,9 +38,9 @@ async function write_tool_call(writer, input) {
 test("动态 Extension Interaction 使用通用 type/payload 完成恢复", async () => {
   const root_path = await fs.mkdtemp(path.join(os.tmpdir(), "downcity-dynamic-interaction-"));
   const files = new LocalFileSystem(root_path);
-  const store = new SqliteSessionStorage({
+  const store = await create_session_storage({
     files,
-    session_id: "dynamic-interaction-test",
+    session_id,
     agent_id: "test-agent",
     origin: { category: "work", type: "work" },
     database_path: path.join(root_path, "session.db"),
@@ -47,14 +48,14 @@ test("动态 Extension Interaction 使用通用 type/payload 完成恢复", asyn
     attachments: {},
   });
   const recorder = new SessionMessages({
-    session_id: "dynamic-interaction-test",
+    session_id,
     store,
     attachment_store: store.attachments,
     publish: () => {},
   });
   await recorder.initialize();
   const interactions = new SessionInteractions({
-    session_id: "dynamic-interaction-test",
+    session_id,
     messages: recorder,
   });
   const writer = await recorder.open_agent_message({ turn_id: "turn-1" });

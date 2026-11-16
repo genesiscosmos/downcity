@@ -25,18 +25,11 @@ export class CityNotifications {
   attach_agent(agent: Agent): void {
     if (!this.receiver || this.observers.has(agent)) return;
     const release_interactions = agent.interactions.subscribe(() => this.receiver?.interactions_changed?.());
-    const release_removals = agent.sessions.on_removed(async (event) => {
-      await this.notify_fact({ type: "target_removed", target: {
-        kind: "agent_session", agent_id: agent.id, session_id: event.session_id,
-        category: event.category, origin_type: event.origin_type,
-      }, reason: event.type === "archived" ? "archived" : "removed" });
-    });
-    const release_creation = agent.sessions.on_created(async () => {
-      await this.notify_fact({ type: "targets_changed" });
-    });
-    const release_directory = agent.sessions.on_directory_changed(() => { void this.notify_fact({ type: "targets_changed" }); });
+    const release_removals = agent.sessions.on_removed(() => this.sources_changed());
+    const release_creation = agent.sessions.on_created(() => this.sources_changed());
+    const release_directory = agent.sessions.on_directory_changed(() => this.sources_changed());
     this.observers.set(agent, () => { release_interactions(); release_removals(); release_creation(); release_directory(); });
-    void this.notify_fact({ type: "targets_changed" });
+    this.sources_changed();
     this.receiver.interactions_changed?.();
   }
 
@@ -44,7 +37,7 @@ export class CityNotifications {
   detach_agent(agent: Agent): void {
     this.observers.get(agent)?.();
     this.observers.delete(agent);
-    void this.notify_fact({ type: "agent_removed", agent_id: agent.id });
+    this.sources_changed();
     if (!this.closing) this.receiver?.interactions_changed?.();
   }
 
@@ -52,26 +45,27 @@ export class CityNotifications {
   attach_group(group: Group): void {
     if (!this.receiver || this.observers.has(group)) return;
     const release_events = group.sessions.on_event(async (session_id, event) => {
-      if (event.type === "title") await this.notify_fact({ type: "targets_changed" });
+      if (event.type === "title") this.sources_changed();
       await this.notify_fact({ type: "group_event", group_id: group.id, session_id, event });
     });
-    const release_removals = group.sessions.on_removed(async (session_id, reason) => {
-      await this.notify_fact({ type: "target_removed", target: { kind: "group_session", group_id: group.id, session_id }, reason });
-    });
-    const release_directory = group.sessions.on_directory_changed(async () => await this.notify_fact({ type: "targets_changed" }));
+    const release_removals = group.sessions.on_removed(() => this.sources_changed());
+    const release_directory = group.sessions.on_directory_changed(() => this.sources_changed());
     this.observers.set(group, () => { release_events(); release_removals(); release_directory(); });
-    void this.notify_fact({ type: "targets_changed" });
+    this.sources_changed();
   }
 
   /** Group 移除释放所有观察并提交主体消失事实。 */
   detach_group(group: Group): void {
     this.observers.get(group)?.();
     this.observers.delete(group);
-    void this.notify_fact({ type: "group_removed", group_id: group.id });
+    this.sources_changed();
   }
 
   /** Workspace 登记或移除使目录事实失效，清理策略由 Power 解释。 */
-  targets_changed(): void { void this.notify_fact({ type: "targets_changed" }); }
+  targets_changed(): void { this.sources_changed(); }
+
+  /** 生命周期回调只同步失效展示，不等待任何存储 IO。 */
+  private sources_changed(): void { if (!this.closing) this.receiver?.sources_changed?.(); }
 
   /** 展示投影失败不能回滚已提交的原主体生命周期。 */
   private async notify_fact(fact: PowerNotificationFact): Promise<void> {

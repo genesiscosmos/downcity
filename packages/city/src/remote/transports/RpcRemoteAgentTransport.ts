@@ -155,20 +155,20 @@ export class RpcRemoteAgentTransport implements RemoteAgentTransport {
     return await this.client.archive_sessions(input);
   }
 
-  async archived_snapshot(storage_id: string): Promise<import("@downcity/agent").SessionArchivedSnapshot> {
-    return await this.client.archived_request("get", storage_id);
+  async archived_snapshot(session_id: string): Promise<import("@downcity/agent").SessionArchivedSnapshot> {
+    return await this.client.archived_request("get", session_id);
   }
-  async archived_messages(storage_id: string, input?: ListSessionMessagesInput): Promise<SessionMessagePage> {
-    return await this.client.archived_request("messages", storage_id, input);
+  async archived_messages(session_id: string, input?: ListSessionMessagesInput): Promise<SessionMessagePage> {
+    return await this.client.archived_request("messages", session_id, input);
   }
-  async archived_configuration(storage_id: string): Promise<import("@downcity/agent").SessionReadConfiguration> {
-    return await this.client.archived_request("configuration", storage_id);
+  async archived_configuration(session_id: string): Promise<import("@downcity/agent").SessionReadConfiguration> {
+    return await this.client.archived_request("configuration", session_id);
   }
-  async archived_interactions(storage_id: string): Promise<SessionInteractionRequest[]> {
-    return await this.client.archived_request("interactions", storage_id);
+  async archived_interactions(session_id: string): Promise<SessionInteractionRequest[]> {
+    return await this.client.archived_request("interactions", session_id);
   }
-  async remove_archived(storage_id: string): Promise<boolean> {
-    return await this.client.archived_request("remove", storage_id);
+  async remove_archived(session_id: string): Promise<boolean> {
+    return await this.client.archived_request("remove", session_id);
   }
 
   async clean_archive(): Promise<AgentCleanArchiveResult> {

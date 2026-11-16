@@ -18,10 +18,12 @@ import {
   SessionMessages,
 } from "../../agent/bin/session/messages/SessionMessages.js";
 import { session_messages_to_model_messages } from "../../agent/bin/model/messages/SessionModelMessages.js";
-import { SqliteSessionStorage } from "../../agent/bin/session/storage/SqliteSessionStorage.js";
+import { AgentSessionStorage } from "../../agent/bin/session/storage/agent-db/AgentSessionStorage.js";
+import { create_session_storage } from "../../agent/scripts/helpers/SessionStorageFixture.mjs";
+const test_session_id = "9d9d215d-3d9a-49e2-88a2-3045f080c7f1";
 
 /** 可让下一次 Assistant 草稿更新失败的测试 Store。 */
-class FailingAssistantMessageStore extends SqliteSessionStorage {
+class FailingAssistantMessageStore extends AgentSessionStorage {
   next_assistant_error = null;
   update_count = 0;
 
@@ -42,14 +44,14 @@ class FailingAssistantMessageStore extends SqliteSessionStorage {
 
 /** 创建隔离的 canonical SessionMessages 测试环境。 */
 async function create_recorder(
-  session_id = "session-messages-test",
-  create_store = (options) => new SqliteSessionStorage(options),
+  session_id = test_session_id,
+  storage_type = AgentSessionStorage,
 ) {
   const root_path = await fs.mkdtemp(path.join(os.tmpdir(), "downcity-session-messages-"));
-  const database_path = path.join(root_path, "session.db");
+  const database_path = path.join(root_path, "sessions.db");
   const files = new LocalFileSystem(root_path);
   const events = [];
-  const store = create_store({
+  const store = await create_session_storage({
     files,
     session_id,
     agent_id: "test-agent",
@@ -57,7 +59,7 @@ async function create_recorder(
     database_path,
     database_location: { type: "file" },
     attachments: {},
-  });
+  }, storage_type);
   const recorder = new SessionMessages({
     session_id,
     store,
@@ -266,8 +268,8 @@ test("模型增量只更新内存投影，Step 完成后才写入 SQLite", async
 
 test("同一 Part 的高频 delta 在 Step 完成前不会写入 SQLite", async () => {
   const { recorder, store } = await create_recorder(
-    "delta-batch-test",
-    (options) => new FailingAssistantMessageStore(options),
+    test_session_id,
+    FailingAssistantMessageStore,
   );
   const writer = await recorder.open_agent_message({ turn_id: "turn-1" });
   await writer.begin_step();
@@ -292,9 +294,9 @@ test("同一 Part 的高频 delta 在 Step 完成前不会写入 SQLite", async 
 });
 
 test("工具调用、审批、结果和后续文本保持 canonical 顺序", async () => {
-  const { recorder, store } = await create_recorder("tool-order-test");
+  const { recorder, store } = await create_recorder();
   const interactions = new SessionInteractions({
-    session_id: "tool-order-test",
+    session_id: test_session_id,
     messages: recorder,
   });
   const writer = await recorder.open_agent_message({ turn_id: "turn-1" });
@@ -377,7 +379,7 @@ test("工具调用、审批、结果和后续文本保持 canonical 顺序", asy
 });
 
 test("reasoning signature 经 canonical Message 保留到模型历史", async () => {
-  const { recorder } = await create_recorder("reasoning-signature-test");
+  const { recorder } = await create_recorder();
   const writer = await recorder.open_agent_message({ turn_id: "turn-1" });
   await writer.begin_step();
   await writer.apply_model_event({ type: "reasoning_start", content_id: "reasoning-1" });
@@ -408,7 +410,7 @@ test("reasoning signature 经 canonical Message 保留到模型历史", async ()
 });
 
 test("多个模型 Step 可复用 content_id 且追加到同一 Assistant Message", async () => {
-  const { recorder } = await create_recorder("reused-content-id-test");
+  const { recorder } = await create_recorder();
   const writer = await recorder.open_agent_message({ turn_id: "turn-1" });
 
   await writer.begin_step();
@@ -440,7 +442,7 @@ test("多个模型 Step 可复用 content_id 且追加到同一 Assistant Messag
 });
 
 test("工具执行等待对应标准流事件创建 canonical Part", async () => {
-  const { recorder } = await create_recorder("tool-gate-test");
+  const { recorder } = await create_recorder();
   const writer = await recorder.open_agent_message({ turn_id: "turn-1" });
   await writer.begin_step();
   let prepared = false;
@@ -468,7 +470,7 @@ test("工具执行等待对应标准流事件创建 canonical Part", async () =>
 });
 
 test("Step 最终快照不能补造未经过模型事件的 Part", async () => {
-  const { recorder } = await create_recorder("snapshot-mismatch-test");
+  const { recorder } = await create_recorder();
   const writer = await recorder.open_agent_message({ turn_id: "turn-1" });
   await writer.begin_step();
   await write_text(writer, "text-1", "final");
@@ -491,8 +493,8 @@ test("Step 最终快照不能补造未经过模型事件的 Part", async () => {
 
 test("Tool 输入检查点持久化失败时终止工具执行", async () => {
   const { recorder, store } = await create_recorder(
-    "tool-write-failure-test",
-    (options) => new FailingAssistantMessageStore(options),
+    test_session_id,
+    FailingAssistantMessageStore,
   );
   const writer = await recorder.open_agent_message({ turn_id: "turn-1" });
   await writer.begin_step();
@@ -513,7 +515,7 @@ test("Tool 输入检查点持久化失败时终止工具执行", async () => {
 });
 
 test("重启时收口流式 Assistant 和运行中 Action", async () => {
-  const session_id = "restart-recovery-test";
+  const session_id = test_session_id;
   const harness = await create_recorder(session_id);
   const writer = await harness.recorder.open_agent_message({ turn_id: "turn-1" });
   await writer.begin_step();
@@ -531,7 +533,7 @@ test("重启时收口流式 Assistant 和运行中 Action", async () => {
   );
 
   await harness.store.dispose();
-  const restarted_store = new SqliteSessionStorage({
+  const restarted_store = await create_session_storage({
     files: harness.files,
     session_id,
     agent_id: "test-agent",
@@ -561,7 +563,7 @@ test("重启时收口流式 Assistant 和运行中 Action", async () => {
 });
 
 test("Action 更新保留 identity 并只读取最新 revision", async () => {
-  const { recorder } = await create_recorder("action-revision-test");
+  const { recorder } = await create_recorder();
   await recorder.persist_action({
     action_id: "action-1",
     action_type: "deploy",
@@ -584,7 +586,7 @@ test("Action 更新保留 identity 并只读取最新 revision", async () => {
 });
 
 test("内部上下文读取不会被 500 条 UI 分页边界截断", async () => {
-  const session_id = "large-context-test";
+  const session_id = test_session_id;
   const { recorder } = await create_recorder(session_id);
   for (let sequence = 1; sequence <= 505; sequence += 1) {
     await recorder.append_user_message({

@@ -332,7 +332,7 @@ export class HttpRemoteAgentTransport implements RemoteAgentTransport {
       session_id?: string;
       archived_at?: number;
       operation_id?: string;
-      root_storage_id?: string;
+      root_session_id?: string;
       plan_fingerprint?: string;
       changed?: boolean;
     }>(
@@ -340,17 +340,17 @@ export class HttpRemoteAgentTransport implements RemoteAgentTransport {
       {
         method: "POST",
         headers: this.headers({ "Content-Type": "application/json" }),
-        body: JSON.stringify({ operation_id: input.operation_id, root_storage_id: input.root_storage_id }),
+        body: JSON.stringify({ operation_id: input.operation_id, root_session_id: input.root_session_id }),
       },
     );
     if (!payload.success || !payload.session_id) {
       throw Object.assign(new Error(String(payload.error || "Remote session archive failed")), {
-        operation_id: payload.operation_id ?? input.operation_id, root_storage_id: payload.root_storage_id ?? input.root_storage_id,
+        operation_id: payload.operation_id ?? input.operation_id, root_session_id: payload.root_session_id ?? input.root_session_id,
         plan_fingerprint: payload.plan_fingerprint,
       });
     }
     return {
-      session_id: payload.session_id, operation_id: payload.operation_id, root_storage_id: payload.root_storage_id,
+      session_id: payload.session_id, operation_id: payload.operation_id, root_session_id: payload.root_session_id,
       plan_fingerprint: payload.plan_fingerprint, changed: payload.changed,
       ...(typeof payload.archived_at === "number" ? { archived_at: payload.archived_at } : {}),
     };
@@ -380,29 +380,29 @@ export class HttpRemoteAgentTransport implements RemoteAgentTransport {
     return payload.page;
   }
 
-  async archived_snapshot(storage_id: string): Promise<import("@downcity/agent").SessionArchivedSnapshot> {
-    return await this.archived_read(storage_id, "");
+  async archived_snapshot(session_id: string): Promise<import("@downcity/agent").SessionArchivedSnapshot> {
+    return await this.archived_read(session_id, "");
   }
-  async archived_messages(storage_id: string, input?: ListSessionMessagesInput): Promise<SessionMessagePage> {
+  async archived_messages(session_id: string, input?: ListSessionMessagesInput): Promise<SessionMessagePage> {
     const query = new URLSearchParams();
     if (input?.limit !== undefined) query.set("limit", String(input.limit));
     if (input?.before_sequence !== undefined) query.set("before_sequence", String(input.before_sequence));
-    return await this.archived_read(storage_id, `/messages?${query}`);
+    return await this.archived_read(session_id, `/messages?${query}`);
   }
-  async archived_configuration(storage_id: string): Promise<import("@downcity/agent").SessionReadConfiguration> {
-    return await this.archived_read(storage_id, "/configuration");
+  async archived_configuration(session_id: string): Promise<import("@downcity/agent").SessionReadConfiguration> {
+    return await this.archived_read(session_id, "/configuration");
   }
-  async archived_interactions(storage_id: string): Promise<SessionInteractionRequest[]> {
-    return await this.archived_read(storage_id, "/interactions");
+  async archived_interactions(session_id: string): Promise<SessionInteractionRequest[]> {
+    return await this.archived_read(session_id, "/interactions");
   }
-  async remove_archived(storage_id: string): Promise<boolean> {
-    return await this.archived_read(storage_id, "", "DELETE");
+  async remove_archived(session_id: string): Promise<boolean> {
+    return await this.archived_read(session_id, "", "DELETE");
   }
-  private async archived_read<T>(storage_id: string, suffix: string, method = "GET"): Promise<T> {
+  private async archived_read<T>(session_id: string, suffix: string, method = "GET"): Promise<T> {
     if (this.closed) throw new Error("session_storage_lease_released");
-    if (!storage_id.trim()) throw new Error("session_validation_error");
+    if (!session_id.trim()) throw new Error("session_validation_error");
     const payload = await read_http_json<{ success?: boolean; error?: string; data?: T }>(
-      `${this.base_url}/api/sdk/archived-sessions/${encodeURIComponent(storage_id)}${suffix}`,
+      `${this.base_url}/api/sdk/archived-sessions/${encodeURIComponent(session_id)}${suffix}`,
       { method, headers: this.headers() },
     );
     if (!payload.success || payload.data === undefined) throw new Error(payload.error || "session_storage_read_failed");

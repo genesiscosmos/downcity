@@ -4,21 +4,17 @@
 export interface AgentArchivePlanInput {
   /** 原操作UUID，重入必须复用，不能换ID自动重放。 */
   operation_id: string;
-  /** 根的逻辑Session ID，用于与原计划交叉校验。 */
+  /** 根的永久 UUID，重入不得指向重建后的主会话。 */
   session_id: string;
   /** 根所属分类，规范化后与原计划相等。 */
   category: string;
-  /** 可选的根不可变记录UUID；提供时拒绝同逻辑新记录替代。 */
-  root_storage_id?: string;
 }
 
 /** 不可变后序节点与同事务推进的提交事实。 */
 export interface AgentArchivePlanNode {
   /** 子节点先于父节点的连续位置，从1开始。 */
   position: number;
-  /** 节点不可变UUID，归档按此定位，绝不按逻辑ID选择其他记录。 */
-  storage_id: string;
-  /** 计划创建时的逻辑Session ID。 */
+  /** 节点永久 UUID，归档和重入始终定位同一会话。 */
   session_id: string;
   /** 计划创建时的分类。 */
   category: string;
@@ -34,10 +30,8 @@ export interface AgentArchivePlanNode {
 export interface AgentArchivePlan {
   /** 原操作UUID，不与单节点事务receipt混用。 */
   operation_id: string;
-  /** 原根UUID，在同逻辑地址重建后保持不变。 */
-  root_storage_id: string;
-  /** 原根逻辑ID。 */
-  session_id: string;
+  /** 原根永久 UUID，主会话重建不改变已冻结的目标。 */
+  root_session_id: string;
   /** 原根分类。 */
   category: string;
   /** 根和不可变后序节点的SHA-256，用于检测计划损坏。 */
@@ -54,8 +48,8 @@ export interface AgentArchivePlan {
 export interface AgentArchiveNodeCommit {
   /** 固定计划UUID。 */
   operation_id: string;
-  /** 原根UUID，防止调用者把另一个计划当作本次重试。 */
-  root_storage_id: string;
+  /** 原根永久 UUID，防止调用者把另一个计划当作本次重试。 */
+  root_session_id: string;
   /** 原计划SHA-256，必须与数据库一致。 */
   fingerprint: string;
   /** 当前后序位置，必须是第一个尚未提交的节点。 */

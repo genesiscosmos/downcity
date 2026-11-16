@@ -11,8 +11,6 @@ import { TaskPower } from "@downcity/powers/task";
 import { NotificationPower } from "../bin/notification.js";
 import { InboxStore } from "../bin/notification/renderer/InboxStore.js";
 import { inbox_entries } from "../bin/notification/renderer/InboxEntries.js";
-import { source_availability } from "../bin/notification/NotificationPolicy.js";
-import { list_notification_targets } from "../../../city/bin/city/power/CityNotificationTargets.js";
 import { createTaskDefinition } from "../bin/task/Action.js";
 import { TaskDefinitionRepository } from "../bin/task/runtime/TaskDefinitionRepository.js";
 import { TaskExecutionCoordinator } from "../bin/task/runtime/TaskExecutionCoordinator.js";
@@ -461,12 +459,11 @@ test("Inbox仅管理通知阅读状态，响应回到原Interaction且通知重�
   let receiver;
   let pending = [{ origin: { category: "work", type: "task" }, reference: { session_category: "work", session_id: "s", turn_id: "t", interaction_id: "i" },
     can_respond: true, interaction: { status: "pending", request: { title: "Question", created_at: 1 } } }];
-  const target = { kind: "agent_session", agent_id: "a", category: "work", session_id: "s", origin_type: "work" };
-  const group_target = { kind: "group_session", group_id: "g", session_id: "gs" };
+  const storage_id = "00000000-0000-4000-8000-000000000001";
+  const target = { kind: "agent_session", storage_id, agent_id: "a", category: "work", session_id: "s", origin_type: "work" };
   let offline = false;
-  let targets = [target, group_target];
-  const title_key = JSON.stringify(["agent_session", "a", "work", "s"]);
-  const group_title_key = JSON.stringify(["group_session", "g", "gs"]);
+  let group_removed = false;
+  let session_archived = false;
   let session_title = "Inbox 标题检查";
   let responded;
   const context = {
@@ -476,8 +473,12 @@ test("Inbox仅管理通知阅读状态，响应回到原Interaction且通知重�
     system: {
       register_notification_receiver: (value) => { receiver = value; return () => { receiver = undefined; }; },
       list_agents: async () => [{ agent_id: "a", name: "Agent" }],
-      list_notification_targets: async () => ({ targets, archived_targets: [], agent_ids: ["a"], group_ids: ["g"], workspace_ids: ["workspace"], target_workspaces: {}, target_titles: { [title_key]: session_title, [group_title_key]: "群聊标题检查" },
-        unavailable_agents: offline ? ["a"] : [], unavailable_groups: [] }),
+      resolve_notification_targets: async (references) => references.map(reference => ({
+        target: reference.kind === "agent_session" ? { ...reference, storage_id } : reference,
+        title: reference.kind === "agent_session" ? session_title : reference.kind === "group_session" ? "群聊标题检查" : undefined,
+        availability: reference.kind === "power" ? "available" : reference.kind === "group_session" && group_removed ? "removed"
+          : reference.kind === "agent_session" && offline ? "unknown" : reference.kind === "agent_session" && session_archived ? "archived" : "available",
+      })),
       list_agent_interactions: async () => { if (offline) throw new Error("offline"); return pending; },
       respond_agent_interaction: async (input) => { responded = input; pending = []; return { status: "resolved" }; },
     },
@@ -502,13 +503,6 @@ test("Inbox仅管理通知阅读状态，响应回到原Interaction且通知重�
     assert.equal(inbox_entries(first, "pending")[0].title, session_title);
     assert.equal(first.interactions[0].interaction.interaction.request.title, "Question");
     assert.equal(first.items[0].title, "Done"); // Task 标题不被 Session 投影替换。
-    assert.equal(source_availability(target, "a", { ...await context.system.list_notification_targets(), archived_targets: [target] }), "available");
-    const archived_group_directory = await list_notification_targets([], [{ id: "g", sessions: {
-      list: async () => [], archived: async () => [{ id: "gs" }],
-    } }], []);
-    assert.deepEqual(archived_group_directory.archived_targets, [group_target]);
-    assert.equal(source_availability(group_target, undefined, archived_group_directory), "archived");
-    assert.equal(archived_group_directory.target_titles[group_title_key], "");
     const saved_path = path.join(scope.root_path, "notifications.json");
     const before_query = fs.readFileSync(saved_path, "utf8");
     const query_mtime = fs.statSync(saved_path).mtimeMs;
@@ -533,13 +527,13 @@ test("Inbox仅管理通知阅读状态，响应回到原Interaction且通知重�
     assert.equal(read.badge_count, 1);
     assert.equal(read.unread_update_count, 0);
     offline = true;
-    await receiver.fact_changed({ type: "targets_changed" });
+    receiver.sources_changed();
     const unknown = await actions.get("notification.list").run({});
     assert.deepEqual(unknown.unavailable_agents, ["a"]);
     assert.equal(unknown.badge_count, 0);
     assert.equal(unknown.interactions.length, 1);
     offline = false;
-    await actions.get("notification.refresh_sources").run({});
+    await actions.get("notification.refresh").run({});
     const recovered = await actions.get("notification.list").run({});
     assert.deepEqual(recovered.unavailable_agents, []);
     assert.ok(recovered.revision > unknown.revision);
@@ -566,7 +560,7 @@ test("Inbox仅管理通知阅读状态，响应回到原Interaction且通知重�
     assert.equal((await actions.get("notification.list").run({})).items.length, 0);
     const commit = async (origin, id = "done") => await power.hooks.effect["session.turn_committed"][0]({
       context: { agent: { id: "a" }, snapshot: { session_origin: origin } },
-      value: { completion_id: id, session_id: "s", status: "completed", result: { text: "Result" } },
+      value: { storage_id, completion_id: id, session_id: "s", status: "completed", result: { text: "Result" } },
     });
     for (const type of ["task", "memory", "channel", "group"]) await commit({ category: "work", type });
     await commit({ category: "work", type: "work", delegation_depth: 2 });
@@ -586,21 +580,20 @@ test("Inbox仅管理通知阅读状态，响应回到原Interaction且通知重�
     assert.equal(renewed.items[0].body, "Result");
     const before_rename = fs.readFileSync(saved_path, "utf8");
     session_title = "重命名后的会话";
-    await receiver.fact_changed({ type: "targets_changed" });
+    receiver.sources_changed();
     const renamed = await actions.get("notification.list").run({});
     assert.equal(renamed.items[0].title, session_title);
     assert.equal(renamed.items[0].created_at, renewed.items[0].created_at);
     assert.equal(renamed.items[0].read, renewed.items[0].read);
     assert.equal(fs.readFileSync(saved_path, "utf8"), before_rename);
     session_title = " ";
-    await receiver.fact_changed({ type: "targets_changed" });
+    receiver.sources_changed();
     assert.equal((await actions.get("notification.list").run({})).items[0].title, "未命名会话");
     session_title = "重命名后的会话";
-    await receiver.fact_changed({ type: "targets_changed" });
+    receiver.sources_changed();
     await power.observe_view("window", target);
     const chat_target = { ...target, category: "chat", origin_type: "agent" };
-    targets.push(chat_target);
-    await receiver.fact_changed({ type: "targets_changed" });
+    receiver.sources_changed();
     await commit({ category: "chat", type: "agent" }, "agent-complete");
     const chat_reply = await actions.get("notification.list").run({});
     assert.equal(chat_reply.items.length, 2);
@@ -618,21 +611,21 @@ test("Inbox仅管理通知阅读状态，响应回到原Interaction且通知重�
     assert.equal((await actions.get("notification.list").run({})).badge_count, 1);
     await receiver.fact_changed({ ...failure, event: { ...failure.event, phase: "idle" } });
     assert.equal((await actions.get("notification.list").run({})).badge_count, 1);
-    await receiver.fact_changed({ type: "group_removed", group_id: "g" });
+    group_removed = true; receiver.sources_changed();
     const removed_group = await actions.get("notification.list").run({});
     assert.equal(removed_group.badge_count, 1);
     assert.equal(removed_group.items.find((item) => item.source_kind === "group").availability, "removed");
-    await receiver.fact_changed({ type: "target_removed", target, reason: "archived" });
+    session_archived = true; receiver.sources_changed();
     const archived = await actions.get("notification.list").run({});
     assert.equal(archived.items.find((item) => item.target.kind === "agent_session" && item.target.category === "work").availability, "archived");
     const archived_bytes = fs.readFileSync(saved_path, "utf8");
-    targets = [];
     await actions.get("notification.list").run({});
     assert.equal(fs.readFileSync(saved_path, "utf8"), archived_bytes);
-    await receiver.fact_changed({ type: "targets_changed" });
+    receiver.sources_changed();
     assert.equal((await actions.get("notification.list").run({})).items.length, 3);
 
     // 用户操作只针对点击时的普通 Inbox 更新版本；恶意传入 Interaction 或 session 也无效。
+    session_archived = false;
     pending = ["question", "approval", "private"].map((type) => ({
       origin: { category: "work", type: "work" }, can_respond: true,
       reference: { session_category: "work", session_id: "s", turn_id: "t", interaction_id: type },

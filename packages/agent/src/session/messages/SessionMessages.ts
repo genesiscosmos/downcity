@@ -9,7 +9,8 @@
 import { generate_id } from "@/utils/Id.js";
 import { prepare_session_prompt_inbox, type PrepareSessionPromptInboxInput } from "./SessionInbox.js";
 import type { SessionAgentInboxPart, SessionInboxInput } from "@downcity/type";
-import { create_result_ref, disclosed_tool_result, tool_result_value } from "@/model/results/ResultReference.js";
+import { assert_tool_terminal } from "@/model/results/ResultReference.js";
+import { fail_tool } from "@/model/results/ToolTerminal.js";
 import { SessionAgentMessageWriter } from "@/session/messages/SessionAgentMessageWriter.js";
 import { SessionAgentMessageState } from "@/session/messages/SessionAgentMessageState.js";
 import {
@@ -149,12 +150,13 @@ export class SessionMessages {
                 )
               : part.interactions;
             if (part.state === "completed" || part.state === "failed") {
+              assert_tool_terminal(part);
               return had_pending_interaction ? { ...part, interactions } : part;
             }
             return {
-              ...part,
-              state: "failed" as const,
-              error: "Tool interrupted before completion.",
+              ...fail_tool(part, { session_id: message.session_id, message_id: message.message_id,
+                message_sequence: message.sequence, part_id: part.part_id, category: this.store.origin.category },
+                "Tool interrupted before completion."),
               interactions,
             };
           }
@@ -240,7 +242,7 @@ export class SessionMessages {
       `agent:${this.session_id}:${generate_id()}`;
     // 先建立持有关系，创建消息时的首次接受才会被登记为可写 Message。
     const writer = new SessionAgentMessageWriter({
-      category: this.store.origin.category, storage_id: this.store.storage_id,
+      category: this.store.origin.category,
       message_id,
       state: this.agent_state,
       cache: this.cache,
@@ -627,7 +629,7 @@ export class SessionMessages {
   }
 
   /** 向当前 Session 导入 fork 来源 Message，并重新分配全部身份和顺序。 */
-  async import_messages(messages: SessionMessage[], source_storage_id: string): Promise<void> {
+  async import_messages(messages: SessionMessage[]): Promise<void> {
     const turn_ids = new Map<string, string>();
     const message_ids = new Map<string, string>();
     for (const source of [...messages].sort((a, b) => a.sequence - b.sequence)) {
@@ -641,13 +643,8 @@ export class SessionMessages {
       );
       const copied = structuredClone(source);
       if (copied.role === "agent") {
-        // 旧结果在分支复制时固定初始披露及来源引用，后续多级 fork 也复用本地事实。
-        copied.parts = copied.parts.map((part) => {
-          if (part.type !== "tool" || (part.state !== "completed" && part.state !== "failed") || part.result_ref) return part;
-          const location = { storage_id: source_storage_id, session_id: source.session_id, message_id: source.message_id, message_sequence: source.sequence, part_id: part.part_id };
-          return { ...part, result_ref: create_result_ref(location, tool_result_value(part)),
-            model_output: disclosed_tool_result(part, location), disclosure_version: 1 };
-        });
+        // Preserve the exact original disclosure/reference. Fork never invents first disclosure evidence.
+        for (const part of copied.parts) if (part.type === "tool") assert_tool_terminal(part);
       }
       await this.create_message((sequence, created_at) => ({
         ...copied,
@@ -659,7 +656,6 @@ export class SessionMessages {
         created_at,
         updated_at: created_at,
         origin: {
-          storage_id: source_storage_id,
           session_id: source.session_id,
           message_id: source.message_id,
           ...(source.turn_id ? { turn_id: source.turn_id } : {}),

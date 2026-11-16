@@ -10,6 +10,7 @@
 export { describe_prompt_powers, snapshot_prompt_powers, execute_prompt_power } from "./session/input/PromptPowers.js";
 export type { PromptPower, PromptPowerAction, PromptPowerDescriptor, PromptPowerCallContext } from "@downcity/type";
 
+export type { AgentBehavior } from "./types/agent/AgentBehavior.js";
 export type {
   SessionExecutionProfile,
   SessionExecutionProfileContext,
@@ -20,7 +21,17 @@ export type {
 
 export { read_agent_pending_references, has_delivered_session_turn } from "./session/storage/AgentPendingReferences.js";
 export type { AgentPendingReference } from "./session/storage/AgentPendingReferences.js";
+/** 显式离线维护；调用方负责根独占维护权，不由会话生命周期自动触发。 */
+export { cleanup_agent_session_attachments } from "./session/storage/agent-db/AgentAttachmentCleanup.js";
+export type {
+  AgentAttachmentCleanupInput,
+  AgentAttachmentCleanupResult,
+  AgentAttachmentCleanupFailure,
+} from "./types/store/AgentAttachmentCleanup.js";
+export type { SessionMetadataAddress, SessionMetadataResult } from "./types/agent/SessionMetadata.js";
 export { AgentSessionBrowser } from "./session/storage/AgentSessionBrowser.js";
+export { prepare_agent_session_storage } from "./session/storage/agent-db/AgentSessionPreparation.js";
+export type { AgentSessionPreparationInput } from "./types/store/AgentSessionPreparation.js";
 export type { AgentSessionBrowserOptions, AgentArchivedSessionAddress } from "./types/store/AgentSessionBrowser.js";
 export type { SessionModelBinding } from "./types/store/SessionModelBinding.js";
 export type { SessionReadView } from "./types/store/SessionReadView.js";
@@ -110,10 +121,7 @@ export type {
 } from "./group/index.js";
 export { DecisionDispatchStrategy } from "./group/index.js";
 export type { SessionStore } from "./types/store/SessionStore.js";
-export type {
-  SessionDerivedStore,
-  SessionDerivedStoreTransaction,
-} from "./types/store/SessionStorage.js";
+export type { SessionDerivedStore } from "./types/store/SessionStorage.js";
 export type { SessionAttachmentStore } from "./types/store/SessionAttachmentStore.js";
 export type { AgentStorage } from "./types/agent/AgentStorage.js";
 export { Session } from "./session/Session.js";

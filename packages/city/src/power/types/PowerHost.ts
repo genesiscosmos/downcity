@@ -94,8 +94,8 @@ export interface PowerHostAgent {
 export interface PowerHostSystem extends PowerInteractionHost {
   /** Notification Power注册持久通知接收器；释放时撤销，避免双重存储。 */
   register_notification_receiver(receiver: import("./PowerNotification.js").PowerNotificationReceiver): () => void;
-  /** 当前活动 Session 和 Group 目录；读取失败必须保留未知主体。 */
-  list_notification_targets(): Promise<import("./PowerNotification.js").PowerNotificationTargets>;
+  /** 只解析明确引用的来源；结果与输入同序，不枚举 Session 集合或恢复执行器。 */
+  resolve_notification_targets(targets: readonly import("./PowerNotification.js").PowerNotificationTarget[]): Promise<import("./PowerNotification.js").PowerNotificationResolution[]>;
   /** 仅可信 Power 生命周期可注册专用执行资源；返回撤销函数。 */
   register_execution_profile(profile: import("./PowerExecutionProfile.js").PowerExecutionProfile): () => void;
   /** 停止后台 Session 的当前工作；等待停止请求完成，用于预算和关闭收口。 */
@@ -258,6 +258,8 @@ export interface PowerHostSystem extends PowerInteractionHost {
 
 /** Power 对自身宿主动作的受限注册能力。 */
 export interface PowerSelf {
+  /** 显式执行后台工作并持有生命周期占用，必须等待实际工作结束；闭包只在 ready 时执行。 */
+  background<TResult>(operation: () => Promise<TResult>): Promise<TResult>;
   /** 当前 Power 的稳定 ID。 */
   readonly id: string;
   /** 注册一个供 Sidebar/Mainview 调用的业务动作。 */

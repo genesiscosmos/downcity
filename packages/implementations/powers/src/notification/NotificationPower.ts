@@ -3,15 +3,15 @@
  * Desktop 默认装配唯一实例；用户动作只注册宿主入口，不编译为模型工具。
  */
 import { Power } from "@downcity/city/power";
-import type { PowerLifecycleContext, PowerHooks, PowerJsonValue, PowerInteractionResponse, PowerNotificationTarget, PowerNotificationFact, PowerNotificationInput, PowerNotificationSource, PowerNotificationTargets } from "@downcity/city/power";
+import type { PowerLifecycleContext, PowerHooks, PowerJsonValue, PowerInteractionResponse, PowerNotificationTarget, PowerNotificationFact, PowerNotificationInput, PowerNotificationSource } from "@downcity/city/power";
 import type { SessionTurnCommittedHookValue } from "@downcity/type";
 import { z } from "zod";
 import { NotificationStore } from "./NotificationStore.js";
 import type { NotificationPowerOptions } from "./types/NotificationOptions.js";
 import type { NotificationListResult } from "./types/NotificationRenderer.js";
 import { NotificationQuery } from "./NotificationQuery.js";
-import { notification_target_key, notification_target_schema as target_schema } from "./NotificationIdentity.js";
-import { session_notification, source_availability, notification_session_title } from "./NotificationPolicy.js";
+import { notification_target_key, notification_target_matches, notification_target_schema as target_schema } from "./NotificationIdentity.js";
+import { session_notification, notification_session_title } from "./NotificationPolicy.js";
 
 /** 来源引用由宿主校验，模型没有审批入口。 */
 const reference_schema = z.object({ session_category: z.enum(["chat", "work"]), session_id: z.string().min(1),
@@ -32,15 +32,11 @@ export class NotificationPower extends Power {
   private store?: NotificationStore;
   private unregister?: () => void;
   private query?: NotificationQuery;
-  /** 启动和来源生命周期入口维护的目录事实，供纯查询投影可达性。 */
-  private source_directory?: PowerNotificationTargets;
   private revision = 0;
   private snapshot?: NotificationListResult;
   /** 最后交付快照用于识别未知来源恢复，向所有消费者发布同一版本。 */
   private last_snapshot?: NotificationListResult;
   private in_flight?: Promise<NotificationListResult>;
-  /** 目录对账只由明确写入口串行执行，查询不会触发持久化操作。 */
-  private reconciliation: Promise<void> = Promise.resolve();
   private readonly visible_targets = new Map<string, PowerNotificationTarget>();
 
   constructor(private readonly options: NotificationPowerOptions = {}) { super(); }
@@ -63,17 +59,17 @@ export class NotificationPower extends Power {
   async initialize(context: PowerLifecycleContext): Promise<void> {
     this.context = context;
     this.store = new NotificationStore(context.storage);
-    this.query = new NotificationQuery(context, this.store, () => this.source_directory);
+    this.query = new NotificationQuery(context, this.store);
     this.unregister = context.system.register_notification_receiver({
       interactions_changed: () => this.changed(),
+      sources_changed: () => this.changed(),
       fact_changed: async (fact) => await this.handle_fact(fact),
       publish: async (source, input) => await this.publish(source, { ...input,
         target: { kind: "power", power_id: source.power_id, route: input.route ?? {} } }),
       dismiss: async (source, input) => { if (await this.require_store().dismiss(source, input.topic_key)) this.changed(); },
     });
     context.power.action({ id: "notification.list", run: async () => await this.read_snapshot() as unknown as PowerJsonValue });
-    context.power.action({ id: "notification.refresh_sources", run: async () => {
-      await this.reconcile_sources();
+    context.power.action({ id: "notification.refresh", run: async () => {
       this.changed();
       return { status: "refreshed" };
     } });
@@ -108,7 +104,6 @@ export class NotificationPower extends Power {
       this.changed();
       return result;
     } });
-    await this.reconcile_sources();
     this.changed();
   }
 
@@ -118,9 +113,9 @@ export class NotificationPower extends Power {
     this.context = undefined;
     this.store = undefined;
     this.query = undefined;
-    this.source_directory = undefined;
     this.snapshot = undefined;
     this.last_snapshot = undefined;
+    this.in_flight = undefined;
     this.visible_targets.clear();
   }
 
@@ -160,53 +155,24 @@ export class NotificationPower extends Power {
 
   /** 写入、可见目标规则和版本变更均属于 Power。 */
   private async publish(source: PowerNotificationSource, input: PowerNotificationInput): Promise<void> {
-    const is_visible = () => !!input.target && [...this.visible_targets.values()].some((target) => notification_target_key(target) === notification_target_key(input.target!));
-    const title = input.target ? notification_session_title(input.target, this.source_directory) : undefined;
+    const is_visible = () => !!input.target && [...this.visible_targets.values()].some((target) => notification_target_matches(target, input.target!));
+    let title: string | undefined;
+    if (input.target && input.target.kind !== "power") {
+      try { title = notification_session_title((await this.context!.system.resolve_notification_targets([input.target]))[0]); }
+      catch { /* 展示元数据失败不阻止原结果通知持久化。 */ }
+    }
     if (await this.require_store().publish(source, title ? { ...input, title } : input, is_visible)) this.changed();
   }
 
-  /** 原 Group 事实按群聊聚合；生命周期改变来源状态，保留摘要与未读。 */
+  /** 群聊失败发布一条结果通知；交互变化只失效展示，不维护来源生命周期。 */
   private async handle_fact(fact: PowerNotificationFact): Promise<void> {
-    if (fact.type === "group_event") {
-      if (fact.event.type === "status" && fact.event.phase === "failed") {
-        const target: PowerNotificationTarget = { kind: "group_session", group_id: fact.group_id, session_id: fact.session_id };
-        await this.publish({ source_kind: "group", power_id: this.name }, {
-          topic_key: notification_target_key(target), event_id: fact.event.turn_id ?? fact.event.message_id, target, kind: "update", scope: "inbox", outcome: "failure", title: notification_session_title(target, this.source_directory) || "未命名会话" });
-      } else if (fact.event.type === "interaction") this.changed();
-      return;
-    }
-    await this.reconcile_sources(fact);
-    this.changed();
-  }
-
-  /** 启动与明确集合更新才对账；文件写入不属于 snapshot/list 的职责。 */
-  private async reconcile_sources(fact?: PowerNotificationFact): Promise<void> {
-    const context = this.context;
-    const store = this.require_store();
-    const operation = this.reconciliation.then(async () => {
-      if (!context || context !== this.context) return;
-      const directory = await context.system.list_notification_targets();
-      if (context !== this.context) return;
-      // 原主体提交的明确生命周期事实优先于同一时刻仍在收尾的集合目录。
-      if (fact?.type === "agent_removed") directory.agent_ids = directory.agent_ids.filter((id) => id !== fact.agent_id);
-      if (fact?.type === "group_removed") directory.group_ids = directory.group_ids.filter((id) => id !== fact.group_id);
-      if (fact?.type === "target_removed") {
-        const key = notification_target_key(fact.target);
-        directory.targets = directory.targets.filter((target) => notification_target_key(target) !== key);
-        directory.archived_targets = directory.archived_targets.filter((target) => notification_target_key(target) !== key);
-        if (fact.reason === "archived") directory.archived_targets.push(fact.target);
-      }
-      this.source_directory = directory;
-      const changed = await store.reconcile((item) => {
-        if (fact?.type === "target_removed" && notification_target_key(item.target) === notification_target_key(fact.target)) return fact.reason;
-        if (fact?.type === "agent_removed" && (item.agent_id === fact.agent_id || (item.target.kind === "agent_session" && item.target.agent_id === fact.agent_id))) return "removed";
-        if (fact?.type === "group_removed" && item.target.kind === "group_session" && item.target.group_id === fact.group_id) return "removed";
-        return source_availability(item.target, item.agent_id, directory);
-      });
-      if (changed) this.changed();
-    });
-    this.reconciliation = operation.catch((error: unknown) => context?.logger.warn("Inbox source reconciliation failed", { error: String(error) }));
-    await operation;
+    const event = fact.event;
+    if (event.type === "status" && event.phase === "failed") {
+      const target: PowerNotificationTarget = { kind: "group_session", group_id: fact.group_id, session_id: fact.session_id };
+      await this.publish({ source_kind: "group", power_id: this.name }, {
+        topic_key: notification_target_key(target), event_id: event.turn_id ?? event.message_id, target,
+        kind: "update", scope: "inbox", outcome: "failure", title: "未命名会话" });
+    } else if (event.type === "interaction") this.changed();
   }
 
   private require_store(): NotificationStore {

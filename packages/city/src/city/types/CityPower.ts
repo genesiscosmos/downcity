@@ -6,6 +6,7 @@
  */
 
 import type { Hono } from "hono";
+import type { CityPowerBatch } from "./CityPowerBatch.js";
 import type {
   CityPowerRegistration,
   PowerDefinition,
@@ -34,6 +35,9 @@ export interface CityPowers {
    * - 本方法会执行 `initialize`，因此适合首次登记或持有长期资源的 Power。
    */
   add(input: CityPowerInput): Promise<void>;
+
+  /** 接管整批实例但保持不可见；调用方完成所有导出校验后初始化并同步发布。 */
+  prepare(inputs: readonly CityPowerInput[]): CityPowerBatch;
 
   /**
    * 原地替换同 ID Power 的定义，并重新发布工具面。

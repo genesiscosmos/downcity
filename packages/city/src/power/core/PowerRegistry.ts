@@ -190,6 +190,18 @@ export class PowerRegistry {
     return this.register_sync(power);
   }
 
+  /** 同步提交整批已初始化实例，校验全部身份后才改变目录并通知观察者。 */
+  register_batch(powers: readonly PowerDefinition[]): void {
+    const ids = new Set<string>();
+    for (const power of powers) {
+      const id = normalize_power_name(power.name);
+      if (!id || ids.has(id) || this.records.has(id)) throw new Error(`Power batch identity conflict: ${id}`);
+      ids.add(id);
+    }
+    for (const power of powers) this.records.set(power.name.trim(), create_record(power));
+    for (const power of powers) this.publish_change({ type: "register", power_name: power.name.trim() });
+  }
+
   /** 同步注册一个已经由 City 启动的 Power 执行实例。 */
   private register_sync(power: PowerDefinition): PowerSnapshot {
     const key = normalize_power_name(power.name);

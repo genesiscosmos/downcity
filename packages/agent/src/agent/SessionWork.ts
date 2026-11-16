@@ -35,8 +35,6 @@ const DEFAULT_MESSAGE_LIMIT = 20;
 
 /** 清单中的一条会话列表项；由 AgentSessions 摘要投影而来。 */
 export interface SessionWorkListEntry {
-  /** 精确记录UUID，归档状态不改变此身份。 */
-  storage_id: string;
   /** 会话当前绑定的项目 Workspace 标识。 */
   workspace_id?: string;
   /** 会话稳定标识。 */
@@ -108,7 +106,6 @@ export class SessionWork implements SessionWorkContract {
 
       const pending_interaction_count = await this.count_pending(item);
       summaries.push({
-        storage_id: item.storage_id,
         session_id: item.session_id,
         session_category: item.origin.category as "chat" | "work",
         archived: item.archived === true,
@@ -140,7 +137,6 @@ export class SessionWork implements SessionWorkContract {
     return {
       mode: "detail",
       session: {
-        storage_id: snapshot.storage_id,
         session_id: input.session_id,
         session_category: input.session_category,
         archived: snapshot.archived,
@@ -173,17 +169,17 @@ export class SessionWork implements SessionWorkContract {
   async archive(input: Parameters<SessionWorkContract["archive"]>[0], caller: SessionDelegationCaller): Promise<AgentArchiveSessionResult> {
     const plan = input.operation_id ? await this.options.read_archive_plan(input.operation_id) : null;
     if (plan) {
-      if (plan.session_id !== input.session_id || plan.category !== "work" || (input.root_storage_id && plan.root_storage_id !== input.root_storage_id)) throw new Error("session_archive_operation_conflict");
+      if (plan.root_session_id !== input.session_id || plan.category !== "work" || (input.root_session_id && plan.root_session_id !== input.root_session_id)) throw new Error("session_archive_operation_conflict");
       const root = plan.nodes.at(-1)!;
-      const view = root.committed_at !== null ? await this.options.read_archived_session(root.storage_id)
+      const view = root.committed_at !== null ? await this.options.read_archived_session(root.session_id)
         : await this.options.read_session(root.session_id, root.category);
-      if (view.storage_id !== root.storage_id) throw new Error("session_archive_record_changed");
+      if (view.session_id !== root.session_id) throw new Error("session_archive_record_changed");
       require_direct_work_child(this.options.agent_id, caller, { id: input.session_id, agent_id: view.metadata.agent_id, origin: view.metadata.origin });
     } else {
       await this.require_control_target(input.session_id, caller);
       await this.require_idle_subtree(input.session_id);
     }
-    return await this.options.archive_session({ id: input.session_id, category: "work", operation_id: input.operation_id, root_storage_id: input.root_storage_id });
+    return await this.options.archive_session({ id: input.session_id, category: "work", operation_id: input.operation_id, root_session_id: input.root_session_id });
   }
 
   /** 代答某条会话正在等待的用户响应。 */
@@ -222,7 +218,7 @@ export class SessionWork implements SessionWorkContract {
     require_direct_work_child(this.options.agent_id, caller, {
       id: session_id, agent_id: snapshot.metadata.agent_id, origin: snapshot.metadata.origin,
     });
-    return { ...snapshot.metadata, storage_id: snapshot.storage_id, session_id, origin: snapshot.metadata.origin };
+    return { ...snapshot.metadata, session_id, origin: snapshot.metadata.origin };
   }
 
   /** 先终止父执行，再扫描子关系，覆盖停止前已提交的子创建。 */
@@ -255,8 +251,8 @@ export class SessionWork implements SessionWorkContract {
 
   /** UUID只定位当前Agent拥有的归档；逻辑ID/分类必须与记录匹配。 */
   private async read_target(input: Parameters<SessionWorkContract["read"]>[0]) {
-    const view = input.storage_id
-      ? await this.options.read_archived_session(input.storage_id)
+    const view = input.archived
+      ? await this.options.read_archived_session(input.session_id)
       : await this.options.read_session(input.session_id, input.session_category);
     if (view.metadata.agent_id !== this.options.agent_id || view.metadata.session_id !== input.session_id
       || view.metadata.origin.category !== input.session_category) throw new Error("session_address_conflict");
@@ -266,7 +262,7 @@ export class SessionWork implements SessionWorkContract {
   /** 按记录状态读取真实pending，存储失败不能伪装成零。 */
   private async count_pending(item: SessionWorkListEntry): Promise<number> {
     const snapshot = item.archived
-      ? await this.options.read_archived_session(item.storage_id)
+      ? await this.options.read_archived_session(item.session_id)
       : await this.options.read_session(item.session_id, item.origin.category);
     return (await snapshot.interactions()).length;
   }

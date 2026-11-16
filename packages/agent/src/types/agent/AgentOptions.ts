@@ -31,6 +31,8 @@ export type AgentSessionConstructor = new (
  * 本地 Agent 构造参数。
  */
 export interface AgentOptions {
+  /** 宿主同步取得执行租约；覆盖排队和整个 Turn，返回幂等释放函数。只读历史不调用。 */
+  acquire_execution?: () => () => void;
   /** 请求级完成回调注册表；名称与函数在启动时注册，prompt 仅保存名称和参数。 */
   callbacks?: SessionCallbacks;
   /**

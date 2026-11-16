@@ -659,7 +659,7 @@ test("GroupSession 持久化调度检查点并在收口后清理", async () => {
   await fs.rm(root_path, { recursive: true, force: true });
 });
 
-test("GroupSession 列表首次读取时将 v1 metadata 原子迁移为 v2", async () => {
+test("GroupSession 列表与恢复拒绝 v1 metadata 并保留原始字节", async () => {
   const root_path = await fs.mkdtemp(path.join(os.tmpdir(), "downcity-group-metadata-migration-"));
   const group_id = "metadata-migration-group";
   const session_id = "legacy-session";
@@ -683,17 +683,11 @@ test("GroupSession 列表首次读取时将 v1 metadata 原子迁移为 v2", asy
   const group = new Group({ id: group_id, members: [agent], dispatch_strategy: test_dispatch_strategy });
   city.groups.add(group);
 
-  assert.deepEqual(await group.sessions.list(), [{
-    id: session_id,
-    group_id,
-    created_at: 1,
-    updated_at: 2,
-    message_count: 1,
-    preview_text: "legacy message",
-  }]);
-  const migrated_metadata = JSON.parse(await fs.readFile(meta_path, "utf8"));
-  assert.equal(migrated_metadata.v, 2);
-  assert.deepEqual(migrated_metadata.pending_message_ids, ["legacy-message"]);
+  const original_bytes = await fs.readFile(meta_path);
+  await assert.rejects(group.sessions.list(), /group_session_migration_required/);
+  await assert.rejects(group.sessions.get(session_id), /group_session_migration_required/);
+  await assert.rejects(group.get_session_store().read_session_metadata(session_id), /group_session_migration_required/);
+  assert.deepEqual(await fs.readFile(meta_path), original_bytes);
   await city.close();
   await fs.rm(root_path, { recursive: true, force: true });
 });

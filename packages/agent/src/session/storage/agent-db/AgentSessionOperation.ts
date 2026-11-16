@@ -20,6 +20,8 @@ export class AgentSessionCommitError extends Error {
 export function agent_session_operation_hash(operation: AgentSessionWriteCommand): string {
   switch (operation.command) {
     case "archive_prepare": return storage_digest({ command: "archive_prepare", ...operation.input, category: normalize_session_origin_category(operation.input.category) });
+    case "ensure_creation": return storage_digest({ command: "ensure_creation", input: { ...operation.input, origin: normalize_session_origin(operation.input.origin) } });
+    case "ensure_main": return storage_digest({ command: "ensure_main", input: operation.input });
     case "create": return storage_digest({ command: "create", input: { ...operation.input, origin: normalize_session_origin(operation.input.origin) } });
     case "archive": return storage_digest({ command: "archive", address: operation.address, archived_at: operation.archived_at });
     case "remove": return storage_digest({ command: "remove", address: operation.address });

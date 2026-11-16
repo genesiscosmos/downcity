@@ -1,5 +1,6 @@
 /** SDK-managed Streamable HTTP connection, including initialization, SSE and session headers. */
 import { wait_for_mcp } from "./Cancellation.js";
+import { mcp_abort_error, mcp_operation_error } from "./McpOperationError.js";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StreamableHTTPClientTransport, StreamableHTTPError } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 import type { McpHttpTransportConfig, McpCallResult, McpToolDefinition } from "../types/Mcp.js";
@@ -61,22 +62,28 @@ export class HttpConnection {
       this.client = client;
       return client;
     } catch (error) {
-      await client.close();
-      throw error;
+      await client.close().catch(() => undefined);
+      throw mcp_operation_error(error, "http", combined_signal);
     }
   }
   private async run<T>(operation: () => Promise<T>, signal?: AbortSignal): Promise<T> {
     const execute = async () => {
-      this.lifetime.signal.throwIfAborted();
-      signal?.throwIfAborted();
+      const combined_signal = AbortSignal.any([this.lifetime.signal, ...(signal ? [signal] : [])]);
+      if (combined_signal.aborted) throw mcp_abort_error(combined_signal, "http");
       this.active_signal = signal;
       try { return await operation(); }
       catch (error) {
         // Only an explicit HTTP 404 proves session rejection. Never replay a tool on network ambiguity.
-        if (!(error instanceof StreamableHTTPError) || error.code !== 404 || !this.client) throw new Error("MCP HTTP operation failed; reconnect or reauthorize in MCP settings");
-        await this.client.close();
+        if (combined_signal.aborted || !(error instanceof StreamableHTTPError) || error.code !== 404 || !this.client) throw mcp_operation_error(error, "http", combined_signal);
+        const expired_client = this.client;
         this.client = undefined;
-        return await operation();
+        await expired_client.close().catch(() => undefined);
+        try {
+          if (combined_signal.aborted) throw mcp_abort_error(combined_signal, "http");
+          return await operation();
+        } catch (retry_error) {
+          throw mcp_operation_error(retry_error, "http", combined_signal);
+        }
       } finally { this.active_signal = undefined; }
     };
     const next = this.operation.then(execute, execute);

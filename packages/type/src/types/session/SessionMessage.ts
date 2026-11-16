@@ -23,9 +23,7 @@ import type { SessionPromptActor } from "./SessionPromptActor.js";
 
 /** 从其他 Session 导入时保留的来源身份。 */
 export interface SessionMessageOrigin {
-  /** 来源持久化记录的稳定 UUID，归档与逻辑主会话重建后仍精确指向原记录。 */
-  storage_id: string;
-  /** 来源 Session 逻辑标识，仅作展示与交叉校验。 */
+  /** 来源会话的永久 UUID；归档或主会话重建不会改变此来源。 */
   session_id: string;
   /** 来源 Message 标识。 */
   message_id: string;
@@ -183,11 +181,11 @@ export interface SessionAgentToolPart {
   input?: JsonValue;
   /** 工具完整终态输出，包含结构化失败；canonical 结果事实源。 */
   output?: JsonValue;
-  /** 模型实际收到的完整小结果、首次折叠包或 lookup 页，不自动展开。 */
+  /** 模型首次收到的固定小结果、折叠包或 lookup 页；completed/failed 必需，JSON null 合法，运行态不保存。 */
   model_output?: JsonValue;
-  /** 已保存模型披露视图的格式版本。 */
+  /** 固定视图的披露格式版本；completed/failed 必须为支持的版本，codec/写入/投影统一校验。 */
   disclosure_version?: number;
-  /** 完整结果的稳定引用，与模型工具调用 ID 分离。 */
+  /** 完整结果的稳定引用，与调用 ID 分离；completed/failed 必需，fork 保留来源引用，不重新生成。 */
   result_ref?: string;
   /** 工具失败信息。 */
   error?: string;

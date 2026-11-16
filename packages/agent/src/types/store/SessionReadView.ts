@@ -8,7 +8,7 @@ import type { SessionHistoryMeta } from "./SessionHistoryMeta.js";
 /** 当前 Agent 已有会话的历史读取能力。 */
 export interface SessionReadView {
   /** 此视图精确引用的不可变记录 UUID，与同逻辑 ID 的新活动记录不混用。 */
-  storage_id: string;
+  session_id: string;
   /** 已校验 Agent、分类和 Session 身份的元信息快照。 */
   metadata: SessionHistoryMeta;
   /** 目标是否位于归档区，读取不会恢复为活动会话。 */

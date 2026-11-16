@@ -1,72 +1,15 @@
 /**
- * Offline migration's source-runtime bridge.
+ * Historical v7 offline bridge.
  *
- * Load the checked-out codec/schema/Step algorithm directly, so stale bin artifacts cannot
- * silently define the migration. Hooks are scoped to the agent/type source trees and are
- * removed after loading. Node >= 22.18 and installed workspace dependencies are required.
- * No Agent, City host, filesystem store or execution loop is constructed here.
+ * The source database definition is frozen in this tools directory. Canonical codecs are
+ * shared layout-free protocols; the current Agent schema is loaded only when requested by
+ * maintenance callers and remains subject to their explicit v8/v9 target gates.
+ * No store, host or automatic data conversion is constructed here.
  */
-import fs from "node:fs";
-import { fail } from "./session-v7-database.mjs";
-import path from "node:path";
-import { registerHooks as register_hooks, stripTypeScriptTypes as strip_types, createRequire as create_require } from "node:module";
-import { fileURLToPath as file_url_to_path, pathToFileURL as path_to_file_url } from "node:url";
+import { load_runtime as load_current_runtime } from "./session-runtime.mjs";
+import * as schema from "./session-v7-schema.mjs";
 
-const public_root = path.resolve(path.dirname(file_url_to_path(import.meta.url)), "../..");
-const agent_source = path.join(public_root, "packages/agent/src/");
-const type_source = path.join(public_root, "packages/type/src/");
-const city_source = path.join(public_root, "packages/city/src/");
-
-/** Import only pure runtime modules, with source-local aliases and TS transformation. */
+/** Load the fixed v7 format alongside the pure protocol modules used by its converter. */
 export async function load_runtime(agent_database = false) {
-  // City 的错误类使用 TS 参数属性；由已安装编译器转换，避免依赖 Node 的实验转换模式。
-  const typescript = agent_database ? create_require(path.join(city_source, "offline.cjs"))("typescript") : undefined;
-  const hook = register_hooks({
-    resolve(specifier, context, next_resolve) {
-      const parent_path = context.parentURL?.startsWith("file:") ? file_url_to_path(context.parentURL) : "";
-      if ([agent_source, type_source, city_source].some(root => parent_path.startsWith(root))) {
-        let target;
-        if (specifier.startsWith("@/")) target = path.join(parent_path.startsWith(city_source) ? city_source : agent_source, specifier.slice(2));
-        else if (specifier === "@downcity/type") target = path.join(type_source, "index.ts");
-        else if (specifier.startsWith("@downcity/type/")) target = path.join(type_source, `${specifier.slice(15)}.ts`);
-        else if (specifier.startsWith(".")) target = path.resolve(path.dirname(parent_path), specifier);
-        if (target?.endsWith(".js")) target = `${target.slice(0, -3)}.ts`;
-        if (target && fs.existsSync(target)) return { url: path_to_file_url(target).href, shortCircuit: true };
-      }
-      return next_resolve(specifier, context);
-    },
-    load(url, context, next_load) {
-      const file_path = url.startsWith("file:") ? file_url_to_path(url) : "";
-      if (file_path.endsWith(".ts") && [agent_source, type_source, city_source].some(root => file_path.startsWith(root))) {
-        const source = fs.readFileSync(file_path, "utf8");
-        return { format: "module", source: file_path.startsWith(city_source)
-          ? typescript.transpileModule(source, { compilerOptions: { target: typescript.ScriptTarget.ESNext, module: typescript.ModuleKind.ESNext } }).outputText
-          : strip_types(source, { mode: "strip", sourceUrl: url }), shortCircuit: true };
-      }
-      return next_load(url, context);
-    },
-  });
-  try {
-    const load = relative => import(path_to_file_url(path.join(agent_source, relative)).href);
-    const schema = await load("session/storage/SessionStorageSchema.ts");
-    if (schema.SESSION_STORAGE_SCHEMA_VERSION !== 7) fail("runtime_target_is_not_v7");
-    const modules = await Promise.all([
-      load("session/storage/SessionStorageCodec.ts"),
-      load("session/messages/SessionStablePrefix.ts"),
-      load("types/sdk/SessionPromptActor.ts"),
-      load("session/storage/SessionMessagePreview.ts"),
-      load("session/loop/SessionInputFacts.ts"),
-    ]);
-    if (agent_database) modules.push(...await Promise.all([
-      load("session/storage/agent-db/AgentSessionSchema.ts"),
-      load("session/storage/agent-db/AgentSessionFileLease.ts"),
-      load("session/storage/ModelBindingCodec.ts"),
-      load("model/results/ResultReference.ts"),
-      import(path_to_file_url(path.join(city_source, "local/resources/RootLease.ts")).href),
-      import(path_to_file_url(path.join(city_source, "local/resources/SessionStorageReadiness.ts")).href),
-      import(path_to_file_url(path.join(type_source, "types/session/SessionOrigin.ts")).href),
-      import(path_to_file_url(path.join(type_source, "types/workspace/AttachmentPolicy.ts")).href),
-    ]));
-    return Object.assign({}, schema, ...modules);
-  } finally { hook.deregister(); }
+  return Object.assign({}, schema, await load_current_runtime(agent_database));
 }

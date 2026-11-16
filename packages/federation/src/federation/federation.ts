@@ -50,6 +50,10 @@ export class FederationRuntime {
   /** 已进入的前台业务、队列与维护执行；取消响应不代表业务已经停止。 */
   private readonly executions = new Set<Promise<unknown>>();
   private disposed = false;
+  private execution_guard?: () => () => void;
+
+  /** owner 注入的同一门禁覆盖后台队列和维护，不能只封闭 HTTP facade。 */
+  guard_execution(acquire: (() => () => void) | undefined): void { this.execution_guard = acquire; }
   private dispose_promise?: Promise<void>;
 
   constructor(options: FederationRuntimeOptions) {
@@ -299,10 +303,13 @@ export class FederationRuntime {
   private async run_execution<TResult>(handler: () => Promise<TResult>): Promise<TResult> {
     if (this.disposed) throw new Error("federation_disposed");
     // 立即进入 handler，使初始化在本次已接受的调用内开始；跨越 await 前完成登记。
-    const execution = handler();
-    this.executions.add(execution);
-    try { return await execution; }
-    finally { this.executions.delete(execution); }
+    const release = this.execution_guard?.() ?? (() => {});
+    let execution: Promise<TResult> | undefined;
+    try {
+      execution = handler();
+      this.executions.add(execution);
+      return await execution;
+    } finally { if (execution) this.executions.delete(execution); release(); }
   }
 
   /** Service 装配在初始化前完成，避免路由与注册表形成两份事实。 */

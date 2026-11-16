@@ -29,34 +29,33 @@ export class AgentSessionMessages {
   /** Worker 在事务内分配最终 sequence；提交确认只保存 ID、序号和 revision。 */
   append(input: AgentSessionAppendMessage): AgentSessionMessageCommit {
     return this.owner.write(input.operation_id, { command: "append", ...input }, (database) => {
-      const record = this.writable_record(input.storage_id);
+      const record = this.writable_record(input.session_id);
       const sequence = Number(database.prepare("SELECT COALESCE(MAX(sequence), 0) + 1 AS sequence FROM messages WHERE session_key = ?")
         .get(record.session_key)?.sequence);
       const message = { ...input.message, sequence };
       if (message.revision !== 1) throw new Error("session_new_message_revision_invalid");
       if (message.origin) {
-        const source = this.catalog.by_storage_id(message.origin.storage_id);
-        if (source.session_id !== message.origin.session_id) throw new Error("session_fork_origin_identity_conflict");
+        this.catalog.by_session_id(message.origin.session_id);
       }
       validate_agent_db_message(message, record.session_id);
       const row = encode_session_message_row(message);
       database.prepare(`INSERT INTO messages(session_key, message_id, turn_id, sequence, revision, role, state,
-        stable_part_sequence, meta, origin_storage_id, origin_session_id, origin_message_id, origin_turn_id, created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?, ?)`)
+        stable_part_sequence, meta, origin_session_id, origin_message_id, origin_turn_id, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?)`)
         .run(record.session_key, row.message_id, row.turn_id, row.sequence, row.revision, row.role, row.state,
-          row.meta, row.origin_storage_id ?? null, row.origin_session_id, row.origin_message_id, row.origin_turn_id, row.created_at, row.updated_at);
+          row.meta, row.origin_session_id, row.origin_message_id, row.origin_turn_id, row.created_at, row.updated_at);
       for (const part of message.parts) this.insert_part(database, record.session_key, message, part);
       if (row.stable_part_sequence) database.prepare("UPDATE messages SET stable_part_sequence = ? WHERE session_key = ? AND message_id = ?")
         .run(row.stable_part_sequence, record.session_key, row.message_id);
       this.update_projection(database, record, message, 1);
       return { message_id: message.message_id, sequence, revision: message.revision };
-    });
+    }, input.session_id);
   }
 
   /** 增量提交；所有变化 Part 成功后才推进水位及 envelope。 */
   update(input: AgentSessionUpdateMessage): AgentSessionMessageCommit {
     return this.owner.write(input.operation_id, { command: "update", ...input }, (database) => {
-      const record = this.writable_record(input.storage_id);
+      const record = this.writable_record(input.session_id);
       const current = this.message_unsafe(database, record, input.message.message_id);
       if (!current) throw new Error("session_message_not_found");
       validate_agent_db_message(input.message, record.session_id);
@@ -81,18 +80,18 @@ export class AgentSessionMessages {
       if (result.changes !== 1) throw new Error("session_message_revision_conflict");
       this.update_projection(database, record, input.message, 0, current);
       return { message_id: row.message_id, sequence: row.sequence, revision: row.revision };
-    });
+    }, input.session_id);
   }
 
   /** 当前页 envelope、Parts 与总数在同一短读事务中取得。 */
-  page(storage_id: string, input: AgentSessionMessagePageInput = {}): AgentSessionMessagePage {
+  page(session_id: string, input: AgentSessionMessagePageInput = {}): AgentSessionMessagePage {
     const limit = input.limit ?? 50;
     if (!Number.isSafeInteger(limit) || limit < 1 || limit > 201) throw new Error("session_message_page_limit_invalid");
     if (input.before_sequence !== undefined && (!Number.isSafeInteger(input.before_sequence) || input.before_sequence <= 0)) {
       throw new Error("session_message_page_sequence_invalid");
     }
     return this.owner.read((database) => {
-      const record = this.catalog.by_storage_id(storage_id);
+      const record = this.catalog.by_session_id(session_id);
       const rows = input.before_sequence === undefined
         ? database.prepare("SELECT * FROM messages WHERE session_key = ? ORDER BY sequence DESC LIMIT ?").all(record.session_key, limit)
         : database.prepare("SELECT * FROM messages WHERE session_key = ? AND sequence < ? ORDER BY sequence DESC LIMIT ?")
@@ -102,14 +101,14 @@ export class AgentSessionMessages {
   }
 
   /** 精确读取单条消息，不因其他 Session 使用相同 message_id 而串读。 */
-  message(storage_id: string, message_id: string): SessionMessage | null {
-    return this.owner.read((database) => this.message_unsafe(database, this.catalog.by_storage_id(storage_id), message_id));
+  message(session_id: string, message_id: string): SessionMessage | null {
+    return this.owner.read((database) => this.message_unsafe(database, this.catalog.by_session_id(session_id), message_id));
   }
 
   /** 按稳定 Part ID 找到所属 Message；fork 保留的结果引用仍限定本 Session。 */
-  part_message(storage_id: string, part_id: string): SessionMessage | null {
+  part_message(session_id: string, part_id: string): SessionMessage | null {
     return this.owner.read((database) => {
-      const record = this.catalog.by_storage_id(storage_id);
+      const record = this.catalog.by_session_id(session_id);
       const row = database.prepare(`SELECT messages.* FROM messages JOIN message_parts USING(session_key, message_id)
         WHERE messages.session_key = ? AND message_parts.part_id = ?`).get(record.session_key, part_id);
       return row ? this.aggregates(database, record, [row as unknown as SessionMessageRow])[0] : null;
@@ -117,9 +116,9 @@ export class AgentSessionMessages {
   }
 
   /** Inbox 幂等来源属于 Session 范围，不采用跨记录全局唯一。 */
-  inbox_message(storage_id: string, inbox_id: string): SessionMessage | null {
+  inbox_message(session_id: string, inbox_id: string): SessionMessage | null {
     return this.owner.read((database) => {
-      const record = this.catalog.by_storage_id(storage_id);
+      const record = this.catalog.by_session_id(session_id);
       const row = database.prepare(`SELECT messages.* FROM messages JOIN message_parts USING(session_key, message_id)
         WHERE messages.session_key = ? AND message_parts.type = 'inbox'
           AND json_extract(message_parts.content, '$.inbox_id') = ?`).get(record.session_key, inbox_id);
@@ -131,7 +130,7 @@ export class AgentSessionMessages {
   truncate(input: AgentSessionTruncateMessages): { message_count: number } {
     if (!Number.isSafeInteger(input.through_sequence) || input.through_sequence < 0) throw new Error("session_truncate_sequence_invalid");
     return this.owner.write(input.operation_id, { command: "truncate", ...input }, (database) => {
-      const record = this.writable_record(input.storage_id);
+      const record = this.writable_record(input.session_id);
       database.prepare("DELETE FROM messages WHERE session_key = ? AND sequence > ?").run(record.session_key, input.through_sequence);
       const latest = database.prepare("SELECT * FROM messages WHERE session_key = ? ORDER BY sequence DESC LIMIT 1").get(record.session_key);
       const message = latest ? this.aggregates(database, record, [latest as unknown as SessionMessageRow])[0] : null;
@@ -139,13 +138,13 @@ export class AgentSessionMessages {
       database.prepare(`UPDATE sessions SET message_count = ?, preview_text = ?, revision = revision + 1 WHERE session_key = ?`)
         .run(message_count, message ? this.preview(message) : null, record.session_key);
       return { message_count };
-    });
+    }, input.session_id);
   }
 
   /** 附件授权查询只检查 User/Inbox canonical 文件内容。 */
-  has_attachment(storage_id: string, file_path: string): boolean {
+  has_attachment(session_id: string, file_path: string): boolean {
     return this.owner.read((database) => {
-      const record = this.catalog.by_storage_id(storage_id);
+      const record = this.catalog.by_session_id(session_id);
       return Boolean(database.prepare(`SELECT 1 FROM message_parts JOIN messages USING(session_key, message_id)
         WHERE messages.session_key = ? AND (
           (messages.role = 'user' AND message_parts.type = 'file' AND json_extract(message_parts.content, '$.url') = ?)
@@ -156,9 +155,9 @@ export class AgentSessionMessages {
   }
 
   /** 执行恢复只查该 Session 的非终态 envelope，随后加载匹配 Parts。 */
-  recoverable(storage_id: string): SessionMessage[] {
+  recoverable(session_id: string): SessionMessage[] {
     return this.owner.read((database) => {
-      const record = this.catalog.by_storage_id(storage_id);
+      const record = this.catalog.by_session_id(session_id);
       const rows = database.prepare("SELECT * FROM messages WHERE session_key = ? AND role = 'agent' AND state = 'streaming' ORDER BY sequence")
         .all(record.session_key) as unknown as SessionMessageRow[];
       return this.aggregates(database, record, rows);
@@ -166,18 +165,18 @@ export class AgentSessionMessages {
   }
 
   /** 标题/结果恢复只加载定向 envelope 和所属 Parts，不扫描全部历史。 */
-  first_user(storage_id: string): SessionMessage | null {
+  first_user(session_id: string): SessionMessage | null {
     return this.owner.read(database => {
-      const record = this.catalog.by_storage_id(storage_id);
+      const record = this.catalog.by_session_id(session_id);
       const row = database.prepare("SELECT * FROM messages WHERE session_key = ? AND role = 'user' ORDER BY sequence LIMIT 1").get(record.session_key);
       return row ? this.aggregates(database, record, [row as unknown as SessionMessageRow])[0] : null;
     });
   }
 
   /** 精确定位最近 Agent Message，可选 Turn 过滤由复合索引支持。 */
-  latest_agent(storage_id: string, turn_id?: string): SessionMessage | null {
+  latest_agent(session_id: string, turn_id?: string): SessionMessage | null {
     return this.owner.read(database => {
-      const record = this.catalog.by_storage_id(storage_id);
+      const record = this.catalog.by_session_id(session_id);
       const row = turn_id === undefined
         ? database.prepare("SELECT * FROM messages WHERE session_key = ? AND role = 'agent' ORDER BY sequence DESC LIMIT 1").get(record.session_key)
         : database.prepare("SELECT * FROM messages WHERE session_key = ? AND role = 'agent' AND turn_id = ? ORDER BY sequence DESC LIMIT 1").get(record.session_key, turn_id);
@@ -185,9 +184,9 @@ export class AgentSessionMessages {
     });
   }
 
-  /** 写路径从不修改归档；调用方先按活动地址获得稳定 storage_id。 */
-  private writable_record(storage_id: string): AgentSessionRecord {
-    const record = this.catalog.by_storage_id(storage_id);
+  /** 写路径从不修改归档；调用方先按活动地址获得稳定 session_id。 */
+  private writable_record(session_id: string): AgentSessionRecord {
+    const record = this.catalog.by_session_id(session_id);
     if (record.archived) throw new Error("session_archived");
     return record;
   }

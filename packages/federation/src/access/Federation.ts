@@ -19,6 +19,10 @@ import type { FederationOptions } from "./types/FederationOptions.js";
 
 /** 账户、AI、业务服务与本地运行资源的唯一公开入口。 */
 export class Federation {
+  /** 连接目录使用的稳定本地 ID；与登录态及展示名无关。 */
+  readonly id: string;
+  /** 用户可见连接名称。 */
+  readonly name: string;
   /** 用户业务访问；使用独立 User Token。 */
   readonly user: FederationUser;
   /** 管理访问；要求独立 Admin Session。 */
@@ -30,6 +34,19 @@ export class Federation {
   private readonly runtime?: FederationRuntime;
   private readonly fetcher: FetchLike;
   private disposed = false;
+  /** 宿主借用门禁；资源唯一 owner 可阻止替换期间进入新请求。 */
+  private request_guard?: () => () => void;
+
+  /** 显式借用长期连接；调用者须在解除绑定或丢弃句柄时释放，项目替换会检查此租约。 */
+  retain(): () => void { this.assert_open(); return this.request_guard?.() ?? (() => {}); }
+
+  /** 绑定宿主执行门禁；返回只撤销本次绑定的释放函数。 */
+  guard_requests(acquire: () => () => void): () => void {
+    if (this.request_guard) throw new Error("Federation request guard is already installed");
+    this.request_guard = acquire;
+    this.runtime?.guard_execution(acquire);
+    return () => { if (this.request_guard === acquire) { this.request_guard = undefined; this.runtime?.guard_execution(undefined); } };
+  }
   private dispose_promise?: Promise<void>;
   private readonly requests = new Set<AbortController>();
 
@@ -45,6 +62,10 @@ export class Federation {
       throw new TypeError("Federation url must be an HTTP(S) address");
     }
     this.url = normalize_federation_url(options.url ?? "https://federation.invalid");
+    if (options.id !== undefined && (typeof options.id !== "string" || !options.id.trim())) throw new TypeError("Federation id must be a nonempty string");
+    if (options.name !== undefined && typeof options.name !== "string") throw new TypeError("Federation name must be a string");
+    this.id = options.id?.trim() ?? (this.mode === "local" ? "local" : this.url);
+    this.name = options.name?.trim() || this.id;
     if (options.database) {
       if (options.fetch !== undefined) throw new TypeError("Local Federation does not accept fetch");
       this.runtime = new FederationRuntime(options);
@@ -59,12 +80,17 @@ export class Federation {
         }
         return this.fetch(new Request(url, init));
       }
+      const release = this.request_guard?.() ?? (() => {});
       const controller = new AbortController();
       const abort = () => controller.abort(init.signal?.reason);
       if (init.signal?.aborted) abort();
       else init.signal?.addEventListener("abort", abort, { once: true });
       this.requests.add(controller);
+      let finished = false;
       const finish = () => {
+        if (finished) return;
+        finished = true;
+        release();
         this.requests.delete(controller);
         init.signal?.removeEventListener("abort", abort);
       };
@@ -91,8 +117,10 @@ export class Federation {
   }
 
   /** 本地服务端请求入口，可信身份仅允许从第二参数显式传入。 */
-  readonly fetch = (request: Request, options?: FederationFetchOptions): Promise<Response> => {
-    return this.require_runtime().fetch(request, options);
+  readonly fetch = async (request: Request, options?: FederationFetchOptions): Promise<Response> => {
+    const release = this.request_guard?.() ?? (() => {});
+    try { return track_response(await this.require_runtime().fetch(request, options), request.signal, release); }
+    catch (error) { release(); throw error; }
   };
 
   /** 注册本地 Service。 */

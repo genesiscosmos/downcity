@@ -3,6 +3,7 @@ import { auth, discoverOAuthServerInfo, extractWWWAuthenticateParams, type OAuth
 import type { OAuthClientInformationMixed, OAuthClientMetadata, OAuthTokens } from "@modelcontextprotocol/sdk/shared/auth.js";
 import type { PowerLifecycleContext } from "@downcity/city/power";
 import { wait_for_mcp } from "../runtime/Cancellation.js";
+import { McpOperationError, mcp_operation_error } from "../runtime/McpOperationError.js";
 import { OAuthCallbackServer } from "./OAuthCallbackServer.js";
 import { McpOAuthStorage } from "./OAuthStorage.js";
 import type { McpOAuthCredential, McpOAuthState, McpOAuthTransportConfig } from "./OAuthTypes.js";
@@ -28,7 +29,7 @@ export interface OAuthSessionOptions {
 /** Validate every OAuth URL before network access or opening a browser. */
 function assert_https(value: string | URL): void {
   const url = new URL(value);
-  if (url.protocol !== "https:" || url.username || url.password || url.hash) throw new Error("OAuth requires HTTPS metadata and endpoints");
+  if (url.protocol !== "https:" || url.username || url.password || url.hash) throw new McpOperationError({ kind: "authorization", phase: "oauth", reason_code: "https_required" });
 }
 
 /** SDK provider plus a single-flight authorization coordinator for one server/endpoint. */
@@ -140,18 +141,25 @@ export class McpOAuthProvider implements OAuthClientProvider {
   private async authorize(metadata_url: URL | undefined, signal: AbortSignal, scope?: string): Promise<void> {
     const callback = new OAuthCallbackServer();
     this.auth_signal = AbortSignal.any([signal, this.lifetime.signal, AbortSignal.timeout(300_000)]);
+    let failed_http_status: number | undefined;
     const secure_fetch: typeof fetch = async (input, init) => {
       assert_https(input instanceof Request ? input.url : input);
-      return await fetch(input, { ...init, signal: this.auth_signal, redirect: "error" });
+      try {
+        const response = await fetch(input, { ...init, signal: this.auth_signal, redirect: "error" });
+        failed_http_status = response.ok ? undefined : response.status;
+        return response;
+      } catch (error) {
+        throw mcp_operation_error(error, "oauth", this.auth_signal);
+      }
     };
     try {
       assert_https(this.options.endpoint);
       if (metadata_url) assert_https(metadata_url);
       const discovery = await discoverOAuthServerInfo(this.options.endpoint, { resourceMetadataUrl: metadata_url, fetchFn: secure_fetch });
       const metadata = discovery.authorizationServerMetadata;
-      if (!metadata || metadata.issuer !== discovery.authorizationServerUrl) throw new Error("OAuth issuer metadata mismatch");
+      if (!metadata || metadata.issuer !== discovery.authorizationServerUrl) throw new McpOperationError({ kind: "authorization", phase: "oauth", reason_code: "issuer_metadata_mismatch" });
       for (const value of [discovery.authorizationServerUrl, metadata.authorization_endpoint, metadata.token_endpoint, metadata.registration_endpoint]) if (value) assert_https(value);
-      if (metadata.grant_types_supported && !metadata.grant_types_supported.includes("authorization_code")) throw new Error("OAuth authorization_code is unsupported");
+      if (metadata.grant_types_supported && !metadata.grant_types_supported.includes("authorization_code")) throw new McpOperationError({ kind: "authorization", phase: "oauth", reason_code: "unsupported_grant_type" });
       this.discovery = discovery;
       const stored = await this.options.storage.load(this.storage_key(discovery.authorizationServerUrl));
       this.credential = stored?.endpoint === this.options.endpoint && stored.issuer === discovery.authorizationServerUrl ? stored : undefined;
@@ -175,19 +183,20 @@ export class McpOAuthProvider implements OAuthClientProvider {
       const first = await auth(this, { serverUrl: this.options.endpoint, scope, fetchFn: secure_fetch });
       if (first === "REDIRECT") {
         const { code } = await this.callback_result!;
-        await auth(this, { serverUrl: this.options.endpoint, authorizationCode: code, scope, fetchFn: secure_fetch });
+        const exchanged = await auth(this, { serverUrl: this.options.endpoint, authorizationCode: code, scope, fetchFn: secure_fetch });
+        if (exchanged !== "AUTHORIZED") throw new McpOperationError({ kind: "authorization", phase: "oauth", reason_code: "authorization_incomplete" });
       }
       this.options.on_state("authorized");
-    } catch {
+    } catch (error) {
       this.options.on_state("expired");
-      // Server errors can contain token responses or URLs: never forward their raw text to model logs.
-      throw new Error("MCP OAuth authorization failed or cancelled. Check server OAuth metadata/client_id and retry authorization in MCP settings.");
+      throw mcp_operation_error(error, "oauth", this.auth_signal, failed_http_status);
     } finally {
       this.verifier = undefined;
       this.csrf_state = "";
       this.callback = undefined;
       this.callback_result = undefined;
       await callback.close();
+      this.auth_signal = undefined;
     }
   }
 }

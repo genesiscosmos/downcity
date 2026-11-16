@@ -6,7 +6,8 @@ import os from "node:os";
 import path from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import test from "node:test";
-import { SqliteSessionStorage } from "../bin/session/storage/SqliteSessionStorage.js";
+import { create_session_storage } from "./helpers/SessionStorageFixture.mjs";
+const session_id = "a65c231b-af6b-41f8-b4ed-4cd51c378d4e";
 
 /** 创建测试用文件系统协议。 */
 function create_files() {
@@ -19,12 +20,12 @@ function create_files() {
 
 /** 创建一个文件型 SessionStorage。 */
 async function create_storage(directory_path, options = {}) {
-  const storage = new SqliteSessionStorage({
-    session_id: options.session_id || "session-1",
+  const storage = await create_session_storage({
+    session_id: options.session_id || session_id,
     agent_id: options.agent_id || "agent-1",
     workspace_id: "workspace-1",
     origin: { category: "work", type: "work" },
-    database_path: path.join(directory_path, "session.db"),
+    database_path: path.join(directory_path, "sessions.db"),
     database_location: { type: "file" },
     files: create_files(),
     attachments: {},
@@ -37,7 +38,7 @@ async function create_storage(directory_path, options = {}) {
 function create_user_message() {
   return {
     message_id: "user-1",
-    session_id: "session-1",
+    session_id,
     turn_id: "turn-1",
     revision: 1,
     role: "user",
@@ -56,7 +57,7 @@ test("Message 与 Part 分表原子保存并刷新列表投影", async () => {
   assert.equal(metadata.message_count, 1);
   assert.equal(metadata.preview_text, "你好");
 
-  const database = new DatabaseSync(path.join(directory_path, "session.db"), { readOnly: true });
+  const database = new DatabaseSync(path.join(directory_path, "sessions.db"), { readOnly: true });
   try {
     const message = database.prepare("SELECT role, state FROM messages").get();
     assert.deepEqual({ ...message }, { role: "user", state: null });
@@ -71,7 +72,7 @@ test("Message 与 Part 分表原子保存并刷新列表投影", async () => {
     message: { ...created, revision: 3 },
     expected_revision: 2,
     changed_parts: [],
-  }), /revision conflict/);
+  }), /revision_conflict/);
   const updated = {
     ...created,
     revision: 2,
@@ -93,7 +94,7 @@ test("Storage 只查询中断状态，不擅自解释领域恢复语义", async 
   const storage = await create_storage(directory_path);
   await storage.create_message({
     message_id: "agent-1",
-    session_id: "session-1",
+    session_id,
     turn_id: "turn-1",
     revision: 1,
     stable_part_sequence: 0,
@@ -135,52 +136,9 @@ test("Composer 只能写自己的派生 namespace，clear 触发 FK 清理", asy
   await storage.dispose();
 });
 
-test("初始化失败会关闭连接并允许同一实例重试", async () => {
-  const directory_path = await fs.mkdtemp(path.join(os.tmpdir(), "downcity-session-storage-"));
-  const database_path = path.join(directory_path, "session.db");
-  const database = new DatabaseSync(database_path);
-  database.exec("PRAGMA user_version = 99");
-  database.close();
-  const storage = new SqliteSessionStorage({
-    session_id: "session-1",
-    agent_id: "agent-1",
-    origin: { category: "work", type: "work" },
-    database_path,
-    database_location: { type: "file" },
-    files: create_files(),
-    attachments: {},
-  });
-  await assert.rejects(storage.initialize(), /session_schema_mismatch/);
-  const repair = new DatabaseSync(database_path);
-  repair.exec("PRAGMA user_version = 0");
-  repair.close();
-  await storage.initialize();
-  assert.equal((await storage.read_metadata()).session_id, "session-1");
-  await storage.dispose();
-});
-
-test("旧 SQLite schema 必须由外部脚本迁移", async () => {
-  const directory_path = await fs.mkdtemp(path.join(os.tmpdir(), "downcity-session-storage-"));
-  const database_path = path.join(directory_path, "session.db");
-  const database = new DatabaseSync(database_path);
-  database.exec("PRAGMA user_version = 1");
-  database.close();
-  const storage = new SqliteSessionStorage({
-    session_id: "session-1",
-    agent_id: "agent-1",
-    origin: { category: "work", type: "work" },
-    database_path,
-    database_location: { type: "file" },
-    files: create_files(),
-    attachments: {},
-  });
-  await assert.rejects(storage.initialize(), /session_schema_mismatch.*offline migration/);
-  await storage.dispose();
-});
-
 test("Codec 在损坏的 Part 内容进入领域层前失败", async () => {
   const directory_path = await fs.mkdtemp(path.join(os.tmpdir(), "downcity-session-storage-"));
-  const database_path = path.join(directory_path, "session.db");
+  const database_path = path.join(directory_path, "sessions.db");
   const storage = await create_storage(directory_path);
   await storage.create_message(create_user_message());
   await storage.dispose();
@@ -194,7 +152,7 @@ test("Codec 在损坏的 Part 内容进入领域层前失败", async () => {
   const reopened = await create_storage(directory_path);
   await assert.rejects(
     reopened.list_messages(),
-    /Invalid persisted Session Part part-user-1.*text must be a string/,
+    /session_storage_transaction_failed/,
   );
   await reopened.dispose();
 });

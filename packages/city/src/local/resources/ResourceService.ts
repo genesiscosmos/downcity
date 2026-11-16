@@ -21,7 +21,8 @@ export class ResourceService implements ResourceDispatcher {
   /** 支持的完整操作名，不允许任意函数路径访问。 */
   readonly capabilities = ["agent.list", "agent.get", "agent.create", "agent.update", "agent.delete", "workspace.register", "workspace.initialize", "workspace.list", "workspace.get", "workspace.update", "workspace.remove", "session.create", "session.list", "session.get", "session.history", "session.receipt", "session.send", "session.stop", "session.archive", "config.token.list", "config.token.get", "config.token.create", "config.token.update", "config.token.remove", "config.power.get", "config.power.set", "config.env.get", "config.env.set", "config.env.delete"];
 
-  constructor(dependencies: ResourceDependencies) {
+  constructor(private readonly dependencies: ResourceDependencies) {
+    if (dependencies.extensions) this.capabilities.push(...dependencies.extensions.service.capabilities);
     this.agents = new AgentResources(dependencies);
     this.workspaces = new WorkspaceResources(dependencies);
     this.sessions = new SessionResources(dependencies);
@@ -31,6 +32,7 @@ export class ResourceService implements ResourceDispatcher {
   /** input 只能为普通记录；每个领域用例继续检查实际字段。 */
   async dispatch(method: string, input: Record<string, unknown>): Promise<unknown> {
     require_resource_value(input && typeof input === "object" && !Array.isArray(input), "Resource input must be an object");
+    if (method.startsWith("extension.") && this.dependencies.extensions) return await this.dependencies.extensions.service.dispatch(method, input);
     validate_resource_input(method, input);
     if (method.startsWith("config.")) return await this.config.call(method, input);
     const target = (): string => { require_resource_value(typeof input.id === "string", "A complete resource ID is required"); return input.id; };

@@ -1,26 +1,18 @@
 /** Notification存储：更新按来源稳定键幂等保存，已读由用户控制；原执行结果不复制到这里。 */
 import { z } from "zod";
 import { createHash } from "node:crypto";
-import type { PowerStorage, PowerNotificationInput, PowerNotificationSource, PowerNotificationTarget, PowerNotificationAvailability } from "@downcity/city/power";
-import type { NotificationItem } from "./types/Notification.js";
-import { notification_target_key, notification_target_schema } from "./NotificationIdentity.js";
+import type { PowerStorage, PowerNotificationInput, PowerNotificationSource, PowerNotificationTarget } from "@downcity/city/power";
+import type { NotificationRecord, NotificationUpdateReference } from "./types/Notification.js";
+import { notification_target_matches, notification_target_schema } from "./NotificationIdentity.js";
 
-/** 存储只有当前协议，缺少语义或来源的旧记录明确报错，不在读取时猜测、迁移或丢弃。 */
+/** 只解析通知内容与阅读状态；来源可达性等派生字段不进入存储协议。 */
 const item_schema = z.object({
   notification_id: z.string().min(1), power_id: z.string().min(1), agent_id: z.string().min(1).optional(),
   source_kind: z.enum(["session", "group", "power"]), topic_key: z.string().min(1), event_id: z.string().min(1).optional(),
   title: z.string(), body: z.string().optional(), target: notification_target_schema,
   kind: z.enum(["reply", "update"]), scope: z.enum(["inbox", "session"]), outcome: z.enum(["success", "failure", "info"]),
-  availability: z.enum(["available", "archived", "removed", "unknown"]), created_at: z.number(), read: z.boolean(),
-}).strict();
-
-/** 用户操作绑定一个已交付的普通更新版本，不能操作原 Interaction。 */
-export interface NotificationUpdateReference {
-  /** 普通更新的稳定通知 ID。 */
-  notification_id: string;
-  /** 快照中当前内容的时间版本；与存储完全相等才应用操作。 */
-  created_at: number;
-}
+  created_at: z.number(), read: z.boolean(),
+}).strip();
 
 /** 对象键顺序不影响重复发布判断。 */
 function canonical_json(value: unknown): string {
@@ -43,17 +35,18 @@ export class NotificationStore {
     const { kind, scope, outcome } = input;
     return await this.mutate(async (items) => {
       const previous = items.find((item) => item.notification_id === notification_id);
+      if (previous && input.event_id && previous.event_id === input.event_id) return items;
       if (previous && canonical_json([previous.title, previous.body, previous.target, previous.kind, previous.scope, previous.outcome, previous.event_id])
         === canonical_json([input.title, input.body || undefined, target, kind, scope, outcome, input.event_id])) return items;
       const created_at = Math.max(Date.now(), this.last_created_at + 1);
       this.last_created_at = created_at;
       return [{ notification_id, ...source, topic_key: input.topic_key,
         title: input.title, ...(input.body ? { body: input.body } : {}), ...(input.event_id ? { event_id: input.event_id } : {}),
-        target, kind, scope, outcome, availability: "available", created_at, read: is_visible() }, ...items.filter((item) => item.notification_id !== notification_id)];
+        target, kind, scope, outcome, created_at, read: is_visible() }, ...items.filter((item) => item.notification_id !== notification_id)];
     });
   }
 
-  async list(): Promise<NotificationItem[]> {
+  async list(): Promise<NotificationRecord[]> {
     if (!await this.storage.files.path_exists("notifications.json")) return [];
     const items: unknown = JSON.parse((await this.storage.files.read_file("notifications.json")).toString("utf8"));
     return z.array(item_schema).parse(items);
@@ -81,17 +74,11 @@ export class NotificationStore {
 
   /** 可见目标只确认普通更新，绝不修改原 Interaction。 */
   async mark_target_read(target: PowerNotificationTarget, is_visible: () => boolean = () => true): Promise<boolean> {
-    const key = notification_target_key(target);
     return await this.mutate(async (items) => !is_visible() ? items
-      : items.map((item) => notification_target_key(item.target) === key ? { ...item, read: true } : item));
+      : items.map((item) => notification_target_matches(item.target, target) ? { ...item, read: true } : item));
   }
 
-  /** 仅在启动与明确生命周期入口核对来源；归档和删除均保留记录和阅读状态。 */
-  async reconcile(resolve: (item: NotificationItem) => PowerNotificationAvailability): Promise<boolean> {
-    return await this.mutate(async (items) => items.map((item) => ({ ...item, availability: resolve(item) })));
-  }
-
-  private async mutate(change: (items: NotificationItem[]) => Promise<NotificationItem[]>): Promise<boolean> {
+  private async mutate(change: (items: NotificationRecord[]) => Promise<NotificationRecord[]>): Promise<boolean> {
     await this.storage.files.ensure_directory(".");
     return await this.storage.files.with_file_lock("notifications.lock", async () => {
       const previous = await this.list();

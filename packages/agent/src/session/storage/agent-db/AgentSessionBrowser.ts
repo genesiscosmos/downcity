@@ -29,11 +29,19 @@ export class AgentSessionBrowser {
   constructor(private readonly options: AgentSessionBrowserOptions) {}
 
   /** 按不可变记录身份读取，不猜测逻辑地址；调用方必须检查返回视图的归档状态。 */
-  async get_record(storage_id: string): Promise<SessionReadView> {
-    if (!/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/iu.test(storage_id)) throw new Error("session_validation_error");
+  async get_record(session_id: string): Promise<SessionReadView> {
+    if (!/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/iu.test(session_id)) throw new Error("session_validation_error");
     const lease = await this.connection();
-    const record = await lease.read<AgentSessionRecord>({ command: "record", storage_id });
+    const record = await lease.read<AgentSessionRecord>({ command: "record", session_id });
     return agent_session_read_view(lease, this.options.agent_id, record);
+  }
+
+  /** 只读持久主指针；空根不创建数据库或会话。 */
+  async main(): Promise<SessionReadView | null> {
+    const lease = await this.collection_connection();
+    if (!lease) return null;
+    const record = await lease.read<AgentSessionRecord | null>({ command: "main" });
+    return record ? agent_session_read_view(lease, this.options.agent_id, record) : null;
   }
 
   async categories(archived = false): Promise<string[]> {
@@ -55,7 +63,7 @@ export class AgentSessionBrowser {
   /** 精确打开某一归档记录；同逻辑 ID 可以同时存在活动记录和多条归档。 */
   async get_archived(address: AgentArchivedSessionAddress): Promise<SessionReadView> {
     const lease = await this.connection();
-    const record = await lease.read<AgentSessionRecord | null>({ command: "find", address: { archived: true, storage_id: address.storage_id } });
+    const record = await lease.read<AgentSessionRecord | null>({ command: "find", address: { archived: true, session_id: address.session_id } });
     if (!record) throw new Error("session_not_found");
     if ((address.session_id !== undefined && address.session_id !== record.session_id)
       || (address.category !== undefined && normalize_session_origin_category(address.category) !== record.category)) {
@@ -65,13 +73,13 @@ export class AgentSessionBrowser {
   }
 
   /** 配置按记录身份独立读取，不阻塞目录或消息页。 */
-  async configuration(storage_id: string): Promise<AgentSessionConfigurationRow> {
-    return await (await this.connection()).read({ command: "configuration", storage_id });
+  async configuration(session_id: string): Promise<AgentSessionConfigurationRow> {
+    return await (await this.connection()).read({ command: "configuration", session_id });
   }
 
   async model_binding(session_id: string, category: string) {
     const view = await this.get(session_id, category);
-    const config = await this.configuration(view.storage_id);
+    const config = await this.configuration(view.session_id);
     return config.model_binding ? decode_model_binding(config.model_binding) : undefined;
   }
 
@@ -80,7 +88,7 @@ export class AgentSessionBrowser {
     const view = await this.get(session_id, category);
     const identity = resolve_prompt_request_identity(session_id, request_id);
     if (!identity) throw new Error("session_validation_error");
-    const message = await (await this.connection()).read<SessionMessage | null>({ command: "message", storage_id: view.storage_id, id: identity.message_id });
+    const message = await (await this.connection()).read<SessionMessage | null>({ command: "message", session_id: view.session_id, id: identity.message_id });
     if (!message) return { accepted: false, completed: false, turn_id: null, result: null, execution_state: "not_found" };
     if (message.role !== "user" || message.meta?.from.kind !== "user" || message.meta.from.user_id !== "local") {
       throw new Error("session_request_forbidden");

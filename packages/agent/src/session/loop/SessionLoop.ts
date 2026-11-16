@@ -73,6 +73,7 @@ import { local_user_prompt_actor, session_prompt_actor_schema, same_session_prom
 import type { SessionPromptActor } from "@/types/sdk/SessionPromptActor.js";
 import { CompletionPersistenceError, prepare_session_completion } from "./SessionCompletionJournal.js";
 import { accept_background_input } from "./SessionBackgroundInput.js";
+import { run_with_execution_lease } from "../SessionExecutionLease.js";
 import { with_session_execution_state } from "./SessionExecutionState.js";
 import type { SessionBackgroundInput, SessionBackgroundReceipt } from "@/types/session/SessionBackgroundInput.js";
 
@@ -97,6 +98,7 @@ export class SessionLoop {
   private readonly session_executor: SessionExecutorPort;
   private readonly maintain_context: SessionLoopOptions["maintain_context"];
   private readonly state: SessionState;
+  /** 原记录身份由 Session 存储拥有者提供。 */
   private readonly messages: SessionMessages;
   /** 可信结果共用 canonical 去重与并发接收屏障。 */
   private readonly result_acceptance: SessionResultAcceptance;
@@ -139,7 +141,10 @@ export class SessionLoop {
   private readonly pending_power_descriptors = new Map<string, PromptPowerDescriptor[]>();
   private readonly pending_request_handles = new Map<string, Promise<AgentSessionTurnHandle>>();
 
+  private readonly acquire_execution?: () => () => void;
+
   constructor(options: SessionLoopOptions) {
+    this.acquire_execution = options.acquire_execution;
     this.session_id = String(options.session_id || "").trim();
     this.completions = options.completions;
     this.session_origin = options.session_origin;
@@ -708,7 +713,7 @@ export class SessionLoop {
         throw new Error("Caller Power execution was interrupted; automatic replay is unavailable");
       }
       await receive(false);
-      const result = await this.execute_prompt_turn({ active_turn });
+      const result = await run_with_execution_lease(this.acquire_execution, () => this.execute_prompt_turn({ active_turn }));
       const final_result = await complete_session_turn(
         this.turn_completion_options(),
         active_turn,

@@ -335,7 +335,7 @@ export function register_sdk_session_routes(
       const input: AgentArchiveSessionInput = {
         id: session_id, category: get_category(c.req.query("category")),
         ...(body.operation_id ? { operation_id: body.operation_id } : {}),
-        ...(body.root_storage_id ? { root_storage_id: body.root_storage_id } : {}),
+        ...(body.root_session_id ? { root_session_id: body.root_session_id } : {}),
       };
       const result = await sessions.archive(input);
       return c.json({
@@ -343,9 +343,9 @@ export function register_sdk_session_routes(
         ...result,
       });
     } catch (error) {
-      const handle = error as { operation_id?: string; root_storage_id?: string; plan_fingerprint?: string };
+      const handle = error as { operation_id?: string; root_session_id?: string; plan_fingerprint?: string };
       return c.json({ success: false, error: error instanceof Error ? error.message : String(error),
-        operation_id: handle.operation_id, root_storage_id: handle.root_storage_id, plan_fingerprint: handle.plan_fingerprint }, 500);
+        operation_id: handle.operation_id, root_session_id: handle.root_session_id, plan_fingerprint: handle.plan_fingerprint }, 500);
     }
   });
 

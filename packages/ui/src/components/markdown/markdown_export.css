@@ -1,43 +1,11 @@
 /*
- * MarkdownView 的静态导出排版：保持正文层级，展开原本需要横向滚动的内容。
- * 导出状态由 MarkdownExportContext 提供，宿主只管理纸张、品牌与消息元数据布局。
+ * MarkdownView 导出复用正常正文的字号、字体、图片、代码与表格排版，仅隐藏交互工具栏。
+ * 导出上下文仍用于立即渲染图表；纸张尺寸、品牌与消息元信息由宿主管理。
  */
-.markdown-view-layout[data-markdown-export] .markdown-view img { margin-inline: auto; object-fit: contain; }
-.markdown-view-layout[data-markdown-export] .markdown-view [data-streamdown="code-block-body"],
-.markdown-view-layout[data-markdown-export] .markdown-view [data-streamdown="code-block-body"] code,
-.markdown-view-layout[data-markdown-export] .markdown-view [data-streamdown="code-block-body"] code span {
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
-}
-.markdown-view-layout[data-markdown-export] .markdown-view [data-streamdown="code-block-body"],
-.markdown-view-layout[data-markdown-export] .markdown-view [data-streamdown="table-wrapper"],
-.markdown-view-layout[data-markdown-export] .markdown-view [data-streamdown="table-wrapper"] > div { overflow: visible; }
-.markdown-view-layout[data-markdown-export] .markdown-view [data-streamdown="table-wrapper"] table {
-  width: 100% !important;
-  min-width: 0;
-  table-layout: fixed;
-}
-.markdown-view-layout[data-markdown-export] .markdown-view :where(th, td) { overflow-wrap: anywhere; white-space: normal; }
 .markdown-view-layout[data-markdown-export] .markdown-view :where(button, [role="toolbar"], .markdown-mermaid-toolbar) { display: none !important; }
 
-/* 静态页面不能滚动，图表按版面完整缩放，源码展开换行，避免导出截断。 */
-.markdown-view-layout[data-markdown-export] .markdown-mermaid-canvas svg { max-width: 100%; }
-.markdown-view-layout[data-markdown-export] pre.markdown-svg-source {
-  max-height: none;
-  overflow: visible;
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
-}
-
 @media print {
-  /* Chromium PDF 在 macOS 上可能无法嵌入 system-ui 中文字形，使用可嵌入字体回退。 */
-  .markdown-view-layout[data-markdown-export] .markdown-view {
-    font-family: Arial, "Heiti SC", "Noto Sans CJK SC", "Microsoft YaHei", sans-serif;
-  }
-  .markdown-view-layout[data-markdown-export] .markdown-view :where(pre, code),
-  .markdown-view-layout[data-markdown-export] .markdown-view :where(pre, code) * {
-    font-family: Menlo, Consolas, "Heiti SC", "Noto Sans CJK SC", monospace;
-  }
+  /* 分页与颜色保真不改变正文排版。 */
   .markdown-view-layout[data-markdown-export] .markdown-view :where(h1, h2, h3) { break-after: avoid; }
   .markdown-view-layout[data-markdown-export] .markdown-view :where(tr, img, svg) { break-inside: avoid; }
   .markdown-view-layout[data-markdown-export] .markdown-view thead { display: table-header-group; }

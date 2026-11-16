@@ -1,7 +1,7 @@
 /** 单 Session 目录包的显式离线导入；同 Agent 原身份、冲突拒绝，不启停宿主或创建目标库。 */
 import path from "node:path";
 import { pathToFileURL as path_to_file_url } from "node:url";
-import { load_runtime } from "./lib/session-v7-runtime.mjs";
+import { load_runtime } from "./lib/session-runtime.mjs";
 import { fail } from "./lib/session-v7-database.mjs";
 import { diagnostic } from "./lib/session-v8-files.mjs";
 import { uuid_pattern } from "./lib/session-transfer-record.mjs";
@@ -10,8 +10,8 @@ import { import_session } from "./lib/session-transfer-import.mjs";
 const help_text = `Single Session import (Node >= 22.18, checkout dependencies required)
 node scripts/import-session.mjs --root PATH --agent ID --package PATH --batch PATH --operation-id UUID --writers-stopped
   --allow-unresolved-sources  Preserve exact unavailable source references; never rebind by logical ID.
-The target must be an existing ready v8 database belonging to the SAME Agent.
-Preserves storage UUID and active/archive status. Conflicts never overwrite records or files.
+The target must be an existing ready v10 database belonging to the SAME Agent.
+Accepts format 3/schema 10 only. Preserves permanent session_id and active/archive status; never selects the main pointer. Conflicts never overwrite records or files.
 Batch must be outside the data root and package. Resume with the SAME arguments and operation UUID.
 No automatic import retry, source removal, root migration, or service stop/start.`;
 
@@ -47,7 +47,7 @@ export async function run(input) {
   if (input.help) { console.log(help_text); return 0; }
   validate(input);
   const result = await import_session(input, await load_runtime(true));
-  console.log(JSON.stringify({ status: result.status, storage_id: result.storage_id,
+  console.log(JSON.stringify({ status: result.status, session_id: result.session_id,
     unresolved_sources: result.unresolved_sources, replayed: result.replayed }));
   return 0;
 }

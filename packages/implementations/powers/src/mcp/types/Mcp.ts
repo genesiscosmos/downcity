@@ -1,6 +1,7 @@
 /** SkillPower 内部 MCP 服务的配置、工具与运行状态协议。 */
 
 import type { PowerJsonObject, PowerJsonValue } from "@downcity/city/power";
+import type { McpFailureDetail } from "./McpFailure.js";
 import type { McpOAuthTransportConfig, McpOAuthState } from "../auth/OAuthTypes.js";
 
 /** MCP server 的稳定配置。 */
@@ -76,6 +77,8 @@ export interface McpServerStatus {
   can_authorize?: boolean;
   /** 最近一次错误。 */
   last_error?: string;
+  /** 最近失败的脱敏分类、HTTP 状态码和受控原因，用于设置页恢复提示。 */
+  last_failure?: McpFailureDetail;
   /** 最近一次成功更新时间。 */
   updated_at?: string;
 }

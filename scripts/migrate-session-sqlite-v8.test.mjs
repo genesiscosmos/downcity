@@ -279,7 +279,7 @@ test("partial attachment copy is verified and continued after interruption", asy
   const copy = fs.copyFileSync; let injected = false;
   fs.copyFileSync = (from, target, flags) => {
     copy(from, target, flags);
-    if (!injected && target.includes("/original/") && target.endsWith("fixture.txt")) { injected = true; throw new Error("copy interrupted"); }
+    if (!injected && target.includes("/original/") && from.endsWith("fixture.txt")) { injected = true; throw new Error("copy interrupted"); }
   };
   try { await assert.rejects(migrate(input.root_path, input.batch_path, runtime), /copy interrupted/); }
   finally { fs.copyFileSync = copy; }
@@ -360,4 +360,135 @@ test("stale preserved source fingerprint blocks the complete batch", context => 
   save_json(recovered_path, { format_version: 1, sources: [{ agent_id: "sample", session_id: "old", category: "chat", database_path: archive,
     source_fingerprint: "0".repeat(64), attachments: [] }] });
   assert.equal(preflight(input.root_path, runtime, new Map(), load_recovered_sources(recovered_path)).agents[0].reason, "source_changed_since_preflight");
+});
+
+test("recovered archive attachments are rebound from preserved absolute paths to original record UUID", async context => {
+  const input = fixture(context); const preserved = fixture(context);
+  source_database(input.root_path, { session_id: "child" });
+  const archive = source_database(preserved.root_path, { file: true });
+  const recovered_path = path.join(path.dirname(input.root_path), "recovered.json");
+  const { attachment_inventory } = await import("./lib/session-v8-files.mjs");
+  save_json(recovered_path, { format_version: 1, sources: [{ agent_id: "sample", session_id: "main", category: "chat", database_path: archive,
+    source_fingerprint: snapshot_file(archive).fingerprint, attachments: attachment_inventory(path.join(path.dirname(archive), "attachments")) }] });
+  const result = await migrate(input.root_path, input.batch_path, runtime, new Map(), load_recovered_sources(recovered_path));
+  assert.equal(result.status, "ready");
+  const target = new DatabaseSync(path.join(input.root_path, "agents/sample/sessions.db"), { readOnly: true });
+  try {
+    const row = target.prepare("SELECT storage_id FROM sessions WHERE archived=1").get();
+    const content = JSON.parse(target.prepare("SELECT content FROM message_parts WHERE type='file'").get().content);
+    assert.equal(content.url, path.join(input.root_path, "agents/sample/session-files", row.storage_id, "attachments/fixture.txt"));
+    assert.equal(fs.readFileSync(content.url, "utf8"), "attachment bytes");
+  } finally { target.close(); }
+});
+
+test("ENOSPC during attachment bytes is recoverable without changing sources or UUIDs", async context => {
+  const input = fixture(context); const source = source_database(input.root_path, { file: true });
+  const before = snapshot_file(source).fingerprint;
+  const copy = fs.copyFileSync; let injected = false;
+  fs.copyFileSync = (from, target, flags) => {
+    if (!injected && target.includes("/original/") && from.endsWith("fixture.txt")) {
+      injected = true; fs.writeFileSync(target, "partial"); throw Object.assign(new Error("disk full"), { code: "ENOSPC" });
+    }
+    return copy(from, target, flags);
+  };
+  try { await assert.rejects(migrate(input.root_path, input.batch_path, runtime), /disk full/); }
+  finally { fs.copyFileSync = copy; }
+  const ids = read_manifest(input.batch_path, input.root_path).agents[0].sources.map(source => source.storage_id);
+  assert.equal(snapshot_file(source).fingerprint, before);
+  const result = await migrate(input.root_path, input.batch_path, runtime);
+  assert.deepEqual(result.agents[0].sources.map(source => source.storage_id), ids);
+  assert.equal(verify_batch(input.root_path, input.batch_path, runtime).status, "verified");
+});
+
+test("space budgets block data and backup volumes before target publication", async context => {
+  const input = fixture(context); const source = source_database(input.root_path);
+  const before = snapshot_file(source).fingerprint;
+  const statfs = fs.statfsSync;
+  fs.statfsSync = () => ({ bavail: 0, bsize: 4096 });
+  try {
+    assert.equal(preflight(input.root_path, runtime).reason, "insufficient_space");
+    assert.equal((await migrate(input.root_path, input.batch_path, runtime)).reason, "insufficient_space");
+  } finally { fs.statfsSync = statfs; }
+  assert(!fs.existsSync(input.batch_path));
+  fs.statfsSync = target => target === path.dirname(input.batch_path) ? { bavail: 0, bsize: 4096 } : statfs(target);
+  try { await assert.rejects(migrate(input.root_path, input.batch_path, runtime), /insufficient_backup_space/); }
+  finally { fs.statfsSync = statfs; }
+  assert.equal(snapshot_file(source).fingerprint, before);
+  assert(!fs.existsSync(path.join(input.root_path, "agents/sample/sessions.db")));
+});
+
+test("restore retained copy interrupted during bytes resumes before removing any target", async context => {
+  const input = fixture(context); source_database(input.root_path);
+  await migrate(input.root_path, input.batch_path, runtime);
+  const target_path = path.join(input.root_path, "agents/sample/sessions.db");
+  const before = snapshot_file(target_path).fingerprint;
+  const copy = fs.copyFileSync; let injected = false;
+  fs.copyFileSync = (from, target, flags) => {
+    if (!injected && target.includes("/retained/")) {
+      injected = true; fs.writeFileSync(target, "partial"); throw Object.assign(new Error("disk full"), { code: "ENOSPC" });
+    }
+    return copy(from, target, flags);
+  };
+  try { assert.throws(() => restore_batch(input.root_path, input.batch_path, runtime), /disk full/); }
+  finally { fs.copyFileSync = copy; }
+  assert(injected); assert.equal(snapshot_file(target_path).fingerprint, before);
+  assert.equal(restore_batch(input.root_path, input.batch_path, runtime).status, "restored");
+  assert.equal(snapshot_file(path.join(input.batch_path, "retained/sample/sessions.db")).fingerprint, before);
+});
+
+test("new legacy source added after interruption cannot be covered by a stale whole-root plan", async context => {
+  const input = fixture(context); source_database(input.root_path);
+  const rename = fs.renameSync; let injected = false;
+  fs.renameSync = (from, target) => {
+    rename(from, target);
+    if (!injected && target.includes("/.session-migration-") && target.endsWith("sessions.db")) { injected = true; throw new Error("interrupted"); }
+  };
+  try { await assert.rejects(migrate(input.root_path, input.batch_path, runtime), /interrupted/); }
+  finally { fs.renameSync = rename; }
+  source_database(input.root_path, { session_id: "late" });
+  await assert.rejects(migrate(input.root_path, input.batch_path, runtime), /source_scope_changed/);
+  await assert.rejects(runtime.assert_session_storage_ready(input.root_path), /session_migration_required/);
+});
+
+test("actual v8 business transaction records first write and rejects restore of the entire batch", async context => {
+  const input = fixture(context); source_database(input.root_path); source_database(input.root_path, { agent_id: "other" });
+  await migrate(input.root_path, input.batch_path, runtime);
+  const { AgentSessionDatabase } = await import("../packages/agent/bin/session/storage/agent-db/AgentSessionDatabase.js");
+  const database_path = path.join(input.root_path, "agents/sample/sessions.db");
+  const owner = new AgentSessionDatabase({ agent_id: "sample", database_path });
+  try {
+    owner.write(crypto.randomUUID(), { action: "isolated-configuration-write" }, database => {
+      database.exec("UPDATE sessions SET title='business write'"); return { changed: true };
+    });
+    assert.notEqual(owner.metadata.first_business_write_at, null);
+  } finally { owner.close(); }
+  assert.throws(() => restore_batch(input.root_path, input.batch_path, runtime), /published_target_changed_or_business_write/);
+  assert(fs.existsSync(path.join(input.root_path, "agents/other/sessions.db")));
+});
+
+test("corrupt source bytes block apply without initializing or replacing the source", async context => {
+  const input = fixture(context); const source = source_database(input.root_path);
+  fs.writeFileSync(source, "not a sqlite database".repeat(64));
+  const before = fs.readFileSync(source);
+  const result = preflight(input.root_path, runtime);
+  assert.equal(result.status, "blocked");
+  assert.equal((await migrate(input.root_path, input.batch_path, runtime)).status, "blocked");
+  assert.deepEqual(fs.readFileSync(source), before);
+  assert(!fs.existsSync(input.batch_path));
+  assert(!fs.existsSync(path.join(input.root_path, "agents/sample/sessions.db")));
+});
+
+
+test("migrated arbitrary attachment names have exact cleanup ownership and source bytes remain", async context => {
+  const input = fixture(context); const source = source_database(input.root_path, { file: true });
+  await migrate(input.root_path, input.batch_path, runtime);
+  const target_path = path.join(input.root_path, "agents/sample/sessions.db");
+  const database = new DatabaseSync(target_path);
+  const storage_id = database.prepare("SELECT storage_id FROM sessions").get().storage_id;
+  database.exec("PRAGMA foreign_keys=ON; DELETE FROM sessions;"); database.close();
+  const { cleanup_agent_session_attachments } = await import("../packages/agent/bin/index.js");
+  const result = cleanup_agent_session_attachments({ agent_id: "sample", storage_root_path: path.dirname(target_path) });
+  assert.deepEqual(result.completed, [storage_id]);
+  assert(fs.existsSync(path.join(path.dirname(source), "attachments/fixture.txt")));
+  assert(!fs.existsSync(path.join(path.dirname(target_path), "session-files", storage_id)));
 });

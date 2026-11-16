@@ -6,6 +6,8 @@
  */
 
 import { generate_id } from "@/utils/Id.js";
+import { fail_tool } from "@/model/results/ToolTerminal.js";
+import { assert_tool_terminal } from "@/model/results/ResultReference.js";
 import { resolve_stable_part_sequence } from "./SessionStablePrefix.js";
 import { create_session_part_mutation } from "@/session/messages/SessionMutationFactory.js";
 import { resolve_session_message_state } from "@/session/messages/SessionMessageState.js";
@@ -259,17 +261,12 @@ export class SessionAgentMessageState {
             )
           : part.interactions;
         if (part.state === "completed" || part.state === "failed") {
+          assert_tool_terminal(part);
           return had_pending_interaction ? { ...part, interactions } : part;
         }
-        return {
-          ...part,
-          state: "failed" as const,
-          interactions,
-          error: outcome === "stopped" && part.state === "waiting-user" &&
-              had_pending_interaction
-            ? "Interaction cancelled"
-            : error || "Tool did not complete before Agent Message closed",
-        };
+        const detail = outcome === "stopped" && part.state === "waiting-user" && had_pending_interaction
+          ? "Interaction cancelled" : error || "Tool did not complete before Agent Message closed";
+        return { ...this.fail_tool_part(current, part, detail), interactions };
       });
       if (outcome === "stopped" && !parts.some((part) =>
         part.type === "error" && part.code === "turn_stopped"
@@ -376,9 +373,7 @@ export class SessionAgentMessageState {
       await this.persist_snapshot(
         current.message_id,
         replace_tool_part(current.parts, {
-          ...owner,
-          state: denied ? "failed" : "running",
-          ...(denied ? { error: "Interaction denied" } : {}),
+          ...(denied ? this.fail_tool_part(current, owner, "Interaction denied") : { ...owner, state: "running" as const }),
           interactions: update_tool_interaction(owner, interaction_id, (item) => ({
             ...item,
             status: denied ? "denied" : "resolved",
@@ -403,10 +398,8 @@ export class SessionAgentMessageState {
       await this.persist_snapshot(
         current.message_id,
         replace_tool_part(current.parts, {
-          ...owner,
           ...(owner.state === "waiting-user"
-            ? { state: "failed" as const, error: "Interaction cancelled" }
-            : {}),
+            ? this.fail_tool_part(current, owner, "Interaction cancelled") : owner),
           interactions: update_tool_interaction(owner, interaction_id, (item) => ({
             ...item,
             status: "cancelled",
@@ -417,6 +410,12 @@ export class SessionAgentMessageState {
       );
     });
     return this.require_interaction(interaction_id).interaction;
+  }
+
+  /** Build a first failure snapshot using the exact persisted message/category location. */
+  private fail_tool_part(message: SessionAgentMessage, part: SessionAgentToolPart, error: string): SessionAgentToolPart {
+    return fail_tool(part, { session_id: message.session_id, message_id: message.message_id,
+      message_sequence: message.sequence, part_id: part.part_id, category: this.options.store.origin.category }, error);
   }
 
   /** 原子保存完整 Message 快照；变更比较以数据库事实而非运行投影为准。 */

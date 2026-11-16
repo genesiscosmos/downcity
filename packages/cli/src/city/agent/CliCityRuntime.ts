@@ -85,6 +85,7 @@ export class CliCityRuntime {
     const results: PromiseSettledResult<unknown>[] = [];
     results.push(...await Promise.allSettled([this.management.close()]));
     results.push(...await Promise.allSettled([this.resources.dispose()]));
+    results.push(...await Promise.allSettled([this.data.extensions.dispose()]));
     results.push(...await Promise.allSettled([this.city.close()]));
     const federation = this.city.federation.current;
     this.city.federation.set(undefined);
@@ -173,7 +174,7 @@ export class CliCityRuntime {
           finally { auth.close(); }
         },
         resolve_session_model: async ({ model_id }) =>
-          await resolve_cli_agent_model(model_id, () => city.federation.current),
+          await resolve_cli_agent_model(model_id, () => city.federation.current, undefined, data.extensions),
         create_agent_extension: ({ agent, workspace, powers, sdk_router }) => {
           const auth_service = new AuthService({
             agent_id: agent.id,
@@ -211,7 +212,7 @@ export class CliCityRuntime {
         instance_id: host_instance_id,
         shutdown: () => { process.kill(process.pid, "SIGTERM"); },
         resolve_session_model: async ({ model_id }) =>
-          await resolve_cli_agent_model(model_id, () => city.federation.current),
+          await resolve_cli_agent_model(model_id, () => city.federation.current, undefined, data.extensions),
         reload_workspace_env: async ({ workspace }) => {
           const env = reload_cli_workspace_env(workspace.path, data.root_path);
           workspace.set_env(env);
@@ -220,12 +221,16 @@ export class CliCityRuntime {
       },
       },
     });
+    data.extensions.attach(city, () => {});
     resources = create_cli_resources(data, city, coordinator);
     const agents: Agent[] = [];
     try {
+      await data.extensions.restore();
       for (const config of data.agents.list()) {
         const agent = await create_cli_agent({
           config,
+          root_path,
+          extensions: data.extensions,
           resolve_federation: () => city.federation.current,
         });
         agents.push(agent);

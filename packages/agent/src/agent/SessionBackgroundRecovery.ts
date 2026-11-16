@@ -22,11 +22,10 @@ export async function recover_background_sessions(
         });
       for (const entry of page.items) {
         const context: SessionBackgroundRecoveryContext = {
-          session_id: entry.session_id, category, storage_id: entry.storage_id, phase: "read_session",
+          session_id: entry.session_id, category, phase: "read_session",
         };
         try {
           const view = await store.read_session(entry.session_id, category);
-          context.storage_id = view.storage_id;
           let before_sequence: number | undefined;
           let latest: SessionMessage | undefined;
           for (;;) {

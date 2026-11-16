@@ -68,16 +68,16 @@ class RemoteAgentSessions implements AgentSessions<RemoteAgentSession> {
   async list(input?: AgentListSessionsInput): Promise<AgentSessionSummaryPage> { return await this.transport.list_sessions(input); }
   async archive(input: AgentArchiveSessionInput): Promise<AgentArchiveSessionResult> { return await this.transport.archive_session(input); }
   async archived(input?: AgentArchiveSessionsInput): Promise<AgentArchiveSessionsResult> { return await this.transport.archive_sessions(input); }
-  async read_archived(storage_id: string): Promise<import("@downcity/agent").SessionReadView> {
+  async read_archived(session_id: string): Promise<import("@downcity/agent").SessionReadView> {
     this.assert_open();
-    const snapshot = await this.transport.archived_snapshot(storage_id);
-    if (snapshot.storage_id !== storage_id || !snapshot.archived) throw new Error("session_address_conflict");
+    const snapshot = await this.transport.archived_snapshot(session_id);
+    if (snapshot.session_id !== session_id || !snapshot.archived) throw new Error("session_address_conflict");
     return { ...snapshot,
-      messages: async input => { this.assert_open(); return await this.transport.archived_messages(storage_id, input); },
-      configuration: async () => { this.assert_open(); return await this.transport.archived_configuration(storage_id); },
-      interactions: async () => { this.assert_open(); return await this.transport.archived_interactions(storage_id); },
+      messages: async input => { this.assert_open(); return await this.transport.archived_messages(session_id, input); },
+      configuration: async () => { this.assert_open(); return await this.transport.archived_configuration(session_id); },
+      interactions: async () => { this.assert_open(); return await this.transport.archived_interactions(session_id); },
     };
   }
-  async remove_archived(storage_id: string): Promise<boolean> { this.assert_open(); return await this.transport.remove_archived(storage_id); }
+  async remove_archived(session_id: string): Promise<boolean> { this.assert_open(); return await this.transport.remove_archived(session_id); }
   async clean_archive(): Promise<AgentCleanArchiveResult> { return await this.transport.clean_archive(); }
 }

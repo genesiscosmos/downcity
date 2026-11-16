@@ -2,12 +2,13 @@
  * v8 离线迁移批次拥有者：独占租约、WAL 一致性备份、暂存、逐 Agent 发布与根完成标记。
  * 源库和原附件始终保留；重入校验完整源/目标指纹，开始业务写入的目标不能恢复或覆盖。
  */
+import { assert_v8_runtime } from "./session-v8-runtime-gate.mjs";
 import fs from "node:fs";
 import path from "node:path";
 import { DatabaseSync, backup } from "node:sqlite";
 import { randomUUID as random_uuid } from "node:crypto";
 import { digest, fail, open_readonly, snapshot_file, read_snapshot, check_integrity } from "./session-v7-database.mjs";
-import { exists, ordinary, inside, file_hash, sync_path, save_json, discover, diagnostic, attachment_inventory, copy_attachments, source_database_path } from "./session-v8-files.mjs";
+import { exists, ordinary, inside, file_hash, sync_path, save_json, discover, diagnostic, attachment_inventory, copy_attachments, copy_verified_file, source_database_path } from "./session-v8-files.mjs";
 import { plan_agent, validate_agent, import_agent, verify_agent } from "./session-v8-plan.mjs";
 
 /** 同步更新只包含结构、映射和摘要的私有清单。 */
@@ -31,6 +32,7 @@ function assert_sources(root_path, agent, runtime) {
 
 /** 不含正文的只读全根预检；任何 Agent 阻塞均阻止整批执行。 */
 export function preflight(root_path, runtime, repairs = new Map(), recovered_sources = []) {
+  assert_v8_runtime(runtime);
   root_path = fs.realpathSync(root_path);
   const agents = discover(root_path);
   for (const recovered of recovered_sources) {
@@ -144,6 +146,17 @@ async function backup_agent(root_path, batch_path, agent, manifest) {
   }
 }
 
+/** 正式转换为非保留命名的旧附件登记精确所属，清理不能靠扫描普通文件名猜归属。 */
+function prepare_attachment_ownership(record_path, agent_id, source, readonly = false) {
+  ordinary(record_path, true);
+  const manifest_path = path.join(record_path, ".owned-attachments.json");
+  const ownership = { format_version: 1, agent_id, storage_id: source.storage_id, files: source.attachments.map(item => item.relative_path) };
+  if (exists(manifest_path)) {
+    ordinary(manifest_path);
+    if (digest(JSON.parse(fs.readFileSync(manifest_path, "utf8"))) !== digest(ownership)) fail("attachment_ownership_changed");
+  } else if (!readonly) save_json(manifest_path, ownership);
+}
+
 /** 暂存只从校验过的备份生成；重复运行不会重新分配 UUID。 */
 function stage_agent(root_path, batch_path, agent, manifest, runtime, repairs) {
   const stage = stage_path(root_path, agent, manifest);
@@ -152,6 +165,7 @@ function stage_agent(root_path, batch_path, agent, manifest, runtime, repairs) {
     const published_files = path.join(root_path, "agents", agent.agent_id, "session-files", source.storage_id, "attachments");
     const files_path = exists(published_files) ? published_files : path.join(stage, "session-files", source.storage_id, "attachments");
     copy_attachments(path.join(path.dirname(inside(path.join(batch_path, "original"), source.relative_path)), "attachments"), files_path, source.attachments);
+    prepare_attachment_ownership(path.dirname(files_path), agent.agent_id, source);
     source.target_media_versions = Object.fromEntries(source.attachments.map(item => [item.relative_path, runtime.file_read_version(fs.statSync(inside(files_path, item.relative_path)))]));
   }
   save_manifest(batch_path, manifest);
@@ -184,11 +198,12 @@ function verify_published(root_path, agent) {
   if (snapshot_file(target_path).fingerprint !== agent.target_fingerprint) fail("published_target_changed_or_business_write");
   for (const source of agent.sources) {
     if (digest(attachment_inventory(path.join(agent_path, "session-files", source.storage_id, "attachments"))) !== digest(source.attachments)) fail("published_attachments_mismatch");
+    prepare_attachment_ownership(path.join(agent_path, "session-files", source.storage_id), agent.agent_id, source, true);
   }
 }
 
 /** 同卷 rename 逐 Agent 发布；根 pending 标记阻止部分布局被宿主消费。 */
-function publish_agent(root_path, batch_path, agent, manifest) {
+function publish_agent(root_path, batch_path, agent, manifest, runtime) {
   const agent_path = path.join(root_path, "agents", agent.agent_id);
   const stage = stage_path(root_path, agent, manifest);
   const files_path = path.join(agent_path, "session-files");
@@ -202,6 +217,7 @@ function publish_agent(root_path, batch_path, agent, manifest) {
   const target_path = path.join(agent_path, "sessions.db");
   if (!exists(target_path)) { fs.renameSync(path.join(stage, "sessions.db"), target_path); sync_path(agent_path); }
   verify_published(root_path, agent);
+  runtime.AgentSessionFileLease.acquire(target_path, agent.agent_id, false, true).release();
   agent.status = "published"; save_manifest(batch_path, manifest);
 }
 
@@ -217,6 +233,7 @@ function assert_scope(root_path, manifest, runtime) {
 
 /** 全批次校验通过才写 ready；重复执行只核验，不覆盖已发布的业务数据。 */
 export async function migrate(root_path, batch_path, runtime, repairs = new Map(), recovered_sources = []) {
+  assert_v8_runtime(runtime);
   root_path = fs.realpathSync(root_path); batch_path = runtime.resolve_resource_root(batch_path);
   if (batch_path === root_path || batch_path.startsWith(`${root_path}${path.sep}`)) fail("batch_must_be_outside_data_root");
   const lease = runtime.RootLease.acquire_write(root_path);
@@ -245,7 +262,11 @@ export async function migrate(root_path, batch_path, runtime, repairs = new Map(
     const marker = exists(marker_path) ? JSON.parse(fs.readFileSync(marker_path, "utf8")) : null;
     if (marker && marker.migration_id !== manifest.migration_id) fail("root_marker_owned_by_another_batch");
     if (manifest.status === "ready") {
-      for (const agent of manifest.agents) verify_published(root_path, agent);
+      for (const agent of manifest.agents) {
+        verify_published(root_path, agent);
+        runtime.AgentSessionFileLease.acquire(path.join(root_path, "agents", agent.agent_id, "sessions.db"), agent.agent_id, false, true).release();
+        for (const source of agent.sources) prepare_attachment_ownership(path.join(root_path, "agents", agent.agent_id, "session-files", source.storage_id), agent.agent_id, source);
+      }
       if (marker?.state !== "ready") fail("root_marker_mismatch");
       return manifest;
     }
@@ -254,13 +275,16 @@ export async function migrate(root_path, batch_path, runtime, repairs = new Map(
       // 发布已发生但清单尚未同步的崩溃窗口，由完整目标指纹识别真实事实。
       if (exists(path.join(root_path, "agents", agent.agent_id, "sessions.db"))) {
         if (!agent.target_fingerprint) fail("unexpected_target_database");
-        verify_published(root_path, agent); agent.status = "published"; save_manifest(batch_path, manifest); continue;
+        verify_published(root_path, agent);
+        runtime.AgentSessionFileLease.acquire(path.join(root_path, "agents", agent.agent_id, "sessions.db"), agent.agent_id, false, true).release();
+        for (const source of agent.sources) prepare_attachment_ownership(path.join(root_path, "agents", agent.agent_id, "session-files", source.storage_id), agent.agent_id, source);
+        agent.status = "published"; save_manifest(batch_path, manifest); continue;
       }
       assert_sources(root_path, agent, runtime);
       await backup_agent(root_path, batch_path, agent, manifest);
       stage_agent(root_path, batch_path, agent, manifest, runtime, repairs);
       assert_sources(root_path, agent, runtime);
-      publish_agent(root_path, batch_path, agent, manifest);
+      publish_agent(root_path, batch_path, agent, manifest, runtime);
     }
     assert_scope(root_path, manifest, runtime);
     for (const agent of manifest.agents) verify_published(root_path, agent);
@@ -272,6 +296,7 @@ export async function migrate(root_path, batch_path, runtime, repairs = new Map(
 
 /** 只读验证包含源、原始备份、发布目标及根标记；不获取写锁或创建任何文件。 */
 export function verify_batch(root_path, batch_path, runtime) {
+  assert_v8_runtime(runtime);
   const manifest = read_manifest(batch_path, root_path);
   assert_scope(root_path, manifest, runtime);
   for (const agent of manifest.agents) {
@@ -289,7 +314,9 @@ export function verify_batch(root_path, batch_path, runtime) {
 
 /** 回退只撤销本批发布，旧源始终未改；保留新库到批次而非删除。业务写入后拒绝。 */
 export function restore_batch(root_path, batch_path, runtime) {
+  assert_v8_runtime(runtime);
   const lease = runtime.RootLease.acquire_write(root_path);
+  const file_leases = [];
   try {
     const manifest = read_manifest(batch_path, root_path);
     if (!["migrating", "ready", "restoring", "restored"].includes(manifest.status)) fail("batch_not_restorable");
@@ -307,7 +334,10 @@ export function restore_batch(root_path, batch_path, runtime) {
     // 先检查全部 Agent，任何已发生的业务写入都不能触发部分回退。
     for (const agent of manifest.agents) {
       const target_path = path.join(root_path, "agents", agent.agent_id, "sessions.db");
-      if (exists(target_path)) verify_published(root_path, agent);
+      if (exists(target_path)) {
+        file_leases.push(runtime.AgentSessionFileLease.acquire(target_path, agent.agent_id, true));
+        verify_published(root_path, agent);
+      }
       for (const source of agent.sources) {
         const original_path = inside(path.join(batch_path, "original"), source.relative_path);
         if (source.backup_sha256 && file_hash(original_path) !== source.backup_sha256) fail("backup_file_changed");
@@ -330,7 +360,7 @@ export function restore_batch(root_path, batch_path, runtime) {
             if (database.prepare("SELECT first_business_write_at FROM storage_metadata").get().first_business_write_at !== null) fail("restore_after_business_write_forbidden");
             database.exec("PRAGMA wal_checkpoint(TRUNCATE);"); check_integrity(database);
           } finally { database.close(); }
-          fs.copyFileSync(target_path, retained_db, fs.constants.COPYFILE_EXCL); fs.chmodSync(retained_db, 0o600); sync_path(retained_db);
+          copy_verified_file(target_path, retained_db, file_hash(target_path), path.join(retained_path, ".session-migration-copies"));
         }
         if (snapshot_file(retained_db).fingerprint !== agent.target_fingerprint) fail("retained_database_mismatch");
         for (const suffix of ["-wal", "-shm", ""]) if (exists(`${target_path}${suffix}`)) fs.unlinkSync(`${target_path}${suffix}`);
@@ -343,5 +373,5 @@ export function restore_batch(root_path, batch_path, runtime) {
     if (manifest.original_marker) save_json(marker_path, manifest.original_marker, true);
     else { fs.unlinkSync(marker_path); sync_path(root_path); }
     return { status: "restored", migration_id: manifest.migration_id };
-  } finally { lease.release(); }
+  } finally { for (const file_lease of file_leases) file_lease.release(); lease.release(); }
 }

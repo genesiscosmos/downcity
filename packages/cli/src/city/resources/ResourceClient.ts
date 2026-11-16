@@ -3,7 +3,7 @@
  * 不自动启动宿主、装配 Agent、使用默认端口或按 daemon 启动快照推断 loaded。
  */
 import { read_city_host_state, type CityHostState } from "@downcity/city";
-import { validate_resource_input, ResourceService, ResourceStore, ResourceCoordinator, RootLease, resolve_resource_root, request_management, ResourceError } from "@downcity/city/local";
+import { validate_resource_input, ResourceService, ResourceStore, ResourceCoordinator, RootLease, resolve_resource_root, LocalHostClient, ResourceError } from "@downcity/city/local";
 import { read_power_agent_references } from "@downcity/powers";
 
 /** 资源客户端的显式上下文；不修改进程环境变量。 */
@@ -33,33 +33,34 @@ export class ResourceClient {
   /** 执行一个白名单资源用例并附上本次已验证的宿主/观察信息。 */
   async call(method: string, input: Record<string, unknown> = {}) {
     validate_resource_input(method, input);
-    const state = await read_city_host_state(this.root_path);
-    if (state) {
-      const handshake = await request_management(state, this.root_path, "handshake", {}, Math.min(this.options.timeout_ms ?? 5_000, 5_000), this.options.abort_signal) as typeof state;
-      if (handshake.instance_id !== state.instance_id || handshake.root_identity !== state.root_identity) throw new ResourceError("host_identity_mismatch", "City identity changed during handshake", 5);
+    const client = await LocalHostClient.connect({ root_path: this.root_path, handshake_timeout_ms: Math.min(this.options.timeout_ms ?? 5000, 5000), abort_signal: this.options.abort_signal });
+    if (client) {
+      const state = client.state;
       this.observed_host = state;
-      let data: unknown;
       try {
-        const initializes_workspace = method === "workspace.initialize" || (method === "workspace.register" && input.initialize_dependencies === true);
-        const default_timeout_ms = initializes_workspace ? 365_000 : method === "session.send" ? 305_000 : 30_000;
-        data = await request_management(state, this.root_path, method, input, this.options.timeout_ms ?? default_timeout_ms, this.options.abort_signal);
-      } catch (error) {
-        if (method !== "session.send" || !(error instanceof ResourceError) || ![5, 7, 130].includes(error.exit_code) || typeof input.request_id !== "string") throw error;
-        // 不重发 prompt。独立只读连接核对同一 request_id，原客户端取消不能取消核实。
+        let data: unknown;
         try {
-          const verified = await new ResourceClient({ root: this.root_path, timeout_ms: 5_000 }).call("session.receipt", input);
-          const receipt = verified.data as Awaited<ReturnType<ResourceService["sessions"]["receipt"]>>;
-          if (receipt.completed && error.exit_code !== 130) {
-            if (!receipt.result?.success) throw new ResourceError("turn_failed", receipt.result?.error ?? "Turn failed or stopped", 8, false, receipt);
-            return { data: receipt, meta: verified.meta };
+          const initializes_workspace = method === "workspace.initialize" || (method === "workspace.register" && input.initialize_dependencies === true);
+          const default_timeout_ms = initializes_workspace ? 365_000 : method === "session.send" ? 305_000 : 30_000;
+          data = await client.call(method, input, { timeout_ms: this.options.timeout_ms ?? default_timeout_ms, abort_signal: this.options.abort_signal });
+        } catch (error) {
+          if (method !== "session.send" || !(error instanceof ResourceError) || ![5, 7, 130].includes(error.exit_code) || typeof input.request_id !== "string") throw error;
+          // 不重发 prompt。独立只读连接核对同一 request_id，原客户端取消不能取消核实。
+          try {
+            const verified = await new ResourceClient({ root: this.root_path, timeout_ms: 5_000 }).call("session.receipt", input);
+            const receipt = verified.data as Awaited<ReturnType<ResourceService["sessions"]["receipt"]>>;
+            if (receipt.completed && error.exit_code !== 130) {
+              if (!receipt.result?.success) throw new ResourceError("turn_failed", receipt.result?.error ?? "Turn failed or stopped", 8, false, receipt);
+              return { data: receipt, meta: verified.meta };
+            }
+            throw new ResourceError(error.code, error.message, error.exit_code, error.retryable, { ...receipt, outcome: receipt.accepted ? "accepted" : "not_accepted" });
+          } catch (recovery_error) {
+            if (recovery_error instanceof ResourceError && (recovery_error.exit_code === 8 || recovery_error.details.outcome === "accepted" || recovery_error.details.outcome === "not_accepted")) throw recovery_error;
+            throw new ResourceError(error.code, error.message, error.exit_code, false, { request_id: input.request_id, session_address: { agent_id: input.agent, category: input.category ?? "work", session_id: input.session_id }, outcome: "unknown", recovery_error: recovery_error instanceof ResourceError ? recovery_error.code : "internal_error" });
           }
-          throw new ResourceError(error.code, error.message, error.exit_code, error.retryable, { ...receipt, outcome: receipt.accepted ? "accepted" : "not_accepted" });
-        } catch (recovery_error) {
-          if (recovery_error instanceof ResourceError && (recovery_error.exit_code === 8 || recovery_error.details.outcome === "accepted" || recovery_error.details.outcome === "not_accepted")) throw recovery_error;
-          throw new ResourceError(error.code, error.message, error.exit_code, false, { request_id: input.request_id, session_address: { agent_id: input.agent, category: input.category ?? "work", session_id: input.session_id }, outcome: "unknown", recovery_error: recovery_error instanceof ResourceError ? recovery_error.code : "internal_error" });
         }
-      }
-      return { data, meta: { root_path: this.root_path, host: { owner: state.owner, instance_id: state.instance_id }, source: "host", observed_at: new Date().toISOString() } };
+        return { data, meta: { root_path: this.root_path, host: { owner: state.owner, instance_id: state.instance_id }, source: "host", observed_at: new Date().toISOString() } };
+      } finally { await client.close(); }
     }
     const readonly = ["agent.list", "agent.get", "workspace.list", "workspace.get", "session.list", "session.get", "session.history", "session.receipt", "config.token.list", "config.token.get", "config.power.get", "config.env.get"].includes(method);
     if (method.startsWith("session.") && !readonly) throw new ResourceError("host_offline", "Start City explicitly with city on or open Desktop before executing this command", 5);

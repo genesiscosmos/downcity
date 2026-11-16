@@ -90,6 +90,15 @@ export interface AgentSessionCollection {
     options?: AgentGetSessionOptions,
   ): Promise<AgentSession>;
 
+  /** 按永久 UUID 读取活动历史；分类仅用于一致性校验，不恢复执行器。 */
+  read(session_id: string, category?: string): Promise<import("../store/SessionReadView.js").SessionReadView>;
+
+  /** 只读当前主会话指针；空值不创建会话或执行器。 */
+  read_main(): Promise<import("../store/SessionReadView.js").SessionReadView | null>;
+
+  /** 按输入顺序批量读取最多 100 条精确元数据；不存在为 null，存储失败继续抛出。 */
+  read_metadata(addresses: readonly import("@/types/agent/SessionMetadata.js").SessionMetadataAddress[]): Promise<(import("@/types/agent/SessionMetadata.js").SessionMetadataResult | null)[]>;
+
   /** 列出当前 Agent 的活动 Session。 */
   list(input?: AgentListSessionsInput): Promise<AgentSessionSummaryPage>;
 
@@ -100,10 +109,10 @@ export interface AgentSessionCollection {
   archived(input?: AgentArchiveSessionsInput): Promise<AgentArchiveSessionsResult>;
 
   /** 按稳定记录 UUID 只读访问归档，不恢复执行。 */
-  read_archived(storage_id: string): Promise<import("../store/SessionReadView.js").SessionReadView>;
+  read_archived(session_id: string): Promise<import("../store/SessionReadView.js").SessionReadView>;
 
   /** 按稳定记录 UUID 删除单条归档，不能误删同逻辑 ID 的新活动会话。 */
-  remove_archived(storage_id: string): Promise<boolean>;
+  remove_archived(session_id: string): Promise<boolean>;
 
   /** 清空已归档 Session。 */
   clean_archive(): Promise<AgentCleanArchiveResult>;

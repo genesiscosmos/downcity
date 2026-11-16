@@ -12,7 +12,7 @@ import { z } from "zod";
 export const session_messages_input = z.strictObject({
   session_id: z.string().trim().min(1).describe("Session ID whose original messages should be read, including archived history."),
   session_category: z.enum(["chat", "work"]).describe("Category returned by check; together with session_id identifies the target."),
-  storage_id: z.string().uuid().optional().describe("Required for archived history: exact record UUID returned by check. Omit for the active address."),
+  archived: z.boolean().optional().describe("Expected archive state; omit or false for active history. The same permanent Session UUID is required."),
   limit: z.number().int().min(1).max(100).optional().describe("Maximum messages per page; defaults to 20. The 64 KiB result budget may return fewer."),
   before_sequence: z.number().int().min(1).optional().describe("Exclusive sequence boundary from next_before_sequence. Omit for the latest page; compact does not remove history."),
 });
@@ -21,7 +21,7 @@ export const session_messages_input = z.strictObject({
 export const session_part_input = z.strictObject({
   session_id: z.string().trim().min(1).describe("Target Session; use check to obtain its category."),
   session_category: z.enum(["chat", "work"]),
-  storage_id: z.string().uuid().optional().describe("Exact archived record UUID returned by check; omit for active history."),
+  archived: z.boolean().optional().describe("Expected archive state; omit or false for active history. The same permanent Session UUID is required."),
   message_id: z.string().min(1).describe("Stable canonical message ID returned by messages or a source reference."),
   message_sequence: z.number().int().min(1).describe("Stable message sequence from the source reference."),
   part_id: z.string().min(1).optional().describe("Omit to list Parts; provide with field to read one original field."),
@@ -37,7 +37,7 @@ export const session_part_input = z.strictObject({
 /** `session.archive` 归档空闲 Work 会话，不永久删除消息。 */
 export const session_archive_input = z.strictObject({
   operation_id: z.string().uuid().optional().describe("Original archive operation UUID for resuming its fixed persisted subtree plan after a partial failure."),
-  root_storage_id: z.string().uuid().optional().describe("Expected original root record UUID; does not grant control permission."),
+  root_session_id: z.string().uuid().optional().describe("Expected original root record UUID; does not grant control permission."),
   session_id: z.string().trim().min(1).describe("Idle Work Session to archive. Running or queued Sessions must finish or stop first."),
 });
 
@@ -72,7 +72,7 @@ export const session_check_input = z
       "Read one session in detail. Omit to list every session of this agent and their current state.",
     ),
     session_category: z.enum(["chat", "work"]).optional().describe("Required when session_id is supplied; omit both to list this agent's sessions."),
-    storage_id: z.string().uuid().optional().describe("Exact archived record UUID; requires session_id and session_category. Omit for active details."),
+    archived: z.boolean().optional().describe("Expected archive state; omit or false for active history. The same permanent Session UUID is required."),
     limit: z.number().int().min(1).max(100).optional().describe(
       "Maximum sessions or messages to return. Defaults to 20.",
     ),
@@ -80,8 +80,8 @@ export const session_check_input = z
   .strict()
   .refine((input) => Boolean(input.session_id) === Boolean(input.session_category), {
     message: "session_id and session_category must be provided together",
-  }).refine(input => !input.storage_id || Boolean(input.session_id && input.session_category), {
-    message: "storage_id requires session_id and session_category",
+  }).refine(input => !input.archived || Boolean(input.session_id && input.session_category), {
+    message: "archived requires session_id and session_category",
   });
 
 /** `session.reply` 输入：代答某条会话正在等待的用户响应。 */

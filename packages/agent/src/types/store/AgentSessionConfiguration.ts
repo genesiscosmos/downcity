@@ -10,7 +10,7 @@ export interface AgentSessionConfigurationUpdate {
   /** 幂等事务 UUID。 */
   operation_id: string;
   /** 精确目标记录身份，只允许活动记录写入。 */
-  storage_id: string;
+  session_id: string;
   /** 可选目录乐观 revision，省略不执行目录 CAS。 */
   expected_revision?: number;
   /** 省略保留，null 脱离项目。 */
@@ -36,7 +36,7 @@ export interface AgentSessionCheckpointInsert {
   /** 幂等事务 UUID。 */
   operation_id: string;
   /** 精确目标 Session 记录身份。 */
-  storage_id: string;
+  session_id: string;
   /** Composer 稳定命名空间，不能访问其他 namespace。 */
   namespace: string;
   /** 累计摘要的稳定 ID。 */

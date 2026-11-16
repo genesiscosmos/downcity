@@ -53,8 +53,18 @@ export interface GroupSessionDataStore {
   append_dispatch_turn(turn: GroupDispatchTurnRecord): Promise<void>;
 }
 
+/** 精确查询来源的只读结果，生命周期状态不在消费方持久化。 */
+export interface GroupSessionMetadataResult {
+  /** 原群聊当前的小字段快照，不加载消息。 */
+  metadata: GroupSessionHistoryMeta;
+  /** 原群聊是否位于归档区。 */
+  archived: boolean;
+}
+
 /** Group 所拥有的全部 GroupSession 持久化入口。 */
 export interface GroupSessionStore {
+  /** 精确读取一个活动或归档会话；不存在返回 null，不创建目录。 */
+  read_session_metadata(session_id: string): Promise<GroupSessionMetadataResult | null>;
   /** 返回指定 GroupSession 的持久化视图。 */
   session(session_id: string): GroupSessionDataStore;
   /** 判断指定 GroupSession 是否存在（活动区）。 */
@@ -66,8 +76,8 @@ export interface GroupSessionStore {
   /**
    * 把一个活动 GroupSession 迁入归档区。
    *
-   * 与 Agent Session 的归档同形（`LocalSessionStore.archive_session`），只有一处差别：
-   * **不接受 `category`**——群聊的来源只有一种，多一个参数只会让人猜该传什么。
+   * GroupSession 按当前 Group 内的 session_id 定位，归档不改变标识。
+   * 存储实现负责将活动记录迁入独立归档区。
    *
    * 不变量（两个方向都不允许静默成功）：
    *

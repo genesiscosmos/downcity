@@ -9,7 +9,7 @@ import path from "node:path";
 import test from "node:test";
 
 import { SessionInteractions } from "../../agent/bin/session/messages/SessionInteractions.js";
-import { SqliteSessionStorage } from "../../agent/bin/session/storage/SqliteSessionStorage.js";
+import { create_session_storage } from "../../agent/scripts/helpers/SessionStorageFixture.mjs";
 import {
   create_workspace_file_mutation_effect,
 } from "@downcity/type/workspace";
@@ -20,11 +20,11 @@ import { SessionLoop } from "../../agent/bin/session/loop/SessionLoop.js";
 import { SessionQueue } from "../../agent/bin/session/loop/SessionQueue.js";
 
 async function create_turn_harness(execute_turn, options = {}) {
-  const session_origin = options.session_origin ?? { type: "work" };
-  const session_id = "session-turn-failure-test";
+  const session_origin = { category: "work", ...(options.session_origin ?? { type: "work" }) };
+  const session_id = "683ea947-edce-4b1c-9f7c-f291e9b9cb5a";
   const root_path = await fs.mkdtemp(path.join(os.tmpdir(), "downcity-turn-failure-"));
   const files = new LocalFileSystem(root_path);
-  const store = new SqliteSessionStorage({
+  const store = await create_session_storage({
     files,
     session_id,
     agent_id: "test-agent",
@@ -83,6 +83,7 @@ async function create_turn_harness(execute_turn, options = {}) {
 
 test("Power 调用环境保留完整 Session origin", async () => {
   const origin = {
+    category: "chat",
     type: "group",
     group_id: "review-team",
     group_session_id: "group-session-1",
@@ -109,7 +110,7 @@ test("Power 调用环境保留完整 Session origin", async () => {
   const handle = await turn.prompt({ actor: { kind: "user", user_id: "local" }, query: "hello" });
   await handle.finished;
 
-  assert.equal(execution_context.session_id, "session-turn-failure-test");
+  assert.equal(execution_context.session_id, "683ea947-edce-4b1c-9f7c-f291e9b9cb5a");
   assert.deepEqual(execution_context.session_origin, origin);
   assert.equal(execution_context.turn_id, handle.id);
 });

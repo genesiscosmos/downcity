@@ -33,6 +33,8 @@ export interface ResourceHost {
 
 /** 持有 root 租约的同一组业务依赖。 */
 export interface ResourceDependencies {
+  /** 宿主已装配的共享扩展用例，离线普通资源浏览可省略。 */
+  extensions?: import("../extensions/ExtensionPlatform.js").ExtensionPlatform;
   /** 已经规范化并验证身份的 root。 */
   root_path: string;
   /** Agent 唯一配置仓储。 */

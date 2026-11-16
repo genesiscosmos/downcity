@@ -3,7 +3,6 @@
 import path from "node:path";
 import type { FileSystem } from "@downcity/type";
 import type {
-  GroupSessionDataStore,
   GroupSessionHistoryMeta,
   GroupSessionStore,
   GroupSessionStoreOptions,
@@ -21,8 +20,7 @@ import { LocalGroupSessionDataStore } from "@/group/storage/LocalGroupSessionDat
  *
  * 归档是**目录搬迁**而不是打标记：活动列表因此天然只含活动项，
  * `list_session_metadata()` 不需要加过滤条件，`metadata.v` 也不用升版本。
- * 这与 Agent Session 的做法一致（`LocalSessionStore.archive_session`），
- * 两处同类能力不该有两套语义。
+ * GroupSession 的归档布局由本 Store 管理，目录搬迁不改变 Session 标识。
  */
 type SessionArea = "active" | "archived";
 
@@ -51,7 +49,7 @@ export class LocalGroupSessionStore implements GroupSessionStore {
    * 缓存键带存储区：同一个 session_id 在活动区与归档区各有一份视图，
    * 不分区的话归档后会拿到活动区的旧视图（路径指向已经不存在的目录）。
    */
-  session(session_id: string, area: SessionArea = "active"): GroupSessionDataStore {
+  session(session_id: string, area: SessionArea = "active"): LocalGroupSessionDataStore {
     const resolved_session_id = String(session_id || "").trim();
     if (!resolved_session_id) throw new Error("GroupSessionStore.session requires a non-empty session_id");
     const cache_key = `${area}:${resolved_session_id}`;
@@ -66,6 +64,15 @@ export class LocalGroupSessionStore implements GroupSessionStore {
     });
     this.sessions_by_id.set(cache_key, created);
     return created;
+  }
+
+  /** 只读取指定来源；先检查活动，再检查同身份归档，不枚举目录。 */
+  async read_session_metadata(session_id: string) {
+    for (const area of ["active", "archived"] as const) {
+      if (!await this.files.path_exists(this.session_path(session_id, area))) continue;
+      return { metadata: await this.session(session_id, area).read_metadata_readonly(), archived: area === "archived" };
+    }
+    return null;
   }
 
   /** 判断指定 GroupSession 是否存在（活动区）。 */
@@ -115,6 +122,7 @@ export class LocalGroupSessionStore implements GroupSessionStore {
     if (!(await this.files.path_exists(source_path))) {
       throw new Error(`GroupSession "${resolved_session_id}" not found`);
     }
+    await this.session(resolved_session_id).read_metadata_readonly();
     await this.files.ensure_directory(this.area_path("archived"));
     await this.files.move_path(source_path, target_path);
     // 运行时缓存指向的是活动区路径；搬迁后必须丢掉它，否则下次 `session()` 会拿到旧视图。
@@ -174,7 +182,7 @@ export class LocalGroupSessionStore implements GroupSessionStore {
     const entries = await this.files.read_directory(area_path);
     const metadata: GroupSessionHistoryMeta[] = [];
     for (const entry of entries.filter((item) => item.is_directory)) {
-      metadata.push(await this.session(decode_session_id(entry.name), area).read_metadata());
+      metadata.push(await this.session(decode_session_id(entry.name), area).read_metadata_readonly());
     }
     return metadata.sort((left, right) => right.updated_at - left.updated_at);
   }

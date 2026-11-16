@@ -21,7 +21,10 @@ import { MockModelClient } from "../../agent/scripts/ModelClientMock.mjs";
 import { Agent } from "@downcity/agent";
 import { City } from "../bin/index.js";
 import { LocalStorageProvider, Workspace } from "@downcity/city";
-import { get_agent_session_database_path } from "../../agent/bin/session/storage/LocalStorePaths.js";
+/** Locate only this test's isolated Agent database; session_id selects its configuration row. */
+function get_agent_session_database_path(agent_root_path) {
+  return path.join(agent_root_path, "sessions.db");
+}
 import {
   create_action,
 } from "@downcity/city/power";
@@ -35,20 +38,20 @@ function create_deferred() {
 }
 
 /** 直接读取测试数据库中的 system snapshot。 */
-function read_system_snapshot(database_path) {
+function read_system_snapshot(database_path, session_id) {
   const database = new DatabaseSync(database_path, { readOnly: true });
   try {
-    return database.prepare("SELECT system_snapshot FROM session_state WHERE singleton_id = 1").get()?.system_snapshot ?? null;
+    return database.prepare("SELECT system_snapshot FROM session_configuration JOIN sessions USING (session_key) WHERE session_id = ?").get(session_id)?.system_snapshot ?? null;
   } finally {
     database.close();
   }
 }
 
 /** 直接修改测试数据库中的 system snapshot。 */
-function write_system_snapshot(database_path, system_snapshot) {
+function write_system_snapshot(database_path, session_id, system_snapshot) {
   const database = new DatabaseSync(database_path);
   try {
-    database.prepare("UPDATE session_state SET system_snapshot = ? WHERE singleton_id = 1").run(system_snapshot);
+    database.prepare("UPDATE session_configuration SET system_snapshot = ? WHERE session_key = (SELECT session_key FROM sessions WHERE session_id = ?)").run(system_snapshot, session_id);
   } finally {
     database.close();
   }
@@ -349,7 +352,7 @@ test("Session syncshot refreshes system and only rewrites an existing instructio
   }
 });
 
-test("Session snapshot explicitly persists the complete system to instruction.md", async () => {
+test("Session snapshot persists the complete system in Session configuration", async () => {
   const agent_path = await fs.mkdtemp(
     path.join(os.tmpdir(), "downcity-agent-instruction-restart-"),
   );
@@ -392,19 +395,19 @@ test("Session snapshot explicitly persists the complete system to instruction.md
       "work",
       session_id,
     );
-    const persisted_system = read_system_snapshot(database_path);
+    const persisted_system = read_system_snapshot(database_path, session_id);
     assert.match(persisted_system, /# Agent Identity/);
     assert.match(persisted_system, /You are "instruction_restart_agent" \(agent id: instruction_restart_agent\)\./);
     assert.match(persisted_system, /instruction:old/);
-    assert.match(persisted_system, /# Harness Design/);
+    assert.match(persisted_system, /# Session Behavior/);
     assert.match(persisted_system, /power-system:persisted/);
     assert.match(persisted_system, /Current session context:/);
     // session block 只描述 session 自身，agent 身份由 instruction 层承担。
     assert.doesNotMatch(persisted_system, /You are serving agent/);
 
-    write_system_snapshot(database_path, "instruction:manual");
+    write_system_snapshot(database_path, session_id, "instruction:manual");
     await session.snapshot();
-    assert.equal(read_system_snapshot(database_path), persisted_system);
+    assert.equal(read_system_snapshot(database_path, session_id), persisted_system);
   } finally {
     await city.agents.remove(first_agent.id);
   }
@@ -437,7 +440,7 @@ test("Session snapshot explicitly persists the complete system to instruction.md
     "work",
     session_id,
   );
-  write_system_snapshot(database_path, null);
+  write_system_snapshot(database_path, session_id, null);
 
   const fallback_agent = new Agent({
     id: "instruction_restart_agent",

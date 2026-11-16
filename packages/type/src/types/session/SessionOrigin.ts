@@ -3,16 +3,16 @@
  *
  * Session 始终归 Agent 所有。来源拆成两层，各自承担不同职责：
  *
- * - `category` 是顶层分类，只有 `chat` 与 `work` 两个值，同时承担物理存储分区
- *   与身份作用域的职责。
+ * - `category` 是顶层分类，只有 `chat` 与 `work` 两个值，用于目录过滤及请求一致性校验。
+ *   Agent 的活动与归档 Session 共享单库，分类不扩大身份命名空间。
  * - `type` 表达具体业务用途；通用角色在此登记，Power 自有角色由对应 Power
  *   定义并显式声明分类。角色名称不授予工具或执行配置。
  *
  * 关键点（中文）
  * - `chat` 类是对话会话：Agent 主对话、外部聊天、群聊、浏览器扩展。
  * - `work` 类是干活会话：普通工作会话、任务会话。
- * - `agent` 角色的 `session_id` 等于 Agent 的 `id`：会话由它属于谁来标识。
- * - `session_id` 只在同一 `category` 内唯一，不跨分类唯一。
+ * - `session_id` 是永久唯一 UUID，Agent 是其拥有者与权限路由。
+ * - Agent 主会话通过持久指针定位；归档不改变身份，重建主会话分配新 UUID。
  */
 
 import type { JsonValue } from "../json/Json.js";
@@ -72,10 +72,10 @@ const ORIGIN_CATEGORY_BY_TYPE: Readonly<Record<string, SessionOriginCategory>> =
 /** Session 的创建来源。 */
 export type SessionOrigin = {
   /**
-   * 顶层分类，同时作为 Session Store 的一级分区名。
+   * 顶层业务分类，用于目录过滤和访问目标的一致性校验。
    *
-   * 取值封闭为 `chat` / `work`；它决定会话的存储位置与身份作用域，不参与
-   * 细粒度能力判定。
+   * 取值封闭为 `chat` / `work`；分类不决定物理位置或身份作用域，也不授予
+   * 细粒度执行能力。
    */
   readonly category: SessionOriginCategory;
   /**
@@ -238,7 +238,7 @@ export function is_agent_session_origin(
   return String(origin?.type || "").trim() === SESSION_ORIGIN_TYPE_AGENT;
 }
 
-/** 恢复 Metadata，并校验来源与目标物理分区一致。 */
+/** 恢复 Metadata，并校验来源 category 与调用方期望一致；category 不决定永久身份或物理位置。 */
 export function restore_session_origin(
   input: unknown,
   expected_category: string,
@@ -248,7 +248,7 @@ export function restore_session_origin(
   const normalized_expected = normalize_session_origin_category(expected_category);
   if (origin.category !== normalized_expected) {
     throw new Error(
-      `Session origin "${origin.category}" does not match storage partition "${normalized_expected}"`,
+      `Session origin "${origin.category}" does not match expected category "${normalized_expected}"`,
     );
   }
   return origin;

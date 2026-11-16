@@ -57,7 +57,8 @@ function create_input(model) {
     },
     history: structuredClone(canonical_messages),
     derived: {
-      transaction: async () => undefined,
+      read_checkpoint: async () => null,
+      insert_checkpoint: async () => undefined,
     },
     turn: { turn_id: "turn-1", advance_count: 0 },
   };

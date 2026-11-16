@@ -24,17 +24,29 @@ export interface SessionStore {
   /** 为一个新 Session 创建稳定持久化视图；完整来源只在创建时由调用方提供。 */
   create_session(session_id: string, origin: SessionOrigin, workspace_id?: string): SessionStorage;
 
+  /** 只读当前主会话；尚未建立返回 null，不创建库或会话。 */
+  read_main(): Promise<SessionReadView | null>;
+
+  /** 显式单事务确保主会话存在，并返回同一个永久身份的存储视图。 */
+  ensure_main(workspace_id?: string): Promise<SessionStorage>;
+
+  /** 持久业务创建键关联新 UUID；归档和删除不允许以原键复活或改选。 */
+  ensure_creation(creation_key: string, origin: SessionOrigin, workspace_id?: string): Promise<SessionStorage>;
+
   /** 打开一个已有 Session；完整来源必须从数据库状态恢复。 */
   open_session(session_id: string, category?: string): Promise<SessionStorage>;
+
+  /** 按输入顺序批量读取最多 100 条精确元数据；不存在为 null，存储失败继续抛出。 */
+  read_metadata(addresses: readonly import("@/types/agent/SessionMetadata.js").SessionMetadataAddress[]): Promise<(import("@/types/agent/SessionMetadata.js").SessionMetadataResult | null)[]>;
 
   /** 读取活动逻辑地址，不回落归档，不恢复执行器或修改生命周期。 */
   read_session(session_id: string, category: string): Promise<SessionReadView>;
 
   /** 通过稳定记录 UUID 精确读取归档，不猜同逻辑 ID 的任意归档记录。 */
-  read_archived_session(storage_id: string): Promise<SessionReadView>;
+  read_archived_session(session_id: string): Promise<SessionReadView>;
 
   /** 永久删除一条精确归档记录，并在同一事务登记附件清理。 */
-  remove_archived_session(storage_id: string): Promise<boolean>;
+  remove_archived_session(session_id: string): Promise<boolean>;
 
   /** 只读查询所有来源的活动 pending 交互；不恢复 Session 或扫描完整历史。 */
   list_pending_interactions(): Promise<AgentInteraction[]>;

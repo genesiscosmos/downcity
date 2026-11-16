@@ -63,7 +63,7 @@ export interface AgentListSessionsInput {
   /**
    * 绑定 Agent、存储世代和完整过滤条件的不透明 keyset 游标。
    *
-   * 翻页间不冻结快照；更新后的记录可能移到前页，调用方按 storage_id 去重。
+   * 翻页间不冻结快照；更新后的记录可能移到前页，调用方按 session_id 去重。
    * 原样透传，收到 session_list_cursor_invalid 时从首页重新查询。
    */
   cursor?: string;
@@ -301,8 +301,6 @@ export interface AgentSessionSystemSnapshot {
  * Session 摘要。
  */
 export interface AgentSessionSummary {
-  /** 记录不可变 UUID；归档读取、删除和导出必须使用，不能由逻辑 ID 猜测。 */
-  storage_id: string;
   /** 当前 session 所属 agent_id。 */
   agent_id: string;
   /** 当前 session 唯一标识。 */
@@ -402,7 +400,7 @@ export interface AgentArchiveSessionInput {
   /** 归档操作UUID，省略创建新操作；失败后必须复用原ID恢复原计划。 */
   operation_id?: string;
   /** 可选原根UUID，提供时与持久化计划核对，不按逻辑新记录替代。 */
-  root_storage_id?: string;
+  root_session_id?: string;
   /**
    * 要归档的 session id。
    *
@@ -441,7 +439,7 @@ export interface AgentArchiveSessionsInput {
   /**
    * 绑定 Agent、存储世代和归档过滤条件的不透明 keyset 游标。
    *
-   * 仅原样透传；归档条目以 storage_id 去重，恢复数据库后旧游标失效。
+   * 仅原样透传；归档条目以 session_id 去重，恢复数据库后旧游标失效。
    */
   cursor?: string;
 
@@ -462,7 +460,7 @@ export interface AgentArchiveSessionResult {
   /** 原操作UUID，允许确认丢失或部分失败后恢复固定计划。 */
   operation_id?: string;
   /** 原根不可变UUID。 */
-  root_storage_id?: string;
+  root_session_id?: string;
   /** 已持久化后序计划SHA-256，用于核对恢复句柄。 */
   plan_fingerprint?: string;
   /** 被归档的 session id。 */

@@ -46,8 +46,10 @@ export class AgentResources {
       const references = await this.dependencies.agent_references(agent_id);
       if (references.length) throw new ResourceError("dependency_conflict", "Agent ID has unresolved references", 4, false, { references });
       const model_id = optional_model(input.model);
+      const definition_id = optional_text(input.definition_id);
+      if (definition_id && !this.dependencies.extensions?.catalog.agents.has(definition_id)) throw new ResourceError("definition_unavailable", "The selected Agent definition is unavailable", 2);
       await this.dependencies.host?.resolve_model(model_id);
-      const config = this.dependencies.agents.create({ agent_id, name: input.name as string, description: optional_text(input.description) ?? "", instruction: optional_text(input.instruction) ?? "", ...(model_id ? { execution: { model_id } } : {}) });
+      const config = this.dependencies.agents.create({ agent_id, name: input.name as string, description: optional_text(input.description) ?? "", instruction: optional_text(input.instruction) ?? "", ...((model_id || definition_id) ? { execution: { ...(model_id ? { model_id } : {}), ...(definition_id ? { definition_id } : {}) } } : {}) });
       try {
         if (this.dependencies.host) this.dependencies.host.city.agents.add(await this.dependencies.host.create_agent(config));
       } catch (error) { this.application_failed(config, error); }
@@ -130,7 +132,7 @@ export class AgentResources {
   private project(agent_id: string, config?: LocalAgentConfig) {
     const runtime = this.dependencies.host?.city.agents.get(agent_id);
     const runtime_state: "loaded" | "unloaded" | "unknown" = this.dependencies.host ? runtime ? "loaded" : "unloaded" : "unknown";
-    return { agent_id, name: config?.name ?? runtime?.name ?? agent_id, description: config?.description ?? runtime?.description ?? "", version: config?.version ?? null, model_id: typeof config?.execution?.model_id === "string" ? config.execution.model_id : null, registered: !!config, runtime_state, revision: config ? resource_revision(config) : null, created_at: config?.created_at ?? null, updated_at: config?.updated_at ?? null };
+    return { agent_id, name: config?.name ?? runtime?.name ?? agent_id, description: config?.description ?? runtime?.description ?? "", version: config?.version ?? null, model_id: typeof config?.execution?.model_id === "string" ? config.execution.model_id : null, definition_id: typeof config?.execution?.definition_id === "string" ? config.execution.definition_id : null, registered: !!config, runtime_state, revision: config ? resource_revision(config) : null, created_at: config?.created_at ?? null, updated_at: config?.updated_at ?? null };
   }
 
   private require_registered(agent_id: string): LocalAgentConfig {

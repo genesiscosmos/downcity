@@ -45,7 +45,7 @@ type RpcRequestPayload =
       method: "sdk.sessions.archived.get" | "sdk.sessions.archived.messages" | "sdk.sessions.archived.configuration" | "sdk.sessions.archived.interactions" | "sdk.sessions.archived.remove";
       /** 仅有稳定记录身份，无可覆盖的Agent目标。 */
       params: {
-        /** 精确归档记录UUID。 */ storage_id: string;
+        /** 精确归档记录UUID。 */ session_id: string;
         /** 消息分页参数，仅messages动作读取。 */ input?: ListSessionMessagesInput;
       };
     }
@@ -121,7 +121,7 @@ type RpcRequestPayload =
       /** 归档参数。 */
       params: {
         /** 原操作UUID，失败后复用同一ID恢复原计划。 */ operation_id?: string;
-        /** 原根不可变UUID，校验重建身份。 */ root_storage_id?: string;
+        /** 原根不可变UUID，校验重建身份。 */ root_session_id?: string;
         /** 目标 session id。 */
         session_id: string;
         /** Session 来源分区。 */
@@ -406,7 +406,7 @@ export interface RpcSuccessFrame {
  */
 export interface RpcErrorFrame {
   /** 归档失败的原操作UUID，重入必须复用。 */ operation_id?: string;
-  /** 原根稳定UUID，不能替换成重建记录。 */ root_storage_id?: string;
+  /** 原根稳定UUID，不能替换成重建记录。 */ root_session_id?: string;
   /** 原后序计划fingerprint。 */ plan_fingerprint?: string;
   /** 请求 id。 */
   id: string;

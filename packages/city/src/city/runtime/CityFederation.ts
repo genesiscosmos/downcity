@@ -8,6 +8,8 @@ import type { Federation, FederationUser } from "@downcity/federation";
 export class CityFederation {
   /** 当前借用的客户端；由创建它的宿主负责释放。 */
   private client?: Federation;
+  /** 活动绑定属于长期借用，阻止 owner 在绑定期间释放项目。 */
+  private release_client?: () => void;
   /** 当前客户端的 City 来源视图，随绑定一起原子替换。 */
   private city_user?: FederationUser;
   /** 每次有效绑定变化递增，用于隔离旧身份的在途结果。 */
@@ -25,7 +27,12 @@ export class CityFederation {
   /** 同步绑定或解除绑定；不发起网络请求，也不释放宿主拥有的客户端。 */
   set(federation: Federation | undefined): void {
     if (this.client === federation) return;
-    const user = federation?.user.with_city(this.city_id);
+    const release = federation?.retain();
+    let user: FederationUser | undefined;
+    try { user = federation?.user.with_city(this.city_id); }
+    catch (error) { release?.(); throw error; }
+    this.release_client?.();
+    this.release_client = release;
     this.client = federation;
     this.city_user = user;
     this.generation += 1;

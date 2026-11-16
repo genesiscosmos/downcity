@@ -9,11 +9,9 @@
 import type { SessionOrigin } from "@downcity/type";
 
 export type SessionHistoryMeta = {
-  /** 目标 Agent DB 的不可变记录身份；离线历史输入尚未映射时缺省，运行投影必须验证存在。 */
-  storage_id?: string;
   /** 宿主专用执行配置身份；存在时恢复必须精确匹配注册项。 */
   execution_profile?: import("@/types/agent/SessionExecutionProfile.js").SessionExecutionProfileReference;
-  /** schema 版本。 */
+  /** metadata 投影协议版本；与 Agent 数据库 schema 版本独立。 */
   v: 2;
   /** 当前元信息所属的 session_id。 */
   session_id: string;
@@ -21,7 +19,7 @@ export type SessionHistoryMeta = {
   agent_id: string;
   /** 当前 session 所属的 workspace_id。 */
   workspace_id?: string;
-  /** 当前 Session 的创建来源与物理存储分区。 */
+  /** 当前 Session 的创建来源；分类用于查询与一致性校验。 */
   origin: SessionOrigin;
   /** 当前 session 首次创建时间戳（ms）。 */
   created_at?: number;

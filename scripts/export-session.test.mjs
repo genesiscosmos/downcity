@@ -11,12 +11,12 @@ import { randomUUID as random_uuid, randomBytes as random_bytes } from "node:cry
 import { DatabaseSync } from "node:sqlite";
 import { parse_arguments, run } from "./export-session.mjs";
 import { export_session, load_package } from "./lib/session-transfer-package.mjs";
-import { load_runtime } from "./lib/session-v7-runtime.mjs";
+import { load_runtime } from "./lib/session-runtime.mjs";
 import { file_hash } from "./lib/session-v8-files.mjs";
 
 const runtime = await load_runtime(true);
 
-/** 建立目标正式 schema 的三条同逻辑记录，不通过导出模块生成源数据。 */
+/** 建立目标正式 schema 的三条永久 UUID 记录，不通过导出模块生成源数据。 */
 function fixture(context) {
   const directory = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "downcity-session-export-")));
   context.after(() => fs.rmSync(directory, { recursive: true, force: true }));
@@ -27,16 +27,17 @@ function fixture(context) {
   const database = new DatabaseSync(database_path);
   database.exec("PRAGMA foreign_keys=ON;");
   database.exec(runtime.AGENT_SESSION_SCHEMA_SQL);
-  database.prepare("INSERT INTO storage_metadata(singleton_id,agent_id,format_version,generation,cursor_secret,created_at) VALUES(1,'sample',8,?,?,1)")
+  database.prepare("INSERT INTO storage_metadata(singleton_id,agent_id,format_version,generation,cursor_secret,created_at) VALUES(1,'sample',10,?,?,1)")
     .run(random_uuid(), random_bytes(32));
-  database.exec("PRAGMA user_version=8;");
+  database.exec("PRAGMA user_version=10;");
   const ids = [random_uuid(), random_uuid(), random_uuid()];
   for (const [index, storage_id] of ids.entries()) {
     const attachments = path.join(agent_path, "session-files", storage_id, "attachments");
     fs.mkdirSync(attachments, { recursive: true });
     const attachment = path.join(attachments, "fixture.txt"); fs.writeFileSync(attachment, 'attachment-' + index);
-    const key = Number(database.prepare(`INSERT INTO sessions(storage_id,session_id,category,origin,timezone,title,archived,archived_at,message_count,revision,created_at,updated_at)
-      VALUES(?,'main','chat',?,'UTC',?,?,?,1,1,1,2)`).run(storage_id,
+    fs.writeFileSync(path.join(path.dirname(attachments), '.owned-attachments.json'), JSON.stringify({ format_version: 2, agent_id: 'sample', session_id: storage_id, files: ['fixture.txt'] }), { mode: 0o600 });
+    const key = Number(database.prepare(`INSERT INTO sessions(session_id,category,origin,timezone,title,archived,archived_at,message_count,revision,created_at,updated_at)
+      VALUES(?,'chat',?,'UTC',?,?,?,1,1,1,2)`).run(storage_id,
       JSON.stringify({ category: "chat", type: "agent" }), 'record-' + index, index < 2 ? 1 : 0, index < 2 ? 3 : null).lastInsertRowid);
     database.prepare("UPDATE session_configuration SET system_snapshot=?,model_binding=? WHERE session_key=?")
       .run('system-' + index, JSON.stringify({ default_model_id: null }), key);
@@ -47,7 +48,7 @@ function fixture(context) {
   database.close();
   runtime.AgentSessionFileLease.acquire(database_path, "sample", false, true).release();
   return { directory, root_path, agent_path, database_path, ids,
-    input: { root_path, agent_id: "sample", storage_id: ids[0], operation_id: random_uuid(), package_path: path.join(directory, "package"), writers_stopped: true } };
+    input: { root_path, agent_id: "sample", session_id: ids[0], operation_id: random_uuid(), package_path: path.join(directory, "package"), writers_stopped: true } };
 }
 
 test('CLI has no default root/mode and rejects ambiguous/partial maintenance inputs', () => {
@@ -63,10 +64,10 @@ test('exports exact UUID, source unchanged, independent package verifies without
   const item = fixture(context);
   const before = file_hash(item.database_path);
   for (const [index, storage_id] of item.ids.entries()) {
-    const input = { ...item.input, storage_id, operation_id: random_uuid(), package_path: path.join(item.directory, 'package-' + index) };
+    const input = { ...item.input, session_id: storage_id, operation_id: random_uuid(), package_path: path.join(item.directory, 'package-' + index) };
     assert.equal((await export_session(input, runtime)).status, 'exported');
     const { record } = load_package(input.package_path, runtime);
-    assert.equal(record.metadata.storage_id, storage_id);
+    assert.equal(record.metadata.session_id, storage_id);
     assert.equal(record.metadata.archived, index < 2 ? 1 : 0);
     assert.equal(record.configuration.system_snapshot, 'system-' + index);
     assert.equal(record.messages.length, 1);
@@ -79,7 +80,7 @@ test('exports exact UUID, source unchanged, independent package verifies without
 
 test('root ownership/exact identity/outside output enforced and source is not initialized', async context => {
   const item = fixture(context);
-  await assert.rejects(export_session({ ...item.input, storage_id: random_uuid() }, runtime), /transfer_session_not_found/);
+  await assert.rejects(export_session({ ...item.input, session_id: random_uuid() }, runtime), /transfer_session_not_found/);
   await assert.rejects(export_session({ ...item.input, package_path: path.join(item.root_path, 'package') }, runtime), /outside_root/);
   await assert.rejects(export_session({ ...item.input, agent_id: '..' }, runtime), /agent_invalid/);
   const lease = runtime.RootLease.acquire_write(item.root_path);
@@ -94,7 +95,7 @@ test('same export operation resumes; different operation or changed source refus
   assert.equal((await export_session(item.input, runtime)).status, 'exported');
   await assert.rejects(export_session({ ...item.input, operation_id: random_uuid() }, runtime), /export_conflict/);
   const database = new DatabaseSync(item.database_path);
-  database.prepare('UPDATE sessions SET title=? WHERE storage_id=?').run('changed', item.ids[0]); database.close();
+  database.prepare('UPDATE sessions SET title=? WHERE session_id=?').run('changed', item.ids[0]); database.close();
   await assert.rejects(export_session(item.input, runtime), /export_conflict/);
 });
 
@@ -138,9 +139,9 @@ test('unfinished subtree archive cannot be exported without its persisted plan',
   const item = fixture(context);
   const database = new DatabaseSync(item.database_path);
   const operation_id = random_uuid();
-  database.prepare("INSERT INTO archive_operations(operation_id,root_storage_id,session_id,category,fingerprint,created_at) VALUES(?,?,'main','chat',?,1)")
+  database.prepare("INSERT INTO archive_operations(operation_id,root_session_id,category,fingerprint,created_at) VALUES(?,?,'chat',?,1)")
     .run(operation_id, item.ids[0], 'a'.repeat(64));
-  database.prepare("INSERT INTO archive_operation_nodes(operation_id,position,storage_id,session_id,category,origin_type) VALUES(?,1,?,'main','chat','agent')")
+  database.prepare("INSERT INTO archive_operation_nodes(operation_id,position,session_id,category,origin_type) VALUES(?,1,?,'chat','agent')")
     .run(operation_id, item.ids[0]); database.close();
   await assert.rejects(export_session(item.input, runtime), /pending_archive_conflict/);
   assert.equal(fs.existsSync(item.input.package_path), false);

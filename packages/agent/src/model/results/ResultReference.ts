@@ -6,29 +6,11 @@
 import { createHash } from "node:crypto";
 import type { ModelJsonValue, SessionAgentToolPart } from "@downcity/type";
 import { project_tool_result } from "../messages/ToolResultProjection.js";
-import { disclose_result } from "./ResultDisclosure.js";
+import { DISCLOSURE_VERSION, RESULT_BYTES, result_bytes } from "./ResultDisclosure.js";
 
-/** 结果引用定位的不可变 canonical 身份。 */
-export interface ResultLocation {
-  /** 新引用携带源存储UUID；旧引用缺失时仅允许本地复制事实或活动地址，不猜归档。 */
-  storage_id?: string;
-  /** 源会话逻辑 ID。 */
-  session_id: string;
-  /** 源消息稳定 ID；分支另分配消息 ID，并在复制的 Part 中保留此引用。 */
-  message_id: string;
-  /** 源消息 sequence，用于精确读取，包含 internal 消息。 */
-  message_sequence: number;
-  /** canonical Tool Part 稳定 ID，与 tool_call_id 职责分离。 */
-  part_id: string;
-  /** 已知源物理分类；旧数据可以由调用边界补充。 */
-  category?: string;
-}
-
-/** 引用解码后的快照定位，摘要绑定结果而非执行调用。 */
-export interface ResultSnapshot extends ResultLocation {
-  /** 稳定阅读值的 SHA-256 摘要，防止源结果被后续状态替换。 */
-  digest: string;
-}
+import { assert_session_id } from "../../session/SessionIdentity.js";
+import type { ResultLocation, ResultSnapshot } from "@/types/model/ResultReference.js";
+export type { ResultLocation, ResultSnapshot } from "@/types/model/ResultReference.js";
 
 /** 只对已清理的阅读值计算固定格式摘要。 */
 export function result_digest(value: ModelJsonValue): string {
@@ -37,30 +19,74 @@ export function result_digest(value: ModelJsonValue): string {
 
 /** 生成可跨重启解析的引用；调用方只在持久化成功后向模型发布。 */
 export function create_result_ref(location: ResultLocation, value: ModelJsonValue): string {
-  return `res_1_${Buffer.from(JSON.stringify({ ...location, digest: result_digest(value) })).toString("base64url")}`;
+  assert_session_id(location.session_id);
+  return `res_2_${Buffer.from(JSON.stringify({ ...location, digest: result_digest(value) })).toString("base64url")}`;
 }
 
 /** 校验引用语法，位置只作为宿主读取参数，绝不拼接物理路径。 */
 export function parse_result_ref(result_ref: string): ResultSnapshot {
-  if (typeof result_ref !== "string" || !result_ref.startsWith("res_1_") || result_ref.length > 4096) throw new Error("result_ref_invalid");
+  if (typeof result_ref !== "string" || !result_ref.startsWith("res_2_") || result_ref.length > 4096) throw new Error("result_ref_invalid");
   let value: ResultSnapshot;
   try { value = JSON.parse(Buffer.from(result_ref.slice(6), "base64url").toString()); }
   catch { throw new Error("result_ref_invalid"); }
   if (!value || typeof value.session_id !== "string" || typeof value.message_id !== "string" || typeof value.part_id !== "string"
     || typeof value.digest !== "string" || !Number.isSafeInteger(value.message_sequence) || value.message_sequence < 1
-    || (value.category !== undefined && typeof value.category !== "string")
-    || (value.storage_id !== undefined && (typeof value.storage_id !== "string" || !/^[0-9a-f-]{36}$/iu.test(value.storage_id)))) throw new Error("result_ref_invalid");
+    || !value.message_id || !value.part_id || !/^[A-Za-z0-9_-]{43}$/u.test(value.digest)
+    || (value.category !== undefined && (typeof value.category !== "string" || !value.category.trim()))
+    || Object.keys(value).some(key => !["session_id", "message_id", "message_sequence", "part_id", "category", "digest"].includes(key))) throw new Error("result_ref_invalid");
+  try { assert_session_id(value.session_id); } catch { throw new Error("result_ref_invalid"); }
   return value;
 }
 
 /** 统一阅读事实源；二进制只保留元信息，不将载荷当文本分页。 */
 export function tool_result_value(part: SessionAgentToolPart): ModelJsonValue {
-  return project_tool_result(part.output ?? part.error ?? null);
+  return project_tool_result(part.output !== undefined ? part.output : part.error ?? null);
 }
 
-/** 历史/摘要只读已经保存的披露视图；没有记录的旧结果才派生首次视图。 */
-export function disclosed_tool_result(part: SessionAgentToolPart, location: ResultLocation): ModelJsonValue {
-  if (part.disclosure_version === 1 && part.model_output !== undefined) return part.model_output;
-  const value = tool_result_value(part);
-  return disclose_result(value, create_result_ref(location, value), part.state === "failed" ? "failed" : "completed");
+/** Validate JSON without stringify normalization: undefined, non-finite numbers and exotic objects are invalid. */
+function assert_json_value(value: unknown, ancestors = new Set<object>()): void {
+  if (value === null || typeof value === "string" || typeof value === "boolean") return;
+  if (typeof value === "number" && Number.isFinite(value)) return;
+  if (typeof value !== "object" || ancestors.has(value)) throw new Error("tool_terminal_model_output_invalid");
+  if (!Array.isArray(value) && Object.getPrototypeOf(value) !== Object.prototype && Object.getPrototypeOf(value) !== null) {
+    throw new Error("tool_terminal_model_output_invalid");
+  }
+  ancestors.add(value);
+  for (const item of Array.isArray(value) ? value : Object.values(value)) assert_json_value(item, ancestors);
+  ancestors.delete(value);
+}
+
+/** Enforce the persisted v10 Tool contract without deriving or replacing its fixed view. */
+export function assert_tool_terminal(part: SessionAgentToolPart): void {
+  if (part.disclosure_version !== undefined && part.disclosure_version !== DISCLOSURE_VERSION) {
+    throw new Error("tool_disclosure_version_unsupported");
+  }
+  const terminal = part.state === "completed" || part.state === "failed";
+  if (!terminal) {
+    if (part.disclosure_version !== undefined || part.model_output !== undefined || part.result_ref !== undefined) {
+      throw new Error("tool_terminal_snapshot_on_running_part");
+    }
+    return;
+  }
+  if (part.disclosure_version !== DISCLOSURE_VERSION || part.model_output === undefined || typeof part.result_ref !== "string") {
+    throw new Error("tool_terminal_snapshot_required");
+  }
+  assert_json_value(part.model_output);
+  if (result_bytes(part.model_output) > RESULT_BYTES) throw new Error("result_disclosure_budget_exceeded");
+  const view = part.model_output;
+  if (view && typeof view === "object" && !Array.isArray(view) && view.view === "folded_result"
+    && (view.result_ref !== part.result_ref || view.status !== part.state)) {
+    throw new Error("tool_terminal_model_view_conflict");
+  }
+  const snapshot = parse_result_ref(part.result_ref);
+  if (snapshot.part_id !== part.part_id || snapshot.digest !== result_digest(tool_result_value(part))) {
+    throw new Error("tool_terminal_result_ref_conflict");
+  }
+}
+
+/** History and summaries read only the validated immutable first-disclosure snapshot. */
+export function disclosed_tool_result(part: SessionAgentToolPart): ModelJsonValue {
+  assert_tool_terminal(part);
+  if (part.state !== "completed" && part.state !== "failed") throw new Error("tool_terminal_snapshot_required");
+  return structuredClone(part.model_output!);
 }

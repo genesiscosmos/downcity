@@ -9,7 +9,7 @@ import { DatabaseSync } from "node:sqlite";
 import { parse_arguments } from "./import-session.mjs";
 import { export_session } from "./lib/session-transfer-package.mjs";
 import { import_session } from "./lib/session-transfer-import.mjs";
-import { load_runtime } from "./lib/session-v7-runtime.mjs";
+import { load_runtime } from "./lib/session-runtime.mjs";
 import { file_hash, attachment_inventory } from "./lib/session-v8-files.mjs";
 import { read_record } from "./lib/session-transfer-record.mjs";
 
@@ -26,24 +26,25 @@ async function fixture(context, archived = false, origin_uuid = null) {
     const filename = path.join(agent_path, 'sessions.db');
     const database = new DatabaseSync(filename);
     database.exec('PRAGMA foreign_keys=ON;'); database.exec(runtime.AGENT_SESSION_SCHEMA_SQL);
-    database.prepare("INSERT INTO storage_metadata(singleton_id,agent_id,format_version,generation,cursor_secret,created_at) VALUES(1,'sample',8,?,?,1)").run(random_uuid(), random_bytes(32));
-    database.exec('PRAGMA user_version=8;');
+    database.prepare("INSERT INTO storage_metadata(singleton_id,agent_id,format_version,generation,cursor_secret,created_at) VALUES(1,'sample',10,?,?,1)").run(random_uuid(), random_bytes(32));
+    database.exec('PRAGMA user_version=10;');
     return { root, filename, database };
   };
   const source = create_database('source'); const target = create_database('target');
   const attachment_path = path.join(path.dirname(source.filename), 'session-files', storage_id, 'attachments/file.txt');
   fs.mkdirSync(path.dirname(attachment_path), { recursive: true }); fs.writeFileSync(attachment_path, 'owned bytes');
-  const key = Number(source.database.prepare(`INSERT INTO sessions(storage_id,session_id,category,origin,timezone,archived,archived_at,message_count,created_at,updated_at)
-    VALUES(?,'main','chat',?,'UTC',?,?,1,1,2)`).run(storage_id, JSON.stringify({ category: 'chat', type: 'agent' }), archived ? 1 : 0, archived ? 3 : null).lastInsertRowid);
+  fs.writeFileSync(path.join(path.dirname(path.dirname(attachment_path)), '.owned-attachments.json'), JSON.stringify({ format_version: 2, agent_id: 'sample', session_id: storage_id, files: ['file.txt'] }), { mode: 0o600 });
+  const key = Number(source.database.prepare(`INSERT INTO sessions(session_id,category,origin,timezone,archived,archived_at,message_count,created_at,updated_at)
+    VALUES(?,'chat',?,'UTC',?,?,1,1,2)`).run(storage_id, JSON.stringify({ category: 'chat', type: 'agent' }), archived ? 1 : 0, archived ? 3 : null).lastInsertRowid);
   source.database.prepare('UPDATE session_configuration SET system_snapshot=? WHERE session_key=?').run('original system', key);
-  source.database.prepare("INSERT INTO messages(session_key,message_id,sequence,role,origin_storage_id,origin_session_id,origin_message_id,created_at,updated_at) VALUES(?,'m1',1,'user',?,?,?,1,2)")
-    .run(key, origin_uuid, origin_uuid ? 'old' : null, origin_uuid ? 'source-message' : null);
+  source.database.prepare("INSERT INTO messages(session_key,message_id,sequence,role,origin_session_id,origin_message_id,created_at,updated_at) VALUES(?,'m1',1,'user',?,?,1,2)")
+    .run(key, origin_uuid, origin_uuid ? 'source-message' : null);
   source.database.prepare("INSERT INTO message_parts(session_key,part_id,message_id,sequence,type,content,created_at,updated_at) VALUES(?,'p1','m1',1,'file',?,1,2)")
     .run(key, JSON.stringify({ media_type: 'text/plain', url: attachment_path }));
   source.database.close(); target.database.close();
   for (const filename of [source.filename, target.filename]) runtime.AgentSessionFileLease.acquire(filename, 'sample', false, true).release();
   const package_path = path.join(directory, 'package');
-  const export_input = { root_path: source.root, agent_id: 'sample', storage_id, operation_id: random_uuid(), package_path, writers_stopped: true };
+  const export_input = { root_path: source.root, agent_id: 'sample', session_id: storage_id, operation_id: random_uuid(), package_path, writers_stopped: true, allow_unresolved_sources: Boolean(origin_uuid) };
   await export_session(export_input, runtime);
   const input = { root_path: target.root, agent_id: 'sample', package_path, batch_path: path.join(directory, 'batch'), operation_id: random_uuid(), writers_stopped: true };
   return { directory, source, target, input, export_input, storage_id };
@@ -68,7 +69,7 @@ test('imports full exact record and copied attachments, replays original receipt
   const result = await import_session(item.input, runtime);
   assert.equal(result.replayed, false);
   const record = target_record(item);
-  assert.equal(record.metadata.storage_id, item.storage_id);
+  assert.equal(record.metadata.session_id, item.storage_id);
   assert.equal(record.configuration.system_snapshot, 'original system');
   assert.equal(record.messages.length, 1);
   const url = JSON.parse(record.message_parts[0].content).url;
@@ -83,21 +84,22 @@ test('imports full exact record and copied attachments, replays original receipt
   assert.equal(database.prepare('PRAGMA foreign_key_check').all().length, 0); database.close();
 });
 
-test('UUID conflict and active logical conflict refuse overwrite; archived same logical ID remains valid', async context => {
+test('permanent UUID conflicts across states refuse overwrite; other UUID imports preserve the main pointer', async context => {
   const item = await fixture(context);
   await import_session(item.input, runtime);
-  await assert.rejects(import_session({ ...item.input, operation_id: random_uuid(), batch_path: path.join(item.directory, 'new-batch') }, runtime), /storage_id_conflict/);
-  const second = await fixture(context, true);
-  const database = new DatabaseSync(second.target.filename);
-  database.prepare(`INSERT INTO sessions(storage_id,session_id,category,origin,timezone,created_at,updated_at) VALUES(?,'main','chat',?,'UTC',1,2)`)
-    .run(random_uuid(), JSON.stringify({ category: 'chat', type: 'agent' })); database.close();
-  await import_session(second.input, runtime);
-  assert.equal(target_record(second).metadata.archived, 1);
-  const third = await fixture(context);
-  const conflict = new DatabaseSync(third.target.filename);
-  conflict.prepare(`INSERT INTO sessions(storage_id,session_id,category,origin,timezone,created_at,updated_at) VALUES(?,'main','chat',?,'UTC',1,2)`)
-    .run(random_uuid(), JSON.stringify({ category: 'chat', type: 'agent' })); conflict.close();
-  await assert.rejects(import_session(third.input, runtime), /active_address_conflict/);
+  await assert.rejects(import_session({ ...item.input, operation_id: random_uuid(), batch_path: path.join(item.directory, 'new-batch') }, runtime), /session_id_conflict/);
+  for (const archived of [true, false]) {
+    const second = await fixture(context, archived);
+    const database = new DatabaseSync(second.target.filename);
+    const main_id = random_uuid();
+    database.prepare(`INSERT INTO sessions(session_id,category,origin,timezone,created_at,updated_at) VALUES(?,'chat',?,'UTC',1,2)`)
+      .run(main_id, JSON.stringify({ category: 'chat', type: 'agent' }));
+    database.prepare('UPDATE agent_session_state SET main_session_id=?').run(main_id); database.close();
+    await import_session(second.input, runtime);
+    assert.equal(target_record(second).metadata.archived, archived ? 1 : 0);
+    const reader = new DatabaseSync(second.target.filename, { readOnly: true });
+    assert.equal(reader.prepare('SELECT main_session_id FROM agent_session_state').get().main_session_id, main_id); reader.close();
+  }
 });
 
 test('same Agent only; held reader and unknown preexisting target files refuse import', async context => {
@@ -157,19 +159,19 @@ test('unresolved fork source requires explicit policy; stable UUID is never rebo
   await assert.rejects(import_session(item.input, runtime), /external_sources_unresolved/);
   const result = await import_session({ ...item.input, allow_unresolved_sources: true }, runtime);
   assert.equal(result.unresolved_sources, 1);
-  assert.equal(target_record(item).messages[0].origin_storage_id, origin_uuid);
+  assert.equal(target_record(item).messages[0].origin_session_id, origin_uuid);
 });
 
 test('Composer boundary, stable Tool prefix and local ResultRef survive exact transfer', async context => {
   const item = await fixture(context);
   const database = new DatabaseSync(item.source.filename);
-  const key = database.prepare('SELECT session_key FROM sessions WHERE storage_id=?').get(item.storage_id).session_key;
+  const key = database.prepare('SELECT session_key FROM sessions WHERE session_id=?').get(item.storage_id).session_key;
   database.prepare("INSERT INTO composer_checkpoints VALUES(?,'default','checkpoint','m1',1,1,'summary',1,3)").run(key);
   database.prepare("INSERT INTO messages(session_key,message_id,sequence,role,state,created_at,updated_at) VALUES(?,'m2',2,'agent','done',3,4)").run(key);
   const output = { success: true, value: 'immutable tool output' };
-  const reference = runtime.create_result_ref({ storage_id: item.storage_id, session_id: 'main', category: 'chat', message_id: 'm2', message_sequence: 2, part_id: 'tool' }, output);
+  const reference = runtime.create_result_ref({ session_id: item.storage_id, category: 'chat', message_id: 'm2', message_sequence: 2, part_id: 'tool' }, output);
   database.prepare("INSERT INTO message_parts(session_key,part_id,message_id,sequence,step_id,type,content,created_at,updated_at) VALUES(?,'tool','m2',1,'step','tool',?,3,4)")
-    .run(key, JSON.stringify({ tool_call_id: 'call', tool_name: 'fixture', state: 'completed', input: {}, output, result_ref: reference }));
+    .run(key, JSON.stringify({ tool_call_id: 'call', tool_name: 'fixture', state: 'completed', input: {}, output, model_output: output, disclosure_version: 1, result_ref: reference }));
   database.prepare("UPDATE messages SET stable_part_sequence=1 WHERE session_key=? AND message_id='m2'").run(key);
   database.prepare('UPDATE sessions SET message_count=2 WHERE session_key=?').run(key);
   database.close();
@@ -187,8 +189,8 @@ test('deleted historical UUID cannot be resurrected under a new operation after 
   const item = await fixture(context);
   await import_session(item.input, runtime);
   const database = new DatabaseSync(item.target.filename); database.exec('PRAGMA foreign_keys=ON;');
-  database.prepare('DELETE FROM sessions WHERE storage_id=?').run(item.storage_id);
-  database.prepare('DELETE FROM attachment_cleanup WHERE storage_id=?').run(item.storage_id); database.close();
+  database.prepare('DELETE FROM sessions WHERE session_id=?').run(item.storage_id);
+  database.prepare('DELETE FROM attachment_cleanup WHERE session_id=?').run(item.storage_id); database.close();
   fs.rmSync(path.join(path.dirname(item.target.filename), 'session-files', item.storage_id), { recursive: true });
   await assert.rejects(import_session({ ...item.input, operation_id: random_uuid(), batch_path: path.join(item.directory, 'retry-new-batch') }, runtime), /historical_identity_conflict/);
 });
@@ -202,6 +204,6 @@ test('damaged package, changed policy and deleted committed target cannot be sil
   await import_session(other.input, runtime);
   await assert.rejects(import_session({ ...other.input, allow_unresolved_sources: true }, runtime), /batch_conflict/);
   const database = new DatabaseSync(other.target.filename); database.exec('PRAGMA foreign_keys=ON;');
-  database.prepare('DELETE FROM sessions WHERE storage_id=?').run(other.storage_id); database.close();
+  database.prepare('DELETE FROM sessions WHERE session_id=?').run(other.storage_id); database.close();
   await assert.rejects(import_session(other.input, runtime), /not_found/);
 });

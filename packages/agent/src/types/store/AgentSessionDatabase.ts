@@ -1,31 +1,24 @@
 /**
  * Agent DB 内部关系记录、地址和查询类型。
- * session_key 只用于存储实现；归档和导出使用稳定 storage_id。
+ * session_key 只用于存储实现；所有活动、归档和转移引用均使用永久 session_id。
  */
 import type { SessionOrigin } from "@downcity/type";
 
 /** 不暴露内部整数主键的精确记录地址。 */
-export type AgentSessionAddress = {
-  /** 活动地址模式，只查询活动记录，绝不回落归档。 */
-  archived: false;
-  /** 规范化来源分类。 */
-  category: string;
-  /** 分类内的逻辑 Session ID。 */
+export interface AgentSessionAddress {
+  /** 期望的归档状态；不匹配返回不存在，不解析另一条记录。 */
+  archived: boolean;
+  /** 可选来源分类校验，不参与身份命名空间。 */
+  category?: string;
+  /** 不因归档、Workspace 变化或同记录转移而改变的 UUIDv4。 */
   session_id: string;
-} | {
-  /** 归档地址模式，必须持有条目给出的稳定身份。 */
-  archived: true;
-  /** 不因归档或主会话重新创建而改变的记录 ID。 */
-  storage_id: string;
-};
+}
 
 /** sessions 的小字段投影，不包含配置和 canonical 正文。 */
 export interface AgentSessionRecord {
   /** 仅限数据库内部 JOIN 和 keyset 使用的整数键。 */
   session_key: number;
-  /** 稳定且可导出的随机记录 ID。 */
-  storage_id: string;
-  /** 分类内逻辑 Session ID，归档后允许重建。 */
+  /** 全分类及活动/归档范围内永久唯一的 UUIDv4。 */
   session_id: string;
   /** 与 origin.category 受 CHECK 约束保持一致的分类。 */
   category: string;
@@ -71,9 +64,7 @@ export interface AgentSessionConfigurationRow {
 
 /** 创建新记录的完整领域身份，不使用文件路径推导。 */
 export interface AgentSessionCreateRecord {
-  /** 调用方已分配并可在失败重入时复用的 UUID。 */
-  storage_id: string;
-  /** 非空逻辑 Session ID。 */
+  /** 调用方已分配的永久 UUIDv4；同 operation_id 重入必须使用相同候选。 */
   session_id: string;
   /** 不可变完整来源，数据库再验证 category/type。 */
   origin: SessionOrigin;
@@ -83,6 +74,24 @@ export interface AgentSessionCreateRecord {
   timezone: string;
   /** 创建时间戳毫秒。 */
   created_at: number;
+}
+
+/** 专用执行的幂等业务键；键映射与会话创建同事务提交。 */
+export interface AgentSessionEnsureCreationInput extends AgentSessionCreateRecord {
+  /** 当前 Agent/分类内的持久业务键，不用于计算永久身份。 */
+  creation_key: string;
+}
+
+/** 显式确保主会话的事务输入；来源由存储固定为 chat/agent。 */
+export interface AgentSessionEnsureMainInput {
+  /** 事务尚未选中主会话时使用的新 UUIDv4，不从 Agent ID 派生。 */
+  session_id: string;
+  /** 首次创建时的时区；已有主会话不更改配置。 */
+  timezone: string;
+  /** 首次创建时间戳毫秒，重入保持原值。 */
+  created_at: number;
+  /** 首次创建的可选 Workspace；已有指针不重新绑定。 */
+  workspace_id?: string;
 }
 
 /** 列表过滤输入，必须经过归一化后绑定游标。 */

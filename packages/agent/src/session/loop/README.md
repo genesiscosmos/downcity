@@ -12,7 +12,7 @@
 | `SessionTurnCompletion.ts` | 是 | 结果映射、Turn Mutation、committed Hook 与 Context 释放顺序 |
 | `SessionTurnFileDiff.ts` | 是 | 把 Tool effects 投影为实时摘要与最终 canonical data part |
 | `SessionTurnFileDiffBuilder.ts` | 是 | 从 Tool effects 中只选出 Workspace 文件修改事实 |
-| `SessionState.ts` | 否 | 配置与 Metadata 状态；跨轮存活，写 `session_state` 表 |
+| `SessionState.ts` | 否 | 配置与 Metadata 状态；跨轮存活，通过 SessionStorage 写入 `sessions` / `session_configuration` |
 | `SessionTitle.ts` | 否 | 标题生成与持久化 |
 | `SessionTitleTask.ts` | 否 | 标题后台任务；不得阻塞 Turn 主链路 |
 

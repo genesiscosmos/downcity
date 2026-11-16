@@ -9,6 +9,7 @@
 import { create_action } from "@downcity/city/power";
 import { z } from "zod";
 import { wait_for_mcp } from "./Cancellation.js";
+import { mcp_operation_error } from "./McpOperationError.js";
 import { dirname, join } from "node:path";
 import { McpAssignments } from "./Assignments.js";
 import { McpOAuthProvider } from "../auth/OAuthSession.js";
@@ -237,7 +238,19 @@ export class McpRuntime {
     if (!config) throw new Error(`Unknown or invalid MCP server: ${server_id}`);
     if (!config.enabled) throw new Error(`MCP server is disabled: ${server_id}`);
     await this.exclusive(async () => await this.reload_all());
-    await this.ensure_connection(server_id);
+    const current = this.runtimes.get(server_id);
+    if (current?.status.state === "ready" && current.connection) {
+      const timeout = AbortSignal.timeout(current.config.transport.type === "http" ? 300_000 : Math.max(1, current.config.request_timeout_ms));
+      try {
+        current.tools = await current.connection.list_tools(timeout);
+        current.status = { ...current.status, tool_count: current.tools.length, last_error: undefined, last_failure: undefined, updated_at: new Date().toISOString() };
+      } catch (error) {
+        const failure = mcp_operation_error(error, "connection", timeout);
+        current.status = { ...current.status, state: "error", tool_count: 0, last_error: failure.message, last_failure: failure.detail, updated_at: new Date().toISOString() };
+        await current.connection.close().catch(() => undefined);
+        throw failure;
+      }
+    } else await this.ensure_connection(server_id);
     const runtime = this.runtimes.get(server_id)!;
     return { success: true, server_id, tool_count: runtime.tools.length, tools: runtime.tools.slice(0, 20).map((tool) => tool.name) };
   }
@@ -324,6 +337,8 @@ export class McpRuntime {
       : { ...config.transport, url: resolve_mcp_variables(config.transport.url, env), headers: resolve_headers(config.transport.headers, env) };
     const runtime: McpServerRuntime = { config, tools: [], status: { id: config.id, state: "idle", tool_count: 0 } };
     this.runtimes.set(config.id, runtime);
+    const timeout = AbortSignal.timeout(resolved_transport.type === "http" ? 300_000 : Math.max(1, config.request_timeout_ms));
+    const connection_signal = AbortSignal.any([timeout, ...(signal ? [signal] : [])]);
     try {
       if (resolved_transport.type === "stdio") assert_runtime_command(resolved_transport.command, resolved_transport.args);
       let oauth: McpOAuthProvider | undefined;
@@ -337,16 +352,16 @@ export class McpRuntime {
         this.providers.set(config.id, oauth);
       }
       runtime.connection = new McpConnection(resolved_transport, undefined, undefined, oauth);
-      const timeout = AbortSignal.timeout(resolved_transport.type === "http" ? 300_000 : Math.max(1, config.request_timeout_ms));
-      await runtime.connection.list_tools(AbortSignal.any([timeout, ...(signal ? [signal] : [])])).then((tools) => { runtime.tools = tools; });
+      runtime.tools = await runtime.connection.list_tools(connection_signal);
       if (this.runtimes.get(config.id) !== runtime) throw new Error("MCP configuration changed during connection");
       runtime.status = { ...runtime.status, id: config.id, state: "ready", tool_count: runtime.tools.length, updated_at: new Date().toISOString() };
       return runtime;
     } catch (error) {
-      runtime.status = { ...runtime.status, id: config.id, state: "error", tool_count: 0, last_error: "MCP connection failed. Check server configuration or retry OAuth authorization.", updated_at: new Date().toISOString() };
-      // Stale connection completions must never overwrite a reconfigured server.
-      await runtime.connection?.close();
-      throw error;
+      const failure = mcp_operation_error(error, "connection", connection_signal);
+      runtime.status = { ...runtime.status, id: config.id, state: "error", tool_count: 0, last_error: failure.message, last_failure: failure.detail, updated_at: new Date().toISOString() };
+      // Stale connection completions must never overwrite a reconfigured server; cleanup cannot hide the original failure.
+      await runtime.connection?.close().catch(() => undefined);
+      throw failure;
     }
   }
 

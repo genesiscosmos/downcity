@@ -24,7 +24,7 @@ export async function compact_context(input: SessionContextAdvanceInput, compose
   if (!model) return false;
   input.abort_signal?.throwIfAborted();
   const window = input.context_window ?? model.context_window;
-  const checkpoint = await read_latest_checkpoint(input.derived, composer_name);
+  const checkpoint = await read_latest_checkpoint(input.derived);
   const units: ContextSummaryUnit[] = [];
   for (const candidate of collect_stable_units(input.history, checkpoint)) {
     const records: string[] = [];
@@ -94,7 +94,7 @@ export async function compact_context(input: SessionContextAdvanceInput, compose
         throw new Error(`Context summary model returned an empty result (finish_reason=${String(result.finish_reason)}, usage=${JSON.stringify(result.usage ?? null)})`);
       }
       // 生成完整摘要后一次提交；任何请求失败都保持旧 checkpoint。
-      await insert_checkpoint(input.derived, composer_name, {
+      await insert_checkpoint(input.derived, {
           through_message_id: boundary.message.message_id,
           through_message_sequence: boundary.message.sequence,
           through_part_sequence: boundary.part.sequence,

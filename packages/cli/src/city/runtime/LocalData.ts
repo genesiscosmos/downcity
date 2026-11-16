@@ -8,6 +8,7 @@
 import {
   get_local_database_path,
   LocalDatabase,
+  ExtensionPlatform,
   resolve_local_root_path,
 } from "@downcity/city/local";
 import {
@@ -21,6 +22,8 @@ import { CityTokenRepository } from "@downcity/city/local";
 
 /** CLI 进程使用的一组本地数据依赖。 */
 export interface CliLocalData {
+  /** 当前 root 唯一扩展目录和管理服务；不自行持有租约。 */
+  extensions: ExtensionPlatform;
   /** 用户级数据根目录。 */
   root_path: string;
   /** 无业务语义的 SQLite Adapter。 */
@@ -47,7 +50,8 @@ export function create_cli_local_data(root_path_input?: string): CliLocalData {
   const agents = new AgentRepository(root_path);
   const powers = new PowerRepository(root_path);
   const city_tokens = new CityTokenRepository(database);
-  return { root_path, database, agents, workspaces, powers, settings, city_tokens };
+  const extensions = new ExtensionPlatform(database, root_path, agents);
+  return { root_path, database, agents, workspaces, powers, settings, city_tokens, extensions };
 }
 
 /** 在短连接本地数据依赖上执行同步操作。 */

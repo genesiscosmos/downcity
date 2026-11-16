@@ -116,7 +116,7 @@ export class FederationQueue {
    */
   async send(message: CityQueueMessage): Promise<void> {
     this.require_available();
-    return await this.adapter!.send(message);
+    return await this.deps.execute(async () => await this.adapter!.send(message));
   }
 
   /**

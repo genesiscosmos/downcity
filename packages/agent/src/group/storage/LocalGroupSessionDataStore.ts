@@ -1,6 +1,13 @@
-/** LocalGroupSessionDataStore：GroupSession 的 metadata 与消息 JSONL 存储。 */
+/**
+ * GroupSession 的本地 metadata、消息 JSONL 与 dispatch 审计存储。
+ *
+ * 持久读取严格验证 metadata v2 和记录自身的归属；只有新建空目录可创建记录。
+ * 初始化通过门禁后恢复消息摘要和崩溃尾行，读取本身不做版本转换或补造身份。
+ * 活动/归档目录由集合层选择，数据视图不改变永久 Session 标识。
+ */
 
 import path from "node:path";
+import { assert_group_session_metadata } from "@/group/storage/GroupSessionMetadata.js";
 import type { FileSystem } from "@downcity/type";
 import type { GroupMessage } from "@/types/group/Group.js";
 import type {
@@ -45,6 +52,9 @@ export class LocalGroupSessionDataStore implements GroupSessionDataStore {
   }) {
     this.files = options.files;
     this.group_id = options.group_id;
+    if (typeof this.group_id !== "string" || !this.group_id.trim()) {
+      throw new Error("GroupSession store requires a non-empty group_id");
+    }
     this.session_id = String(options.session_id || "").trim();
     if (!this.session_id) throw new Error("GroupSession store requires a non-empty session_id");
     this.session_root_path = path.join(
@@ -65,14 +75,20 @@ export class LocalGroupSessionDataStore implements GroupSessionDataStore {
     await this.files.ensure_directory(this.session_root_path);
     await this.files.with_file_lock(this.transaction_lock_path, async () => {
       if (!(await this.files.path_exists(this.metadata_file_path))) {
+        await this.assert_empty_session_unlocked();
         await this.write_metadata_unlocked(this.create_initial_metadata());
       }
+      // 先验证持久身份和格式，旧格式或损坏记录不得进入日志修复。
       await this.repair_metadata_unlocked();
     });
   }
 
   /** 读取完整共享消息历史。 */
   async list_messages(): Promise<GroupMessage[]> {
+    const metadata = await this.read_metadata_unlocked();
+    if (metadata.message_count > 0 && !(await this.files.path_exists(this.messages_file_path))) {
+      throw new Error("group_session_messages_not_found");
+    }
     return await this.read_messages();
   }
 
@@ -83,79 +99,65 @@ export class LocalGroupSessionDataStore implements GroupSessionDataStore {
     }
     await this.initialize();
     await this.files.with_file_lock(this.transaction_lock_path, async () => {
-      await this.files.append_file(this.messages_file_path, `${JSON.stringify(message)}\n`);
       const metadata = await this.read_metadata_unlocked();
-      await this.write_metadata_unlocked({
+      const next_metadata = {
         ...metadata,
         updated_at: message.created_at,
         message_count: metadata.message_count + 1,
         preview_text: message.text,
-      });
+      };
+      assert_group_session_metadata(next_metadata, this.session_id, this.group_id);
+      await this.files.append_file(this.messages_file_path, `${JSON.stringify(message)}\n`);
+      await this.write_metadata_unlocked(next_metadata);
     });
   }
 
   /** 读取当前 metadata。 */
   async read_metadata(): Promise<GroupSessionHistoryMeta> {
-    if (!(await this.files.path_exists(this.metadata_file_path))) {
-      return this.create_initial_metadata();
-    }
-    return await this.files.with_file_lock(
-      this.transaction_lock_path,
-      async () => await this.read_metadata_unlocked(),
-    );
+    return await this.read_metadata_unlocked();
   }
 
-  /** 在调用方已经持有事务锁时读取 metadata。 */
+  /** 精确只读元数据；缺失、旧格式或损坏明确失败，禁止创建或修复数据。 */
+  async read_metadata_readonly(): Promise<GroupSessionHistoryMeta> {
+    return await this.read_metadata_unlocked();
+  }
+
+  /** 读取原子提交的 metadata 快照；不创建目录、取写锁或修复记录。 */
   private async read_metadata_unlocked(): Promise<GroupSessionHistoryMeta> {
     if (!(await this.files.path_exists(this.metadata_file_path))) {
-      return this.create_initial_metadata();
+      throw new Error("group_session_metadata_not_found");
     }
-    const raw = JSON.parse(
+    const metadata: unknown = JSON.parse(
       (await this.files.read_file(this.metadata_file_path)).toString("utf8"),
-    ) as Omit<Partial<GroupSessionHistoryMeta>, "v" | "pending_message_ids"> & {
-      /** 读取时先校验版本，禁止未声明的 schema。 */ readonly v?: unknown;
-      /** 原始检查点需归一化为不重复的有效消息 ID。 */ readonly pending_message_ids?: unknown[];
-    };
-    if (raw.v !== 1 && raw.v !== 2) {
-      throw new Error(`Unsupported GroupSession metadata version: ${String(raw.v)}`);
-    }
-    if (raw.session_id !== this.session_id) {
-      throw new Error(`Invalid GroupSession ownership metadata: ${this.session_id}`);
-    }
-    if (raw.group_id && raw.group_id !== this.group_id) {
-      throw new Error(`GroupSession "${this.session_id}" belongs to another Group`);
-    }
-    const metadata: GroupSessionHistoryMeta = {
-      v: 2,
-      session_id: this.session_id,
-      group_id: String(raw.group_id || this.group_id),
-      ...(typeof raw.workspace_id === "string" && raw.workspace_id.trim() ? { workspace_id: raw.workspace_id.trim() } : {}),
-      ...(typeof raw.title === "string" && raw.title.trim() ? { title: raw.title.trim() } : {}),
-      created_at: typeof raw.created_at === "number" ? raw.created_at : Date.now(),
-      updated_at: typeof raw.updated_at === "number" ? raw.updated_at : 0,
-      message_count: typeof raw.message_count === "number" ? raw.message_count : 0,
-      ...(typeof raw.preview_text === "string" && raw.preview_text ? { preview_text: raw.preview_text } : {}),
-      ...(raw.member_session_ids && typeof raw.member_session_ids === "object"
-        ? { member_session_ids: normalize_member_session_ids(raw.member_session_ids) }
-        : {}),
-      pending_message_ids: Array.isArray(raw.pending_message_ids) ? normalize_message_ids(raw.pending_message_ids) : [],
-    };
-    if (raw.v === 1) await this.write_metadata_unlocked(metadata);
+    );
+    assert_group_session_metadata(metadata, this.session_id, this.group_id);
     return metadata;
+  }
+
+  /** 仅允许全新空目录创建 metadata，已有日志、调度或其他文件均不能作为空会话覆盖。 */
+  private async assert_empty_session_unlocked(): Promise<void> {
+    if (!(await this.files.path_exists(this.session_root_path))) return;
+    const entries = await this.files.read_directory(this.session_root_path);
+    if (entries.some((entry) => entry.name !== ".lock")) {
+      throw new Error("group_session_metadata_not_found");
+    }
   }
 
   /** 原子写入当前 metadata。 */
   async write_metadata(metadata: GroupSessionHistoryMeta): Promise<void> {
     await this.files.with_file_lock(this.transaction_lock_path, async () => {
+      if (await this.files.path_exists(this.metadata_file_path)) {
+        await this.read_metadata_unlocked();
+      } else {
+        await this.assert_empty_session_unlocked();
+      }
       await this.write_metadata_unlocked(metadata);
     });
   }
 
   /** 在调用方已经持有事务锁时写入 metadata。 */
   private async write_metadata_unlocked(metadata: GroupSessionHistoryMeta): Promise<void> {
-    if (metadata.session_id !== this.session_id || metadata.group_id !== this.group_id) {
-      throw new Error(`Invalid GroupSession metadata ownership: ${this.session_id}`);
-    }
+    assert_group_session_metadata(metadata, this.session_id, this.group_id);
     await this.files.ensure_directory(this.session_root_path);
     await this.files.write_file_atomically(
       this.metadata_file_path,
@@ -170,9 +172,6 @@ export class LocalGroupSessionDataStore implements GroupSessionDataStore {
       const next_metadata = {
         ...(await this.read_metadata_unlocked()),
         ...patch,
-        session_id: this.session_id,
-        group_id: this.group_id,
-        v: 2 as const,
       };
       await this.write_metadata_unlocked(next_metadata);
       return next_metadata;
@@ -181,6 +180,7 @@ export class LocalGroupSessionDataStore implements GroupSessionDataStore {
 
   /** 读取每个 dispatch_id 最后一次成功提交的调度状态。 */
   async list_dispatch_turns(): Promise<GroupDispatchTurnRecord[]> {
+    await this.read_metadata_unlocked();
     if (!(await this.files.path_exists(this.dispatch_turns_file_path))) return [];
     await this.files.ensure_directory(this.dispatch_root_path);
     return await this.files.with_file_lock(this.dispatch_lock_path, async () => {
@@ -197,22 +197,27 @@ export class LocalGroupSessionDataStore implements GroupSessionDataStore {
   /** 向 GroupSession 私有调度日志追加一个完整状态快照。 */
   async append_dispatch_turn(turn: GroupDispatchTurnRecord): Promise<void> {
     assert_dispatch_turn(turn);
+    await this.read_metadata_unlocked();
     await this.files.ensure_directory(this.dispatch_root_path);
     await this.files.with_file_lock(this.dispatch_lock_path, async () => {
+      await this.read_metadata_unlocked();
       await this.files.append_file(this.dispatch_turns_file_path, `${JSON.stringify(turn)}\n`);
     });
   }
 
   /** 校验消息日志并由真实消息重建可恢复的摘要字段。 */
   private async repair_metadata_unlocked(): Promise<void> {
-    const messages = await this.read_messages(true);
     const metadata = await this.read_metadata_unlocked();
+    if (metadata.message_count > 0 && !(await this.files.path_exists(this.messages_file_path))) {
+      throw new Error("group_session_messages_not_found");
+    }
+    const messages = await this.read_messages(true);
     const first_message = messages[0];
     const last_message = messages[messages.length - 1];
     await this.write_metadata_unlocked({
       ...metadata,
-      created_at: first_message?.created_at || metadata.created_at,
-      updated_at: last_message?.created_at || metadata.updated_at,
+      created_at: first_message?.created_at ?? metadata.created_at,
+      updated_at: last_message?.created_at ?? metadata.updated_at,
       message_count: messages.length,
       ...(last_message?.text ? { preview_text: last_message.text } : {}),
     });
@@ -320,12 +325,4 @@ function assert_dispatch_turn(value: GroupDispatchTurnRecord): void {
   if (value.status === "completed" && !value.decision) {
     throw new Error(`Completed Group dispatch is missing its decision: ${value.dispatch_id}`);
   }
-}
-
-function normalize_member_session_ids(input: object): Record<string, string> {
-  return Object.fromEntries(Object.entries(input).filter(([agent_id, session_id]) => Boolean(agent_id.trim()) && typeof session_id === "string" && session_id.trim()));
-}
-
-function normalize_message_ids(input: unknown[]): string[] {
-  return [...new Set(input.filter((item): item is string => typeof item === "string").map((item) => item.trim()).filter(Boolean))];
 }

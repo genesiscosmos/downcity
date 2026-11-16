@@ -26,6 +26,7 @@ export async function prepare_session_completion(
   const stopped = active_turn.turn_context?.lifecycle.abort_signal.aborted === true;
   const event: SessionTurnCommittedHookValue = {
     completion_id: `completion:${options.session_id}:${active_turn.turn_id}`,
+
     session_id: options.session_id,
     turn_id: active_turn.turn_id,
     status: stopped ? "stopped" : result.success ? "completed" : "failed",

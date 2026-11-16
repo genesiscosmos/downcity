@@ -39,8 +39,6 @@ export type SessionToolState =
 
 /** 清单里的一条会话摘要。 */
 export interface SessionToolSummary {
-  /** 不可变记录UUID，归档历史必须用此身份精确读取。 */
-  storage_id: string;
   /** 会话所属 Agent 标识；后续调用应携带同一 agent_id。 */
   agent_id: string;
   /** 会话当前绑定的项目 Workspace 标识。 */

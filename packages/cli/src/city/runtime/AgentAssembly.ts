@@ -14,6 +14,7 @@ import {
   LocalPowerLoader,
   resolve_workspace_ssh_access,
   type LocalAgentConfig,
+  type ExtensionPlatform,
   type LocalWorkspaceConfig,
   type PowerRepository,
   type LocalPowerRegistration,
@@ -61,22 +62,27 @@ export async function create_cli_agent(input: {
   root_path?: string;
   /** 每次模型调用读取 City 当前绑定；未绑定时不回退机器账户。 */
   resolve_federation: () => Federation | undefined;
+  /** 当前 root 共享扩展模型和行为目录。 */
+  extensions?: ExtensionPlatform;
 }): Promise<Agent> {
   resolve_local_root_path(input.root_path);
   const [model, tools] = await Promise.all([
-    Promise.resolve(create_cli_agent_model(input.config, input.resolve_federation)),
+    Promise.resolve(create_cli_agent_model(input.config, input.resolve_federation, input.extensions)),
     Promise.resolve(create_cli_agent_tools()),
   ]);
+  const behavior = input.extensions?.agent_behavior(input.config, { model, tools }) ?? {};
   return new Agent({
+    ...behavior,
+    acquire_execution: behavior.acquire_execution,
     id: input.config.agent_id,
     name: input.config.name,
     description: input.config.description,
-    instruction: input.config.instruction,
-    model,
-    tools,
+    instruction: input.config.instruction || behavior.instruction,
+    model: model ?? behavior.model,
+    tools: { ...tools, ...behavior.tools },
     resolve_work_model: async (model_id) =>
       await resolve_cli_agent_model(model_id, input.resolve_federation,
-        model_id === input.config.execution?.model_id ? read_reasoning_effort(input.config.execution) : undefined),
+        model_id === input.config.execution?.model_id ? read_reasoning_effort(input.config.execution) : undefined, input.extensions),
   });
 }
 
@@ -109,9 +115,10 @@ export async function create_cli_workspace(
 export function create_cli_agent_model(
   config: LocalAgentConfig,
   resolve_federation: () => Federation | undefined,
+  extensions?: ExtensionPlatform,
 ): ModelClient | undefined {
   const model_id = read_model_id(config.execution);
-  return model_id ? create_lazy_cli_model(model_id, resolve_federation, read_reasoning_effort(config.execution)) : undefined;
+  return model_id ? extensions?.model(model_id) ?? create_lazy_cli_model(model_id, resolve_federation, read_reasoning_effort(config.execution)) : undefined;
 }
 
 /** Session 或 Agent 只记录模型选择，实际调用时读取 City 当前绑定。 */
@@ -119,10 +126,11 @@ export async function resolve_cli_agent_model(
   model_id_input: string,
   resolve_federation: () => Federation | undefined,
   reasoning_effort?: string,
+  extensions?: ExtensionPlatform,
 ): Promise<ModelClient> {
   const model_id = String(model_id_input || "").trim();
   if (!model_id) throw new Error("model_id is required");
-  return create_lazy_cli_model(model_id, resolve_federation, reasoning_effort);
+  return extensions?.model(model_id) ?? create_lazy_cli_model(model_id, resolve_federation, reasoning_effort);
 }
 
 /** 在请求边界解析当前 Federation 目录并应用有效的思考强度。 */

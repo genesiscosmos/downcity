@@ -20,7 +20,7 @@ export interface NotificationInteractionItem {
   target?: PowerNotificationTarget;
   /** 来源 Session 的当前标题；仅作通知外层展示，不修改原 Interaction 请求标题。 */
   session_title?: string;
-  /** 原主体未提供来源时为 unknown；不会因目录缺失丢弃请求。 */
+  /** 原主体未提供来源或读取失败时为 unknown；不会丢弃原请求。 */
   availability: PowerNotificationAvailability;
 }
 
@@ -64,7 +64,7 @@ export interface NotificationListResult {
   badge_count: number;
   /** 全部未读与可响应请求投影；消费方按 scope 区分会话和 Inbox。 */
   notifications: NotificationAttention[];
-  /** 暂时无法核对目标目录的 Group，不能据此清理其状态。 */
+  /** 暂时无法读取被引用来源的 Group，不能据此清理其状态。 */
   unavailable_groups: string[];
   /** 当前主体目录的显示名称；更新来源独立于是否存在待处理请求。 */
   agent_names: Record<string, string>;

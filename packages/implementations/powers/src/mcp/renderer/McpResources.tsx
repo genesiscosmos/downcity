@@ -67,6 +67,7 @@ export function mcp_resource_detail({ power, ui, server_id }: McpResourceDetailP
       return () => { disposed = true; clearInterval(timer); };
     }, [power]);
     const authorize = async (server_id: string, cancel = false) => {
+      set_error("");
       set_authorizing((current) => [...current, server_id]);
       try {
         set_status(await power.invoke<McpRendererStatusView>(cancel ? "skill.mcp.cancel_authorization" : "skill.mcp.reauthorize", { server_id }));
@@ -111,7 +112,7 @@ export function mcp_resource_detail({ power, ui, server_id }: McpResourceDetailP
               <Button disabled={authorizing.includes(server.id) || server.auth_state === "authorizing" || server.state === "disabled"} on_click={() => void authorize(server.id)}>重新授权</Button>
               {server.auth_state === "authorizing" ? <Button on_click={() => void authorize(server.id, true)}>取消授权</Button> : null}
             </span>} /> : null}
-            {server.last_error ? <Row label="最近错误" description={server.last_error} /> : null}
+            {server.last_error ? <Row label="最近错误" description={to_error_message(new Error(server.last_error))} /> : null}
             {server.updated_at ? <Row label="更新时间" description={server.updated_at} /> : null}
           </Group>)}
         </Section>
@@ -198,8 +199,10 @@ export function mcp_resource_config({ config, ui, server_id }: McpResourceConfig
       apply_snapshot(await config.invoke<McpConfigSnapshotView>("skill.mcp.config.read"), draft.id);
     });
     const test_file = (draft: McpConfigFileDraft) => run_operation(`test:${draft.id}`, draft.id, async () => {
-      const result = await config.invoke<McpConfigTestView>("skill.mcp.config.test", { server_id: draft.id });
-      ui.toast({ type: "success", message: `${draft.id}: ${result.tool_count} 个工具` });
+      try {
+        const result = await config.invoke<McpConfigTestView>("skill.mcp.config.test", { server_id: draft.id });
+        ui.toast({ type: "success", message: `${draft.id}: ${result.tool_count} 个工具` });
+      } finally { ui.invalidate(); }
     });
     const reload = () => run_operation("reload", undefined, async () => {
       apply_snapshot(await config.invoke<McpConfigSnapshotView>("skill.mcp.config.reload"));
@@ -274,7 +277,17 @@ function merge_snapshot(drafts: McpConfigFileDraft[], snapshot: McpConfigSnapsho
   ];
 }
 
-/** 将通道错误转为可见消息，不对配置原文进行解析或转换。 */
+/** 保留运行时脱敏诊断，移除 Electron 外包装，并提供对应的中文恢复操作。 */
 function to_error_message(reason: unknown): string {
-  return reason instanceof Error ? reason.message : String(reason);
+  const message = reason instanceof Error ? reason.message : String(reason);
+  const match = /MCP (?:http|oauth|connection) (connection failed|authorization failed|operation timed out|protocol error|operation cancelled)(?: \(([^)]+)\))?/.exec(message);
+  if (!match) return message;
+  const guidance: Record<string, string> = {
+    "connection failed": "连接失败：检查地址、网络与 Server 是否可用，再测试连接。",
+    "authorization failed": "授权失败：检查 OAuth 元数据、client_id 和权限，再重新授权。",
+    "operation timed out": "操作超时：检查服务响应，或在时限内完成浏览器授权后重试。",
+    "protocol error": "协议错误：检查 MCP 端点与 Server 协议配置，再测试连接。",
+    "operation cancelled": "操作已取消，可在准备好后重试。",
+  };
+  return `${guidance[match[1]]}${match[2] ? `（${match[2]}）` : ""}`;
 }

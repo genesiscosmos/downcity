@@ -76,6 +76,8 @@ export interface CityPowerRecord {
   resolve_host_calls_idle?: () => void;
   /** Power 是否已经进入需要释放的生命周期。 */
   lifecycle_active: boolean;
+  /** 批量接管期间不进入公开目录、实例查询及宿主调用。 */
+  staged?: boolean;
   /** Power 当前可观察状态。 */
   state: "initializing" | "ready" | "error" | "disposing" | "cleanup_failed";
   /** Power 加入 City 的时间戳。 */

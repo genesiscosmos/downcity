@@ -18,10 +18,8 @@ export interface AgentSessionBrowserOptions {
 
 /** 归档历史的精确地址，逻辑 Session ID 只用于交叉校验。 */
 export interface AgentArchivedSessionAddress {
-  /** 列表返回的不可变记录 UUID，必须原样传回。 */
-  storage_id: string;
-  /** 可选逻辑 ID 校验；不能用于推测 storage_id。 */
-  session_id?: string;
+  /** 列表返回的永久会话 UUID，必须原样传回。 */
+  session_id: string;
   /** 可选分类校验；不能用于跨分类扫描。 */
   category?: string;
 }

@@ -31,7 +31,7 @@ export interface AgentStorageBudgets {
 export interface AgentStorageRequest {
   /** 稳定 Agent 存储拥有者标识，不允许以 Workspace 为隔离键。 */
   agent_id: string;
-  /** Session storage_id；集合操作使用固定的 collection 键。 */
+  /** Session session_id；集合操作使用固定的 collection 键。 */
   session_id: string;
   /** 已验证为 JSON 的完整 Worker 请求正文，调度器不记录正文。 */
   payload: string;

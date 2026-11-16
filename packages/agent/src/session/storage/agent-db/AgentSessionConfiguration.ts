@@ -21,10 +21,10 @@ export class AgentSessionConfiguration {
   /** 指定字段才提交；配置事实与目录投影只在这个入口维护。 */
   update(input: AgentSessionConfigurationUpdate): { revision: number } {
     return this.owner.write(input.operation_id, { command: "configure", ...input }, (database) => {
-      const record = this.catalog.by_storage_id(input.storage_id);
+      const record = this.catalog.by_session_id(input.session_id);
       if (record.archived) throw new Error("session_archived");
       if (input.expected_revision !== undefined && input.expected_revision !== record.revision) throw new Error("session_revision_conflict");
-      const configuration = this.catalog.configuration(input.storage_id);
+      const configuration = this.catalog.configuration(input.session_id);
       if (input.execution_profile && configuration.execution_profile
         && !is_deep_strict_equal(input.execution_profile, JSON.parse(configuration.execution_profile))) {
         throw new Error("session_execution_profile_conflict");
@@ -48,14 +48,14 @@ export class AgentSessionConfiguration {
         record.session_key,
       );
       return { revision: record.revision + 1 };
-    });
+    }, input.session_id);
   }
 
   /** 读取指定命名空间/版本的最近累计 checkpoint。 */
-  checkpoint(storage_id: string, namespace: string, schema_version: number): ContextCheckpointRow | null {
+  checkpoint(session_id: string, namespace: string, schema_version: number): ContextCheckpointRow | null {
     this.assert_namespace(namespace);
     return this.owner.read((database) => {
-      const record = this.catalog.by_storage_id(storage_id);
+      const record = this.catalog.by_session_id(session_id);
       return (database.prepare(`SELECT checkpoint_id, through_message_id, through_message_sequence, through_part_sequence,
         summary, schema_version, created_at FROM composer_checkpoints
         WHERE session_key = ? AND namespace = ? AND schema_version = ?
@@ -68,7 +68,7 @@ export class AgentSessionConfiguration {
   insert_checkpoint(input: AgentSessionCheckpointInsert): { checkpoint_id: string } {
     this.assert_namespace(input.namespace);
     return this.owner.write(input.operation_id, { command: "checkpoint_insert", ...input }, (database) => {
-      const record = this.catalog.by_storage_id(input.storage_id);
+      const record = this.catalog.by_session_id(input.session_id);
       if (record.archived) throw new Error("session_archived");
       const row = database.prepare("SELECT * FROM messages WHERE session_key = ? AND message_id = ?")
         .get(record.session_key, input.through_message_id) as unknown as SessionMessageRow | undefined;
@@ -84,7 +84,7 @@ export class AgentSessionConfiguration {
         .run(record.session_key, input.namespace, input.checkpoint_id, input.through_message_id,
           input.through_message_sequence, input.through_part_sequence, input.summary, input.schema_version, input.created_at);
       return { checkpoint_id: input.checkpoint_id };
-    });
+    }, input.session_id);
   }
 
   private assert_namespace(namespace: string): void {

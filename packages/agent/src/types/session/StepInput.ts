@@ -20,7 +20,7 @@ import type { Logger } from "@/utils/logger/Logger.js";
 /** StepInput 构造参数。 */
 export interface StepInputOptions {
   /** 当前 Agent 已授权会话的只读访问；供 lookup 解析外部与归档引用。 */
-  read_result_session?: (session_id: string, category: string, storage_id?: string) => Promise<import("@/types/store/SessionReadView.js").SessionReadView>;
+  read_result_session?: (session_id: string, category: string) => Promise<import("@/types/store/SessionReadView.js").SessionReadView>;
   /** 当前 Session 所属 Agent 的稳定标识。 */
   agent_id: string;
   /** 读取当前 Agent 的用户可见名称；实时读取，与 system 身份保持一致。 */

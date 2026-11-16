@@ -26,7 +26,7 @@ export type {
   PowerNotificationOutcome,
   PowerNotificationAvailability,
   PowerNotificationFact,
-  PowerNotificationTargets,
+  PowerNotificationResolution,
   PowerNotificationInput,
   PowerNotificationSource,
   PowerNotificationReceiver,

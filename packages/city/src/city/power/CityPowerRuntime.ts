@@ -47,7 +47,7 @@ import { register_power_http_routes } from "@/power/core/PowerHttpRoutes.js";
 import { CityExecutionProfiles } from "./CityExecutionProfiles.js";
 import { assert_power_session_owner, create_power_session_host } from "./CityPowerSessionHost.js";
 import { CityNotifications } from "./CityNotifications.js";
-import { list_notification_targets } from "./CityNotificationTargets.js";
+import { resolve_notification_targets } from "./CityNotificationSources.js";
 
 /** City 唯一的 Power Runtime。 */
 export class CityPowerRuntime implements PowerRuntimeHost {
@@ -96,6 +96,7 @@ export class CityPowerRuntime implements PowerRuntimeHost {
     });
     this.public_api = Object.freeze({
       add: (input) => this.lifecycle.add(input),
+      prepare: (inputs) => this.lifecycle.prepare(inputs),
       refresh: (input) => this.lifecycle.refresh(input),
       remove: async (power_id) => await this.lifecycle.remove(power_id),
       cancel_initialization: (power_id) => this.lifecycle.cancel_initialization(power_id),
@@ -134,7 +135,7 @@ export class CityPowerRuntime implements PowerRuntimeHost {
   /** 返回 City 当前持有的唯一 Power 实例。 */
   private require_power(power_id_input: string): PowerDefinition | null {
     const record = this.lifecycle.records.get(String(power_id_input || "").trim());
-    return record?.state === "ready" ? record.power : null;
+    return record?.state === "ready" && !record.staged ? record.power : null;
   }
 
   /** 关闭门禁与通知，同时同步取消已提交的初始化。 */
@@ -475,6 +476,7 @@ export class CityPowerRuntime implements PowerRuntimeHost {
       get federation() { return options.federation; },
       power: Object.freeze({
         id: power_id,
+        background: async <TResult>(operation: () => Promise<TResult>) => await this.with_record_execution(power_id, async () => await operation()),
         action: (action: PowerHostAction) =>
           register_host_action(power_id, host_actions, config_actions, action, "host"),
         config_action: (action: PowerConfigAction) =>
@@ -489,7 +491,7 @@ export class CityPowerRuntime implements PowerRuntimeHost {
       system: Object.freeze({
         ...create_power_session_host(power_id, this.options.runtime_access, this.execution_profiles),
         register_notification_receiver: (receiver) => this.notifications.register(receiver, this.options.runtime_access.list_agents(), this.options.runtime_access.list_groups()),
-        list_notification_targets: async () => await list_notification_targets(this.options.runtime_access.list_agents(), this.options.runtime_access.list_groups(), this.options.runtime_access.list_notification_workspace_ids()),
+        resolve_notification_targets: async (targets) => await resolve_notification_targets(targets, this.options.runtime_access.list_agents(), this.options.runtime_access.list_groups(), this.options.runtime_access.list_notification_workspace_ids()),
         list_agent_interactions: async ({ agent_id }) => {
           const agent = this.options.runtime_access.get_agent(agent_id);
           if (!agent) throw new Error(`Agent not found: ${agent_id}`);

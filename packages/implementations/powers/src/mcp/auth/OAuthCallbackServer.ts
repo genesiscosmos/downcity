@@ -8,6 +8,7 @@
 
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
 import { randomUUID } from "node:crypto";
+import { McpOperationError, mcp_abort_error } from "../runtime/McpOperationError.js";
 
 /** 一次成功 callback 的结果。 */
 export interface OAuthCallbackResult {
@@ -50,7 +51,7 @@ export class OAuthCallbackServer {
     return await new Promise<OAuthCallbackResult>((resolve, reject) => {
       const timer = setTimeout(() => {
         cleanup();
-        reject(new Error(`OAuth authorization timed out after ${Math.round(timeout_ms / 1000)}s`));
+        reject(new McpOperationError({ kind: "timeout", phase: "oauth" }));
       }, timeout_ms);
       const on_request = (request: IncomingMessage, response: ServerResponse) => {
         const url = new URL(request.url ?? "/", "http://127.0.0.1");
@@ -64,9 +65,9 @@ export class OAuthCallbackServer {
           return;
         }
         if (error) {
-          this.respond(response, 200, `Authorization failed: ${error}`);
+          this.respond(response, 200, "Authorization failed. Return to MCP settings to retry.");
           cleanup();
-          reject(new Error("OAuth authorization was denied"));
+          reject(new McpOperationError({ kind: "authorization", phase: "oauth", reason_code: "access_denied" }));
           return;
         }
         if (!code) {
@@ -77,7 +78,7 @@ export class OAuthCallbackServer {
         cleanup();
         resolve({ code, redirect_uri: `http://127.0.0.1:${this.port}/callback` });
       };
-      const on_abort = () => { cleanup(); reject(new Error("OAuth authorization cancelled")); };
+      const on_abort = () => { cleanup(); reject(mcp_abort_error(signal!, "oauth")); };
       const cleanup = () => {
         signal?.removeEventListener("abort", on_abort);
         clearTimeout(timer);

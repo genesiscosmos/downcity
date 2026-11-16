@@ -1,13 +1,10 @@
 /**
- * 原 Session Interaction 的只读查询与引用投影。
- *
- * 文件模式使用短生命周期只读连接，只查询 streaming Agent Message，绝不恢复执行器、
- * 初始化 schema 或加载完整历史。内存模式复用已有 Storage 的非终态查询。
+ * canonical Tool 交互的纯投影。
+ * 从调用方提供的消息筛选 pending 项，构造带 Agent 路由的独立引用快照；
+ * 不打开数据库、不恢复执行器，也不依赖物理存储布局。
  */
-import { DatabaseSync } from "node:sqlite";
 import type { SessionAgentInteraction, SessionMessage, SessionOrigin } from "@downcity/type";
 import type { AgentInteraction } from "@/types/agent/AgentInteractions.js";
-import { decode_session_message, type SessionMessageRow, type SessionMessagePartRow } from "./SessionStorageCodec.js";
 
 /** 为原交互构造当前 Agent 内可验证的公开引用，返回独立快照。 */
 export function project_agent_interaction(
@@ -38,41 +35,4 @@ export function collect_pending_interactions(
     ? message.parts.flatMap((part) => part.type === "tool"
       ? (part.interactions ?? []).filter((interaction) => interaction.status === "pending")
       : []) : []);
-}
-
-/** 在一个只读事务内校验 Agent/分类身份，并查询尚未终结的 Tool 交互。 */
-export function read_file_pending_interactions(
-  database_path: string,
-  agent_id: string,
-  session_id: string,
-  session_category: string,
-): AgentInteraction[] {
-  const database = new DatabaseSync(database_path, { readOnly: true });
-  try {
-    database.exec("BEGIN");
-    const identity = database.prepare(`
-      SELECT agent_id, session_id, origin, json_extract(origin, '$.category') AS category
-      FROM session_state WHERE singleton_id = 1
-    `).get();
-    if (identity?.agent_id !== agent_id || identity.session_id !== session_id
-      || identity.category !== session_category) {
-      throw new Error("session_target_forbidden: Session is unavailable to this Agent");
-    }
-    const rows = database.prepare(`
-      SELECT * FROM messages
-      WHERE role = 'agent' AND state = 'streaming'
-      ORDER BY sequence ASC
-    `).all() as unknown as SessionMessageRow[];
-    const parts = database.prepare(`
-      SELECT * FROM message_parts WHERE message_id = ? AND type = 'tool'
-      ORDER BY sequence ASC
-    `);
-    const messages = rows.map((row) => decode_session_message(row,
-      parts.all(row.message_id) as unknown as SessionMessagePartRow[], session_id));
-    const origin = JSON.parse(String(identity.origin)) as SessionOrigin;
-    return collect_pending_interactions(messages).map((interaction) =>
-      project_agent_interaction(session_id, session_category, interaction, false, origin));
-  } finally {
-    database.close();
-  }
 }

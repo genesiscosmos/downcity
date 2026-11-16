@@ -8,7 +8,7 @@
 import { project_session_attachment, is_generated_attachment_context } from "./SessionAttachmentProjection.js";
 import { max_request_media_bytes } from "@downcity/type/workspace";
 import { model_media_bytes, project_session_inbox, type SessionProjectionOptions } from "./SessionInboxProjection.js";
-import { disclosed_tool_result } from "../results/ResultReference.js";
+import { assert_tool_terminal, disclosed_tool_result } from "../results/ResultReference.js";
 import { published_power_summaries, project_published_tool_input } from "./SessionPowerProjection.js";
 import type {
   ModelContent,
@@ -166,8 +166,9 @@ async function convert_assistant_message(
         }
         break;
       case "tool":
+        assert_tool_terminal(part);
         if (part.input !== undefined) {
-          append_tool_content(message, part, content, tool_results, published_summaries.get(part.tool_call_id));
+          append_tool_content(part, content, tool_results, published_summaries.get(part.tool_call_id));
         }
         break;
       case "power":
@@ -189,7 +190,6 @@ async function convert_assistant_message(
 
 /** 把 canonical Tool Part 投影为模型工具调用和可选工具结果。 */
 function append_tool_content(
-  message: SessionAgentMessage,
   part: SessionAgentToolPart,
   content: ModelContent[],
   tool_results: ModelContent[],
@@ -209,12 +209,7 @@ function append_tool_content(
     outcome: part.state === "completed" ? "succeeded" : "failed",
     content: [{
       type: "json",
-      value: disclosed_tool_result(part, {
-        session_id: message.session_id,
-        message_id: message.message_id,
-        message_sequence: message.sequence,
-        part_id: part.part_id,
-      }),
+      value: disclosed_tool_result(part),
     }],
   });
 }

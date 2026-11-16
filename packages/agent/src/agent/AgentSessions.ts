@@ -10,7 +10,6 @@
 import { read_result_session } from "@/session/storage/ReadResultSession.js";
 import { SessionLifecycle } from "./SessionLifecycle.js";
 import { archive_session_subtree } from "./SessionArchive.js";
-import { createHash } from "node:crypto";
 import { read_session_execution } from "./SessionExecutionRead.js";
 import { SessionExecutionProfiles } from "./SessionExecutionProfiles.js";
 import type { ResolvedSessionExecutionProfile, SessionExecutionProfile, SessionExecutionProfileSelection } from "@/types/agent/SessionExecutionProfile.js";
@@ -50,11 +49,13 @@ import type { WorkspaceRuntime } from "@downcity/type";
 import type { SessionOrigin } from "@downcity/type";
 import { normalize_session_origin, normalize_session_origin_category, SESSION_ORIGIN_CATEGORY_WORK, SESSION_ORIGIN_TYPE_WORK } from "@downcity/type";
 import type { SessionContextResolution } from "@/types/agent/SessionContext.js";
-import { create_agent_session_origin, resolve_agent_session_id } from "@/agent/AgentSessionIdentity.js";
+import { create_agent_session_origin } from "@/agent/AgentSessionIdentity.js";
 
 import { resolve_session_snapshot } from "./SessionModelSnapshot.js";
 
 type AgentSessionsOptions = {
+  /** 宿主完整 Turn 租约；回调只在执行入口触发。 */
+  acquire_execution?: () => () => void;
   /**
    * 当前 agent 稳定标识。
    */
@@ -129,8 +130,10 @@ export class AgentSessions implements AgentSessionsContract<AgentSession> {
   private readonly resolve_session_context: AgentSessionsOptions["resolve_session_context"];
   private readonly logger: Logger;
   private readonly get_instruction: AgentSessionsOptions["get_instruction"];
-  private readonly session_class: AgentSessionConstructor;
-  private readonly session_composer: SessionComposer;
+  private session_class: AgentSessionConstructor;
+  private behavior_revision = 0;
+  private readonly acquire_execution?: () => () => void;
+  private session_composer: SessionComposer;
   private readonly get_agent_model: AgentSessionsOptions["get_agent_model"];
   /** 宿主提供的稳定模型解析器，仅执行时调用。 */
   private readonly resolve_model?: AgentSessionsOptions["resolve_model"];
@@ -171,6 +174,7 @@ export class AgentSessions implements AgentSessionsContract<AgentSession> {
     this.session_composer = options.session_composer ?? new DefaultSessionComposer();
     this.get_agent_model = options.get_agent_model;
     this.resolve_model = options.resolve_model;
+    this.acquire_execution = options.acquire_execution;
     this.observe_session = options.observe_session;
   }
 
@@ -209,6 +213,21 @@ export class AgentSessions implements AgentSessionsContract<AgentSession> {
         });
       }
     }));
+  }
+
+  /** 替换行为必须空闲；旧句柄失效但历史与 Session 身份不变，下次访问按新类恢复。 */
+  reconfigure_behavior(session_class?: AgentSessionConstructor, composer?: SessionComposer): void {
+    const unlock = this.guard_idle();
+    try {
+      this.behavior_revision++;
+      this.session_class = session_class ?? Session;
+      this.session_composer = composer ?? new DefaultSessionComposer();
+      for (const [key, session] of this.sessions_by_id) {
+        session.dispose_title_generation?.();
+        session.clear_secrets();
+        this.delete_cached_session(key);
+      }
+    } finally { unlock(); }
   }
 
   /**
@@ -315,14 +334,15 @@ export class AgentSessions implements AgentSessionsContract<AgentSession> {
    * 取用 Agent 自己那条会话；不存在时创建。
    *
    * 关键点（中文）
-   * - 身份就是 `origin.type = "agent"`，`session_id` 就是 Agent 的 `id`：
-   *   因此不新增索引，也不维护额外状态。
+   * - 当前会话由持久 main_session_id 指针选择，永久 UUID 与 Agent ID 独立。
+   * - 空指针通过显式 ensure_main 事务创建；读取不会推断或建立会话。
    * - 同一进程内并发调用会收敛到同一个创建过程，不会产生第二条。
    * - 被归档或删除后，下一次调用自然重建一条。
    * - Workspace 仅用于首次创建；已有会话的目录实例由宿主通过 get/set 明确恢复。
    */
   async self(input?: { workspace?: WorkspaceRuntime }): Promise<AgentSession> {
-    const key = this.session_cache_key(resolve_agent_session_id(this.agent_id), create_agent_session_origin().category);
+    const current = await this.resolve_session_context().store.read_main();
+    const key = current ? this.session_cache_key(current.session_id, "chat") : "main-pointer";
     return await this.lifecycle.access(() => this.open_self(input), [key]);
   }
 
@@ -339,8 +359,8 @@ export class AgentSessions implements AgentSessionsContract<AgentSession> {
         creating: true,
         ...(input?.workspace ? { workspace: input.workspace } : {}),
       });
-      const session_id = resolve_agent_session_id(this.agent_id);
-      const storage = context.store.create_session(session_id, origin, context.workspace_id);
+      const storage = await context.store.ensure_main(context.workspace_id);
+      const session_id = storage.session_id;
       const restored_model = await resolve_session_snapshot(storage, this.get_agent_model(), true);
       const session = this.get_or_create_session({ session_id, origin, ...(input?.workspace ? { workspace: input.workspace } : {}), storage, restored_model });
       await session.initialize();
@@ -357,15 +377,8 @@ export class AgentSessions implements AgentSessionsContract<AgentSession> {
   private async find_agent_session(): Promise<AgentSession | undefined> {
     const origin = create_agent_session_origin();
     const context = this.resolve_session_context({ origin });
-    const session_id = resolve_agent_session_id(this.agent_id);
-    try {
-      if (!(await context.store.has_session(session_id, origin.category))) {
-        return undefined;
-      }
-    } catch {
-      return undefined;
-    }
-    return await this.get(session_id, origin.category);
+    const current = await context.store.read_main();
+    return current ? await this.get(current.session_id, origin.category) : undefined;
   }
 
   /** 串行化 Agent 会话创建；失败时释放链，使下一次调用可以重试。 */
@@ -409,10 +422,8 @@ export class AgentSessions implements AgentSessionsContract<AgentSession> {
     const origin = normalize_session_origin(input.origin);
     const creation_key = input.creation_key?.trim();
     if (input.creation_key !== undefined && (!creation_key || creation_key.length > 512)) throw new Error("execution_creation_key_invalid");
-    const session_id = creation_key
-      ? createHash("sha256").update(this.agent_id).update("\u0000").update(origin.category).update("\u0000").update(creation_key).digest("hex").slice(0, 32)
-      : await this.allocate_session_id(origin);
-    const key = this.session_cache_key(session_id, origin.category);
+    const candidate_id = await this.allocate_session_id(origin);
+    const key = creation_key ? `creation:${origin.category}:${creation_key}` : this.session_cache_key(candidate_id, origin.category);
     const pending = this.execution_creations.get(key);
     if (pending) {
       await pending;
@@ -420,25 +431,28 @@ export class AgentSessions implements AgentSessionsContract<AgentSession> {
     }
     const operation = this.lifecycle.access(async () => {
       const context = this.resolve_session_context({ origin });
-      const exists = await context.store.has_session(session_id, origin.category);
-      if (!exists) await this.assert_parent_available(origin, context.store);
-      const storage = exists ? await context.store.open_session(session_id, origin.category)
-        : context.store.create_session(session_id, origin, input.workspace_id);
-      const metadata = await storage.read_metadata();
-      if (!isDeepStrictEqual(metadata.origin, origin) || metadata.workspace_id !== input.workspace_id) throw new Error("execution_creation_conflict: origin or scope differs");
-      const persisted = metadata.execution_profile;
-      if (persisted && (persisted.id !== input.execution_profile_id || persisted.version !== input.execution_profile_version
-        || persisted.creation_key !== creation_key)) throw new Error("execution_creation_conflict: profile or key differs");
-      if (!persisted && exists && await storage.message_count() > 0) throw new Error("execution_profile_missing: existing history has no profile");
-      const execution_profile = await this.execution_profiles.resolve({ ...input, creation_key }, {
-        agent_id: this.agent_id, session_id, origin, workspace_id: input.workspace_id,
-        default_model: this.get_agent_model(),
-      }, persisted);
-      await storage.bind_execution_profile(execution_profile.reference);
-      const session = this.get_or_create_session({ session_id, origin, storage, execution_profile });
-      await session.initialize();
-      if (!exists) await this.notify_created(session);
-      return session;
+      await this.assert_parent_available(origin, context.store);
+      const storage = creation_key
+        ? await context.store.ensure_creation(creation_key, origin, input.workspace_id)
+        : context.store.create_session(candidate_id, origin, input.workspace_id);
+      const session_id = storage.session_id;
+      return await this.lifecycle.read(this.session_cache_key(session_id, origin.category), async () => {
+        const metadata = await storage.read_metadata();
+        if (!isDeepStrictEqual(metadata.origin, origin) || metadata.workspace_id !== input.workspace_id) throw new Error("execution_creation_conflict: origin or scope differs");
+        const persisted = metadata.execution_profile;
+        if (persisted && (persisted.id !== input.execution_profile_id || persisted.version !== input.execution_profile_version
+          || persisted.creation_key !== creation_key)) throw new Error("execution_creation_conflict: profile or key differs");
+        if (!persisted && await storage.message_count() > 0) throw new Error("execution_profile_missing: existing history has no profile");
+        const execution_profile = await this.execution_profiles.resolve({ ...input, creation_key }, {
+          agent_id: this.agent_id, session_id, origin, workspace_id: input.workspace_id,
+          default_model: this.get_agent_model(),
+        }, persisted);
+        await storage.bind_execution_profile(execution_profile.reference);
+        const session = this.get_or_create_session({ session_id, origin, storage, execution_profile });
+        await session.initialize();
+        if (!persisted) await this.notify_created(session);
+        return session;
+      });
     }, [key, ...this.session_parent_keys(origin)]);
     this.execution_creations.set(key, operation);
     try { return await operation; }
@@ -632,7 +646,7 @@ export class AgentSessions implements AgentSessionsContract<AgentSession> {
     );
     this.delete_cached_session(cache_key);
     if (existed) await this.notify_removed({
-      type: "deleted", storage_id: existing_record?.storage_id, session_id: resolved_session_id,
+      type: "deleted", session_id: resolved_session_id,
       category: resolved_category, origin_type: existing_record?.metadata.origin.type ?? cached?.origin.type ?? SESSION_ORIGIN_TYPE_WORK,
       workspace_id: existing_record?.metadata.workspace_id ?? cached?.workspace_id,
     });
@@ -667,6 +681,19 @@ export class AgentSessions implements AgentSessionsContract<AgentSession> {
     );
     this.delete_cached_session(cache_key);
     return existed;
+  }
+
+  /** 读取永久身份的活动历史，不恢复执行器或读取模型配置。 */
+  async read(session_id: string, category = SESSION_ORIGIN_CATEGORY_WORK) {
+    return await this.resolve_session_context().store.read_session(session_id, category);
+  }
+
+  /** 只读当前主会话，不恢复执行器；显式 self() 才确保创建。 */
+  async read_main() { return await this.resolve_session_context().store.read_main(); }
+
+  /** 只读查询明确记录的小字段；不创建 Session 或恢复执行环境。 */
+  async read_metadata(addresses: readonly import("@/types/agent/SessionMetadata.js").SessionMetadataAddress[]) {
+    return await this.resolve_session_context().store.read_metadata(addresses);
   }
 
   /**
@@ -718,13 +745,13 @@ export class AgentSessions implements AgentSessionsContract<AgentSession> {
   }
 
   /** 精确读取归档记录，只取得历史能力，不恢复执行或模型。 */
-  async read_archived(storage_id: string): Promise<import("@/types/store/SessionReadView.js").SessionReadView> {
-    return await this.resolve_session_context().store.read_archived_session(storage_id);
+  async read_archived(session_id: string): Promise<import("@/types/store/SessionReadView.js").SessionReadView> {
+    return await this.resolve_session_context().store.read_archived_session(session_id);
   }
 
   /** 永久删除一条归档记录，稳定身份避免误删重建后的活动主会话。 */
-  async remove_archived(storage_id: string): Promise<boolean> {
-    const result = await this.lifecycle.clean_archive(() => this.resolve_session_context().store.remove_archived_session(storage_id));
+  async remove_archived(session_id: string): Promise<boolean> {
+    const result = await this.lifecycle.clean_archive(() => this.resolve_session_context().store.remove_archived_session(session_id));
     this.notify_directory_changed();
     return result;
   }
@@ -785,8 +812,14 @@ export class AgentSessions implements AgentSessionsContract<AgentSession> {
     this.assert_resource_available(context.workspace_id);
     // 默认模型是本实例创建时的快照，Agent.reconfigure 不改变已打开 Session。
     const default_model = input && Object.hasOwn(input, "restored_model") ? input.restored_model : this.get_agent_model();
+    const behavior_revision = this.behavior_revision;
     const created = new this.session_class({
-      read_result_session: (session_id, category, storage_id) => read_result_session(context.store, session_id, category, storage_id),
+      acquire_execution: () => {
+        if (behavior_revision !== this.behavior_revision) throw new Error("Session behavior changed; restore this Session before executing");
+        this.assert_resource_available(context.workspace_id);
+        return this.acquire_execution?.() ?? (() => {});
+      },
+      read_result_session: (session_id, category) => read_result_session(context.store, session_id, category),
       ...(profile ? { assert_execution_profile: assert_profile } : {}),
       agent_id: this.agent_id,
       get_agent_name: this.get_agent_name,

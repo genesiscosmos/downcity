@@ -2,7 +2,7 @@
  * SDK Session 标题生成与持久化辅助。
  *
  * 关键点（中文）
- * - session title 是 `session_state` 的字段，列表与详情都以它为准。
+ * - session title 是 Agent 数据库 `sessions` 的字段，列表与详情都以它为准。
  * - title 默认允许为空；只有模型成功生成标题时才会写入。
  * - 当 title 仍为空时，后续执行链路可以再次尝试生成。
  */

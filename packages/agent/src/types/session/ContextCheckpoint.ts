@@ -23,7 +23,7 @@ export interface ContextCheckpointRow {
   through_part_sequence: number;
   /** 截至边界的累计摘要正文。 */
   summary: string;
-  /** 生成派生结果时的 schema 版本；不兼容的旧表会被重建。 */
+  /** 生成派生结果时的 schema 版本；读取仅采用匹配当前派生版本的记录。 */
   schema_version: number;
   /** 派生记录创建时间。 */
   created_at: number;

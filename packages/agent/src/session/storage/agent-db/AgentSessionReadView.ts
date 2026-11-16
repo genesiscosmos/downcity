@@ -15,7 +15,7 @@ import { collect_pending_interactions } from "../SessionInteractionReader.js";
 
 /** 小字段事实投影，列表不 JOIN configuration 或正文。 */
 export function project_agent_session_record(agent_id: string, row: AgentSessionRecord): AgentSessionSummary {
-  return { storage_id: row.storage_id, agent_id, session_id: row.session_id,
+  return { agent_id, session_id: row.session_id,
     origin: restore_session_origin(JSON.parse(row.origin), row.category), message_count: row.message_count,
     created_at: row.created_at, updated_at: row.updated_at,
     ...(row.title ? { title: row.title } : {}), ...(row.preview_text ? { preview_text: row.preview_text } : {}),
@@ -36,15 +36,15 @@ export function agent_session_read_view(lease: AgentSessionRuntimeLease, agent_i
   const archived = Boolean(row.archived);
   const assert_record = async () => {
     const current = await lease.read<AgentSessionRecord | null>({ command: "find", address: archived
-      ? { archived: true, storage_id: row.storage_id }
+      ? { archived: true, session_id: row.session_id }
       : { archived: false, category: row.category, session_id: row.session_id } });
-    if (!current || current.storage_id !== row.storage_id) throw new Error("session_address_changed");
+    if (!current || current.session_id !== row.session_id) throw new Error("session_address_changed");
   };
   return {
-    storage_id: row.storage_id, metadata: project_agent_session_metadata(agent_id, row), archived,
+    session_id: row.session_id, metadata: project_agent_session_metadata(agent_id, row), archived,
     configuration: async () => {
       await assert_record();
-      const config = await lease.read<AgentSessionConfigurationRow>({ command: "configuration", storage_id: row.storage_id });
+      const config = await lease.read<AgentSessionConfigurationRow>({ command: "configuration", session_id: row.session_id });
       return { system_snapshot: config.system_snapshot,
         ...(config.model_binding ? { model_binding: decode_model_binding(config.model_binding) } : {}),
         ...(config.approval_mode ? { approval_mode: config.approval_mode } : {}),
@@ -55,7 +55,7 @@ export function agent_session_read_view(lease: AgentSessionRuntimeLease, agent_i
       await assert_record();
       const limit = input?.limit ?? 50;
       if (!Number.isSafeInteger(limit) || limit < 1 || limit > 200) throw new Error("session_message_page_limit_invalid");
-      const page = await lease.read<AgentSessionMessagePage>({ command: "messages", storage_id: row.storage_id,
+      const page = await lease.read<AgentSessionMessagePage>({ command: "messages", session_id: row.session_id,
         input: { before_sequence: input?.before_sequence, limit: limit + 1 } });
       const has_more = page.items.length > limit;
       const items = has_more ? page.items.slice(1) : page.items;
@@ -68,7 +68,7 @@ export function agent_session_read_view(lease: AgentSessionRuntimeLease, agent_i
     },
     interactions: async () => {
       await assert_record();
-      const messages = await lease.read<SessionMessage[]>({ command: "recoverable", storage_id: row.storage_id });
+      const messages = await lease.read<SessionMessage[]>({ command: "recoverable", session_id: row.session_id });
       return collect_pending_interactions(messages).map(entry => structuredClone(entry.request));
     },
   };

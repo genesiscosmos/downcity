@@ -1,7 +1,5 @@
 /** Session 离开活动集合的领域事件；由集合发布，宿主负责释放自己的投影。 */
 export interface SessionRemovalEvent {
-  /** 本次移出活动集合的真实记录UUID；不作用于同逻辑重建记录。 */
-  readonly storage_id?: string;
   /** 成功完成的操作；归档仍保留历史，删除永久移除活动会话数据。 */
   readonly type: "archived" | "deleted";
   /** 当前 Agent 内稳定的会话标识，与 category 共同组成身份。 */

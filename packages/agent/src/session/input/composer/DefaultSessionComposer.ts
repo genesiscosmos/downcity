@@ -42,12 +42,12 @@ export class DefaultSessionComposer implements SessionComposer {
   async initialize(
     input: Parameters<SessionComposer["initialize"]>[0],
   ): Promise<void> {
-    await initialize_checkpoint_schema(input.derived, this.name);
+    await initialize_checkpoint_schema(input.derived);
   }
 
   /** 返回显式摘要 system block 与 checkpoint 边界后的 canonical 历史。 */
   async compose(input: SessionComposeInput): Promise<SessionStepInput> {
-    const checkpoint = await read_latest_checkpoint(input.derived, this.name);
+    const checkpoint = await read_latest_checkpoint(input.derived);
     const system_blocks = await build_composer_system_blocks(input);
     const tail = checkpoint
       ? slice_messages_after_checkpoint(input.history, checkpoint)

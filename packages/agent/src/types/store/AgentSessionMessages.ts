@@ -9,8 +9,8 @@ import type { SessionMessageCreateInput } from "./SessionStorage.js";
 export interface AgentSessionAppendMessage {
   /** 幂等操作 UUID，同一请求重试必须复用。 */
   operation_id: string;
-  /** 精确目标记录身份，不依赖可重建的逻辑 ID。 */
-  storage_id: string;
+  /** 永久会话 UUID；写事务只允许该会话处于活动状态。 */
+  session_id: string;
   /** 已构造并通过领域校验的候选聚合；最终 sequence 由事务分配。 */
   message: SessionMessageCreateInput;
 }
@@ -19,8 +19,8 @@ export interface AgentSessionAppendMessage {
 export interface AgentSessionUpdateMessage {
   /** 幂等操作 UUID。 */
   operation_id: string;
-  /** 精确 Session 记录身份。 */
-  storage_id: string;
+  /** 永久会话 UUID；消息身份仍限定在该会话范围内。 */
+  session_id: string;
   /** 本次完整领域聚合，用于验证稳定前缀和 envelope 不变量。 */
   message: SessionMessage;
   /** 更新前的已知 revision，防止并发覆盖。 */
@@ -59,8 +59,8 @@ export interface AgentSessionMessagePage {
 export interface AgentSessionTruncateMessages {
   /** 幂等操作 UUID。 */
   operation_id: string;
-  /** 要修改的活动 Session 记录身份。 */
-  storage_id: string;
+  /** 要修改的活动会话永久 UUID。 */
+  session_id: string;
   /** 保留到的 sequence，0 表示清空。 */
   through_sequence: number;
 }

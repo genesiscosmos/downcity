@@ -11,6 +11,7 @@ import type {
   AgentSessionRuntimeWriteOptions,
 } from "@/types/store/AgentSessionRuntime.js";
 import type { AgentSessionReadCommand, AgentSessionWorkerRequest, AgentSessionWriteCommand } from "@/types/store/AgentSessionWorker.js";
+import { AgentSessionFileLease } from "./AgentSessionFileLease.js";
 import { AgentSessionDatabase } from "./AgentSessionDatabase.js";
 import { AgentSessionWorkerPool } from "./AgentSessionWorkerPool.js";
 import { AgentStorageScheduler } from "./AgentStorageScheduler.js";
@@ -95,6 +96,16 @@ export async function acquire_agent_session_storage(target_input: AgentSessionRu
   const pending = new Set<Promise<unknown>>();
   let released = false;
   let release_promise: Promise<void> | undefined;
+  // Reader Worker按请求关闭DB；文件访问租约必须覆盖Browser/导出的整个生命周期。
+  let file_lease: AgentSessionFileLease | undefined;
+  const retain_files = (required = false) => {
+    if (file_lease || retained.target.database_path === ":memory:") return;
+    try { file_lease = AgentSessionFileLease.acquire(retained.target.database_path, retained.target.agent_id); }
+    catch (error) {
+      if (!required && ((error as NodeJS.ErrnoException).code === "ENOENT" || (error as Error).message === "session_attachment_coordination_required")) return;
+      throw error;
+    }
+  };
 
   /** 操作在租约关闭前登记，避免最后释放遗漏同一 tick 接受的写入。 */
   const track = <T>(operation: () => Promise<T>): Promise<T> => {
@@ -109,28 +120,34 @@ export async function acquire_agent_session_storage(target_input: AgentSessionRu
   return {
     read: <T>(operation: AgentSessionReadCommand, signal?: AbortSignal) => track(async () => {
       if (signal?.aborted) throw new Error("session_storage_cancelled");
+      retain_files();
       const payload = request_payload(retained.target, true, operation);
       const result = retained.target.database_path === ":memory:"
         ? await runtime.scheduler.submit({ agent_id: owner_key, session_id: "collection", payload, signal })
         : await runtime.read(payload, signal);
+      retain_files(true);
       // 文件读一旦派发完成后才取消 UI 提交，不把读取消误传为写事务回滚。
       if (signal?.aborted) throw new Error("session_storage_cancelled");
       return JSON.parse(result) as T;
     }),
     write: <T>(session_id: string, operation: AgentSessionWriteCommand, options?: AgentSessionRuntimeWriteOptions) => track(async () => {
       if (readonly) throw new Error("session_storage_readonly");
+      retain_files();
       try {
         const result = await runtime.scheduler.submit({
           agent_id: owner_key, session_id, payload: request_payload(retained.target, false, operation),
           signal: options?.signal, assert_dispatchable: options?.assert_dispatchable,
         });
+        retain_files(true);
         return JSON.parse(result) as T;
       } catch (error) {
         if (!(error instanceof Error) || error.message !== "session_storage_outcome_unknown") throw error;
-        return await reconcile_agent_session_operation<T>(operation,
+        const reconciled = await reconcile_agent_session_operation<T>(operation,
           async () => await runtime.writers.settle_failed_workers(),
           async (operation_id) => JSON.parse(await runtime.read(request_payload(retained.target, true, { command: "receipt", operation_id }))),
         );
+        retain_files(true);
+        return reconciled;
       }
     }),
     release: () => {
@@ -139,6 +156,8 @@ export async function acquire_agent_session_storage(target_input: AgentSessionRu
       release_promise = wait_agent_storage_drain((async () => {
         const results = await Promise.allSettled([...pending]);
         const errors = results.filter((result): result is PromiseRejectedResult => result.status === "rejected").map(result => result.reason);
+        file_lease?.release();
+        file_lease = undefined;
         retained.references -= 1;
         if (!retained.references) {
           retained.closing = (async () => {

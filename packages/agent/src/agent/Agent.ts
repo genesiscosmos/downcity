@@ -26,6 +26,7 @@ import type {
   AgentOptions,
   AgentSessionConstructor,
 } from "@/types/agent/AgentOptions.js";
+import type { AgentBehavior } from "@/types/agent/AgentBehavior.js";
 import type { AgentReconfigureInput } from "@/types/agent/AgentReconfigureInput.js";
 import type {
   AgentSessionCollection,
@@ -96,10 +97,10 @@ export class Agent {
   readonly custom_tools: Record<string, Tool>;
 
   /** Agent 使用的 Session 类。 */
-  readonly session_class?: AgentSessionConstructor;
+  session_class?: AgentSessionConstructor;
 
   /** 当前 Agent 使用的 Session Composer；其所有 Session 共享该实例。 */
-  readonly session_composer?: SessionComposer;
+  session_composer?: SessionComposer;
 
   /** Agent 级日志器，不绑定任何 Workspace。 */
   private readonly logger = new Logger();
@@ -108,7 +109,7 @@ export class Agent {
   private readonly instruction: string[];
 
   /** Agent 自有检查点处理器；与容器提供的 Power hooks 合并使用。 */
-  private readonly custom_hooks: ToolHookSet;
+  private custom_hooks: ToolHookSet;
 
   /**
    * Agent 会话可用的会话工具；延迟创建并复用。
@@ -180,6 +181,7 @@ export class Agent {
     }
     this.session_manager = new AgentSessions({
       agent_id: this.id,
+      acquire_execution: options.acquire_execution,
       // 关键点（中文）：身份用回调实时读取，使重配后的名称与描述立即进入 system、
       // Power 上下文与工具调用环境，三处不再出现同一 Turn 内身份漂移。
       get_agent_name: () => this.agent_name,
@@ -295,6 +297,19 @@ export class Agent {
     }
   }
 
+  /** 空闲时替换完整行为；保留 Agent、Session ID 与历史，旧运行句柄不可继续执行。 */
+  reconfigure_behavior(behavior: AgentBehavior): void {
+    if (this.dispose_promise) throw new Error("Agent is disposing");
+    this.session_manager.reconfigure_behavior(behavior.session_class, behavior.session_composer);
+    this.session_class = behavior.session_class;
+    this.session_composer = behavior.session_composer;
+    this.set_instruction(behavior.instruction ?? []);
+    this.agent_model = behavior.model;
+    for (const key of Object.keys(this.custom_tools)) delete this.custom_tools[key];
+    Object.assign(this.custom_tools, behavior.tools ?? {});
+    this.custom_hooks = behavior.hooks ?? EMPTY_TOOL_HOOK_SET;
+  }
+
   /** 返回 Agent 指令快照。 */
   get_instructions(): readonly string[] {
     return [...this.instruction];
@@ -353,7 +368,7 @@ export class Agent {
     this.host = undefined;
     this.work_host = undefined;
     this.storage_provider = new AgentMemoryStorageProvider();
-    this.agent_storage = undefined;
+    // 存储租约仍由 Agent 持有，dispose 排空后释放；提前丢弃会泄漏 DB 和附件共享锁。
   }
 
   /**
@@ -557,7 +572,7 @@ export class Agent {
       },
       is_executing: (session_id, category) => this.session_manager.list_executing_session_ids(undefined, category).includes(session_id),
       read_session: async (session_id, category) => await this.resolve_storage().sessions.read_session(session_id, category),
-      read_archived_session: async (storage_id) => await this.resolve_storage().sessions.read_archived_session(storage_id),
+      read_archived_session: async (session_id) => await this.resolve_storage().sessions.read_archived_session(session_id),
       read_archive_plan: async operation_id => await this.resolve_storage().sessions.read_archive_plan(operation_id),
       archive_session: async input => await this.session_manager.archive(input),
       get_session: async (session_id, category) => await this.restore_work_session(session_id, category),

@@ -2,6 +2,8 @@
  * 单 Session 离线导入：原身份、同 Agent、冲突拒绝、附件先暂存、数据库事务最后提交。
  * 批次清单与原 operation_id 驱动重入；已提交通过同库 receipt 核对，不覆盖用户记录。
  */
+import { assert_transfer_runtime } from "./session-transfer-protocol.mjs";
+import { assert_available, assert_operation, assert_root_identity, assert_transfer_database } from "./session-transfer-guards.mjs";
 import fs from "node:fs";
 import path from "node:path";
 import { DatabaseSync } from "node:sqlite";
@@ -11,14 +13,6 @@ import { agent_database, inventory, load_package, outside_root } from "./session
 import { read_record, insert_record, rebind_record, uuid_pattern } from "./session-transfer-record.mjs";
 import { verify_sources } from "./session-transfer-sources.mjs";
 
-/** 同一UUID、活动逻辑地址或待清理文件不能被导入接管；原receipt例外由调用方先核对。 */
-function assert_available(database, metadata) {
-  if (database.prepare("SELECT 1 FROM sessions WHERE storage_id=?").get(metadata.storage_id)) fail("transfer_storage_id_conflict");
-  if (!metadata.archived && database.prepare("SELECT 1 FROM sessions WHERE category=? AND session_id=? AND archived=0").get(metadata.category, metadata.session_id)) fail("transfer_active_address_conflict");
-  if (database.prepare("SELECT 1 FROM attachment_cleanup WHERE storage_id=?").get(metadata.storage_id)) fail("transfer_pending_cleanup_conflict");
-  if (database.prepare("SELECT 1 FROM operation_receipts WHERE storage_id=? LIMIT 1").get(metadata.storage_id)
-    || database.prepare("SELECT 1 FROM archive_operation_nodes WHERE storage_id=? LIMIT 1").get(metadata.storage_id)) fail("transfer_historical_identity_conflict");
-}
 
 /** 整个目标记录文件树必须与批次清单一致，原本存在的目录不会被当作暂存副本。 */
 function verify_files(record_path, planned) {
@@ -26,9 +20,9 @@ function verify_files(record_path, planned) {
   if (fs.realpathSync(record_path) !== record_path) fail("unsafe_storage_path");
   if (fs.readdirSync(record_path).sort().join(",") !== ".owned-attachments.json,attachments") fail("transfer_target_files_conflict");
   const ownership_path = path.join(record_path, ".owned-attachments.json");
-  ordinary(ownership_path);
+  if (ordinary(ownership_path).mode & 0o077) fail("transfer_target_files_changed");
   const ownership = JSON.parse(fs.readFileSync(ownership_path, "utf8"));
-  const expected = { format_version: 1, agent_id: planned.agent_id, storage_id: planned.storage_id,
+  const expected = { format_version: 2, agent_id: planned.agent_id, session_id: planned.session_id,
     files: planned.attachments.map(file => file.relative_path) };
   if (digest(ownership) !== digest(expected) || digest(attachment_inventory(path.join(record_path, "attachments"))) !== digest(planned.attachments)) fail("transfer_target_files_changed");
 }
@@ -40,26 +34,27 @@ function open_target(database_path, runtime, agent_id) {
   try {
     database.exec("PRAGMA foreign_keys=ON; PRAGMA journal_mode=WAL; PRAGMA synchronous=FULL; PRAGMA busy_timeout=250;");
     if (process.platform === "darwin") database.exec("PRAGMA fullfsync=ON;");
-    runtime.assert_agent_session_schema(database, agent_id);
+    assert_transfer_database(database, agent_id, runtime);
     return database;
   } catch (error) { database.close(); throw error; }
 }
 
 /** 参数由CLI和此函数分别校验；没有默认根、自动改ID或隐式覆盖模式。 */
 export async function import_session(input, runtime) {
+  assert_transfer_runtime(runtime);
   if (!input.writers_stopped || !input.root_path || !input.agent_id || !input.batch_path || !input.package_path
     || !uuid_pattern.test(input.operation_id ?? "")) fail("transfer_import_explicit_parameters_required");
   const root_path = fs.realpathSync(input.root_path);
   const batch_path = outside_root(root_path, input.batch_path, runtime);
-  const package_path = path.resolve(input.package_path);
-  if (package_path === root_path || package_path.startsWith(`${root_path}${path.sep}`)) fail("transfer_package_must_be_outside_root");
+  const package_path = outside_root(root_path, input.package_path, runtime);
   if (batch_path === package_path || batch_path.startsWith(`${package_path}${path.sep}`)
     || package_path.startsWith(`${batch_path}${path.sep}`)) fail("transfer_batch_overlaps_package");
   const { manifest: package_manifest, record, fingerprint } = load_package(package_path, runtime);
   if (input.agent_id !== package_manifest.agent_id) fail("transfer_agent_identity_conflict");
-  const storage_id = record.metadata.storage_id;
-  const planned = { format_version: 1, operation_id: input.operation_id, root_path, agent_id: input.agent_id,
-    storage_id, package_path, package_fingerprint: fingerprint, allow_unresolved_sources: input.allow_unresolved_sources === true,
+  const session_id = record.metadata.session_id;
+  const source_runtime = { ...runtime, agent_id: input.agent_id };
+  const planned = { format_version: 3, schema_version: 10, operation_id: input.operation_id, root_path, agent_id: input.agent_id,
+    session_id, package_path, package_fingerprint: fingerprint, allow_unresolved_sources: input.allow_unresolved_sources === true,
     attachments: inventory(package_manifest.attachments) };
   const request_hash = digest(planned);
   const manifest_path = path.join(batch_path, "import.json");
@@ -70,42 +65,50 @@ export async function import_session(input, runtime) {
     const database_path = agent_database(root_path, input.agent_id);
     file_lease = runtime.AgentSessionFileLease.acquire(database_path, input.agent_id, true);
     database = open_target(database_path, runtime, input.agent_id);
+    assert_operation(database, input.operation_id, true);
+    assert_root_identity(root_path, input.agent_id, session_id, runtime);
     let state;
     if (exists(batch_path)) {
-      ordinary(batch_path, true); ordinary(manifest_path);
+      const batch_stat = ordinary(batch_path, true); const manifest_stat = ordinary(manifest_path);
+      if ((batch_stat.mode & 0o077) || (manifest_stat.mode & 0o077)) fail("transfer_import_batch_conflict");
       state = JSON.parse(fs.readFileSync(manifest_path, "utf8"));
       if (digest(state.planned) !== request_hash || state.request_hash !== request_hash
         || !["copying", "publishing", "files_published", "committed"].includes(state.status)) fail("transfer_import_batch_conflict");
     } else {
-      assert_available(database, record.metadata);
-      const final_path = path.join(path.dirname(database_path), "session-files", storage_id);
+      assert_available(database, session_id);
+      const final_path = path.join(path.dirname(database_path), "session-files", session_id);
       if (exists(final_path)) fail("transfer_target_files_conflict");
       // 先检查来源，失败时不创建批次或发布附件。
-      verify_sources(database, record, package_manifest.sources, runtime, planned.allow_unresolved_sources);
+      verify_sources(database, record, package_manifest.sources, source_runtime, planned.allow_unresolved_sources);
       fs.mkdirSync(batch_path, { mode: 0o700 });
       state = { planned, request_hash, status: "copying" }; save_json(manifest_path, state);
     }
     const save = status => { state = { planned, request_hash, status }; save_json(manifest_path, state, true); };
     const agent_path = path.dirname(database_path);
     const files_root = path.join(agent_path, "session-files");
-    const final_path = path.join(files_root, storage_id);
+    const final_path = path.join(files_root, session_id);
     const stage_root = path.join(agent_path, ".session-imports");
     const stage_path = path.join(stage_root, input.operation_id);
     const stage_record = path.join(stage_path, "record");
+    if (exists(stage_path)) {
+      ordinary(stage_path, true); ordinary(path.join(stage_path, "owner.json"));
+      if (fs.realpathSync(stage_path) !== stage_path
+        || digest(JSON.parse(fs.readFileSync(path.join(stage_path, "owner.json"), "utf8"))) !== digest({ operation_id: input.operation_id, request_hash })) fail("transfer_stage_conflict");
+    }
     const receipt = database.prepare("SELECT * FROM operation_receipts WHERE operation_id=?").get(input.operation_id);
     if (receipt) {
-      if (receipt.request_hash !== request_hash || receipt.storage_id !== storage_id) fail("transfer_operation_conflict");
+      if (receipt.request_hash !== request_hash || receipt.session_id !== session_id) fail("transfer_operation_conflict");
       const result = JSON.parse(receipt.result);
-      if (result.status !== "imported" || result.storage_id !== storage_id) fail("transfer_operation_conflict");
+      if (result.status !== "imported" || result.session_id !== session_id) fail("transfer_operation_conflict");
       verify_files(final_path, planned);
-      const target = read_record(database, storage_id);
+      const target = read_record(database, session_id);
       if (digest(target) !== result.record_sha256) fail("transfer_imported_record_changed");
       save("committed");
       return { ...result, replayed: true };
     }
     if (state.status === "committed") fail("transfer_import_receipt_missing");
-    assert_available(database, record.metadata);
-    const unresolved = verify_sources(database, record, package_manifest.sources, runtime, planned.allow_unresolved_sources);
+    assert_available(database, session_id);
+    const unresolved = verify_sources(database, record, package_manifest.sources, source_runtime, planned.allow_unresolved_sources);
     for (const directory of [files_root, stage_root]) {
       if (!exists(directory)) { fs.mkdirSync(directory, { mode: 0o700 }); sync_path(agent_path); }
       ordinary(directory, true);
@@ -118,7 +121,7 @@ export async function import_session(input, runtime) {
       if (digest(JSON.parse(fs.readFileSync(path.join(stage_path, "owner.json"), "utf8"))) !== digest({ operation_id: input.operation_id, request_hash })) fail("transfer_stage_conflict");
       if (!exists(stage_record)) fs.mkdirSync(stage_record, { mode: 0o700 });
       copy_attachments(path.join(package_path, "attachments"), path.join(stage_record, "attachments"), planned.attachments);
-      const ownership = { format_version: 1, agent_id: input.agent_id, storage_id,
+      const ownership = { format_version: 2, agent_id: input.agent_id, session_id,
         files: planned.attachments.map(file => file.relative_path) };
       const ownership_path = path.join(stage_record, ".owned-attachments.json");
       if (!exists(ownership_path)) save_json(ownership_path, ownership);
@@ -140,17 +143,18 @@ export async function import_session(input, runtime) {
       target_media_version: runtime.file_read_version(fs.statSync(path.join(final_path, "attachments", file.relative_path))) }));
     const rebound = rebind_record(record, package_manifest.source_attachments, path.join(final_path, "attachments"), files,
       { ...runtime, agent_id: input.agent_id });
-    const result = { status: "imported", storage_id, unresolved_sources: unresolved.length, record_sha256: digest(rebound) };
+    const result = { status: "imported", session_id, unresolved_sources: unresolved.length, record_sha256: digest(rebound) };
     database.exec("BEGIN IMMEDIATE;");
     try {
-      assert_available(database, rebound.metadata);
-      verify_sources(database, rebound, package_manifest.sources, runtime, planned.allow_unresolved_sources);
+      assert_operation(database, input.operation_id);
+      assert_available(database, session_id);
+      verify_sources(database, rebound, package_manifest.sources, source_runtime, planned.allow_unresolved_sources);
       insert_record(database, rebound); check_integrity(database);
-      if (digest(read_record(database, storage_id)) !== result.record_sha256) fail("transfer_semantic_mismatch");
+      if (digest(read_record(database, session_id)) !== result.record_sha256) fail("transfer_semantic_mismatch");
       const now = Date.now();
       database.prepare("UPDATE storage_metadata SET first_business_write_at=COALESCE(first_business_write_at,?) WHERE singleton_id=1").run(now);
-      database.prepare("INSERT INTO operation_receipts(operation_id,request_hash,storage_id,result,committed_at) VALUES(?,?,?,?,?)")
-        .run(input.operation_id, request_hash, storage_id, JSON.stringify(result), now);
+      database.prepare("INSERT INTO operation_receipts(operation_id,request_hash,session_id,result,committed_at) VALUES(?,?,?,?,?)")
+        .run(input.operation_id, request_hash, session_id, JSON.stringify(result), now);
       database.exec("COMMIT;");
     } catch (error) { try { database.exec("ROLLBACK;"); } catch {} throw error; }
     save("committed");

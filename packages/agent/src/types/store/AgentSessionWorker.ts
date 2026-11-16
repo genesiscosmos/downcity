@@ -9,6 +9,14 @@ import type { AgentSessionAppendMessage, AgentSessionMessagePageInput, AgentSess
 
 /** 仅读取 canonical 事实的命令。 */
 export type AgentSessionReadCommand = {
+  /** 只读当前主会话指针；为空返回 null，绝不创建。 */
+  command: "main";
+} | {
+  /** 批量精确查询小字段，不加载正文、配置或全量目录。 */
+  command: "metadata";
+  /** 最多 100 个明确引用，结果与输入同序。 */
+  addresses: readonly import("../agent/SessionMetadata.js").SessionMetadataAddress[];
+} | {
   /** 读取持久化归档计划，不扫描当前活动目录。 */
   command: "archive_plan";
   /** 原归档操作UUID。 */
@@ -21,8 +29,8 @@ export type AgentSessionReadCommand = {
 } | {
   /** 不加载完整历史的定向消息/统计查询。 */
   command: "first_user" | "latest_agent" | "message_stats";
-  /** 精确目标记录身份。 */
-  storage_id: string;
+  /** 目标会话永久 UUID。 */
+  session_id: string;
   /** 仅 latest_agent 使用的可选 Turn 过滤。 */
   turn_id?: string;
 } | {
@@ -31,8 +39,8 @@ export type AgentSessionReadCommand = {
 } | {
   /** 读取单个 Composer 命名空间的最近累计摘要。 */
   command: "checkpoint";
-  /** 精确 Session 记录身份。 */
-  storage_id: string;
+  /** 会话永久 UUID，不随归档变化。 */
+  session_id: string;
   /** Composer 命名空间。 */
   namespace: string;
   /** 目标 checkpoint 自身的结构版本。 */
@@ -45,32 +53,32 @@ export type AgentSessionReadCommand = {
 } | {
   /** 活动/归档精确地址读取。 */
   command: "find";
-  /** 归档必须携带 storage_id。 */
+  /** 永久身份及可选分类和状态校验。 */
   address: AgentSessionAddress;
 } | {
   /** 按稳定记录读取 metadata、配置或非终态消息。 */
   command: "record" | "configuration" | "recoverable";
-  /** 已确认的稳定记录身份。 */
-  storage_id: string;
+  /** 已确认的永久会话 UUID。 */
+  session_id: string;
 } | {
   /** 消息页及同事务 total。 */
   command: "messages";
-  /** 目标稳定记录身份。 */
-  storage_id: string;
+  /** 目标永久会话 UUID。 */
+  session_id: string;
   /** 页大小及 sequence 边界。 */
   input: AgentSessionMessagePageInput;
 } | {
   /** 指定消息或 Part 对应消息或 Inbox 对应消息。 */
   command: "message" | "part_message" | "inbox_message";
-  /** 目标稳定记录身份。 */
-  storage_id: string;
+  /** 目标永久会话 UUID。 */
+  session_id: string;
   /** 当前 Session 范围中的 message_id / part_id / inbox_id。 */
   id: string;
 } | {
   /** 检查 canonical User/Inbox 附件授权。 */
   command: "has_attachment";
-  /** 目标稳定记录身份。 */
-  storage_id: string;
+  /** 目标永久会话 UUID。 */
+  session_id: string;
   /** 精确 canonical 文件 URL。 */
   file_path: string;
 } | {
@@ -82,6 +90,20 @@ export type AgentSessionReadCommand = {
 
 /** 在单写连接中执行的短事务命令。 */
 export type AgentSessionWriteCommand = {
+  /** 原子选择业务创建键所关联的永久 UUID。 */
+  command: "ensure_creation";
+  /** 重入和未知确认都使用原操作 UUID。 */
+  operation_id: string;
+  /** 完整来源、候选 UUID 与独立业务键。 */
+  input: import("./AgentSessionDatabase.js").AgentSessionEnsureCreationInput;
+} | {
+  /** 显式单事务确保主会话；不同并发候选收敛为同一指针。 */
+  command: "ensure_main";
+  /** 本次确认身份；重入保留原 UUID。 */
+  operation_id: string;
+  /** 新会话候选及首次创建信息；已有主会话不被重绑。 */
+  input: import("./AgentSessionDatabase.js").AgentSessionEnsureMainInput;
+} | {
   /** 创建或取得原持久化计划，返回小型确认。 */
   command: "archive_prepare";
   /** 原UUID与根逻辑地址。 */

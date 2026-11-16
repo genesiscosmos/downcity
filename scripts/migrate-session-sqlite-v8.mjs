@@ -4,6 +4,7 @@
  * 每批次支持 status、完整 verify、崩溃后同批次继续、业务写入前 restore。
  */
 import path from "node:path";
+import { assert_v8_runtime } from "./lib/session-v8-runtime-gate.mjs";
 import os from "node:os";
 import { pathToFileURL as path_to_file_url } from "node:url";
 import { load_runtime } from "./lib/session-v7-runtime.mjs";
@@ -50,8 +51,9 @@ export function parse_arguments(arguments_) {
 /** 执行结果只含结构信息；失败原始诊断不能泄漏正文和凭据。 */
 export async function run(input) {
   if (input.help) { console.log(help_text); return 0; }
-  if (input.report_path && exists(input.report_path)) fail("output_already_exists");
   const runtime = await load_runtime(true);
+  assert_v8_runtime(runtime);
+  if (input.report_path && exists(input.report_path)) fail("output_already_exists");
   if (input.report_path) {
     const report_path = runtime.resolve_resource_root(input.report_path);
     const root_path = runtime.resolve_resource_root(input.root_path);

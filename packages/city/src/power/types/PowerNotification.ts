@@ -56,34 +56,26 @@ export type PowerNotificationOutcome = "success" | "failure" | "info";
 /** 来源状态只描述可达性；不会隐含删除通知或完成请求。 */
 export type PowerNotificationAvailability = "available" | "archived" | "removed" | "unknown";
 
-/** City 集合生命周期及 Group 运行事实，不包含通知策略或私密响应。 */
-export type PowerNotificationFact =
-  | { /** 活动目标目录发生变化。 */ type: "targets_changed" }
-  | { /** 生命周期事实。 */ type: "target_removed"; /** 离开活动集合的目标。 */ target: PowerNotificationTarget; /** 原主体确认的归档或删除原因。 */ reason: "archived" | "removed" }
-  | { /** 主体移除事实。 */ type: "agent_removed"; /** 已移除主体。 */ agent_id: string }
-  | { /** 群组移除事实。 */ type: "group_removed"; /** 已移除群组。 */ group_id: string }
-  | { /** 群聊的原始状态事件。 */ type: "group_event"; /** 持有群聊的 Group。 */ group_id: string; /** 原群聊。 */ session_id: string; /** 原始状态或交互事件。 */ event: import("@downcity/agent").GroupEvent };
+/** 群聊原始运行事实；通知不维护主体目录或生命周期副本。 */
+export interface PowerNotificationFact {
+  /** 仅转发群聊执行事件。 */
+  type: "group_event";
+  /** 原群聊所属主体。 */
+  group_id: string;
+  /** 原群聊会话。 */
+  session_id: string;
+  /** 原始执行或交互事实。 */
+  event: import("@downcity/agent").GroupEvent;
+}
 
-/** 当前可打开的目标目录；不可枚举的主体单独保留未知状态。 */
-export interface PowerNotificationTargets {
-  /** 活动 Session 与 GroupSession 稳定目标。 */
-  targets: PowerNotificationTarget[];
-  /** 已归档来源，保留摘要但不能作为活动会话打开。 */
-  archived_targets: PowerNotificationTarget[];
-  /** 当前已登记 Agent，用于区分来源移除和目录暂时不可达。 */
-  agent_ids: string[];
-  /** 当前已登记 Group，用于区分来源移除和目录暂时不可达。 */
-  group_ids: string[];
-  /** 目标当前绑定的 Workspace，只作可达性核对，不参与稳定身份。 */
-  target_workspaces: Record<string, string>;
-  /** 以通知目标稳定键索引的真实 Session 标题；含活动与归档元数据，空字符串表示尚未命名。 */
-  target_titles: Record<string, string>;
-  /** 当前 City 已登记 Workspace 的稳定标识。 */
-  workspace_ids: string[];
-  /** 目录读取失败的 Agent。 */
-  unavailable_agents: string[];
-  /** 目录读取失败的 Group。 */
-  unavailable_groups: string[];
+/** 一条明确来源的只读解析结果；不持久化可达性或目录副本。 */
+export interface PowerNotificationResolution {
+  /** 原目标；活动逻辑引用解析成功后补齐存储记录身份。 */
+  target: PowerNotificationTarget;
+  /** 当前来源可达性，读取失败保留 unknown。 */
+  availability: PowerNotificationAvailability;
+  /** 来源真实标题；undefined 表示不可读取，空字符串表示未命名。 */
+  title?: string;
 }
 
 /** Power 发布的一条宿主通知。 */
@@ -128,6 +120,8 @@ export interface PowerNotificationSource {
 export interface PowerNotificationReceiver {
   /** 原主体交互集合发生变化；仅提示刷新，不复制交互状态。 */
   interactions_changed?(): void;
+  /** 来源元数据发生变化；仅失效快照，不等待查询或持久化。 */
+  sources_changed?(): void;
   /** City 的集合与群聊事实；展示策略完全由接收 Power 决定。 */
   fact_changed?(fact: PowerNotificationFact): void | Promise<void>;
   /** 将来源通知持久化后才确认成功。 */

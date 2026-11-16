@@ -48,19 +48,6 @@ export interface SessionMessageStorageStats {
   latest_message: SessionMessage | null;
 }
 
-/** Composer 派生 SQL 参数允许的 SQLite 标量。 */
-export type SessionStorageValue = string | number | bigint | Uint8Array | null;
-
-/** 单个 Composer 命名空间的派生表事务。 */
-export interface SessionDerivedStoreTransaction {
-  /** 执行一条不返回数据的派生 SQL。 */
-  execute(sql: string, parameters?: readonly SessionStorageValue[]): void;
-  /** 读取第一条派生数据；没有匹配时返回空。 */
-  get<TRow>(sql: string, parameters?: readonly SessionStorageValue[]): TRow | null;
-  /** 读取全部匹配的派生数据。 */
-  all<TRow>(sql: string, parameters?: readonly SessionStorageValue[]): TRow[];
-}
-
 /**
  * 单 Session、单 Composer 命名空间的可序列化派生能力。
  * canonical history 由宿主传给 Composer；所有存储请求都是数据，不跨 Worker 传递 SQL 回调。
@@ -74,9 +61,7 @@ export interface SessionDerivedStore {
 
 /** 单个 Session 的结构化持久化能力。 */
 export interface SessionStorage {
-  /** 当前持久化记录不可变身份，归档及逻辑地址重建后不变。 */
-  readonly storage_id: string;
-  /** 当前 Session 的逻辑标识。 */
+  /** 当前 Session 的永久唯一 UUID。 */
   readonly session_id: string;
   /** 当前 Session 的不可变创建来源。 */
   readonly origin: SessionOrigin;

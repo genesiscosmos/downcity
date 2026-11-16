@@ -7,6 +7,7 @@
  */
 import { existsSync as exists_sync } from "node:fs";
 import { randomBytes as random_bytes, randomUUID as random_uuid } from "node:crypto";
+import { AgentSessionFileLease } from "./AgentSessionFileLease.js";
 import { DatabaseSync } from "node:sqlite";
 import type {
   AgentSessionDatabaseMetadata, AgentSessionDatabaseOptions, AgentSessionOperationReceipt,
@@ -24,6 +25,7 @@ export class AgentSessionDatabase {
     return this.database.prepare(`SELECT agent_id, generation, cursor_secret, first_business_write_at
       FROM storage_metadata WHERE singleton_id = 1`).get() as unknown as AgentSessionDatabaseMetadata;
   }
+  private file_lease?: AgentSessionFileLease;
   private closed = false;
   private transaction_active = false;
 
@@ -32,8 +34,9 @@ export class AgentSessionDatabase {
       throw new Error("session_storage_address_invalid");
     }
     const memory = options.database_path === ":memory:";
+    const existed = !memory && exists_sync(options.database_path);
     if (memory && options.readonly) throw new Error("session_storage_memory_reader_requires_owner");
-    if (!memory && !exists_sync(options.database_path) && (options.readonly || !options.allow_create)) {
+    if (!memory && !existed && (options.readonly || !options.allow_create)) {
       throw new Error("session_storage_not_found");
     }
     const database = new DatabaseSync(options.database_path, { readOnly: options.readonly ?? false });
@@ -43,7 +46,8 @@ export class AgentSessionDatabase {
       database.exec("PRAGMA busy_timeout = 250;");
       const version = Number(database.prepare("PRAGMA user_version").get()?.user_version ?? 0);
       const empty = version === 0 && !database.prepare("SELECT 1 FROM sqlite_master WHERE name NOT LIKE 'sqlite_%' LIMIT 1").get();
-      if (empty && options.allow_create && !options.readonly) {
+      if (empty && options.allow_create && !options.readonly && (memory || !existed)) {
+        // 已存在的空库可能是截断或未完成转换，必须交给维护流程，不能静默覆写身份。
         database.exec("PRAGMA foreign_keys = ON; BEGIN IMMEDIATE;");
         try {
           database.exec(AGENT_SESSION_SCHEMA_SQL);
@@ -55,13 +59,14 @@ export class AgentSessionDatabase {
         } catch (error) { database.exec("ROLLBACK"); throw error; }
       }
       assert_agent_session_schema(database, options.agent_id);
+      if (!memory) this.file_lease = AgentSessionFileLease.acquire(options.database_path, options.agent_id, false, Boolean(options.allow_create && !options.readonly));
       database.exec("PRAGMA foreign_keys = ON;");
       if (options.readonly) database.exec("PRAGMA query_only = ON;");
       else if (!memory) {
         database.exec("PRAGMA journal_mode = WAL; PRAGMA synchronous = FULL; PRAGMA wal_autocheckpoint = 1000;");
         if (process.platform === "darwin") database.exec("PRAGMA fullfsync = ON; PRAGMA checkpoint_fullfsync = ON;");
       }
-    } catch (error) { database.close(); throw error; }
+    } catch (error) { database.close(); this.file_lease?.release(); throw error; }
   }
 
   /** 目录页、COUNT 和当前页 Parts 必须在一个短读事务中读取。 */
@@ -70,13 +75,14 @@ export class AgentSessionDatabase {
   }
 
   /** 幂等写入；receipt 内容仅保存小型结果，不能复制 canonical 正文。 */
-  write<T>(operation_id: string, request: unknown, operation: (database: DatabaseSync) => T): T {
+  write<T>(operation_id: string, request: unknown, operation: (database: DatabaseSync) => T, session_id?: string): T {
     if (this.options.readonly) throw new Error("session_storage_readonly");
     if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/iu.test(operation_id)) {
       throw new Error("session_storage_operation_id_invalid");
     }
     const request_hash = storage_digest(request);
     return this.transaction(true, (database) => {
+      this.assert_current_operation(operation_id);
       const existing = database.prepare("SELECT request_hash, result FROM operation_receipts WHERE operation_id = ?").get(operation_id);
       if (existing) {
         if (existing.request_hash !== request_hash) throw new Error("session_storage_operation_conflict");
@@ -88,8 +94,11 @@ export class AgentSessionDatabase {
         throw new Error("session_storage_receipt_invalid");
       }
       const committed_at = Date.now();
-      database.prepare("INSERT INTO operation_receipts(operation_id, request_hash, result, committed_at) VALUES (?, ?, ?, ?)")
-        .run(operation_id, request_hash, serialized, committed_at);
+      // ensure 的实际目标可能是另一并发请求选中的会话，确认绑定已提交结果而非候选。
+      const result_session_id = result && typeof result === "object" && "session_id" in result
+        && typeof result.session_id === "string" ? result.session_id : session_id;
+      database.prepare("INSERT INTO operation_receipts(operation_id, request_hash, session_id, result, committed_at) VALUES (?, ?, ?, ?, ?)")
+        .run(operation_id, request_hash, result_session_id ?? null, serialized, committed_at);
       database.prepare("UPDATE storage_metadata SET first_business_write_at = COALESCE(first_business_write_at, ?) WHERE singleton_id = 1")
         .run(committed_at);
       return result;
@@ -99,6 +108,7 @@ export class AgentSessionDatabase {
   /** 查询幂等提交事实；缺失只表示当前快照未见 receipt，不能推断失联写者已回滚。 */
   receipt(operation_id: string): AgentSessionOperationReceipt | null {
     this.assert_open();
+    this.assert_current_operation(operation_id);
     const row = this.database.prepare("SELECT request_hash, result, committed_at FROM operation_receipts WHERE operation_id = ?").get(operation_id);
     return row ? { request_hash: String(row.request_hash), result: JSON.parse(String(row.result)), committed_at: Number(row.committed_at) } : null;
   }
@@ -118,6 +128,7 @@ export class AgentSessionDatabase {
     if (this.closed) return;
     if (this.transaction_active) throw new Error("session_storage_transaction_active");
     this.database.close();
+    this.file_lease?.release();
     this.closed = true;
   }
 
@@ -136,6 +147,13 @@ export class AgentSessionDatabase {
       try { this.database.exec("ROLLBACK"); } catch { /* 原始失败保留，拥有者决定连接隔离。 */ }
       throw error;
     } finally { this.transaction_active = false; }
+  }
+
+  /** 旧协议摘要只属于审计记录，不能恢复为新格式操作。 */
+  private assert_current_operation(operation_id: string): void {
+    if (this.database.prepare("SELECT 1 FROM legacy_operation_ids WHERE operation_id = ?").get(operation_id)) {
+      throw new Error("session_operation_legacy_audit");
+    }
   }
 
   private assert_open(): void {

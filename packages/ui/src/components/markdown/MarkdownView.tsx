@@ -24,7 +24,7 @@ const markdown_controls: ControlsConfig = { code: true, table: false, mermaid: f
 export const MarkdownView = memo(function markdown_view({ text, mode = "static", layout = "document", document_url, class_name }: MarkdownViewProps) {
   const export_mode = use_markdown_export();
   const inherited_size = use_markdown_text_size();
-  const text_size = layout === "embedded" && !export_mode ? inherited_size : "medium";
+  const text_size = layout === "embedded" ? inherited_size : "medium";
   // Streamdown 的 memo 只比较原文和渲染模式；字号写在自有布局节点，保证纯设置更新即时生效。
   const layout_style = { "--markdown-text-size": get_markdown_text_size(text_size) } as CSSProperties;
   const prepared = useMemo(() => {

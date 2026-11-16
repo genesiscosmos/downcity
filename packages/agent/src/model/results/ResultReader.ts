@@ -6,7 +6,7 @@
 import type { ModelJsonValue, SessionMessage } from "@downcity/type";
 import type { SessionStorage } from "@/types/store/SessionStorage.js";
 import type { SessionReadView } from "@/types/store/SessionReadView.js";
-import { parse_result_ref, result_digest, tool_result_value, type ResultSnapshot } from "./ResultReference.js";
+import { assert_tool_terminal, parse_result_ref, result_digest, tool_result_value, type ResultSnapshot } from "./ResultReference.js";
 import { read_result_page } from "./ResultDisclosure.js";
 
 /** 通用 lookup 参数；没有任何业务执行能力。 */
@@ -23,14 +23,17 @@ export interface ResultLookupInput {
 export type ResultLookup = (input: ResultLookupInput) => Promise<ModelJsonValue>;
 
 /** 查找精确 Part 并验证快照，未完成或已变更结果不可读。 */
-function read_snapshot(message: SessionMessage | null | undefined, location: ResultSnapshot, category?: string, copied_ref?: string, storage_id?: string): ModelJsonValue | undefined {
+function read_snapshot(message: SessionMessage | null | undefined, location: ResultSnapshot, category?: string, copied_ref?: string): ModelJsonValue | undefined {
   if (message?.role !== "agent") return undefined;
   const part = message.parts.find((item) => item.part_id === location.part_id);
   if (part?.type !== "tool") return undefined;
   const same_source = message.session_id === location.session_id && message.message_id === location.message_id
-    && (!location.category || location.category === category) && (!location.storage_id || location.storage_id === storage_id);
-  if (!same_source && (!copied_ref || part.result_ref !== copied_ref)) return undefined;
+    && message.sequence === location.message_sequence && (!location.category || location.category === category);
+  const copied_source = copied_ref && part.result_ref === copied_ref
+    && message.origin?.session_id === location.session_id && message.origin.message_id === location.message_id;
+  if (!same_source && !copied_source) return undefined;
   if (part.state !== "completed" && part.state !== "failed") throw new Error("result_not_completed");
+  assert_tool_terminal(part);
   const value = tool_result_value(part);
   if (result_digest(value) !== location.digest) throw new Error("result_snapshot_changed");
   return value;
@@ -38,21 +41,21 @@ function read_snapshot(message: SessionMessage | null | undefined, location: Res
 
 /** 在已授权宿主边界中读取，不将引用当授权，不触发操作或 UI 投递。 */
 export async function lookup_result(input: ResultLookupInput, local: SessionStorage,
-  read_session?: (session_id: string, category: string, storage_id?: string) => Promise<SessionReadView>): Promise<ModelJsonValue> {
+  read_session?: (session_id: string, category: string) => Promise<SessionReadView>): Promise<ModelJsonValue> {
   try {
     const location = parse_result_ref(input.result_ref);
     const copied = await local.read_message(location.message_id) ?? await local.read_part_message(location.part_id);
-    const local_value = read_snapshot(copied, location, local.origin.category, input.result_ref, local.storage_id);
+    const local_value = read_snapshot(copied, location, local.origin.category, input.result_ref);
     if (local_value !== undefined) return read_result_page(local_value, input.result_ref, input.cursor, input.limit);
     if (!read_session) throw new Error("result_unavailable_or_forbidden");
     const matches: ModelJsonValue[] = [];
     for (const category of location.category ? [location.category] : ["work", "chat"]) {
       let view: SessionReadView;
-      try { view = await read_session(location.session_id, category, location.storage_id); }
+      try { view = await read_session(location.session_id, category); }
       catch { continue; }
-      if (location.storage_id && view.storage_id !== location.storage_id) throw new Error("result_unavailable_or_forbidden");
+      if (view.session_id !== location.session_id) throw new Error("result_unavailable_or_forbidden");
       const page = await view.messages({ before_sequence: location.message_sequence + 1, limit: 1 });
-      const value = read_snapshot(page.items.find((item) => item.sequence === location.message_sequence), location, category, undefined, view.storage_id);
+      const value = read_snapshot(page.items.find((item) => item.sequence === location.message_sequence), location, category);
       if (value !== undefined) matches.push(value);
     }
     if (matches.length !== 1) throw new Error("result_unavailable_or_forbidden");

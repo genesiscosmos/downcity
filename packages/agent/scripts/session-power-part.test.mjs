@@ -1,8 +1,9 @@
 /** 验证 Power Part 的 schema guard、角色约束、重放及模型摘要边界。 */
 import assert from "node:assert/strict";
 import test from "node:test";
-import { DatabaseSync } from "node:sqlite";
-import { assert_session_storage_schema, SESSION_STORAGE_SCHEMA_SQL, SESSION_STORAGE_SCHEMA_VERSION } from "../bin/session/storage/SessionStorageSchema.js";
+import { create_result_ref } from "../bin/model/results/ResultReference.js";
+import { AgentSessionDatabase } from "../bin/session/storage/agent-db/AgentSessionDatabase.js";
+import { assert_agent_session_schema, AGENT_SESSION_SCHEMA_VERSION } from "../bin/session/storage/agent-db/AgentSessionSchema.js";
 import { create_session_agent_content_part } from "../bin/session/messages/SessionAgentContent.js";
 import { extract_session_message_text } from "../bin/session/messages/SessionMessageText.js";
 import { session_messages_to_model_messages } from "../bin/model/messages/SessionModelMessages.js";
@@ -13,28 +14,27 @@ import { project_published_tool_input } from "../bin/model/messages/SessionPower
 const content = { type: "power", power_id: "presentation", schema_version: 1, data: { private_spec: "not model text" }, fallback_text: "调整参数查看结果" };
 
 test("当前 schema 支持 Agent Power Part 并拒绝自动迁移旧版本，User 仍受约束", () => {
-  const database = new DatabaseSync(":memory:");
+  const owner = new AgentSessionDatabase({ agent_id: "test", database_path: ":memory:", allow_create: true });
+  const database = owner.database;
   try {
-    assert_session_storage_schema(database, true);
-    database.exec(SESSION_STORAGE_SCHEMA_SQL);
     database.exec(`
-      PRAGMA user_version = ${SESSION_STORAGE_SCHEMA_VERSION};
-      INSERT INTO messages(message_id, sequence, role, state, created_at, updated_at)
-      VALUES ('user-1', 1, 'user', NULL, 1, 1), ('agent-1', 2, 'agent', 'done', 2, 2);
-      INSERT INTO message_parts VALUES ('text-1', 'user-1', 1, NULL, 'text', '{"text":"原消息"}', 1, 1);
+      INSERT INTO sessions(session_key, session_id, category, origin, timezone, created_at, updated_at)
+      VALUES (1, 'a4aaa5a0-0741-4679-bfe6-cf2b86fe4ced', 'work', '{"category":"work","type":"work"}', 'UTC', 1, 1);
+      INSERT INTO messages(session_key, message_id, sequence, role, state, created_at, updated_at)
+      VALUES (1, 'user-1', 1, 'user', NULL, 1, 1), (1, 'agent-1', 2, 'agent', 'done', 2, 2);
+      INSERT INTO message_parts VALUES (1, 'text-1', 'user-1', 1, NULL, 'text', '{"text":"原消息"}', 1, 1);
     `);
-    assert_session_storage_schema(database);
+    assert_agent_session_schema(database, "test");
     database.exec("PRAGMA user_version = 6");
-    assert.throws(() => assert_session_storage_schema(database), /session_schema_mismatch.*offline migration/);
+    assert.throws(() => assert_agent_session_schema(database, "test"), /session_migration_required.*offline migration/);
     assert.equal(database.prepare("PRAGMA user_version").get().user_version, 6);
     assert.equal(database.prepare("SELECT content FROM message_parts WHERE part_id = 'text-1'").get().content, '{"text":"原消息"}');
-    database.exec(`PRAGMA user_version = ${SESSION_STORAGE_SCHEMA_VERSION}`);
-    const insert = database.prepare("INSERT INTO message_parts VALUES (?, ?, 1, NULL, 'power', ?, 2, 2)");
+    database.exec(`PRAGMA user_version = ${AGENT_SESSION_SCHEMA_VERSION}`);
+    const insert = database.prepare("INSERT INTO message_parts VALUES (1, ?, ?, 1, NULL, 'power', ?, 2, 2)");
     insert.run("power-1", "agent-1", JSON.stringify(content));
     assert.throws(() => insert.run("power-2", "user-1", JSON.stringify(content)), /incompatible/);
     assert.deepEqual(database.prepare("PRAGMA foreign_key_check").all(), []);
-    assert.equal(database.prepare("SELECT COUNT(*) AS count FROM sqlite_master WHERE type = 'index' AND name LIKE 'message_parts_%_index'").get().count, 4);
-  } finally { database.close(); }
+  } finally { owner.close(); }
 });
 
 test("Power 内容补齐 canonical 身份并只使用回退文字投影", () => {
@@ -48,8 +48,10 @@ test("Power 内容补齐 canonical 身份并只使用回退文字投影", () => 
 
 test("来源绑定的 Spec 调用在模型历史中投影为摘要，原始 canonical 参数保持完整", async () => {
   const part = create_session_agent_content_part(content, "power-1", 2, "call-1");
-  const tool = { type: "tool", part_id: "tool-1", sequence: 1, tool_name: "presentation", tool_call_id: "call-1", state: "completed", input: { action: "show", args: { content: "large-private-spec", fallback_text: content.fallback_text } }, output: { success: true } };
-  const message = { role: "agent", stable_part_sequence: 0, parts: [tool, part] };
+  const tool = { type: "tool", part_id: "tool-1", sequence: 1, tool_name: "presentation", tool_call_id: "call-1", state: "completed", model_output: { success: true }, disclosure_version: 1,
+    result_ref: create_result_ref({ session_id: "a4aaa5a0-0741-4679-bfe6-cf2b86fe4ced", message_id: "agent-1", message_sequence: 1, part_id: "tool-1" }, { success: true }), input: { action: "show", args: { content: "large-private-spec", fallback_text: content.fallback_text } }, output: { success: true } };
+  const message = { session_id: "a4aaa5a0-0741-4679-bfe6-cf2b86fe4ced", message_id: "agent-1", sequence: 1,
+    role: "agent", stable_part_sequence: 0, parts: [tool, part] };
   const projected = await session_messages_to_model_messages([message]);
   assert.equal(JSON.stringify(projected).includes("large-private-spec"), false);
   assert.equal(JSON.stringify(projected).includes(content.fallback_text), true);

@@ -19,22 +19,23 @@ export async function archive_session_subtree(input: AgentArchiveSessionInput, o
   const session_id = normalize_session_id(input?.id || "");
   if (!session_id) throw new Error("sessions.archive requires a non-empty id");
   const category = normalize_session_origin_category(input.category ?? SESSION_ORIGIN_CATEGORY_WORK);
+  if (input.root_session_id !== undefined && input.root_session_id !== session_id) throw new Error("session_archive_operation_conflict");
   const operation_id = input.operation_id ?? random_uuid();
   const locked = new Map<string, AgentManagedSession>();
   let plan: AgentArchivePlan | undefined;
   try {
-    plan = await options.store.prepare_archive({ operation_id, session_id, category, root_storage_id: input.root_storage_id });
+    plan = await options.store.prepare_archive({ operation_id, session_id, category });
     const pending = plan.nodes.filter(node => node.committed_at === null);
     options.reserve_sessions(pending.map(node => ({ id: node.session_id, category: node.category })));
     // 数据已提交但宿主缓存清理前中断时，重入也只清理匹配原UUID的句柄。
     for (const node of plan.nodes.filter(node => node.committed_at !== null)) {
       const cached = options.get_cached(node.session_id, node.category);
-      if (!cached || (await cached.get_info()).storage_id !== node.storage_id) continue;
+      if (!cached || (await cached.get_info()).session_id !== node.session_id) continue;
       cached.begin_archive();
-      await options.store.commit_archive_node({ operation_id, root_storage_id: plan.root_storage_id, fingerprint: plan.fingerprint, position: node.position });
+      await options.store.commit_archive_node({ operation_id, root_session_id: plan.root_session_id, fingerprint: plan.fingerprint, position: node.position });
       cached.finish_archive(true); cached.dispose_title_generation?.(); cached.clear_secrets();
       options.remove_cached(node.session_id, node.category);
-      options.record_removal({ type: "archived", storage_id: node.storage_id, session_id: node.session_id, category: node.category,
+      options.record_removal({ type: "archived", session_id: node.session_id, category: node.category,
         origin_type: node.origin_type, ...(node.workspace_id ? { workspace_id: node.workspace_id } : {}) });
     }
     // 先预留全部逻辑地址，再核对缓存真实UUID并关闭输入；不取得重建记录的句柄。
@@ -42,23 +43,23 @@ export async function archive_session_subtree(input: AgentArchiveSessionInput, o
       const cached = options.get_cached(node.session_id, node.category);
       if (!cached) continue;
       const info = await cached.get_info();
-      if (info.storage_id !== node.storage_id) throw new Error("session_archive_record_changed");
-      cached.begin_archive(); locked.set(node.storage_id, cached);
+      if (info.session_id !== node.session_id) throw new Error("session_archive_record_changed");
+      cached.begin_archive(); locked.set(node.session_id, cached);
     }
     for (const node of pending) {
-      plan = await options.store.commit_archive_node({ operation_id, root_storage_id: plan.root_storage_id,
+      plan = await options.store.commit_archive_node({ operation_id, root_session_id: plan.root_session_id,
         fingerprint: plan.fingerprint, position: node.position });
-      const cached = locked.get(node.storage_id);
-      cached?.finish_archive(true); locked.delete(node.storage_id);
+      const cached = locked.get(node.session_id);
+      cached?.finish_archive(true); locked.delete(node.session_id);
       cached?.dispose_title_generation?.(); cached?.clear_secrets();
       if (cached) options.remove_cached(node.session_id, node.category);
-      options.record_removal({ type: "archived", storage_id: node.storage_id, session_id: node.session_id, category: node.category,
+      options.record_removal({ type: "archived", session_id: node.session_id, category: node.category,
         origin_type: node.origin_type, ...(node.workspace_id ? { workspace_id: node.workspace_id } : {}) });
     }
-    return { session_id, operation_id, root_storage_id: plan.root_storage_id, plan_fingerprint: plan.fingerprint,
+    return { session_id, operation_id, root_session_id: plan.root_session_id, plan_fingerprint: plan.fingerprint,
       archived_at: plan.nodes.at(-1)!.committed_at!, changed: pending.length > 0 };
   } catch (error) {
-    throw new SessionArchiveOperationError(operation_id, error, plan, input.root_storage_id);
+    throw new SessionArchiveOperationError(operation_id, error, plan, input.root_session_id);
   } finally {
     for (const cached of locked.values()) cached.finish_archive(false);
   }

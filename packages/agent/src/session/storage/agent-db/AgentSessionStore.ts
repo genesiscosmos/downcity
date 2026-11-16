@@ -10,12 +10,12 @@ import { randomUUID as random_uuid } from "node:crypto";
 import { normalize_session_origin, normalize_session_origin_category, restore_session_origin } from "@downcity/type";
 import type { SessionOrigin } from "@downcity/type";
 import type { SessionStore } from "@/types/store/SessionStore.js";
-import type { LocalSessionStoreOptions } from "@/types/store/LocalStore.js";
+import type { AgentSessionStoreOptions } from "@/types/store/AgentSessionStore.js";
 import type { AgentSessionRuntimeLease } from "@/types/store/AgentSessionRuntime.js";
 import type { AgentSessionRecord, AgentSessionRecordPage } from "@/types/store/AgentSessionDatabase.js";
 import type { AgentListSessionsInput, AgentSessionSummaryPage, AgentArchiveSessionsInput, AgentArchiveSessionsResult, AgentArchiveSessionResult, AgentCleanArchiveResult } from "@/types/agent/SessionTypes.js";
 import type { AgentInteraction } from "@/types/agent/AgentInteractions.js";
-import { agent_session_read_view } from "./AgentSessionReadView.js";
+import { project_agent_session_metadata, agent_session_read_view } from "./AgentSessionReadView.js";
 import { collect_pending_interactions, project_agent_interaction } from "../SessionInteractionReader.js";
 import { acquire_agent_session_storage } from "./AgentSessionRuntime.js";
 import { AgentSessionStorage } from "./AgentSessionStorage.js";
@@ -28,7 +28,42 @@ export class AgentSessionStore implements SessionStore {
   private disposed = false;
   private readonly memory_scope = random_uuid();
 
-  constructor(private readonly options: LocalSessionStoreOptions) {}
+  constructor(private readonly options: AgentSessionStoreOptions) {}
+
+  /** 读取主指针只返回持久视图，缺失的新文件根不隐式初始化。 */
+  async read_main() {
+    try {
+      const lease = await this.read_connection();
+      const row = await lease.read<AgentSessionRecord | null>({ command: "main" });
+      return row ? agent_session_read_view(lease, this.options.agent_id, row) : null;
+    } catch (error) {
+      if (error instanceof Error && error.message === "session_storage_not_found") return null;
+      throw error;
+    }
+  }
+
+  /** 候选与操作 UUID 在派发前固定；未知确认交由原 receipt 核对。 */
+  async ensure_main(workspace_id?: string): Promise<AgentSessionStorage> {
+    const lease = await this.connection();
+    const selected = await lease.write<{ session_id: string }>("main", {
+      command: "ensure_main", operation_id: random_uuid(),
+      input: { session_id: random_uuid(), timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+        created_at: Date.now(), ...(workspace_id ? { workspace_id } : {}) },
+    });
+    return await this.open_session(selected.session_id, "chat");
+  }
+
+  /** 业务幂等键与候选 UUID 一起提交；不会从业务键推导会话身份。 */
+  async ensure_creation(creation_key: string, origin: SessionOrigin, workspace_id?: string): Promise<AgentSessionStorage> {
+    const lease = await this.connection();
+    const selected = await lease.write<{ session_id: string }>("creation", {
+      command: "ensure_creation", operation_id: random_uuid(), input: {
+        creation_key, origin, session_id: random_uuid(), timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+        created_at: Date.now(), ...(workspace_id ? { workspace_id } : {}),
+      },
+    });
+    return await this.open_session(selected.session_id, origin.category);
+  }
 
   /** 同步创建惰性视图；真实记录写入由 initialize 明确确认。 */
   create_session(session_id: string, origin: SessionOrigin, workspace_id = this.options.workspace_id): AgentSessionStorage {
@@ -69,9 +104,18 @@ export class AgentSessionStore implements SessionStore {
     return agent_session_read_view(lease, this.options.agent_id, row);
   }
 
-  async read_archived_session(storage_id: string) {
+  /** 有界批量精确读取；独立读租约不创建缺失数据库。 */
+  async read_metadata(addresses: readonly import("@/types/agent/SessionMetadata.js").SessionMetadataAddress[]) {
+    if (addresses.length > 100) throw new Error("session_metadata_limit_invalid");
+    if (!addresses.length) return [];
+    const rows = await (await this.read_connection()).read<(AgentSessionRecord | null)[]>({ command: "metadata", addresses });
+    return rows.map(row => row ? { session_id: row.session_id, archived: Boolean(row.archived),
+      metadata: project_agent_session_metadata(this.options.agent_id, row) } : null);
+  }
+
+  async read_archived_session(session_id: string) {
     const lease = await this.read_connection();
-    const row = await lease.read<AgentSessionRecord | null>({ command: "find", address: { archived: true, storage_id } });
+    const row = await lease.read<AgentSessionRecord | null>({ command: "find", address: { archived: true, session_id } });
     if (!row) throw new Error("session_not_found");
     return agent_session_read_view(lease, this.options.agent_id, row);
   }
@@ -121,7 +165,7 @@ export class AgentSessionStore implements SessionStore {
     const node = plan.nodes.find(node => node.position === input.position)!;
     const key = this.key(node.session_id, node.category);
     const cached = this.sessions.get(key);
-    if (cached?.storage_id === node.storage_id) { await cached.dispose(); this.sessions.delete(key); }
+    if (cached) { await cached.dispose(); this.sessions.delete(key); }
     return plan;
   }
 
@@ -139,7 +183,7 @@ export class AgentSessionStore implements SessionStore {
     const records = await lease.read<AgentSessionRecord[]>({ command: "archived_records" });
     const removed_session_ids: string[] = [];
     for (const record of records) {
-      await lease.write(record.storage_id, { command: "remove", operation_id: random_uuid(), address: { archived: true, storage_id: record.storage_id } });
+      await lease.write(record.session_id, { command: "remove", operation_id: random_uuid(), address: { archived: true, session_id: record.session_id } });
       removed_session_ids.push(record.session_id);
     }
     return { removed_session_ids };
@@ -191,7 +235,7 @@ export class AgentSessionStore implements SessionStore {
       throw error;
     }
     return { ...page, items: page.items.map(row => ({ agent_id: this.options.agent_id, session_id: row.session_id,
-      storage_id: row.storage_id, origin: restore_session_origin(JSON.parse(row.origin), row.category),
+      origin: restore_session_origin(JSON.parse(row.origin), row.category),
       message_count: row.message_count, created_at: row.created_at, updated_at: row.updated_at,
       ...(row.workspace_id ? { workspace_id: row.workspace_id } : {}), ...(row.title ? { title: row.title } : {}),
       ...(row.model_label ? { model_label: row.model_label } : {}), ...(row.preview_text ? { preview_text: row.preview_text } : {}),
@@ -225,9 +269,9 @@ export class AgentSessionStore implements SessionStore {
     return this.reader;
   }
 
-  async remove_archived_session(storage_id: string): Promise<boolean> {
+  async remove_archived_session(session_id: string): Promise<boolean> {
     const result = await (await this.connection()).write<{ removed: boolean }>("collection", {
-      command: "remove", operation_id: random_uuid(), address: { archived: true, storage_id },
+      command: "remove", operation_id: random_uuid(), address: { archived: true, session_id },
     });
     return result.removed;
   }

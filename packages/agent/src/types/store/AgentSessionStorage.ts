@@ -7,7 +7,7 @@ import type { AgentSessionRecord } from "./AgentSessionDatabase.js";
 export interface AgentSessionStorageOptions {
   /** 当前 Agent 唯一身份。 */
   agent_id: string;
-  /** 逻辑 Session ID；同分类活动记录唯一。 */
+  /** 永久唯一的 Session UUID；归档不改变身份，分类不扩大其作用域。 */
   session_id: string;
   /** 完整不可变创建来源。 */
   origin: SessionOrigin;
@@ -15,7 +15,7 @@ export interface AgentSessionStorageOptions {
   workspace_id?: string;
   /** Agent 私有文件能力，不使用 Workspace 文件能力。 */
   files: FileSystem;
-  /** Agent 私有根目录，用于稳定 storage_id 附件目录。 */
+  /** Agent 私有根目录，用于稳定 session_id 附件目录。 */
   storage_root_path: string;
   /** 集合共享租约；视图 dispose 不关闭该租约。 */
   lease: AgentSessionRuntimeLease;

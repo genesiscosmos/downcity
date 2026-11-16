@@ -1,8 +1,8 @@
 /**
- * Agent 范围 Session 数据库的正式 v8 schema。
+ * Agent 范围 Session 数据库的正式 v10 schema。
  *
- * sessions 是目录唯一事实源；canonical、配置和 Composer 数据全部通过内部 session_key
- * 关联。storage_id 是可导出的不可变身份，归档只改变状态，允许同逻辑地址重新创建。
+ * sessions 是目录唯一事实源；canonical、配置和 Composer 数据通过内部 session_key
+ * 关联。session_id 是永久 UUID，主会话由同库持久指针选择，归档不会改变身份。
  * 本模块仅供存储拥有者和离线工具使用，不自动升级历史数据库。
  */
 import type { DatabaseSync } from "node:sqlite";
@@ -10,7 +10,7 @@ import { AGENT_ARCHIVE_PLAN_SCHEMA_SQL } from "./AgentArchivePlanSchema.js";
 import { AGENT_SESSION_CONSTRAINTS_SQL } from "./AgentSessionConstraints.js";
 
 /** 与每 Session v7 分库明确区分的 Agent DB 格式。 */
-export const AGENT_SESSION_SCHEMA_VERSION = 8;
+export const AGENT_SESSION_SCHEMA_VERSION = 10;
 
 /** 校验版本和数据库拥有者；只读调用绝不初始化数据库。 */
 export function assert_agent_session_schema(database: DatabaseSync, agent_id: string): void {
@@ -29,7 +29,7 @@ export const AGENT_SESSION_SCHEMA_SQL = `
 CREATE TABLE storage_metadata (
   singleton_id INTEGER PRIMARY KEY CHECK (singleton_id = 1),
   agent_id TEXT NOT NULL CHECK (length(trim(agent_id)) > 0),
-  format_version INTEGER NOT NULL CHECK (format_version = 8),
+  format_version INTEGER NOT NULL CHECK (format_version = 10),
   generation TEXT NOT NULL CHECK (length(generation) = 36),
   cursor_secret BLOB NOT NULL CHECK (length(cursor_secret) = 32),
   created_at INTEGER NOT NULL,
@@ -38,8 +38,14 @@ CREATE TABLE storage_metadata (
 
 CREATE TABLE sessions (
   session_key INTEGER PRIMARY KEY,
-  storage_id TEXT NOT NULL UNIQUE CHECK (length(storage_id) = 36),
-  session_id TEXT NOT NULL CHECK (length(trim(session_id)) > 0),
+  session_id TEXT NOT NULL UNIQUE CHECK (
+    length(session_id) = 36 AND session_id = lower(session_id)
+    AND substr(session_id, 9, 1) = '-' AND substr(session_id, 14, 1) = '-'
+    AND substr(session_id, 19, 1) = '-' AND substr(session_id, 24, 1) = '-'
+    AND substr(session_id, 15, 1) = '4' AND substr(session_id, 20, 1) IN ('8', '9', 'a', 'b')
+    AND length(replace(session_id, '-', '')) = 32
+    AND replace(session_id, '-', '') NOT GLOB '*[^0-9a-f]*'
+  ),
   category TEXT NOT NULL CHECK (length(trim(category)) > 0),
   origin TEXT NOT NULL CHECK (
     json_valid(origin) AND json_type(origin) = 'object'
@@ -62,7 +68,32 @@ CREATE TABLE sessions (
   CHECK ((archived = 0 AND archived_at IS NULL) OR (archived = 1 AND archived_at IS NOT NULL))
 ) STRICT;
 
-CREATE UNIQUE INDEX sessions_active_address ON sessions(category, session_id) WHERE archived = 0;
+CREATE TABLE agent_session_state (
+  singleton_id INTEGER PRIMARY KEY CHECK (singleton_id = 1),
+  main_session_id TEXT REFERENCES sessions(session_id) ON DELETE SET NULL
+) STRICT;
+INSERT INTO agent_session_state(singleton_id) VALUES (1);
+
+-- 已删除身份继续占用；业务创建和单记录导入均不能复活旧会话。
+CREATE TABLE retired_session_ids (
+  session_id TEXT PRIMARY KEY,
+  retired_at INTEGER NOT NULL
+) STRICT;
+
+-- 业务创建键独立于永久 UUID；记录删除后保留映射，不能复活旧身份。
+CREATE TABLE session_creation_keys (
+  category TEXT NOT NULL,
+  creation_key TEXT NOT NULL CHECK (length(creation_key) BETWEEN 1 AND 512),
+  session_id TEXT NOT NULL UNIQUE,
+  PRIMARY KEY (category, creation_key)
+) STRICT;
+
+-- 离线转换的旧操作仅供审计，绝不当作新协议下的幂等证明。
+CREATE TABLE legacy_operation_ids (
+  operation_id TEXT PRIMARY KEY,
+  source_schema INTEGER NOT NULL,
+  audit_sha256 TEXT NOT NULL CHECK (length(audit_sha256) = 64)
+) STRICT;
 CREATE INDEX sessions_agent_list ON sessions(category, archived, updated_at DESC, session_key DESC);
 CREATE INDEX sessions_workspace_list ON sessions(workspace_id, category, archived, updated_at DESC, session_key DESC);
 
@@ -86,7 +117,6 @@ CREATE TABLE messages (
     stable_part_sequence >= 0 AND (role = 'agent' OR stable_part_sequence = 0)
   ),
   meta TEXT CHECK (meta IS NULL OR (json_valid(meta) AND json_type(meta) = 'object' AND role = 'user')),
-  origin_storage_id TEXT,
   origin_session_id TEXT,
   origin_message_id TEXT,
   origin_turn_id TEXT,
@@ -95,7 +125,7 @@ CREATE TABLE messages (
   PRIMARY KEY (session_key, message_id),
   UNIQUE (session_key, sequence),
   CHECK ((role = 'user' AND state IS NULL) OR (role = 'agent' AND state IS NOT NULL)),
-  CHECK (origin_storage_id IS NULL OR (length(origin_storage_id) = 36 AND origin_session_id IS NOT NULL))
+  CHECK (origin_session_id IS NULL OR length(origin_session_id) = 36)
 ) STRICT;
 
 CREATE TABLE message_parts (
@@ -141,13 +171,13 @@ CREATE TABLE composer_checkpoints (
 CREATE TABLE operation_receipts (
   operation_id TEXT PRIMARY KEY,
   request_hash TEXT NOT NULL CHECK (length(request_hash) = 64),
-  storage_id TEXT,
+  session_id TEXT,
   result TEXT NOT NULL CHECK (json_valid(result)),
   committed_at INTEGER NOT NULL
 ) STRICT;
 
 CREATE TABLE attachment_cleanup (
-  storage_id TEXT PRIMARY KEY CHECK (length(storage_id) = 36),
+  session_id TEXT PRIMARY KEY CHECK (length(session_id) = 36),
   requested_at INTEGER NOT NULL,
   attempts INTEGER NOT NULL DEFAULT 0 CHECK (attempts >= 0)
 ) STRICT;

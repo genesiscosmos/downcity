@@ -7,8 +7,8 @@
  */
 export const AGENT_SESSION_CONSTRAINTS_SQL = `
 CREATE TRIGGER sessions_identity_immutable
-BEFORE UPDATE OF session_key, storage_id, session_id, category, origin, created_at ON sessions
-WHEN OLD.session_key IS NOT NEW.session_key OR OLD.storage_id IS NOT NEW.storage_id
+BEFORE UPDATE OF session_key, session_id, category, origin, created_at ON sessions
+WHEN OLD.session_key IS NOT NEW.session_key
   OR OLD.session_id IS NOT NEW.session_id OR OLD.category IS NOT NEW.category
   OR OLD.origin IS NOT NEW.origin OR OLD.created_at IS NOT NEW.created_at
 BEGIN
@@ -22,15 +22,63 @@ END;
 
 CREATE TRIGGER sessions_attachment_cleanup AFTER DELETE ON sessions
 BEGIN
-  INSERT INTO attachment_cleanup(storage_id, requested_at) VALUES (OLD.storage_id, unixepoch('subsec') * 1000)
-  ON CONFLICT(storage_id) DO NOTHING;
+  INSERT INTO attachment_cleanup(session_id, requested_at) VALUES (OLD.session_id, unixepoch('subsec') * 1000)
+  ON CONFLICT(session_id) DO NOTHING;
+  INSERT INTO retired_session_ids(session_id, retired_at) VALUES (OLD.session_id, unixepoch('subsec') * 1000);
 END;
+
+CREATE TRIGGER sessions_retired_identity BEFORE INSERT ON sessions
+WHEN EXISTS (SELECT 1 FROM retired_session_ids WHERE session_id = NEW.session_id)
+BEGIN
+  SELECT RAISE(ABORT, 'session identity is retired');
+END;
+
+CREATE TRIGGER sessions_main_archive AFTER UPDATE OF archived ON sessions
+WHEN NEW.archived = 1
+BEGIN
+  UPDATE agent_session_state SET main_session_id = NULL WHERE main_session_id = OLD.session_id;
+END;
+
+CREATE TRIGGER agent_session_state_valid_insert BEFORE INSERT ON agent_session_state
+WHEN NEW.main_session_id IS NOT NULL AND NOT EXISTS (
+  SELECT 1 FROM sessions WHERE session_id = NEW.main_session_id AND archived = 0
+    AND category = 'chat' AND json_extract(origin, '$.type') = 'agent'
+)
+BEGIN
+  SELECT RAISE(ABORT, 'invalid main Session pointer');
+END;
+
+CREATE TRIGGER agent_session_state_valid_update BEFORE UPDATE OF main_session_id ON agent_session_state
+WHEN NEW.main_session_id IS NOT NULL AND NOT EXISTS (
+  SELECT 1 FROM sessions WHERE session_id = NEW.main_session_id AND archived = 0
+    AND category = 'chat' AND json_extract(origin, '$.type') = 'agent'
+)
+BEGIN
+  SELECT RAISE(ABORT, 'invalid main Session pointer');
+END;
+
+CREATE TRIGGER agent_session_state_delete_forbidden BEFORE DELETE ON agent_session_state
+BEGIN
+  SELECT RAISE(ABORT, 'main Session state cannot be deleted');
+END;
+
+CREATE TRIGGER retired_session_ids_update_forbidden BEFORE UPDATE ON retired_session_ids
+BEGIN SELECT RAISE(ABORT, 'retired Session identity is immutable'); END;
+CREATE TRIGGER retired_session_ids_delete_forbidden BEFORE DELETE ON retired_session_ids
+BEGIN
+  SELECT RAISE(ABORT, 'retired Session identity cannot be deleted');
+END;
+
+CREATE TRIGGER session_creation_keys_update_forbidden BEFORE UPDATE ON session_creation_keys
+BEGIN SELECT RAISE(ABORT, 'Session creation key is immutable'); END;
+CREATE TRIGGER session_creation_keys_delete_forbidden BEFORE DELETE ON session_creation_keys
+BEGIN SELECT RAISE(ABORT, 'Session creation key cannot be deleted'); END;
 
 CREATE TRIGGER messages_identity_immutable
 BEFORE UPDATE ON messages
 WHEN OLD.session_key IS NOT NEW.session_key OR OLD.message_id IS NOT NEW.message_id
   OR OLD.sequence IS NOT NEW.sequence OR OLD.role IS NOT NEW.role
-  OR OLD.created_at IS NOT NEW.created_at OR OLD.origin_storage_id IS NOT NEW.origin_storage_id
+  OR OLD.created_at IS NOT NEW.created_at
   OR OLD.origin_session_id IS NOT NEW.origin_session_id OR OLD.origin_message_id IS NOT NEW.origin_message_id
   OR OLD.origin_turn_id IS NOT NEW.origin_turn_id
 BEGIN

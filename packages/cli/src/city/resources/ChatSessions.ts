@@ -7,7 +7,7 @@ import type { SessionCreateData, SessionGetData, SessionListData } from "./Resou
 
 /** 把资源 DTO 的时间恢复为 SDK 视图，canonical 消息本身不经过此投影。 */
 function sdk_summary(item: SessionListData["items"][number]): AgentSessionSummary {
-  return { storage_id: item.storage_id, agent_id: item.agent_id, session_id: item.session_id, origin: item.origin, message_count: item.message_count,
+  return { agent_id: item.agent_id, session_id: item.session_id, origin: item.origin, message_count: item.message_count,
     ...(item.workspace_id ? { workspace_id: item.workspace_id } : {}), ...(item.title ? { title: item.title } : {}),
     ...(item.preview_text ? { preview_text: item.preview_text } : {}), ...(item.model_label ? { model_label: item.model_label } : {}),
     ...(item.created_at ? { created_at: Date.parse(item.created_at) } : {}), ...(item.updated_at ? { updated_at: Date.parse(item.updated_at) } : {}),
@@ -40,20 +40,20 @@ export function resource_chat_sessions(client: ResourceClient, agent_id: string,
     list: async (input) => await list(input, false),
     archived: async (input) => await list(input, true),
     archive: async (input) => {
-      const result = await client.call("session.archive", { agent: agent_id, session_id: input.id, category: input.category ?? "work", operation_id: input.operation_id, root_storage_id: input.root_storage_id });
+      const result = await client.call("session.archive", { agent: agent_id, session_id: input.id, category: input.category ?? "work", operation_id: input.operation_id, root_session_id: input.root_session_id });
       const data = result.data as Awaited<ReturnType<import("@downcity/city/local").ResourceService["sessions"]["archive"]>>;
       if (!data.root_result) throw new ResourceError("dependency_conflict", "Session was already archived; refresh the list", 4);
       return data.root_result;
     },
-    read_archived: async storage_id => {
-      const view = await sdk.read_archived(storage_id);
+    read_archived: async session_id => {
+      const view = await sdk.read_archived(session_id);
       if (workspace_id && view.metadata.workspace_id !== workspace_id) throw new ResourceError("dependency_conflict", "Archived Session belongs to another Workspace", 4);
       return view;
     },
-    remove_archived: async storage_id => {
-      const view = await sdk.read_archived(storage_id);
+    remove_archived: async session_id => {
+      const view = await sdk.read_archived(session_id);
       if (workspace_id && view.metadata.workspace_id !== workspace_id) throw new ResourceError("dependency_conflict", "Archived Session belongs to another Workspace", 4);
-      return await sdk.remove_archived(storage_id);
+      return await sdk.remove_archived(session_id);
     },
     clean_archive: async () => { throw new ResourceError("capability_missing", "Permanent archive cleanup is not exposed by City resource management", 5); },
   };

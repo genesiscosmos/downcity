@@ -15,12 +15,13 @@ import { Agent } from "../bin/agent/Agent.js";
 import { AgentInteractions } from "../bin/agent/AgentInteractions.js";
 import { AskQuestionsTool } from "../bin/tools/ask/AskQuestionsTool.js";
 import { MockModelClient } from "./ModelClientMock.mjs";
+import { assert_tool_terminal } from "../bin/model/results/ResultReference.js";
 
 /** 构造一条含 ready 状态 Tool Part 的流式 Assistant Message fixture。 */
 function create_writer_fixture() {
   let message = {
     message_id: "agent:session-1:1",
-    session_id: "session-1",
+    session_id: "11111111-1111-4111-8111-111111111111",
     turn_id: "turn-1",
     sequence: 1,
     revision: 1,
@@ -45,12 +46,13 @@ function create_writer_fixture() {
   // 缓存与 State 都是真实实例：Interaction 变更依赖“读取当前快照 → 替换 Tool”的
   // 串行语义，用桩会绕过被验证的部分。
   const cache = new SessionMessageCache({
-    session_id: "session-1",
+    session_id: "11111111-1111-4111-8111-111111111111",
     publish: () => {},
   });
   cache.set_held(message.message_id);
   cache.accept(message, false);
   const store = {
+    origin: { category: "work", type: "work" },
     read_message: async (message_id) =>
       message_id === message.message_id ? structuredClone(message) : null,
     update_message: async (input) => {
@@ -59,7 +61,7 @@ function create_writer_fixture() {
     },
   };
   const state = new SessionAgentMessageState({
-    session_id: "session-1",
+    session_id: "11111111-1111-4111-8111-111111111111",
     store,
     cache,
   });
@@ -129,6 +131,7 @@ test("拒绝响应会把所属 Tool 标记为失败", async () => {
   assert.equal(tool.state, "failed");
   assert.equal(tool.interactions[0].status, "denied");
   assert.equal(tool.error, "Interaction denied");
+  assert_tool_terminal(tool);
 });
 
 test("取消未响应交互会把所属 Tool 标记为失败并保留原因", async () => {
@@ -142,6 +145,7 @@ test("取消未响应交互会把所属 Tool 标记为失败并保留原因", as
   const tool = fixture.read_tool();
   assert.equal(tool.state, "failed");
   assert.equal(tool.error, "Interaction cancelled");
+  assert_tool_terminal(tool);
   assert.equal(tool.interactions[0].status, "cancelled");
   assert.equal(tool.interactions[0].cancel_reason, "turn_stopped");
 });

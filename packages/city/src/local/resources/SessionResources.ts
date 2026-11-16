@@ -57,7 +57,7 @@ export class SessionResources {
     const view = await this.read_view(input);
     const metadata = view.metadata;
     const cached = view.archived ? undefined : this.dependencies.host?.city.agents.get(agent_id)?.sessions.peek(session_id, category);
-    const configuration = await this.browser(agent_id).configuration(view.storage_id);
+    const configuration = await this.browser(agent_id).configuration(view.session_id);
     const model_binding = configuration.model_binding ? JSON.parse(configuration.model_binding) as import("@downcity/agent").SessionModelBinding : undefined;
     const saved_model_id = !view.archived && this.dependencies.workspaces ? read_saved_session_model(this.dependencies.root_path, metadata, this.dependencies.immutable) : undefined;
     return { session: { ...project_session(metadata, view.archived), model_binding: model_binding ?? null, saved_model_override: saved_model_id ?? null, model_selection_required: !(model_binding?.override_model_id ?? saved_model_id ?? model_binding?.default_model_id) }, runtime: await this.observe(cached), pending_interaction_count: (await view.interactions()).length };
@@ -168,15 +168,15 @@ export class SessionResources {
       try {
         const root_result = await agent.sessions.archive({ id: session_id, category,
           ...(typeof input.operation_id === "string" ? { operation_id: input.operation_id } : {}),
-          ...(typeof input.root_storage_id === "string" ? { root_storage_id: input.root_storage_id } : {}),
+          ...(typeof input.root_session_id === "string" ? { root_session_id: input.root_session_id } : {}),
         });
         return { session_address: { agent_id, category, session_id }, root_result, changed: root_result.changed ?? false };
       } catch (error) {
         if (error instanceof Error && "code" in error && error.code === "session_busy") throw new ResourceError("resource_busy", error.message, 4);
-        const handle = error as { operation_id?: string; root_storage_id?: string; plan_fingerprint?: string };
+        const handle = error as { operation_id?: string; root_session_id?: string; plan_fingerprint?: string };
         throw new ResourceError("partial_failure", "Session archive incomplete; resume the original operation_id", 9, false, {
           partial_state: "unknown", session_address: { agent_id, category, session_id }, operation_id: handle.operation_id,
-          root_storage_id: handle.root_storage_id, plan_fingerprint: handle.plan_fingerprint,
+          root_session_id: handle.root_session_id, plan_fingerprint: handle.plan_fingerprint,
         });
       } finally { this.invalidate(agent_id); }
     });
@@ -196,9 +196,7 @@ export class SessionResources {
   private async read_view(input: Record<string, unknown>): Promise<SessionReadView> {
     const browser = this.browser(this.agent_id(input));
     if (input.archived === true) {
-      require_resource_value(typeof input.storage_id === "string" && input.storage_id.trim(), "Archived Session requires storage_id");
-      return await browser.get_archived({ storage_id: input.storage_id as string,
-        ...(typeof input.session_id === "string" ? { session_id: input.session_id } : {}),
+      return await browser.get_archived({ session_id: this.session_id(input),
         ...(typeof input.category === "string" ? { category: this.category(input) } : {}),
       });
     }
@@ -236,8 +234,7 @@ export class SessionResources {
 
 /** SDK 时间戳只在资源 DTO 边界转换，canonical history 保持原格式。 */
 function project_session(info: Pick<AgentSessionInfo, "agent_id" | "session_id" | "origin"> & Partial<AgentSessionInfo>, archived: boolean) {
-  if (!info.storage_id) throw new Error("session_migration_required");
-  return { storage_id: info.storage_id, agent_id: info.agent_id, category: info.origin.category, session_id: info.session_id, origin: info.origin, workspace_id: info.workspace_id ?? null, title: info.title ?? null, preview_text: info.preview_text ?? null, message_count: info.message_count ?? 0, model_label: info.model_label ?? null, created_at: info.created_at === undefined ? null : new Date(info.created_at).toISOString(), updated_at: info.updated_at === undefined ? null : new Date(info.updated_at).toISOString(), timezone: info.timezone ?? null, archived };
+  return { agent_id: info.agent_id, category: info.origin.category, session_id: info.session_id, origin: info.origin, workspace_id: info.workspace_id ?? null, title: info.title ?? null, preview_text: info.preview_text ?? null, message_count: info.message_count ?? 0, model_label: info.model_label ?? null, created_at: info.created_at === undefined ? null : new Date(info.created_at).toISOString(), updated_at: info.updated_at === undefined ? null : new Date(info.updated_at).toISOString(), timezone: info.timezone ?? null, archived };
 }
 
 /** 严格参数校验，不静默截断页数或超时。 */
