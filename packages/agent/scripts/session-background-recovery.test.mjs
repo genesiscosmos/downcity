@@ -14,8 +14,8 @@ function background_input(session_id, turn_id = "latest-turn", sequence = 1) {
 /** 用可注入失败的只读端口测试恢复算法，不依赖执行器内部状态。 */
 function scan_store(ids, read_messages = async id => ({ items: [background_input(id)], has_more: false })) {
   return {
-    list_sessions: async ({ category }) => ({ items: category === "work" ? ids.map(session_id => ({ session_id, storage_id: `record-${session_id}` })) : [], has_more: false }),
-    read_session: async session_id => ({ storage_id: `record-${session_id}`, messages: input => read_messages(session_id, input) }),
+    list_sessions: async ({ category }) => ({ items: category === "work" ? ids.map(session_id => ({ session_id })) : [], has_more: false }),
+    read_session: async session_id => ({ messages: input => read_messages(session_id, input) }),
   };
 }
 
@@ -70,7 +70,7 @@ for (const phase of ["read_session", "read_messages", "read_completion", "read_r
       report_error: (error, context) => errors.push({ error, context }),
     });
     assert.equal(errors.length, 1); assert.equal(errors[0].error, failure);
-    assert.deepEqual(errors[0].context, { session_id: "bad", category: "work", storage_id: "record-bad", phase,
+    assert.deepEqual(errors[0].context, { session_id: "bad", category: "work", phase,
       ...(["read_completion", "read_recoverable_messages", "restore_session", "restore_status"].includes(phase) ? { turn_id: "latest-turn" } : {}) });
     assert.deepEqual(restored, ["good"]);
   });
@@ -87,7 +87,7 @@ test("目录读取失败保留分类定位并继续向宿主抛出，不能报�
 test("导入历史与真人输入不进入后台恢复，也不读取完成日志", async () => {
   const store = scan_store(["imported", "human"], async id => {
     const message = background_input(id);
-    if (id === "imported") message.origin = { storage_id: "source", session_id: "source", message_id: "source" };
+    if (id === "imported") message.origin = { session_id: "source", message_id: "source" };
     else message.meta.from = { kind: "user", user_id: "local" };
     return { items: [message], has_more: false };
   });
