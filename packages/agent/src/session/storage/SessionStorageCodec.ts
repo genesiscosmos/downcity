@@ -6,7 +6,6 @@
 
 import { validate_session_power_content } from "@downcity/type";
 import { assert_tool_terminal, parse_result_ref } from "@/model/results/ResultReference.js";
-import { decode_session_model_retry } from "./SessionModelRetryCodec.js";
 import { decode_session_inbox_part } from "./SessionInboxCodec.js";
 import { validate_session_stable_prefix } from "./SessionStablePrefix.js";
 import { session_prompt_actor_schema } from "@/types/sdk/SessionPromptActor.js";
@@ -299,7 +298,6 @@ function decode_session_part(
         code: read_string(content, "code", row),
         message: read_string(content, "message", row),
         recoverable: read_boolean(content, "recoverable", row),
-        ...(content.retry === undefined ? {} : { retry: decode_session_model_retry(content.retry) }),
       };
     default:
       return assert_never(row.type);

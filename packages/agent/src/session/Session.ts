@@ -554,6 +554,7 @@ export class Session implements AgentSession {
       state: this.session_loop.is_busy() || this.session_loop.is_executing() ? "running" : "idle",
       occupied_by: this.session_loop.occupied_by(),
       waiting_model_retry: this.session_loop.model_retry.is_waiting(),
+      model_retry: this.session_loop.model_retry.current(),
       ...(active_turn_id ? { active_turn_id } : {}),
       security: {
         approval_mode: this.state.get_approval_mode(),
@@ -562,7 +563,7 @@ export class Session implements AgentSession {
     };
   }
 
-  /** 为失败模型步骤提交控制动作；相同 ID 的确认先于当前状态校验。 */
+  /** 为当前失败模型步骤提交控制动作，由执行栈互斥接收。 */
   async retry_model_step(input: import("@downcity/type").SessionModelRetryInput): Promise<import("@downcity/type").SessionModelRetryResult> {
     return await this.session_loop.model_retry.submit(input);
   }

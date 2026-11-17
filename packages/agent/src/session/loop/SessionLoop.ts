@@ -162,7 +162,7 @@ export class SessionLoop {
     this.create_call_context = options.create_call_context;
     this.queue = options.queue;
     this.interactions = options.interactions;
-    this.model_retry = new SessionModelRetryControl(this.messages, () => this.queue.has_command() || this.stopping, () => this.has_pending_prompt());
+    this.model_retry = new SessionModelRetryControl(this.messages, () => this.queue.has_command() || this.stopping, () => this.has_pending_prompt(), () => this.publish_runtime("running"));
     if (!this.session_id) {
       throw new Error("SessionLoop requires a non-empty session_id");
     }
@@ -298,7 +298,7 @@ export class SessionLoop {
         return;
       }
       if (history.some(message => message.turn_id === latest.turn_id && message.role === "agent"
-        && message.parts.some(part => part.type === "error" && part.retry?.status === "interrupted"))
+        && message.parts.some(part => part.type === "error"))
         || actor.kind === "runtime" && actor.namespace === "session_background") {
         const interrupted = create_active_session_turn_state(latest.turn_id);
         interrupted.turn_context = this.create_turn_context(interrupted);
@@ -551,7 +551,7 @@ export class SessionLoop {
       variant: "session",
       type: "runtime",
       session_id: this.session_id,
-      state,
+      state, model_retry: state === "running" ? this.model_retry.current() : undefined,
       created_at: Date.now(),
     });
   }
@@ -827,7 +827,7 @@ export class SessionLoop {
     await this.internal_inputs.get(input.active_turn.turn_id)?.flush();
 
     if (!result.success && !turn_context.lifecycle.abort_signal.aborted && result.error
-      && !(await this.messages.read_latest_agent_message(input.active_turn.turn_id))?.parts.some(part => part.type === "error" && part.retry?.status !== "succeeded")) {
+      && !(await this.messages.read_latest_agent_message(input.active_turn.turn_id))?.parts.some(part => part.type === "error")) {
       await assistant_output.append_error({
         scope: "turn",
         code: result.error_code || "turn_execution_failed",

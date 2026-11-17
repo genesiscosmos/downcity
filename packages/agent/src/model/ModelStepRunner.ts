@@ -91,8 +91,6 @@ export interface RunModelStepInput {
   call?: ModelCall;
   /** 接收通过协议校验的事件，用于隔离保存尝试草稿。 */
   on_event?: (event: ModelStreamEvent) => void;
-  /** 完整响应与尝试终态必须在同一次 canonical 提交中保存。 */
-  prepare_response_commit?: () => import("@downcity/type").SessionModelRetry;
   /** 完整模型响应可靠提交之后、任何工具执行之前调用。 */
   on_response_committed?: () => Promise<void>;
   /** 可选模型流阶段诊断；只传递时序和事件类型，不包含请求正文。 */
@@ -128,7 +126,7 @@ export async function run_model_step(input: RunModelStepInput): Promise<{
   }
   // 完整流先可靠提交，再允许任何工具开始执行；保存失败不进入请求自动重试。
   if (input.assistant_output) {
-    try { await input.assistant_output.finish_step(collected.assistant_parts, input.prepare_response_commit?.()); }
+    try { await input.assistant_output.finish_step(collected.assistant_parts); }
     catch { throw new ModelResponseCommitFailure(); }
   }
   input.abort_signal.throwIfAborted();

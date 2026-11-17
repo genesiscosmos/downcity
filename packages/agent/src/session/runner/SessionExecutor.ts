@@ -44,7 +44,7 @@ import {
 import type {
   SessionContextAdvanceTrigger,
 } from "@/types/session/SessionComposer.js";
-import { ContextRetry } from "@/session/runner/ContextRetry.js";
+import { ContextRetry, ModelContextAdvanced } from "@/session/runner/ContextRetry.js";
 import type { Logger } from "@/utils/logger/Logger.js";
 import type { SessionTurnContext } from "@/types/turn/SessionTurnContext.js";
 import type {
@@ -163,8 +163,9 @@ export class SessionExecutor implements SessionExecutorPort {
     try {
       return await this.context_retry.execute_with_retry({
         signal: input.turn_context.lifecycle.abort_signal,
-        execute_turn: async (advance_count) =>
+        execute_turn: async (advance_count, advance_context) =>
           await this.run_tool_loop({
+            advance_context: this.retry_control ? advance_context : undefined,
             turn_context: input.turn_context,
             resolve_step_input: async () =>
               await input.resolve_step_input(advance_count),
@@ -177,6 +178,8 @@ export class SessionExecutor implements SessionExecutorPort {
 
   /** 运行模型与 tool-loop 主循环。 */
   private async run_tool_loop(input: {
+    /** 尝试共用 Turn 的上下文推进预算；耗尽后模型步骤等待手动重试。 */
+    advance_context?: (error: unknown) => Promise<boolean>;
     /** 当前显式运行上下文。 */
     turn_context: SessionTurnContext;
     /** 已绑定当前推进次数的 Step 输入解析器。 */
@@ -240,7 +243,7 @@ export class SessionExecutor implements SessionExecutorPort {
         last_observed_stream_error = undefined;
         let step: Awaited<ReturnType<SessionExecutor["execute_provider_step"]>>;
         try {
-          step = await this.execute_provider_step({ turn_context: input.turn_context, step_input, on_step_finish });
+          step = await this.execute_provider_step({ turn_context: input.turn_context, step_input, on_step_finish, advance_context: input.advance_context });
         } catch (error) {
           // 新输入或配置替代等待失败，回到现有检查点处理，不能重放旧请求。
           if (error instanceof ModelRetrySuperseded) continue;
@@ -345,6 +348,7 @@ export class SessionExecutor implements SessionExecutorPort {
         const finalization = await this.execute_max_steps_finalization({
           turn_context: input.turn_context,
           resolve_step_input: input.resolve_step_input,
+          advance_context: input.advance_context,
           on_step_finish,
         });
         final_assistant_parts = merge_assistant_parts(
@@ -412,7 +416,7 @@ export class SessionExecutor implements SessionExecutorPort {
         });
       }
 
-      if (this.is_context_limit(error)) {
+      if (error instanceof ModelContextAdvanced || this.is_context_limit(error)) {
         throw error;
       }
 
@@ -473,6 +477,8 @@ export class SessionExecutor implements SessionExecutorPort {
     turn_context: SessionTurnContext;
     /** 当前 Step 已装配完成的模型输入。 */
     step_input: SessionStepExecutionInput;
+    /** 有界上下文推进能力，失败后保留冻结请求等待用户。 */
+    advance_context?: (error: unknown) => Promise<boolean>;
     /** 覆盖本 Step 的工具集合；撞顶收尾时传空表以禁止继续调用工具。 */
     tools_override?: Record<string, BoundAgentTool>;
     /** 合并本 Step 的计数与诊断日志。 */
@@ -488,6 +494,7 @@ export class SessionExecutor implements SessionExecutorPort {
       allow_empty_response: input.tools_override !== undefined,
       turn_context, step_input: input.tools_override ? { ...input.step_input, tools: input.tools_override } : input.step_input,
       retry_control: this.retry_control, is_context_limit: this.is_context_limit, logger: this.logger,
+      advance_context: input.advance_context,
     });
 
     let step_assistant_parts = result.assistant_parts;
@@ -519,6 +526,8 @@ export class SessionExecutor implements SessionExecutorPort {
   private async execute_max_steps_finalization(input: {
     /** 当前显式运行上下文。 */
     turn_context: SessionTurnContext;
+    /** 收尾同样使用当前 Turn 的上下文推进预算。 */
+    advance_context?: (error: unknown) => Promise<boolean>;
     /** 按当前 canonical history 重新装配收尾 Step 输入。 */
     resolve_step_input: () => Promise<SessionStepExecutionInput>;
     /** 合并收尾 Step 的计数与诊断日志。 */
@@ -543,6 +552,7 @@ export class SessionExecutor implements SessionExecutorPort {
         report: diagnostic => this.logger.log("info", "[agent] context.request_budget", { session_id: this.session_id, ...diagnostic }),
       }),
       tools_override: {},
+      advance_context: input.advance_context,
       on_step_finish: input.on_step_finish,
     });
     const produced_text =

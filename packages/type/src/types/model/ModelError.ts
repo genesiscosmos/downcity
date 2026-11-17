@@ -27,7 +27,7 @@ export interface ModelError {
   code: ModelErrorCode;
   /** 可安全展示给调用方的错误说明。 */
   message: string;
-  /** 故障是否具备暂时性恢复语义；调用方仍须检查已发布内容和副作用。 */
+  /** 是否建议自动重试；手动再次请求不受此标志限制，调用方仍须校验输入、停止和响应提交边界。 */
   retryable: boolean;
   /** 可选上游 HTTP 状态码。 */
   status_code?: number;

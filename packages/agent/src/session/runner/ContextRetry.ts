@@ -4,7 +4,7 @@
  * 关键点（中文）
  * - 统一封装「推进上下文后重试」和「普通失败兜底」逻辑。
  * - 执行器提供单次 Turn 行为，本模块只决定是否恢复并重试。
- * - 不改变外部行为，只把异常分流规则集中到一个地方。
+ * - 模型步骤与外层兜底共用同一推进预算；步骤无法推进时可保留冻结输入等待手动控制。
  */
 
 import type { Logger } from "@/utils/logger/Logger.js";
@@ -15,6 +15,9 @@ import type { SessionTurnExecutionResult } from "@/types/session/SessionExecutio
  * 上下文推进后的最大重试次数。
  */
 const MAX_CONTEXT_ADVANCE_ATTEMPTS = 3;
+
+/** 上下文已可靠推进；回到 Turn 检查点读取新输入，不重复消耗推进预算。 */
+export class ModelContextAdvanced extends Error {}
 
 interface ContextRetryOptions {
   /** 当前 Session 稳定标识。 */
@@ -32,8 +35,8 @@ interface ContextRetryOptions {
 interface ContextRetryInput {
   /** 当前 Turn 取消后停止摘要恢复。 */
   signal?: AbortSignal;
-  /** 按当前上下文推进次数执行完整 Turn。 */
-  execute_turn: (advance_count: number) => Promise<SessionTurnExecutionResult>;
+  /** 按当前推进次数执行 Turn；模型步骤可先尝试有界推进，耗尽后保留原请求等待手动重试。 */
+  execute_turn: (advance_count: number, advance_context: (error: unknown) => Promise<boolean>) => Promise<SessionTurnExecutionResult>;
 }
 
 /**
@@ -59,24 +62,21 @@ export class ContextRetry {
     input: ContextRetryInput,
   ): Promise<SessionTurnExecutionResult> {
     let advance_count = 0;
+    const advance_context = async (error: unknown): Promise<boolean> => {
+      if (advance_count >= MAX_CONTEXT_ADVANCE_ATTEMPTS) return false;
+      input.signal?.throwIfAborted();
+      if (!await this.advance_context(error, input.signal)) return false;
+      await this.logger.log("info", "[agent] context.advance", { advanceCount: advance_count, error: String(error) });
+      advance_count += 1;
+      return true;
+    };
     while (true) {
       try {
-        return await input.execute_turn(advance_count);
+        return await input.execute_turn(advance_count, advance_context);
       } catch (error) {
         // 操作已发生，任何 Composer 推进建议都不能授权重新执行。
         if (error instanceof ResultSaveFailure) return this.build_failure_result({ error_text: error.message });
-        if (advance_count < MAX_CONTEXT_ADVANCE_ATTEMPTS) {
-          input.signal?.throwIfAborted();
-          const advanced = await this.advance_context(error, input.signal);
-          if (advanced) {
-            await this.logger.log("info", "[agent] context.advance", {
-              advanceCount: advance_count,
-              error: String(error),
-            });
-            advance_count += 1;
-            continue;
-          }
-        }
+        if (error instanceof ModelContextAdvanced || await advance_context(error)) continue;
         if (advance_count > 0) {
           return this.build_failure_result({
             error_text:

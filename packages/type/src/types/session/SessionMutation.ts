@@ -171,6 +171,8 @@ export type SessionRuntimeMutation = SessionMutationBase & {
   type: "runtime";
   /** running 覆盖队列消费全过程；队列全部排空后才变为 idle。 */
   state: "running" | "idle";
+  /** 当前进程仍持有的失败恢复绑定；省略表示没有可执行 Retry。 */
+  model_retry?: import("./SessionModelRetry.js").SessionModelRetry;
 };
 
 /** Session 自身属性变化 Mutation。 */

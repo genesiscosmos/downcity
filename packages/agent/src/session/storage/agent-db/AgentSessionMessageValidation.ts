@@ -45,13 +45,18 @@ export function validate_agent_db_update(current: SessionMessage, input: AgentSe
     || current.message_id !== next.message_id || current.sequence !== next.sequence
     || current.role !== next.role || current.created_at !== next.created_at
     || !is_deep_strict_equal(current.origin, next.origin)) throw new Error("session_message_identity_immutable");
-  if (next.parts.length < current.parts.length) throw new Error("session_message_parts_cannot_disappear");
+  const removed = input.removed_error_part_id ? current.parts.find(part => part.part_id === input.removed_error_part_id) : undefined;
+  if (input.removed_error_part_id && (current.role !== "agent" || current.state !== "streaming"
+    || !removed || removed.type !== "error" || removed !== current.parts.at(-1) || removed.sequence <= current.stable_part_sequence
+    || next.parts.some(part => part.part_id === removed.part_id))) throw new Error("session_error_removal_invalid");
+  const retained = removed ? current.parts.slice(0, -1) : current.parts;
+  if (next.parts.length < retained.length) throw new Error("session_message_parts_cannot_disappear");
   const current_watermark = current.role === "agent" ? current.stable_part_sequence : 0;
   if (next.role === "agent" && next.stable_part_sequence < current_watermark) throw new Error("session_stable_prefix_backwards");
   const changed = new Map<string, SessionMessage["parts"][number]>(input.changed_parts.map((part) => [part.part_id, part] as const));
   if (changed.size !== input.changed_parts.length) throw new Error("session_changed_parts_invalid");
   for (const [index, part] of next.parts.entries()) {
-    const old = current.parts[index];
+    const old = retained[index];
     if (old && old.part_id !== part.part_id) throw new Error("session_part_identity_immutable");
     if (old?.type === "tool" && (old.state === "completed" || old.state === "failed")) {
       const { interactions: _old_interactions, ...fixed } = old;

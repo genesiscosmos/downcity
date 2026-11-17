@@ -12,7 +12,7 @@ export class ModelStreamFailure extends Error {
   /** Downcity 稳定模型错误码。 */
   readonly code: ModelError["code"];
 
-  /** 当前模型调用是否可以安全重试。 */
+  /** 上游是否建议自动重试；手动资格由本地执行边界判定。 */
   readonly retryable: boolean;
 
   /** 失败前是否已经向用户发布正文或工具输入。 */
@@ -110,8 +110,7 @@ export function is_retryable_empty_model_stream_failure(
     error.code !== "cancelled";
 }
 
-/** 手动恢复允许丢弃未提交流；idle/total 超时不安全自动重放，但在工具未执行边界可手动重试。 */
+/** 手动恢复只要求错误属于模型请求；自动重试标志不限制用户再次尝试，停止和提交边界由执行层校验。 */
 export function is_manually_retryable_model_failure(error: unknown): boolean {
-  const classified = read_model_error(error);
-  return Boolean(classified && (classified.retryable || classified.code === "provider_timeout"));
+  return read_model_error(error) !== undefined;
 }

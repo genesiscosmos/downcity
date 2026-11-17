@@ -28,7 +28,7 @@ export class SessionAssistantOutputAdapter implements SessionAssistantOutput {
   private writer_task: Promise<SessionAgentMessageWriter> | null = null;
   /** 已 begin 但尚未绑定 Writer 的 Step，消息边界不能丢弃它。 */
   private step_pending = false;
-  /** 显式模型步骤身份使内容、输入依据和尝试记录可以直接关联。 */
+  /** 显式模型步骤身份隔离当前步骤的草稿作用域。 */
   private pending_step_id?: string;
 
   constructor(options: {
@@ -72,8 +72,8 @@ export class SessionAssistantOutputAdapter implements SessionAssistantOutput {
   }
 
   /** 使用模型聚合出的 canonical Parts 校验当前 Step。 */
-  async finish_step(parts: SessionAgentMessagePart[], retry?: import("@downcity/type").SessionModelRetry): Promise<void> {
-    await (await this.ensure_writer()).finish_step(parts, retry);
+  async finish_step(parts: SessionAgentMessagePart[]): Promise<void> {
+    await (await this.ensure_writer()).finish_step(parts);
   }
 
   /** 清理异常结束的 Step 作用域。 */
@@ -83,14 +83,14 @@ export class SessionAssistantOutputAdapter implements SessionAssistantOutput {
     this.step_pending = false;
   }
 
-  /** 原请求依据与错误尝试复用现有 canonical 存储。 */
-  async save_model_input(snapshot: import("@/types/session/SessionModelInput.js").SessionModelInputSnapshot): Promise<string> {
-    return await (await this.ensure_writer()).save_model_input(snapshot);
+  /** 写入当前失败，恢复绑定只留在执行栈。 */
+  async show_model_error(part_id: string, error: import("@downcity/type").ModelError): Promise<import("@downcity/type").SessionModelRetry> {
+    return await (await this.ensure_writer()).show_model_error(part_id, error);
   }
 
-  /** 将尝试记录持久化到同一个错误位置，不创建用户输入。 */
-  async save_model_retry(record: import("@downcity/type").SessionModelRetry): Promise<string> {
-    return await (await this.ensure_writer()).save_model_retry(record);
+  /** 接受动作后清除当前错误。 */
+  async clear_model_error(part_id: string): Promise<void> {
+    await (await this.ensure_writer()).clear_model_error(part_id);
   }
 
   /**

@@ -33,13 +33,13 @@ export interface SessionAssistantOutput {
   /** 写入 Tool 执行终态。 */
   write_tool_result(result: SessionToolExecutionResult): Promise<import("@downcity/type").SessionAgentToolPart | void>;
   /** 使用模型流聚合出的 canonical Parts 校验当前 Step。 */
-  finish_step(parts: SessionAgentMessagePart[], retry?: import("@downcity/type").SessionModelRetry): Promise<void>;
+  finish_step(parts: SessionAgentMessagePart[]): Promise<void>;
   /** 放弃当前未完成 Step 的临时作用域。 */
   abort_step(): Promise<void>;
-  /** 将步骤尝试记录保存到原错误位置，返回所属消息身份。 */
-  save_model_retry?(record: import("@downcity/type").SessionModelRetry): Promise<string>;
-  /** 将原请求的脱敏快照持久化为隐藏 data Part。 */
-  save_model_input?(snapshot: import("@/types/session/SessionModelInput.js").SessionModelInputSnapshot): Promise<string>;
+  /** 写入当前普通错误，返回进程内恢复绑定。 */
+  show_model_error?(part_id: string, error: import("@downcity/type").ModelError): Promise<import("@downcity/type").SessionModelRetry>;
+  /** 接受动作后清除当前错误；不保留尝试状态。 */
+  clear_model_error?(part_id: string): Promise<void>;
   /** 真人 User steer 持久化后关闭当前连续 Assistant Message。 */
   close_current_message(): Promise<void>;
   /**

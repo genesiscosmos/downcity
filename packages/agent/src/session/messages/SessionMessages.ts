@@ -6,7 +6,6 @@
  * 从最新快照严格递增。
  */
 
-import { decode_session_model_retry, interrupt_session_model_retry } from "../storage/SessionModelRetryCodec.js";
 import { generate_id } from "@/utils/Id.js";
 import { prepare_session_prompt_inbox, type PrepareSessionPromptInboxInput } from "./SessionInbox.js";
 import type { SessionAgentInboxPart, SessionInboxInput } from "@downcity/type";
@@ -126,15 +125,6 @@ export class SessionMessages {
         revision: message.revision + 1,
         updated_at,
         parts: [...message.parts.map((part) => {
-          if (part.type === "data" && part.data_type === "model_request_attempts") {
-            const retry = decode_session_model_retry(part.data);
-            if (retry.status === "running") return { part_id: part.part_id, sequence: part.sequence, type: "error" as const,
-              scope: "turn" as const, code: "runtime_interrupted", message: "Model request interrupted", recoverable: false,
-              retry: interrupt_session_model_retry(retry, updated_at) };
-          }
-          if (part.type === "error" && part.retry && (part.retry.status === "running" || part.retry.status === "failed")) {
-            return { ...part, recoverable: false, retry: interrupt_session_model_retry(part.retry, updated_at) };
-          }
           if (part.type === "action" && part.state === "running") {
             return {
               ...part,
@@ -177,9 +167,7 @@ export class SessionMessages {
             return { ...part, state: "done" as const };
           }
           return part;
-        }), ...(!message.parts.some(part => part.type === "error" && part.retry
-          || part.type === "data" && part.data_type === "model_request_attempts" && decode_session_model_retry(part.data).status === "running")
-          && (!completion || (completion.result.error && !message.parts.some((part) => part.type === "error"))) ? [{
+        }), ...((!completion || completion.result.error) && !message.parts.some(part => part.type === "error") ? [{
           part_id: `error:${generate_id()}`,
           sequence: next_agent_part_sequence(message.parts),
           type: "error" as const,

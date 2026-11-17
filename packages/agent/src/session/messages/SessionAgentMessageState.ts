@@ -209,6 +209,23 @@ export class SessionAgentMessageState {
     });
   }
 
+  /** 删除当前普通错误；提交未知时只回读本消息的权威快照。 */
+  async remove_error(message_id: string, part_id: string): Promise<void> {
+    await this.enqueue_write(message_id, async () => {
+      const current = this.require_writable_agent(message_id);
+      const part = current.parts.find(item => item.part_id === part_id);
+      if (!part) return;
+      if (part.type !== "error") throw new Error("Only an error Part can be cleared");
+      try {
+        await this.persist_snapshot(message_id, current.parts.filter(item => item.part_id !== part_id), { removed_error_part_id: part_id });
+      } catch (error) {
+        const persisted = await this.options.store.read_message(message_id);
+        if (!persisted || persisted.role !== "agent" || persisted.parts.some(item => item.part_id === part_id)) throw error;
+        this.options.cache.accept(persisted);
+      }
+    });
+  }
+
   /** 丢弃当前未提交 Step 投影，并向订阅方恢复最近持久化快照。 */
   async rollback_projection(message_id: string): Promise<void> {
     await this.enqueue_write(message_id, async () => {
@@ -423,6 +440,8 @@ export class SessionAgentMessageState {
     message_id: string,
     parts: SessionAgentMessagePart[],
     options?: {
+      /** 仅清除尚未稳定的普通错误，其他内容仍受存储不变量保护。 */
+      removed_error_part_id?: string;
       /** 本次提交后是否仍由 writer 持有；收口时传 false。省略时读取当前持有关系。 */
       held_by_writer?: boolean;
       /** 是否向订阅方发布 Message Mutation。 */
@@ -459,6 +478,7 @@ export class SessionAgentMessageState {
       message,
       expected_revision: persisted.revision,
       changed_parts,
+      removed_error_part_id: options?.removed_error_part_id,
       assert_receivable: options?.assert_receivable,
     });
     // 只有收口快照持久化成功才释放 writer；失败时保留 held 与运行投影供重试。

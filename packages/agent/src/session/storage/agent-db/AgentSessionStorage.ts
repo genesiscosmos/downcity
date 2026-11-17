@@ -146,6 +146,7 @@ export class AgentSessionStorage implements SessionStorage {
     await this.options.lease.write(this.session_id, { command: "update", input: {
       operation_id: random_uuid(), session_id: this.session_id, message: input.message,
       changed_parts: input.changed_parts as SessionMessage["parts"], expected_revision: input.expected_revision,
+      removed_error_part_id: input.removed_error_part_id,
     } }, { assert_dispatchable: input.assert_receivable });
   }
   async list_message_page(input?: { before_sequence?: number; limit?: number }): Promise<SessionMessage[]> {

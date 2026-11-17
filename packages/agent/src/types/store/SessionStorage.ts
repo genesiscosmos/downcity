@@ -34,6 +34,8 @@ export interface SessionMessageUpdate {
   message: SessionMessage;
   /** 调用方读取快照时的 revision，用于拒绝并发覆盖。 */
   expected_revision: number;
+  /** 显式清除末尾尚未进入稳定前缀的普通错误；其他 Part 的身份与序号不可改变。 */
+  removed_error_part_id?: string;
   /** 本次新增或内容发生变化的 Part；每项必须属于 message，稳定前缀只能携带未变化的同值 Part。 */
   changed_parts: Array<SessionUserMessagePart | SessionAgentMessagePart>;
 }

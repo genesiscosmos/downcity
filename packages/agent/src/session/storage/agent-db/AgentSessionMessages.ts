@@ -61,6 +61,12 @@ export class AgentSessionMessages {
       validate_agent_db_message(input.message, record.session_id);
       validate_agent_db_update(current, input);
       const watermark = current.role === "agent" ? current.stable_part_sequence : 0;
+      if (input.removed_error_part_id) {
+        const removed = current.parts.find(part => part.part_id === input.removed_error_part_id)!;
+        database.prepare("DELETE FROM message_parts WHERE session_key = ? AND message_id = ? AND part_id = ?")
+          .run(record.session_key, current.message_id, removed.part_id);
+
+      }
       for (const part of input.changed_parts) {
         if (part.sequence <= watermark) continue;
         const row = encode_session_part_row(input.message, part);

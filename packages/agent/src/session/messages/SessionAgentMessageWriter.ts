@@ -135,7 +135,7 @@ export class SessionAgentMessageWriter {
    *
    * 最终快照不能创建、删除或重排模型 Part；不一致意味着事件链不完整。
    */
-  async finish_step(parts: SessionAgentMessagePart[], retry?: import("@downcity/type").SessionModelRetry): Promise<void> {
+  async finish_step(parts: SessionAgentMessagePart[]): Promise<void> {
     await this.enqueue_write(async () => {
       if (!this.step_active) {
         throw new Error("Assistant canonical step is not active");
@@ -160,10 +160,7 @@ export class SessionAgentMessageWriter {
       }
       await this.state.commit_step(
         this.message_id,
-        current.parts.map((part) => part.type === "error" && retry && part.retry?.step_id === retry.step_id
-          ? { ...part, recoverable: false, retry: structuredClone(retry) }
-          : part.type === "data" && part.data_type === "model_request_attempts" && retry && part.data_id === retry.step_id
-            ? { ...part, data: to_session_json_value(retry) } : merged_parts.get(part.part_id) ?? part),
+        current.parts.map((part) => merged_parts.get(part.part_id) ?? part),
       );
       this.reset_step_state();
     });
@@ -180,39 +177,21 @@ export class SessionAgentMessageWriter {
     });
   }
 
-  /** 保存输入依据，不向模型历史、聊天正文或摘要投影。 */
-  async save_model_input(snapshot: import("@/types/session/SessionModelInput.js").SessionModelInputSnapshot): Promise<string> {
+  /** 自动策略结束后只写一个普通错误，恢复能力由当前执行栈独占。 */
+  async show_model_error(part_id: string, error: import("@downcity/type").ModelError): Promise<import("@downcity/type").SessionModelRetry> {
     return await this.enqueue_write(async () => {
-      const part_id = `model-input:${snapshot.step_id}`;
-      await this.state.commit_parts(this.message_id, [{ part_id, sequence: this.next_part_sequence(), type: "data",
-        data_type: "model_request_input", data: to_session_json_value(snapshot) }]);
-      return part_id;
+      const part: SessionAgentErrorPart = {
+        part_id, sequence: this.next_part_sequence(), type: "error", scope: "turn",
+        code: error.code, message: error.message, recoverable: false,
+      };
+      await this.state.commit_parts(this.message_id, [part]);
+      return { message_id: this.message_id, error_part_id: part_id };
     });
   }
 
-  /** 只更新诊断 Part，完整模型输出和已完成工具保持原位。 */
-  async save_model_retry(record: import("@downcity/type").SessionModelRetry): Promise<string> {
-    return await this.enqueue_write(async () => {
-      const current = this.current_message();
-      const previous = current.parts.find(part => part.part_id === `model-attempts:${record.step_id}`);
-      const first_error = record.attempts.find(attempt => attempt.error)?.error;
-      if (!record.attempts.some(attempt => attempt.outcome === "failed") && record.status !== "interrupted" && record.status !== "stopped") {
-        await this.state.commit_parts(this.message_id, [{ part_id: previous?.part_id ?? `model-attempts:${record.step_id}`,
-          sequence: previous?.sequence ?? this.next_part_sequence(), type: "data", data_type: "model_request_attempts",
-          data_id: record.step_id, data: to_session_json_value(record) }]);
-        return this.message_id;
-      }
-      const part: SessionAgentErrorPart = {
-        part_id: previous?.part_id ?? `model-attempts:${record.step_id}`,
-        sequence: previous?.sequence ?? this.next_part_sequence(),
-        type: "error", scope: "turn", code: first_error?.code ?? "model_request_failed",
-        message: first_error?.message ?? "Model request failed",
-        recoverable: record.status === "failed" && record.recoverable,
-        retry: structuredClone(record),
-      };
-      await this.state.commit_parts(this.message_id, [part]);
-      return this.message_id;
-    });
+  /** 接受动作后删除当前错误，保留更早的已完成输出。 */
+  async clear_model_error(part_id: string): Promise<void> {
+    await this.enqueue_write(() => this.state.remove_error(this.message_id, part_id));
   }
 
   /** 把 Action 产生的封闭内容追加到当前 Assistant Message。 */
