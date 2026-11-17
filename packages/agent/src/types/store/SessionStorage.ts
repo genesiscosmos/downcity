@@ -91,6 +91,8 @@ export interface SessionStorage {
 
   /** 读取全部 canonical Message 聚合。 */
   list_messages(): Promise<SessionMessage[]>;
+  /** 在存储拥有者侧读取输入内容版本、附件引用和交互状态，不返回历史正文。 */
+  read_input_versions(): Promise<import("./SessionInputVersions.js").SessionInputVersions>;
   /** 检查 canonical 用户消息或 Inbox 内容是否登记该精确附件路径，不加载完整历史。 */
   has_attachment(file_path: string): Promise<boolean>;
   /** 读取指定 Message。 */

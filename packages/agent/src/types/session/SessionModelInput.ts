@@ -1,23 +1,12 @@
 /** 当前执行栈持有的冻结输入校验与控制检查点；所有内容仅驻留内存。 */
+import type { SessionInputMessageVersion } from "../store/SessionInputVersions.js";
 
 /** 原有效输入的进程内内容版本，用于接受 Retry 前校验。 */
 export interface SessionModelInputSnapshot {
   /** 完整未修改 ModelCall 的 SHA-256，用于校验内存请求语义。 */
   request_sha256: string;
   /** 输入引用的 canonical 消息身份与内容版本，只驻留当前执行栈。 */
-  messages: Array<{
-    /** 所属原始消息。 */
-    message_id: string;
-    /** 当时已提交 Parts 的内容摘要。 */
-    sha256: string;
-    /** 原始引用的 Part 身份及内容摘要，用于允许同消息后续追加。 */
-    parts: Array<{
-      /** 不可变内容身份。 */
-      part_id: string;
-      /** 该 Part 的内容版本摘要。 */
-      sha256: string;
-    }>;
-  }>;
+  messages: SessionInputMessageVersion[];
   /** 输入依赖的本地附件，路径来自已登记的 canonical 消息。 */
   attachments: Array<{
     /** Session 已登记的绝对文件路径。 */

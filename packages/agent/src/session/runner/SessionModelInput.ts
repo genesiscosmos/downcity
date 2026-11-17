@@ -1,31 +1,18 @@
 /**
  * 当前执行的冻结输入校验。
  * 内容与附件版本只由原执行栈持有，不保存到 Session data 或其他持久介质。
+ * canonical 内容摘要由存储拥有者投影，本模块不读取或重复摘要历史正文。
  */
 import { createHash as create_hash } from "node:crypto";
 import { stat } from "node:fs/promises";
 import { file_read_version } from "@downcity/type/workspace";
-import type { ModelCall, SessionMessage } from "@downcity/type";
+import type { ModelCall } from "@downcity/type";
+import type { SessionInputVersions } from "@/types/store/SessionInputVersions.js";
 import type { SessionModelInputSnapshot } from "@/types/session/SessionModelInput.js";
 
 /** JSON 协议值的内容摘要；只用于比较，不向模型注入。 */
 export function model_input_digest(value: unknown): string {
   return create_hash("sha256").update(JSON.stringify(value)).digest("hex");
-}
-
-
-/** 从已提交历史提取文件引用；不读取模型传入的任意新路径。 */
-function attachment_paths(history: readonly SessionMessage[]): string[] {
-  const paths = new Set<string>();
-  const visit = (value: unknown): void => {
-    if (!value || typeof value !== "object") return;
-    if (Array.isArray(value)) { value.forEach(visit); return; }
-    const item = value as Record<string, unknown>;
-    if (item.type === "file" && typeof item.url === "string" && /^(?:\/|[A-Za-z]:[\\/])/.test(item.url)) paths.add(item.url);
-    Object.values(item).forEach(visit);
-  };
-  history.forEach(message => visit(message.parts.filter(part => part.type !== "error" && part.type !== "data")));
-  return [...paths];
 }
 
 /** 原最终请求已经记录的媒体版本，禁止用稍后再次 stat 的版本替代它。 */
@@ -52,31 +39,29 @@ function request_attachment_versions(call: ModelCall): Map<string, string> {
 export async function snapshot_model_input(input: {
   /** 已装配的最终请求。 */
   call: ModelCall;
-  /** 当时的可靠历史，不包含流式草稿。 */
-  history: SessionMessage[];
+  /** 一次权威读事务取得的已提交内容版本，不包含流式草稿或历史正文。 */
+  versions: SessionInputVersions;
 }): Promise<SessionModelInputSnapshot> {
-  const messages = input.history.map(message => {
-    const parts = message.parts.filter(part => part.type !== "error" && part.type !== "data" && part.type !== "action");
-    return { message_id: message.message_id, sha256: model_input_digest(parts),
-      parts: parts.map(part => ({ part_id: part.part_id, sha256: model_input_digest(part) })) };
-  }).filter(message => message.parts.length > 0);
+  const encoded_call = JSON.stringify(input.call);
   const versions = request_attachment_versions(input.call);
-  const attachments = await Promise.all(attachment_paths(input.history).filter(file_path => JSON.stringify(input.call).includes(JSON.stringify(file_path).slice(1, -1))).map(async file_path => ({
+  const attachments = await Promise.all(input.versions.attachment_paths.filter(file_path => encoded_call.includes(JSON.stringify(file_path).slice(1, -1))).map(async file_path => ({
     path: file_path, sha256: versions.has(file_path) ? model_input_digest(versions.get(file_path))
       : await stat(file_path).then(metadata => model_input_digest(file_read_version(metadata)), () => "unavailable"),
   })));
-  return { request_sha256: model_input_digest(input.call), messages, attachments };
+  return { request_sha256: create_hash("sha256").update(encoded_call).digest("hex"),
+    messages: input.versions.messages, attachments };
 }
 
 /** 只允许原消息内容和附件仍可验证的步骤恢复，不重新生成动态 system 或提示词。 */
-export async function validate_model_input(snapshot: SessionModelInputSnapshot, call: ModelCall, history: SessionMessage[]): Promise<void> {
+export async function validate_model_input(snapshot: SessionModelInputSnapshot, call: ModelCall, versions: SessionInputVersions): Promise<void> {
   if (model_input_digest(call) !== snapshot.request_sha256) throw new Error("Original model input is unavailable or corrupted");
+  const messages = new Map(versions.messages.map(message => [message.message_id, message]));
   for (const reference of snapshot.messages) {
-    const message = history.find(item => item.message_id === reference.message_id);
+    const message = messages.get(reference.message_id);
     if (!message) throw new Error("Original model input message is unavailable");
+    const parts = new Map(message.parts.map(part => [part.part_id, part.sha256]));
     for (const part of reference.parts) {
-      const current = message.parts.find(item => item.part_id === part.part_id);
-      if (!current || model_input_digest(current) !== part.sha256) throw new Error("Original model input content changed");
+      if (parts.get(part.part_id) !== part.sha256) throw new Error("Original model input content changed");
     }
   }
   for (const attachment of snapshot.attachments) {

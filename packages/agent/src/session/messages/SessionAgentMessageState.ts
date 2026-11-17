@@ -3,6 +3,8 @@
  *
  * Model stream 只更新内存投影并发布实时 Mutation；完整 Step、Tool、Interaction
  * 与 Message 收口才通过一次 SQLite 事务提交稳定快照。数据库不承担流事件日志职责。
+ * 运行投影由本模块构造并转交缓存拥有；更新只替换变化的 Part，共享的旧 Parts
+ * 始终只读。外部 Part 输入及订阅 Mutation 分别隔离，delta 不复制整条 Message。
  */
 
 import { generate_id } from "@/utils/Id.js";
@@ -366,7 +368,7 @@ export class SessionAgentMessageState {
         }),
       );
     });
-    return this.require_pending_interaction(request.interaction_id).interaction;
+    return structuredClone(this.require_pending_interaction(request.interaction_id).interaction);
   }
 
   /** 原子保存用户响应，并按 Interaction 结果恢复或终止所属 Tool。 */
@@ -400,7 +402,7 @@ export class SessionAgentMessageState {
         }),
       );
     });
-    return this.require_interaction(interaction_id).interaction;
+    return structuredClone(this.require_interaction(interaction_id).interaction);
   }
 
   /** 原子结束未响应 Interaction，并把所属 Tool 标记为失败。 */
@@ -426,7 +428,7 @@ export class SessionAgentMessageState {
         }),
       );
     });
-    return this.require_interaction(interaction_id).interaction;
+    return structuredClone(this.require_interaction(interaction_id).interaction);
   }
 
   /** Build a first failure snapshot using the exact persisted message/category location. */
@@ -566,9 +568,7 @@ export class SessionAgentMessageState {
 
   /** 读取当前运行投影中的可写 Agent Message；只有 writer 持有的消息可写。 */
   private require_writable_agent(message_id: string): SessionAgentMessage {
-    const message = [...this.options.cache.all()].find(
-      (item) => item.message_id === message_id,
-    );
+    const message = this.options.cache.get(message_id);
     if (!message || message.role !== "agent") {
       throw new Error(`Writable Agent Message not found: ${message_id}`);
     }

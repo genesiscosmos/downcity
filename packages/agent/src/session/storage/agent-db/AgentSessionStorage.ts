@@ -112,6 +112,11 @@ export class AgentSessionStorage implements SessionStorage {
       before_sequence = page[0].sequence;
     }
   }
+  /** 只接收输入版本和附件引用，完整 canonical 正文保留在存储拥有者侧。 */
+  async read_input_versions(): Promise<import("@/types/store/SessionInputVersions.js").SessionInputVersions> {
+    await this.initialize();
+    return await this.options.lease.read({ command: "input_versions", session_id: this.session_id });
+  }
   async has_attachment(file_path: string): Promise<boolean> {
     await this.initialize(); return await this.options.lease.read({ command: "has_attachment", session_id: this.session_id, file_path });
   }

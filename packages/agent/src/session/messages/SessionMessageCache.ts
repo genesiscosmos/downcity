@@ -7,6 +7,11 @@
  *
  * 抽出它的原因是打破 SessionMessages 与 Agent Message 运行时之间的双向依赖：
  * 两者都只单向依赖本模块，不再需要互相回指的闭包。
+ *
+ * 引用所有权：持久化快照在 accept 边界复制一次；project 接管状态转换器新建的
+ * 不可变运行投影，与上一投影共享未变化的 Parts。get/all 仅供领域内部只读使用；
+ * 对外读取由 SessionMessages 复制，实时 Part Mutation 由状态转换器独立复制，
+ * 避免每个 delta 重复遍历、复制此前所有工具结果和模型输入依据。
  */
 
 import { generate_id } from "@/utils/Id.js";
@@ -44,12 +49,12 @@ export class SessionMessageCache {
     this.on_activity = options.on_activity;
   }
 
-  /** 读取一条已缓存的 Message。 */
+  /** 领域内部只读借用当前投影；不得修改，也不得直接返回给外部调用方。 */
   get(message_id: string): SessionMessage | undefined {
     return this.messages_by_id.get(message_id);
   }
 
-  /** 返回当前缓存中的全部 Message。 */
+  /** 领域内部只读遍历；更新必须构造新 Message/Part，不能修改借用的引用。 */
   all(): Iterable<SessionMessage> {
     return this.messages_by_id.values();
   }
@@ -118,13 +123,21 @@ export class SessionMessageCache {
     });
   }
 
-  /** 接受一条尚未持久化的实时 Mutation 及其对应的运行快照。 */
+  /**
+   * 接管状态转换器拥有的新运行投影，未变化 Parts 继续共享，不复制整条 Message。
+   * 调用方在转移后只能只读使用；Mutation 必须与缓存隔离，delta 仅含值类型，
+   * Part Mutation 由 project_part 单独复制，不能携带投影中的可变对象引用。
+   */
   project(mutation: SessionMutation, message: SessionMessage): void {
-    this.remember(message);
+    if (message.role === "agent" && this.is_held(message.message_id)) {
+      this.messages_by_id.set(message.message_id, message);
+    } else {
+      this.messages_by_id.delete(message.message_id);
+    }
     this.publish(mutation);
   }
 
-  /** 只缓存被 writer 持有的 Agent Message；终态历史始终读取 Store。 */
+  /** 持久化快照可能同时交给外部调用方或订阅者，只在此边界复制一次以隔离引用。 */
   private remember(message: SessionMessage): void {
     this.messages_by_id.delete(message.message_id);
     if (message.role !== "agent") return;

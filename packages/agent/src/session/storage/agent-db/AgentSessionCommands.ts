@@ -8,6 +8,7 @@ import { AgentSessionDatabase } from "./AgentSessionDatabase.js";
 import { AgentSessionCatalog } from "./AgentSessionCatalog.js";
 import { AgentSessionMessages } from "./AgentSessionMessages.js";
 import { AgentSessionConfiguration } from "./AgentSessionConfiguration.js";
+import { read_session_input_versions } from "./AgentSessionInputVersions.js";
 
 /** Writer 命令集合用于 Reader 防线，不能依赖 TypeScript 在运行时阻止写入。 */
 export function is_agent_session_write_command(operation: AgentSessionReadCommand | AgentSessionWriteCommand): boolean {
@@ -59,6 +60,7 @@ export function execute_agent_session_command(owner: AgentSessionDatabase, opera
     case "record": return catalog.by_session_id(operation.session_id);
     case "configuration": return catalog.configuration(operation.session_id);
     case "recoverable": return messages.recoverable(operation.session_id);
+    case "input_versions": return read_session_input_versions(owner, operation.session_id);
     case "messages": return messages.page(operation.session_id, operation.input);
     case "message": return messages.message(operation.session_id, operation.id);
     case "part_message": return messages.part_message(operation.session_id, operation.id);

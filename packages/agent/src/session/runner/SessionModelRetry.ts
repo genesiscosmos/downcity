@@ -30,10 +30,10 @@ export class SessionModelRetryControl {
 
   /** 输入版本只由当前步骤闭包持有，进程退出即释放。 */
   async prepare_input(call: ModelCall, validate_config?: () => Promise<void>): Promise<() => Promise<void>> {
-    const snapshot = await snapshot_model_input({ call, history: await this.messages.list_history_messages() });
+    const snapshot = await snapshot_model_input({ call, versions: await this.messages.read_input_versions() });
     return async () => {
       await validate_config?.();
-      await validate_model_input(snapshot, call, await this.messages.list_history_messages());
+      await validate_model_input(snapshot, call, await this.messages.read_input_versions());
     };
   }
 
@@ -84,9 +84,8 @@ export class SessionModelRetryControl {
         return { accepted: false, reason: "This failure is no longer the current retry checkpoint" };
       }
       if (this.blocked() || pending.signal.aborted) return { accepted: false, reason: "Session input changed or execution stopped" };
-      const history = await this.messages.list_history_messages();
-      if (history.some(message => message.role === "agent" && message.parts.some(part => part.type === "tool"
-        && part.interactions?.some(interaction => interaction.status === "pending")))) {
+      const versions = await this.messages.read_input_versions();
+      if (versions.has_pending_interactions) {
         return { accepted: false, reason: "Resolve the pending interaction before retrying" };
       }
       try { await pending.validate(); } catch (error) {

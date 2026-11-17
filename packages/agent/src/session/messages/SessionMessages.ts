@@ -188,9 +188,10 @@ export class SessionMessages {
     }
   }
 
-  /** 同步读取当前内存 Message。 */
+  /** 返回调用方独占的运行快照，外部修改不能影响缓存或后续流式投影。 */
   get_message(message_id: string): SessionMessage | undefined {
-    return this.cache.get(message_id);
+    const message = this.cache.get(message_id);
+    return message ? structuredClone(message) : undefined;
   }
 
   /** 按稳定标识读取 canonical Message；终态和 User 历史由存储提供。 */
@@ -371,7 +372,7 @@ export class SessionMessages {
       );
       return;
     }
-    const existing = this.get_message(event.action_id) ||
+    const existing = this.cache.get(event.action_id) ||
       await this.store.read_message(event.action_id) || undefined;
     if (!existing) {
       await this.create_standalone_action_message(event, publish_mutation);
@@ -389,7 +390,7 @@ export class SessionMessages {
   private find_open_message(turn_id: string): SessionAgentMessage | undefined {
     const message_id = this.cache.held_message_id();
     if (!message_id) return undefined;
-    const message = this.get_message(message_id);
+    const message = this.cache.get(message_id);
     if (!message || message.role !== "agent" || message.turn_id !== turn_id) {
       return undefined;
     }
@@ -460,7 +461,7 @@ export class SessionMessages {
     changes?: { title?: string; description?: string; data?: JsonObject },
     options?: { publish_mutation?: boolean },
   ): Promise<SessionAgentMessage> {
-    const current_message = this.get_message(message_id) || await this.store.read_message(message_id);
+    const current_message = this.cache.get(message_id) || await this.store.read_message(message_id);
     if (!current_message || current_message.role !== "agent") {
       throw new Error(`Session agent Message not found: ${message_id}`);
     }
@@ -495,7 +496,8 @@ export class SessionMessages {
       changed_parts: [next_action],
     });
     this.cache.accept(message, options?.publish_mutation !== false, current_message);
-    return message;
+    // next_parts 与当前投影共享未变化的 Parts，对外返回前统一隔离。
+    return structuredClone(message);
   }
 
   /**
@@ -612,6 +614,12 @@ export class SessionMessages {
   async list_history_messages(): Promise<SessionMessage[]> {
     await this.ensure_initialized();
     return await this.store.list_messages();
+  }
+
+  /** 读取已提交输入的内容版本，不加载或克隆全部历史正文。 */
+  async read_input_versions(): Promise<import("@/types/store/SessionInputVersions.js").SessionInputVersions> {
+    await this.ensure_initialized();
+    return await this.store.read_input_versions();
   }
 
   /** 读取当前 Session 的存储统计。 */

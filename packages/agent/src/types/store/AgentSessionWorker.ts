@@ -56,8 +56,8 @@ export type AgentSessionReadCommand = {
   /** 永久身份及可选分类和状态校验。 */
   address: AgentSessionAddress;
 } | {
-  /** 按稳定记录读取 metadata、配置或非终态消息。 */
-  command: "record" | "configuration" | "recoverable";
+  /** 按稳定记录读取 metadata、配置、非终态消息或轻量输入版本。 */
+  command: "record" | "configuration" | "recoverable" | "input_versions";
   /** 已确认的永久会话 UUID。 */
   session_id: string;
 } | {

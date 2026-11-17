@@ -123,10 +123,11 @@ export class SessionAgentMessageWriter {
         disclosed: result.disclosed,
         ...(!result.succeeded ? { error: read_tool_error(result.output) } : {}),
       });
-      if (terminal === tool) return tool;
+      if (terminal === tool) return structuredClone(tool);
       // Terminal and first model view are committed atomically before publishing a reference.
       await this.state.commit_parts(this.message_id, [{ ...terminal, tool_name: result.tool_name }]);
-      return this.require_tool(result.tool_call_id);
+      // Tool 结果向外返回时隔离缓存引用，后续 delta 可以安全共享稳定 Parts。
+      return structuredClone(this.require_tool(result.tool_call_id));
     });
   }
 
@@ -227,7 +228,7 @@ export class SessionAgentMessageWriter {
       const existing = this.current_message().parts.find(
         (part): part is SessionAgentInboxPart => part.type === "inbox" && part.inbox_id === inbox_id,
       );
-      if (existing) return existing;
+      if (existing) return structuredClone(existing);
       assert_receivable?.();
       const part: SessionAgentInboxPart = {
         ...structuredClone(input),
@@ -378,7 +379,7 @@ export class SessionAgentMessageWriter {
     }
   }
 
-  /** 读取当前 Assistant Message 快照。 */
+  /** 只读借用当前运行投影；所有写入都通过 State 构造新 Message/Part。 */
   private current_message(): SessionAgentMessage {
     const message = this.cache.get(this.message_id);
     if (!message || message.role !== "agent") {
