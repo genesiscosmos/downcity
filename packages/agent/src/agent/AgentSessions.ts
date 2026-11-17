@@ -288,6 +288,12 @@ export class AgentSessions implements AgentSessionsContract<AgentSession> {
       .map((session) => session.id);
   }
 
+  /** 集合是否仍拥有需保护的执行；包含交互等待和尚未完成的收尾。 */
+  has_live_execution(workspace_id?: string): boolean {
+    return this.list_cached_sessions().some(session => session.has_live_execution()
+      && (!workspace_id || session.workspace_id === workspace_id));
+  }
+
   /** 返回当前执行中的 Session 数量。 */
   get_executing_session_count(): number {
     return this.list_executing_session_ids().length;
@@ -296,7 +302,7 @@ export class AgentSessions implements AgentSessionsContract<AgentSession> {
   /** 停止当前集合内正在执行的 Session；可按 Workspace 限定。 */
   async stop_executing_sessions(workspace_id?: string): Promise<void> {
     const executing_sessions = this.list_cached_sessions().filter((session) =>
-      session.is_executing()
+      session.has_live_execution()
       && (!workspace_id || session.workspace_id === workspace_id)
     );
     await Promise.all(executing_sessions.map(async (session) => await session.stop()));
@@ -467,7 +473,7 @@ export class AgentSessions implements AgentSessionsContract<AgentSession> {
     request_id?: string;
   }) {
     const storage = await this.read_session_storage(session_id, category);
-    return await read_session_execution(storage, this.runtime(session_id, category).is_executing(), input,
+    return await read_session_execution(storage, this.sessions_by_id.get(this.session_cache_key(session_id, category))?.has_live_execution() === true, input,
       this.resolve_session_context().completions);
   }
 
@@ -633,7 +639,7 @@ export class AgentSessions implements AgentSessionsContract<AgentSession> {
     const resolved_category = normalize_session_origin_category(category);
     const cache_key = this.session_cache_key(resolved_session_id, resolved_category);
     const cached = this.sessions_by_id.get(cache_key);
-    if (cached?.is_executing()) {
+    if (cached?.has_live_execution()) {
       await cached.stop();
     }
     cached?.dispose_title_generation?.();
@@ -670,7 +676,7 @@ export class AgentSessions implements AgentSessionsContract<AgentSession> {
     const resolved_category = normalize_session_origin_category(category);
     const cache_key = this.session_cache_key(resolved_session_id, resolved_category);
     const cached = this.sessions_by_id.get(cache_key);
-    if (cached?.is_executing()) {
+    if (cached?.has_live_execution()) {
       throw new Error(`Session "${resolved_session_id}" is currently executing`);
     }
     cached?.dispose_title_generation?.();
@@ -867,7 +873,7 @@ export class AgentSessions implements AgentSessionsContract<AgentSession> {
     );
     if (this.lifecycle.is_busy(cache_key)) return false;
     const cached = this.sessions_by_id.get(cache_key);
-    if (!cached || cached.is_executing()) return false;
+    if (!cached || cached.has_live_execution()) return false;
     cached.dispose_title_generation?.();
     cached.clear_secrets();
     this.delete_cached_session(cache_key);

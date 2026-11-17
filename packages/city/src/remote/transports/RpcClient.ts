@@ -8,6 +8,7 @@
  */
 
 import { SESSION_ORIGIN_CATEGORY_WORK } from "@downcity/type";
+import type { SessionModelRetryRpcPayload } from "@/types/remote/SessionModelRetry.js";
 import net from "node:net";
 import type { AgentInteraction, AgentListInteractionsInput, AgentRespondInteractionInput } from "@downcity/agent";
 import type { RemoteInteractionSubscriptionInput } from "@/types/remote/RemoteAgentInteractions.js";
@@ -320,6 +321,14 @@ export class RpcClient {
       params: { session_id: session_id, category },
     });
     return data.status;
+  }
+
+  /** 单次控制提交；不自动重发结果未知的动作。 */
+  async retry_model_step(session_id: string, category: string, input: import("@downcity/type").SessionModelRetryInput): Promise<import("@downcity/type").SessionModelRetryResult> {
+    const data = await this.request<SessionModelRetryRpcPayload>({
+      method: "sdk.sessions.retry_model_step", params: { session_id, category, input },
+    });
+    return data.result;
   }
 
   async set_session(

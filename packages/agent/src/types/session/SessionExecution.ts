@@ -85,6 +85,18 @@ export interface SessionStepExecutionInput {
    */
   tools: Record<string, BoundAgentTool>;
 
+  /** 工具循环撞顶后的无工具收尾步骤；重试仍保持这一执行约束。 */
+  finalization?: boolean;
+
+  /** 人工重试使用的完整请求；不重新生成 system、messages 或参数。 */
+  call?: import("@downcity/type").ModelCall;
+
+  /** 新执行首步发送前校验原输入代次；不传递给再次失败后的静态绑定。 */
+  validate_replay?: () => Promise<void>;
+
+  /** 只持有未绑定工具及值快照，为新的 Turn 创建执行绑定。 */
+  rebind_retry?: (context: SessionTurnContext) => SessionStepExecutionInput;
+
   /** 校验当前配置仍与该步骤绑定一致；只校验静态语义，不重装动态上下文。 */
   validate_retry?: () => Promise<void>;
 

@@ -1,4 +1,4 @@
-/** 当前执行的手动 Retry 动作协议；绑定只存在于运行时，不保存尝试历史。 */
+/** 原失败请求的新执行 Retry 协议；绑定只存在于运行时，不保存尝试历史。 */
 
 /** 当前进程内仍可恢复的错误位置；由 Session.status 投影。 */
 export interface SessionModelRetry {
@@ -16,9 +16,9 @@ export interface SessionModelRetryInput {
   error_part_id: string;
 }
 
-/** 当前执行对动作的接收结果。 */
+/** 新执行对动作的接收结果。 */
 export interface SessionModelRetryResult {
-  /** 是否已清除当前错误并唤醒原执行步骤。 */
+  /** 是否已接收原失败请求的新执行；不重新打开已结束 Turn。 */
   accepted: boolean;
   /** 明确未接收时的原因；传输未知时读取 Session 当前运行状态。 */
   reason?: string;

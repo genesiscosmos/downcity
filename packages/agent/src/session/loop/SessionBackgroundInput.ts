@@ -59,9 +59,9 @@ async function receive_background_input(host: SessionBackgroundHost, input: Sess
   }
   const completed = await host.completions?.read(host.session_id, input.turn_id);
   if (!host.is_current()) return "retry";
-  if (!completed) return host.loop.is_busy() ? "retry" : "discarded";
+  if (!completed) return host.loop.has_live_execution() ? "retry" : "discarded";
   if (completed.status !== "completed" && !input.allow_stopped_turn) return "discarded";
-  if (host.loop.is_busy()) return "retry";
+  if (host.loop.has_live_execution()) return "retry";
   try {
     await host.loop.prompt_inbox({
       actor: { kind: "runtime", namespace: "session_background", object_id: input.request_id },

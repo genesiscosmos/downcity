@@ -71,6 +71,8 @@ export interface AppState {
 
   /** 是否正在等待助手回复。 */
   is_executing: boolean;
+  /** 原 Turn 或接收、收尾尚未释放；停止与输入队列不能依赖活动展示。 */
+  live_execution: boolean;
 
   /** 当前 TUI 本地等待发送的消息数量。 */
   queued_message_count: number;

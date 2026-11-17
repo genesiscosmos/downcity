@@ -21,6 +21,8 @@ export interface AgentChatSecurityControllerOptions {
   on_status: (input: {
     /** 当前 Session 是否正在执行 Turn。 */
     is_executing: boolean;
+    /** 原执行仍需保护，控制面不能从 running 展示推断停止资格。 */
+    live_execution: boolean;
     /** 当前 Session configured 与 effective 审批状态。 */
     security: AgentSessionSecurityStatus;
   }) => void;

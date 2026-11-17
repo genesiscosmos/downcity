@@ -88,10 +88,6 @@ export class SessionAssistantOutputAdapter implements SessionAssistantOutput {
     return await (await this.ensure_writer()).show_model_error(part_id, error);
   }
 
-  /** 接受动作后清除当前错误。 */
-  async clear_model_error(part_id: string): Promise<void> {
-    await (await this.ensure_writer()).clear_model_error(part_id);
-  }
 
   /**
    * 在 Step 边界关闭当前 Assistant Message，失败时保留原 Writer 供重试。

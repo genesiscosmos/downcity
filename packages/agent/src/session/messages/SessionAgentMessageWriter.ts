@@ -178,7 +178,7 @@ export class SessionAgentMessageWriter {
     });
   }
 
-  /** 自动策略结束后只写一个普通错误，恢复能力由当前执行栈独占。 */
+  /** 自动策略结束后只写一个普通错误，新执行的重试能力仅由进程内描述提供。 */
   async show_model_error(part_id: string, error: import("@downcity/type").ModelError): Promise<import("@downcity/type").SessionModelRetry> {
     return await this.enqueue_write(async () => {
       const part: SessionAgentErrorPart = {
@@ -188,11 +188,6 @@ export class SessionAgentMessageWriter {
       await this.state.commit_parts(this.message_id, [part]);
       return { message_id: this.message_id, error_part_id: part_id };
     });
-  }
-
-  /** 接受动作后删除当前错误，保留更早的已完成输出。 */
-  async clear_model_error(part_id: string): Promise<void> {
-    await this.enqueue_write(() => this.state.remove_error(this.message_id, part_id));
   }
 
   /** 把 Action 产生的封闭内容追加到当前 Assistant Message。 */

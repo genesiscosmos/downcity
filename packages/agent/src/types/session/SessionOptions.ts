@@ -39,6 +39,8 @@ export interface AgentManagedSession extends AgentSession {
    * 返回当前 session 是否正在执行。
    */
   is_executing(): boolean;
+  /** 原 Turn、接收或收尾仍需保护；包含交互等待及尚未结束的收尾，供停止和资源生命周期使用。 */
+  has_live_execution(): boolean;
 
   /** 只读检查原 Turn 的交互运行 waiter 是否仍存在，不恢复执行器。 */
   can_respond_interaction(interaction_id: string, turn_id: string): boolean;

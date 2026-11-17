@@ -71,6 +71,7 @@ export class ChatSessionSubscription {
         messages: messages.items,
         security: status.security,
         is_executing: status.state === "running",
+        live_execution: status.live_execution,
         interactions,
       };
       this.options.on_snapshot(snapshot);

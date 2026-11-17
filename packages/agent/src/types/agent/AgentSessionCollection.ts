@@ -126,6 +126,9 @@ export interface AgentSessionCollection {
   /** 只观察已缓存实例；不存在时返回 undefined，不触发恢复执行或目录注入。 */
   peek(session_id: string, category?: string): AgentSession | undefined;
 
+  /** 当前集合仍有接收、活 Turn 或收尾需保护；当前模型故障不释放该能力。 */
+  has_live_execution(workspace_id?: string): boolean;
+
   /** 返回当前 Agent 正在执行的 Session 标识。 */
   list_executing_session_ids(): string[];
 

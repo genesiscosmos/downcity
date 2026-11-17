@@ -51,7 +51,7 @@ export class ExtensionPlatform {
       for (const config of this.agents.list()) {
         if (typeof config.execution?.definition_id !== "string" || !config.execution.definition_id.startsWith(prefix)) continue;
         const agent = city.agents.get(config.agent_id);
-        if (agent?.sessions.list_executing_session_ids().length) throw new ExtensionFailure("project_busy", "An Agent using this extension has active work", "dispose", 4, { agent_id: agent.id });
+        if (agent?.sessions.has_live_execution()) throw new ExtensionFailure("project_busy", "An Agent using this extension has active work", "dispose", 4, { agent_id: agent.id });
       }
     } });
   }

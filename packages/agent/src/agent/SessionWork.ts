@@ -63,8 +63,8 @@ export interface SessionWorkOptions {
   }>;
   /** 恢复单条会话的运行时实例。 */
   get_session: (session_id: string, category: string) => Promise<AgentSession>;
-  /** 只查看集合持有的运行状态，不恢复目标执行器。 */
-  is_executing: (session_id: string, category: string) => boolean;
+  /** 只读取集合已有实例的权威状态，不恢复目标执行器。 */
+  read_runtime: (session_id: string, category: string) => Promise<import("@/types/agent/SessionTypes.js").AgentSessionStatus | undefined>;
   /** 只读持久化会话入口，不恢复执行器。 */
   read_session: SessionStore["read_session"];
   /** 精确只读归档记录；UUID不授予执行控制权。 */
@@ -105,6 +105,7 @@ export class SessionWork implements SessionWorkContract {
     for (const item of page.items) {
 
       const pending_interaction_count = await this.count_pending(item);
+      const runtime = !item.archived ? await this.options.read_runtime(item.session_id, item.origin.category) : undefined;
       summaries.push({
         session_id: item.session_id,
         session_category: item.origin.category as "chat" | "work",
@@ -113,6 +114,7 @@ export class SessionWork implements SessionWorkContract {
         ...(item.workspace_id ? { workspace_id: item.workspace_id } : {}),
         ...(item.title ? { title: item.title } : {}),
         state: resolve_session_state({
+          state: runtime?.state,
           executing: item.executing === true,
           pending_interaction_count,
         }),
@@ -132,7 +134,7 @@ export class SessionWork implements SessionWorkContract {
       snapshot.messages({ limit: normalize_limit(input.limit, DEFAULT_MESSAGE_LIMIT) }),
       snapshot.interactions(),
     ]);
-    const executing = !snapshot.archived && this.options.is_executing(input.session_id, input.session_category);
+    const runtime = !snapshot.archived ? await this.options.read_runtime(input.session_id, input.session_category) : undefined;
     const failure = resolve_failure_text(messages.items);
     return {
       mode: "detail",
@@ -144,7 +146,8 @@ export class SessionWork implements SessionWorkContract {
         ...(item.workspace_id ? { workspace_id: item.workspace_id } : {}),
         ...(item.title ? { title: item.title } : {}),
         state: resolve_session_state({
-          executing,
+          state: runtime?.state,
+          executing: runtime?.state === "running",
           pending_interaction_count: pending.length,
         }),
         ...(item.preview_text ? { preview_text: item.preview_text } : {}),
@@ -241,7 +244,7 @@ export class SessionWork implements SessionWorkContract {
     const snapshot = await this.options.read_session(session_id, "work");
     if (snapshot.archived) return;
     const session = await this.options.get_session(session_id, "work");
-    if ((await session.status()).state === "running" || (await snapshot.interactions()).length) {
+    if ((await session.status()).live_execution || (await snapshot.interactions()).length) {
       throw new Error("session_subtree_busy: finish or stop child work before archiving");
     }
     for (const child_id of await this.options.delegations.children(session_id, "work")) {
@@ -275,13 +278,16 @@ function normalize_limit(input: number | undefined, fallback: number): number {
 
 /** 由执行态与待响应数量推导清单状态。 */
 function resolve_session_state(input: {
-  /** 该会话当前是否在执行 Turn。 */
+  /** 已存在运行时的同源活动阶段；历史记录不推测恢复能力。 */
+  state?: import("@downcity/type").SessionRuntimeState;
+  /** 没有实时实例时的目录活动快照。 */
   executing: boolean;
   /** 当前待用户响应的 Interaction 数量。 */
   pending_interaction_count: number;
 }): SessionToolState {
-  if (input.pending_interaction_count > 0) return "waiting_for_user";
-  if (input.executing) return "running";
+  if (input.state === "failed" || input.state === "waiting_child") return input.state;
+  if (input.state === "waiting_input" || input.pending_interaction_count > 0) return "waiting_for_user";
+  if (input.state ? input.state === "running" : input.executing) return "running";
   return "idle";
 }
 

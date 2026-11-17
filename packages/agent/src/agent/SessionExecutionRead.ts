@@ -11,14 +11,14 @@ import { resolve_prompt_request_identity } from "@/session/loop/SessionTurnHandl
 export interface SessionExecutionReadResult {
   /** 定位出的稳定 Turn ID。 */
   turn_id?: string;
-  /** 无请求、运行中、终态、丢失或中断状态。 */
+  /** 生命周期状态：running 指原 Turn 未完成，包含当前故障及等待；不用于活动展示。 */
   status: "idle" | "running" | "completed" | "not_found" | "interrupted";
   /** 权威 Turn 完成日志提供的真实结果；单条消息终态不代表 Turn 完成。 */
   result?: AgentSessionTurnResult;
 }
 
 /** 按 Turn 或业务请求键读取真实完成状态。 */
-export async function read_session_execution(storage: SessionStorage, executing: boolean, input: {
+export async function read_session_execution(storage: SessionStorage, live_execution: boolean, input: {
   /** 精确 Turn ID，与 request_id 互斥。 */
   turn_id?: string;
   /** prompt 业务请求键，与 turn_id 互斥。 */
@@ -33,6 +33,6 @@ export async function read_session_execution(storage: SessionStorage, executing:
   const resolved_turn_id = turn_id ?? message?.turn_id;
   const completion = resolved_turn_id ? await completions?.read(storage.session_id, resolved_turn_id) : undefined;
   if (completion) return { turn_id: completion.turn_id, status: "completed", result: { turn_id: completion.turn_id, ...completion.result } };
-  if (message || request) return { turn_id: turn_id ?? message?.turn_id, status: executing ? "running" : "interrupted" };
-  return { ...(turn_id ? { turn_id } : {}), status: turn_id ? "not_found" : executing ? "running" : "idle" };
+  if (message || request) return { turn_id: turn_id ?? message?.turn_id, status: live_execution ? "running" : "interrupted" };
+  return { ...(turn_id ? { turn_id } : {}), status: turn_id ? "not_found" : live_execution ? "running" : "idle" };
 }

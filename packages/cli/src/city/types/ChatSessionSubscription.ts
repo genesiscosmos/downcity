@@ -26,6 +26,8 @@ export interface ChatSessionSnapshot {
   security: AgentSessionSecurityStatus;
   /** 读取快照时 Session 是否正在执行 Turn。 */
   is_executing: boolean;
+  /** 原执行生命周期仍需保护；当前失败不等于完成。 */
+  live_execution: boolean;
   /** 当前 Session 尚未进入终态的 Interaction。 */
   interactions: SessionInteractionRequest[];
 }

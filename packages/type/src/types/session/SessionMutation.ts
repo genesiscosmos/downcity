@@ -164,15 +164,11 @@ export type SessionHistoryMutation = SessionMutationBase & {
 };
 
 /** Session 队列生命周期；不依赖是否存在对话 Turn，也不持久化为聊天消息。 */
-export type SessionRuntimeMutation = SessionMutationBase & {
+export type SessionRuntimeMutation = SessionMutationBase & import("./SessionRuntime.js").SessionRuntimeSnapshot & {
   /** Mutation 层级固定为 session。 */
   variant: "session";
   /** 队列执行状态变化。 */
   type: "runtime";
-  /** running 覆盖队列消费全过程；队列全部排空后才变为 idle。 */
-  state: "running" | "idle";
-  /** 当前进程仍持有的失败恢复绑定；省略表示没有可执行 Retry。 */
-  model_retry?: import("./SessionModelRetry.js").SessionModelRetry;
 };
 
 /** Session 自身属性变化 Mutation。 */

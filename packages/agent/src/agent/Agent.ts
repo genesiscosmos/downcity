@@ -570,7 +570,7 @@ export class Agent {
         return { items: pages.flatMap((page) => page.items)
           .sort((left, right) => (right.updated_at ?? 0) - (left.updated_at ?? 0)).slice(0, input.limit) };
       },
-      is_executing: (session_id, category) => this.session_manager.list_executing_session_ids(undefined, category).includes(session_id),
+      read_runtime: async (session_id, category) => await this.session_manager.peek(session_id, category)?.status(),
       read_session: async (session_id, category) => await this.resolve_storage().sessions.read_session(session_id, category),
       read_archived_session: async (session_id) => await this.resolve_storage().sessions.read_archived_session(session_id),
       read_archive_plan: async operation_id => await this.resolve_storage().sessions.read_archive_plan(operation_id),

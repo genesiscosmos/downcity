@@ -164,6 +164,11 @@ export async function handle_sdk_session_rpc_request(params: {
       write_success(request.id, { queued: true });
       return true;
     }
+    case "sdk.sessions.retry_model_step": {
+      const session = await get_session(request.params.session_id, request.params.category);
+      write_success(request.id, { result: await session.retry_model_step(request.params.input) });
+      return true;
+    }
     case "sdk.sessions.respond": {
       const session = await get_session(request.params.session_id, request.params.category);
       write_success(request.id, {

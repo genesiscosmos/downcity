@@ -56,13 +56,13 @@ export interface SessionTurnContextHookValue {
   blocks: SessionHookContextBlock[];
 }
 
-/** `session.execution_state` 的临时执行状态；等待子工作时为 idle。 */
+/** `session.execution_state` 的临时活动投影；模型故障、用户交互和子工作等待时为 idle。 */
 export interface SessionExecutionStateHookValue {
   /** 正在执行或暂停执行的 Session 稳定标识。 */
   session_id: string;
   /** 当前模型与工具执行所属的 Turn 稳定标识。 */
   turn_id: string;
-  /** running 包含模型和工具循环；idle 表示本段执行已退出。 */
+  /** running 表示原 Turn 自主推进；idle 只暂停 typing 等副作用，不代表 Turn 已完成。 */
   state: "running" | "idle";
 }
 

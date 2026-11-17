@@ -83,7 +83,8 @@ export async function fail_session_turn(
   };
   await prepare_session_completion(options, active_turn, final_result);
   active_turn.result = final_result;
-  if (message !== options.stopped_message) {
+  if (message !== options.stopped_message
+    && !(await options.messages.read_latest_agent_message(active_turn.turn_id))?.parts.some(part => part.type === "error")) {
     try {
       await options.messages.append_error_part({
         scope: "turn",

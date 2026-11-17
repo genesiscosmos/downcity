@@ -289,15 +289,9 @@ export class Session implements AgentSession {
    * - 当前已经发出的 provider 请求不受影响，后续 step 使用新 snapshot。
    */
   async syncshot(): Promise<void> {
+    this.session_loop.model_retry.notify_input();
     await this.step_input.syncshot();
   }
-
-  /**
-   * 读取当前 session 配置快照。
-   *
-   * 删除说明：它与 `get("model")` / `get("model_label")` 重复；
-   * 读取统一走 `get(key)`，不再保留属性形式的入口。
-   */
 
   /**
    * 读取当前 Session 状态。
@@ -345,6 +339,9 @@ export class Session implements AgentSession {
     if (this.assert_execution_profile) throw new Error("execution_profile_immutable: configuration belongs to the host");
     if (!input.model && !input.security && input.workspace === undefined) {
       throw new Error("session.set requires model, security, or workspace");
+    }
+    if (input.workspace !== undefined && (input.workspace?.id ?? undefined) !== this.workspace_id && this.has_live_execution()) {
+      throw new Error("Stop the Session before replacing its Workspace");
     }
     const requested_approval_mode = input.security?.approval_mode;
     if (
@@ -515,7 +512,8 @@ export class Session implements AgentSession {
   /** 在任何存储 await 前同步关闭输入，拒绝正在运行或排队的工作。 */
   begin_archive(): void {
     if (this.archive_state !== "active") throw new Error(`Session is ${this.archive_state}: ${this.id}`);
-    if (this.session_loop.is_busy()) throw Object.assign(new Error(`Session "${this.id}" is currently executing or queued`), { code: "session_busy" });
+    if (this.has_live_execution()) throw Object.assign(new Error(`Session "${this.id}" is currently executing or queued`), { code: "session_busy" });
+    this.session_loop.model_retry.notify_input();
     this.archive_state = "archiving";
   }
 
@@ -548,14 +546,10 @@ export class Session implements AgentSession {
   /** 读取当前 Session 的运行与安全状态。 */
   async status(): Promise<AgentSessionStatus> {
     await this.session_loop.initialize_occupation();
-    const active_turn_id = this.session_loop.current_turn_id();
     return {
       session_id: this.id,
-      state: this.session_loop.is_busy() || this.session_loop.is_executing() ? "running" : "idle",
+      ...this.session_loop.execution.snapshot(),
       occupied_by: this.session_loop.occupied_by(),
-      waiting_model_retry: this.session_loop.model_retry.is_waiting(),
-      model_retry: this.session_loop.model_retry.current(),
-      ...(active_turn_id ? { active_turn_id } : {}),
       security: {
         approval_mode: this.state.get_approval_mode(),
         effective_approval_mode: this.effective_approval_mode,
@@ -563,8 +557,12 @@ export class Session implements AgentSession {
     };
   }
 
-  /** 为当前失败模型步骤提交控制动作，由执行栈互斥接收。 */
+  /** 空闲时接收失败模型请求的新 Turn；不会重新打开旧执行或追加 Prompt。 */
   async retry_model_step(input: import("@downcity/type").SessionModelRetryInput): Promise<import("@downcity/type").SessionModelRetryResult> {
+    this.assert_execution_profile?.();
+    if (this.archive_state !== "active" || this.replacing_history) return { accepted: false, reason: "Session unavailable" };
+    await this.step_input.initialize();
+    if (this.archive_state !== "active" || this.replacing_history) return { accepted: false, reason: "Session unavailable" };
     return await this.session_loop.model_retry.submit(input);
   }
 
@@ -584,13 +582,12 @@ export class Session implements AgentSession {
 
   /** 宿主释放空闲 Session 时清除私密内存，不删除用户明确写出的配置。 */
   clear_secrets(): void {
-    if (this.is_executing()) throw new Error("Stop the Session before clearing private values");
+    if (this.has_live_execution()) throw new Error("Stop the Session before clearing private values");
+    this.session_loop.model_retry.notify_input();
     this.session_interactions.clear_secrets();
   }
 
-  /**
-   * 追加一条 user 文本消息。
-   */
+  /** 追加一条 user 文本消息。 */
   async append_user_message(input: {
     text: string;
   }): Promise<void> {
@@ -599,9 +596,7 @@ export class Session implements AgentSession {
     });
   }
 
-  /**
-   * 追加一条 Agent 文本消息。
-   */
+  /** 追加一条 Agent 文本消息。 */
   async append_agent_message(input: {
     text: string;
   }): Promise<void> {
@@ -610,9 +605,7 @@ export class Session implements AgentSession {
     });
   }
 
-  /**
-   * 读取当前 session 详情。
-   */
+  /** 读取当前 Session 详情与当前活动投影。 */
   async get_info(): Promise<AgentSessionInfo> {
     return await read_session_information({ store: this.store, model: this.get_selected_model(),
       project_root: this.get_workspace_path(), agent_id: this.agent_id,
@@ -620,9 +613,7 @@ export class Session implements AgentSession {
     });
   }
 
-  /**
-   * 读取当前 session records 分页。
-   */
+  /** 读取 canonical 消息分页。 */
   async messages(input?: ListSessionMessagesInput): Promise<SessionMessagePage> {
     return await this.session_messages.list_messages(input);
   }
@@ -648,11 +639,12 @@ export class Session implements AgentSession {
     return await this.step_input.read_system();
   }
 
-  /**
-   * 返回当前 session 是否正在执行。
-   */
+  /** 原 Turn、接收及收尾仍有效时保护资源；当前 failed 或等待也必须可停止。 */
+  has_live_execution(): boolean { return this.session_loop.has_live_execution(); }
+
+  /** 仅当前自主执行阶段计入活动，不以原 execute 栈是否返回判断。 */
   is_executing(): boolean {
-    return this.session_loop.is_active() || this.session_loop.is_executing();
+    return this.session_loop.execution.snapshot().state === "running";
   }
 
   /**
@@ -707,9 +699,10 @@ export class Session implements AgentSession {
   }
   /** 保留当前 Session 身份、消息身份和配置，原子删除锚点之后的历史。 */
   private async replace_history(input: AgentSessionForkInput): Promise<this> {
-    if (this.is_executing() || this.session_queue.has_command()) {
+    if (this.has_live_execution() || this.session_queue.has_command()) {
       throw new Error("Cannot replace history while Session is executing or has queued commands");
     }
+    this.session_loop.model_retry.notify_input();
     this.replacing_history = true;
     try {
       const message_id = String(input.message_id || "").trim();
@@ -721,7 +714,7 @@ export class Session implements AgentSession {
         message_id,
         include_message: input.include_message !== false,
       });
-      if (this.is_executing() || this.session_queue.has_command()) {
+      if (this.has_live_execution() || this.session_queue.has_command()) {
         throw new Error("Cannot replace history while Session is executing or has queued commands");
       }
       if (retained.length === messages.length) return this;
@@ -733,9 +726,7 @@ export class Session implements AgentSession {
     }
   }
 
-  /**
-   * 返回供宿主运行时使用的 Session 端口。
-   */
+  /** 返回供宿主运行时使用的 Session 端口。 */
   get_runtime_port(): SessionPort {
     if (this.runtime_port) return this.runtime_port;
     this.runtime_port = create_runtime_session_port({
@@ -989,6 +980,7 @@ export class Session implements AgentSession {
   private async append_external_user_message(
     input: AppendExternalSessionUserMessageInput,
   ): Promise<void> {
+    this.session_loop.model_retry.notify_input();
     const appended = await this.session_messages.append_external_user_message(
       input,
     );
@@ -1000,6 +992,7 @@ export class Session implements AgentSession {
   private async append_external_agent_message(
     input: AppendExternalSessionAgentMessageInput,
   ): Promise<void> {
+    this.session_loop.model_retry.notify_input();
     await this.session_messages.append_external_agent_message(
       input,
     );

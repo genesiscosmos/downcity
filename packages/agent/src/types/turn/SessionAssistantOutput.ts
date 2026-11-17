@@ -38,8 +38,6 @@ export interface SessionAssistantOutput {
   abort_step(): Promise<void>;
   /** 写入当前普通错误，返回进程内恢复绑定。 */
   show_model_error?(part_id: string, error: import("@downcity/type").ModelError): Promise<import("@downcity/type").SessionModelRetry>;
-  /** 接受动作后清除当前错误；不保留尝试状态。 */
-  clear_model_error?(part_id: string): Promise<void>;
   /** 真人 User steer 持久化后关闭当前连续 Assistant Message。 */
   close_current_message(): Promise<void>;
   /**

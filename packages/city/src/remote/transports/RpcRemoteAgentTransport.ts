@@ -213,6 +213,11 @@ export class RpcRemoteAgentTransport implements RemoteAgentTransport {
     return await this.client.get_session_status(session_id, category);
   }
 
+  /** Retry 仅转交原 Session 的控制屏障。 */
+  async retry_model_step(session_id: string, category: string, input: import("@downcity/type").SessionModelRetryInput): Promise<import("@downcity/type").SessionModelRetryResult> {
+    return await this.client.retry_model_step(session_id, category, input);
+  }
+
   async set(
     session_id: string,
     category: string,

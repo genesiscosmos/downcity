@@ -15,6 +15,8 @@ export class SessionOccupation {
   /** 尚未结束的接收与 Turn 句柄数。 */
   private references = 0;
 
+  constructor(private readonly changed: () => void = () => {}) {}
+
   /** 返回快照，宿主不能修改内部身份。 */
   get occupied_by(): SessionPromptActor | null {
     return this.owner ? structuredClone(this.owner) : null;
@@ -31,12 +33,14 @@ export class SessionOccupation {
     }
     const generation = this.generation;
     this.references += 1;
+    this.changed();
     let released = false;
     return () => {
       if (released || generation !== this.generation) return;
       released = true;
       this.references -= 1;
       if (this.references === 0) this.owner = null;
+      this.changed();
     };
   }
 }

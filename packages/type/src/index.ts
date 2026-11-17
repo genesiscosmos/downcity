@@ -4,6 +4,7 @@
  * 导出跨 package 的稳定协议与共享模型流期限，业务执行和恢复由各 SDK 负责。
  */
 
+export type { SessionRuntimeSnapshot, SessionRuntimeState } from "./types/session/SessionRuntime.js";
 export type { SessionPromptActor } from "./types/session/SessionPromptActor.js";
 
 export {

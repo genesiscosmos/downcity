@@ -10,10 +10,17 @@ import type { SessionCommand } from "@/types/session/SessionCommand.js";
 /** 单个 Session 的进程内 FIFO。 */
 export class SessionQueue {
   private readonly commands: SessionCommand[] = [];
+  private notify_enqueue?: (command: SessionCommand) => void;
+
+  /** 唯一消费者注册同步通知；内部 inbox 与 facade 必须经过相同入队边界。 */
+  on_enqueue(notify: (command: SessionCommand) => void): void {
+    this.notify_enqueue = notify;
+  }
 
   /** 追加一个可执行 Command 对象。 */
   enqueue_command(command: SessionCommand): void {
     this.commands.push(command);
+    this.notify_enqueue?.(command);
   }
 
   /** 当前队列是否包含尚未执行的 Command。 */

@@ -188,6 +188,11 @@ export class RemoteSession implements RemoteAgentSession {
     return await this.transport.status(this.id, this.origin.category);
   }
 
+  /** 向原宿主提交原失败请求的新执行；传输未知时调用方只读状态，不自动重发。 */
+  async retry_model_step(input: import("@downcity/type").SessionModelRetryInput): Promise<import("@downcity/type").SessionModelRetryResult> {
+    return await this.transport.retry_model_step(this.id, this.origin.category, input);
+  }
+
   /** 更新当前远程 Session 的可序列化动态配置。 */
   async set(
     input: RemoteSessionSetInput,

@@ -139,6 +139,7 @@ export class GroupSession implements GroupSessionContract {
         this.member_sessions.set(agent_id, session);
         this.member_session_ids.set(agent_id, session.id);
         this.subscribe_member_session(agent_id, session);
+        this.set_member_running(agent_id, (await session.status()).state === "running");
         valid_member_session_ids[agent_id] = session.id;
       } catch {
         // 成员已被删除或 Session 不再匹配时清理映射，继续恢复共享对话。
@@ -433,12 +434,8 @@ export class GroupSession implements GroupSessionContract {
     turn_id?: string,
     dispatch_id?: string,
   ): Promise<GroupMessage | null> {
-    this.set_member_running(agent.id, 1, turn_id);
-    let running = true;
     try {
       const result = await turn.finished;
-      this.set_member_running(agent.id, -1, turn_id);
-      running = false;
       if (this.stop_requested || this.disposed) return null;
       if (!result.success) {
         await this.append_member_failure(agent, message, result.error || "未知错误");
@@ -459,8 +456,6 @@ export class GroupSession implements GroupSessionContract {
     } catch (error) {
       await this.append_member_failure(agent, message, error);
       return null;
-    } finally {
-      if (running) this.set_member_running(agent.id, -1, turn_id);
     }
   }
 
@@ -532,6 +527,9 @@ export class GroupSession implements GroupSessionContract {
   private subscribe_member_session(agent_id: string, session: AgentSession): void {
     this.member_session_unsubscribes.get(agent_id)?.();
     this.member_session_unsubscribes.set(agent_id, session.subscribe((mutation) => {
+      if (mutation.variant === "session" && mutation.type === "runtime") {
+        this.set_member_running(agent_id, mutation.state === "running", mutation.active_turn_id);
+      }
       if (mutation.variant !== "part" || mutation.type !== "tool") return;
       for (const interaction of mutation.part.interactions ?? []) {
         const registered = this.interaction_sessions.has(interaction.interaction_id);
@@ -589,10 +587,10 @@ export class GroupSession implements GroupSessionContract {
     return this.members.find((member) => member.id === agent_id) || null;
   }
 
-  /** 更新成员运行计数，并在可见状态发生变化时通知订阅者。 */
-  private set_member_running(agent_id: string, delta: 1 | -1, turn_id?: string): void {
+  /** 成员活动仅投影原 Session 阶段；等待完成句柄不代表成员仍在生成。 */
+  private set_member_running(agent_id: string, running: boolean, turn_id?: string): void {
     const previous_count = this.member_running_counts.get(agent_id) || 0;
-    const next_count = Math.max(0, previous_count + delta);
+    const next_count = running ? 1 : 0;
     if (next_count === 0) this.member_running_counts.delete(agent_id);
     else this.member_running_counts.set(agent_id, next_count);
     if ((previous_count > 0) !== (next_count > 0)) this.publish_status(turn_id, this.stop_requested ? "stopped" : "executing");

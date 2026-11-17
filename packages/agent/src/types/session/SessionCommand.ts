@@ -8,6 +8,8 @@
 export type SessionCommandKind =
   /** Prompt Command 需要创建或加入一个 Turn。 */
   | "prompt"
+  /** 原失败模型请求的新 Turn，无用户输入。 */
+  | "retry"
   /** Maintenance Command 可以在 Session 空闲期独立执行。 */
   | "maintenance";
 
@@ -15,6 +17,8 @@ export type SessionCommandKind =
 export interface SessionCommand {
   /** 当前 Command 的执行类别。 */
   kind: SessionCommandKind;
+  /** replace 表示新输入，defer 不改变配置；缺省使内存 Retry 失效。 */
+  interrupt?: "replace" | "defer";
   /** Prompt 恢复执行时要求复用的稳定 Turn ID。 */
   turn_id?: string;
   /** Command 出队后执行的完整行为。 */

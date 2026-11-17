@@ -136,7 +136,7 @@ export class SessionResources {
       const receipt = await this.browser(agent_id).receipt(session_id, category, input.request_id as string);
       const cached = this.dependencies.host?.city.agents.get(agent_id)?.sessions.peek(session_id, category);
       const status = await cached?.status();
-      return { ...receipt, session_address: { agent_id, category, session_id }, request_id: input.request_id, execution_state: receipt.completed ? "completed" : receipt.accepted ? status?.state === "running" ? "running" : "interrupted" : "not_found" };
+      return { ...receipt, session_address: { agent_id, category, session_id }, request_id: input.request_id, execution_state: receipt.completed ? "completed" : receipt.accepted ? status?.live_execution ? "running" : "interrupted" : "not_found" };
     });
   }
 

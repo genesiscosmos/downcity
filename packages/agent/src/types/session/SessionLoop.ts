@@ -55,6 +55,8 @@ export interface ActiveSessionTurnState {
   deferred_finished: SessionDeferred<AgentSessionTurnResult>;
   /** 当前 Turn 进入执行阶段后拥有的唯一上下文。 */
   turn_context: SessionTurnContext | null;
+  /** 新 Retry 执行的首步描述；消费后立即释放。 */
+  replay?: import("./SessionModelInput.js").SessionModelReplay;
   /** 当前 Turn 是否已经接收并持久化首条 Prompt。 */
   prompt_started: boolean;
 }

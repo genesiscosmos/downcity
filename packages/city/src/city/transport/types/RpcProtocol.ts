@@ -219,6 +219,21 @@ type RpcRequestPayload =
   | {
       /** 请求 id，用于匹配响应。 */
       id: string;
+      /** 提交指定 Session 当前失败位置的单次控制动作。 */
+      method: "sdk.sessions.retry_model_step";
+      /** 原失败绑定和所属地址，不接受输入内容或回放参数。 */
+      params: {
+        /** 当前会话稳定标识。 */
+        session_id: string;
+        /** 当前会话来源分类。 */
+        category: string;
+        /** 当前进程有效的错误锚点。 */
+        input: import("@downcity/type").SessionModelRetryInput;
+      };
+    }
+  | {
+      /** 传输请求标识，只匹配本连接的响应。 */
+      id: string;
       /** 提交指定 Session 的 Interaction 用户响应。 */
       method: "sdk.sessions.respond";
       /** Session 与 Interaction 响应参数。 */

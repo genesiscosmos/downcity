@@ -25,8 +25,6 @@ export interface AgentSessionUpdateMessage {
   message: SessionMessage;
   /** 更新前的已知 revision，防止并发覆盖。 */
   expected_revision: number;
-  /** 显式清除末尾尚未进入稳定前缀的普通错误；其他 Part 的身份与序号不可改变。 */
-  removed_error_part_id?: string;
   /** 明确发生变化的 Part，避免逐 token 重写全部历史 Parts。 */
   changed_parts: SessionMessage["parts"];
 }

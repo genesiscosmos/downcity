@@ -3,9 +3,8 @@
  * 描述采用 JSON 快照；函数留在提供方，不进入 Session 的长期工具注册表。
  */
 import { randomUUID } from "node:crypto";
-import type { AgentSessionPromptInput } from "@/types/sdk/AgentSessionPrompt.js";
 import { z } from "zod";
-import type { AgentTool, ModelJsonValue, PromptPower, PromptPowerDescriptor, PromptPowerCallContext, SessionHookContextBlock } from "@downcity/type";
+import type { AgentTool, ModelJsonValue, PromptPower, SessionHookContextBlock } from "@downcity/type";
 import type { SessionTurnContext } from "@/types/turn/SessionTurnContext.js";
 
 const scopes = new WeakMap<SessionTurnContext, readonly PromptPower[]>();
@@ -33,6 +32,11 @@ export function clear_turn_prompt_powers(context: SessionTurnContext): void {
   scopes.delete(context);
 }
 
+/** 复制提供方描述；不暴露或保留原 Turn。 */
+export function read_turn_prompt_powers(context: SessionTurnContext): readonly PromptPower[] {
+  return [...(scopes.get(context) ?? [])];
+}
+
 /** 把本轮 Power 编译为独立模型工具，并保留现有 Action 发现语义。 */
 export function compose_prompt_power_tools(context: SessionTurnContext): Record<string, AgentTool> {
   return Object.fromEntries((scopes.get(context) ?? []).map((power) => [power.name, {
@@ -43,10 +47,11 @@ export function compose_prompt_power_tools(context: SessionTurnContext): Record<
       /** 目标 Action 的 JSON 参数。 */ args?: ModelJsonValue;
     }, site) => {
       if (!payload.action) return describe_prompt_powers([power])[0]!.actions;
+      if (!site.turn_id || !site.abort_signal) throw new Error("Power execution requires a live Turn context");
       return await execute_prompt_power(power, payload.action, payload.args, {
         agent_id: site.agent_id, session_id: site.session_id,
-        turn_id: context.session.turn_id, tool_call_id: site.tool_call_id!,
-        call_id: randomUUID(), abort_signal: site.abort_signal ?? context.lifecycle.abort_signal,
+        turn_id: site.turn_id, tool_call_id: site.tool_call_id!,
+        call_id: randomUUID(), abort_signal: site.abort_signal,
       });
     },
   } satisfies AgentTool]));

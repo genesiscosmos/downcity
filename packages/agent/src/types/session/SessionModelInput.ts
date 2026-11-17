@@ -1,11 +1,11 @@
-/** 当前执行栈持有的冻结输入校验与控制检查点；所有内容仅驻留内存。 */
+/** 进程内冻结输入校验与新执行描述；所有内容仅驻留内存。 */
 import type { SessionInputMessageVersion } from "../store/SessionInputVersions.js";
 
 /** 原有效输入的进程内内容版本，用于接受 Retry 前校验。 */
 export interface SessionModelInputSnapshot {
   /** 完整未修改 ModelCall 的 SHA-256，用于校验内存请求语义。 */
   request_sha256: string;
-  /** 输入引用的 canonical 消息身份与内容版本，只驻留当前执行栈。 */
+  /** 输入引用的 canonical 消息身份与内容版本，只驻留当前进程。 */
   messages: SessionInputMessageVersion[];
   /** 输入依赖的本地附件，路径来自已登记的 canonical 消息。 */
   attachments: Array<{
@@ -16,18 +16,22 @@ export interface SessionModelInputSnapshot {
   }>;
 }
 
-/** 一个等待手动控制的步骤；运行闭包不持久化，也不充当进程恢复依据。 */
-export interface PendingModelRetry {
-  /** 当前可恢复的普通错误位置。 */
+/** 已结束执行留下的请求描述；不持有 Turn、输出或取消信号。 */
+export interface SessionModelReplay {
+  /** 普通错误的展示锚点，不是执行身份。 */
   binding: import("@downcity/type").SessionModelRetry;
-  /** 删除当前错误，成功后才唤醒原执行栈。 */
-  clear: () => Promise<void>;
-  /** 原 Turn 的取消信号。 */
-  signal: AbortSignal;
-  /** 接收前校验请求、配置及媒体引用。 */
+  /** 失败的完整模型请求，发送时始终复制。 */
+  call: import("@downcity/type").ModelCall;
+  /** 接收前校验静态配置及原输入引用。 */
   validate: () => Promise<void>;
-  /** 恢复原请求或进入正常新输入检查点。 */
-  resume: (retry: boolean) => void;
-  /** 中断等待中的执行。 */
-  reject: (error: unknown) => void;
+  /** 为新 Turn 创建工具绑定，不能引用原 Turn。 */
+  bind: (context: import("../turn/SessionTurnContext.js").SessionTurnContext) => import("./SessionExecution.js").SessionStepExecutionInput;
+}
+
+/** 请求发出前采集的进程内校验能力；不持有执行资源。 */
+export interface SessionModelInputValidation {
+  /** 当前请求是否仍属于采集时的输入代次。 */
+  current: () => boolean;
+  /** 校验原消息、附件及静态配置。 */
+  validate: () => Promise<void>;
 }

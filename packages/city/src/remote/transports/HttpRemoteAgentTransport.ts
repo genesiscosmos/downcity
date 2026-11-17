@@ -7,6 +7,7 @@
  */
 
 import { SESSION_ORIGIN_CATEGORY_WORK } from "@downcity/type";
+import type { SessionModelRetryHttpPayload } from "@/types/remote/SessionModelRetry.js";
 import type { AgentInteraction, AgentInteractionChange, AgentListInteractionsInput, AgentRespondInteractionInput } from "@downcity/agent";
 import type { RemoteInteractionSubscriptionInput } from "@/types/remote/RemoteAgentInteractions.js";
 import { validate_interaction_list_input, validate_interaction_response_input } from "@/remote/InteractionValidation.js";
@@ -556,6 +557,16 @@ export class HttpRemoteAgentTransport implements RemoteAgentTransport {
       throw new Error(String(payload.error || "Remote session status failed"));
     }
     return payload.status;
+  }
+
+  /** HTTP 只提交一次；结果未知交由调用方回读权威快照。 */
+  async retry_model_step(session_id: string, category: string, input: import("@downcity/type").SessionModelRetryInput): Promise<import("@downcity/type").SessionModelRetryResult> {
+    const payload = await read_http_json<SessionModelRetryHttpPayload>(
+      this.session_url(session_id, category, "/retry-model-step"), {
+        method: "POST", headers: this.headers({ "Content-Type": "application/json" }), body: JSON.stringify(input),
+      });
+    if (!payload.success || !payload.result) throw new Error(payload.error || "Remote model retry submission failed");
+    return payload.result;
   }
 
   async set(

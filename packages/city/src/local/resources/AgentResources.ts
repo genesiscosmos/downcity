@@ -103,7 +103,7 @@ export class AgentResources {
       const references = [...await this.dependencies.agent_references(agent_id), ...await read_session_agent_references(this.dependencies.root_path, this.dependencies.agents.list().map((item) => item.agent_id), agent_id, this.dependencies.immutable)];
       if (references.length) throw new ResourceError("dependency_conflict", "Resolve Agent references before permanent deletion", 4, false, { references });
       const host = this.dependencies.host;
-      if (host?.city.agents.get(agent_id)?.sessions.list_executing_session_ids().length) throw new ResourceError("resource_busy", "Agent has active or queued work", 4);
+      if (host?.city.agents.get(agent_id)?.sessions.has_live_execution()) throw new ResourceError("resource_busy", "Agent has active or queued work", 4);
       const coordinator = this.dependencies.coordinator;
       const release_guard = host?.city.agents.get(agent_id)?.sessions.guard_idle();
       coordinator.blocked_agents.add(agent_id);

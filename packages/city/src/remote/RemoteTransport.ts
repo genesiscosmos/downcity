@@ -90,6 +90,8 @@ export type RemoteSessionTransport = {
   interactions(session_id: string, category: string): Promise<SessionInteractionRequest[]>;
   /** 读取指定 Session 的运行与安全状态。 */
   status(session_id: string, category: string): Promise<AgentSessionStatus>;
+  /** 向原进程的当前失败绑定提交一次 Retry；不重建 Prompt 或保存回执。 */
+  retry_model_step(session_id: string, category: string, input: import("@downcity/type").SessionModelRetryInput): Promise<import("@downcity/type").SessionModelRetryResult>;
   /** 更新指定 Session 的可序列化动态配置。 */
   set(
     session_id: string,

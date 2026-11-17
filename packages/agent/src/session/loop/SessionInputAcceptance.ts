@@ -61,6 +61,7 @@ export class SessionInternalInput {
     const prepared: SessionInboxInput = structuredClone({ ...input, content, inbox_id: input.inbox_id ?? `inbox:${this.options.turn_id}:${nanoid()}` });
     const command: SessionCommand = {
       kind: "maintenance",
+      interrupt: "defer",
       execute: async () => {
         // 已暂存输入即使随后 stop，也要在 Step 结束后保存事实；同一 ID 可安全重试。
         const assistant = this.options.get_context().output.assistant;

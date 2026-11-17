@@ -440,6 +440,22 @@ export function register_sdk_session_routes(
     }
   });
 
+  app.post("/api/sdk/sessions/:session_id/retry-model-step", async (c) => {
+    try {
+      const body: unknown = await c.req.json().catch(() => null);
+      if (!body || typeof body !== "object" || !("message_id" in body) || !("error_part_id" in body)
+        || typeof body.message_id !== "string" || !body.message_id.trim()
+        || typeof body.error_part_id !== "string" || !body.error_part_id.trim()) {
+        return c.json({ success: false, error: "Current message_id and error_part_id are required" }, 400);
+      }
+      const session = await get_session(String(c.req.param("session_id") || "").trim(), c.req.query("category"));
+      const result = await session.retry_model_step({ message_id: body.message_id, error_part_id: body.error_part_id });
+      return c.json({ success: true, result });
+    } catch (error) {
+      return c.json({ success: false, error: error instanceof Error ? error.message : String(error) }, 500);
+    }
+  });
+
   app.post("/api/sdk/sessions/:session_id/respond", async (c) => {
     try {
       const session = await get_session(

@@ -4,7 +4,7 @@
  * 关键点（中文）
  * - 统一封装「推进上下文后重试」和「普通失败兜底」逻辑。
  * - 执行器提供单次 Turn 行为，本模块只决定是否恢复并重试。
- * - 模型步骤与外层兜底共用同一推进预算；步骤无法推进时可保留冻结输入等待手动控制。
+ * - 模型步骤与外层兜底共用同一推进预算；步骤无法推进时正常失败结束。
  */
 
 import type { Logger } from "@/utils/logger/Logger.js";
@@ -35,7 +35,7 @@ interface ContextRetryOptions {
 interface ContextRetryInput {
   /** 当前 Turn 取消后停止摘要恢复。 */
   signal?: AbortSignal;
-  /** 按当前推进次数执行 Turn；模型步骤可先尝试有界推进，耗尽后保留原请求等待手动重试。 */
+  /** 按当前推进次数执行 Turn；模型步骤可先尝试有界推进，耗尽后失败结束。 */
   execute_turn: (advance_count: number, advance_context: (error: unknown) => Promise<boolean>) => Promise<SessionTurnExecutionResult>;
 }
 

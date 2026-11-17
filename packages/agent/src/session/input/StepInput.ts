@@ -19,7 +19,7 @@ import type {
   ToolCallContext,
   WorkspaceRuntime,
 } from "@downcity/type";
-import { compose_prompt_power_tools, prompt_power_context_blocks } from "./PromptPowers.js";
+import { compose_prompt_power_tools, prompt_power_context_blocks, read_turn_prompt_powers, set_turn_prompt_powers } from "./PromptPowers.js";
 import type { BoundAgentTool, ToolCallSite } from "@/types/tool/BoundAgentTool.js";
 import { create_lookup_tool } from "@/model/results/LookupTool.js";
 import { lookup_result } from "@/model/results/ResultReader.js";
@@ -142,21 +142,35 @@ export class StepInput {
         : {}),
     };
     const configured_model = this.options.get_model();
+    const configured_tools = Object.entries(this.options.get_tools()).map(([name, tool]) => ({ name, execute: tool.execute, is_available: tool.is_available }));
     const config_digest = () => model_input_digest({
       model_id: this.options.get_model()?.id, timezone: this.options.get_timezone(),
-      workspace: this.options.get_workspace_path(), instruction: this.instruction_blocks(),
+      workspace: this.options.get_workspace_path(), env: this.read_workspace_env(), instruction: this.instruction_blocks(),
       tools: build_model_step_call([], [], this.options.get_tools() as Record<string, BoundAgentTool>).tools,
     });
     const original_config = config_digest();
     request.validate_retry = async () => {
-      if (this.options.get_model() !== configured_model || config_digest() !== original_config) {
+      if (powers.some(power => power.abort_signal?.aborted)) throw new Error("Original Power execution is unavailable");
+      const current_tools = this.options.get_tools();
+      if (configured_tools.some(tool => current_tools[tool.name]?.execute !== tool.execute
+        || current_tools[tool.name]?.is_available !== tool.is_available)
+        || this.options.get_model() !== configured_model || config_digest() !== original_config) {
         throw new Error("Model or tool configuration changed; start a new request");
       }
     };
     const budget = measure_request(request);
     // 留出后续工具结果与引用协议开销；拒绝不能容纳的显式读取，避免成功回执后才超限。
     const media_tokens = Math.max(0, (budget.input_budget ?? 0) - budget.estimated_input_tokens - 8192);
-    return { ...request, tools: this.bind_turn_context_to_tools(frozen.tools, turn_context, media_tokens) };
+    // 只捕获未绑定工具及值快照；失败描述不能保留原 Turn 的闭包。
+    const tools = frozen.tools;
+    const powers = read_turn_prompt_powers(turn_context);
+    const step_state = structuredClone({ workspace_env: compose_input.state.env, agent_systems: compose_input.state.systems });
+    const rebind_retry = (context: SessionTurnContext): SessionStepExecutionInput => {
+      if (powers.length) set_turn_prompt_powers(context, powers);
+      context.step.commit(structuredClone(step_state));
+      return { ...request, rebind_retry, tools: this.bind_turn_context_to_tools(tools, context, media_tokens) };
+    };
+    return { ...request, rebind_retry, tools: this.bind_turn_context_to_tools(tools, turn_context, media_tokens) };
   }
 
   /** 只持久化基础 system 快照，动态摘要继续从 Composer 派生状态读取。 */

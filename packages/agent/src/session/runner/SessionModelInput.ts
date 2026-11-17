@@ -1,6 +1,6 @@
 /**
  * 当前执行的冻结输入校验。
- * 内容与附件版本只由原执行栈持有，不保存到 Session data 或其他持久介质。
+ * 内容与附件版本仅驻留当前进程，不保存到 Session data 或其他持久介质。
  * canonical 内容摘要由存储拥有者投影，本模块不读取或重复摘要历史正文。
  */
 import { createHash as create_hash } from "node:crypto";

@@ -27,7 +27,7 @@ export class SessionChildWorkLifecycle {
    * 一级 Work 收尾等待；返回是否需要消费输入并继续原 Turn。
    * wait 的完成必须表示本 Turn 已无待投递子工作，不能仅表示子模型结束。
    */
-  async wait(context: SessionTurnContext, has_pending: () => boolean): Promise<boolean> {
+  async wait(context: SessionTurnContext, has_pending: () => boolean, waiting: (active: boolean) => void = () => {}): Promise<boolean> {
     const origin = context.session.origin;
     const signal = context.lifecycle.abort_signal;
     if (!this.child_work || origin.category !== "work"
@@ -48,6 +48,7 @@ export class SessionChildWorkLifecycle {
     try {
       if (signal.aborted) return false;
       if (has_pending()) return true;
+      waiting(true);
       const completion = this.child_work.wait(this.input(context, controller.signal));
       await Promise.race([completion, input_ready, aborted]);
       return !signal.aborted && has_pending();
@@ -55,6 +56,7 @@ export class SessionChildWorkLifecycle {
       if (signal.aborted) return false;
       throw error;
     } finally {
+      waiting(false);
       this.input_listeners.delete(wake_input);
       signal.removeEventListener("abort", on_abort);
       // 输入唤醒后释放本次观察；不取消实际子执行或结果投递。

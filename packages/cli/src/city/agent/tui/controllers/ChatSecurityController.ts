@@ -46,6 +46,7 @@ export class ChatSecurityController {
       if (status.session_id !== this.options.get_session_id()) return false;
       this.options.on_status({
         is_executing: status.state === "running",
+        live_execution: status.live_execution,
         security: status.security,
       });
       return true;

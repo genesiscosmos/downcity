@@ -10,7 +10,7 @@
 
 import type { BoundAgentTool } from "@/types/tool/BoundAgentTool.js";
 import { execute_session_provider_step } from "./SessionProviderStep.js";
-import { ModelRetrySuperseded, type SessionModelRetryControl } from "./SessionModelRetry.js";
+import type { SessionModelRetryControl } from "./SessionModelReplay.js";
 import { fit_request } from "./RequestBudget.js";
 import { log_assistant_message_now } from "@/model/messages/SessionMessageLog.js";
 import {
@@ -93,6 +93,9 @@ export interface SessionExecutorInput {
    */
   turn_context: SessionTurnContext;
 
+  /** 新执行的第一步使用原失败请求，后续步骤正常装配。 */
+  initial_step?: SessionStepExecutionInput;
+
   /**
    * 在统一输入队列提交后按当前推进次数解析本 Step 输入。
    */
@@ -110,8 +113,6 @@ export interface SessionExecutorInput {
 export interface SessionExecutorPort {
   /** 执行一轮已经由调用方创建上下文的 Turn。 */
   execute(input: SessionExecutorInput): Promise<SessionTurnExecutionResult>;
-  /** 返回当前是否正在执行。 */
-  is_executing(): boolean;
 }
 
 /** 核心模型请求与 tool-loop 执行器。 */
@@ -121,7 +122,8 @@ export class SessionExecutor implements SessionExecutorPort {
   private readonly logger: Logger;
   private readonly is_context_limit: SessionExecutorOptions["is_context_limit"];
   private readonly context_retry: ContextRetry;
-  private executing = false;
+  /** 单次执行防重入锁，退出执行后立即释放。 */
+  private entered = false;
   private readonly retry_control?: SessionModelRetryControl;
 
   constructor(options: SessionExecutorOptions) {
@@ -143,11 +145,6 @@ export class SessionExecutor implements SessionExecutorPort {
     });
   }
 
-  /** 返回当前 Session 是否正在执行模型请求。 */
-  is_executing(): boolean {
-    return this.executing;
-  }
-
   /**
    * 执行一次已装配完成的模型/tool-loop 运行。
    *
@@ -156,10 +153,11 @@ export class SessionExecutor implements SessionExecutorPort {
    * - Provider 拒绝上下文超限时，先推进派生上下文再重试整轮。
    */
   async execute(input: SessionExecutorInput): Promise<SessionTurnExecutionResult> {
-    if (this.executing) {
+    if (this.entered) {
       throw new Error("SessionExecutor.execute does not support concurrent execution");
     }
-    this.executing = true;
+    this.entered = true;
+    let initial_step = input.initial_step;
     try {
       return await this.context_retry.execute_with_retry({
         signal: input.turn_context.lifecycle.abort_signal,
@@ -167,18 +165,20 @@ export class SessionExecutor implements SessionExecutorPort {
           await this.run_tool_loop({
             advance_context: this.retry_control ? advance_context : undefined,
             turn_context: input.turn_context,
-            resolve_step_input: async () =>
-              await input.resolve_step_input(advance_count),
+            resolve_step_input: async () => await input.resolve_step_input(advance_count),
+            take_initial_step: () => { const step = initial_step; initial_step = undefined; return step; },
           }),
       });
     } finally {
-      this.executing = false;
+      this.entered = false;
     }
   }
 
   /** 运行模型与 tool-loop 主循环。 */
   private async run_tool_loop(input: {
-    /** 尝试共用 Turn 的上下文推进预算；耗尽后模型步骤等待手动重试。 */
+    /** 只消费一次的新执行首步输入。 */
+    take_initial_step: () => SessionStepExecutionInput | undefined;
+    /** 尝试共用 Turn 的有界上下文推进预算。 */
     advance_context?: (error: unknown) => Promise<boolean>;
     /** 当前显式运行上下文。 */
     turn_context: SessionTurnContext;
@@ -223,7 +223,7 @@ export class SessionExecutor implements SessionExecutorPort {
           step_index: step_count + 1,
         });
         await input.turn_context.input.checkpoint();
-        const step_input = await fit_request({
+        const step_input = input.take_initial_step() ?? await fit_request({
           resolve: input.resolve_step_input,
           advance: () => this.advance_context("request_budget", input.turn_context.lifecycle.abort_signal),
           signal: input.turn_context.lifecycle.abort_signal,
@@ -241,16 +241,15 @@ export class SessionExecutor implements SessionExecutorPort {
         });
 
         last_observed_stream_error = undefined;
-        let step: Awaited<ReturnType<SessionExecutor["execute_provider_step"]>>;
-        try {
-          step = await this.execute_provider_step({ turn_context: input.turn_context, step_input, on_step_finish, advance_context: input.advance_context });
-        } catch (error) {
-          // 新输入或配置替代等待失败，回到现有检查点处理，不能重放旧请求。
-          if (error instanceof ModelRetrySuperseded) continue;
-          throw error;
-        }
+        const step = await this.execute_provider_step({ turn_context: input.turn_context, step_input, on_step_finish, advance_context: input.advance_context });
         const step_assistant_parts = step.step_assistant_parts;
         const step_result = step.step_result;
+        if (step_input.finalization) {
+          const text = extract_assistant_text(step_assistant_parts);
+          return this.build_result({ success: !!text.trim(), text, compact_required,
+            ...(!text.trim() ? { error: build_max_steps_error_text(MAX_TOOL_LOOP_STEPS), error_code: TOOL_LOOP_MAX_STEPS_ERROR_CODE } : {}),
+          });
+        }
         final_assistant_parts = merge_assistant_parts(
           final_assistant_parts,
           step_assistant_parts,
@@ -477,7 +476,7 @@ export class SessionExecutor implements SessionExecutorPort {
     turn_context: SessionTurnContext;
     /** 当前 Step 已装配完成的模型输入。 */
     step_input: SessionStepExecutionInput;
-    /** 有界上下文推进能力，失败后保留冻结请求等待用户。 */
+    /** 有界上下文推进能力，耗尽后正常失败结束。 */
     advance_context?: (error: unknown) => Promise<boolean>;
     /** 覆盖本 Step 的工具集合；撞顶收尾时传空表以禁止继续调用工具。 */
     tools_override?: Record<string, BoundAgentTool>;
@@ -491,8 +490,8 @@ export class SessionExecutor implements SessionExecutorPort {
   }> {
     const turn_context = input.turn_context;
     const result = await execute_session_provider_step({
-      allow_empty_response: input.tools_override !== undefined,
-      turn_context, step_input: input.tools_override ? { ...input.step_input, tools: input.tools_override } : input.step_input,
+      allow_empty_response: input.tools_override !== undefined || input.step_input.finalization,
+      turn_context, step_input: input.tools_override ? { ...input.step_input, finalization: true, tools: input.tools_override } : input.step_input,
       retry_control: this.retry_control, is_context_limit: this.is_context_limit, logger: this.logger,
       advance_context: input.advance_context,
     });

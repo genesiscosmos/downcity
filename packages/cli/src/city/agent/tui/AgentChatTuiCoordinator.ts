@@ -100,7 +100,7 @@ export class AgentChatTuiCoordinator {
    */
   private get slash_command_host(): SlashCommandHost {
     return {
-      is_streaming: this.app_state.is_executing || this.prompt_pending,
+      is_streaming: this.app_state.live_execution || this.prompt_pending,
       send_normal_user_input: async (text: string) => {
         await this.run_message_sequence(text);
       },
@@ -150,6 +150,7 @@ export class AgentChatTuiCoordinator {
       session_title: undefined,
       model_label: undefined,
       is_executing: false,
+      live_execution: false,
       queued_message_count: 0,
       transcript_scroll_offset: 0,
     };
@@ -197,7 +198,8 @@ export class AgentChatTuiCoordinator {
       get_session: () => this.session_subscription.session,
       get_session_id: () => this.current_session_id,
       get_approval_mode: () => this.app_state.security?.approval_mode,
-      on_status: ({ is_executing, security }) => {
+      on_status: ({ is_executing, live_execution, security }) => {
+        this.app_state.live_execution = live_execution;
         this.app_state.security = security;
         this.set_session_executing(is_executing);
         this.request_render();
@@ -526,11 +528,11 @@ export class AgentChatTuiCoordinator {
 
     const intent = resolveSlashCommandInput({
       input: text,
-      is_streaming: this.app_state.is_executing || this.prompt_pending,
+      is_streaming: this.app_state.live_execution || this.prompt_pending,
     });
 
     if (
-      (this.app_state.is_executing || this.prompt_pending) &&
+      (this.app_state.live_execution || this.prompt_pending) &&
       (intent.kind === "not-command" || intent.kind === "message")
     ) {
       this.input_queue.enqueue(intent.input);
@@ -596,11 +598,7 @@ export class AgentChatTuiCoordinator {
     this.drop_queued_messages();
   }
 
-  /**
-   * 执行一轮对话。
-   *
-   * @param message 用户消息。
-   */
+  /** 提交一轮用户输入并等待权威完成结果；当前故障仍保留原 Turn。 */
   private async run_turn(message: string): Promise<boolean> {
     if (!(await this.security_controller.wait())) return false;
     const session = this.session_subscription.session;
@@ -634,7 +632,7 @@ export class AgentChatTuiCoordinator {
    * 关键点（中文）：执行中的新 Enter 会继续追加到同一队列，当前循环自然在后续迭代中消费。
    */
   private async drain_input_queue(): Promise<void> {
-    if (this.draining_input_queue || this.stopped || this.app_state.is_executing) return;
+    if (this.draining_input_queue || this.stopped || this.app_state.live_execution) return;
 
     this.draining_input_queue = true;
     try {
@@ -846,6 +844,7 @@ export class AgentChatTuiCoordinator {
     this.app_state.session_title = snapshot.title;
     this.app_state.model_label = snapshot.model_label;
     this.app_state.security = snapshot.security;
+    this.app_state.live_execution = snapshot.live_execution;
     this.set_session_executing(snapshot.is_executing);
     this.header.set_state(this.app_state);
     this.footer.set_state(this.app_state);
@@ -880,8 +879,9 @@ export class AgentChatTuiCoordinator {
       return;
     }
 
-    if (mutation.variant === "turn") {
-      this.set_session_executing(mutation.status === "running");
+    if (mutation.variant === "session" && mutation.type === "runtime") {
+      this.app_state.live_execution = mutation.live_execution;
+      this.set_session_executing(mutation.state === "running");
       return;
     }
 
