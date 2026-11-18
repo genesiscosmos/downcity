@@ -1,5 +1,6 @@
 /**
- * 终端用户 SDK。
+ * 终端用户请求层：统一识别静态与动态凭证，并在 JSON 和流请求发送前解析认证。
+ * 动态读取器失败时终止请求，不回退旧凭证或重放业务请求；刷新凭证退出独立认证。
  */
 
 import { AIInvoker, serialize_model } from "../invoker/ai/index.js";
@@ -8,6 +9,7 @@ import { ServiceClient } from "../invoker/invoker.js";
 import { UserInvoker } from "../invoker/user/index.js";
 import type { FederationActionInput, UserPactAccessOptions, UserServiceSummary } from "./types.js";
 import {
+  defaultFetch,
   requiredString,
   type RequestInitLike,
 } from "../http.js";
@@ -25,6 +27,8 @@ export class UserPactAccess {
   readonly token: string | undefined;
 
   private readonly requester: CityRequester;
+  /** 请求快照绑定的动态凭证来源，也独立构成用户身份。 */
+  private readonly resolve_user_token?: () => Promise<string>;
 
   constructor(options: UserPactAccessOptions) {
     if (!options || typeof options !== "object") {
@@ -33,9 +37,16 @@ export class UserPactAccess {
 
     this.serverUrl = requiredString(options.base_url, "base_url").replace(/\/+$/, "");
     this.token = readOptional(options.user_token);
+    this.resolve_user_token = options.resolve_user_token;
+    const fetcher = options.fetch ?? defaultFetch();
     this.requester = create_http_requester({
       base_url: this.serverUrl,
-      fetch: options.fetch,
+      fetch: async (url, init) => {
+        // 退出用刷新凭证或当前静态凭证认证，不依赖一次额外续期。
+        if (!this.resolve_user_token || url === `${this.serverUrl}/v1/accounts/logout`) return fetcher(url, init);
+        const user_token = requiredString(await this.resolve_user_token(), "resolved user_token");
+        return fetcher(url, { ...init, headers: { ...init.headers, authorization: `Bearer ${user_token}` } });
+      },
       with_auth: (init) => this.withAuth(init),
     });
 
@@ -47,11 +58,11 @@ export class UserPactAccess {
     });
     this.payment = new PaymentInvoker({
       requestJSON: (path, init) => this.json(path, init),
-      hasUserToken: () => Boolean(this.token),
+      hasUserToken: () => this.has_user_credentials(),
     });
     this.user = new UserInvoker({
       requestJSON: (path, init) => this.json(path, init),
-      hasUserToken: () => Boolean(this.token),
+      hasUserToken: () => this.has_user_credentials(),
     });
   }
 
@@ -105,8 +116,12 @@ export class UserPactAccess {
     };
   }
 
+  private has_user_credentials(): boolean {
+    return Boolean(this.token || this.resolve_user_token);
+  }
+
   private requireToken(): void {
-    if (!this.token) throw new TypeError("user_token is required for this operation");
+    if (!this.has_user_credentials()) throw new TypeError("user_token is required for this operation");
   }
 }
 

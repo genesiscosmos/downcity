@@ -119,30 +119,29 @@ export class FederationUser {
 
   private create_user_access(): UserPactAccess {
     const credentials = { ...this.credentials };
+    const resolve_user_token = credentials.resolve_user_token;
     return new UserPactAccess({
       base_url: this.url,
       user_token: credentials.user_token,
+      resolve_user_token: resolve_user_token ? async () => {
+        const user_token = read_optional_string(await resolve_user_token(this.fetcher));
+        if (!user_token) throw new TypeError("resolved user_token is required for this operation");
+        if (this.credentials.resolve_user_token === credentials.resolve_user_token
+          && this.credentials.user_token === credentials.user_token) this.credentials.user_token = user_token;
+        return user_token;
+      } : undefined,
       fetch: async (url, init) => {
         const headers = { ...init.headers };
-        const authorization = Object.keys(headers).find((key) => key.toLowerCase() === "authorization");
-        // 退出用刷新凭证认证，无需先续期；业务请求从不在 401 后自动重放。
-        if (authorization && credentials.resolve_user_token && !url.endsWith("/accounts/logout")) {
-          const user_token = await credentials.resolve_user_token(this.fetcher);
-          if (this.credentials.resolve_user_token === credentials.resolve_user_token
-            && this.credentials.user_token === credentials.user_token) this.credentials.user_token = user_token;
-          headers[authorization] = `Bearer ${user_token}`;
-        }
         if (this.city_id) headers["x-downcity-city-id"] = this.city_id;
         return this.fetcher(url, { ...init, headers });
       },
     });
   }
 
-  private require_user_token(): string {
-    if (!this.credentials.user_token) {
+  private require_user_token(): void {
+    if (!this.credentials.user_token && !this.credentials.resolve_user_token) {
       throw new TypeError("user_token is required for this operation");
     }
-    return this.credentials.user_token;
   }
 }
 

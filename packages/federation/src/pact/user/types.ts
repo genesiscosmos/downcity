@@ -55,8 +55,10 @@ export interface UserServiceSummary {
 export interface UserPactAccessOptions {
   /** City 的访问入口地址，支持 `http(s)://`。 */
   base_url: string;
-  /** 终端用户访问 token；调用需要 user 身份的 action 时必须传入。 */
+  /** 静态用户访问凭证；可由动态读取器独立提供认证。 */
   user_token?: string;
+  /** 请求前读取当前会话凭证；读取失败或返回空值时终止请求，不回退静态凭证。 */
+  resolve_user_token?: () => Promise<string>;
   /** 自定义 fetch 实现。 */
   fetch?: FetchLike;
 }

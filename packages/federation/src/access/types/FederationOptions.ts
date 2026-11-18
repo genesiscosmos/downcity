@@ -15,9 +15,9 @@ export interface FederationIdentity {
 
 /** 用户与管理员保持独立的访问身份。 */
 export interface FederationCredentials {
-  /** 每次发送用户请求前读取宿主共享凭证；传入原始 fetch 以复用代理和请求取消策略。 */
+  /** 独立提供用户认证的动态读取器，无需初始 user_token；请求前通过原始 fetch 读取凭证，空值或异常阻止发送。 */
   resolve_user_token?: (fetcher: FetchLike) => Promise<string>;
-  /** 当前用户 Token；省略时用户请求以 guest 进入标准鉴权流程。 */
+  /** 静态用户 Token；与动态读取器都省略时以 guest 进入标准鉴权流程，配置读取器后优先使用动态凭证。 */
   user_token?: string;
   /** 管理员 Session Token；不会从普通用户 Token 推导。 */
   admin_token?: string;
