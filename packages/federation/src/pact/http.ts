@@ -166,6 +166,9 @@ function enrich_fetch_error(
     `${error.message}${cause_text ? ` :: cause=${cause_text}` : ""} :: ${method} ${params.url}`,
     error.cause ? { cause: error.cause } : undefined,
   );
+  // 宿主在请求前续期失败时保留认证状态，调用方才能区别 401 与网络故障。
+  const status = (error as Error & { /** 已确认的 HTTP 失败状态。 */ status?: number }).status;
+  if (typeof status === "number") Object.assign(enriched, { status });
   enriched.stack = error.stack;
   return enriched;
 }

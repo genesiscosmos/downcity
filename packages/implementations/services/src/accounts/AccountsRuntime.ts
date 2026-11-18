@@ -367,7 +367,11 @@ export class AccountsRuntime {
         throw reason;
       }
     }
-    return await this.flow.exchange(row, String(input.exchange_id ?? ""));
+    const result = await this.flow.exchange(row, String(input.exchange_id ?? ""));
+    // 网站由 BFF Cookie 持有独立登录；设备登录交付可续期会话。
+    if (row.client_type === "web") return result;
+    const credentials = await this.install_context.create_user_session(result.user_token, `${input.login_secret}:${input.exchange_id}`);
+    return { ...result, ...credentials };
   }
 
   /** 返回产品侧当前可见的登录方式。 */

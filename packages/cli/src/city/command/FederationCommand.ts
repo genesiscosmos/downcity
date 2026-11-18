@@ -147,8 +147,8 @@ export function register_federation_command(program: Command): void {
       zh: "以 JSON 输出",
       en: "output as JSON",
     }), parseBoolean)
-    .action((options: { json?: boolean }) => {
-      run_federation_logout_command({ as_json: options.json === true });
+    .action(async (options: { json?: boolean }) => {
+      await run_federation_logout_command({ as_json: options.json === true });
     });
 
   federation

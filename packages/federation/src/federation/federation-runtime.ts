@@ -17,6 +17,7 @@ import {
   sqlite_federation_administrators,
   sqlite_federation_admin_sessions,
 } from "./auth/admin-schema.js";
+import { pg_user_sessions, sqlite_user_sessions } from "./auth/user-session-schema.js";
 import { EnvStore } from "../service/env/env-store.js";
 import {
   pg_user_token_revocations,
@@ -59,6 +60,7 @@ function builtin_tables_for(schema_id: string): BuiltinTables {
         federation_administrators: pg_federation_administrators,
         federation_admin_sessions: pg_federation_admin_sessions,
         federation_user_token_revocations: pg_user_token_revocations,
+        federation_user_sessions: pg_user_sessions,
       }
     : {
         env: sqliteEnv,
@@ -66,6 +68,7 @@ function builtin_tables_for(schema_id: string): BuiltinTables {
         federation_administrators: sqlite_federation_administrators,
         federation_admin_sessions: sqlite_federation_admin_sessions,
         federation_user_token_revocations: sqlite_user_token_revocations,
+        federation_user_sessions: sqlite_user_sessions,
       };
 }
 

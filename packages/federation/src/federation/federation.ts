@@ -278,6 +278,7 @@ export class FederationRuntime {
         this.runtime.database,
       );
       await revocations.cleanup_expired();
+      await this.authenticator!.user_sessions.cleanup();
       for (const service of this.get_services()) await maintain_service(service);
     });
   }

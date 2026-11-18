@@ -14,6 +14,7 @@ import { FederationKeyStore } from "./auth/federation-key-store.js";
 import { CREATE_FEDERATION_ACTIVE_AUTH_KEY_INDEX_SQL } from "./auth/key-schema.js";
 import { UserTokenAuthority } from "./auth/user-token-authority.js";
 import { FederationAdminStore } from "./auth/admin-store.js";
+import { UserSessionStore } from "./auth/user-session-store.js";
 import { UserTokenRevocationStore } from "./auth/user-token-revocation-store.js";
 import type { UserTokenRevocationRecord } from "./auth/user-token-schema.js";
 import { randomSecret } from "../utils/helpers.js";
@@ -123,6 +124,7 @@ export async function initialize_federation(params: {
     database,
   );
   if (params.prepare_database) {
+    await database.execute_ddl('CREATE INDEX IF NOT EXISTS federation_user_sessions_expiry_idx ON "federation_user_sessions" ("expires_at")');
     await database.execute_ddl('CREATE INDEX IF NOT EXISTS federation_user_token_revocations_expiry_idx ON "federation_user_token_revocations" ("expires_at")');
   }
   const authenticator = new Authenticator(
@@ -131,6 +133,7 @@ export async function initialize_federation(params: {
     key_store,
     admin_store,
     user_token_revocations,
+    new UserSessionStore(database, token_authority),
   );
 
   for (const service of services) {

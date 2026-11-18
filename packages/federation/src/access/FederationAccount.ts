@@ -136,10 +136,10 @@ export class FederationAccount {
   }
 
   /** Revoke before clearing local credentials; failure preserves the token for retry. */
-  async logout(): Promise<void> {
-    if (this.options.read_user_token()) {
+  async logout(refresh_token?: string): Promise<void> {
+    if (this.options.read_user_token() || refresh_token) {
       try {
-        await this.options.accounts().action("logout").invoke({});
+        await this.options.accounts().action("logout").invoke({ refresh_token });
       } catch (error) {
         // 已撤销/到期可安全清理；网络或存储故障必须保留凭据以便重试。
         if ((error as { /** HTTP 鉴权失败状态。 */ status?: number }).status !== 401) throw error;

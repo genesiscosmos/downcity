@@ -5,6 +5,7 @@
  * 管理员与用户业务权限保持隔离。
  */
 
+import type { UserSessionStore } from "./user-session-store.js";
 import { bearerToken, httpError } from "../../utils/helpers.js";
 import { normalizeRouteAuth, type RouteAuth, type RouteIdentity } from "../../service/service.js";
 import type { EnvProvider } from "../runtime.js";
@@ -43,6 +44,7 @@ export class Authenticator {
     private readonly key_store: FederationKeyStore,
     private readonly admin_store: FederationAdminStore,
     private readonly user_token_revocations: UserTokenRevocationStore,
+    readonly user_sessions: UserSessionStore,
   ) {}
 
   /** 解析 HTTP Bearer 凭证，失败时返回 guest。 */
@@ -112,12 +114,17 @@ export class Authenticator {
     if (await this.user_token_revocations.is_revoked(payload.jti)) {
       throw httpError(401, "User token revoked");
     }
+    const session_id = payload.metadata?.session_id;
+    if (typeof session_id === "string") await this.user_sessions.require_active(session_id, payload.user_id);
     return payload;
   }
 
   /** 验签后幂等撤销当前 Token；不接收未经验证的 jti 或任意用户 ID。 */
   async revoke_user_token(token: string): Promise<void> {
     const payload = await this.token_authority.verify(token);
+    if (typeof payload.metadata?.session_id === "string") {
+      await this.user_sessions.revoke_access(payload.metadata.session_id, payload.user_id);
+    }
     await this.user_token_revocations.revoke(payload);
   }
 

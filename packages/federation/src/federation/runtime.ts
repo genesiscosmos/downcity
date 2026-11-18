@@ -110,6 +110,8 @@ export interface BuiltinTables {
   federation_admin_sessions: TableDef;
   /** 当前 User Token 的 jti 撤销记录表；到期后可清理。 */
   federation_user_token_revocations: TableDef;
+  /** 设备登录会话，仅保存刷新摘要与撤销事实。 */
+  federation_user_sessions: TableDef;
 }
 
 // ===========================================================================

@@ -3,9 +3,12 @@
  *
  * 关键点（中文）
  * - 只负责通过 Federation Account providers 获取 User Token。
- * - 不读写 Downcity 本地状态，调用方负责持久化 Session。
+ * - 校验成功后保存共享续期凭证；调用方负责选择当前 Session。
  */
 
+import { UserSessionRepository } from "@downcity/city/local";
+import { with_cli_local_data } from "@/city/runtime/LocalData.js";
+import type { UserSessionCredentials } from "@downcity/federation";
 import prompts from "@/city/tui/Prompts.js";
 import {
   Federation,
@@ -127,7 +130,7 @@ async function email_login(input: FederationLoginInput): Promise<FederationUserS
   const done = read_done_login_result(result, "email login");
   return await build_verified_user_session({
     ...input,
-    user_token: done.user_token,
+    user_token: done.user_token, credentials: done as UserSessionCredentials,
     user_id: done.user_id,
     user_label: done.email || email,
   });
@@ -184,7 +187,7 @@ async function email_register(input: FederationLoginInput): Promise<FederationUs
   });
   const done = read_done_login_result(result, "verified email login");
   return await build_verified_user_session({
-    ...input, user_token: done.user_token, user_id: done.user_id || registered.user_id, user_label: email,
+    ...input, user_token: done.user_token, credentials: done as UserSessionCredentials, user_id: done.user_id || registered.user_id, user_label: email,
   });
 }
 
@@ -220,7 +223,7 @@ async function oauth_auth(
     });
     if (cancelled) throw new Error("Sign-in cancelled");
     const done = read_done_login_result(result, "OAuth");
-    const session = await build_verified_user_session({ ...input, user_token: done.user_token,
+    const session = await build_verified_user_session({ ...input, user_token: done.user_token, credentials: done as UserSessionCredentials,
       user_id: done.user_id, user_label: done.email || `${provider}:${done.user_id || ""}` });
     if (cancelled) throw new Error("Sign-in cancelled");
     return session;
@@ -243,7 +246,7 @@ async function input_auth(
   const done = read_done_login_result(result, "login");
   return await build_verified_user_session({
     ...input,
-    user_token: done.user_token,
+    user_token: done.user_token, credentials: done as UserSessionCredentials,
     user_id: done.user_id,
     user_label: done.email || done.user_id || provider,
   });
@@ -261,6 +264,8 @@ function read_done_login_result(
 }
 
 function build_user_session(input: FederationLoginInput & {
+  /** 登录交换交付的完整会话。 */
+  credentials: UserSessionCredentials;
   user_token: string;
   user_id?: string;
   user_label?: string;
@@ -268,6 +273,7 @@ function build_user_session(input: FederationLoginInput & {
   return {
     federation_url: input.federation_url,
     user_token: input.user_token,
+    session_id: input.credentials.session_id,
     user_id: read_string(input.user_id) || undefined,
     user_label: read_string(input.user_label) || undefined,
     updated_at: new Date().toISOString(),
@@ -275,11 +281,14 @@ function build_user_session(input: FederationLoginInput & {
 }
 
 async function build_verified_user_session(input: FederationLoginInput & {
+  /** 登录交换交付的完整会话。 */
+  credentials: UserSessionCredentials;
   user_token: string;
   user_id?: string;
   user_label?: string;
 }): Promise<FederationUserSession> {
   const verified = await read_user_session_from_token(input);
+  with_cli_local_data((data) => new UserSessionRepository(data.database).save(input.federation_url, input.credentials));
   return build_user_session({
     ...input,
     user_id: verified.user_id || input.user_id,

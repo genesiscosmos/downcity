@@ -40,6 +40,8 @@ export interface ResolvedFederationUser {
    * Federation User Token。
    */
   user_token: string;
+  /** 共享凭证仓储中的稳定登录 ID，运行时按此读取最新凭证。 */
+  session_id?: string;
 
   /**
    * Token 实际解析出的 Federation User ID。

@@ -6,6 +6,7 @@
  */
 
 import type { ServiceInstallContext } from "@downcity/federation";
+import type { AccountsRefreshRequest, AccountsLogoutRequest } from "./types/AccountsSession.js";
 import type { AccountsRuntime } from "./AccountsRuntime.js";
 import { register_login_routes } from "./login-routes.js";
 
@@ -15,6 +16,15 @@ export function register_accounts_routes(
   ctx: ServiceInstallContext,
 ): void {
   register_login_routes(runtime, ctx);
+
+  ctx.route({
+    method: "POST", path: "/refresh", public: true,
+    handler: async (request_ctx) => {
+      const body = await request_ctx.json<AccountsRefreshRequest>();
+      const result = await ctx.refresh_user_session(String(body.refresh_token ?? ""), String(body.refresh_id ?? ""));
+      return Response.json(result, { headers: { "cache-control": "no-store" } });
+    },
+  });
 
   ctx.route({
     method: "ALL",
@@ -106,8 +116,13 @@ export function register_accounts_routes(
   ctx.route({
     method: "POST",
     path: "/logout",
-    auth: ["user"],
+    public: true,
     handler: async (request_ctx) => {
+      const body = await request_ctx.json<AccountsLogoutRequest>();
+      if (body.refresh_token) {
+        await ctx.revoke_user_session(body.refresh_token);
+        return Response.json({ success: true }, { headers: { "cache-control": "no-store" } });
+      }
       const authorization = request_ctx.request.headers.get("authorization") ?? "";
       const token = /^Bearer\s+(\S+)$/i.exec(authorization)?.[1];
       if (!token) return request_ctx.jsonResponse({ error: "Bearer user token required" }, 401);

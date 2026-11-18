@@ -5,6 +5,7 @@
  * 统一桥接到 Downcity action route 与原生 HTTP route 体系。
  */
 
+import type { UserSessionCredentials } from "../types/UserSession.js";
 import { Service, type Context, type EnvRequirement, type ServiceNativeRouteHandler, type ServiceRouteMethod } from "./service.js";
 import type { Action } from "./action.js";
 import { Hook } from "./hook.js";
@@ -33,6 +34,12 @@ const INSTALL_SERVICE = Symbol("downcity.service.install");
 // ===========================================================================
 
 export interface ServiceInstallContext {
+  /** 登录交换后创建可续期的设备会话，proof 必须来自私密登录交换证明。 */
+  create_user_session(user_token: string, proof: string): Promise<UserSessionCredentials>;
+  /** 轮换刷新凭证，相同 refresh_id 支持有界重试。 */
+  refresh_user_session(refresh_token: string, refresh_id: string): Promise<UserSessionCredentials>;
+  /** 使用刷新凭证撤销整条设备会话，访问凭证过期不影响退出。 */
+  revoke_user_session(refresh_token: string): Promise<void>;
   /** 当前 Service 可使用的受限数据库能力。 */
   readonly database: ServiceDatabaseContext;
 
@@ -238,6 +245,9 @@ export abstract class InstallableService extends Service {
     }
 
     const ctx: ServiceInstallContext = {
+      create_user_session: (token, proof) => self._authenticator!.user_sessions.create(token, proof),
+      refresh_user_session: (token, id) => self._authenticator!.user_sessions.refresh(token, id),
+      revoke_user_session: (token) => self._authenticator!.user_sessions.revoke(token),
       database: database.service_context(),
 
       table<TRow extends Record<string, unknown> = Record<string, unknown>>(name: string): CityTableApi<TRow> {

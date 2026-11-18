@@ -15,6 +15,7 @@ import {
 import { httpError, randomSecret } from "../../utils/helpers.js";
 import { FederationKeyStore, USER_TOKEN_ALGORITHM } from "./federation-key-store.js";
 import type { CreateUserTokenInput, UserTokenPayload } from "./types.js";
+import type { UserSessionAccessClaims } from "../../types/UserSessionAccess.js";
 import { USER_TOKEN_AUDIENCE } from "./audience.js";
 
 const DEFAULT_USER_TOKEN_TTL_SECONDS = 7 * 24 * 60 * 60;
@@ -28,10 +29,10 @@ export class UserTokenAuthority {
   ) {}
 
   /** 使用当前 active 私钥签发 user_token。 */
-  async sign(input: CreateUserTokenInput): Promise<string> {
+  async sign(input: CreateUserTokenInput, claims?: UserSessionAccessClaims): Promise<string> {
     validate_sign_input(input);
     const ttl_seconds = parse_user_token_ttl(input.ttl);
-    const now = Math.floor(Date.now() / 1000);
+    const now = claims?.issued_at ?? Math.floor(Date.now() / 1000);
     const signing_key = await this.key_store.ensure_active_key();
     const private_jwk = JSON.parse(signing_key.private_jwk) as Record<string, unknown>;
     const private_key = await importJWK(private_jwk, USER_TOKEN_ALGORITHM);
@@ -50,7 +51,7 @@ export class UserTokenAuthority {
       .setSubject(input.user_id)
       .setIssuedAt(now)
       .setExpirationTime(now + ttl_seconds)
-      .setJti(`token_${randomSecret(16)}`)
+      .setJti(claims?.token_id ?? `token_${randomSecret(16)}`)
       .sign(private_key);
 
     return `ub_${jwt}`;

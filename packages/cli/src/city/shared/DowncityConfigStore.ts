@@ -295,6 +295,7 @@ function normalize_downcity_config(value: DowncityConfig | null | undefined): Do
       user_id: read_downcity_string(session?.user_id) || undefined,
       user_label: read_downcity_string(session?.user_label) || undefined,
       user_token,
+      session_id: read_downcity_string(session?.session_id) || undefined,
       updated_at: read_downcity_string(session?.updated_at) || new Date().toISOString(),
     };
   }

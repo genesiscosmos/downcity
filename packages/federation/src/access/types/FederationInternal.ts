@@ -19,6 +19,8 @@ export interface FederationAccountOptions {
 
 /** FederationUser 内部构造参数。 */
 export interface FederationUserOptions {
+  /** 宿主负责刷新并返回当前会话凭证；只在发送请求前调用。 */
+  resolve_user_token?: (fetcher: FetchLike) => Promise<string>;
   /** 当前用户视图固定的 City 来源标签，仅用于记录，不授予权限。 */
   city_id?: string;
   /** Federation HTTP(S) 入口。 */

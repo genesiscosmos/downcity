@@ -30,13 +30,15 @@ export class FederationUser {
   private credentials: {
     /** 仅保存用户认证凭据；来源视图共享此凭据事实源。 */
     user_token?: string;
+    /** 同一会话的动态凭证读取器，来源视图共用。 */
+    resolve_user_token?: (fetcher: FetchLike) => Promise<string>;
   };
   /** 每次访问创建凭据快照，已经创建的请求不受后续账户切换影响。 */
   private get user_access(): UserPactAccess { return this.create_user_access(); }
 
   constructor(options: FederationUserOptions) {
     this.url = normalize_http_url(options.url, "url");
-    this.credentials = { user_token: read_optional_string(options.user_token) };
+    this.credentials = { user_token: read_optional_string(options.user_token), resolve_user_token: options.resolve_user_token };
     this.fetcher = options.fetch ?? defaultFetch();
     this.city_id = normalize_city_source(options.city_id);
     this.account = new FederationAccount({
@@ -107,16 +109,32 @@ export class FederationUser {
   /** 更新后续请求使用的 Token，已创建的请求保留原身份快照。 */
   set_token(user_token: string | undefined): void {
     this.credentials.user_token = read_optional_string(user_token);
+    this.credentials.resolve_user_token = undefined;
+  }
+
+  /** 绑定宿主持有的会话，后续所有用户请求在发送前获取最新凭证。 */
+  set_token_resolver(resolve_user_token: (fetcher: FetchLike) => Promise<string>): void {
+    this.credentials.resolve_user_token = resolve_user_token;
   }
 
   private create_user_access(): UserPactAccess {
+    const credentials = { ...this.credentials };
     return new UserPactAccess({
       base_url: this.url,
-      user_token: this.credentials.user_token,
-      fetch: this.city_id ? (url, init) => this.fetcher(url, {
-        ...init,
-        headers: { ...init.headers, "x-downcity-city-id": this.city_id! },
-      }) : this.fetcher,
+      user_token: credentials.user_token,
+      fetch: async (url, init) => {
+        const headers = { ...init.headers };
+        const authorization = Object.keys(headers).find((key) => key.toLowerCase() === "authorization");
+        // 退出用刷新凭证认证，无需先续期；业务请求从不在 401 后自动重放。
+        if (authorization && credentials.resolve_user_token && !url.endsWith("/accounts/logout")) {
+          const user_token = await credentials.resolve_user_token(this.fetcher);
+          if (this.credentials.resolve_user_token === credentials.resolve_user_token
+            && this.credentials.user_token === credentials.user_token) this.credentials.user_token = user_token;
+          headers[authorization] = `Bearer ${user_token}`;
+        }
+        if (this.city_id) headers["x-downcity-city-id"] = this.city_id;
+        return this.fetcher(url, { ...init, headers });
+      },
     });
   }
 

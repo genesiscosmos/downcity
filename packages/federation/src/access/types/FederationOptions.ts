@@ -15,6 +15,8 @@ export interface FederationIdentity {
 
 /** 用户与管理员保持独立的访问身份。 */
 export interface FederationCredentials {
+  /** 每次发送用户请求前读取宿主共享凭证；传入原始 fetch 以复用代理和请求取消策略。 */
+  resolve_user_token?: (fetcher: FetchLike) => Promise<string>;
   /** 当前用户 Token；省略时用户请求以 guest 进入标准鉴权流程。 */
   user_token?: string;
   /** 管理员 Session Token；不会从普通用户 Token 推导。 */

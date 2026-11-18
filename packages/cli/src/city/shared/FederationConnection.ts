@@ -8,6 +8,7 @@
  * - CLI 命令装配统一放在 `src/command/FederationCommand.ts`，本模块只保留状态与登录流程。
  */
 
+import { revoke_saved_user_session } from "./FederationUserCredentials.js";
 import { emitCliBlock, emitCliList } from "@/shared/CliReporter.js";
 import { printResult } from "@/city/utils/cli/CliOutput.js";
 import { perform_federation_user_login } from "@/city/shared/FederationUserLogin.js";
@@ -322,20 +323,24 @@ export async function run_federation_login_command(params: {
   });
 }
 
-export function run_federation_logout_command(options?: { as_json?: boolean }): void {
+export async function run_federation_logout_command(options?: { as_json?: boolean }): Promise<void> {
   const state = read_downcity_config();
   const federation_url = resolve_selected_federation_url(state);
   const sessions = { ...(state.sessions ?? {}) };
-  delete sessions[federation_url];
-  write_downcity_config({
-    ...state,
-    sessions,
-  });
+  const session = sessions[federation_url];
+  const revoked = await revoke_saved_user_session(federation_url, session?.session_id, session?.user_token);
+  const current = read_downcity_config();
+  const current_session = current.sessions?.[federation_url];
+  if (current_session?.user_token === session?.user_token && current_session?.session_id === session?.session_id) {
+    const next_sessions = { ...current.sessions };
+    delete next_sessions[federation_url];
+    write_downcity_config({ ...current, sessions: next_sessions });
+  }
   printResult({
     type: "block",
     asJson: options?.as_json === true,
     success: true,
-    title: "federation user signed out",
+    title: revoked ? "federation user signed out" : "signed out locally; remote revocation unavailable",
     data: {
       federation_url,
     },

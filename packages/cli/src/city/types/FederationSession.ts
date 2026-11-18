@@ -30,10 +30,12 @@ export interface FederationUserSession {
    * Federation User Token 明文。
    *
    * 说明（中文）
-   * - 仅在 Downcity 本地加密存储中保存。
+   * - 仅在权限受限的 Downcity 本地数据库中保存。
    * - CLI 状态输出只能展示是否存在，不输出明文。
    */
   user_token: string;
+  /** 共享凭证仓储中的稳定登录 ID，运行时按此读取最新凭证。 */
+  session_id?: string;
 
   /**
    * session 最后更新时间。

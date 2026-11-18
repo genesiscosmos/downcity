@@ -106,7 +106,7 @@ export class Federation {
         return track_response(new Response(response.body, { status: response.status, headers }), controller.signal, finish);
       } catch (error) { finish(); throw error; }
     };
-    this.user = new FederationUser({ url: this.url, user_token: options.user_token, fetch: this.fetcher });
+    this.user = new FederationUser({ url: this.url, user_token: options.user_token, resolve_user_token: options.resolve_user_token, fetch: this.fetcher });
     this.admin = new FederationAdmin({ url: this.url, admin_token: options.admin_token, fetch: this.fetcher });
   }
 

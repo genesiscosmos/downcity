@@ -132,6 +132,14 @@ export interface FederationAccountDoneResult extends FederationAccountLoginBaseR
 
   /** User Token, present only after exchange or successful high-level login; status never returns it. */
   user_token?: string;
+  /** 登录交换交付的轮换刷新凭证；状态查询不返回。 */
+  refresh_token?: string;
+  /** 访问凭证到期时间，ISO 8601。 */
+  expires_at?: string;
+  /** 闲置会话到期时间，ISO 8601。 */
+  refresh_expires_at?: string;
+  /** 当前设备登录的稳定会话 ID。 */
+  session_id?: string;
 
   /** 登录成功后的 Federation 用户 ID。 */
   user_id?: string;

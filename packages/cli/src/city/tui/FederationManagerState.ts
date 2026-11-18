@@ -6,6 +6,7 @@
  * - 与 TUI 渲染解耦，便于单独测试和后续扩展。
  */
 
+import { revoke_saved_user_session } from "@/city/shared/FederationUserCredentials.js";
 import {
   list_federations,
   read_persisted_downcity_cli_locale,
@@ -278,8 +279,8 @@ function build_city_items(params: {
           en: "Clear the City session for the current City",
         }),
         detail: t({
-          zh: "只清除 City 本地保存的当前 Federation 登录态，不删除 City 账号。",
-          en: "Only clears City's local session for the current City; it does not delete the City account.",
+          zh: "退出当前设备会话，并清理本机共享登录凭据。",
+          en: "Sign out this device session and clear its shared local credentials.",
         }),
       },
     );
@@ -361,8 +362,14 @@ export async function handle_city_action(params: {
     const federation_url = resolve_selected_federation_url(read_downcity_config());
     const state = read_downcity_config();
     const sessions = { ...(state.sessions ?? {}) };
-    delete sessions[federation_url];
-    write_downcity_config({ ...state, sessions });
+    const session = sessions[federation_url];
+    await revoke_saved_user_session(federation_url, session?.session_id, session?.user_token);
+    const current = read_downcity_config();
+    const next_sessions = { ...current.sessions };
+    if (next_sessions[federation_url]?.user_token === session?.user_token && next_sessions[federation_url]?.session_id === session?.session_id) {
+      delete next_sessions[federation_url];
+      write_downcity_config({ ...current, sessions: next_sessions });
+    }
     await params.refresh_state({
       keep_action: "login",
       detail_override: t({

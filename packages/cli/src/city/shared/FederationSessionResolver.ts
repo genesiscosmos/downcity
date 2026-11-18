@@ -7,6 +7,7 @@
  * - 业务模块只消费解析后的身份，避免余额、Agent、模型目录各自拼接身份。
  */
 
+import { shared_user_token_resolver } from "./FederationUserCredentials.js";
 import { Federation, type FederationUser } from "@downcity/federation";
 import {
   DEFAULT_FEDERATION_URL,
@@ -69,6 +70,7 @@ export class FederationSessionResolver {
     const resolved: ResolvedFederationUser = {
       federation_url,
       user_token,
+      session_id: env_user_token ? undefined : session?.session_id,
       user_id: env_user_token ? undefined : session?.user_id,
       user_label: env_user_token ? undefined : session?.user_label,
       source,
@@ -107,7 +109,7 @@ export class FederationSessionResolver {
     if (!user.user_token) {
       throw new Error("Federation user token is required. Run `city federation login` first.");
     }
-    const federation = new Federation({ url: user.federation_url, user_token: user.user_token });
+    const federation = new Federation({ url: user.federation_url, user_token: user.user_token, resolve_user_token: shared_user_token_resolver(user.federation_url, user.session_id) });
     const verified_user = input.verify_user === false ? user : await this.verify_current_user(user, user.user_id, federation);
     return {
       user: verified_user,
@@ -120,7 +122,7 @@ export class FederationSessionResolver {
   async create_runtime_client(): Promise<Federation | undefined> {
     const user = await this.resolve_current_user({ require_user_token: false, verify_user: false });
     return user.user_token
-      ? new Federation({ url: user.federation_url, user_token: user.user_token })
+      ? new Federation({ url: user.federation_url, user_token: user.user_token, resolve_user_token: shared_user_token_resolver(user.federation_url, user.session_id) })
       : undefined;
   }
 
@@ -137,6 +139,7 @@ export class FederationSessionResolver {
     const federation = current ?? new Federation({
       url: user.federation_url,
       user_token: user.user_token,
+      resolve_user_token: shared_user_token_resolver(user.federation_url, user.session_id),
     });
     const result = await federation.user.current();
     const token_user_id = read_string(result.user.user_id);

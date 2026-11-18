@@ -4,6 +4,7 @@
  * 平台数据库 Adapter 由宿主注入，包根入口不加载 Node 原生数据库。
  */
 
+export type { UserSessionCredentials } from "./types/UserSession.js";
 export { Federation } from "./access/Federation.js";
 export { FederationUser } from "./access/FederationUser.js";
 export { FederationAdmin } from "./access/FederationAdmin.js";
