@@ -342,3 +342,24 @@ export {
 } from "./components/typography";
 export { Workboard } from "./components/workboard";
 export { buildWorkboardGameMapConfig } from "./components/workboard-game-map";
+
+// 消息与富文本输入的可复用表面及其文档协议。
+export { AgentChatMessage, AgentWorkMessage, UserMessage, UserMessageBody } from "./components/chat-messages";
+export { ChatInput } from "./components/chat-input/ChatInput";
+export { create_chat_composer_extensions } from "./components/chat-input/chatComposerExtensions";
+export { read_draft_agent_id, select_draft_agent } from "./components/chat-input/draftAgentRecipient";
+export * from "./composer";
+export type { AgentMessageProps, UserMessageProps, MessageIdentity } from "./types/chat-message";
+
+export * from "./lib/message-layout";
+
+export { connect_chat_session } from "./lib/chat-session";
+export type { DowncityChatSession, DowncityChatConnection } from "./types/chat-session";
+
+export { apply_session_mutation, apply_session_mutations, apply_indexed_session_mutations, create_session_message_index, merge_session_snapshot } from "./lib/session-mutation";
+
+export { AgentMessageContent, UserMessageContent } from "./components/chat-message-content";
+export type { AgentMessageBlock, AgentActivityPart, AgentMessageContentProps, UserMessageContentProps } from "./types/chat-blocks";
+
+export { build_user_message_preview, split_complete_blocks, user_message_collapse_over_chars, user_message_preview_chars, user_message_parts_text } from "./lib/user-message-preview";
+export type { UserMessagePreview } from "./types/user-message-preview";

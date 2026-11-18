@@ -1,5 +1,5 @@
 /** Chat runtime：把 Session JSONL、发送队列和宿主执行能力连接到 ChatPanel。 */
-import { session_jsonl_to_chat_messages, session_message_to_chat_message } from "./session-message";
+import { session_jsonl_to_chat_messages } from "./session-message";
 import type { DowncityChatApprovalMode, DowncityChatMessage, DowncityChatModelOption, DowncityChatStatus, DowncityChatSubmitInput, DowncityChatSubmitMode } from "../types/chat";
 import type { DowncityChatRuntimeListener, DowncityChatRuntimeOptions, DowncityChatRuntimeSnapshot } from "../types/chat-runtime";
 
@@ -15,6 +15,7 @@ export class DowncityChatRuntime {
   constructor(options: DowncityChatRuntimeOptions = {}) {
     this.options = options;
     this.snapshot = {
+      session_id: options.session_id,
       messages: options.initial_jsonl ? session_jsonl_to_chat_messages(options.initial_jsonl) : [...(options.initial_messages ?? [])],
       status: "ready",
       model_options: options.model_options ?? [{ id: "default", label: "Default model" }],
@@ -32,14 +33,17 @@ export class DowncityChatRuntime {
   append_jsonl(jsonl: string): void {
     const next_messages = session_jsonl_to_chat_messages(jsonl);
     const by_id = new Map(this.snapshot.messages.map((message) => [message.id, message]));
-    for (const message of next_messages) by_id.set(message.id, message);
+    for (const message of next_messages) {
+      const current = by_id.get(message.id);
+      if (!current || Number(message.metadata?.revision ?? 0) >= Number(current.metadata?.revision ?? 0)) by_id.set(message.id, message);
+    }
     this.update({ messages: [...by_id.values()].sort((left, right) => Number(left.metadata?.sequence ?? 0) - Number(right.metadata?.sequence ?? 0)) });
   }
   /** 追加已经解析的 Session message。 */
   append_message(record: Record<string, unknown>): void { this.append_jsonl(JSON.stringify(record)); }
   /** 提交输入；常规发送在运行中进入队列，steer 始终绕过队列即时提交。 */
   async submit(input: DowncityChatSubmitInput, mode: DowncityChatSubmitMode = "send"): Promise<void> {
-    if (!input.text.trim() && input.attachments.length === 0) return;
+    if (!input.text.trim() && input.attachments.length === 0 && !input.parts?.length) return;
     const is_busy = this.snapshot.status === "streaming" || this.snapshot.status === "submitted" || this.snapshot.status === "building-context";
     if (mode !== "steer" && (mode === "queue" || is_busy || this.queued_inputs.length > 0)) {
       this.queued_inputs = [...this.queued_inputs, { id: create_id("queue"), input }];
@@ -48,14 +52,26 @@ export class DowncityChatRuntime {
     }
     // 用户消息由 Session 持久化后统一读取，runtime 不再创建第二份 optimistic 消息。
     if (!is_busy) this.update({ status: "submitted" });
-    await this.options.submit_message?.(input, mode === "steer" ? "steer" : "send");
+    try {
+      if (!this.options.submit_message) throw new Error("No Session connected");
+      await this.options.submit_message(input, mode === "steer" ? "steer" : "send");
+    } catch (error) { this.update({ status: "error", error: String(error) }); throw error; }
   }
-  /** 停止当前生成并恢复可输入状态。 */
-  async stop(): Promise<void> { await this.options.stop_generation?.(); this.update({ status: "ready" }); }
+  /** 请求宿主停止当前生成；最终状态由 Session 事件或快照决定。 */
+  async stop(): Promise<void> { if (!this.options.stop_generation) throw new Error("No stop capability connected"); await this.options.stop_generation(); }
   /** 响应一个 Session interaction。 */
-  async respond_interaction(interaction_id: string, response: unknown): Promise<void> { await this.options.respond_interaction?.(interaction_id, response); }
+  async respond_interaction(interaction_id: string, response: unknown): Promise<void> { if (!this.options.respond_interaction) throw new Error("No interaction responder connected"); await this.options.respond_interaction(interaction_id, response); }
   /** 切换运行状态，供 Session 事件桥接。 */
   set_status(status: DowncityChatStatus): void { this.update({ status }); }
+  /** 用 Session 的权威快照替换消息，包括历史截断。 */
+  replace_messages(messages: DowncityChatMessage[]): void { this.update({ messages }); }
+  /** 更新连接失败或当前模型可重试位置。 */
+  set_connection_state(error?: string, retry_message_id?: string): void { this.update({ error, retry_message_id }); }
+  /** 只允许重试当前快照公开的有效错误锚点。 */
+  async retry(message_id: string): Promise<void> {
+    if (this.snapshot.retry_message_id !== message_id || !this.options.retry_message) throw new Error("This message cannot be retried");
+    await this.options.retry_message(message_id);
+  }
   /** 修改模型。 */
   set_model(model_id: string): void { this.update({ model_id }); }
   /** 修改 approval 模式。 */
@@ -66,6 +82,11 @@ export class DowncityChatRuntime {
     this.queued_inputs = rest;
     this.sync_queued_inputs();
     return next?.input;
+  }
+  /** 发送结果未知或失败时恢复队首，等待用户处理，不自动重发。 */
+  restore_queued_input(input: DowncityChatSubmitInput): void {
+    this.queued_inputs = [{ id: create_id("queue"), input }, ...this.queued_inputs];
+    this.sync_queued_inputs();
   }
   /** 删除一条尚未执行的队列输入。 */
   remove_queued_input(input_id: string): void {

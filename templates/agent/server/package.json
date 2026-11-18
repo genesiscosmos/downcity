@@ -12,7 +12,7 @@
     "@downcity/agent": "workspace:*",
     "@downcity/city": "workspace:*",
     "@downcity/federation": "workspace:*",
-    "@hono/node-server": "^2.0.4",
+    "@hono/node-server": "2.1.6",
     "hono": "^4.12.23"
   },
   "devDependencies": {

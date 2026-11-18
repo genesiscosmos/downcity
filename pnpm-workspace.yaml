@@ -6,6 +6,8 @@ packages:
   - packages/implementations/services
   - packages/implementations/workspaces/*
   - templates/*
+  - templates/agent/server
+  - templates/agent/web
 
 allowBuilds:
   better-sqlite3: true

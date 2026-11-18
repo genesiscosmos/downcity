@@ -23,11 +23,23 @@ function parse_user_text(text: string): string {
 export function session_message_to_chat_message(record: Record<string, unknown>): DowncityChatMessage {
   const message_id = typeof record.message_id === "string" ? record.message_id : String(record.id ?? `message-${String(record.sequence ?? "unknown")}`);
   const record_role = String(record.role ?? "agent");
-  const role = record_role === "user" ? "user" : "assistant";
+  const role = record_role === "user" ? "user" : record_role === "agent" ? "assistant" : "system";
   const raw_parts = Array.isArray(record.parts) ? [...record.parts] : [];
   if (record.current_error && typeof record.current_error === "object") raw_parts.push(record.current_error);
   raw_parts.sort((left, right) => Number((left as Record<string, unknown>)?.sequence ?? 0) - Number((right as Record<string, unknown>)?.sequence ?? 0));
-  const parts = raw_parts.map((part, index) => session_part_to_chat_part(part, index)).filter((part): part is DowncityChatMessagePart => part !== null);
+  const parts = raw_parts.flatMap((raw_part, index) => {
+    const projected = session_part_to_chat_part(raw_part, index);
+    if (!projected) return [];
+    const raw = raw_part as Record<string, unknown>;
+    if (raw.type !== "tool" || !Array.isArray(raw.interactions)) return [projected];
+    const interactions = raw.interactions.flatMap((interaction, interaction_index) => {
+      if (!interaction || typeof interaction !== "object") return [];
+      const value = interaction as Record<string, unknown>;
+      const part = session_part_to_chat_part({ ...value, type: "interaction", part_id: value.interaction_id ?? `${projected.id}:interaction:${interaction_index}` }, interaction_index);
+      return part ? [part] : [];
+    });
+    return [projected, ...interactions];
+  });
   if (role === "assistant") {
     const interactions = parts.filter((part): part is DowncityChatContentPart => part.type === "interaction");
     for (const interaction of interactions) {
@@ -108,12 +120,13 @@ export function session_part_to_chat_part(raw_part: unknown, index = 0): Downcit
         return {
           id: typeof item.question_id === "string" ? item.question_id : `question-${question_index}`,
           prompt: typeof item.question === "string" ? item.question : "",
-          response_type: item.type === "single_select" || item.type === "multi_select" ? item.type : "text",
+          response_type: item.type === "single_select" || item.type === "multi_select" || item.type === "secret" ? item.type : "text",
           options: Array.isArray(item.options) ? item.options.map((option) => typeof option === "string" ? { value: option, label: option } : option as { value: string; label: string }) : undefined,
         };
       }),
     };
   }
+  if (type === "context") return { id, type: "data", data_type: to_string(part.tag), data: part.context };
   if (type === "file") return { id, type, url: typeof part.url === "string" ? part.url : undefined, media_type: typeof part.media_type === "string" ? part.media_type : undefined, filename: typeof part.filename === "string" ? part.filename : undefined };
   if (type === "source") return { id, type, source_title: typeof part.title === "string" ? part.title : undefined, source_url: typeof part.url === "string" ? part.url : undefined };
   if (type === "data") return { id, type, data_type: typeof part.data_type === "string" ? part.data_type : undefined, data: part.data };

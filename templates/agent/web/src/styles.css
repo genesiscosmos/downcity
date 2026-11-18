@@ -3,7 +3,9 @@
  */
 
 @import "tailwindcss";
+@import "@downcity/ui/source.css";
 @import "@downcity/ui/styles.css";
+@import "@downcity/ui/markdown.css";
 
 html,
 body,

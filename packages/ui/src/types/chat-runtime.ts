@@ -9,6 +9,8 @@ export interface DowncityChatQueuedInput {
 
 /** Runtime 初始化和宿主能力。 */
 export interface DowncityChatRuntimeOptions {
+  /** 当前输入所属的 Session；用于切换时隔离 ChatPanel 编辑实例。 */ session_id?: string;
+  /** 重试当前仍有效的模型错误。 */ retry_message?: (message_id: string) => Promise<void>;
   /** 初始 Session JSONL。 */ initial_jsonl?: string;
   /** 初始规范化消息。 */ initial_messages?: DowncityChatMessage[];
   /** 默认模型列表。 */ model_options?: DowncityChatModelOption[];
@@ -21,6 +23,9 @@ export interface DowncityChatRuntimeOptions {
 
 /** Runtime 的只读快照。 */
 export interface DowncityChatRuntimeSnapshot {
+  /** 当前输入所属的 Session，受控宿主也可用 thread.id 指定。 */ session_id?: string;
+  /** 当前连接或操作错误；不会写入 canonical 消息。 */ error?: string;
+  /** 当前进程可重试消息，历史错误不提供此能力。 */ retry_message_id?: string;
   /** 当前消息。 */ messages: DowncityChatMessage[];
   /** 当前运行状态。 */ status: DowncityChatStatus;
   /** 模型列表。 */ model_options: DowncityChatModelOption[];

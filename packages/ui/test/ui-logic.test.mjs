@@ -56,11 +56,11 @@ test("Chat Composer 使用统一 Enter 矩阵", () => {
  */
 test("Chat Composer 的围栏动作与代码块投影", () => {
   // 围栏行：Enter 转代码块，而不是把 ``` 当消息发出去。
-  assert.equal(resolve_chat_composer_enter_action(enter_key(), plain_paragraph, { block_text: "```ts" }), "code-fence")
-  assert.equal(resolve_chat_composer_enter_action(enter_key(), plain_paragraph, { block_text: "请看 ```" }), "submit")
+  assert.equal(resolve_chat_composer_enter_action(enter_key(), plain_paragraph, false, { block_text: "```ts" }), "code-fence")
+  assert.equal(resolve_chat_composer_enter_action(enter_key(), plain_paragraph, false, { block_text: "请看 ```" }), "submit")
   // 代码块内回车是换行，修饰键提交仍然优先。
-  assert.equal(resolve_chat_composer_enter_action(enter_key(), plain_paragraph, { in_code: true }), "native")
-  assert.equal(resolve_chat_composer_enter_action(enter_key({ metaKey: true }), plain_paragraph, { in_code: true }), "submit")
+  assert.equal(resolve_chat_composer_enter_action(enter_key(), plain_paragraph, false, { in_code: true }), "native")
+  assert.equal(resolve_chat_composer_enter_action(enter_key({ metaKey: true }), plain_paragraph, false, { in_code: true }), "submit")
 
   // 提交文本必须保留围栏，否则接收端分不出哪部分是代码。
   const document = { type: "doc", content: [

@@ -58,7 +58,7 @@ export interface DowncityChatQuestionOption { /** 选项值。 */ value: string;
 export interface DowncityChatQuestion {
   /** 问题标识。 */ id: string;
   /** 提示文案。 */ prompt: string;
-  /** 响应类型。 */ response_type: "text" | "single_select" | "multi_select";
+  /** 响应类型。 */ response_type: "text" | "single_select" | "multi_select" | "secret";
   /** 可选项。 */ options?: DowncityChatQuestionOption[];
 }
 /** 工具操作展示载荷。 */
@@ -91,7 +91,7 @@ export interface DowncityChatSubmitAttachment extends DowncityChatAttachment { /
 /** Chat 输入提交意图：常规发送、显式排队或绕过队列即时调整。 */
 export type DowncityChatSubmitMode = "send" | "queue" | "steer";
 /** 输入提交值。 */
-export interface DowncityChatSubmitInput { /** 输入正文。 */ text: string; /** 输入附件。 */ attachments: DowncityChatSubmitAttachment[]; }
+export interface DowncityChatSubmitInput { /** 从富文本按原位投影的正文、引用、附件与数据；存在时提交这些 parts。 */ parts?: import("./chat-document").ChatComposerPart[]; /** 输入正文。 */ text: string; /** 输入附件。 */ attachments: DowncityChatSubmitAttachment[]; }
 /** 自定义消息渲染参数。 */
 export interface DowncityChatMessageRenderProps { /** 当前消息。 */ message: DowncityChatMessage; }
 /** Chat Panel 属性。 */
@@ -125,6 +125,8 @@ export interface DowncityChatPanelProps extends Omit<React.ComponentPropsWithout
   /** 归档会话。 */ on_archive_thread?: (thread_id: string) => void | Promise<void>;
   /** 加载更多会话。 */ on_load_more_threads?: () => void | Promise<void>;
   /** 自定义消息渲染。 */ render_message?: (props: DowncityChatMessageRenderProps) => React.ReactNode;
+  /** 当前进程仍可重试的消息标识。 */ retry_message_id?: string;
+  /** 重试当前有效的失败请求。 */ on_retry_message?: (message_id: string) => Promise<void>;
   /** 顶部自定义操作。 */ render_header_actions?: () => React.ReactNode;
   /** 底部自定义内容。 */ render_footer?: () => React.ReactNode;
 }
