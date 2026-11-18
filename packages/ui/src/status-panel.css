@@ -1,0 +1,280 @@
+/** 状态面板列表、交互表单与待处理区布局；由宿主加载一次。 */
+/**
+ * StatusPanel 内容条目的共享几何与反馈。
+ * 外壳负责整体圆角与裁剪，条目使用 8px item 令牌、6px 外侧留白和 2px 行间距。
+ * Queue 与子会话共用行规则；交互表单仅对选项应用同一规则，不增加卡片外框。
+ */
+/* 分类胶囊的 hover 独立于滑动选中背景，收起时也有明确反馈。 */
+.chat-status-panel [data-pill-option]:not(:disabled):hover {
+  background-color: var(--control-hover);
+}
+
+.chat-status-panel [data-pill-option][aria-checked="true"]:not(:disabled):hover {
+  background-color: var(--interaction-active);
+}
+
+.status-panel-list-area {
+  min-width: 0;
+  padding: 6px;
+}
+
+.status-panel-list {
+  display: flex;
+  max-height: 15rem;
+  min-width: 0;
+  flex-direction: column;
+  gap: 2px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.status-panel-item {
+  display: flex;
+  width: 100%;
+  min-width: 0;
+  min-height: 32px;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border-radius: var(--radius-item, 0.5rem);
+  background: transparent;
+  text-align: left;
+  font-size: var(--text-2xs, 0.6875rem);
+  transition: background-color 120ms ease-out;
+}
+
+.status-panel-item:hover {
+  background: var(--interaction-hover);
+}
+
+.status-panel-item[aria-current="true"] {
+  background: var(--interaction-selected);
+}
+
+.status-panel-item:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: -2px;
+  background: var(--interaction-hover);
+}
+
+.chat-status-panel .question-options {
+  gap: 2px;
+}
+
+.chat-status-panel .question-option {
+  min-height: 32px;
+  padding: 6px 8px;
+  border-radius: var(--radius-item, 0.5rem);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .status-panel-item {
+    transition: none;
+  }
+}
+
+/** 极简交互表单：文字、浅色选中行与共享按钮；消息结果复用同一排版。 */
+.interaction-card {
+  display: grid;
+  min-width: 0;
+  gap: var(--interaction-gap, 0.65rem);
+  color: var(--foreground);
+  font-size: var(--text-xs);
+  line-height: 1.5;
+}
+
+.interaction-card-header,
+.interaction-card-actions {
+  display: flex;
+  min-width: 0;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+/* 输入皮肤与状态交给共享 Input；这里只保留表单布局。 */
+.approval-note-input {
+  width: 100%;
+  min-width: 0;
+}
+
+.interaction-heading {
+  min-width: 0;
+  flex: 1;
+}
+
+.interaction-card-title,
+.question-prompt {
+  font-size: var(--text-xs);
+  font-weight: 500;
+  overflow-wrap: anywhere;
+}
+
+.interaction-card-meta,
+.approval-card-message,
+.question-option-description {
+  color: var(--muted-foreground);
+  font-size: var(--text-2xs, 0.6875rem);
+}
+
+.approval-card-message {
+  margin: 0.2rem 0 0;
+  overflow-wrap: anywhere;
+}
+
+.interaction-navigation {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.interaction-page {
+  color: var(--muted-foreground);
+  font-size: var(--text-2xs, 0.6875rem);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* 命令默认只显示一行；展开后完整内容可读、可选择。 */
+.interaction-command {
+  min-width: 0;
+  color: var(--muted-foreground);
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs, 0.6875rem);
+}
+
+.interaction-command > summary {
+  cursor: pointer;
+  list-style: none;
+  border-radius: var(--radius-control, 0.375rem);
+}
+
+.interaction-command > summary::-webkit-details-marker {
+  display: none;
+}
+
+.interaction-command code {
+  display: block;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font: inherit;
+}
+
+.interaction-command pre {
+  max-height: 12rem;
+  overflow: auto;
+  margin: 0.5rem 0 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font: inherit;
+}
+
+.question-options {
+  display: grid;
+  gap: var(--interaction-option-gap, 0.125rem);
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.question-option {
+  display: grid;
+  position: relative;
+  grid-template-columns: 0.9375rem minmax(0, 1fr);
+  align-items: start;
+  gap: var(--interaction-option-content-gap, 0.5rem);
+  padding: var(--interaction-option-padding, 0.45rem 0.5rem);
+}
+
+/* 选项标记复用公共 Checkbox/Radio，布局只负责与首行文字对齐。 */
+.question-option > .interaction-choice { margin-top: 0.125rem; }
+.question-option-label,
+.question-option-description { display: block; overflow-wrap: anywhere; }
+
+.question-text-input,
+.interaction-note-input {
+  width: 100%;
+}
+
+/* 问题补充说明常显，与提交按钮垂直居中；Input 自行提供背景和焦点反馈。 */
+.interaction-note-input { min-width: 0; flex: 1; }
+.question-interaction > .interaction-card-actions { align-items: center; }
+
+.interaction-command > summary:focus-visible {
+  outline: none;
+  background: var(--interaction-active);
+}
+
+.interaction-answer-list { display: grid; gap: 0.5rem; margin: 0; }
+.interaction-answer-list dt { color: var(--muted-foreground); }
+.interaction-answer-list dd { margin: 0.15rem 0 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+
+/* 独立 Inbox 表单明确声明页面展示参数；默认聊天表单沿用自身紧凑尺寸。 */
+.interaction-card[data-presentation="inbox"] {
+  --interaction-gap: 18px;
+  --interaction-option-gap: 4px;
+  --interaction-option-content-gap: 10px;
+  --interaction-option-padding: 10px 12px;
+  font-size: 13px;
+  line-height: 1.8;
+}
+.interaction-card[data-presentation="inbox"] .interaction-card-header,
+.interaction-card[data-presentation="inbox"] .interaction-card-actions { align-items: center; }
+.interaction-card[data-presentation="inbox"] .question-prompt { font-size: 13px; line-height: 1.8; }
+.interaction-card[data-presentation="inbox"] .question-option-description { margin-top: 3px; font-size: 12px; line-height: 1.7; }
+.interaction-card[data-presentation="inbox"] .question-option > .interaction-choice { margin-top: 0.25rem; }
+.interaction-card[data-presentation="inbox"] .approval-card-message { margin: 0; font-size: 13px; line-height: 1.9; }
+.interaction-card[data-presentation="inbox"] .interaction-command { padding: 14px 16px; background: var(--surface-subtle); border-radius: var(--radius-control, 0.375rem); font-size: 12px; line-height: 1.8; }
+.interaction-card[data-presentation="inbox"] .interaction-approval-actions { justify-content: flex-end; gap: 8px; }
+.interaction-card[data-presentation="inbox"] .interaction-card-actions { flex-wrap: wrap; }
+.interaction-card[data-presentation="inbox"] .interaction-card-actions > label { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.interaction-command-standalone { margin: 0; max-height: 320px; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; }
+
+/** StatusPanel 的交互表单：6px 外侧留白与列表一致，表单保留滚动及独立内容排版。 */
+.pending-interaction-area {
+  display: flex;
+  flex: 0 0 auto;
+  flex-direction: column;
+  gap: 2px;
+  width: 100%;
+  min-width: 0;
+  padding: 6px;
+}
+
+.pending-interaction-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pending-interaction-content {
+  max-height: min(40dvh, 22rem);
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+
+/* 文字与操作栏对齐选项文字区，选项自身使用共享 8px item 圆角。 */
+.pending-interaction-content .interaction-card-header,
+.pending-interaction-content .interaction-card-actions,
+.pending-interaction-content .interaction-command,
+.pending-interaction-content .interaction-card-body {
+  margin-inline: 8px;
+}
+
+/* 原生单选/多选保留浏览器键盘与表单语义，颜色由 SDK 主题提供。 */
+.interaction-choice { width: 15px; height: 15px; accent-color: var(--foreground); }
+.question-option { border-radius: var(--radius-item, 8px); }
+.question-option:hover { background: var(--interaction-hover); }
+.question-option:has(input:checked) { background: var(--interaction-selected); }
+.question-option:has(input:focus-visible) { outline: 2px solid var(--ring); outline-offset: -2px; }
+
+/* 队列正文与资源使用阅读字号，仅对文字摘要缩小，宿主可覆盖 chat-text-size。 */
+.status-panel-item .chat-text-size-content { font-size: var(--chat-text-size, 1rem); }
+.status-panel-item .chat-queued-message-text { font-size: calc(var(--chat-text-size, 1rem) * 0.875); }
+
+/* 操作按钮的尺寸与焦点由 StatusPanelButton 统一声明，此处仅负责内容布局。 */

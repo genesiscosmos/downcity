@@ -2,7 +2,7 @@
 
 `@downcity/ui` 是 Downcity 的 React UI 组件包。
 
-它提供基础 UI 原语、统一 Markdown 阅读组件、样式入口，以及 workboard 相关复合组件。
+它提供基础 UI 原语、统一 Markdown 阅读组件、聊天输入与消息、模型配置、会话状态面板、样式入口，以及 workboard 相关复合组件。
 这个包只负责界面组件和类型，不负责 Agent 或 City 的运行时逻辑。
 
 ## 包定位
@@ -105,6 +105,16 @@ src
   - `session_message_to_chat_message`、`session_part_to_chat_part`
   - 按钮、卡片、toast 等基础类型
   - workboard 相关展示与地图类型
+
+## 模型与会话状态
+
+- `ModelSelector` 与 `ChatModelSelector` 共用目录、搜索、品牌图标与模型详情，聊天入口可按宿主能力配置推理强度。
+- `ChatApprovalModeSelector` 使用共享 Session 审批模式；`ModelPricingChart` 与格式化函数提供一致的模型信息展示。
+- `StatusPanel` 接收完整 `session_key`、队列、交互、后代会话、文案与动作；切换会话释放临时状态。队列调度、会话导航与私密提交 transport 由宿主持有。
+- `MessageQueue`、`QueuedMessageResources`、`PendingInteractionArea`、`AgentInteraction`、审批/问题卡片、`SubSessionList`、`PillSwitcher` 和模型目录/详情组件均可独立使用。
+- 表单和状态布局按需引入 `@downcity/ui/status-panel.css`；标准主题与 Tailwind 扫描入口仍分别为 `styles.css` 与 `source.css`。
+
+使用说明与真实运行示例见 Homepage 的 [模型控件](https://downcity.ai/zh/ui-sdk-docs/components/model-controls)及[状态面板](https://downcity.ai/zh/ui-sdk-docs/components/status-panel)文档。
 
 ## 关键调用关系
 

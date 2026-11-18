@@ -87,7 +87,9 @@ export class AgentSessionStorage implements SessionStorage {
   async write_metadata(metadata: SessionHistoryMeta): Promise<void> {
     if (metadata.session_id !== this.session_id || metadata.agent_id !== this.options.agent_id
       || !is_deep_strict_equal(metadata.origin, this.origin)) throw new Error("session_storage_identity_conflict");
-    await this.configure({ workspace_id: metadata.workspace_id ?? null, title: metadata.title ?? null,
+    const current = await this.read_metadata();
+    if (metadata.workspace_id !== current.workspace_id) throw new Error("session_workspace_immutable");
+    await this.configure({ title: metadata.title ?? null,
       model_label: metadata.model_label ?? null, timezone: metadata.timezone ?? resolve_system_timezone(),
       approval_mode: metadata.approval_mode ?? null });
   }

@@ -22,10 +22,10 @@ import type { ModelClient, SessionApprovalMode, WorkspaceRuntime } from "@downci
  * 2. 运行时实例：只存在于当前进程，由宿主在创建或打开 Session 时注入。
  */
 export interface AgentSessionStateValues {
-  /** 当前 Session 正在使用的 Workspace 实例；未注入或已脱离时为 undefined。 */
+  /** 当前 Session 正在使用的 Workspace 实例；未装配执行资源时为 undefined。 */
   workspace: WorkspaceRuntime | undefined;
 
-  /** 当前 Session 持久化的 Workspace 标识；没有项目上下文时为 undefined。 */
+  /** 当前 Session 持久化的 Workspace 标识；创建时无归属才为 undefined。 */
   workspace_id: string | undefined;
 
   /** 当前 Session 使用的运行时模型实例。 */

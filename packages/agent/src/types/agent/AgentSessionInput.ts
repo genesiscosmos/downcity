@@ -3,7 +3,7 @@
  *
  * 关键点（中文）
  * - Agent 自己那条会话就是普通 Session，因此这里的语义与创建普通 Session 一致。
- * - 已经存在时该参数被忽略：换目录走 `session.set({ workspace })`，避免静默切目录。
+ * - 已经存在时该参数被忽略；通过 sessions.get 注入同 ID 的 Workspace 执行资源。
  */
 
 import type { WorkspaceRuntime } from "@downcity/type";

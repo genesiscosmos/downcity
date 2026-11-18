@@ -18,7 +18,7 @@ Agent 是主体，不是一个需要用户组装的执行框架。用户对它�
 
 同时修正两处范畴错误：
 
-- **Workspace 不是 Session 的身份。** 现在 `workspace_id` 落盘并在 `get()` 时强校验相等，等于拿执行参数当身份——换个目录就得新建会话。
+- **Workspace 归属在 Session 创建时确定。** `get()` 只装配同 ID 执行资源；未装配资源时仍保留持久化归属，不继承 Agent 默认 Workspace。
 - **Workspace 的解析不是 Agent 的职责。** 谁持有 Workspace，谁负责把标识还原成实例。
 
 ## 2. 心智模型
@@ -74,7 +74,7 @@ Workspace 的位置由所有权决定，不由调用便利性决定。
 | | 写 | 读 |
 | --- | --- | --- |
 | 持久化字段 | `set({ ... })` | `get("<field>")` |
-| 运行时实例 | `set({ model })`、`set({ workspace })` | `get("model")`、`get("workspace")` |
+| 运行时实例 | `set({ model })`；Workspace 资源由 `sessions.get(..., { workspace })` 恢复 | `get("model")`、`get("workspace")` |
 
 `set` 接收运行时对象，把可序列化部分落盘，把实例留在内存。`get("workspace_id")` 与 `get("workspace")` 是两件事，互不推导。
 
@@ -156,7 +156,7 @@ export interface AgentOptions {
    * 新建 Session 时注入的默认目录。
    *
    * 关键点（中文）
-   * - 不是绑定：单个 Session 可用 `set({ workspace })` 换掉。
+   * - 只供新会话选择默认归属；已有会话的归属不可改变。
    * - 不参与恢复：历史会话的目录由宿主在 `get()` 时注入。
    */
   workspace?: WorkspaceRuntime;
@@ -214,8 +214,8 @@ export interface AgentGetSessionOptions {
   /**
    * 本次恢复注入的 Workspace 实例。
    *
-   * 与持久化值不一致不是错误：以传入值为准，语义等同 `set({ workspace })`。
-   * 省略时沿用内存实例；内存也没有则该会话没有项目上下文。
+   * 必须匹配持久化归属；不一致时失败且不修改存储。
+   * 省略时保留持久化归属与已有资源；冷恢复没有资源时仍可读历史。
    */
   workspace?: WorkspaceRuntime;
 }
@@ -245,16 +245,7 @@ export interface AgentSessionSetInput {
   /** 安全策略。 */
   security?: AgentSessionSecurityConfig;
 
-  /**
-   * 执行目录。
-   *
-   * 关键点（中文）
-   * - 实例由宿主注入；同时把它的 `id` 写入持久化配置。
-   * - 传 `null` 表示脱离项目上下文。
-   * - 不迁移已有消息、附件与工具结果；它们属于发生时的目录。
-   * - 执行中的 Turn 沿用旧目录，从下一 Step 检查点起生效。
-   */
-  workspace?: WorkspaceRuntime | null;
+
 }
 ```
 
@@ -304,7 +295,7 @@ session.origin;          // { type: "agent" }
 ### 5.2 读写配置
 
 ```ts
-await session.set({ model, security, workspace });   // 写
+await session.set({ model, security });   // 写
 session.get("workspace");                            // 运行时实例
 session.get("workspace_id");                         // 持久化标识
 session.get("model_label");
@@ -392,7 +383,7 @@ Agent 主会话与 Channel 会话提供一个 `session` 工具，通过 `action`
 | 它被归档或删除 | 下一次取用时重建；集合不维护额外索引 |
 | `get()` 未注入 Workspace | 该会话没有项目上下文；`get("workspace_id")` 仍可读，`get("workspace")` 为空 |
 | 持久化目录本次不提供 | 同上，不抛错 |
-| `set({ workspace })` 时有 Turn 在跑 | 生效于下一 Step 检查点；当前 Turn 沿用旧值，与 `set({ model })` 一致 |
+| `get()` 注入不同 Workspace ID | 拒绝，且不修改内存归属或持久化数据 |
 | `session.start` 后立即 `session.stop` | 排队输入被取消，状态记 `stopped`，与用户叫停可区分 |
 | `session.reply` 目标 Interaction 已失效 | 返回明确失败，由模型转述给用户，不静默丢弃 |
 
@@ -401,7 +392,7 @@ Agent 主会话与 Channel 会话提供一个 `session` 工具，通过 `action`
 1. 一个 Agent 至多一条 `origin.type === "agent"` 的会话，其 `session_id` 等于 Agent 的 `id`。
 2. 它是普通 Session，除角色、工具集合与固定存取入口外没有特殊行为。
 3. `session_*` 工具只在 `origin.type === "agent"` 的会话上下文中存在。
-4. Workspace 不是 Session 的身份。切换目录不改变 Session 标识、历史与附件归属。
+4. Workspace 归属创建后不可替换、清空或补绑；同 ID 资源恢复不改变历史与附件。
 5. Session 不解析 Workspace：`workspace_id` 是索引，实例一律由宿主注入。
 6. Agent 不持有 Workspace registry，不参与解析。
 7. `origin` 仍是唯一的分区与分类事实源；不新增并行索引。
@@ -410,7 +401,7 @@ Agent 主会话与 Channel 会话提供一个 `session` 工具，通过 `action`
 
 不改 schema。
 
-- `session_state.workspace_id` 保留，语义为「上次使用的目录」，不用于还原实例。
+- `session_state.workspace_id` 保留，语义为「创建时确定的 Workspace 归属」，不用于还原实例。
 - Agent 自己的会话落盘为 `sessions/agent/<agent_id>/`（沿用现有 `sessions/<origin_type>/<session_id>/` 规则）。
 - `work` 取代 `chat` 后，新会话落在 `sessions/work/<session_id>/`。
 - 不做旧数据迁移；既有 `chat` 分区按新类型名读取（见第 10 节）。
@@ -446,4 +437,4 @@ Agent 主会话与 Channel 会话提供一个 `session` 工具，通过 `action`
 | 3.6 换渠道、重启 | 新进程取到同一条会话与同一份历史 |
 | 3.7 人不在场 | 任务会话与派出的活出现在同一份 `list()` |
 
-结构性检查：派出的会话上下文里不存在 `session_*` 工具；并发取用只产生一条 Agent 会话；`get("workspace_id")` 在未注入实例时仍可读而 `get("workspace")` 为空；`set({ workspace })` 在 Turn 执行期间不改变该 Turn 的目录。
+结构性检查：派出的会话上下文里不存在 `session_*` 工具；并发取用只产生一条 Agent 会话；`get("workspace_id")` 在未注入实例时仍可读而 `get("workspace")` 为空；公开 set 拒绝 Workspace 字段，冷恢复与 Shell 回投保持持久化归属。

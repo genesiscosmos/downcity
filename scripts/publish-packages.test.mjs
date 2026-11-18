@@ -94,6 +94,7 @@ test("指定 package 会自动补齐 scoped 运行时依赖并保持拓扑顺序
     "@downcity/type",
     "@downcity/agent",
     "@downcity/federation",
+    "@downcity/workspace-ssh",
     "@downcity/city",
     "@downcity/powers",
   ]);

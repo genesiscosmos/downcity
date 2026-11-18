@@ -80,7 +80,7 @@ export class Agent {
    * 新建 Session 时注入的默认目录。
    *
    * 关键点（中文）
-   * - 它是宿主在构造 Agent 时声明的默认值，不是绑定；单个 Session 可用 `set({ workspace })` 换掉。
+   * - 它是宿主为新建会话声明的默认值；已有 Session 保持创建时的 Workspace 归属。
    * - 省略时新建的 Session 没有项目上下文：没有文件工具与 Shell，纯模型对话仍可用。
    */
   readonly workspace?: WorkspaceRuntime;
@@ -320,7 +320,7 @@ export class Agent {
    *
    * 关键点（中文）
    * - 它就是一条普通 Session：工作区能力、set/get、消息、审批与其他会话完全一致。
-   * - 不接收 Workspace：目录在创建时注入，之后用 `session.set({ workspace })` 切换。
+   * - 不接收 Workspace：归属在创建时确定，恢复资源通过 sessions.get 注入同 ID 实例。
    */  async session(input?: AgentSessionInput): Promise<AgentSession> {
     return await this.session_manager.self(
       input?.workspace ? { workspace: input.workspace } : undefined,
@@ -419,6 +419,7 @@ export class Agent {
     const storage = this.resolve_storage();
     const session_storage = await storage.sessions.open_session(session_id, category);
     const metadata = await session_storage.read_metadata();
+    if (workspace.id !== metadata.workspace_id) throw new Error("session_workspace_immutable");
     const instruction_system_blocks = create_instruction_system_blocks({
       agent_id: this.id,
       agent_name: this.name,

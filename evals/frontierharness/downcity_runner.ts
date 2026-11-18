@@ -1,6 +1,6 @@
 /**
  * Downcity SDK 的单 trial Node 入口。
- * 模型在宿主调用；terminal_exec 仅通过带 id 的 JSONL 请求 Python Harbor 环境。
+ * 模型在宿主调用；terminal_exec 仅通过带 id 的 JSONL 请求 Python harness 环境。
  * 不创建 City、Workspace、宿主文件工具或宿主命令执行工具。
  */
 import { Agent } from "@downcity/agent";
@@ -83,9 +83,10 @@ function usage_totals(): UsageTotals {
   };
 }
 
-/** 持续回填 Python AgentContext，保留中途被 Harbor 取消的计量证据。 */
+/** 持续回填 Python AgentContext，保留中途被 harness 取消的计量证据。 */
 function checkpoint(): void {
-  send({ type: "checkpoint", usage: usage_totals(), model_calls: http_calls, tool_calls, calls });
+  send({ type: "checkpoint", suite: init?.suite, task: init?.task,
+    usage: usage_totals(), model_calls: http_calls, tool_calls, calls });
 }
 
 /** 注入公开 ModelClient；所有用途的请求都经过同一额度与上下文边界。 */
@@ -238,12 +239,18 @@ async function run(input: InitMessage): Promise<void> {
   try {
     mkdirSync(input.logs_dir, { recursive: true });
     const build_info = JSON.parse(readFileSync(new URL("./build-info.json", import.meta.url), "utf8"));
-    writeFileSync(join(input.logs_dir, "downcity-build-info.json"), JSON.stringify(build_info, null, 2) + "\n");
-    trace("init", { model_name: input.model_name, config: input.config, methodology_comparable: false, protocol: "openai_chat_completions" });
-    agent = new Agent({ id: `harbor-${randomUUID()}`, model: create_model(input),
+    const task_sources = build_info.task_sources.suites[input.suite];
+    if (!task_sources || task_sources.task !== input.task) throw new Error("Suite/task does not match build sources");
+    writeFileSync(join(input.logs_dir, "downcity-build-info.json"), JSON.stringify({ ...build_info,
+      suite: input.suite, task: input.task, task_sources,
+      task_source_checks: { [input.suite]: build_info.task_source_checks[input.suite] ?? null },
+      registry: input.suite === "terminal-bench" ? build_info.registry : null }, null, 2) + "\n");
+    trace("init", { suite: input.suite, task: input.task, model_name: input.model_name, config: input.config,
+      methodology_comparable: false, protocol: "openai_chat_completions" });
+    agent = new Agent({ id: `eval-${randomUUID()}`, model: create_model(input),
       instruction: "Complete the task using terminal_exec in the task container. All task file reads, writes, searches and programs must use this tool. Paths and cwd refer only to the container. Commands are non-interactive; background processes may be terminated. Inspect return_code and truncated output. Finish with a concise report.",
       tools: { terminal_exec: {
-        description: "Execute a non-interactive shell command in the Harbor task container. Use it for every task file operation.",
+        description: "Execute a non-interactive shell command in the current task container. Use it for every task file operation.",
         input_schema: { type: "object", properties: {
           command: { type: "string", description: "Shell command in the task container" },
           cwd: { type: "string", description: `Container absolute directory; default ${input.config.cwd}` },
@@ -253,7 +260,7 @@ async function run(input: InitMessage): Promise<void> {
       } },
     });
     session = await agent.sessions.create();
-    await session.rename("Harbor regex-log smoke");
+    await session.rename(`${input.suite}/${input.task} SDK eval`);
     unsubscribe = session.subscribe((mutation) => { try { trace("mutation", mutation); } catch (error) { fail(error); } });
     const handle = await session.prompt({ query: input.instruction, abort_signal: root_abort.signal });
     const result = await handle.finished;
@@ -272,7 +279,7 @@ async function run(input: InitMessage): Promise<void> {
     clearTimeout(deadline);
     const result = { type: "result", success: success && !fatal_error, error: fatal_error?.message,
       text: final_text, usage: usage_totals(), model_calls: http_calls, tool_calls,
-      methodology_comparable: false, cost_usd: null, calls };
+      suite: input.suite, task: input.task, methodology_comparable: false, cost_usd: null, calls };
     writeFileSync(join(input.logs_dir, "downcity-result.json"), redact(JSON.stringify(result, null, 2)) + "\n");
     send(result);
     process.stdin.pause();
@@ -292,7 +299,8 @@ process.stdin.on("data", (chunk: Buffer) => {
       const line = buffer.subarray(0, newline).toString("utf8"); buffer = buffer.subarray(newline + 1);
       const message = JSON.parse(line);
       if (!started) {
-        if (message.type !== "init" || !message.config || typeof message.logs_dir !== "string") throw new Error("Expected init frame");
+        if (message.type !== "init" || !message.config || typeof message.logs_dir !== "string"
+            || !["terminal-bench", "deep-swe"].includes(message.suite) || typeof message.task !== "string") throw new Error("Expected init frame");
         started = true; init = message as InitMessage;
         void run(init).catch((error) => { fail(error); process.exitCode = 1; process.stdin.pause(); });
       } else if (message.type === "exec_result") {

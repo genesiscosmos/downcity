@@ -81,12 +81,8 @@ export class Session implements AgentSession {
   private readonly get_agent_name: SessionOptions["get_agent_name"];
   /** 读取当前 Agent 一句话能力描述；与名称同一时机实时读取。 */
   private readonly get_agent_description: SessionOptions["get_agent_description"];
-  /**
-   * 当前 Session 正在使用的 Workspace ID。
-   *
-   * 关键点（中文）：这是可变的会话状态，不是身份；切换目录后随之改变。
-   */
-  workspace_id?: string;
+  /** 创建时确定的 Workspace 归属；未装配执行资源时仍保留。 */
+  readonly workspace_id?: string;
   /** 当前 Session 的创建来源。 */
   readonly origin: SessionOptions["origin"];
 
@@ -139,16 +135,23 @@ export class Session implements AgentSession {
     this.agent_id = String(options.agent_id || "").trim();
     this.get_agent_name = options.get_agent_name;
     this.get_agent_description = options.get_agent_description;
-    this.workspace_id = String(options.workspace?.id || "").trim() || undefined;
+    this.workspace_id = Object.hasOwn(options, "workspace_id") ? options.workspace_id : options.workspace?.id;
+    Object.defineProperty(this, "workspace_id", { writable: false, configurable: false });
+    if (options.workspace && (!options.workspace.id || options.workspace.id !== this.workspace_id)) throw new Error("session_workspace_immutable");
     this.origin = options.origin;
     this.store = options.store;
     this.create_session_store = options.create_session_store;
     this.read_result_session = options.read_result_session;
     this.allocate_session_id = options.allocate_session_id ?? (async () => generate_session_id());
     this.register_forked_session = options.register_forked_session;
-    this.get_tools = options.get_tools;
+    this.get_tools = () => options.get_tools(this.local_state.current_workspace);
     this.assert_execution_profile = options.assert_execution_profile;
-    this.acquire_execution = options.acquire_execution;
+    this.acquire_execution = () => {
+      if (!this.assert_execution_profile && this.workspace_id && !this.local_state.current_workspace) {
+        throw new Error("session_workspace_unavailable: restore the original Workspace before execution");
+      }
+      return options.acquire_execution?.() ?? (() => {});
+    };
     this.logger = options.logger;
     this.get_agent_model = options.get_agent_model;
     this.get_hooks = options.get_hooks;
@@ -209,6 +212,7 @@ export class Session implements AgentSession {
       logger: this.logger,
     });
     this.state = new SessionState({
+      workspace_id: this.workspace_id,
       agent_id: this.agent_id,
       session_id: this.id,
       origin: this.origin,
@@ -337,11 +341,9 @@ export class Session implements AgentSession {
     options?: AgentSessionSetOptions,
   ): Promise<void> {
     if (this.assert_execution_profile) throw new Error("execution_profile_immutable: configuration belongs to the host");
-    if (!input.model && !input.security && input.workspace === undefined) {
-      throw new Error("session.set requires model, security, or workspace");
-    }
-    if (input.workspace !== undefined && (input.workspace?.id ?? undefined) !== this.workspace_id && this.has_live_execution()) {
-      throw new Error("Stop the Session before replacing its Workspace");
+    if ("workspace" in input || "workspace_id" in input) throw new Error("session_workspace_immutable");
+    if (!input.model && !input.security) {
+      throw new Error("session.set requires model or security");
     }
     const requested_approval_mode = input.security?.approval_mode;
     if (
@@ -364,28 +366,11 @@ export class Session implements AgentSession {
     const model_result = input.model
       ? await this.state.set_model(input.model)
       : undefined;
-    const workspace_changed = input.workspace !== undefined
-      ? await this.state.apply_workspace(input.workspace ?? undefined)
-      : false;
-    const next_workspace = this.local_state.current_workspace;
     const next_approval_mode = requested_approval_mode;
     const security_changed = next_approval_mode !== undefined
       ? await this.state.set_approval_mode(next_approval_mode)
       : false;
-    if (!model_result && !security_changed && !workspace_changed) return;
-    if (workspace_changed) {
-      this.workspace_id = next_workspace?.id;
-    }
-    if (workspace_changed && publish_mutation) {
-      this.events.publish({
-        mutation_id: generate_id(),
-        variant: "session",
-        type: "workspace",
-        session_id: this.id,
-        created_at: Date.now(),
-        ...(next_workspace ? { workspace_id: next_workspace.id } : {}),
-      });
-    }
+    if (!model_result && !security_changed) return;
     if (model_result?.changed && publish_mutation) {
       this.events.publish({
         mutation_id: generate_id(),
@@ -404,9 +389,6 @@ export class Session implements AgentSession {
     const changed_fields = [
       ...(model_result?.changed
         ? [`model: ${String(model_result.config.model_label || "configured")}`]
-        : []),
-      ...(workspace_changed
-        ? [`workspace: ${String(next_workspace?.id || "none")}`]
         : []),
       ...(security_changed
         ? [`security.approval_mode: ${String(next_approval_mode)}`]
@@ -618,11 +600,16 @@ export class Session implements AgentSession {
     return await this.session_messages.list_messages(input);
   }
 
-  /**
-   * 返回当前目录；没有项目上下文时为空。
-   *
-   * 关键点（中文）：只读读取。修改走 `set({ workspace })`，与 `model` 同一手柄。
-   */
+  /** 仅装配原 Workspace 的执行资源，不写入 metadata 或发布归属变更。 */
+  restore_workspace(workspace: WorkspaceRuntime): void {
+    if (this.assert_execution_profile) throw new Error("execution_profile_immutable: Workspace capabilities cannot be attached");
+    if (!workspace?.id || workspace.id !== this.workspace_id) throw new Error("session_workspace_immutable");
+    if (workspace === this.local_state.current_workspace) return;
+    if (this.has_live_execution()) throw new Error("session_busy: cannot replace Workspace resources during execution");
+    this.local_state.current_workspace = workspace;
+  }
+
+  /** 返回当前执行资源；未装配时为空，持久化归属仍由 workspace_id 保留。 */
   get_workspace(): WorkspaceRuntime | undefined {
     return this.local_state.current_workspace;
   }
@@ -806,6 +793,7 @@ export class Session implements AgentSession {
       agent_id: this.agent_id,
       get_agent_name: this.get_agent_name,
       get_agent_description: this.get_agent_description,
+      workspace_id: this.workspace_id,
       workspace_path: this.local_state.fallback_workspace_path,
       ...(this.local_state.current_workspace
         ? { workspace: this.local_state.current_workspace }

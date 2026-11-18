@@ -1,6 +1,7 @@
 # FrontierHarness 本地接入方案与实施状态
 
 > 更新日期：2026-11-18。状态：本地真实 smoke 已完成，最终原始 verifier reward 1.0，pytest 1 passed，SDK 执行成功。有效模型运行使用 Krill GPT-6.1 Sol，5 次模型请求、4 次终端调用，完整耗时 272.022 秒。
+> 第二阶段状态：Pier 0.3.1 接入与非运行检查已完成，DeepSWE 容器、模型、collect、verifier 尚未运行；资源和执行另行确认，见第 7 节。
 > 工具与最新命令：[evals/frontierharness/README.md](../evals/frontierharness/README.md)。目标是单题 SDK + 终端工具 smoke，不代表完整 City/Desktop。
 > [完整本地运行报告与证据](../evals/frontierharness/artifacts/smoke-20261118T024622Z/local-run-report.md)。已授权调整 Colima 并运行题目容器、模型与 verifier；没有重启或部署 City/localnode。Teable 三个容器和 searxng 已恢复，但原 `downcity-pg-migration-check` 及匿名卷重启后未列出、恢复未完成，详见报告。另保留 CLI 权限失败及 0 模型请求的元数据失败 trial，不能描述为全程一次无失败启动。
 
@@ -112,7 +113,8 @@ FrontierHarness 参考 commit `e837a70bd6beb4e72eeeda62dd06e3bd34f6cb63` 的同�
 
 | 已实现文件 | 职责 |
 | --- | --- |
-| `downcity_agent.py` | Harbor BaseAgent、任务环境 exec 桥接、子进程生命周期、AgentContext 回填 |
+| `downcity_agent.py`、`downcity_pier_agent.py` | 各 harness 公开 BaseAgent 初始化、suite 校验及 setup/run 转发；Pier 显式实现安装/网络契约 |
+| `eval_runtime.py` | 共享任务环境 exec 桥接、子进程生命周期、取消、AgentContext 用量与来源回填 |
 | `downcity_runner.ts` | Agent SDK 装配、终端工具、JSONL 协议、usage 与请求数统计、轨迹导出；构建为一次性 Node 入口 |
 | `pyproject.toml`、`uv.lock` | Python 3.13 与 Harbor 0.22.0 固定依赖，目录内 `.venv` 已安装 |
 | `package.json` | 评测入口及必需本地 SDK 依赖，具体构建方式复用仓库工具链 |
@@ -132,23 +134,86 @@ FrontierHarness 参考 commit `e837a70bd6beb4e72eeeda62dd06e3bd34f6cb63` 的同�
 
 首轮保留原生轨迹即可，不宣称已支持 Harbor ATIF；未来转换时再设置 `SUPPORTS_ATIF`。FrontierHarness trial.json/normalizer 接入可在 smoke 成功后新增；需保留 cache read/write 和第一请求 usage 才能计算官方 first-cold 成本。不得将首次模型请求与一次用户 turn 混为一谈。
 
-## 7. DeepSWE / Pier 后续差异
+## 7. 第二阶段：DeepSWE 单题接入准备
 
-| 项目 | 首轮 Terminal-Bench smoke | DeepSWE 扩展 |
-| --- | --- | --- |
-| 执行器 | Harbor 0.22.0、Docker | `datacurve-pier==0.3.1`，不能默认沿用 Harbor 全部参数/API |
-| 任务来源 | `terminal-bench@2.0`，`regex-log` | deep-swe corpus commit `435ee89ec2f2e2289f33b0da4f992f0b7b7266b9`；`v1.1` 不是 Git tag |
-| 任务命令 | `harbor run -d ... -i ...` | 官方模板 `pier run -p /work/deep-swe/tasks/{task} --agent ... --model ... --jobs-dir ...` |
-| 网络 | SDK 模型在宿主；容器按任务规则隔离 | 官方采用 Pier 的 per-agent allowlist 解决禁网任务里的模型访问；需要核对外部 SDK 拓扑与其网络规则是否匹配 |
-| 额外工作 | 两个 adapter 入口与本地依赖 | 语料、镜像/构建和 verifier 依赖、Pier 自定义 Agent 契约、额外资源和网络预检 |
+2026-11-18 已完成第二阶段接入、Colima 12 GiB 调整与原容器恢复、只读存储诊断，并按追加授权在现有根盘完成镜像拉取、禁网预检、一次 Anko Krill Agent、原 collect 和独立原始判题。**模型自行提交 `f9c2742`；原始 reward=0，partial=0.2621359223300971，F2P 0/9、P2P 27/94。** 原 CLI verifier build 因 Compose/buildx/沙箱权限失败；保留失败 trial，仅对同一 patch 续接未开始的判题，没有新的模型 attempt。VM 测试包构建失败且诊断不完整，大量测试未实际运行，因此不能把这个分数直接当作干净的能力结论。完整证据见 [本轮报告](../evals/frontierharness/artifacts/anko-execution-20261118T081707Z/local-run-report.md)。原 5 个容器及卷保持，本题环境已销毁；未修复数据盘、调查或重建 migration-check。
 
-首轮不需要安装 Pier、下载 deep-swe、使用 Runta checkpoint 或运行官方全量脚本。即使后续也采用外部 SDK，Pier 的任务格式、结果和注册入口仍需独立核查，不能推断 Harbor adapter 原样可用。
+### 7.1 固定来源与接口证据
 
-官方模型固定 **Kimi K3**；换 provider 也需 matched control 才能讨论可比性。现有其他模型可用于验证接入，但只能报告本地 smoke。即便使用 Kimi K3，本地 ARM64/仿真、外部 SDK 工具配置、网络政策、资源与冷启动条件均与公开基线不同，仍不能据此宣称榜单分数或成本优劣。
+- FrontierHarness 参考 commit：`e837a70bd6beb4e72eeeda62dd06e3bd34f6cb63`；deep-swe corpus：`435ee89ec2f2e2289f33b0da4f992f0b7b7266b9`。`v1.1` 是数据集标签，不是 Git tag；该 corpus 与 FrontierHarness 冻结元数据并非字节一致。
+- 直接读取 PyPI 官方 `datacurve-pier==0.3.1` wheel，SHA-256 为 `6986b3cb5f66aada5ed6edcc9f045cdf62d19f66b95ff99c706ec8e835981ae1`。Python 要求 `>=3.12`，包声明依赖 `harbor>=0.5.0`；已在 `pier/uv.lock` 同时固定 Harbor 0.22.0，成功解析并安装到 `pier/.venv`，保留现有 smoke 虚拟环境。
+- wheel 内 `pier/agents/base.py:29`、`:82` 起：同样实现 `setup(environment)`、`run(instruction, environment, context)`，另有 `install_spec()` 和 `network_allowlist()`。`pier/trial/execution.py:201` 无条件调用后两项；现有 Harbor BaseAgent 没有这些方法，不能把现有类直接交给 Pier。
+- `pier/environments/base.py:656` 的 `exec(command, cwd, env, timeout_sec, user)` 和返回的 stdout/stderr/return_code 与当前桥接所需契约匹配；`pier/models/agent/context.py:8` 保留现用 token、cache、cost、metadata 字段。`pier/agents/base.py:29` 没有现有 adapter 依赖的 `extra_env` 属性或 `load_trajectory` 初始化，需要由入口明确处理。
+- `pier/agents/factory.py:66` 支持公开 `module:Class` 导入；`pier/cli/jobs.py:316` 提供 `--agent-import-path`，无需修改第三方 registry。并发、尝试、job 重试参数为 `-n 1 -k 1 -r 0`。当前命令采用 `--no-delete`：Pier Docker 实际执行 compose down，销毁容器/网络但保留镜像/卷；`--delete` 路径带 `--rmi all --volumes`，不适用于要求保留镜像/卷的执行。注意 `pier/trial/trial.py:332` 内置 verifier timeout 最多两次尝试，`pier/trial/execution.py:206` 也有环境启动超时重试；`-r 0` 不能表述为所有阶段绝无重试。
+
+### 7.2 原始任务、隔离与评分
+
+固定 [Anko task.toml](https://github.com/datacurve-ai/deep-swe/blob/435ee89ec2f2e2289f33b0da4f992f0b7b7266b9/tasks/anko-typed-variable-bindings/task.toml) 使用 schema 1.3；题目为给 Go 实现的 Anko 增加 typed variable bindings，base commit 为 `3f269a72ff69398b1250c584171f32d12c0d8085`。
+
+| 配置 | 原任务要求 / 本地检查 |
+| --- | --- |
+| Agent | 5,400 秒；2 CPU、8,192 MiB RAM、20,480 MiB storage；`/app` |
+| Verifier | `environment_mode="separate"`；1,800 秒，build 1,800 秒；2 CPU、8,192 MiB RAM、20,480 MiB storage |
+| 网络 | Agent 和 verifier 均为 `no-network`；镜像下载/构建在宿主侧进行 |
+| 镜像 | `public.ecr.aws/d3j8x8q7/swe-bench-202605:kh79betfed7ets4an20cr4j57182y9wt-v1.1` |
+| 实际镜像 | `linux/amd64`；按 digest `sha256:4fb704fd8dff600f6d028c20ae4aca5e1261968bb615bb41c01a111dd371255b` 拉取并运行，原任务 tag 指向该本地镜像 |
+
+SDK/模型调用留在宿主，本轮已通过公开 local login/exchange 获取内存中的新普通用户 token，认证目录核实 Krill `gpt-6.1-sol` 和 1,000,000 窗口后执行一次 Agent；未读取已有凭据或发送额外模型 ping。Pier 入口使用默认空网络 allowlist 和 `install_spec()=None`，无需给任务容器开放模型域名、注入模型 key 或添加 egress proxy。`pier/environments/docker/docker.py:327`、`:390` 表明空 allowlist + 禁网任务会采用 `network_mode: none`。
+
+每次 trial 使用全新 Agent/Session、独立宿主 HOME、命令登记目录和题目容器；不加载已有会话，不挂宿主工作树或 Docker socket。`pier/trial/trial.py:994` 先执行 collect、保存 artifacts 并停止 Agent 容器，再创建独立 verifier；两个 8 GiB 任务环境按阶段运行，不要求同时常驻，但 VM 仍要为既有服务、Docker 和构建留余量。
+
+**提交是评分契约的一部分。** [instruction.md](https://github.com/datacurve-ai/deep-swe/blob/435ee89ec2f2e2289f33b0da4f992f0b7b7266b9/tasks/anko-typed-variable-bindings/instruction.md) 要求从 main 新建分支并提交；原始 collect 是 `git diff --binary <base> HEAD`。只修改 working tree、只 stage 或仅增加未提交文件都不会进入提交产物。保留原 instruction/collect，不替模型自动 commit，不改成包含 working tree 的补丁。
+
+[tests/Dockerfile](https://github.com/datacurve-ai/deep-swe/blob/435ee89ec2f2e2289f33b0da4f992f0b7b7266b9/tasks/anko-typed-variable-bindings/tests/Dockerfile) 用同一任务镜像构建 verifier，并只向 verifier 复制测试、test.patch、grader 和 config；这些内容不提供给被测 Agent。[tests/grader.py](https://github.com/datacurve-ai/deep-swe/blob/435ee89ec2f2e2289f33b0da4f992f0b7b7266b9/tasks/anko-typed-variable-bindings/tests/grader.py) 先应用 model.patch，再应用原始测试补丁；最终二元 reward=1 要求全部 fail-to-pass 通过且没有 pass-to-pass 回归。同时保留原始 partial、各组计数和 CTRF；`reward.txt=-1` 是 verifier 异常哨兵，应报告基础设施异常，不能当一般答错或 SDK success。
+
+[environment/Dockerfile](https://github.com/datacurve-ai/deep-swe/blob/435ee89ec2f2e2289f33b0da4f992f0b7b7266b9/tasks/anko-typed-variable-bindings/environment/Dockerfile) 在镜像构建期准备 Go modules、goyacc v0.42.0 和 CTRF reporter v0.1.0。本轮已验证 Bash/coreutils、Go 1.25.5、模块校验与禁网测试编译，预检缓存随独立容器销毁。原始 verifier 脚本已在 separate 环境运行并产生分数，但存在 VM 包构建失败，不能宣称工具链或离线评分全部通过。
+
+### 7.3 已实施的最小接入与验证
+
+只修改独立 eval 工具与本计划，保留原始任务和 SDK 核心。已完成以下变更：
+
+| 文件（相对 `public/evals/frontierharness/`） | 职责 |
+| --- | --- |
+| 新增 `eval_runtime.py`；调整 `downcity_agent.py` | 提取一次性 Node 生命周期、JSONL、终端输出/取消处理、用量采集的公共运行层；Harbor 入口持有其 BaseAgent 和 context 回填 |
+| 新增 `downcity_pier_agent.py` | 继承 Pier BaseAgent；实现公开 setup/run、空 allowlist、无需容器内安装，独立保存专用模型 env，回填 Pier context |
+| `downcity_runner.ts`、`types/bridge.ts` | 保持 SDK/工具协议；去掉写死的 regex-log 会话名和 Harbor 文案，传入当前 suite/task 标识用于证据 |
+| `sources.json`、`build.mjs` | 记录 suite/task 对应来源及实际选择；避免 DeepSWE 结果沿用 regex-log 来源与构建标记 |
+| 新增 `pier/pyproject.toml`、`pier/uv.lock` | 隔离锁定 Pier 0.3.1 + Harbor 0.22.0；已安装到 `pier/.venv`，保留已跑通的 Harbor 环境 |
+| `README.md`、本计划 | 写明当前命令、评分契约、资源、执行边界与结果解释 |
+
+公共运行层按显式 suite 配置校验：Pier 入口仅接受 `deep-swe`，默认/最高 5,400 秒；Harbor 入口仅接受 `terminal-bench`，默认 900 秒、原有上限 1,200 秒不变，原任务 900 秒限制独立生效。task 必须匹配该 suite 唯一固定来源，未知参数、布尔/越界时限、MCP、skills 与轨迹恢复均拒绝。Node 按接收配置计算时限，无需改 SDK。原始 90 分钟 Agent + 30 分钟 verifier 不是整个 job 上限；镜像拉取、构建、collect、清理与 Pier 内置超时重试可能进一步增加时长。若选择更短 Agent smoke，必须另记限制参数，不能称完整任务条件。
+
+已批准使用 `max_model_calls=64`、`max_tool_calls=128`、`max_output_tokens=4096`，并发/尝试各 1、job 重试 0，记录每次真实调用、token 和原始 reward；这是请求与输出控制，**不是金额硬上限**。本机 Krill 路由没有本轮核实的价格或金额限额，`cost_usd` 保留 null。资源阻塞解除后按已批准范围执行，不把目录可见或 SDK success 当作通过。
+
+已通过 Node 26.11.1 / Python 3.13.16 下的以下非运行检查：
+
+- Pier 独立 uv 锁解析、frozen 安装及实际版本校验：datacurve-pier 0.3.1、Harbor 0.22.0；原 Harbor 环境仍为 0.22.0。
+- 共享类型、Agent、Federation 无 bump 构建；eval TypeScript typecheck/构建、Node 语法检查、三个 Python 模块编译与 Bash 语法检查。
+- 两个固定版公开 `AgentFactory.create_agent_from_config()` 的真实 import/构造，context 用量与对应 task 来源回填；未启动 Node 或 task。
+- Pier `install_spec() is None`、空 `NetworkAllowlist.domains`，extra_env/load_trajectory 显式处理；suite、task、未知参数、越界时限等错误配置拒绝。
+- 固定源码 archive 下载、只解包 Anko 一题，全部 10 个任务文件哈希由 build 核对；Pier 公开 Task 解析保留 separate/no-network/5,400 秒/1,800 秒/2 CPU/8 GiB 配置。
+- Harbor registry 单题公开配置解析；两套 CLI `run --help`；README 完整命令通过 Click/Typer `make_context` 参数解析及对应公开配置验证，未调用执行 callback、Job.create 或 Docker preflight。
+
+完整准备与运行命令已写入 [README](../evals/frontierharness/README.md)，Pier 使用 `pier/.venv/bin/pier run -p ./artifacts/deep-swe-435ee89ec2f2e2289f33b0da4f992f0b7b7266b9/tasks/anko-typed-variable-bindings --agent-import-path downcity_pier_agent:DowncityPierAgent ...`。构建快照保留所有 suite 来源，trial 证据只选当前 suite/task；DeepSWE registry 为 null，避免套用 regex-log 来源。
+
+实际 SDK prompt、Pier environment.exec、模型自行提交、原 collect、amd64 禁网预检、separate verifier-only 续接、partial/CTRF 与 reward 均已有运行证据。没有主动执行模型强杀或额外取消测试。产物保留在本地 artifacts；核心 SDK 未变，不 bump、不提交 Git。模型在题目容器内按原指令创建的 Git commit 属于答案产物，与本仓库提交分开记录。
+
+### 7.4 本轮实际资源与结果
+
+1. **实现/来源：** 固定 Pier/Harbor 版本、10 个任务文件 SHA-256、adapter build/typecheck 和 Node/Python/Bash 检查通过。保留 dirty 工作树事实及实际构建快照，未改 SDK、任务或评分测试。
+2. **资源：** Colima 保持 4 CPU / 12 GiB。100 GiB 数据盘长期挂载失败未处理；Docker/containerd 使用现有根盘完成本题，采样最低余量约 6.83 GiB、最终约 7.08 GiB，没有触发 3 GiB 保留线。宿主 warning 结合真实 CPU/swap 活动判断；预检后恢复 normal，正式 Agent 32 次采样均 normal，verifier 后又出现 warning，未退出任何应用或追加资源。原 5 个容器 ID、运行状态、挂载/策略及原卷最终核对一致，本题环境和 Node 已销毁。
+3. **无模型预检：** 固定 digest 拉取约 316 秒，实际根盘减少约 3.50 GiB。禁网编译已有测试但不执行评分约 309 秒；原 verifier build 和工具检查通过。预检工作状态/Go cache 不进入正式 Agent，共享镜像与构建 cache 保留。
+4. **一次模型 attempt：** `gpt-6.1-sol` Krill，目录窗口 1000000；18 次模型请求、17 次终端调用，Agent 472.977 秒。input=291805（含缓存）、cached_input=269446、output=6790、reasoning=597；cache_write 与 cost_usd 为 null。模型自行建分支并提交 `f9c2742`，collect patch 103886 bytes，SHA-256 `3763b52c7d7dd12b513bbb9fec79151a81813a684844e42a25e0d957120f4590`。没有重跑模型。
+5. **基础设施与续接：** 原 CLI 的 Compose build 尝试缺失 buildx 并写入沙箱不可写目录，trial 为 infra exception，未评分。只在判题续接进程设置 `DOCKER_BUILDKIT=0`、`COMPOSE_BAKE=false`，通过公开 EnvironmentFactory/Verifier 使用同一 patch 和原始任务进行一次判题，206.216 秒；原失败 trial 保留，不覆盖为成功。当前 README 命令包含这些构建环境变量。
+6. **原始分数与限制：** reward=0（非 -1），partial=0.2621359223300971，F2P 0/9、P2P 27/94，CTRF 103 项中 27 pass / 76 fail。VM 包 build failed，保留 JSON FailedBuild=net；new-ctrf.json 为空，原 grader 将缺失测试计失败。完整编译诊断没有保留，不能断言全部失败源于模型逻辑，也不能直接把此前仿真工具链 SIGSEGV 当作唯一根因。原始日志/评分全部保留，没有为提高分数重跑。
+
+本轮目标已实际执行至模型提交和原始评分。后续若需区分实现与基础设施问题，应先明确稳定运行条件与完整编译日志方案，再单独决定是否执行；不擅自换模型、扩题、修盘或重启/部署服务。
+
+官方模型固定 **Kimi K3**；换 provider 也需 matched control 才能讨论可比性。现有模型用于本地 smoke 时保持 `methodology_comparable: false`。即便使用 Kimi K3，本地 ARM64/仿真、外部 SDK 工具配置、网络政策、资源与冷启动条件均与公开基线不同，仍不能据此宣称榜单分数或成本优劣。
 
 ## 8. 模型配置与后续执行边界
 
-本次单题、镜像拉取、模型调用、Colima 8 GiB / 4 CPU 调整及现有容器中断恢复均已获明确批准。恢复结果见运行报告，不能将 4 个容器已运行写为原 5 个全部恢复。
+2026-11-18 首轮 regex-log 的运行与恢复结果见其报告；此前丢失容器事件独立记录。第二阶段已批准 Pier 接入和准备，随后明确批准现有 Colima 12 GiB 调整及必要重启、恢复原 running 容器、本题镜像拉取/无模型预检，以及 Krill 单次 Anko 正式 Agent + separate verifier。随后用户批准在现有根盘逐阶段继续；本次已完成镜像/预检、一次模型运行与原始判题（包含一次未开始评分的 verifier build 失败后的同 patch 续接）。原 5 个现存容器/卷保持，本题环境已销毁；没有新的待运行 retry。新增磁盘处理、其它服务部署/重启、扩题/换模型仍不在授权范围内。
 
 当前节点 `http://127.0.0.1:12314` 的标准 `local` 登录/exchange 已实测可签发普通 user_token；新 token 仅在进程内存及专用子进程环境传递，未读取现有 key、token、.env 或上游凭据。匿名模型目录返回 401，认证后返回 200。兼容 base URL 是 `http://127.0.0.1:12314/v1/ai`。该目录将 Krill GPT-6.1 Sol 登记为 `gpt-6.1-sol`，description/tags 明确为 Krill；这也是实际请求 ID。
 

@@ -15,10 +15,14 @@ export function create_shell_completion_handler(
     const agent = resolve_agent(target.agent_id);
     if (!agent) return "retry";
     try {
-      const existing = await agent.sessions.get(target.session_id, target.category);
-      const workspace = existing.workspace_id ? await resolve_workspace(agent.id, existing.workspace_id) : undefined;
-      const session = workspace
-        ? await agent.sessions.get(target.session_id, target.category, { workspace }) : existing;
+      const existing = await agent.sessions.read(target.session_id, target.category).catch((error: unknown) => {
+        if (error instanceof Error && error.message === "session_not_found") return null;
+        throw error;
+      });
+      if (!existing) return "discarded";
+      const workspace_id = existing.metadata.workspace_id;
+      const workspace = workspace_id ? await resolve_workspace(agent.id, workspace_id) : undefined;
+      const session = await agent.sessions.get(target.session_id, target.category, { workspace });
       abort_signal.throwIfAborted();
       return await session.accept_background_result({
         turn_id: target.turn_id, request_id: `shell_exit:${snapshot.shell_id}`,

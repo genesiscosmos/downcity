@@ -80,7 +80,7 @@
 | `agent_id` | `string` | 必填 | SDK core | 稳定 | |
 | `get_agent_name` | `() => string` | 必填 | SDK core | 稳定 | 实时读取，使重配身份立即生效 |
 | `get_agent_description` | `() => string` | 必填 | SDK core | 稳定 | 同上 |
-| `workspace` | `WorkspaceRuntime` | 无 | 宿主 | 稳定 | 会话当前目录；可通过 `set({ workspace })` 切换 |
+| `workspace` | `WorkspaceRuntime` | 无 | 宿主 | 稳定 | 同 ID 的 Workspace 执行资源；归属创建后不可变 |
 | `workspace_path` | `string` | 必填 | SDK core | **待验证** | 仅用于无 Workspace 时的 system 快照与项目根展示；`build_session_system_blocks` 要求非空，见第 4 节 Q4 |
 | `origin` | `SessionOrigin` | 必填 | 调用方 | 稳定 | 唯一决定分区与角色身份的字段 |
 | `store` | `SessionStorage` | 必填 | SDK core | 稳定 | 本 Session 独占的领域持久化视图 |
@@ -103,11 +103,11 @@
 | --- | --- | --- | --- | --- | --- |
 | `AgentCreateSessionInput` | [`SessionTypes.ts:24`](../packages/agent/src/types/agent/SessionTypes.ts) | `origin?: SessionOrigin` | 调用方 | 稳定 | 省略时为 `{ type: "work" }`；**调用方唯一可声明角色的入口** |
 | `AgentCreateSessionOptions` | [`AgentSessionCollection.ts:23`](../packages/agent/src/types/agent/AgentSessionCollection.ts) | `workspace?: WorkspaceRuntime` | 宿主 | 稳定 | 省略时用 Agent 默认目录，都没有则该会话无项目上下文 |
-| `AgentGetSessionOptions` | [`AgentSessionCollection.ts:29`](../packages/agent/src/types/agent/AgentSessionCollection.ts) | `workspace?: WorkspaceRuntime` | 宿主 | 稳定 | 与持久化值不一致**不再报错**，以传入值为准 |
+| `AgentGetSessionOptions` | [`AgentSessionCollection.ts:29`](../packages/agent/src/types/agent/AgentSessionCollection.ts) | `workspace?: WorkspaceRuntime` | 宿主 | 稳定 | 必须匹配持久化归属；省略资源不继承 Agent 默认 Workspace |
 | `AgentListSessionsInput` | [`SessionTypes.ts:36`](../packages/agent/src/types/agent/SessionTypes.ts) | `origin_type?`, `workspace_id?`, `limit?`, `cursor?`, `query?` | 调用方 | 稳定 | `origin_type` 省略时为 `work`（注释仍写 `chat`，见 2.4） |
 | `AgentArchiveSessionInput` | [`SessionTypes.ts:393`](../packages/agent/src/types/agent/SessionTypes.ts) | `id: string`, `origin_type?` | 调用方 | 稳定 | |
 | `AgentArchiveSessionsInput` | [`SessionTypes.ts:409`](../packages/agent/src/types/agent/SessionTypes.ts) | `origin_type?`, `workspace_id?`, `limit?` | 调用方 | 稳定 | |
-| `AgentSessionSetInput` | [`SessionTypes.ts:78`](../packages/agent/src/types/agent/SessionTypes.ts) | `model?`, `security?`, `workspace?: WorkspaceRuntime \| null` | 宿主 | 稳定 | `null` 表示脱离项目上下文；执行中的 Turn 沿用旧值 |
+| `AgentSessionSetInput` | [`SessionTypes.ts:78`](../packages/agent/src/types/agent/SessionTypes.ts) | `model?`, `security?` | 宿主 | 稳定 | 只修改模型与安全配置，不接受 Workspace 字段 |
 | `AgentSessionSetOptions` | [`SessionTypes.ts:110`](../packages/agent/src/types/agent/SessionTypes.ts) | `persist_action?`, `publish_mutation?` | 宿主 | 稳定 | 默认 `true`；`publish_mutation` 默认跟随 `persist_action` |
 | `RemoteSessionSetInput` | [`SessionTypes.ts:138`](../packages/agent/src/types/agent/SessionTypes.ts) | `model_id?`, `security?` | 调用方 | 稳定 | 远程边界只传可序列化 ID，服务端解析为实例 |
 | `AgentSessionInput` | [`AgentSessionInput.ts:12`](../packages/agent/src/types/agent/AgentSessionInput.ts) | `workspace?: WorkspaceRuntime` | 宿主 | 稳定 | `agent.session()` 的入参；已存在时被忽略 |
@@ -166,7 +166,7 @@
 
 `origin` 与分区必须一致。读元数据时 `restore_session_origin` 会校验 `origin.category === expected_category`，不一致直接抛错。这是防止「文件在 A 分区、元数据自称 B 分区」的唯一硬校验。
 
-**Workspace 不是身份，也不参与恢复校验。** 宿主注入的 Workspace 直接成为该会话的新当前目录，语义等同 `set({ workspace })`；不注入则沿用内存实例，内存也没有则该会话没有项目上下文。
+**Workspace 归属在创建时确定。** 宿主只能注入与持久化 ID 相同的执行资源，缓存与冷恢复均校验；未注入资源仍保留 workspace_id，不继承 Agent 默认 Workspace。历史可读，执行需恢复原资源；创建时无归属的会话不得补绑。metadata 写入拒绝归属变化，configure 拒绝 Workspace 字段。
 
 #### 2.2.4 已废弃与仅存于文档的取值
 
@@ -250,7 +250,7 @@ flowchart TB
 | [`MessengerEnvironment.ts`](../packages/implementations/powers/src/messenger/runtime/MessengerEnvironment.ts) | 角色为 `channel` 且有 `chat_id` 与有效平台 | 选择平台 prompt、构造本轮环境事实 |
 | [`MessengerPower.ts`](../packages/implementations/powers/src/messenger/MessengerPower.ts) | 角色为 `channel` | `turn_committed` 只对外部聊天会话执行自动回复 |
 
-加上两处宿主侧约束：Desktop 的 `rebind_session_workspace` 拒绝给 Agent 主会话绑定项目目录（[`AgentController.ts`](../../private/apps/desktop/src/main/agent/AgentController.ts)），以及 Group 成员会话的归属断言。
+加上两处宿主侧约束：Desktop 的执行入口校验原 Workspace 可用且归属一致（[`AgentController.ts`](../../private/apps/desktop/src/main/agent/AgentController.ts)），以及 Group 成员会话的归属断言。
 
 协调类能力（前两行）与归档（第三行）按分类判定；剩下的都是角色判定，因为分类不足以区分同一分类内的角色。这就是来源在能力面上的全部权限。
 
@@ -260,7 +260,7 @@ flowchart TB
 
 | 主张 | 核实结果 | 证据 |
 | --- | --- | --- |
-| 「Workspace 不是 Session 的身份」：`workspace_id` 落盘强校验属范畴错误 | **已采纳并实现** | `AgentSessions.get()` 不再比对持久化 `workspace_id`，以注入值为准（[`AgentSessions.ts:360`](../packages/agent/src/agent/AgentSessions.ts)） |
+| Workspace 归属创建后不可变 | **已实现** | `AgentSessions.get()` 校验持久化 ID，恢复只装配同 ID 执行资源；公开 set 与 storage configure 不接受 Workspace 字段 |
 | 「Workspace 的解析不是 Agent 的职责」：`AgentOptions` 不含 `resolve_workspace` | **已采纳并实现** | `AgentOptions` 只有 `resolve_work_workspace`，且仅服务 `session.start`（[`AgentOptions.ts:112`](../packages/agent/src/types/agent/AgentOptions.ts)）；解析失败走宿主端口（[`Agent.ts:512`](../packages/agent/src/agent/Agent.ts)） |
 | 用 `work` 取代 `chat`，`origin_type` 默认值改 `work` | **代码已采纳，文档未跟进** | 默认值为 `work`（[`SessionOrigin.ts:51`](../packages/type/src/types/session/SessionOrigin.ts)、[`AgentSessions.ts:469`](../packages/agent/src/agent/AgentSessions.ts)）；但 README 与类型注释仍写 `chat` |
 | 角色常量从 `@downcity/type` 导出 | **部分采纳** | 导出了三个（含文档未提的 `SESSION_ORIGIN_TYPE_CHANNEL`），但 `group` / `task` / `chrome` 没有常量 |

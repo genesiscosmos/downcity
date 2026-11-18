@@ -20,6 +20,7 @@ export class AgentSessionConfiguration {
 
   /** 指定字段才提交；配置事实与目录投影只在这个入口维护。 */
   update(input: AgentSessionConfigurationUpdate): { revision: number } {
+    if ("workspace_id" in input || "workspace" in input) throw new Error("session_workspace_immutable");
     return this.owner.write(input.operation_id, { command: "configure", ...input }, (database) => {
       const record = this.catalog.by_session_id(input.session_id);
       if (record.archived) throw new Error("session_archived");
@@ -33,10 +34,9 @@ export class AgentSessionConfiguration {
       if (input.system_snapshot !== undefined && input.system_snapshot !== null && !input.system_snapshot.trim()) {
         throw new Error("session_system_snapshot_empty");
       }
-      database.prepare(`UPDATE sessions SET workspace_id = ?, title = ?, model_label = ?, timezone = ?,
+      database.prepare(`UPDATE sessions SET title = ?, model_label = ?, timezone = ?,
         revision = revision + 1 WHERE session_key = ?`)
-        .run(input.workspace_id === undefined ? record.workspace_id : input.workspace_id,
-          input.title === undefined ? record.title : input.title,
+        .run(input.title === undefined ? record.title : input.title,
           input.model_label === undefined ? record.model_label : input.model_label,
           input.timezone ?? record.timezone, record.session_key);
       database.prepare(`UPDATE session_configuration SET model_binding = ?, approval_mode = ?, execution_profile = ?, system_snapshot = ?

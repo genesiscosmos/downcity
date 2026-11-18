@@ -150,7 +150,7 @@ export class AgentSessions implements AgentSessionsContract<AgentSession> {
   /** 当前活动目录元数据变化；只提供事实失效信号。 */
   private readonly directory_listeners = new Set<() => void>();
 
-  /** 订阅 Workspace 绑定等目录变化，不复制 Session 状态。 */
+  /** 订阅标题等目录变化，不复制 Session 状态。 */
   on_directory_changed(listener: () => void): () => void {
     this.directory_listeners.add(listener);
     return () => { this.directory_listeners.delete(listener); };
@@ -344,7 +344,7 @@ export class AgentSessions implements AgentSessionsContract<AgentSession> {
    * - 空指针通过显式 ensure_main 事务创建；读取不会推断或建立会话。
    * - 同一进程内并发调用会收敛到同一个创建过程，不会产生第二条。
    * - 被归档或删除后，下一次调用自然重建一条。
-   * - Workspace 仅用于首次创建；已有会话的目录实例由宿主通过 get/set 明确恢复。
+   * - Workspace 仅用于首次创建；已有会话的资源由宿主通过 get 注入同 ID Workspace 恢复。
    */
   async self(input?: { workspace?: WorkspaceRuntime }): Promise<AgentSession> {
     const current = await this.resolve_session_context().store.read_main();
@@ -367,8 +367,11 @@ export class AgentSessions implements AgentSessionsContract<AgentSession> {
       });
       const storage = await context.store.ensure_main(context.workspace_id);
       const session_id = storage.session_id;
+      const metadata = await storage.read_metadata();
+      const workspace = context.get_workspace();
+      if (workspace && workspace.id !== metadata.workspace_id) throw new Error("session_workspace_immutable");
       const restored_model = await resolve_session_snapshot(storage, this.get_agent_model(), true);
-      const session = this.get_or_create_session({ session_id, origin, ...(input?.workspace ? { workspace: input.workspace } : {}), storage, restored_model });
+      const session = this.get_or_create_session({ session_id, origin, workspace, workspace_id: metadata.workspace_id, inherit_workspace: false, storage, restored_model });
       await session.initialize();
       await this.notify_created(session);
       return session;
@@ -454,7 +457,7 @@ export class AgentSessions implements AgentSessionsContract<AgentSession> {
           default_model: this.get_agent_model(),
         }, persisted);
         await storage.bind_execution_profile(execution_profile.reference);
-        const session = this.get_or_create_session({ session_id, origin, storage, execution_profile });
+        const session = this.get_or_create_session({ session_id, origin, storage, execution_profile, workspace_id: metadata.workspace_id, inherit_workspace: false });
         await session.initialize();
         if (!persisted) await this.notify_created(session);
         return session;
@@ -544,9 +547,8 @@ export class AgentSessions implements AgentSessionsContract<AgentSession> {
    * 获取一个已存在的 session。
    *
    * 关键点（中文）
-   * - 当前目录不是 Session 身份：传入的 Workspace 与持久化值不一致时不再报错，
-   *   而是以传入值为准成为该 Session 的新当前目录。
-   * - 省略 Workspace 时沿用持久化值；两者都为空时该 Session 没有项目上下文。
+   * - 归属由创建时确定；传入资源必须匹配持久化 Workspace ID。
+   * - 省略资源时保留原归属，仅恢复历史与配置，不继承 Agent 默认 Workspace。
    */
   async get(
     session_id: string,
@@ -559,6 +561,7 @@ export class AgentSessions implements AgentSessionsContract<AgentSession> {
 
   /** 生命周期保护内读取持久化信息并恢复 Session 句柄。 */
   private async open_existing_session(session_id: string, category: string, input?: { /** 恢复时注入的 Workspace 实例。 */ workspace?: WorkspaceRuntime }): Promise<AgentSession> {
+    if (input && "workspace" in input && input.workspace === null) throw new Error("session_workspace_immutable");
     const resolved_session_id = normalize_session_id(session_id);
     if (!resolved_session_id) {
       throw new Error("sessions.get requires a non-empty session_id");
@@ -587,34 +590,29 @@ export class AgentSessions implements AgentSessionsContract<AgentSession> {
     }, { agent_id: this.agent_id, session_id: resolved_session_id, origin: persisted_metadata.origin,
       workspace_id: persisted_metadata.workspace_id, default_model: this.get_agent_model() }, reference) : undefined;
     if (execution_profile && input?.workspace) throw new Error("execution_profile_immutable: Workspace capabilities cannot be attached");
-    const persisted_workspace_id = String(persisted_metadata.workspace_id || "").trim() || undefined;
+    const persisted_workspace_id = persisted_metadata.workspace_id;
+    if (input?.workspace && (!input.workspace.id || input.workspace.id !== persisted_workspace_id)) throw new Error("session_workspace_immutable");
     this.assert_resource_available(persisted_workspace_id);
-    if (cached && (!input?.workspace || (cached.get("workspace") === input.workspace && input.workspace.id === persisted_workspace_id))) {
-      // 保留资源和执行配置校验，跳过重复模型恢复与实例装配。
+    if (cached) {
+      if (cached.workspace_id !== persisted_workspace_id) throw new Error("session_workspace_immutable");
+      // 装配前检查工具冲突；失败时不改变缓存实例或存储。
+      if (input?.workspace) cached.restore_workspace(input.workspace);
       await cached.initialize();
       return cached;
     }
-    const requested_workspace_id = String(input?.workspace?.id || "").trim() || undefined;
-    // 目录不是身份，也不在 Session 侧还原：
-    // - 宿主传了实例 → 用它；
-    // - 本进程有缓存 → 沿用内存实例；
-    // - 都没有 → 该会话没有项目上下文，但仍可正常读历史与对话。
     const session = this.get_or_create_session({
       session_id: resolved_session_id,
-      ...(input?.workspace ? { workspace: input.workspace } : {}),
+      workspace: input?.workspace,
+      workspace_id: persisted_workspace_id,
+      inherit_workspace: false,
       origin: persisted_metadata.origin,
       storage,
       execution_profile,
-      restored_model: await resolve_session_snapshot(storage, this.get_agent_model(), false, this.resolve_model, input?.workspace),
+      // 惰性模型解析发生在执行时，应读取随后装配的同 ID 资源。
+      restored_model: await resolve_session_snapshot(storage, this.get_agent_model(), false, this.resolve_model,
+        () => this.sessions_by_id.get(cache_key)?.get("workspace") ?? input?.workspace),
     });
     await session.initialize();
-    if (input?.workspace && (
-      requested_workspace_id !== persisted_workspace_id
-      || session.get("workspace") !== input.workspace
-    )) {
-      // 持久化 ID 相同不代表缓存实例已经恢复目录；宿主注入也必须更新执行资源。
-      await session.set({ workspace: input.workspace }, { persist_action: false });
-    }
     return session;
   }
 
@@ -771,20 +769,15 @@ export class AgentSessions implements AgentSessionsContract<AgentSession> {
     return result;
   }
 
-  /**
-   * 删除：把 Session 重新绑定到另一个 Workspace。
-   *
-   * 删除理由：它表达的是「Workspace 是 Session 绑定」这个旧模型。目录切换改由
-   * `session.set({ workspace })` 承担，恢复时不再校验归属，因此不需要第二条路径。
-   */
-
   private get_or_create_session(input?: {
     /**
      * 可选指定 session id。
      */
     session_id?: string;
-    /** 当前 Session 可选使用的 Workspace。 */
+    /** 当前 Session 可选使用的 Workspace 执行资源。 */
     workspace?: WorkspaceRuntime;
+    /** 恢复时的持久化归属；显式 undefined 表示创建时无归属。 */
+    workspace_id?: string;
     /** 当前 Session 的创建来源。 */
     origin?: SessionOrigin;
     /** 已由集合层创建或打开的单 Session Storage。 */
@@ -815,14 +808,15 @@ export class AgentSessions implements AgentSessionsContract<AgentSession> {
       creating: !profile && input?.inherit_workspace !== false,
       ...(input?.workspace ? { workspace: input.workspace } : {}),
     });
-    this.assert_resource_available(context.workspace_id);
+    const workspace_id = input && Object.hasOwn(input, "workspace_id") ? input.workspace_id : context.workspace_id;
+    this.assert_resource_available(workspace_id);
     // 默认模型是本实例创建时的快照，Agent.reconfigure 不改变已打开 Session。
     const default_model = input && Object.hasOwn(input, "restored_model") ? input.restored_model : this.get_agent_model();
     const behavior_revision = this.behavior_revision;
     const created = new this.session_class({
       acquire_execution: () => {
         if (behavior_revision !== this.behavior_revision) throw new Error("Session behavior changed; restore this Session before executing");
-        this.assert_resource_available(context.workspace_id);
+        this.assert_resource_available(workspace_id);
         return this.acquire_execution?.() ?? (() => {});
       },
       read_result_session: (session_id, category) => read_result_session(context.store, session_id, category),
@@ -830,15 +824,19 @@ export class AgentSessions implements AgentSessionsContract<AgentSession> {
       agent_id: this.agent_id,
       get_agent_name: this.get_agent_name,
       get_agent_description: this.get_agent_description,
+      workspace_id,
       workspace_path: context.workspace_path,
       ...(context.get_workspace() ? { workspace: context.get_workspace() } : {}),
       origin: resolved_origin,
-      store: input?.storage || context.store.create_session(resolved_session_id, resolved_origin, context.workspace_id),
-      create_session_store: (session_id) => context.store.create_session(session_id, resolved_origin, context.workspace_id),
+      store: input?.storage || context.store.create_session(resolved_session_id, resolved_origin, workspace_id),
+      create_session_store: (session_id) => context.store.create_session(session_id, resolved_origin, workspace_id),
       allocate_session_id: () => this.allocate_session_id(resolved_origin),
       register_forked_session: (session) => this.register_forked_session(session),
       session_id: resolved_session_id,
-      get_tools: () => { assert_profile(); return profile ? profile.resources.tools : context.get_tools(); },
+      get_tools: (workspace) => {
+        assert_profile();
+        return profile ? profile.resources.tools : this.resolve_session_context({ origin: resolved_origin, workspace }).get_tools();
+      },
       logger: context.logger,
       instruction_system_blocks: instruction_blocks(),
       get_instruction_system_blocks: instruction_blocks,
@@ -899,13 +897,13 @@ export class AgentSessions implements AgentSessionsContract<AgentSession> {
     if (this.session_observers.has(cache_key)) return;
     const release_subject = this.observe_session?.(session);
     const release_directory = session.subscribe((mutation) => {
-      if (mutation.variant !== "session" || (mutation.type !== "workspace" && mutation.type !== "title")) return;
+      if (mutation.variant !== "session" || mutation.type !== "title") return;
       this.notify_directory_changed();
     });
     this.session_observers.set(cache_key, () => { release_subject?.(); release_directory(); });
   }
 
-  /** 标题、Workspace 换绑和归档清空只发目录事实，不改变通知记录。 */
+  /** 标题和归档清空只发目录事实，不改变通知记录。 */
   private notify_directory_changed(): void {
     for (const listener of this.directory_listeners) {
       try { listener(); } catch (error) { this.logger.warn("Session directory observer failed", { error: String(error) }); }

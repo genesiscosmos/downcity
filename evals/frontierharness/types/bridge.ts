@@ -15,7 +15,7 @@ export interface EvalConfig {
   max_output_bytes: number;
   /** 单条容器命令允许的最长执行秒数。 */
   command_timeout_sec: number;
-  /** 整个 Agent 阶段的适配器墙钟秒数，不含 Harbor setup/verifier。 */
+  /** 整个 Agent 阶段的适配器墙钟秒数，不含 harness setup/verifier。 */
   run_timeout_sec: number;
   /** 所有终端调用默认使用的容器绝对目录。 */
   cwd: string;
@@ -25,8 +25,12 @@ export interface EvalConfig {
 export interface InitMessage {
   /** 固定消息判别字段。 */
   type: "init";
-  /** Harbor 原始任务指令。 */
+  /** 原始任务指令，保留其提交与评分契约。 */
   instruction: string;
+  /** 经过 Python 入口校验的固定评测 suite，用于选择来源证据。 */
+  suite: "terminal-bench" | "deep-swe";
+  /** 当前 suite 唯一固定任务的名称。 */
+  task: string;
   /** 显式指定的上游模型名称，不自动剥离 provider 前缀。 */
   model_name: string;
   /** 当前轮不可变资源配置。 */
@@ -37,7 +41,7 @@ export interface InitMessage {
 
 /** 容器终端工具输入。 */
 export interface ExecInput {
-  /** 只在 Harbor 当前容器执行的 shell 命令。 */
+  /** 只在 harness 当前容器执行的 shell 命令。 */
   command: string;
   /** 容器内绝对目录；省略时采用默认 cwd。 */
   cwd?: string;

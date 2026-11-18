@@ -13,8 +13,6 @@ export interface AgentSessionConfigurationUpdate {
   session_id: string;
   /** 可选目录乐观 revision，省略不执行目录 CAS。 */
   expected_revision?: number;
-  /** 省略保留，null 脱离项目。 */
-  workspace_id?: string | null;
   /** 省略保留，null 清除用户标题。 */
   title?: string | null;
   /** 省略保留，null 清除模型展示标签。 */

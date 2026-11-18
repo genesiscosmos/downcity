@@ -39,7 +39,7 @@ Deployment uploads the static build and binds the custom domain with managed HTT
 
 ## Connecting
 
-1. In Desktop, enable **Settings → General → City Remote**, then select **Create connection code**. Enter a recipient note and a City address reachable by the recipient, choose Agent permissions and expiry, and create the code. Every creation issues an independent token.
+1. In Desktop, enable **Settings → City Remote**, then select **Create connection code**. Enter a recipient note and a City address reachable by the recipient, choose Agent permissions and expiry, and create the code. Every creation issues an independent token.
 2. Copy the complete code from its one-time display and send it privately. Closing the dialog clears the code. Existing authorizations can be edited or revoked, but their plaintext cannot be recovered; create another code if needed.
 3. Paste the code into Remote's single connection-code field. Remote decodes it locally and shows the City address. Confirm the address, then click **Connect** to access the authorized Agents.
 

@@ -27,6 +27,9 @@ export interface AgentManagedSession extends AgentSession {
    */
   initialize(): Promise<this>;
 
+  /** 仅供集合恢复同 ID 的执行资源；不改变或持久化会话归属。 */
+  restore_workspace(workspace: WorkspaceRuntime): void;
+
   /**
    * 返回供宿主运行时使用的 Session 端口。
    */
@@ -79,12 +82,10 @@ export interface SessionOptions {
   /** 当前 Agent 一句话能力描述；实时读取，与 system 身份保持一致。 */
   get_agent_description: () => string;
 
-  /**
-   * 当前 Session 的初始目录。
-   *
-   * 关键点（中文）：这是会话配置而非身份，可在会话中通过 `set({ workspace })` 切换；
-   * 省略时该 Session 没有项目上下文。
-   */
+  /** 创建时确定的 Workspace 归属；恢复时沿用持久化值，与资源是否装配无关。 */
+  workspace_id?: string;
+
+  /** 与归属 ID 相同的 Workspace 执行资源；省略时只恢复历史与配置。 */
   workspace?: WorkspaceRuntime;
 
   /** 没有 Workspace 时用于 system 快照与项目根展示的回退路径。 */
@@ -116,8 +117,8 @@ export interface SessionOptions {
    */
   session_id: string;
 
-  /** 在每个 Step 检查点读取当前可用 Tool 集合。 */
-  get_tools: () => Record<string, Tool>;
+  /** 按当前已装配 Workspace 在每个 Step 检查点读取可用 Tool 集合；未装配时不继承默认资源。 */
+  get_tools: (workspace?: WorkspaceRuntime) => Record<string, Tool>;
   /**
    * 统一日志器。
    */

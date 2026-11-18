@@ -1,6 +1,6 @@
 {
   "name": "@downcity/ui",
-  "version": "1.5.4",
+  "version": "1.5.5",
   "description": "Downcity UI SDK for React and Tailwind CSS applications.",
   "type": "module",
   "license": "MIT",
@@ -20,7 +20,8 @@
     "./src/styles.css",
     "./src/markdown.css",
     "./src/components/markdown/**/*.css",
-    "./src/chat.css"
+    "./src/chat.css",
+    "./src/status-panel.css"
   ],
   "main": "./dist/index.cjs",
   "module": "./dist/index.js",
@@ -39,7 +40,8 @@
       "import": "./dist/composer.js",
       "require": "./dist/composer.cjs"
     },
-    "./chat.css": "./src/chat.css"
+    "./chat.css": "./src/chat.css",
+    "./status-panel.css": "./src/status-panel.css"
   },
   "files": [
     "dist",
@@ -47,7 +49,8 @@
     "src/styles.css",
     "src/markdown.css",
     "src/components/markdown/**/*.css",
-    "src/chat.css"
+    "src/chat.css",
+    "src/status-panel.css"
   ],
   "scripts": {
     "build": "tsup src/index.ts src/composer.ts --format esm,cjs --dts --clean",
@@ -92,6 +95,8 @@
     "clsx": "^2.1.1",
     "cmdk": "^1.1.1",
     "lucide-react": "^1.17.0",
+    "framer-motion": "^11.18.2",
+    "react-icons": "^5.5.0",
     "react-resizable-panels": "^4.11.2",
     "sonner": "^2.0.7",
     "tailwind-merge": "^3.6.0",

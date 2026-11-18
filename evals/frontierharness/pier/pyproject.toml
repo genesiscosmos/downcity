@@ -1,0 +1,10 @@
+# Pier 独立环境：不改变已实测 Harbor 虚拟环境，固定公开适配契约。
+[project]
+name = "downcity-frontierharness-pier-eval"
+version = "0.1.0"
+description = "Local Pier DeepSWE adapter for the Downcity Agent SDK"
+requires-python = ">=3.13,<3.14"
+dependencies = ["datacurve-pier==0.3.1", "harbor==0.22.0"]
+
+[tool.uv]
+package = false

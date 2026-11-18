@@ -61,6 +61,7 @@ export interface SessionModelSetResult {
  * 本地 Session 配置与 Metadata 状态管理器。
  */
 export class SessionState {
+  private readonly workspace_id?: string;
   private readonly agent_id: string;
   private readonly session_id: string;
   private readonly origin: SessionStateOptions["origin"];
@@ -73,6 +74,7 @@ export class SessionState {
   private metadata_mutation_chain: Promise<void> = Promise.resolve();
 
   constructor(options: SessionStateOptions) {
+    this.workspace_id = options.workspace_id;
     this.agent_id = options.agent_id;
     this.session_id = options.session_id;
     this.origin = options.origin;
@@ -122,6 +124,7 @@ export class SessionState {
     if (!this.state.initialize_promise) {
       this.state.initialize_promise = (async () => {
         const metadata = await this.store.read_metadata();
+        if (metadata.workspace_id !== this.workspace_id) throw new Error("session_workspace_immutable");
         const created_at =
           typeof metadata.created_at === "number" ? metadata.created_at : Date.now();
         const timezone =
@@ -248,37 +251,6 @@ export class SessionState {
       });
     }
     return title;
-  }
-
-  /**
-   * 写入当前目录，并同步内存实例。
-   *
-   * 关键点（中文）
-   * - 这是 `session.set({ workspace })` 的内部实现，不对 Session 用户单独暴露写入口。
-   * - 以持久化值为比较基准：即使内存已持有同一实例，只要元数据不同就补写，
-   *   保证恢复时传入的目录真的落盘。
-   * - 传空值表示脱离项目上下文。
-   */
-  async apply_workspace(workspace?: WorkspaceRuntime): Promise<boolean> {
-    const next_workspace_id = String(workspace?.id || "").trim() || undefined;
-    const changed = await this.run_metadata_mutation(async () => {
-      const metadata = await this.store.read_metadata();
-      const current_workspace_id = String(metadata.workspace_id || "").trim() || undefined;
-      if (current_workspace_id === next_workspace_id) return false;
-      const { workspace_id: _previous_workspace_id, ...rest } = metadata;
-      await this.store.write_metadata({
-        ...rest,
-        agent_id: this.agent_id,
-        ...(next_workspace_id ? { workspace_id: next_workspace_id } : {}),
-      });
-      return true;
-    });
-    if (workspace) {
-      this.state.current_workspace = workspace;
-    } else {
-      delete this.state.current_workspace;
-    }
-    return changed;
   }
 
   /** 返回当前 Session 正在使用的 Workspace；没有项目上下文时为空。 */

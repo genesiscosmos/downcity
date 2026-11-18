@@ -143,16 +143,6 @@ export type SessionConfigMutation = SessionMutationBase & {
   model_context_window?: number;
 };
 
-/** Session 当前目录变化 Mutation。 */
-export type SessionWorkspaceMutation = SessionMutationBase & {
-  /** Mutation 层级固定为 session。 */
-  variant: "session";
-  /** 当前 Session 属性变化类型。 */
-  type: "workspace";
-  /** 切换后的 Workspace 标识；脱离项目上下文时省略。 */
-  workspace_id?: string;
-};
-
 /** Session 历史被原地截断的同步事件；不表示用户可见操作记录。 */
 export type SessionHistoryMutation = SessionMutationBase & {
   /** Mutation 层级固定为 session。 */
@@ -175,7 +165,6 @@ export type SessionRuntimeMutation = SessionMutationBase & import("./SessionRunt
 export type SessionStateMutation =
   | SessionTitleMutation
   | SessionConfigMutation
-  | SessionWorkspaceMutation
   | SessionHistoryMutation
   | SessionRuntimeMutation;
 

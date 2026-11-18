@@ -47,12 +47,14 @@ const buttonVariants = cva(
 function Button({
   className,
   variant = "default",
-  size = "default",
+  size,
   children,
   ...props
 }: ButtonPrimitive.Props & VariantProps<typeof buttonVariants>) {
   const visible_children = React.Children.toArray(children).filter(Boolean);
-  const resolved_size = visible_children.length === 1 && React.isValidElement(visible_children[0]) && typeof visible_children[0].type !== "string" ? "icon" : size;
+  // 显式尺寸始终优先；只有未指定尺寸时才根据单个图标推断默认值。
+  const icon_only = visible_children.length === 1 && React.isValidElement(visible_children[0]) && typeof visible_children[0].type !== "string";
+  const resolved_size = size ?? (icon_only ? "icon" : "default");
   return (
     <ButtonPrimitive
       data-slot="button"

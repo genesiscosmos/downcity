@@ -1,7 +1,7 @@
 /**
  * Agent 面向 SDK 用户的 Session 集合类型。
  *
- * Session 归 Agent 所有；Workspace 是会话的当前目录，不是会话身份。
+ * Session 归 Agent 所有；Workspace 归属在创建时确定，恢复仅装配同 ID 执行资源。
  */
 
 import type { WorkspaceRuntime } from "@downcity/type";
@@ -27,14 +27,9 @@ export interface AgentCreateSessionOptions extends AgentCreateSessionInput {
   inherit_workspace?: boolean;
 }
 
-/** 恢复 Agent Session 时使用的当前目录。 */
+/** 恢复 Agent Session 原 Workspace 的执行资源。 */
 export interface AgentGetSessionOptions {
-  /**
-   * 恢复后要使用的当前目录。
-   *
-   * 关键点（中文）：这与持久化值不一致时不再报错，而是以该值为准成为该 Session 的当前目录，
-   * 语义等同 `session.set({ workspace })`。省略时由 Agent 的 `resolve_workspace` 按持久化值还原。
-   */
+  /** 必须匹配持久化归属；省略时只恢复历史与配置，不继承 Agent 默认 Workspace。 */
   workspace?: WorkspaceRuntime;
 }
 

@@ -8,6 +8,29 @@
  */
 
 export { cn } from "./lib/utils";
+export { ModelSelector } from "./components/model/ModelSelector";
+export { ChatModelSelector, ModelDetails, ModelOptions, ReasoningOptions, SelectorSubmenu } from "./components/model/ChatModelSelector";
+export { ChatApprovalModeSelector } from "./components/model/ChatApprovalModeSelector";
+export { LLMModelIcon } from "./components/model/LLMModelIcon";
+export { ModelPricingChart } from "./components/model/ModelPricingChart";
+export { format_token_count, format_usd_price, format_credit_amount, format_compact_number } from "./lib/model/model_format";
+export { build_model_pricing } from "./lib/model/model_pricing";
+export { format_model_reasoning, format_default_model_reasoning, get_default_model_reasoning } from "./lib/model/model_reasoning";
+export { is_text_model } from "./lib/model/model_selection";
+export { StatusPanel } from "./components/status-panel/StatusPanel";
+export { StatusPanelHeader } from "./components/status-panel/StatusPanelHeader";
+export { MessageQueue } from "./components/status-panel/MessageQueue";
+export { QueuedMessageResources } from "./components/status-panel/QueuedMessageResources";
+export { PendingInteractionArea } from "./components/status-panel/PendingInteractionArea";
+export { AgentInteraction, ApprovalInteractionCard, QuestionInteractionCard, QuestionField, resolve_agent_interaction_title } from "./components/status-panel/AgentInteraction";
+export { SubSessionList } from "./components/status-panel/SubSessionList";
+export { SubSessionStatusIcon } from "./components/status-panel/SubSessionStatusIcon";
+export { PillSwitcher } from "./components/pill-switcher";
+export type { ChatControlTranslate, ChatControlMessages } from "./types/chat-controls";
+export type { ModelSummary, ModelDetailsProps, ModelConfiguration, ModelPricingPoint, LLMModelIconProps, ModelSelectorProps, ChatModelSelectorProps, ModelOptionsProps, ReasoningOptionsProps, SelectorSubmenuProps, ChatApprovalModeSelectorProps, ModelPricingChartProps } from "./types/model-controls";
+export type { StatusPanelProps, QueuedMessageResourcesProps, StatusPanelHeaderProps, MessageQueueProps, QueuedChatMessage, PendingInteractionItem, PendingInteractionAreaProps, SubSessionItem, SubSessionListProps, SubSessionStatus, SubSessionStatusIconProps } from "./types/status-panel";
+export type { AgentInteractionProps, InteractionPresentation, QuestionFieldProps } from "./types/agent-interaction";
+export type { PillSwitcherOption, PillSwitcherProps } from "./types/pill-switcher";
 export { MarkdownView } from "./components/markdown/MarkdownView";
 export { MarkdownViewProvider, use_markdown_text_size } from "./components/markdown/markdown_host_context";
 export { MarkdownExportContext } from "./components/markdown/markdown_export_context";

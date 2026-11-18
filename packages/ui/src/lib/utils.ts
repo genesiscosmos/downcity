@@ -7,8 +7,17 @@
  */
 
 import { clsx, type ClassValue } from "clsx";
-import { twMerge } from "tailwind-merge";
+import { extendTailwindMerge } from "tailwind-merge";
+
+// SDK 的主题声明了两档紧凑字号；必须注册为字号，避免被当作文字颜色合并掉。
+const tw_merge = extendTailwindMerge({
+  extend: {
+    classGroups: {
+      "font-size": [{ text: ["3xs", "2xs"] }],
+    },
+  },
+});
 
 export function cn(...inputs: ClassValue[]) {
-  return twMerge(clsx(inputs));
+  return tw_merge(clsx(inputs));
 }

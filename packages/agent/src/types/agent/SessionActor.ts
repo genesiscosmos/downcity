@@ -139,7 +139,7 @@ export interface AgentSession extends AgentSessionActor {
   /** 当前 session 所属 agent_id。 */
   readonly agent_id: string;
 
-  /** 写入持久化配置；`model`、`security`、`workspace` 共用这一个入口。 */
+  /** 写入模型与安全配置；Workspace 归属创建后不可改变。 */
   set(input: AgentSessionSetInput, options?: AgentSessionSetOptions): Promise<void>;
 
   /**

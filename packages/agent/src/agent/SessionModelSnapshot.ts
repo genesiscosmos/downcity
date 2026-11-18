@@ -4,21 +4,21 @@ import type { SessionStorage } from "../types/store/SessionStorage.js";
 import { DeferredModelClient } from "../model/DeferredModelClient.js";
 
 /** 已保存 ID 的惰性模型，浏览/恢复句柄不进行网络请求，执行时才解析宿主模型。 */
-export function snapshot_model(model_id: string, current: ModelClient | undefined, resolve_model?: (model_id: string, workspace?: WorkspaceRuntime) => Promise<ModelClient>, workspace?: WorkspaceRuntime): ModelClient {
+export function snapshot_model(model_id: string, current: ModelClient | undefined, resolve_model?: (model_id: string, workspace?: WorkspaceRuntime) => Promise<ModelClient>, get_workspace?: () => WorkspaceRuntime | undefined): ModelClient {
   if (current?.id === model_id) return current;
   return new DeferredModelClient(model_id, async () => {
     if (!resolve_model) throw Object.assign(new Error(`Host cannot restore persisted Session model: ${model_id}`), { code: "session_model_required" });
-    return await resolve_model(model_id, workspace);
+    return await resolve_model(model_id, get_workspace?.());
   });
 }
 
 /** 新建时先保存默认快照，null 也代表明确事实；恢复时只使用已有事实。 */
-export async function resolve_session_snapshot(storage: SessionStorage, current: ModelClient | undefined, creating: boolean, resolve_model?: (model_id: string, workspace?: WorkspaceRuntime) => Promise<ModelClient>, workspace?: WorkspaceRuntime): Promise<ModelClient | undefined> {
+export async function resolve_session_snapshot(storage: SessionStorage, current: ModelClient | undefined, creating: boolean, resolve_model?: (model_id: string, workspace?: WorkspaceRuntime) => Promise<ModelClient>, get_workspace?: () => WorkspaceRuntime | undefined): Promise<ModelClient | undefined> {
   let binding = await storage.read_model_binding();
   if (!binding && creating) {
     binding = { default_model_id: current?.id ?? null };
     await storage.write_model_binding(binding);
   }
   const model_id = binding?.override_model_id ?? binding?.default_model_id;
-  return model_id ? snapshot_model(model_id, current, resolve_model, workspace) : undefined;
+  return model_id ? snapshot_model(model_id, current, resolve_model, get_workspace) : undefined;
 }

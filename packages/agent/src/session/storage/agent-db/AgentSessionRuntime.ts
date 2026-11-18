@@ -132,6 +132,10 @@ export async function acquire_agent_session_storage(target_input: AgentSessionRu
     }),
     write: <T>(session_id: string, operation: AgentSessionWriteCommand, options?: AgentSessionRuntimeWriteOptions) => track(async () => {
       if (readonly) throw new Error("session_storage_readonly");
+      // 在 JSON 序列化丢弃 undefined 字段之前拒绝非法归属配置。
+      if (operation.command === "configure" && ("workspace_id" in operation.input || "workspace" in operation.input)) {
+        throw new Error("session_workspace_immutable");
+      }
       retain_files();
       try {
         const result = await runtime.scheduler.submit({

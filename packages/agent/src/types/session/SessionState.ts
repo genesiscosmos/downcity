@@ -13,6 +13,8 @@ import type { SessionOrigin } from "@downcity/type";
 
 /** SessionState 构造参数。 */
 export interface SessionStateOptions {
+  /** 创建时确定的 Workspace 归属；初始化 metadata 时必须一致，不依赖资源是否装配。 */
+  workspace_id?: string;
   /** 当前 Agent 的稳定标识。 */
   agent_id: string;
   /** 当前 Session 的稳定标识。 */

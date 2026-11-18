@@ -63,10 +63,25 @@ if (!process.argv.includes("--typecheck")) {
       build_sha256: hash_tree(join(root, "bin")),
     };
   }
+  const task_sources = JSON.parse(readFileSync(join(eval_dir, "sources.json"), "utf8"));
+  // 只核验已准备的固定语料，不下载、不运行任务。缺失时保留未准备状态。
+  const task_source_checks = {};
+  for (const [suite, source] of Object.entries(task_sources.suites)) {
+    if (!source.local_task_path) continue;
+    const root = join(eval_dir, source.local_task_path);
+    task_source_checks[suite] = { prepared: existsSync(root), files_sha256: {} };
+    if (!existsSync(root)) continue;
+    for (const [path, expected] of Object.entries(source.files_sha256)) {
+      const actual = createHash("sha256").update(readFileSync(join(root, path))).digest("hex");
+      if (actual !== expected) throw new Error(`Pinned task source mismatch: ${suite}/${path}`);
+      task_source_checks[suite].files_sha256[path] = actual;
+    }
+  }
   const snapshot = {
     built_at: new Date().toISOString(),
     node: process.version,
-    task_sources: JSON.parse(readFileSync(join(eval_dir, "sources.json"), "utf8")),
+    task_sources,
+    task_source_checks,
     registry: JSON.parse(readFileSync(join(eval_dir, "registry.json"), "utf8")),
     public_head: git("rev-parse", "HEAD").toString().trim(),
     public_status: git("status", "--short").toString(),

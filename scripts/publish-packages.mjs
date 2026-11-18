@@ -432,7 +432,7 @@ async function main() {
     );
     if (should_build) {
       const flags = build_flags(targets, include_cli);
-      run_command("pnpm", ["patch:build", "--", ...flags]);
+      run_command("pnpm", ["patch:build", "--", ...flags, "--no-global-install"]);
       for (const item of plan) {
         const manifest = item.name === cli_package.name
           ? read_package_manifest(cli_package_path)
@@ -440,6 +440,9 @@ async function main() {
         item.version = manifest.version;
       }
     }
+
+    console.log("\n执行本地发布检查……");
+    run_command("pnpm", ["release:check"]);
 
     console.log("\n将发布以上版本到 npm registry。");
     if (!(await confirm_prompt(readline, "确认继续？"))) return;

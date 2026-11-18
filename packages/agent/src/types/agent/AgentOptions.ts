@@ -99,7 +99,7 @@ export interface AgentOptions {
    * 新建 Session 时注入的默认目录。
    *
    * 关键点（中文）
-   * - 它是宿主在构造 Agent 时声明的默认值，不是绑定；单个 Session 可用 `set({ workspace })` 换掉。
+   * - 它是宿主为新建会话声明的默认值；已有 Session 保持创建时的 Workspace 归属。
    * - 它不参与恢复：历史会话的目录由宿主在 `get()` 时注入。
    * - 省略时新建的 Session 没有项目上下文：没有文件工具与 Shell，纯模型对话仍可用。
    */

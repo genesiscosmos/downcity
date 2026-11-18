@@ -1,6 +1,6 @@
 {
   "name": "@downcity/federation",
-  "version": "1.6.6",
+  "version": "1.6.7",
   "description": "Unified local and remote Federation SDK for user and admin access.",
   "type": "module",
   "main": "./bin/index.js",
