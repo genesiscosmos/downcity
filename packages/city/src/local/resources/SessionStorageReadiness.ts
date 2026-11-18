@@ -7,6 +7,7 @@
 import path from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { readFile as read_file, readdir, lstat } from "node:fs/promises";
+import { AGENT_SESSION_SCHEMA_VERSION, assert_agent_session_schema } from "@downcity/agent";
 
 /** 离线工具与宿主共享的完成标记，写入由独占根租约保护。 */
 export const SESSION_STORAGE_MARKER = "session-storage.json";
@@ -31,8 +32,8 @@ export async function assert_session_storage_ready(root_path: string): Promise<v
     let marker;
     try { marker = JSON.parse(await read_file(marker_path, "utf8")); }
     catch { throw new Error("session_storage_marker_invalid"); }
-    if (marker?.format_version !== 10 || marker?.state !== "ready") {
-      throw new Error("session_migration_required: 当前运行时需要 Session v10，请退出宿主后完成 v10 离线迁移或继续原批次");
+    if (marker?.format_version !== AGENT_SESSION_SCHEMA_VERSION || marker?.state !== "ready") {
+      throw new Error(`session_migration_required: 数据根需要完成离线迁移或继续原批次；root_path=${root_path}; actual_version=${marker?.format_version}; expected_version=${AGENT_SESSION_SCHEMA_VERSION}; state=${marker?.state}`);
     }
     migrated = true;
   }
@@ -45,7 +46,7 @@ export async function assert_session_storage_ready(root_path: string): Promise<v
     for (const partition of ["sessions", "archived-sessions"]) {
       if (await exists(path.join(agents_path, entry.name, partition))) {
         if (migrated && await exists(path.join(agents_path, entry.name, "sessions.db"))) continue;
-        throw new Error("session_migration_required: 检测到旧 Session 分库，请先完成离线转换到 v10；尚未启动 Agent、Power 或工作恢复");
+        throw new Error(`session_migration_required: 检测到旧 Session 分库，请先完成离线转换；agent_id=${entry.name}; expected_version=${AGENT_SESSION_SCHEMA_VERSION}`);
       }
     }
     const database_path = path.join(agents_path, entry.name, "sessions.db");
@@ -53,11 +54,8 @@ export async function assert_session_storage_ready(root_path: string): Promise<v
     const database = new DatabaseSync(database_path, { readOnly: true });
     try {
       database.exec("PRAGMA busy_timeout=250; PRAGMA query_only=ON; BEGIN;");
-      if (Number(database.prepare("PRAGMA user_version").get()?.user_version) !== 10) {
-        throw new Error("session_migration_required: 检测到旧 Agent Session 数据库，请先完成 v10 离线迁移");
-      }
-      const metadata = database.prepare("SELECT agent_id,format_version FROM storage_metadata WHERE singleton_id=1").get();
-      if (metadata?.agent_id !== entry.name || metadata.format_version !== 10) throw new Error("session_storage_identity_conflict");
+      // 单库格式与拥有者由 Agent 存储层校验；City 只负责根状态和跨 Agent 身份。
+      assert_agent_session_schema(database, entry.name);
       for (const row of database.prepare("SELECT session_id FROM sessions").iterate()) {
         const session_id = String(row.session_id);
         if (session_ids.has(session_id)) throw new Error("session_storage_identity_conflict: 数据根内存在重复 Session UUID");

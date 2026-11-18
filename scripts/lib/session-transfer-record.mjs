@@ -52,6 +52,11 @@ export function insert_record(database, record) {
 /** 使用当前正式schema/codec/水位算法验证包，不能仅检查总数或JSON合法。 */
 export function validate_record(record, agent_id, runtime) {
   assert_transfer_runtime(runtime);
+  validate_protocol_record(record, agent_id, runtime);
+}
+
+/** 显式离线转换复用记录校验；历史 runtime 必须由调用方的冻结 loader 提供。 */
+export function validate_protocol_record(record, agent_id, runtime) {
   if (!record || Object.keys(record).sort().join(",") !== "composer_checkpoints,configuration,message_parts,messages,metadata"
     || !uuid_pattern.test(record.metadata?.session_id ?? "") || !record_tables.every(table => Array.isArray(record[table]))) fail("transfer_record_invalid");
   if (record.metadata.message_count !== record.messages.length) fail("transfer_count_invalid");
@@ -77,9 +82,9 @@ export function validate_record(record, agent_id, runtime) {
   try {
     database.exec("PRAGMA foreign_keys=ON; BEGIN IMMEDIATE;");
     database.exec(runtime.AGENT_SESSION_SCHEMA_SQL);
-    database.prepare("INSERT INTO storage_metadata(singleton_id,agent_id,format_version,generation,cursor_secret,created_at) VALUES(1,?,10,?,?,?)").run(agent_id, random_uuid(), random_bytes(32), Date.now());
+    database.prepare("INSERT INTO storage_metadata(singleton_id,agent_id,format_version,generation,cursor_secret,created_at) VALUES(1,?,?,?,?,?)").run(agent_id, runtime.AGENT_SESSION_SCHEMA_VERSION, random_uuid(), random_bytes(32), Date.now());
     insert_record(database, record);
-    database.exec("PRAGMA user_version=10;"); check_integrity(database);
+    database.exec(`PRAGMA user_version=${runtime.AGENT_SESSION_SCHEMA_VERSION};`); check_integrity(database);
     if (digest(read_record(database, record.metadata.session_id)) !== digest(record)) fail("transfer_semantic_mismatch");
   } finally { database.close(); }
 }
@@ -122,6 +127,6 @@ export function rebind_record(record, source_root, target_root, files, runtime) 
       after[index].content = JSON.stringify(hint(JSON.parse(after[index].content), { type: before[index - 1].type, ...JSON.parse(before[index - 1].content) }, { type: after[index - 1].type, ...JSON.parse(after[index - 1].content) }));
     }
   }
-  validate_record(result, runtime.agent_id, runtime);
+  validate_protocol_record(result, runtime.agent_id, runtime);
   return result;
 }

@@ -99,7 +99,7 @@ export interface AgentSessionActor {
   retry_model_step(input: import("@downcity/type").SessionModelRetryInput): Promise<import("@downcity/type").SessionModelRetryResult>;
 
   /** 停止当前 turn，并取消尚未被吸收的排队 prompt。 */
-  stop(expected_turn_id?: string): Promise<AgentSessionStopResult>;
+  stop(expected_turn_id?: string, expected_message?: import("@downcity/type").SessionMessageCheckpoint): Promise<AgentSessionStopResult>;
 
   /** 订阅当前 session 的未来事件。 */
   subscribe(

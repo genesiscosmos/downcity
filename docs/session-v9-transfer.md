@@ -1,8 +1,8 @@
-<!-- 隔离历史 schema9/format2 协议；当前正式协议为session-v10-transfer.md。 -->
+<!-- 隔离历史 schema9/format2 协议；当前正式协议为session-v11-transfer.md。 -->
 
 # Session v9 历史转移协议
 
-本文仅供隔离历史 loader 校验 schema9/format2 包与批次，不是当前通用入口的使用说明。正式 export/import 使用 [v10 转移协议](session-v10-transfer.md)；历史包必须通过独立 `convert-session-package.mjs` 的首次披露证据门禁后才能导入。以下字段描述冻结的历史事实。
+本文仅供隔离历史 loader 校验 schema9/format2 包与批次，不是当前通用入口的使用说明。正式 export/import 使用 [v11 转移协议](session-v11-transfer.md)；历史包必须通过独立 `convert-session-package.mjs` 的首次披露证据门禁后才能导入。以下字段描述冻结的历史事实。
 
 ## 包格式
 

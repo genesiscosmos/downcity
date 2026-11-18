@@ -119,13 +119,11 @@ export class HttpRemoteAgentTransport implements RemoteAgentTransport {
     session_id: string,
     category: string,
     input: RemotePromptInput,
-  ): Promise<{ id: string }> {
+  ): Promise<import("@/types/remote/RemoteTurn.js").RemotePromptTurn> {
     const payload = await read_http_json<{
       success?: boolean;
       error?: string;
-      turn?: {
-        id?: string;
-      };
+      turn?: import("@/types/remote/RemoteTurn.js").RemotePromptTurn;
     }>(this.session_url(session_id, category, "/prompt"), {
       method: "POST",
       headers: this.headers({
@@ -137,7 +135,7 @@ export class HttpRemoteAgentTransport implements RemoteAgentTransport {
     if (!payload.success || !id) {
       throw new Error(String(payload.error || "Remote session prompt failed"));
     }
-    return { id };
+    return { id, result: payload.turn?.result ?? null };
   }
 
   async open_power_channel(input: OpenPromptPowerChannel): Promise<PromptPowerChannel> {
@@ -148,14 +146,14 @@ export class HttpRemoteAgentTransport implements RemoteAgentTransport {
     return { id: channel.id, result: (result) => channel.result(result), close };
   }
 
-  async stop(session_id: string, category: string, expected_turn_id?: string): Promise<AgentSessionStopResult> {
+  async stop(session_id: string, category: string, expected_turn_id?: string, expected_message?: import("@downcity/type").SessionMessageCheckpoint): Promise<AgentSessionStopResult> {
     const payload = await read_http_json<{
       success?: boolean;
       error?: string;
       result?: AgentSessionStopResult;
     }>(this.session_url(session_id, category, "/stop"), {
       method: "POST",
-      body: JSON.stringify({ expected_turn_id }),
+      body: JSON.stringify({ expected_turn_id, expected_message }),
       headers: this.headers({
         "Content-Type": "application/json",
       }),

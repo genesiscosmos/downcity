@@ -193,8 +193,8 @@ export class RpcClient {
     session_id: string;
     category: string;
     input: RemotePromptInput;
-  }): Promise<{ id: string }> {
-    const data = await this.request<{ turn: { id: string } }>({
+  }): Promise<import("@/types/remote/RemoteTurn.js").RemotePromptTurn> {
+    const data = await this.request<{ turn: import("@/types/remote/RemoteTurn.js").RemotePromptTurn }>({
       method: "sdk.sessions.prompt",
       params: {
         session_id: params.session_id,
@@ -208,11 +208,11 @@ export class RpcClient {
   /**
    * 停止远程 session 当前 turn。
    */
-  async stop_session(session_id: string, category: string, expected_turn_id?: string): Promise<AgentSessionStopResult> {
+  async stop_session(session_id: string, category: string, expected_turn_id?: string, expected_message?: import("@downcity/type").SessionMessageCheckpoint): Promise<AgentSessionStopResult> {
     const data = await this.request<{ result: AgentSessionStopResult }>({
       method: "sdk.sessions.stop",
       params: {
-        expected_turn_id,
+        expected_turn_id, expected_message,
         session_id: session_id,
         category,
       },

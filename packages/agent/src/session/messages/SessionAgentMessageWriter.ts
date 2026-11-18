@@ -31,6 +31,8 @@ import { next_agent_part_sequence } from "@/session/messages/SessionAgentParts.j
 
 /** Writer 构造参数。 */
 export interface SessionAgentMessageWriterOptions {
+  /** 在串行写入点确认当前调用仍持有此 Writer。 */
+  assert_current?: () => void;
   /** 当前 canonical Assistant Message 标识。 */
   message_id: string;
   /** Agent Message 写入状态转换器。 */
@@ -46,6 +48,7 @@ export class SessionAgentMessageWriter {
   /** 当前 canonical Assistant Message 标识。 */
   readonly message_id: string;
 
+  private readonly assert_current: () => void;
   private readonly state: SessionAgentMessageState;
   private readonly cache: SessionMessageCache;
   private readonly category?: string;
@@ -60,6 +63,7 @@ export class SessionAgentMessageWriter {
   private closed = false;
 
   constructor(options: SessionAgentMessageWriterOptions) {
+    this.assert_current = options.assert_current ?? (() => {});
     this.state = options.state;
     this.cache = options.cache;
     this.category = options.category;
@@ -185,7 +189,7 @@ export class SessionAgentMessageWriter {
         part_id, sequence: this.next_part_sequence(), type: "error", scope: "turn",
         code: error.code, message: error.message, recoverable: false,
       };
-      await this.state.commit_parts(this.message_id, [part]);
+      await this.state.set_current_error(this.message_id, part);
       return { message_id: this.message_id, error_part_id: part_id };
     });
   }
@@ -260,7 +264,7 @@ export class SessionAgentMessageWriter {
         message: input.message,
         recoverable: input.recoverable,
       } satisfies SessionAgentErrorPart;
-      await this.state.commit_parts(this.message_id, [part]);
+      await this.state.set_current_error(this.message_id, part);
     });
   }
 
@@ -498,7 +502,8 @@ export class SessionAgentMessageWriter {
 
   /** 串行执行对当前 Assistant Message 的全部写操作。 */
   private async enqueue_write<TResult>(operation: () => Promise<TResult>): Promise<TResult> {
-    const current = this.write_chain.then(operation, operation);
+    const guarded = async () => { this.assert_current(); return await operation(); };
+    const current = this.write_chain.then(guarded, guarded);
     this.write_chain = current.then(() => undefined, () => undefined);
     return await current;
   }

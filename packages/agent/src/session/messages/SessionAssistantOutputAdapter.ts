@@ -5,6 +5,7 @@
  * Action 内容转交给 Writer；`SessionMessages` 始终是唯一事实源。
  */
 
+import type { SessionMessageResume, SessionAssistantOutputAdapterOptions } from "@/types/session/SessionMessages.js";
 import type { ModelStreamEvent } from "@downcity/type";
 import {
   SessionAgentMessageWriter,
@@ -31,18 +32,26 @@ export class SessionAssistantOutputAdapter implements SessionAssistantOutput {
   /** 显式模型步骤身份隔离当前步骤的草稿作用域。 */
   private pending_step_id?: string;
 
-  constructor(options: {
-    /** 当前输出所属 Turn 标识。 */
-    turn_id: string;
-    /** canonical Message 写入入口。 */
-    messages: SessionMessages;
-  }) {
+  /** 原位续写仅消费一次的消息检查点。 */
+  private resume?: SessionMessageResume;
+  /** Loop 持有对象身份校验，阻止旧 Writer 在同 Turn 的下一调用中继续写入。 */
+  private readonly assert_current: () => void;
+
+  private readonly assert_resumable: () => void;
+
+  constructor(options: SessionAssistantOutputAdapterOptions) {
     this.turn_id = String(options.turn_id || "").trim();
     this.messages = options.messages;
+    this.resume = options.resume;
+    this.assert_current = options.assert_current ?? (() => {});
+    this.assert_resumable = () => { this.assert_current(); options.assert_resumable?.(); };
     if (!this.turn_id) {
       throw new Error("SessionAssistantOutputAdapter requires a non-empty turn_id");
     }
   }
+
+  /** 接收后先撤销错误并恢复消息，模型开始前已经是普通 streaming 状态。 */
+  async resume_message(): Promise<void> { if (this.resume) await this.ensure_writer(); }
 
   /** 开始当前模型 Step。 */
   async begin_step(step_id?: string): Promise<void> {
@@ -153,6 +162,7 @@ export class SessionAssistantOutputAdapter implements SessionAssistantOutput {
 
   /** 惰性打开当前连续 Assistant 回复的唯一 Writer。 */
   private async ensure_writer(): Promise<SessionAgentMessageWriter> {
+    this.assert_current();
     if (this.writer_task) return await this.writer_task;
     if (this.writer && !this.step_pending) return this.writer;
     this.writer_task = this.open_writer();
@@ -165,9 +175,11 @@ export class SessionAssistantOutputAdapter implements SessionAssistantOutput {
 
   /** 建立 Writer 并完成 Step 初始化后，才允许并发调用消费模型事件。 */
   private async open_writer(): Promise<SessionAgentMessageWriter> {
-    const writer = this.writer ?? await this.messages.open_agent_message({
-      turn_id: this.turn_id,
-    });
+    const resume = this.resume;
+    const writer = this.writer ?? (resume
+      ? await this.messages.resume_agent_message(resume.message_id, resume.revision, resume.error_part_id, this.assert_resumable, this.assert_current)
+      : await this.messages.open_agent_message({ turn_id: this.turn_id, assert_current: this.assert_current }));
+    this.resume = undefined;
     this.writer = writer;
     if (this.step_pending) {
       await writer.begin_step(this.pending_step_id);

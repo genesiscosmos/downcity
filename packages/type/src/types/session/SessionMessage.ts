@@ -350,12 +350,22 @@ export type SessionAgentMessagePart =
 export interface SessionAgentMessage extends SessionMessageBase {
   /** Message 主体角色固定为 agent。 */
   role: "agent";
-  /** Agent Message 聚合当前仍在写入，还是已经永久收口。 */
+  /** 当前调用留下的错误；Retry 接收时清除，不属于稳定正文或工具 Parts。 */
+  current_error?: SessionAgentErrorPart;
+  /** 当前仍在写入或本次调用已收口；有效 Step Retry 可恢复写入。 */
   state: "streaming" | "done";
   /** 已由写入方冻结的连续 Part 前缀水位；零表示尚无可摘要前缀，水位内的 Part 永不可修改。 */
   stable_part_sequence: number;
   /** Agent 内按真实产生顺序保存的 Parts。 */
   parts: SessionAgentMessagePart[];
+}
+
+/** 已观测消息的原生版本，用于拒绝跨恢复调用的迟到控制请求。 */
+export interface SessionMessageCheckpoint {
+  /** 已观测 canonical Message 的稳定标识。 */
+  message_id: string;
+  /** 发出控制请求前观测到的消息版本。 */
+  revision: number;
 }
 
 /** Session 唯一顶层 Message 联合类型。 */

@@ -14,7 +14,7 @@ export class SessionModelRetryControl {
   private submitting = false;
 
   constructor(private readonly messages: SessionMessages, private readonly blocked: () => boolean,
-    private readonly start: (replay: SessionModelReplay) => void, private readonly changed: () => void) {}
+    private readonly start: (replay: SessionModelReplay) => Promise<NonNullable<SessionModelRetryResult["result"]>>, private readonly changed: () => void) {}
 
   /** 只有完全结束原执行且没有新输入时才授予 Retry 能力。 */
   current(): SessionModelRetry | undefined {
@@ -48,6 +48,7 @@ export class SessionModelRetryControl {
     }
     this.submitting = true;
     const generation = this.generation;
+    let finished: Promise<NonNullable<SessionModelRetryResult["result"]>>;
     try {
       const versions = await this.messages.read_input_versions();
       if (versions.has_pending_interactions) return { accepted: false, reason: "Resolve the pending interaction before retrying" };
@@ -55,17 +56,23 @@ export class SessionModelRetryControl {
         this.notify_input();
         return { accepted: false, reason: error instanceof Error ? error.message : "Original input unavailable" };
       }
+      const message = await this.messages.read_message(replay.binding.message_id);
+      if (!message || message.role !== "agent" || message.state !== "done" || message.turn_id !== replay.turn_id
+        || message.current_error?.part_id !== replay.binding.error_part_id) {
+        this.notify_input();
+        return { accepted: false, reason: "Original Message checkpoint changed" };
+      }
       if (this.blocked() || generation !== this.generation || this.replay !== replay) {
         return { accepted: false, reason: "Session input changed" };
       }
       // 最终接收与入队同步完成，不在删除 Banner 的 I/O 间隙释放互斥。
       this.replay = undefined;
-      this.start(replay);
-      return { accepted: true };
+      finished = this.start({ ...replay, message_revision: message.revision });
     } finally {
       this.submitting = false;
       this.changed();
     }
+    return { accepted: true, result: await finished };
   }
 
   /** 新输入、配置、停止或释放使旧请求失效；不影响任何执行的收尾。 */

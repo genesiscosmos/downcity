@@ -36,6 +36,7 @@ export function resolve_session_message_preview(
 
   const user_visible = resolve_session_assistant_visible_text(message).trim();
   if (user_visible) return user_visible;
+  if (message.current_error) return message.current_error.message;
   for (const part of message.parts) {
     switch (part.type) {
       case "action":

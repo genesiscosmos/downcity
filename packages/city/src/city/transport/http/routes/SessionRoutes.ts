@@ -130,6 +130,7 @@ export function register_sdk_session_routes(
         success: true,
         turn: {
           id: turn.id,
+          result: turn.result,
         },
       });
     } catch (error) {
@@ -155,8 +156,8 @@ export function register_sdk_session_routes(
         return c.json({ success: false, error: "Missing session_id" }, 400);
       }
       const session = await get_session(session_id, c.req.query("category"));
-      const body = await c.req.json<{ expected_turn_id?: string }>().catch(() => ({} as { expected_turn_id?: string }));
-      const result = await session.stop(body.expected_turn_id);
+      const body = await c.req.json<{ expected_turn_id?: string; expected_message?: import("@downcity/type").SessionMessageCheckpoint }>().catch(() => ({} as { expected_turn_id?: string; expected_message?: import("@downcity/type").SessionMessageCheckpoint }));
+      const result = await session.stop(body.expected_turn_id, body.expected_message);
       return c.json({
         success: true,
         result,

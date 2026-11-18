@@ -245,6 +245,7 @@ export class SessionMessages {
     const writer = new SessionAgentMessageWriter({
       category: this.store.origin.category,
       message_id,
+      assert_current: input.assert_current,
       state: this.agent_state,
       cache: this.cache,
     });
@@ -268,6 +269,13 @@ export class SessionMessages {
       throw error;
     }
     return writer;
+  }
+
+  /** 同一 canonical 消息原位恢复，只能由有效失败检查点取得新 Writer。 */
+  async resume_agent_message(message_id: string, revision: number, error_part_id: string, assert_receivable: () => void, assert_current: () => void = assert_receivable): Promise<SessionAgentMessageWriter> {
+    await this.agent_state.resume(message_id, revision, error_part_id, assert_receivable);
+    return new SessionAgentMessageWriter({ category: this.store.origin.category, message_id,
+      state: this.agent_state, cache: this.cache, assert_current });
   }
 
   /** 把公开 Session API 的 User 输入转换为 canonical Message 并持久化。 */

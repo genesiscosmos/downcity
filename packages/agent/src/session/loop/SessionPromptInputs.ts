@@ -2,6 +2,9 @@
  * Prompt 的 canonical 接收与身份校验。
  * 运行时输入先预持久化附件及记账，再经 Turn 唯一 writer 提交 inbox；预处理不构成接收。
  */
+import { read_prompt_input } from "./SessionInputFacts.js";
+import { create_turn_handle, create_completed_turn_handle } from "./SessionTurnHandles.js";
+import { completion_unavailable } from "./SessionInputAcceptance.js";
 import { nanoid } from "nanoid";
 import type { SessionAgentInboxPart, SessionUserMessage } from "@downcity/type";
 import type { NormalizedAgentSessionPromptInput } from "@/types/sdk/AgentSessionPrompt.js";
@@ -49,4 +52,18 @@ export async function persist_prompt_input(options: SessionPromptPersistence): P
     inbox_id: identity?.inbox_id ?? `inbox:${turn_context.session.turn_id}:${nanoid()}`, assert_receivable });
   assert_receivable();
   return await assistant.append_inbox(prepared, assert_receivable);
+}
+
+/** 幂等请求始终返回原调用快照，不从同 Turn 的 Retry 句柄借结果。 */
+export async function resolve_idempotent_prompt(options: import("@/types/session/SessionLoop.js").SessionPromptLookupOptions): Promise<import("@/types/sdk/AgentSessionTurn.js").AgentSessionTurnHandle | null> {
+  const { identity, messages, active_turn, completions, session_id } = options;
+  const existing = await read_prompt_input(messages, identity);
+  if (!existing) return null;
+  const turn_id = existing.message.turn_id;
+  if (!turn_id) throw new Error("Session prompt request identity conflicts with canonical history");
+  if (active_turn?.turn_id === turn_id && !active_turn.is_retry) return create_turn_handle(active_turn);
+  const prepared = await completions?.read_initial(session_id, turn_id);
+  if (prepared) return create_completed_turn_handle({ turn_id, ...prepared.result });
+  if (completions) return null;
+  throw completion_unavailable(turn_id);
 }

@@ -5,7 +5,7 @@
  * Queue，也不持有 Active Turn 引用或 Handle；这些调度状态仍由 SessionLoop 收口。
  */
 
-import { nanoid } from "nanoid";
+import { generate_id } from "@/utils/Id.js";
 import type { JsonValue, SessionMessage } from "@downcity/type";
 import type { AgentSessionTurnResult } from "@/types/sdk/AgentSessionTurn.js";
 import type { SessionTurnExecutionResult } from "@/types/session/SessionExecution.js";
@@ -31,7 +31,8 @@ export async function complete_session_turn(
   result: SessionTurnExecutionResult,
 ): Promise<AgentSessionTurnResult> {
   // 写前提交是本轮结果的确认边界，之后到达的 stop 或清理故障不能改写它。
-  const prepared = await options.completions?.read(options.session_id, active_turn.turn_id);
+  const prepared = active_turn.prepared_completion ?? (active_turn.is_retry ? undefined
+    : await options.completions?.read(options.session_id, active_turn.turn_id));
   const outcome = prepared?.result ?? result;
   const stopped = prepared ? prepared.status === "stopped"
     : active_turn.turn_context?.lifecycle.abort_signal.aborted === true;
@@ -44,17 +45,7 @@ export async function complete_session_turn(
       : outcome.error ? { error: outcome.error } : {}),
   };
   active_turn.result = final_result;
-  options.events.publish({
-    mutation_id: nanoid(),
-    variant: "turn",
-    type: "finish",
-    session_id: options.session_id,
-    turn_id: active_turn.turn_id,
-    status: stopped ? "stopped" : final_result.success ? "completed" : "failed",
-    created_at: Date.now(),
-    text: final_result.text,
-    ...(final_result.error ? { error: final_result.error } : {}),
-  });
+
   await notify_turn_committed(
     options,
     active_turn,
@@ -84,7 +75,7 @@ export async function fail_session_turn(
   await prepare_session_completion(options, active_turn, final_result);
   active_turn.result = final_result;
   if (message !== options.stopped_message
-    && !(await options.messages.read_latest_agent_message(active_turn.turn_id))?.parts.some(part => part.type === "error")) {
+    && !(await options.messages.read_latest_agent_message(active_turn.turn_id))?.current_error) {
     try {
       await options.messages.append_error_part({
         scope: "turn",
@@ -103,20 +94,23 @@ export async function fail_session_turn(
     status: stopped ? "stopped" : "failed",
     error: message,
   });
-  options.events.publish({
-    mutation_id: nanoid(),
-    variant: "turn",
-    type: "finish",
-    session_id: options.session_id,
-    turn_id: active_turn.turn_id,
-    status: stopped ? "stopped" : "failed",
-    created_at: Date.now(),
-    text: "",
-    error: message,
-  });
+
   await notify_turn_committed(options, active_turn, stopped ? "stopped" : "failed");
   await dispose_turn_context(options, active_turn);
   return final_result;
+}
+
+/** 运行资源释放后兑现本次调用，并在已登记的占用释放处理器结束后发布同源终态。 */
+export async function settle_session_turn(options: SessionTurnCompletionOptions, active: ActiveSessionTurnState): Promise<void> {
+  if (!active.result) return;
+  active.settle_after_release = false;
+  active.deferred_finished.resolve(active.result);
+  await active.deferred_finished.promise;
+  const result = active.result;
+  options.events.publish({ mutation_id: generate_id(), variant: "turn", type: "finish",
+    session_id: options.session_id, turn_id: active.turn_id,
+    status: active.prepared_completion?.status ?? (result.success ? "completed" : "failed"),
+    created_at: Date.now(), text: result.text, ...(result.error ? { error: result.error } : {}) });
 }
 
 /** 在释放当前 Hook lease 前触发 Turn committed effect。 */
@@ -125,6 +119,7 @@ async function notify_turn_committed(
   active_turn: ActiveSessionTurnState,
   status: SessionTurnCommittedHookValue["status"],
 ): Promise<void> {
+  if (active_turn.is_retry) return;
   const hooks = options.get_hooks();
   try {
     const messages = (await options.messages.list_history_messages())

@@ -661,11 +661,6 @@ export class Agent {
       get_handlers: () => this.resolve_raw_hooks().effect[SESSION_HOOK_POINTS.turn_committed] ?? [],
       restore_context: async (record) => {
         const session = await this.restore_work_session(record.event.session_id, record.origin.category);
-        if (record.state === "prepared") {
-          const session_store = await this.resolve_storage().sessions.open_session(session.id, record.origin.category);
-          record.event.messages = (await session_store.list_messages())
-            .filter((message) => message.turn_id === record.event.turn_id);
-        }
         const workspace = record.workspace_id
           ? record.workspace_id === this.workspace?.id ? this.workspace : await this.resolve_project_workspace(record.workspace_id)
           : undefined;

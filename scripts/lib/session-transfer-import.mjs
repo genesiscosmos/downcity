@@ -2,7 +2,7 @@
  * 单 Session 离线导入：原身份、同 Agent、冲突拒绝、附件先暂存、数据库事务最后提交。
  * 批次清单与原 operation_id 驱动重入；已提交通过同库 receipt 核对，不覆盖用户记录。
  */
-import { assert_transfer_runtime } from "./session-transfer-protocol.mjs";
+import { assert_transfer_runtime, transfer_schema_version, transfer_batch_version } from "./session-transfer-protocol.mjs";
 import { assert_available, assert_operation, assert_root_identity, assert_transfer_database } from "./session-transfer-guards.mjs";
 import fs from "node:fs";
 import path from "node:path";
@@ -53,7 +53,7 @@ export async function import_session(input, runtime) {
   if (input.agent_id !== package_manifest.agent_id) fail("transfer_agent_identity_conflict");
   const session_id = record.metadata.session_id;
   const source_runtime = { ...runtime, agent_id: input.agent_id };
-  const planned = { format_version: 3, schema_version: 10, operation_id: input.operation_id, root_path, agent_id: input.agent_id,
+  const planned = { format_version: transfer_batch_version, schema_version: transfer_schema_version, operation_id: input.operation_id, root_path, agent_id: input.agent_id,
     session_id, package_path, package_fingerprint: fingerprint, allow_unresolved_sources: input.allow_unresolved_sources === true,
     attachments: inventory(package_manifest.attachments) };
   const request_hash = digest(planned);

@@ -58,11 +58,11 @@ export type RemoteSessionTransport = {
     session_id: string,
     category: string,
     input: RemotePromptInput,
-  ): Promise<{ id: string }>;
+  ): Promise<import("@/types/remote/RemoteTurn.js").RemotePromptTurn>;
   /** 为本次 Prompt 建立独立执行通道。 */
   open_power_channel(input: OpenPromptPowerChannel): Promise<PromptPowerChannel>;
   /** 停止当前 session turn，并取消未吸收队列。 */
-  stop(session_id: string, category: string, expected_turn_id?: string): Promise<AgentSessionStopResult>;
+  stop(session_id: string, category: string, expected_turn_id?: string, expected_message?: import("@downcity/type").SessionMessageCheckpoint): Promise<AgentSessionStopResult>;
   /** 订阅 session 事件。 */
   subscribe(params: {
     session_id: string;

@@ -69,6 +69,8 @@ export interface SessionTurnExecutionInput {
  * Executor 通过 Composer 装配后的中间运行态。
  */
 export interface SessionStepExecutionInput {
+  /** Retry 首步沿用原 Step 身份，后续步骤正常生成。 */
+  retry_step_id?: string;
   /** 当前 Step 使用的模型实例。 */
   model: ModelClient;
 
@@ -95,7 +97,7 @@ export interface SessionStepExecutionInput {
   validate_replay?: () => Promise<void>;
 
   /** 只持有未绑定工具及值快照，为新的 Turn 创建执行绑定。 */
-  rebind_retry?: (context: SessionTurnContext) => SessionStepExecutionInput;
+  rebind_retry?: (context: SessionTurnContext) => Promise<SessionStepExecutionInput>;
 
   /** 校验当前配置仍与该步骤绑定一致；只校验静态语义，不重装动态上下文。 */
   validate_retry?: () => Promise<void>;

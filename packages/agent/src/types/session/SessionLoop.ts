@@ -49,6 +49,14 @@ export interface PromptRequestIdentity {
 export interface ActiveSessionTurnState {
   /** 当前 Turn 的稳定标识。 */
   turn_id: string;
+  /** Retry 消息的接收水位；同 Turn 的旧 Stop 不能控制恢复后的新调用。 */
+  resumed_message?: import("@downcity/type").SessionMessageCheckpoint;
+  /** 本次调用是否为原 Step Retry；完成投递只属于已结算的原调用。 */
+  is_retry?: boolean;
+  /** 本次方法调用已经写前确认的完成快照。 */
+  prepared_completion?: import("@downcity/type").SessionTurnCommittedHookValue;
+  /** Loop 在运行租约释放后才兑现 finished；离线恢复收口可以直接兑现。 */
+  settle_after_release?: boolean;
   /** 当前 Turn 的最终结果快照。 */
   result: AgentSessionTurnResult | null;
   /** 当前 Turn 完成状态的延迟控制器。 */
@@ -59,6 +67,15 @@ export interface ActiveSessionTurnState {
   replay?: import("./SessionModelInput.js").SessionModelReplay;
   /** 当前 Turn 是否已经接收并持久化首条 Prompt。 */
   prompt_started: boolean;
+}
+
+/** 原请求的幂等结果查询；当前 Retry 调用不得覆盖原接收句柄。 */
+export interface SessionPromptLookupOptions {
+  /** 被查询的原业务输入身份。 */ identity: PromptRequestIdentity;
+  /** canonical 输入事实的唯一来源。 */ messages: SessionMessages;
+  /** 当前活动方法调用，仅原调用可以复用其未完成句柄。 */ active_turn: ActiveSessionTurnState | null;
+  /** 原结果与 Turn 当前结果共用的完成记录端口。 */ completions?: SessionCompletionPort;
+  /** 当前 Session 稳定标识。 */ session_id: string;
 }
 
 /** SessionLoop 构造参数。 */

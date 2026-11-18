@@ -8,7 +8,7 @@
 export type SessionCommandKind =
   /** Prompt Command 需要创建或加入一个 Turn。 */
   | "prompt"
-  /** 原失败模型请求的新 Turn，无用户输入。 */
+  /** 原失败模型 Step 的同 Turn 继续调用，无新增用户输入。 */
   | "retry"
   /** Maintenance Command 可以在 Session 空闲期独立执行。 */
   | "maintenance";
@@ -19,7 +19,9 @@ export interface SessionCommand {
   kind: SessionCommandKind;
   /** replace 表示新输入，defer 不改变配置；缺省使内存 Retry 失效。 */
   interrupt?: "replace" | "defer";
-  /** Prompt 恢复执行时要求复用的稳定 Turn ID。 */
+  /** Retry 命令恢复同一 Turn 所需的纯数据描述。 */
+  replay?: import("./SessionModelInput.js").SessionModelReplay;
+  /** Prompt 或 Retry 要求复用的稳定 Turn ID。 */
   turn_id?: string;
   /** Command 出队后执行的完整行为。 */
   execute: () => Promise<void>;

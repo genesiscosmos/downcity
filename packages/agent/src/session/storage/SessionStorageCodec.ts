@@ -37,7 +37,7 @@ export interface SessionMessageRow {
   state: "streaming" | "done" | null;
   /** 已提交的稳定 Part 前缀末尾 sequence；0 表示空前缀，User 固定为 0。 */
   stable_part_sequence: number;
-  /** 本条用户消息携带的请求记账 JSON；Agent 消息固定为空。 */
+  /** User 请求记账或 Agent 当前错误的 envelope JSON；不保存模型输入。 */
   meta: string | null;
   /** Fork 来源 Session。 */
   origin_session_id: string | null;
@@ -81,7 +81,8 @@ export function encode_session_message_row(message: SessionMessage): SessionMess
     role: message.role,
     state: message.role === "agent" ? message.state : null,
     stable_part_sequence: message.role === "agent" ? message.stable_part_sequence : 0,
-    meta: message.role === "user" && message.meta ? JSON.stringify(message.meta) : null,
+    meta: message.role === "user" ? (message.meta ? JSON.stringify(message.meta) : null)
+      : message.current_error ? JSON.stringify({ current_error: message.current_error }) : null,
     origin_session_id: message.origin?.session_id ?? null,
     origin_message_id: message.origin?.message_id ?? null,
     origin_turn_id: message.origin?.turn_id ?? null,
@@ -161,6 +162,7 @@ export function decode_session_message(
     state: row.state,
     stable_part_sequence: row.stable_part_sequence,
     parts: agent_parts,
+    ...(row.meta ? { current_error: decode_current_error(row) } : {}),
   };
   for (const part of agent_parts) {
     if (part.type !== "tool" || !part.result_ref) continue;
@@ -548,4 +550,15 @@ function invalid_meta(row: SessionMessageRow, reason: string): Error {
 /** schema 联合类型增加成员时强制 codec 显式解码。 */
 function assert_never(value: never): never {
   throw new Error(`Unsupported persisted Session Part type: ${String(value)}`);
+}
+
+/** 当前错误使用既有 Part 形状校验，但不占用正文序号或稳定水位。 */
+function decode_current_error(row: SessionMessageRow): Extract<SessionAgentMessagePart, { type: "error" }> {
+  const value = JSON.parse(row.meta!).current_error;
+  if (!value || value.type !== "error" || typeof value.part_id !== "string" || !value.part_id
+    || !Number.isSafeInteger(value.sequence) || value.sequence < 1) throw new Error("Invalid current Message error");
+  const part = decode_session_part({ part_id: value.part_id, message_id: row.message_id, sequence: value.sequence,
+    step_id: null, type: "error", content: JSON.stringify(value), created_at: row.created_at, updated_at: row.updated_at }, "agent");
+  if (part.type !== "error") throw new Error("Invalid current Message error");
+  return part;
 }

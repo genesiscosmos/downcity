@@ -199,6 +199,7 @@ function project_message_change(
     message.role !== "agent" ||
     previous.state !== message.state ||
     previous.stable_part_sequence !== message.stable_part_sequence ||
+    JSON.stringify(previous.current_error) !== JSON.stringify(message.current_error) ||
     previous.parts.some(
       (part) => !message.parts.some((next) => next.part_id === part.part_id),
     )

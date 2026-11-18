@@ -19,7 +19,8 @@ const city_source = path.join(public_root, "packages/city/src/");
 
 /** Import only pure runtime modules, with source-local aliases and TS transformation. */
 export async function load_runtime(agent_database = true, protocol = "current") {
-  if (!["current", "historical-v9"].includes(protocol)) throw new Error("offline_runtime_protocol_invalid");
+  if (!["current", "historical-v9", "historical-v10"].includes(protocol)) throw new Error("offline_runtime_protocol_invalid");
+  const historical_version = protocol === "historical-v9" ? 9 : protocol === "historical-v10" ? 10 : undefined;
   // City 的错误类使用 TS 参数属性；由已安装编译器转换，避免依赖 Node 的实验转换模式。
   const typescript = agent_database ? create_require(path.join(city_source, "offline.cjs"))("typescript") : undefined;
   const hook = register_hooks({
@@ -28,6 +29,8 @@ export async function load_runtime(agent_database = true, protocol = "current") 
       if ([agent_source, type_source, city_source].some(root => parent_path.startsWith(root))) {
         let target;
         if (specifier.startsWith("@/")) target = path.join(parent_path.startsWith(city_source) ? city_source : agent_source, specifier.slice(2));
+        // 纯门禁只依赖 schema，离线桥不加载 Agent 执行器或已构建的 package 入口。
+        else if (specifier === "@downcity/agent" && parent_path === path.join(city_source, "local/resources/SessionStorageReadiness.ts")) target = path.join(agent_source, "session/storage/agent-db/AgentSessionSchema.ts");
         else if (specifier === "@downcity/type") target = path.join(type_source, "index.ts");
         else if (specifier.startsWith("@downcity/type/")) target = path.join(type_source, `${specifier.slice(15)}.ts`);
         else if (specifier.startsWith(".")) target = path.resolve(path.dirname(parent_path), specifier);
@@ -50,8 +53,8 @@ export async function load_runtime(agent_database = true, protocol = "current") 
   try {
     const load = relative => import(path_to_file_url(path.join(agent_source, relative)).href);
     const modules = await Promise.all([
-      protocol === "historical-v9"
-        ? import(new URL("../fixtures/session-v9/codec.mjs", import.meta.url))
+      historical_version
+        ? import(new URL(`../fixtures/session-v${historical_version}/codec.mjs`, import.meta.url))
         : load("session/storage/SessionStorageCodec.ts"),
       load("session/messages/SessionStablePrefix.ts"),
       load("types/sdk/SessionPromptActor.ts"),
@@ -74,15 +77,15 @@ export async function load_runtime(agent_database = true, protocol = "current") 
       import(path_to_file_url(path.join(type_source, "types/workspace/AttachmentPolicy.ts")).href),
     ]));
     const runtime = Object.assign({}, ...modules);
-    if (protocol === "historical-v9" && agent_database) {
-      runtime.AGENT_SESSION_SCHEMA_VERSION = 9;
-      runtime.AGENT_SESSION_SCHEMA_SQL = fs.readFileSync(new URL("../fixtures/session-v9/schema.sql", import.meta.url), "utf8");
+    if (historical_version && agent_database) {
+      runtime.AGENT_SESSION_SCHEMA_VERSION = historical_version;
+      runtime.AGENT_SESSION_SCHEMA_SQL = fs.readFileSync(new URL(`../fixtures/session-v${historical_version}/schema.sql`, import.meta.url), "utf8");
       runtime.assert_agent_session_schema = (database, agent_id) => {
-        if (database.prepare("PRAGMA user_version").get().user_version !== 9) throw new Error("v9_tool_database_version_mismatch");
+        if (database.prepare("PRAGMA user_version").get().user_version !== historical_version) throw new Error(`v${historical_version}_tool_database_version_mismatch`);
         const row = database.prepare("SELECT agent_id,format_version FROM storage_metadata WHERE singleton_id=1").get();
-        if (row?.agent_id !== agent_id || row.format_version !== 9) throw new Error("session_storage_identity_conflict");
+        if (row?.agent_id !== agent_id || row.format_version !== historical_version) throw new Error("session_storage_identity_conflict");
       };
-      Object.assign(runtime, await import(new URL("../fixtures/session-v9/readiness.mjs", import.meta.url)));
+      Object.assign(runtime, await import(new URL(`../fixtures/session-v${historical_version}/readiness.mjs`, import.meta.url)));
     }
     return runtime;
   } finally { hook.deregister(); }

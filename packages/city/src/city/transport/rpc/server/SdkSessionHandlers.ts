@@ -128,13 +128,13 @@ export async function handle_sdk_session_rpc_request(params: {
         const runtime_powers = channel?.prepare(request.params.input, JSON.stringify([session.agent_id, session.id, session.origin.type]));
         const turn = await session.prompt({ ...base, ...(runtime_powers ? { powers: runtime_powers } : {}) });
         if (channel) void turn.finished.then(() => channel.close(), () => channel.close());
-        write_success(request.id, { turn: { id: turn.id } });
+        write_success(request.id, { turn: { id: turn.id, result: turn.result } });
       } catch (error) { channel?.close(); throw error; }
       return true;
     }
     case "sdk.sessions.stop": {
       const session = await get_session(request.params.session_id, request.params.category);
-      const result = await session.stop(request.params.expected_turn_id);
+      const result = await session.stop(request.params.expected_turn_id, request.params.expected_message);
       write_success(request.id, { result });
       return true;
     }

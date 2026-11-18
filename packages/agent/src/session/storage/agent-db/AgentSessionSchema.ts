@@ -1,22 +1,23 @@
 /**
- * Agent 范围 Session 数据库的正式 v10 schema。
+ * Agent 范围 Session 数据库的正式 v11 schema。
  *
  * sessions 是目录唯一事实源；canonical、配置和 Composer 数据通过内部 session_key
  * 关联。session_id 是永久 UUID，主会话由同库持久指针选择，归档不会改变身份。
- * 本模块仅供存储拥有者和离线工具使用，不自动升级历史数据库。
+ * 存储拥有者、宿主门禁与离线工具共用本模块的版本规则，不自动升级历史数据库。
  */
 import type { DatabaseSync } from "node:sqlite";
 import { AGENT_ARCHIVE_PLAN_SCHEMA_SQL } from "./AgentArchivePlanSchema.js";
 import { AGENT_SESSION_CONSTRAINTS_SQL } from "./AgentSessionConstraints.js";
 
 /** 与每 Session v7 分库明确区分的 Agent DB 格式。 */
-export const AGENT_SESSION_SCHEMA_VERSION = 10;
+export const AGENT_SESSION_SCHEMA_VERSION = 11;
 
 /** 校验版本和数据库拥有者；只读调用绝不初始化数据库。 */
 export function assert_agent_session_schema(database: DatabaseSync, agent_id: string): void {
   const version = Number(database.prepare("PRAGMA user_version").get()?.user_version ?? 0);
   if (version !== AGENT_SESSION_SCHEMA_VERSION) {
-    throw new Error("session_migration_required: Agent Session storage requires offline migration");
+    const database_path = database.prepare("PRAGMA database_list").all().find(row => row.name === "main")?.file || ":memory:";
+    throw new Error(`session_migration_required: Agent Session storage requires offline migration; agent_id=${agent_id}; database_path=${database_path}; actual_version=${version}; expected_version=${AGENT_SESSION_SCHEMA_VERSION}`);
   }
   const metadata = database.prepare("SELECT agent_id, format_version FROM storage_metadata WHERE singleton_id = 1").get();
   if (metadata?.agent_id !== agent_id || metadata.format_version !== AGENT_SESSION_SCHEMA_VERSION) {
@@ -29,7 +30,7 @@ export const AGENT_SESSION_SCHEMA_SQL = `
 CREATE TABLE storage_metadata (
   singleton_id INTEGER PRIMARY KEY CHECK (singleton_id = 1),
   agent_id TEXT NOT NULL CHECK (length(trim(agent_id)) > 0),
-  format_version INTEGER NOT NULL CHECK (format_version = 10),
+  format_version INTEGER NOT NULL CHECK (format_version = 11),
   generation TEXT NOT NULL CHECK (length(generation) = 36),
   cursor_secret BLOB NOT NULL CHECK (length(cursor_secret) = 32),
   created_at INTEGER NOT NULL,
@@ -116,7 +117,7 @@ CREATE TABLE messages (
   stable_part_sequence INTEGER NOT NULL DEFAULT 0 CHECK (
     stable_part_sequence >= 0 AND (role = 'agent' OR stable_part_sequence = 0)
   ),
-  meta TEXT CHECK (meta IS NULL OR (json_valid(meta) AND json_type(meta) = 'object' AND role = 'user')),
+  meta TEXT CHECK (meta IS NULL OR (json_valid(meta) AND json_type(meta) = 'object')),
   origin_session_id TEXT,
   origin_message_id TEXT,
   origin_turn_id TEXT,

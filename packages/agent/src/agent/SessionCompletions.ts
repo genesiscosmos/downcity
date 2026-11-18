@@ -46,6 +46,8 @@ export class SessionCompletions {
       validate_callback: () => { throw new Error("execution_profile_immutable: ordinary completion callbacks are forbidden"); },
       prepare: async (event, context) => { await this.prepare(event, context, false); },
       read: async (session_id, turn_id) => await this.read(session_id, turn_id),
+      read_initial: async (session_id, turn_id) => await this.read_initial(session_id, turn_id),
+      update_result: async (event, context) => await this.update_result(event, context),
     };
   }
 
@@ -85,7 +87,23 @@ export class SessionCompletions {
   async read(session_id: string, turn_id: string): Promise<SessionTurnCommittedHookValue | undefined> {
     const file_path = this.record_path(`completion:${session_id}:${turn_id}`);
     if (!(await this.options.files.path_exists(file_path))) return undefined;
-    return (await this.read_record(file_path)).event;
+    const record = await this.read_record(file_path);
+    return record.current ?? record.event;
+  }
+
+  /** 按原调用返回幂等快照；永远不把 Retry 的成功交给旧调用。 */
+  async read_initial(session_id: string, turn_id: string): Promise<SessionTurnCommittedHookValue | undefined> {
+    const path = this.record_path(`completion:${session_id}:${turn_id}`);
+    return await this.options.files.path_exists(path) ? (await this.read_record(path)).event : undefined;
+  }
+
+  /** 同一完成记录只替换当前结果，不触碰原事件、接收方或投递状态。 */
+  async update_result(event: SessionTurnCommittedHookValue, _context: ToolCallContext): Promise<void> {
+    const path = this.record_path(event.completion_id);
+    await this.options.files.with_file_lock(`${path}.lock`, async () => {
+      const record = await this.read_record(path);
+      await this.save({ ...record, current: structuredClone(event) });
+    });
   }
 
   /** 先持久化，再启动后台投递；Turn Handle 不等待业务回调完成。 */
@@ -132,7 +150,7 @@ export class SessionCompletions {
       const committed: SessionCompletionRecord = {
         ...existing,
         // 写前结果一旦提交就不受后续日志、压缩或资源释放失败影响。
-        event: { ...structuredClone(event), result: existing.event.result, status: existing.event.status },
+        event: existing.event,
         state: Object.keys(existing.deliveries).length ? "pending" : "delivered",
       };
       await this.save(committed);
@@ -191,8 +209,12 @@ export class SessionCompletions {
         this.options.report_error(error);
       }
       record.state = Object.values(record.deliveries).every((item) => item.delivered) ? "delivered" : "pending";
-      // 每个接收方完成即落盘，其它处理器失败不重放已确认的接收方。
-      await this.save(record);
+      // 旧投递可能晚于同 Turn 的 Retry；只保存投递确认，不能覆盖最新当前结果。
+      const file_path = this.record_path(record.event.completion_id);
+      await this.options.files.with_file_lock(`${file_path}.lock`, async () => {
+        const latest = await this.read_record(file_path);
+        await this.save({ ...latest, state: record.state, deliveries: record.deliveries });
+      });
     }
     // 缺失处理器或尚未到期时也更新唤醒时间，避免反复读取无法推进的记录。
     this.track_pending(record);

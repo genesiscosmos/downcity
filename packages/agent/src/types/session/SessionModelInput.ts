@@ -18,14 +18,38 @@ export interface SessionModelInputSnapshot {
 
 /** 已结束执行留下的请求描述；不持有 Turn、输出或取消信号。 */
 export interface SessionModelReplay {
+  /** 原逻辑 Turn；Retry 仅替换当前方法调用的上下文。 */
+  turn_id: string;
+  /** 原失败 Step 身份，自动和手动调用共用。 */
+  step_id: string;
+  /** 原调用的纯数据进度，不持有资源。 */
+  checkpoint: SessionStepCheckpoint;
+  /** 接收 Retry 时读取的 canonical 消息版本，恢复 Writer 前必须再次匹配。 */
+  message_revision?: number;
   /** 普通错误的展示锚点，不是执行身份。 */
   binding: import("@downcity/type").SessionModelRetry;
   /** 失败的完整模型请求，发送时始终复制。 */
   call: import("@downcity/type").ModelCall;
   /** 接收前校验静态配置及原输入引用。 */
   validate: () => Promise<void>;
-  /** 为新 Turn 创建工具绑定，不能引用原 Turn。 */
-  bind: (context: import("../turn/SessionTurnContext.js").SessionTurnContext) => import("./SessionExecution.js").SessionStepExecutionInput;
+  /** 为本次有效 Context 重绑定工具，不能引用旧 Context。 */
+  bind: (context: import("../turn/SessionTurnContext.js").SessionTurnContext) => Promise<import("./SessionExecution.js").SessionStepExecutionInput>;
+}
+
+/** 同一 Turn 的模型循环检查点；仅保留内存数据，不拥有信号、工具或输出。 */
+export interface SessionStepCheckpoint {
+  /** 已成功完成的模型步骤数，失败步骤不消耗新的预算。 */
+  step_count: number;
+  /** 已观察到的工具调用总量。 */
+  tool_call_count: number;
+  /** 已观察到的工具结果总量。 */
+  tool_result_count: number;
+  /** 已完成模型内容，用于结果聚合；canonical Parts 始终由消息存储拥有。 */
+  assistant_parts: import("@downcity/type").SessionAgentMessagePart[];
+  /** 已使用的上下文推进预算。 */
+  advance_count: number;
+  /** 已检测的上下文维护需求。 */
+  compact_required: boolean;
 }
 
 /** 请求发出前采集的进程内校验能力；不持有执行资源。 */

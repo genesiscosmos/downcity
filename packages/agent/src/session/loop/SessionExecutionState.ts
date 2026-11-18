@@ -23,7 +23,7 @@ export class SessionExecutionState {
   snapshot(): SessionRuntimeSnapshot {
     const { processing, interaction, ...runtime } = this.options.read();
     return { ...runtime, state: runtime.model_retry ? "failed" : interaction && runtime.live_execution ? "waiting_input"
-      : this.waiting_child ? "waiting_child" : processing ? "running" : "idle" };
+      : this.waiting_child && runtime.live_execution ? "waiting_child" : runtime.live_execution ? "running" : "idle" };
   }
 
   /** 子工作等待只是原 Loop 的执行边界；不会完成父 Turn 或交付结果。 */

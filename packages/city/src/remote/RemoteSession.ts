@@ -111,6 +111,12 @@ export class RemoteSession implements RemoteAgentSession {
     if (is_agent_session_prompt_input_empty(input)) {
       throw new Error("remote session.prompt requires a non-empty query");
     }
+    const observed = new Map([...this.turns_by_id].filter(([, turn]) => turn.result === null));
+    const unwatch = this.event_hub.subscribe(mutation => {
+      if (mutation.variant !== "turn" || mutation.type !== "start" || observed.has(mutation.turn_id)) return;
+      const lifecycle = this.turns_by_id.get(mutation.turn_id);
+      if (lifecycle) observed.set(mutation.turn_id, lifecycle);
+    });
     const execution = input.powers?.length ? new PromptPowerExecution(input.powers) : undefined;
     try {
       await this.ensure_event_pump();
@@ -129,20 +135,22 @@ export class RemoteSession implements RemoteAgentSession {
         ...wire_input,
         ...(execution ? { powers: execution.descriptors, execution_channel_id: channel_id } : {}),
       });
-      const handle = create_turn_handle(this.ensure_turn_lifecycle(turn.id));
+      const handle: AgentSessionTurnHandle = turn.result
+        ? { id: turn.id, result: turn.result, finished: Promise.resolve(turn.result) }
+        : create_turn_handle(observed.get(turn.id) ?? this.ensure_turn_lifecycle(turn.id));
       if (execution) void handle.finished.then(() => execution.close(), () => execution.close()).catch(() => {});
       return handle;
     } catch (error) {
       await execution?.close().catch(() => {});
       await this.maybe_stop_event_pump();
       throw error;
-    }
+    } finally { unwatch(); }
   }
 
   /** 停止当前远程 Session Turn。 */
-  async stop(expected_turn_id?: string): Promise<AgentSessionStopResult> {
+  async stop(expected_turn_id?: string, expected_message?: import("@downcity/type").SessionMessageCheckpoint): Promise<AgentSessionStopResult> {
     await this.ensure_event_pump();
-    return await this.transport.stop(this.id, this.origin.category, expected_turn_id);
+    return await this.transport.stop(this.id, this.origin.category, expected_turn_id, expected_message);
   }
 
   /** 订阅当前 Session 的全部未来 Mutation。 */
@@ -190,7 +198,9 @@ export class RemoteSession implements RemoteAgentSession {
 
   /** 向原宿主提交原失败请求的新执行；传输未知时调用方只读状态，不自动重发。 */
   async retry_model_step(input: import("@downcity/type").SessionModelRetryInput): Promise<import("@downcity/type").SessionModelRetryResult> {
-    return await this.transport.retry_model_step(this.id, this.origin.category, input);
+    await this.ensure_event_pump();
+    try { return await this.transport.retry_model_step(this.id, this.origin.category, input); }
+    finally { await this.maybe_stop_event_pump(); }
   }
 
   /** 更新当前远程 Session 的可序列化动态配置。 */
@@ -242,6 +252,10 @@ export class RemoteSession implements RemoteAgentSession {
 
   private handle_mutation(mutation: SessionMutation): void {
     const turn_id = "turn_id" in mutation ? mutation.turn_id : undefined;
+    if (turn_id && mutation.variant === "turn" && mutation.type === "start" && this.turns_by_id.get(turn_id)?.result) {
+      // 原 handle 闭包仍持有旧 lifecycle；同一 Turn 的新调用使用另一个普通 Promise。
+      this.turns_by_id.delete(turn_id);
+    }
     if (turn_id) this.ensure_turn_lifecycle(turn_id);
     if (mutation.variant === "turn" && mutation.type === "finish") {
       const lifecycle = this.ensure_turn_lifecycle(mutation.turn_id);
@@ -251,8 +265,7 @@ export class RemoteSession implements RemoteAgentSession {
         success: mutation.status === "completed",
         ...(mutation.error ? { error: mutation.error } : {}),
       };
-      lifecycle.result = result;
-      lifecycle.deferred_finished.resolve(result);
+      if (!lifecycle.result) { lifecycle.result = result; lifecycle.deferred_finished.resolve(result); }
       this.remember_completed_turn(mutation.turn_id);
       void this.maybe_stop_event_pump();
     }

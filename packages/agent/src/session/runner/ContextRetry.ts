@@ -33,6 +33,8 @@ interface ContextRetryOptions {
 }
 
 interface ContextRetryInput {
+  /** 已使用的上下文预算，人工继续不重置。 */
+  checkpoint?: import("@/types/session/SessionModelInput.js").SessionStepCheckpoint;
   /** 当前 Turn 取消后停止摘要恢复。 */
   signal?: AbortSignal;
   /** 按当前推进次数执行 Turn；模型步骤可先尝试有界推进，耗尽后失败结束。 */
@@ -61,13 +63,14 @@ export class ContextRetry {
   async execute_with_retry(
     input: ContextRetryInput,
   ): Promise<SessionTurnExecutionResult> {
-    let advance_count = 0;
+    let advance_count = input.checkpoint?.advance_count ?? 0;
     const advance_context = async (error: unknown): Promise<boolean> => {
       if (advance_count >= MAX_CONTEXT_ADVANCE_ATTEMPTS) return false;
       input.signal?.throwIfAborted();
       if (!await this.advance_context(error, input.signal)) return false;
       await this.logger.log("info", "[agent] context.advance", { advanceCount: advance_count, error: String(error) });
       advance_count += 1;
+      if (input.checkpoint) input.checkpoint.advance_count = advance_count;
       return true;
     };
     while (true) {

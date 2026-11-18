@@ -166,6 +166,8 @@ type RpcRequestPayload =
       params: {
         /** 用户实际观察的 Turn；不匹配时拒绝停止后来的工作。 */
         expected_turn_id?: string;
+        /** 已观测消息版本，防止同 Turn Retry 后收到原调用的迟到 Stop。 */
+        expected_message?: import("@downcity/type").SessionMessageCheckpoint;
         /** 目标 session id。 */
         session_id: string;
         /** Session 来源分区。 */

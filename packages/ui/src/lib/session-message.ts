@@ -25,6 +25,7 @@ export function session_message_to_chat_message(record: Record<string, unknown>)
   const record_role = String(record.role ?? "agent");
   const role = record_role === "user" ? "user" : "assistant";
   const raw_parts = Array.isArray(record.parts) ? [...record.parts] : [];
+  if (record.current_error && typeof record.current_error === "object") raw_parts.push(record.current_error);
   raw_parts.sort((left, right) => Number((left as Record<string, unknown>)?.sequence ?? 0) - Number((right as Record<string, unknown>)?.sequence ?? 0));
   const parts = raw_parts.map((part, index) => session_part_to_chat_part(part, index)).filter((part): part is DowncityChatMessagePart => part !== null);
   if (role === "assistant") {

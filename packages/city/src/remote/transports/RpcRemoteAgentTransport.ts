@@ -68,7 +68,7 @@ export class RpcRemoteAgentTransport implements RemoteAgentTransport {
     session_id: string,
     category: string,
     input: RemotePromptInput,
-  ): Promise<{ id: string }> {
+  ): Promise<import("@/types/remote/RemoteTurn.js").RemotePromptTurn> {
     return await this.client.prompt_session({
       session_id,
       category,
@@ -80,8 +80,8 @@ export class RpcRemoteAgentTransport implements RemoteAgentTransport {
     return await this.client.open_power_channel(input);
   }
 
-  async stop(session_id: string, category: string, expected_turn_id?: string): Promise<AgentSessionStopResult> {
-    return await this.client.stop_session(session_id, category, expected_turn_id);
+  async stop(session_id: string, category: string, expected_turn_id?: string, expected_message?: import("@downcity/type").SessionMessageCheckpoint): Promise<AgentSessionStopResult> {
+    return await this.client.stop_session(session_id, category, expected_turn_id, expected_message);
   }
 
   async subscribe(params: {

@@ -153,7 +153,17 @@ export class SessionResources {
     const expected = typeof input.turn_id === "string" ? input.turn_id : status.active_turn_id;
     if (expected && expected !== status.active_turn_id) throw new ResourceError("turn_changed", "Current Turn changed; refresh before stopping", 4);
     if (!expected) return { stopped: false, turn_id: null, cancelled_queued_prompts: 0, reason: "idle" };
-    return await session.stop(expected);
+    const supplied = input.expected_message;
+    if (supplied !== undefined && (!supplied || typeof supplied !== "object" || !("message_id" in supplied)
+      || !("revision" in supplied) || typeof supplied.message_id !== "string" || !Number.isSafeInteger(supplied.revision))) {
+      throw new ResourceError("invalid_input", "expected_message requires message_id and revision", 2);
+    }
+    // 显式 turn_id 不自动补成新检查点；无目标的宿主操作按当前状态捕获可见消息。
+    const message = typeof input.turn_id === "string" ? undefined : (await session.messages()).items
+      .filter(message => message.role === "agent" && message.turn_id === expected).at(-1);
+    const checkpoint = supplied as import("@downcity/type").SessionMessageCheckpoint | undefined
+      ?? (message ? { message_id: message.message_id, revision: message.revision } : undefined);
+    return await session.stop(expected, checkpoint);
   }
 
   /** 归档递归由 SDK 负责；失败明确表示可能部分提交，不承诺原子回滚。 */

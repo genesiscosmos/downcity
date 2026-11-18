@@ -525,8 +525,8 @@ export class Session implements AgentSession {
   /**
    * 停止当前 turn，并取消尚未被吸收的排队 prompt。
    */
-  async stop(expected_turn_id?: string): Promise<AgentSessionStopResult> {
-    return await this.session_loop.stop(expected_turn_id);
+  async stop(expected_turn_id?: string, expected_message?: import("@downcity/type").SessionMessageCheckpoint): Promise<AgentSessionStopResult> {
+    return await this.session_loop.stop(expected_turn_id, expected_message);
   }
 
   /**
@@ -557,7 +557,7 @@ export class Session implements AgentSession {
     };
   }
 
-  /** 空闲时接收失败模型请求的新 Turn；不会重新打开旧执行或追加 Prompt。 */
+  /** 空闲时从原失败 Step 继续同一 Turn 和消息，返回本次调用的独立结果。 */
   async retry_model_step(input: import("@downcity/type").SessionModelRetryInput): Promise<import("@downcity/type").SessionModelRetryResult> {
     this.assert_execution_profile?.();
     if (this.archive_state !== "active" || this.replacing_history) return { accepted: false, reason: "Session unavailable" };
@@ -736,7 +736,7 @@ export class Session implements AgentSession {
       get_model: () => this.get_model(),
       messages: async () => await this.session_messages.list_history_messages(),
       prompt: async (input) => await this.prompt(input),
-      stop: async (expected_turn_id) => await this.stop(expected_turn_id),
+      stop: async (expected_turn_id, expected_message) => await this.stop(expected_turn_id, expected_message),
       subscribe: (subscriber) => this.subscribe(subscriber),
       append_user_message: async (message_params) =>
         await this.append_external_user_message(message_params),

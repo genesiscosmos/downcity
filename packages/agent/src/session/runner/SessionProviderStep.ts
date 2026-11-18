@@ -21,6 +21,8 @@ import type { SessionModelRetryControl } from "./SessionModelReplay.js";
 
 /** 运行一个冻结输入的模型步骤；恢复不重新调用输入装配器。 */
 export async function execute_session_provider_step(input: {
+  /** 失败步骤保留成功正文和预算，不持有运行资源。 */
+  checkpoint: import("@/types/session/SessionModelInput.js").SessionStepCheckpoint;
   /** 上限收尾的空响应由执行器按上限失败处理，不扩展模型恢复循环。 */
   allow_empty_response?: boolean;
   /** 本次 Turn 上下文，持有输出、审批和停止信号。 */
@@ -45,7 +47,7 @@ export async function execute_session_provider_step(input: {
   if (step_input.call && model_input_digest(call.tools) !== model_input_digest(build_model_step_call([], [], step_input.tools).tools)) {
     throw new Error("Original tool definitions changed");
   }
-  const step_id = generate_id();
+  const step_id = step_input.retry_step_id ?? generate_id();
   const prepared = await input.retry_control?.prepare_input(call, step_input.validate_retry);
   if (step_input.call) {
     await step_input.validate_replay?.();
@@ -102,6 +104,7 @@ export async function execute_session_provider_step(input: {
     const binding = await output.show_model_error(error_part_id, model_error);
     if (prepared?.current() && step_input.rebind_retry && !signal.aborted) {
       input.retry_control.capture({ binding, call, validate: prepared.validate,
+        turn_id: turn_context.session.turn_id, step_id, checkpoint: structuredClone(input.checkpoint),
         bind: replay_step_binding(step_input.rebind_retry, call.tools?.map(tool => tool.name) ?? [], step_input.finalization),
       });
     }
@@ -111,8 +114,8 @@ export async function execute_session_provider_step(input: {
 
 /** 只捕获工具名字和无 Turn 的工厂；工具裁剪与收尾约束同样属于原请求。 */
 function replay_step_binding(bind: NonNullable<SessionStepExecutionInput["rebind_retry"]>, names: readonly string[], finalization?: boolean): NonNullable<SessionStepExecutionInput["rebind_retry"]> {
-  return context => {
-    const next = bind(context);
+  return async context => {
+    const next = await bind(context);
     return { ...next, finalization, tools: Object.fromEntries(Object.entries(next.tools).filter(([name]) => names.includes(name))) };
   };
 }

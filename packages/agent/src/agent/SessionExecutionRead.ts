@@ -31,7 +31,9 @@ export async function read_session_execution(storage: SessionStorage, live_execu
   if (identity && !request) return { turn_id, status: "not_found" };
   const message = await storage.read_latest_agent_message(turn_id);
   const resolved_turn_id = turn_id ?? message?.turn_id;
-  const completion = resolved_turn_id ? await completions?.read(storage.session_id, resolved_turn_id) : undefined;
+  const completion = resolved_turn_id && completions ? await (identity
+    ? completions.read_initial(storage.session_id, resolved_turn_id)
+    : completions.read(storage.session_id, resolved_turn_id)) : undefined;
   if (completion) return { turn_id: completion.turn_id, status: "completed", result: { turn_id: completion.turn_id, ...completion.result } };
   if (message || request) return { turn_id: turn_id ?? message?.turn_id, status: live_execution ? "running" : "interrupted" };
   return { ...(turn_id ? { turn_id } : {}), status: turn_id ? "not_found" : live_execution ? "running" : "idle" };

@@ -222,6 +222,33 @@ export class SessionAgentMessageState {
     });
   }
 
+  /** 当前错误属于 Message envelope，不追加不可变诊断历史。 */
+  async set_current_error(message_id: string, error: SessionAgentErrorPart): Promise<void> {
+    await this.enqueue_write(message_id, async () => {
+      const current = this.require_writable_agent(message_id);
+      await this.persist_snapshot(message_id, current.parts, { current_error: error });
+    });
+  }
+
+  /** 原位恢复已结束消息；提交前由原 revision 与本次 signal 再次校验所有权。 */
+  async resume(message_id: string, revision: number, error_part_id: string, assert_receivable: () => void): Promise<void> {
+    await this.enqueue_write(message_id, async () => {
+      const current = await this.options.store.read_message(message_id);
+      if (!current || current.role !== "agent" || current.state !== "done"
+        || current.revision !== revision || current.current_error?.part_id !== error_part_id) {
+        throw new Error("Original failed Message checkpoint changed");
+      }
+      assert_receivable();
+      this.options.cache.set_held(message_id);
+      try {
+        await this.persist_snapshot(message_id, current.parts, { current_error: null, assert_receivable });
+      } catch (error) {
+        this.options.cache.release_held(message_id);
+        throw error;
+      }
+    });
+  }
+
   /** 收口 Agent Message，并将局部非终态与失败原因一并原子提交。 */
   async complete(
     message_id: string,
@@ -270,14 +297,9 @@ export class SessionAgentMessageState {
           ? "Interaction cancelled" : error || "Tool did not complete before Agent Message closed";
         return { ...this.fail_tool_part(current, part, detail), interactions };
       });
-      if (outcome === "stopped" && !parts.some((part) =>
-        part.type === "error" && part.code === "turn_stopped"
-      )) {
-        parts.push(create_terminal_error_part(parts, "turn_stopped", error || "Turn stopped"));
-      } else if (outcome === "failed" && error && !parts.some((part) => part.type === "error")) {
-        parts.push(create_terminal_error_part(parts, "turn_execution_failed", error));
-      }
-      await this.persist_snapshot(message_id, parts, { held_by_writer: false });
+      const current_error = outcome === "completed" ? null : current.current_error
+        ?? create_terminal_error_part(parts, outcome === "stopped" ? "turn_stopped" : "turn_execution_failed", error || "Turn failed");
+      await this.persist_snapshot(message_id, parts, { held_by_writer: false, current_error });
     });
   }
 
@@ -425,6 +447,8 @@ export class SessionAgentMessageState {
     message_id: string,
     parts: SessionAgentMessagePart[],
     options?: {
+      /** 当前调用的错误；null 清除，省略保持原值。 */
+      current_error?: SessionAgentErrorPart | null;
       /** 本次提交后是否仍由 writer 持有；收口时传 false。省略时读取当前持有关系。 */
       held_by_writer?: boolean;
       /** 是否向订阅方发布 Message Mutation。 */
@@ -445,6 +469,7 @@ export class SessionAgentMessageState {
     );
     const message: SessionAgentMessage = {
       ...persisted,
+      ...(options?.current_error !== undefined ? { current_error: options.current_error ?? undefined } : {}),
       state: resolve_session_message_state(
         next_parts,
         options?.held_by_writer ?? this.options.cache.is_held(message_id),

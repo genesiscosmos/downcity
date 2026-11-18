@@ -1,4 +1,4 @@
-/** 原失败请求的新执行 Retry 协议；绑定只存在于运行时，不保存尝试历史。 */
+/** 同 Turn 原失败 Step 的 Retry 协议；绑定只存在于运行时，不保存尝试历史。 */
 
 /** 当前进程内仍可恢复的错误位置；由 Session.status 投影。 */
 export interface SessionModelRetry {
@@ -18,8 +18,15 @@ export interface SessionModelRetryInput {
 
 /** 新执行对动作的接收结果。 */
 export interface SessionModelRetryResult {
-  /** 是否已接收原失败请求的新执行；不重新打开已结束 Turn。 */
+  /** 是否接受继续原 Turn 的失败 Step。 */
   accepted: boolean;
   /** 明确未接收时的原因；传输未知时读取 Session 当前运行状态。 */
   reason?: string;
+  /** 本次方法调用的完成快照；不改变先前调用已经返回的结果。 */
+  result?: {
+    /** 原逻辑 Turn 标识。 */ turn_id: string;
+    /** 当前完整回答正文。 */ text: string;
+    /** 本次调用是否成功。 */ success: boolean;
+    /** 本次失败说明。 */ error?: string;
+  };
 }

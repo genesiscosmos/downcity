@@ -13,7 +13,7 @@ import { uuid_pattern } from "./lib/session-transfer-record.mjs";
 const help_text = `Single Session export (Node >= 22.18, checkout dependencies required)
 node scripts/export-session.mjs --export --root PATH --agent ID --session-id UUID --package PATH --operation-id UUID --writers-stopped
 node scripts/export-session.mjs --verify-package --package PATH
-Exports schema v10 to format 3; --allow-unresolved-sources explicitly preserves unavailable sources.
+Exports schema v11 to format 3; --allow-unresolved-sources explicitly preserves unavailable sources.
 Export creates a private versioned directory outside the data root; it never overwrites a different package.
 Resume an interrupted export with the SAME arguments and operation UUID. Source changes block resume.
 Quit writers before export. Verification reads the package only, not its original source paths.

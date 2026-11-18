@@ -165,9 +165,13 @@ export class StepInput {
     const tools = frozen.tools;
     const powers = read_turn_prompt_powers(turn_context);
     const step_state = structuredClone({ workspace_env: compose_input.state.env, agent_systems: compose_input.state.systems });
-    const rebind_retry = (context: SessionTurnContext): SessionStepExecutionInput => {
+    const power_blocks = structuredClone(turn_context.step.power_context_blocks);
+    const user_messages = structuredClone(turn_context.input.user_messages());
+    const rebind_retry = async (context: SessionTurnContext): Promise<SessionStepExecutionInput> => {
       if (powers.length) set_turn_prompt_powers(context, powers);
       context.step.commit(structuredClone(step_state));
+      await context.step.resolve_power_context_blocks(async () => structuredClone(power_blocks));
+      for (const message of user_messages) context.input.observe_user_message(message);
       return { ...request, rebind_retry, tools: this.bind_turn_context_to_tools(tools, context, media_tokens) };
     };
     return { ...request, rebind_retry, tools: this.bind_turn_context_to_tools(tools, turn_context, media_tokens) };

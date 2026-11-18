@@ -49,6 +49,8 @@ export interface AppendSessionUserMessageInput {
 
 /** Assistant Message 创建参数。 */
 export interface OpenSessionAgentMessageInput {
+  /** 当前调用的 Writer 所有权检查，旧流不能写入恢复后的同一消息。 */
+  assert_current?: () => void;
   /** 当前 Assistant 所属 Turn。 */
   turn_id: string;
   /** 可选的稳定 Message 标识。 */
@@ -107,4 +109,20 @@ export interface AppendSessionPromptMessageInput {
   turn_id: string;
   /** 幂等 Prompt 使用的稳定 User Message ID。 */
   message_id?: string;
+}
+
+/** 原消息恢复的内存检查点；不属于持久化输入。 */
+export interface SessionMessageResume {
+  /** 同一原 canonical 消息。 */ message_id: string;
+  /** 接收时的消息版本。 */ revision: number;
+  /** 当前错误位置，拒绝旧按钮。 */ error_part_id: string;
+}
+
+/** 每次普通方法调用独占的输出 Adapter 依赖。 */
+export interface SessionAssistantOutputAdapterOptions {
+  /** 原逻辑 Turn 标识。 */ turn_id: string;
+  /** 当前调用的对象所有权检查，旧流不能写新调用。 */ assert_current?: () => void;
+  /** 恢复事务提交前确认本次 signal 未停止；不约束已接收事实的失败收口。 */ assert_resumable?: () => void;
+  /** 原消息恢复检查点；只消费一次。 */ resume?: SessionMessageResume;
+  /** canonical 消息唯一写入入口。 */ messages: import("@/session/messages/SessionMessages.js").SessionMessages;
 }

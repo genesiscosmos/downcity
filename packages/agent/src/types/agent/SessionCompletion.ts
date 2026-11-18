@@ -8,6 +8,8 @@ import type { EffectHook, FileSystem, SessionOrigin, SessionTurnCommittedHookVal
 export interface SessionCompletionRecord {
   /** 该 Turn 已持久化的完成事件与结果。 */
   event: SessionTurnCommittedHookValue;
+  /** 同一 Turn 最近一次 Retry 调用的当前结果；原投递 event 永不改变。 */
+  current?: SessionTurnCommittedHookValue;
   /** 会话来源分区，用于重启后恢复正确的 Session。 */
   origin: SessionOrigin;
   /** 事件发生时的项目标识；回调恢复时使用该执行上下文。 */
@@ -33,7 +35,11 @@ export interface SessionCompletionPort {
   validate_callback(name: string): void;
   /** 模型执行结束、canonical 消息关闭前保存结果与接收方快照。 */
   prepare(event: SessionTurnCommittedHookValue, context: ToolCallContext): Promise<void>;
-  /** 读取写前日志中的权威结果，用于幂等恢复，避免再次运行已完成模型。 */
+  /** 仅更新 Turn 当前结果，不注册或唤醒已结算调用的接收方。 */
+  update_result(event: SessionTurnCommittedHookValue, context: ToolCallContext): Promise<void>;
+  /** 原调用的不可变结果，用于 request_id 幂等结果。 */
+  read_initial(session_id: string, turn_id: string): Promise<SessionTurnCommittedHookValue | undefined>;
+  /** 读取当前 Turn 权威结果，Retry 可将其更新为成功。 */
   read(session_id: string, turn_id: string): Promise<SessionTurnCommittedHookValue | undefined>;
 }
 

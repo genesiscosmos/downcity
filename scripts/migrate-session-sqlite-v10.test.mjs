@@ -11,7 +11,7 @@ import { randomUUID as random_uuid, randomBytes as random_bytes } from "node:cry
 import { DatabaseSync } from "node:sqlite";
 import { spawnSync as spawn_sync } from "node:child_process";
 import { fileURLToPath as file_url_to_path } from "node:url";
-import { load_runtime } from "./lib/session-runtime.mjs";
+import { load_runtime } from "./lib/session-v10-runtime.mjs";
 import { load_runtime as load_historical } from "./lib/session-v9-runtime.mjs";
 import { plan_batch, preflight, migrate, verify_batch, restore_batch, read_manifest } from "./lib/session-v10-migration.mjs";
 import { fingerprint_file } from "./lib/session-v9-database.mjs";

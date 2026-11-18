@@ -27,9 +27,9 @@ function fixture(context) {
   const database = new DatabaseSync(database_path);
   database.exec("PRAGMA foreign_keys=ON;");
   database.exec(runtime.AGENT_SESSION_SCHEMA_SQL);
-  database.prepare("INSERT INTO storage_metadata(singleton_id,agent_id,format_version,generation,cursor_secret,created_at) VALUES(1,'sample',10,?,?,1)")
-    .run(random_uuid(), random_bytes(32));
-  database.exec("PRAGMA user_version=10;");
+  database.prepare("INSERT INTO storage_metadata(singleton_id,agent_id,format_version,generation,cursor_secret,created_at) VALUES(1,'sample',?,?,?,1)")
+    .run(runtime.AGENT_SESSION_SCHEMA_VERSION, random_uuid(), random_bytes(32));
+  database.exec(`PRAGMA user_version=${runtime.AGENT_SESSION_SCHEMA_VERSION};`);
   const ids = [random_uuid(), random_uuid(), random_uuid()];
   for (const [index, storage_id] of ids.entries()) {
     const attachments = path.join(agent_path, "session-files", storage_id, "attachments");

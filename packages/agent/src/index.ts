@@ -31,6 +31,8 @@ export type {
 export type { SessionMetadataAddress, SessionMetadataResult } from "./types/agent/SessionMetadata.js";
 export { AgentSessionBrowser } from "./session/storage/AgentSessionBrowser.js";
 export { prepare_agent_session_storage } from "./session/storage/agent-db/AgentSessionPreparation.js";
+/** 宿主只读门禁复用存储拥有者的版本与身份规则，不初始化或迁移数据库。 */
+export { AGENT_SESSION_SCHEMA_VERSION, assert_agent_session_schema } from "./session/storage/agent-db/AgentSessionSchema.js";
 export type { AgentSessionPreparationInput } from "./types/store/AgentSessionPreparation.js";
 export type { AgentSessionBrowserOptions, AgentArchivedSessionAddress } from "./types/store/AgentSessionBrowser.js";
 export type { SessionModelBinding } from "./types/store/SessionModelBinding.js";

@@ -2,7 +2,7 @@
 
 # Session v9→v10 离线终态转换
 
-`migrate-session-sqlite-v10.mjs`只解释正式schema9源库与独立v10批次。冻结v9 loader不使用当前codec解释旧Tool缺省字段；正式runtime仅接受schema10。v8→v9身份转换继续使用冻结v9目标、UUID保留与原identity_policy；不能把已有批次改标为v10。
+`migrate-session-sqlite-v10.mjs`只解释正式schema9源库与独立v10批次。冻结v9 loader不使用当前codec解释旧Tool缺省字段；本工具目标固定schema10，使用冻结的v10 loader；正式runtime仅接受schema11，需继续执行v10→v11转换。v8→v9身份转换继续使用冻结v9目标、UUID保留与原identity_policy；不能把已有批次改标为v10。
 
 Node>=22.18、安装工作区依赖，从public目录执行。所有命令要求显式root，不默认读取用户运行根。preflight不写源：不带batch输出结构化证据报告，带新batch在根外创建0700目录及0600 `manifest.json`。apply只接受已经保存并审阅的原计划及writers-stopped声明；工具不管理进程。
 

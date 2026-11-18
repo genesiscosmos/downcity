@@ -26,8 +26,8 @@ async function fixture(context, archived = false, origin_uuid = null) {
     const filename = path.join(agent_path, 'sessions.db');
     const database = new DatabaseSync(filename);
     database.exec('PRAGMA foreign_keys=ON;'); database.exec(runtime.AGENT_SESSION_SCHEMA_SQL);
-    database.prepare("INSERT INTO storage_metadata(singleton_id,agent_id,format_version,generation,cursor_secret,created_at) VALUES(1,'sample',10,?,?,1)").run(random_uuid(), random_bytes(32));
-    database.exec('PRAGMA user_version=10;');
+    database.prepare("INSERT INTO storage_metadata(singleton_id,agent_id,format_version,generation,cursor_secret,created_at) VALUES(1,'sample',?,?,?,1)").run(runtime.AGENT_SESSION_SCHEMA_VERSION, random_uuid(), random_bytes(32));
+    database.exec(`PRAGMA user_version=${runtime.AGENT_SESSION_SCHEMA_VERSION};`);
     return { root, filename, database };
   };
   const source = create_database('source'); const target = create_database('target');

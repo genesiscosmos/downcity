@@ -38,7 +38,7 @@ export interface CreateRuntimeSessionPortParams {
   /**
    * 停止当前 turn，并取消尚未被吸收的排队 prompt。
    */
-  stop: (expected_turn_id?: string) => Promise<AgentSessionStopResult>;
+  stop: (expected_turn_id?: string, expected_message?: import("@downcity/type").SessionMessageCheckpoint) => Promise<AgentSessionStopResult>;
   /**
    * 订阅当前 session 的 future 事件。
    */
@@ -79,9 +79,9 @@ export function create_runtime_session_port(
       await params.ensure_ready_for_execution();
       return await params.prompt(input);
     },
-    stop: async (expected_turn_id) => {
+    stop: async (expected_turn_id, expected_message) => {
       await params.ensure_ready_for_execution();
-      return await params.stop(expected_turn_id);
+      return await params.stop(expected_turn_id, expected_message);
     },
     subscribe: (subscriber) => {
       return params.subscribe(subscriber);

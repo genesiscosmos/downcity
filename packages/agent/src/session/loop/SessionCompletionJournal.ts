@@ -37,13 +37,15 @@ export async function prepare_session_completion(
     },
     messages: (await options.messages.list_history_messages())
       .filter((message) => message.turn_id === active_turn.turn_id)
-      .map((message) => structuredClone(message)),
+      .map((message) => message.role === "agent" ? { ...structuredClone(message), state: "done" as const } : structuredClone(message)),
   };
   try {
-    await options.completions.prepare(event, options.create_call_context({
+    await (active_turn.is_retry ? options.completions.update_result.bind(options.completions)
+      : options.completions.prepare.bind(options.completions))(event, options.create_call_context({
       turn_id: active_turn.turn_id,
       abort_signal: active_turn.turn_context?.lifecycle.abort_signal ?? new AbortController().signal,
     }));
+    active_turn.prepared_completion = event;
   } catch (error) {
     throw new CompletionPersistenceError(error);
   }

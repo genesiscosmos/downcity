@@ -8,6 +8,7 @@
  * - 不持有历史副本，也不修改 canonical Message。
  */
 
+import type { SessionStepCheckpoint } from "@/types/session/SessionModelInput.js";
 import type { BoundAgentTool } from "@/types/tool/BoundAgentTool.js";
 import { execute_session_provider_step } from "./SessionProviderStep.js";
 import type { SessionModelRetryControl } from "./SessionModelReplay.js";
@@ -96,6 +97,9 @@ export interface SessionExecutorInput {
   /** 新执行的第一步使用原失败请求，后续步骤正常装配。 */
   initial_step?: SessionStepExecutionInput;
 
+  /** 同一 Turn 的成功步骤、正文与预算检查点。 */
+  checkpoint?: SessionStepCheckpoint;
+
   /**
    * 在统一输入队列提交后按当前推进次数解析本 Step 输入。
    */
@@ -158,14 +162,17 @@ export class SessionExecutor implements SessionExecutorPort {
     }
     this.entered = true;
     let initial_step = input.initial_step;
+    const checkpoint: SessionStepCheckpoint = input.checkpoint ?? { step_count: 0, tool_call_count: 0,
+      tool_result_count: 0, assistant_parts: [], advance_count: 0, compact_required: false };
     try {
       return await this.context_retry.execute_with_retry({
-        signal: input.turn_context.lifecycle.abort_signal,
+        signal: input.turn_context.lifecycle.abort_signal, checkpoint,
         execute_turn: async (advance_count, advance_context) =>
           await this.run_tool_loop({
             advance_context: this.retry_control ? advance_context : undefined,
             turn_context: input.turn_context,
             resolve_step_input: async () => await input.resolve_step_input(advance_count),
+            checkpoint, has_initial_step: () => initial_step !== undefined,
             take_initial_step: () => { const step = initial_step; initial_step = undefined; return step; },
           }),
       });
@@ -176,6 +183,10 @@ export class SessionExecutor implements SessionExecutorPort {
 
   /** 运行模型与 tool-loop 主循环。 */
   private async run_tool_loop(input: {
+    /** 原步骤进度和预算，仅纯数据。 */
+    checkpoint: SessionStepCheckpoint;
+    /** 上限收尾恢复时也允许消费原失败输入。 */
+    has_initial_step: () => boolean;
     /** 只消费一次的新执行首步输入。 */
     take_initial_step: () => SessionStepExecutionInput | undefined;
     /** 尝试共用 Turn 的有界上下文推进预算。 */
@@ -188,41 +199,40 @@ export class SessionExecutor implements SessionExecutorPort {
     const start_time = Date.now();
     const session_id = this.session_id;
     let last_observed_stream_error: unknown = undefined;
-    let final_assistant_parts: SessionAgentMessagePart[] = [];
-    let compact_required = false;
+    const checkpoint = input.checkpoint;
+    // 关键点（中文）：输入准备失败时 step_count 尚未递增，单独保留当前步骤关联。
+    let step_index = checkpoint.step_count;
 
     try {
-      let step_count = 0;
-      let total_tool_call_count = 0;
-      let total_tool_result_count = 0;
       const on_step_finish = async (
         step_result: ModelStepResult,
       ): Promise<void> => {
-        step_count += 1;
+        checkpoint.step_count += 1;
         const summary = summarize_step_for_debug(step_result);
-        total_tool_call_count +=
+        checkpoint.tool_call_count +=
           typeof summary.toolCallCount === "number" ? summary.toolCallCount : 0;
-        total_tool_result_count +=
+        checkpoint.tool_result_count +=
           typeof summary.toolResultCount === "number"
             ? summary.toolResultCount
             : 0;
         await this.logger.log("info", "[agent] step.finish", {
           session_id: session_id,
-          step_index: step_count,
+          step_index: checkpoint.step_count,
           ...summary,
         });
       };
 
-      while (step_count < MAX_TOOL_LOOP_STEPS) {
+      while (input.has_initial_step() || checkpoint.step_count < MAX_TOOL_LOOP_STEPS) {
         // 关键点（中文）：steer 与 command 在同一个 Session step 检查点执行。
         // 当前流与 tool callback 保持原执行视图，下一 step 再统一读取 effective 配置。
+        step_index = checkpoint.step_count + 1;
         const input_started_at = Date.now();
         await this.logger.log("info", "[agent] step.input_start", {
           session_id,
           turn_id: input.turn_context.session.turn_id,
-          step_index: step_count + 1,
+          step_index: checkpoint.step_count + 1,
         });
-        await input.turn_context.input.checkpoint();
+        if (!input.has_initial_step()) await input.turn_context.input.checkpoint();
         const step_input = input.take_initial_step() ?? await fit_request({
           resolve: input.resolve_step_input,
           advance: () => this.advance_context("request_budget", input.turn_context.lifecycle.abort_signal),
@@ -232,7 +242,7 @@ export class SessionExecutor implements SessionExecutorPort {
         await this.logger.log("info", "[agent] step.input_ready", {
           session_id,
           turn_id: input.turn_context.session.turn_id,
-          step_index: step_count + 1,
+          step_index: checkpoint.step_count + 1,
           elapsed_ms: Date.now() - input_started_at,
           model_id: step_input.model.id,
           context_window: step_input.context_window ?? null,
@@ -241,17 +251,17 @@ export class SessionExecutor implements SessionExecutorPort {
         });
 
         last_observed_stream_error = undefined;
-        const step = await this.execute_provider_step({ turn_context: input.turn_context, step_input, on_step_finish, advance_context: input.advance_context });
+        const step = await this.execute_provider_step({ turn_context: input.turn_context, checkpoint, step_input, on_step_finish, advance_context: input.advance_context });
         const step_assistant_parts = step.step_assistant_parts;
         const step_result = step.step_result;
         if (step_input.finalization) {
-          const text = extract_assistant_text(step_assistant_parts);
-          return this.build_result({ success: !!text.trim(), text, compact_required,
-            ...(!text.trim() ? { error: build_max_steps_error_text(MAX_TOOL_LOOP_STEPS), error_code: TOOL_LOOP_MAX_STEPS_ERROR_CODE } : {}),
+          const text = extract_assistant_text(merge_assistant_parts(checkpoint.assistant_parts, step_assistant_parts));
+          return this.build_result({ success: !!extract_assistant_text(step_assistant_parts).trim(), text, compact_required: checkpoint.compact_required,
+            ...(!extract_assistant_text(step_assistant_parts).trim() ? { error: build_max_steps_error_text(MAX_TOOL_LOOP_STEPS), error_code: TOOL_LOOP_MAX_STEPS_ERROR_CODE } : {}),
           });
         }
-        final_assistant_parts = merge_assistant_parts(
-          final_assistant_parts,
+        checkpoint.assistant_parts = merge_assistant_parts(
+          checkpoint.assistant_parts,
           step_assistant_parts,
         );
 
@@ -261,10 +271,10 @@ export class SessionExecutor implements SessionExecutorPort {
         );
         if (usage_ratio !== null) {
           const pressure_detected = is_context_pressured(usage_ratio);
-          if (pressure_detected) compact_required = true;
+          if (pressure_detected) checkpoint.compact_required = true;
           await this.logger.log("info", "[agent] context.usage", {
             session_id: session_id,
-            step_index: step_count,
+            step_index: checkpoint.step_count,
             usageRatio: usage_ratio,
             contextWindow: step_input.context_window,
             compactPending: pressure_detected,
@@ -284,7 +294,7 @@ export class SessionExecutor implements SessionExecutorPort {
 
         await this.logger.log("info", "[agent] loop.decision", {
           session_id: session_id,
-          step_index: step_count,
+          step_index: checkpoint.step_count,
           continueForToolCalls: loop_decision.continueForToolCalls,
           continueForIncompleteRecovery:
             loop_decision.continueForIncompleteRecovery,
@@ -299,7 +309,7 @@ export class SessionExecutor implements SessionExecutorPort {
         if (incomplete_response) {
           await this.logger.log("error", "[agent] incomplete_response", {
             session_id: session_id,
-            step_index: step_count,
+            step_index: checkpoint.step_count,
             reason: incomplete_response.reason,
             ...incomplete_response.details,
           });
@@ -323,7 +333,7 @@ export class SessionExecutor implements SessionExecutorPort {
         ) {
           await this.logger.log("info", "[agent] loop.tail_merge_continue", {
             session_id: session_id,
-            step_index: step_count,
+            step_index: checkpoint.step_count,
             mergedUserMessageCount: tail_merged_message_count,
           });
           continue;
@@ -335,31 +345,31 @@ export class SessionExecutor implements SessionExecutorPort {
       // 关键点（中文）：撞顶不再静默成功收口——先强制收尾一次，再决定成功或明确失败。
       let max_steps_reached = false;
       let finalization_produced_text = false;
-      if (step_count >= MAX_TOOL_LOOP_STEPS) {
+      if (checkpoint.step_count >= MAX_TOOL_LOOP_STEPS) {
         max_steps_reached = true;
         await this.logger.log("warn", "[agent] loop.max_steps_reached", {
           session_id: session_id,
-          stepCount: step_count,
+          stepCount: checkpoint.step_count,
           maxSteps: MAX_TOOL_LOOP_STEPS,
-          totalToolCallCount: total_tool_call_count,
-          totalToolResultCount: total_tool_result_count,
+          totalToolCallCount: checkpoint.tool_call_count,
+          totalToolResultCount: checkpoint.tool_result_count,
         });
         const finalization = await this.execute_max_steps_finalization({
-          turn_context: input.turn_context,
+          turn_context: input.turn_context, checkpoint,
           resolve_step_input: input.resolve_step_input,
           advance_context: input.advance_context,
           on_step_finish,
         });
-        final_assistant_parts = merge_assistant_parts(
-          final_assistant_parts,
+        checkpoint.assistant_parts = merge_assistant_parts(
+          checkpoint.assistant_parts,
           finalization.assistant_parts,
         );
         finalization_produced_text = finalization.produced_text;
       }
 
       // 撞顶且收尾失败时不伪造兜底正文，改由 Session 层写入 canonical Error Part。
-      const final_parts = final_assistant_parts.length > 0
-        ? final_assistant_parts
+      const final_parts = checkpoint.assistant_parts.length > 0
+        ? checkpoint.assistant_parts
         : max_steps_reached
           ? []
           : build_fallback_assistant_parts("Execution completed");
@@ -373,17 +383,17 @@ export class SessionExecutor implements SessionExecutorPort {
       if (max_steps_reached && !finalization_produced_text) {
         await this.logger.log("error", "[agent] loop.max_steps_exhausted", {
           session_id: session_id,
-          stepCount: step_count,
+          stepCount: checkpoint.step_count,
           maxSteps: MAX_TOOL_LOOP_STEPS,
-          totalToolCallCount: total_tool_call_count,
-          totalToolResultCount: total_tool_result_count,
+          totalToolCallCount: checkpoint.tool_call_count,
+          totalToolResultCount: checkpoint.tool_result_count,
         });
         return this.build_result({
           success: false,
           text: extract_assistant_text(final_parts),
           error: build_max_steps_error_text(MAX_TOOL_LOOP_STEPS),
           error_code: TOOL_LOOP_MAX_STEPS_ERROR_CODE,
-          compact_required,
+          compact_required: checkpoint.compact_required,
         });
       }
 
@@ -391,15 +401,15 @@ export class SessionExecutor implements SessionExecutorPort {
       await this.logger.log("info", "[agent] finish", {
         session_id: session_id,
         duration,
-        stepCount: step_count,
-        totalToolCallCount: total_tool_call_count,
-        totalToolResultCount: total_tool_result_count,
+        stepCount: checkpoint.step_count,
+        totalToolCallCount: checkpoint.tool_call_count,
+        totalToolResultCount: checkpoint.tool_result_count,
       });
 
       return this.build_result({
         success: true,
         text: extract_assistant_text(final_parts),
-        compact_required,
+        compact_required: checkpoint.compact_required,
       });
     } catch (error) {
       if (input.turn_context.lifecycle.abort_signal.aborted) {
@@ -409,9 +419,9 @@ export class SessionExecutor implements SessionExecutorPort {
         });
         return this.build_result({
           success: false,
-          text: extract_assistant_text(final_assistant_parts),
+          text: extract_assistant_text(checkpoint.assistant_parts),
           error: error_text,
-          compact_required,
+          compact_required: checkpoint.compact_required,
         });
       }
 
@@ -425,14 +435,17 @@ export class SessionExecutor implements SessionExecutorPort {
       });
 
       await this.logger.log("error", "SessionExecutor execution failed", {
+        session_id,
+        turn_id: input.turn_context.session.turn_id,
+        step_index,
         error: error_text,
       });
 
       return this.build_result({
         success: false,
-        text: extract_assistant_text(final_assistant_parts),
+        text: extract_assistant_text(checkpoint.assistant_parts),
         error: error_text,
-        compact_required,
+        compact_required: checkpoint.compact_required,
       });
     }
   }
@@ -474,6 +487,8 @@ export class SessionExecutor implements SessionExecutorPort {
   private async execute_provider_step(input: {
     /** 当前显式运行上下文。 */
     turn_context: SessionTurnContext;
+    /** 同一 Turn 的纯数据检查点。 */
+    checkpoint: SessionStepCheckpoint;
     /** 当前 Step 已装配完成的模型输入。 */
     step_input: SessionStepExecutionInput;
     /** 有界上下文推进能力，耗尽后正常失败结束。 */
@@ -491,7 +506,7 @@ export class SessionExecutor implements SessionExecutorPort {
     const turn_context = input.turn_context;
     const result = await execute_session_provider_step({
       allow_empty_response: input.tools_override !== undefined || input.step_input.finalization,
-      turn_context, step_input: input.tools_override ? { ...input.step_input, finalization: true, tools: input.tools_override } : input.step_input,
+      turn_context, checkpoint: input.checkpoint, step_input: input.tools_override ? { ...input.step_input, finalization: true, tools: input.tools_override } : input.step_input,
       retry_control: this.retry_control, is_context_limit: this.is_context_limit, logger: this.logger,
       advance_context: input.advance_context,
     });
@@ -525,6 +540,8 @@ export class SessionExecutor implements SessionExecutorPort {
   private async execute_max_steps_finalization(input: {
     /** 当前显式运行上下文。 */
     turn_context: SessionTurnContext;
+    /** 上限收尾同样保留原步骤进度。 */
+    checkpoint: SessionStepCheckpoint;
     /** 收尾同样使用当前 Turn 的上下文推进预算。 */
     advance_context?: (error: unknown) => Promise<boolean>;
     /** 按当前 canonical history 重新装配收尾 Step 输入。 */
@@ -550,7 +567,7 @@ export class SessionExecutor implements SessionExecutorPort {
         signal: input.turn_context.lifecycle.abort_signal,
         report: diagnostic => this.logger.log("info", "[agent] context.request_budget", { session_id: this.session_id, ...diagnostic }),
       }),
-      tools_override: {},
+      tools_override: {}, checkpoint: input.checkpoint,
       advance_context: input.advance_context,
       on_step_finish: input.on_step_finish,
     });
