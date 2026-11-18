@@ -1,0 +1,18 @@
+{
+  "checked_at": "2026-11-17",
+  "harbor_version": "0.22.0",
+  "registry_source": "https://raw.githubusercontent.com/laude-institute/harbor/v0.22.0/registry.json",
+  "registry_source_sha256": "da1446bce05eabbd72a25eb9eef5a2f5db94645ce88c28e2497581433b3d2e60",
+  "dataset": "terminal-bench@2.0",
+  "task": "regex-log",
+  "task_commit": "69671fbaac6d67a7ef0dfec016cc38a64ef7a77c",
+  "task_config_sha256": "cbffabfe62b495480b06a8a34dfa3b11bd5a86ff20b0c82a1406491b6f50665c",
+  "task_dockerfile_sha256": "5f264ff0bf62a49aee3c6398447de5108df141e7a2ad35c6de8ef39fa62049c6",
+  "frontierharness_reference_commit": "e837a70bd6beb4e72eeeda62dd06e3bd34f6cb63",
+  "image_reference": "alexgshaw/regex-log:20251031",
+  "observed_image_manifest_digest": "sha256:90101b2e815323a8da20528a1439bebc407eb9761c9c68a3d557730856c878e9",
+  "observed_image_platform": "linux/amd64",
+  "image_observation_method": "docker manifest inspect --verbose; no pull or container execution",
+  "image_tag_is_mutable": true,
+  "methodology_comparable": false
+}

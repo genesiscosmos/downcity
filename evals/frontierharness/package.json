@@ -1,0 +1,16 @@
+{
+  "name": "@downcity-evals/frontierharness",
+  "private": true,
+  "type": "module",
+  "description": "Checkout-local Harbor terminal smoke adapter; no City or Workspace",
+  "engines": { "node": ">=22.13.0" },
+  "scripts": {
+    "build": "node build.mjs",
+    "typecheck": "node build.mjs --typecheck"
+  },
+  "dependencies": {
+    "@downcity/agent": "file:../../packages/agent",
+    "@downcity/type": "file:../../packages/type",
+    "@downcity/federation": "file:../../packages/federation"
+  }
+}

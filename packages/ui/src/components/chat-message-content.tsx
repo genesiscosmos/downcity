@@ -3,6 +3,7 @@ import { Fragment, useRef, useState } from "react";
 import { AlertTriangle, File, RefreshCw } from "lucide-react";
 import { is_messenger_runtime_context_tag } from "@downcity/type";
 import { MarkdownView } from "./markdown/MarkdownView";
+import { Button } from "./button";
 import { render_message_parts } from "./chat-parts";
 import { is_chat_reference_tag } from "./chat-input/session-reference";
 import { session_message_to_chat_message } from "../lib/session-message";
@@ -28,7 +29,7 @@ export function AgentMessageContent({ message_id, blocks, streaming, actions, re
     if (block.type === "error") {
       if (!show_errors) return null;
       const retryable = block.part.part_id === retry_error_part_id;
-      return <div role="alert" className="min-w-0 w-full rounded-item bg-surface-subtle px-2.5 py-2"><div className="flex min-w-0 items-start gap-2"><AlertTriangle className="mt-0.5 size-4 shrink-0 text-destructive/75" aria-hidden /><p className="min-w-0 flex-1 whitespace-pre-wrap break-words text-xs leading-[1.55] text-muted-foreground [overflow-wrap:anywhere]">{block.part.message}</p>{retry_message && retryable ? <button type="button" className="inline-flex items-center gap-1 text-xs" disabled={!can_retry || pending} onClick={() => void retry()}><RefreshCw className="size-3.5" aria-hidden />{retry_label}</button> : null}</div>{retryable && error ? <p role="alert" className="mt-1 whitespace-pre-wrap break-words text-xs text-destructive">{error}</p> : null}</div>;
+      return <div role="alert" className="min-w-0 w-full rounded-item bg-surface-subtle px-2.5 py-2"><div className="flex min-w-0 items-start gap-2"><AlertTriangle className="mt-0.5 size-4 shrink-0 text-destructive/75" aria-hidden /><p className="min-w-0 flex-1 whitespace-pre-wrap break-words text-xs leading-[1.55] text-muted-foreground [overflow-wrap:anywhere]">{block.part.message}</p>{retry_message && retryable ? <Button type="button" variant="ghost" size="xs" className="focus-visible:ring-2 focus-visible:ring-ring/30 [&_svg]:size-3.5" disabled={!can_retry || pending} onClick={() => void retry()}><RefreshCw aria-hidden />{retry_label}</Button> : null}</div>{retryable && error ? <p role="alert" className="mt-1 whitespace-pre-wrap break-words text-xs text-destructive">{error}</p> : null}</div>;
     }
     const custom = render_block?.(block);
     if (custom !== undefined) return custom;

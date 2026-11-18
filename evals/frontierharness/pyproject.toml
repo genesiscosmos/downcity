@@ -1,0 +1,10 @@
+# 固定 Harbor 公共契约；仅供本地独立评测使用。
+[project]
+name = "downcity-frontierharness-eval"
+version = "0.1.0"
+description = "Local Harbor terminal smoke adapter for the Downcity Agent SDK"
+requires-python = ">=3.13,<3.14"
+dependencies = ["harbor==0.22.0"]
+
+[tool.uv]
+package = false

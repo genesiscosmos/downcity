@@ -1,0 +1,10 @@
+# 本地依赖、构建与评测证据不进入 Git。
+.venv/
+__pycache__/
+*.pyc
+node_modules/
+dist/
+artifacts/
+.env
+.env.*
+!.env.example

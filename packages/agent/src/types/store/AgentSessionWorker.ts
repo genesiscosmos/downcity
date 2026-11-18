@@ -207,8 +207,14 @@ export interface AgentSessionWorkerSlot {
   worker: Worker;
   /** 已派发、尚未响应的请求集合。 */
   pending: Map<number, AgentSessionWorkerPending>;
-  /** Worker 故障后先隔离，确认旧线程结束后才允许替换。 */
-  failed: boolean;
+  /** ready 才可派发；terminating 隔离旧线程；terminated 表示已确认退出。 */
+  state: "ready" | "terminating" | "terminated";
+  /** 本代线程唯一终止信号；拒绝时保留隔离槽，不能创建并行写者。 */
+  termination?: Promise<void>;
+  /** 终止失败的安全错误；后续等待立即拒绝，保持旧槽隔离。 */
+  termination_error?: Error;
+  /** 未派发请求的有界等待集合；超时和关闭立即移除，避免在未完成 Promise 上积累回调。 */
+  termination_waiters: Set<(error?: Error) => void>;
   /** 无在途请求后回收空闲线程的 Timer。 */
   idle_timer?: ReturnType<typeof setTimeout>;
 }
