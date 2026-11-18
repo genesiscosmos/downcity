@@ -7,6 +7,7 @@
 
 import { Hono, type Context } from "hono";
 import { authorized_response } from "./AuthorizedResponse.js";
+import { create_city_cors } from "./CityCors.js";
 import {
   AgentHTTP,
   create_agent_http_server_handle,
@@ -47,6 +48,7 @@ export class CityHTTP {
   router(): Hono {
     if (this.cached_router) return this.cached_router;
     const root = new Hono();
+    if (this.runtime_options.allowed_origins) root.use("*", create_city_cors(this.runtime_options.allowed_origins));
     const describe_agent = (agent: import("@downcity/agent").Agent) => ({ id: agent.id, name: agent.name, description: agent.description });
     root.get("/api/sdk/agents", async (context) => {
       const agents = this.runtime_access.list_agents();

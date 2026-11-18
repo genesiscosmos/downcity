@@ -1,0 +1,6 @@
+# 本地依赖与可重新生成的静态产物。
+node_modules/
+dist/
+*.tsbuildinfo
+# 静态站点部署配置不含秘密，需要随产品源码提交。
+!wrangler.toml

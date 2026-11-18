@@ -1,0 +1,13 @@
+# Remote 的独立 Cloudflare 静态站点；不装配后端、数据库或凭据绑定。
+name = "downcity-remote"
+compatibility_date = "2026-11-18"
+workers_dev = true
+
+# Cloudflare 为该自定义域名管理 DNS 绑定与 HTTPS 证书。
+[[routes]]
+pattern = "remote.downcity.ai"
+custom_domain = true
+
+[assets]
+directory = "./dist"
+not_found_handling = "single-page-application"

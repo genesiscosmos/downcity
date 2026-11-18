@@ -22,6 +22,12 @@ export interface CityAgentHttpExtension {
 
 /** City HTTP transport 所需的宿主能力。 */
 export interface CityHttpRuntimeOptions {
+  /**
+   * 允许跨域访问 City HTTP 的精确 HTTP/HTTPS Origin 列表，例如 https://remote.downcity.ai。
+   * 省略时不启用 CORS；传空列表时拒绝跨域来源。禁止通配符、路径和内嵌凭据。
+   * 预检只允许 GET、POST、OPTIONS 及 Authorization、Content-Type，不替代 Agent 授权。
+   */
+  allowed_origins?: readonly string[];
   /** 为 Agent 发现及无 Workspace SDK 路由校验凭据；宿主提供时未授权 Agent 不可见。 */
   authorize_agent?: (input: {
     /** 待访问的 Agent。 */ readonly agent: Agent;

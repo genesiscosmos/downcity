@@ -6,6 +6,8 @@ import type { RemoteAgentOptions } from "./types/remote/RemoteAgentOptions.js";
 import { RemoteAgentCore } from "./remote/RemoteAgentCore.js";
 import { HttpRemoteAgentTransport } from "./remote/transports/HttpRemoteAgentTransport.js";
 export { RemoteCity, RemoteCityAgent } from "./remote/RemoteCity.js";
+export { encode_city_connection, decode_city_connection } from "./remote/CityConnection.js";
+export type { CityConnection } from "./types/remote/CityConnection.js";
 export type { RemoteCityOptions, RemoteCityAgentInfo } from "./types/remote/RemoteCity.js";
 export type { PromptPower, PromptPowerAction, PromptPowerCallContext } from "@downcity/type";
 
