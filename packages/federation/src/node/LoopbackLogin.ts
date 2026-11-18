@@ -6,6 +6,7 @@
 import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import type { LoopbackLoginCallback } from "./types/LoopbackLogin.js";
+import { login_callback_content_security_policy, render_login_callback_page } from "./LoopbackLoginPage.js";
 export type { LoopbackLoginCallback } from "./types/LoopbackLogin.js";
 
 /** 创建已经开始监听的独立接收器；监听失败时拒绝开始登录。 */
@@ -33,30 +34,31 @@ export async function create_loopback_login_callback(ttl_ms: number): Promise<Lo
     server.closeAllConnections();
   }
 
-  function respond(response: ServerResponse, status: number, message: string): void {
+  function respond(request: IncomingMessage, response: ServerResponse, status: number, state: "received" | "invalid" | "expired"): void {
+    const page = render_login_callback_page(state, request.headers["accept-language"]);
     response.writeHead(status, {
       "content-type": "text/html; charset=utf-8",
       "cache-control": "no-store",
       "referrer-policy": "no-referrer",
-      "content-security-policy": "default-src 'none'; frame-ancestors 'none'; base-uri 'none'",
+      "content-security-policy": login_callback_content_security_policy,
       "x-content-type-options": "nosniff",
       connection: "close",
     });
-    response.end(`<!doctype html><html lang="en"><meta charset="utf-8"><title>Downcity</title><h1>${message}</h1><p>You can close this window and return to Downcity.</p></html>`);
+    response.end(page);
   }
 
   function handle_request(request: IncomingMessage, response: ServerResponse): void {
     // 不使用客户端提供的 Host 构建可信地址，也不接受绝对形式 URL、重复参数或额外字段。
-    if (closed || authorization_code || !redirect_uri) return respond(response, 410, "Login callback expired");
+    if (closed || authorization_code || !redirect_uri) return respond(request, response, 410, "expired");
     const expected_url = new URL(redirect_uri);
     const raw_url = request.url ?? "";
     if (request.method !== "GET" || request.headers.host !== expected_url.host
       || !raw_url.startsWith(`${callback_path}?`) || raw_url.length > 2_048) {
-      return respond(response, 400, "Invalid login callback");
+      return respond(request, response, 400, "invalid");
     }
     let url: URL;
     try { url = new URL(raw_url, expected_url.origin); }
-    catch { return respond(response, 400, "Invalid login callback"); }
+    catch { return respond(request, response, 400, "invalid"); }
     const codes = url.searchParams.getAll("code");
     const states = url.searchParams.getAll("state");
     const received_state = Buffer.from(states[0] ?? "");
@@ -65,13 +67,13 @@ export async function create_loopback_login_callback(ttl_ms: number): Promise<Lo
       || codes.length !== 1 || states.length !== 1 || [...url.searchParams.keys()].length !== 2
       || !/^[A-Za-z0-9_-]{20,128}$/.test(codes[0] ?? "")
       || received_state.length !== expected_state.length || !timingSafeEqual(received_state, expected_state)) {
-      return respond(response, 400, "Invalid login callback");
+      return respond(request, response, 400, "invalid");
     }
     authorization_code = codes[0];
     // 响应送出后再释放连接；本机接收成功不等于账户已经保存。
     response.once("finish", close);
     response.once("close", close);
-    respond(response, 200, "Authorization received");
+    respond(request, response, 200, "received");
   }
 
   await new Promise<void>((resolve, reject) => {
