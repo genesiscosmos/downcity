@@ -1,6 +1,6 @@
 /** canonical 消息内容的通用展示块；领域投影可注入 Power 与附件，SDK 拥有正文顺序与交互反馈。 */
 import type { ReactNode } from "react";
-import type { SessionAgentActionPart, SessionAgentDataPart, SessionAgentErrorPart, SessionAgentFilePart, SessionAgentInboxPart, SessionAgentPowerPart, SessionAgentReasoningPart, SessionAgentTextPart, SessionAgentToolPart, SessionTurnFileDiffData, SessionUserMessagePart } from "@downcity/type";
+import type { SessionAgentActionPart, SessionAgentDataPart, SessionAgentErrorPart, SessionAgentFilePart, SessionAgentInputPart, SessionAgentViewPart, SessionAgentReasoningPart, SessionAgentTextPart, SessionAgentToolPart, SessionTurnFileDiffData, SessionUserMessagePart } from "@downcity/type";
 import type { DowncityChatPanelProps } from "./chat";
 /** 共享同一时间线的活动记录。 */
 export type AgentActivityPart = SessionAgentToolPart | SessionAgentActionPart | SessionAgentReasoningPart;
@@ -12,8 +12,8 @@ export interface AgentMessageAttachment {
 }
 /** 按 canonical 顺序呈现的单层内容块。 */
 export type AgentMessageBlock =
-  | { /** 运行时输入。 */ type: "inbox"; /** canonical 输入快照。 */ part: SessionAgentInboxPart }
-  | { /** Power 内容。 */ type: "power"; /** canonical 内容或受信任宿主预览。 */ part: SessionAgentPowerPart; /** 是否只为生成中的预览。 */ preview?: boolean }
+  | { /** 运行时输入。 */ type: "input"; /** canonical 输入快照。 */ part: SessionAgentInputPart }
+  | { /** Power 内容。 */ type: "view"; /** canonical 内容或受信任宿主预览。 */ part: SessionAgentViewPart; /** 是否只为生成中的预览。 */ preview?: boolean }
   | { /** 正文。 */ type: "text"; /** canonical 正文。 */ part: SessionAgentTextPart }
   | { /** 连续活动。 */ type: "activity"; /** 原位有序的工具、操作与推理。 */ parts: AgentActivityPart[] }
   | { /** 文件。 */ type: "file"; /** canonical 文件。 */ part: SessionAgentFilePart }

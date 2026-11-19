@@ -44,7 +44,7 @@ export function collect_stable_units(
     for (const unit of units) {
       if (checkpoint && compare_part_position(message.sequence, unit.part.sequence, checkpoint) <= 0) continue;
       if (checkpoint && compare_part_position(message.sequence, unit.parts[0]!.sequence, checkpoint) <= 0) {
-        throw new Error("Context checkpoint splits a complete Step or inbox unit");
+        throw new Error("Context checkpoint splits a complete Step or input unit");
       }
       if ((streaming && (!Number.isSafeInteger(watermark) || watermark < 0 || unit.part.sequence > watermark))
         || !is_context_unit_terminal(unit)) {

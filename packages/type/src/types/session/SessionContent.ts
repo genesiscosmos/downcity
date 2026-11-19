@@ -52,9 +52,9 @@ export interface SessionDataContent {
 }
 
 /** Power 拥有的结构化回复内容；由宿主按 power_id 分发消息渲染器。 */
-export interface SessionPowerContent {
+export interface SessionViewContent {
   /** 内容判别字段，用户输入不接受此类型。 */
-  type: "power";
+  type: "view";
   /** 内容所属 Power 的稳定标识。 */
   power_id: string;
   /** 所属 Power 数据协议的正整数版本。 */
@@ -81,4 +81,4 @@ export type SessionAgentContent =
   | SessionTextContent
   | SessionFileContent
   | SessionDataContent
-  | SessionPowerContent;
+  | SessionViewContent;

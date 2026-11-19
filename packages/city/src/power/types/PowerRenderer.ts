@@ -5,7 +5,7 @@
  * 为页签 ID 添加 Power 命名空间，并注入当前 Agent、业务网关与统一 UI。
  */
 
-import type { SessionAgentPowerPart, SessionAgentToolPart, SessionPowerContent, JsonObject } from "@downcity/type";
+import type { SessionAgentViewPart, SessionAgentToolPart, SessionViewContent, JsonObject } from "@downcity/type";
 
 import type { ReactNode } from "react";
 import type { PowerJsonObject, PowerJsonValue } from "./Json.js";
@@ -793,9 +793,9 @@ export interface PowerMarkdownRenderRequest {
 }
 
 /** 消息组件的受限宿主端口，不提供任意业务执行能力。 */
-export interface PowerMessageComponentProps {
+export interface PowerViewMessageComponentProps {
   /** 已持久化的 Power 内容，身份由 Session 分配。 */
-  readonly part: SessionAgentPowerPart;
+  readonly part: SessionAgentViewPart;
   /** 纯展示预览尚未由 Action 发布，不允许提交或保存为成功内容。 */
   readonly preview?: boolean;
   /** 当前内容所属 Session。 */
@@ -820,10 +820,15 @@ export interface PowerMessageComponentProps {
 }
 
 /** Power 消息组件，仅解释所属 Power 的内容。 */
-export type PowerMessageComponent = (props: PowerMessageComponentProps) => ReactNode;
+export type PowerViewMessageComponent = (props: PowerViewMessageComponentProps) => ReactNode;
 
 /** 单一 Renderer 入口声明的固定 UI 插槽。 */
 export interface PowerRendererDefinition {
+  /** 后台结果的独立只读投影；可返回 null 隐藏内部事件。 */
+  readonly input?: import("./PowerInputRenderer.js").PowerInputRenderer;
+  /** 操作过程的纯文本描述与按需挂载的详情；允许单独注册。 */
+  readonly activity?: import("./PowerActivityRenderer.js").PowerActivityRenderer;
+
   /** Power 工作区左侧的业务导航；必须与 Mainview 同时声明。 */
   readonly sidebar?: PowerSidebarComponent;
 
@@ -840,8 +845,8 @@ export interface PowerRendererDefinition {
   readonly views?: readonly PowerViewDefinition[];
 
   /** 回复正文中的结构化内容；允许只注册此插槽。 */
-  readonly message?: PowerMessageComponent;
+  readonly view?: PowerViewMessageComponent;
 
   /** 从当前 Power 的输入快照派生只读预览；无副作用，不持有 Session 或执行工具。 */
-  readonly preview?: (tool: SessionAgentToolPart) => SessionPowerContent | null;
+  readonly preview?: (tool: SessionAgentToolPart) => SessionViewContent | null;
 }

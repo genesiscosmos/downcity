@@ -116,7 +116,7 @@ export async function compact_context(input: SessionContextAdvanceInput, compose
 
 /** 预算不足时报告完整单元位置，不降级为截断 Tool 结果或半个 Step。 */
 function complete_unit_budget_error(unit: ContextSummaryUnit): Error {
-  return new Error(`Summary request cannot fit one complete Step/inbox history unit with the existing summary and output reserve (message_sequence=${unit.message.sequence}, from_part_sequence=${unit.parts[0]!.sequence}, through_part_sequence=${unit.part.sequence})`);
+  return new Error(`Summary request cannot fit one complete Step/input history unit with the existing summary and output reserve (message_sequence=${unit.message.sequence}, from_part_sequence=${unit.parts[0]!.sequence}, through_part_sequence=${unit.part.sequence})`);
 }
 
 /** 诊断不参与领域提交，观测失败不能改变压缩结果。 */

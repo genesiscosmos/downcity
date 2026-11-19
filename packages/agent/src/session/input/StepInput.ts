@@ -526,7 +526,7 @@ export class StepInput {
               turn_context.output.enqueue_assistant_parts(message.parts, { source_tool_call_id: tool_call_id, published_parts });
               continue;
             }
-            await turn_context.input.append_inbox({
+            await turn_context.input.append_input({
               kind: "tool_media", source: { tool_call_id, turn_id: turn_context.session.turn_id }, content: message.parts,
             });
           }

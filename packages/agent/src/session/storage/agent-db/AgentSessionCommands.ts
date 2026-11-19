@@ -64,7 +64,7 @@ export function execute_agent_session_command(owner: AgentSessionDatabase, opera
     case "messages": return messages.page(operation.session_id, operation.input);
     case "message": return messages.message(operation.session_id, operation.id);
     case "part_message": return messages.part_message(operation.session_id, operation.id);
-    case "inbox_message": return messages.inbox_message(operation.session_id, operation.id);
+    case "input_message": return messages.input_message(operation.session_id, operation.id);
     case "has_attachment": return messages.has_attachment(operation.session_id, operation.file_path);
     case "receipt": return owner.receipt(operation.operation_id);
     case "create": return catalog.create(operation.operation_id, operation.input);

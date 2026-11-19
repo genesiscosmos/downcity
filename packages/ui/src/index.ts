@@ -72,7 +72,7 @@ export type {
   DowncityChatSubmitMode,
   DowncityChatThread,
 } from "./types/chat";
-export type { DowncityChatInboxContent, DowncityChatInboxPart, DowncityChatInboxSource } from "./types/chat-inbox";
+export type { DowncityChatInputContent, DowncityChatInputPart, DowncityChatInputSource } from "./types/chat-runtime-input";
 export { ChatComposer, ChatHistory, ChatMessage, ChatMessageList, ChatPanel } from "./components/chat";
 export { session_jsonl_to_chat_messages, session_message_to_chat_message, session_part_to_chat_part } from "./lib/session-message";
 export { DowncityChatRuntime, create_chat_runtime } from "./lib/chat-runtime";

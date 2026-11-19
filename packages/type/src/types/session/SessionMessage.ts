@@ -2,7 +2,7 @@
  * Session canonical 消息类型。
  *
  * Session 只维护一条由 sequence 排序的双主体消息序列；User 与 Agent 是顶层角色，
- * text、reasoning、tool、inbox、file、data、action、error 都是主体内部 Part；Interaction 归属 Tool。
+ * text、reasoning、tool、input、file、data、action、error 都是主体内部 Part；Interaction 归属 Tool。
  */
 
 import type { JsonObject, JsonValue } from "../json/Json.js";
@@ -10,7 +10,7 @@ import type {
   SessionContextContent,
   SessionDataContent,
   SessionFileContent,
-  SessionPowerContent,
+  SessionViewContent,
   SessionModelUserContent,
   SessionTextContent,
 } from "./SessionContent.js";
@@ -107,7 +107,7 @@ export type SessionUserPartContent =
  *
  * 说明（中文）
  * - 这里只描述「谁发起了这次输入」以及本次请求独有的绑定，不是用户撰写的内容，
- *   保存于 User Message.meta 或 Inbox Part.meta，不参与模型上下文，也不在聊天界面渲染。
+ *   保存于 User Message.meta 或 Input Part.meta，不参与模型上下文，也不在聊天界面渲染。
  * - 它是消息级只读数据：写入方是 SDK 输入接收链路，宿主与 UI 只读取。
  */
 export interface SessionMessageMeta {
@@ -287,7 +287,7 @@ export interface SessionAgentErrorPart {
 }
 
 /** 已持久化的 Power 回复内容，身份与顺序统一由 Session 分配。 */
-export interface SessionAgentPowerPart extends SessionPowerContent {
+export interface SessionAgentViewPart extends SessionViewContent {
   /** 由执行运行时绑定的来源 Tool Call；模型历史据此使用摘要替代大型调用参数。 */
   source_tool_call_id?: string;
   /** 当前 Message 内稳定的内容身份。 */
@@ -299,21 +299,21 @@ export interface SessionAgentPowerPart extends SessionPowerContent {
 }
 
 /** 运行时输入的因果来源；仅可信执行入口可以设置。 */
-export interface SessionInboxSource {
+export interface SessionInputSource {
   /** 产生该输入的 Tool Call；用于关联媒体或异步工具事件。 */
   tool_call_id?: string;
   /** 产生该输入的原 Turn；后台续行时与接收 Turn 可以不同。 */
   turn_id?: string;
 }
 
-/** 尚未分配 Part 身份的运行时输入；inbox_id 由来源提供以保证重试幂等。 */
-export interface SessionInboxInput {
+/** 尚未分配 Part 身份的运行时输入；input_id 由来源提供以保证重试幂等。 */
+export interface SessionInputContent {
   /** 当前 Session 内稳定且唯一的事件身份；重试必须复用同一个值。 */
-  inbox_id: string;
+  input_id: string;
   /** 输入的语义种类，例如 shell_result、delegation_result、tool_media 或 runtime_notice。 */
   kind: string;
   /** 该输入关联的执行来源；不可用作用户授权。 */
-  source?: SessionInboxSource;
+  source?: SessionInputSource;
   /** 可供模型使用的封闭内容集合；文件持久化后只保存附件引用。 */
   content: SessionModelUserContent[];
   /** 自动执行输入的请求记账；不作为模型输入或 UI 正文展示。 */
@@ -321,9 +321,9 @@ export interface SessionInboxInput {
 }
 
 /** Agent 执行期间收到的一项运行时输入；与模型输出共享同一条 Part 时间线。 */
-export interface SessionAgentInboxPart extends SessionInboxInput {
+export interface SessionAgentInputPart extends SessionInputContent {
   /** Part 判别字段。 */
-  type: "inbox";
+  type: "input";
   /** 当前 Message 内稳定的 Part 标识。 */
   part_id: string;
   /** 当前 Message 内不可变的线性顺序，从 1 开始。 */
@@ -341,10 +341,10 @@ export type SessionAgentMessagePart =
   | SessionAgentToolPart
   | SessionAgentFilePart
   | SessionAgentDataPart
-  | SessionAgentPowerPart
+  | SessionAgentViewPart
   | SessionAgentActionPart
   | SessionAgentErrorPart
-  | SessionAgentInboxPart;
+  | SessionAgentInputPart;
 
 /** Agent 顶层 Message。 */
 export interface SessionAgentMessage extends SessionMessageBase {

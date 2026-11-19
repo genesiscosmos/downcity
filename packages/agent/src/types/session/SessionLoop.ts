@@ -39,8 +39,8 @@ export interface SessionDeferred<T> {
 export interface PromptRequestIdentity {
   /** 真人输入的稳定 User Message 标识。 */
   message_id: string;
-  /** 运行时输入的稳定 inbox 标识，不依赖承载 Agent Message 的身份。 */
-  inbox_id: string;
+  /** 运行时输入的稳定 input 标识，不依赖承载 Agent Message 的身份。 */
+  input_id: string;
   /** 首条输入对应的稳定 Turn 标识，合并输入时以实际 Turn 为准。 */
   turn_id: string;
 }

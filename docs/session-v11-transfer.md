@@ -2,6 +2,8 @@
 
 # Session v11 单记录转移
 
+本文保留历史 schema11 契约。当前导出、导入使用 schema12，历史包须显式转换；当前边界见 [v12 离线转换](session-v12-offline-migration.md)。下述“当前”均指 v11 阶段。
+
 当前 `export-session.mjs` / `import-session.mjs` 只接受 DB schema11、目录包 format3；导入批次 format3 并显式绑定 schema11。Tool disclosure1、ResultRef2、附件所属清单2保持独立版本。永久 session_id 保留，仅同 Agent 跨根转移；不设置主指针，不覆盖记录、不自动改 ID。
 
 包目录0700、JSON文件0600，单JSON上限256 MiB。manifest封闭字段：format_version=3、schema_version=11、agent_id、session_id、export_operation_id、request_hash、allow_unresolved_sources、source_attachments、record_sha256、attachments、sources、status。request_hash绑定除status及自身外的全部字段，正式加载仅接受ready。record仅metadata/configuration/messages/message_parts/composer_checkpoints，不携带session_key、主指针、receipt、归档计划或执行权。

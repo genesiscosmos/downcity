@@ -236,17 +236,17 @@ export class SessionLoop {
     return await this.receive_prompt(input);
   }
 
-  /** 可信后台输入沿用占用身份，但 canonical 主体始终是 Agent inbox。 */
-  async prompt_inbox(input: AgentSessionPromptInput): Promise<AgentSessionTurnHandle> {
+  /** 可信后台输入沿用占用身份，但 canonical 主体始终是 Agent input。 */
+  async prompt_input(input: AgentSessionPromptInput): Promise<AgentSessionTurnHandle> {
     return await this.receive_prompt(input, true);
   }
 
   /** 所有接收入口共享取消、Powers 快照及 callback 校验。 */
-  private async receive_prompt(input: AgentSessionPromptInput, force_inbox = false): Promise<AgentSessionTurnHandle> {
+  private async receive_prompt(input: AgentSessionPromptInput, force_input = false): Promise<AgentSessionTurnHandle> {
     input.abort_signal?.throwIfAborted();
     const actor = session_prompt_actor_schema.parse(input.actor ?? local_user_prompt_actor);
     let normalized: NormalizedAgentSessionPromptInput = {
-      ...input, actor, input_kind: force_inbox || actor.kind !== "user" ? "inbox" : "user",
+      ...input, actor, input_kind: force_input || actor.kind !== "user" ? "input" : "user",
     };
     if (is_agent_session_prompt_input_empty(normalized)) throw new Error("session.prompt requires a non-empty query");
     if (normalized.powers?.length) {
@@ -328,7 +328,7 @@ export class SessionLoop {
       const latest_fact = latest_session_input(history);
       const latest = latest_fact?.message;
       if (!latest?.turn_id || latest.origin) return;
-      // 工具 inbox 没有调用方记账，沿同一 Turn 的可信 prompt 恢复占用。
+      // 工具 input 没有调用方记账，沿同一 Turn 的可信 prompt 恢复占用。
       const owner = session_input_facts(history).reverse().find((fact) => !fact.message.origin
         && fact.message.turn_id === latest.turn_id && fact.meta?.from);
       const from = owner?.meta?.from;
@@ -383,7 +383,7 @@ export class SessionLoop {
       const content = typeof parts === "string" ? [{ type: "text" as const, text: parts }] : parts;
       await this.enqueue_prompt({ actor, request_id, query: [
         { type: "context", tag: "background_source", context: JSON.stringify({ caller_turn_id: turn_id }) }, ...content,
-      ], input_kind: "inbox" }, identity);
+      ], input_kind: "input" }, identity);
       return true;
     });
   }
@@ -949,7 +949,7 @@ export class SessionLoop {
       session_origin: this.session_origin,
       project_root: this.get_workspace_path(),
       commit_step_input: () => this.drain_queued_inputs(),
-      append_inbox: async (input) => internal_input.stage(input),
+      append_input: async (input) => internal_input.stage(input),
       has_pending_step_input: () => this.has_pending_prompt(),
       assistant_output,
       interactions: this.interactions,

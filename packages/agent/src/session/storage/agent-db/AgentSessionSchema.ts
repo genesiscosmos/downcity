@@ -1,5 +1,5 @@
 /**
- * Agent 范围 Session 数据库的正式 v11 schema。
+ * Agent 范围 Session 数据库的正式 v12 schema。
  *
  * sessions 是目录唯一事实源；canonical、配置和 Composer 数据通过内部 session_key
  * 关联。session_id 是永久 UUID，主会话由同库持久指针选择，归档不会改变身份。
@@ -10,7 +10,7 @@ import { AGENT_ARCHIVE_PLAN_SCHEMA_SQL } from "./AgentArchivePlanSchema.js";
 import { AGENT_SESSION_CONSTRAINTS_SQL } from "./AgentSessionConstraints.js";
 
 /** 与每 Session v7 分库明确区分的 Agent DB 格式。 */
-export const AGENT_SESSION_SCHEMA_VERSION = 11;
+export const AGENT_SESSION_SCHEMA_VERSION = 12;
 
 /** 校验版本和数据库拥有者；只读调用绝不初始化数据库。 */
 export function assert_agent_session_schema(database: DatabaseSync, agent_id: string): void {
@@ -30,7 +30,7 @@ export const AGENT_SESSION_SCHEMA_SQL = `
 CREATE TABLE storage_metadata (
   singleton_id INTEGER PRIMARY KEY CHECK (singleton_id = 1),
   agent_id TEXT NOT NULL CHECK (length(trim(agent_id)) > 0),
-  format_version INTEGER NOT NULL CHECK (format_version = 11),
+  format_version INTEGER NOT NULL CHECK (format_version = 12),
   generation TEXT NOT NULL CHECK (length(generation) = 36),
   cursor_secret BLOB NOT NULL CHECK (length(cursor_secret) = 32),
   created_at INTEGER NOT NULL,
@@ -135,10 +135,10 @@ CREATE TABLE message_parts (
   message_id TEXT NOT NULL,
   sequence INTEGER NOT NULL CHECK (sequence >= 1),
   step_id TEXT,
-  type TEXT NOT NULL CHECK (type IN ('text', 'context', 'reasoning', 'tool', 'file', 'data', 'power', 'action', 'error', 'inbox')),
+  type TEXT NOT NULL CHECK (type IN ('text', 'context', 'reasoning', 'tool', 'file', 'data', 'view', 'action', 'error', 'input')),
   content TEXT NOT NULL CHECK (json_valid(content)) CHECK (
-    type <> 'inbox' OR COALESCE(json_type(content, '$.inbox_id') = 'text'
-      AND length(json_extract(content, '$.inbox_id')) > 0, 0)
+    type <> 'input' OR COALESCE(json_type(content, '$.input_id') = 'text'
+      AND length(json_extract(content, '$.input_id')) > 0, 0)
   ),
   created_at INTEGER NOT NULL,
   updated_at INTEGER NOT NULL,
@@ -151,7 +151,7 @@ CREATE INDEX messages_turn_sequence ON messages(session_key, turn_id, sequence);
 CREATE INDEX messages_recoverable ON messages(session_key, state, sequence) WHERE role = 'agent' AND state = 'streaming';
 CREATE INDEX message_parts_step ON message_parts(session_key, step_id, message_id, sequence);
 CREATE INDEX message_parts_type ON message_parts(session_key, type, message_id);
-CREATE UNIQUE INDEX message_parts_inbox ON message_parts(session_key, json_extract(content, '$.inbox_id')) WHERE type = 'inbox';
+CREATE UNIQUE INDEX message_parts_input ON message_parts(session_key, json_extract(content, '$.input_id')) WHERE type = 'input';
 
 CREATE TABLE composer_checkpoints (
   session_key INTEGER NOT NULL,

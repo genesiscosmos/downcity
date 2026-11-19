@@ -12,7 +12,7 @@ export class SessionQueue {
   private readonly commands: SessionCommand[] = [];
   private notify_enqueue?: (command: SessionCommand) => void;
 
-  /** 唯一消费者注册同步通知；内部 inbox 与 facade 必须经过相同入队边界。 */
+  /** 唯一消费者注册同步通知；内部 input 与 facade 必须经过相同入队边界。 */
   on_enqueue(notify: (command: SessionCommand) => void): void {
     this.notify_enqueue = notify;
   }

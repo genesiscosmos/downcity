@@ -50,7 +50,7 @@ export function normalize_session_user_parts(
 }
 
 /** 仅供可信工具输入提交边界调用；外部 prompt 继续使用普通归一化并剥离媒体权限。 */
-export function normalize_inbox_content(
+export function normalize_input_content(
   parts: readonly import("@downcity/type").SessionModelUserContent[],
 ): import("@downcity/type").SessionModelUserContent[] {
   const normalized = normalize_session_user_parts(structuredClone([...parts])).filter(
@@ -74,7 +74,7 @@ export function has_assistant_result_content(
     if (part.type === "file") {
       return Boolean(part.media_type.trim() && part.url.trim());
     }
-    if (part.type === "power") return Boolean(part.fallback_text.trim());
+    if (part.type === "view") return Boolean(part.fallback_text.trim());
     return Boolean(part.data_type.trim());
   });
 }

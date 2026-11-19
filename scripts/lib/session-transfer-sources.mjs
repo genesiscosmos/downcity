@@ -37,7 +37,8 @@ export function record_sources(record, runtime) {
       session_id: message.origin_session_id, message_id: message.origin_message_id, turn_id: message.origin_turn_id });
     if (message.meta) meta_source(JSON.parse(message.meta));
   }
-  for (const part of record.message_parts) if (part.type === "inbox") meta_source(JSON.parse(part.content).meta);
+  const input_type = runtime.AGENT_SESSION_SCHEMA_VERSION >= 12 ? "input" : "inbox";
+  for (const part of record.message_parts) if (part.type === input_type) meta_source(JSON.parse(part.content).meta);
   for (const part of record.message_parts) if (part.type === "tool") {
     const content = JSON.parse(part.content);
     // 入参和 input_text 是历史调用原文，不参与结果寻址，也不会被迁移或重放。

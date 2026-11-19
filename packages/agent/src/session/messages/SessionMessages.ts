@@ -7,8 +7,8 @@
  */
 
 import { generate_id } from "@/utils/Id.js";
-import { prepare_session_prompt_inbox, type PrepareSessionPromptInboxInput } from "./SessionInbox.js";
-import type { SessionAgentInboxPart, SessionInboxInput } from "@downcity/type";
+import { prepare_session_prompt_input, type PrepareSessionPromptInputInput } from "./SessionRuntimeInput.js";
+import type { SessionAgentInputPart, SessionInputContent } from "@downcity/type";
 import { assert_tool_terminal } from "@/model/results/ResultReference.js";
 import { fail_tool } from "@/model/results/ToolTerminal.js";
 import { SessionAgentMessageWriter } from "@/session/messages/SessionAgentMessageWriter.js";
@@ -335,19 +335,19 @@ export class SessionMessages {
   }
 
   /** 准备运行时输入；提交由当前 Turn 的唯一 Assistant Writer 完成。 */
-  async prepare_prompt_inbox(input: PrepareSessionPromptInboxInput): Promise<SessionInboxInput> {
-    return await prepare_session_prompt_inbox(input, this.attachment_store);
+  async prepare_prompt_input(input: PrepareSessionPromptInputInput): Promise<SessionInputContent> {
+    return await prepare_session_prompt_input(input, this.attachment_store);
   }
 
   /** 按来源幂等标识读取已经提交的运行时输入。 */
-  async read_inbox(inbox_id: string): Promise<{
+  async read_input(input_id: string): Promise<{
     /** 该输入所属的完整 Agent Message。 */
     message: SessionAgentMessage;
-    /** 已提交的 Inbox Part。 */
-    part: SessionAgentInboxPart;
+    /** 已提交的 Input Part。 */
+    part: SessionAgentInputPart;
   } | null> {
     await this.ensure_initialized();
-    return await this.store.read_inbox(inbox_id);
+    return await this.store.read_input(input_id);
   }
 
   /** 读取指定 Turn 最近一条 canonical Agent Message。 */

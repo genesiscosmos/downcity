@@ -27,7 +27,7 @@ export function resolve_prompt_request_identity(session_id: string, request_id_i
   if (!request_id) return null;
   if (request_id.length > 512) throw new Error("session.prompt request_id must not exceed 512 characters");
   const digest = createHash("sha256").update(session_id).update("\u0000").update(request_id).digest("hex");
-  return { message_id: `user-request:${digest}`, inbox_id: `inbox-request:${digest}`, turn_id: `turn-request:${digest}` };
+  return { message_id: `user-request:${digest}`, input_id: `inbox-request:${digest}`, turn_id: `turn-request:${digest}` };
 }
 
 /** 为已持久化结果创建立即完成的句柄。 */

@@ -533,7 +533,7 @@ export class SessionExecutor implements SessionExecutorPort {
    * 达到工具循环上限后，要求模型在禁用工具的前提下给出收尾结论。
    *
    * 关键点（中文）
-   * - 收尾提示沿 FIFO 写入当前 Agent Message 的 inbox，Composer 从 canonical history 读取。
+   * - 收尾提示沿 FIFO 写入当前 Agent Message 的 input，Composer 从 canonical history 读取。
    * - 收尾 Step 仍走统一模型请求重试与上下文压缩恢复，真实 Provider 错误不会被吞掉。
    * - 只执行一次；收尾仍无正文时由调用方按明确失败收口。
    */
@@ -554,7 +554,7 @@ export class SessionExecutor implements SessionExecutorPort {
     /** 收尾是否真正产出了用户可见正文。 */
     produced_text: boolean;
   }> {
-    await input.turn_context.input.append_inbox({
+    await input.turn_context.input.append_input({
       kind: "max_steps_finalization",
       content: [{ type: "text", text: build_max_steps_finalization_nudge(MAX_TOOL_LOOP_STEPS) }],
     });

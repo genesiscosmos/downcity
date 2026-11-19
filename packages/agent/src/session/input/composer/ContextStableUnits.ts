@@ -1,7 +1,7 @@
 /**
  * canonical 历史的不可拆分摘要单元。
  *
- * User Message 保持完整；Agent 按 Step 与独立 inbox 分组。同一 step_id 的首尾跨度
+ * User Message 保持完整；Agent 按 Step 与独立 input 分组。同一 step_id 的首尾跨度
  * 即使夹有无作用域的宿主内容也必须完整保留，避免 checkpoint 留下半组工具调用。
  * 此处只识别单元及终态，写端的稳定水位仍是 streaming 前缀不可变性的唯一授权。
  */
@@ -15,15 +15,15 @@ export function group_context_units(message: SessionMessage): StableContextUnit[
   if (message.role === "user") return [{ message, parts, part: parts.at(-1)! }];
   const last_step_index = new Map<string, number>();
   for (const [index, part] of parts.entries()) {
-    // inbox 是独立输入，step_id 仅为因果关联，不把它当作模型输出 Step。
-    if (part.type !== "inbox" && "step_id" in part && part.step_id) last_step_index.set(part.step_id, index);
+    // input 是独立输入，step_id 仅为因果关联，不把它当作模型输出 Step。
+    if (part.type !== "input" && "step_id" in part && part.step_id) last_step_index.set(part.step_id, index);
   }
   const units: StableContextUnit[] = [];
   for (let start = 0; start < parts.length;) {
     let end = start;
     for (let index = start; index <= end; index++) {
       const part = parts[index]!;
-      if (part.type !== "inbox" && "step_id" in part && part.step_id) {
+      if (part.type !== "input" && "step_id" in part && part.step_id) {
         end = Math.max(end, last_step_index.get(part.step_id)!);
       }
     }
@@ -45,10 +45,10 @@ export function is_context_unit_terminal(unit: StableContextUnit): boolean {
   });
 }
 
-/** 活动尾部本身已被保留；否则为请求保留最后一个 Step/inbox，纯宿主数据不替代它。 */
+/** 活动尾部本身已被保留；否则为请求保留最后一个 Step/input，纯宿主数据不替代它。 */
 export function is_context_request_unit(unit: StableContextUnit): boolean {
   if (unit.message.role === "user") return true;
   return !is_context_unit_terminal(unit)
-    || unit.parts.some(part => part.type === "inbox" || part.type === "tool" || part.type === "text"
-      || part.type === "reasoning" || part.type === "power");
+    || unit.parts.some(part => part.type === "input" || part.type === "tool" || part.type === "text"
+      || part.type === "reasoning" || part.type === "view");
 }

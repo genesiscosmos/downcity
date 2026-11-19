@@ -11,7 +11,7 @@
 
 import type { PowerAction, PowerActionResult } from "@/power/index.js";
 import type { PowerCallSite, PowerRuntimeHost } from "@/power/index.js";
-import { validate_session_power_content, type JsonValue } from "@downcity/type";
+import { validate_session_view_content, type JsonValue } from "@downcity/type";
 import { request_power_action_approval } from "./PowerActionApproval.js";
 import { assert_public_execution_input, redact_public_value } from "./PowerPrivateValues.js";
 
@@ -199,8 +199,8 @@ export async function execute_power_action(
     for (const message of result.messages ?? []) {
       if (message.role !== "agent") continue;
       for (const part of message.parts) {
-        if (part.type !== "power") continue;
-        validate_session_power_content(part);
+        if (part.type !== "view") continue;
+        validate_session_view_content(part);
         if (!result.success || part.power_id !== input.power_name) {
           throw new Error("Power content must belong to the successful calling Power");
         }

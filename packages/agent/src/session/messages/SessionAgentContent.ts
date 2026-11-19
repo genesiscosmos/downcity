@@ -5,7 +5,7 @@
  * Store 或 Turn 生命周期。所有非模型 Agent Content 入口共用这一条转换规则。
  */
 
-import { validate_session_power_content } from "@downcity/type";
+import { validate_session_view_content } from "@downcity/type";
 import type {
   SessionAgentContent,
   SessionAgentMessagePart,
@@ -36,10 +36,10 @@ export function create_session_agent_content_part(
         url: content.url,
         ...(content.filename ? { filename: content.filename } : {}),
       };
-    case "power":
-      validate_session_power_content(content);
+    case "view":
+      validate_session_view_content(content);
       return {
-        type: "power", power_id: content.power_id, schema_version: content.schema_version,
+        type: "view", power_id: content.power_id, schema_version: content.schema_version,
         data: content.data, fallback_text: content.fallback_text, part_id, sequence,
         ...(source_tool_call_id ? { source_tool_call_id } : {}),
       };

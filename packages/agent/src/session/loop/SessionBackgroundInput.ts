@@ -49,7 +49,7 @@ async function receive_background_input(host: SessionBackgroundHost, input: Sess
     const actor = host.loop.occupied_by();
     if (!host.loop.is_active() && actor) {
       // 重启恢复的占用仍属于原执行；沿已有恢复入口续行，不重放外部命令。
-      await host.loop.prompt_inbox({ actor, request_id: input.request_id, query });
+      await host.loop.prompt_input({ actor, request_id: input.request_id, query });
       return "accepted";
     }
     return await host.loop.accept_delegation_result(input.turn_id, input.request_id, query) ? "accepted" : "retry";
@@ -63,7 +63,7 @@ async function receive_background_input(host: SessionBackgroundHost, input: Sess
   if (completed.status !== "completed" && !input.allow_stopped_turn) return "discarded";
   if (host.loop.has_live_execution()) return "retry";
   try {
-    await host.loop.prompt_inbox({
+    await host.loop.prompt_input({
       actor: { kind: "runtime", namespace: "session_background", object_id: input.request_id },
       request_id: input.request_id,
       query,

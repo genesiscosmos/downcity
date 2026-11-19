@@ -17,7 +17,7 @@ export type ControlTimelineRole =
   | "tool-call"
   | "tool-result"
   | "system"
-  | "inbox"
+  | "input"
   | "action";
 
 /**

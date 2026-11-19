@@ -5,22 +5,22 @@
  * Electron 能力；宿主负责把自己的 SessionMessage 投影到这里。
  */
 import type * as React from "react";
-import type { DowncityChatInboxPart } from "./chat-inbox";
+import type { DowncityChatInputPart } from "./chat-runtime-input";
 
 /** Chat 面板运行状态。 */
 export type DowncityChatStatus = "ready" | "submitted" | "streaming" | "building-context" | "error";
 /** 消息角色。 */
 export type DowncityChatMessageRole = "user" | "assistant" | "system" | "error";
 /** 消息 part 类型。 */
-export type DowncityChatMessagePartType = "text" | "reasoning" | "tool" | "interaction" | "file" | "source" | "operation" | "changed-files" | "data" | "step-start" | "inbox";
+export type DowncityChatMessagePartType = "text" | "reasoning" | "tool" | "interaction" | "file" | "source" | "operation" | "changed-files" | "data" | "step-start" | "input";
 
-/** Chat 消息中的结构化 Part；运行时输入使用独立的 inbox 协议。 */
-export type DowncityChatMessagePart = DowncityChatContentPart | DowncityChatInboxPart;
+/** Chat 消息中的结构化 Part；运行时输入使用独立的 input 协议。 */
+export type DowncityChatMessagePart = DowncityChatContentPart | DowncityChatInputPart;
 
 /** Chat 消息中的正文、活动与交互 Part。 */
 export interface DowncityChatContentPart {
   /** part 稳定标识。 */ id: string;
-  /** part 类型；inbox 使用独立的判别分支。 */ type: Exclude<DowncityChatMessagePartType, "inbox">;
+  /** part 类型；input 使用独立的判别分支。 */ type: Exclude<DowncityChatMessagePartType, "input">;
   /** 文本内容。 */ text?: string;
   /** part 是否仍在流式生成。 */ state?: string;
   /** 工具调用标识。 */ tool_call_id?: string;

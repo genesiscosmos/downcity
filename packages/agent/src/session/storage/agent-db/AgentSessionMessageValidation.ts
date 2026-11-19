@@ -25,7 +25,7 @@ export function validate_agent_db_message(message: SessionMessage, session_id: s
       throw new Error("session_part_role_invalid");
     }
   }
-  // codec 负责 Tool/Interaction、Inbox、Power 等内容形状校验，错误不跨 Worker 输出正文。
+  // codec 负责 Tool/Interaction、Input、Power 等内容形状校验，错误不跨 Worker 输出正文。
   decode_session_message(encode_session_message_row(message), message.parts.map((part) => encode_session_part_row(message, part)), session_id);
   if (message.role === "agent" && message.state === "done") {
     const nonterminal = message.parts.some((part) => {

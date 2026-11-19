@@ -1,4 +1,4 @@
-/** 验证 Power Part 的 schema guard、角色约束、重放及模型摘要边界。 */
+/** 验证 View Part 的 schema guard、角色约束、重放及模型摘要边界。 */
 import assert from "node:assert/strict";
 import test from "node:test";
 import { create_result_ref } from "../bin/model/results/ResultReference.js";
@@ -8,12 +8,12 @@ import { create_session_agent_content_part } from "../bin/session/messages/Sessi
 import { extract_session_message_text } from "../bin/session/messages/SessionMessageText.js";
 import { session_messages_to_model_messages } from "../bin/model/messages/SessionModelMessages.js";
 import { StepInput } from "../bin/session/input/StepInput.js";
-import { project_published_tool_input } from "../bin/model/messages/SessionPowerProjection.js";
+import { project_published_tool_input } from "../bin/model/messages/SessionViewProjection.js";
 
 /** 代表性的业务内容，不依赖具体 Renderer。 */
-const content = { type: "power", power_id: "presentation", schema_version: 1, data: { private_spec: "not model text" }, fallback_text: "调整参数查看结果" };
+const content = { type: "view", power_id: "presentation", schema_version: 1, data: { private_spec: "not model text" }, fallback_text: "调整参数查看结果" };
 
-test("当前 schema 支持 Agent Power Part 并拒绝自动迁移旧版本，User 仍受约束", () => {
+test("当前 schema 支持 Agent View Part 并拒绝自动迁移旧版本，User 仍受约束", () => {
   const owner = new AgentSessionDatabase({ agent_id: "test", database_path: ":memory:", allow_create: true });
   const database = owner.database;
   try {
@@ -30,14 +30,14 @@ test("当前 schema 支持 Agent Power Part 并拒绝自动迁移旧版本，Use
     assert.equal(database.prepare("PRAGMA user_version").get().user_version, 6);
     assert.equal(database.prepare("SELECT content FROM message_parts WHERE part_id = 'text-1'").get().content, '{"text":"原消息"}');
     database.exec(`PRAGMA user_version = ${AGENT_SESSION_SCHEMA_VERSION}`);
-    const insert = database.prepare("INSERT INTO message_parts VALUES (1, ?, ?, 1, NULL, 'power', ?, 2, 2)");
+    const insert = database.prepare("INSERT INTO message_parts VALUES (1, ?, ?, 1, NULL, 'view', ?, 2, 2)");
     insert.run("power-1", "agent-1", JSON.stringify(content));
     assert.throws(() => insert.run("power-2", "user-1", JSON.stringify(content)), /incompatible/);
     assert.deepEqual(database.prepare("PRAGMA foreign_key_check").all(), []);
   } finally { owner.close(); }
 });
 
-test("Power 内容补齐 canonical 身份并只使用回退文字投影", () => {
+test("View 内容补齐 canonical 身份并只使用回退文字投影", () => {
   const part = create_session_agent_content_part(content, "power-1", 1);
   assert.equal(part.part_id, "power-1");
   assert.equal(part.sequence, 1);

@@ -37,9 +37,9 @@ test("跨消息页查找最新 Turn 的可信输入，忽略其他轮次的后�
   const store = scan_store(["paged"], async (id, input) => {
     calls.push(input.before_sequence);
     if (input.before_sequence === undefined) {
-      const inbox = { ...background_input(id, "new-turn", 101), role: "agent", meta: undefined,
-        parts: [{ type: "inbox", part_id: "inbox-part", inbox_id: "latest-inbox", sequence: 1 }] };
-      return { items: [inbox], has_more: true, next_before_sequence: 101 };
+      const input = { ...background_input(id, "new-turn", 101), role: "agent", meta: undefined,
+        parts: [{ type: "input", part_id: "input-part", input_id: "latest-input", sequence: 1 }] };
+      return { items: [input], has_more: true, next_before_sequence: 101 };
     }
     return { items: [background_input(id, "old-turn", 1), background_input(id, "new-turn", 2)], has_more: false };
   });

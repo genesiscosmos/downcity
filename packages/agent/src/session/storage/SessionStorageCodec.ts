@@ -4,9 +4,9 @@
  * Message envelope 与 Part 分表保存；公开领域对象仍保持 Message 聚合拥有 parts[]。
  */
 
-import { validate_session_power_content } from "@downcity/type";
+import { validate_session_view_content } from "@downcity/type";
 import { assert_tool_terminal, parse_result_ref } from "@/model/results/ResultReference.js";
-import { decode_session_inbox_part } from "./SessionInboxCodec.js";
+import { decode_session_input_part } from "./SessionInputCodec.js";
 import { validate_session_stable_prefix } from "./SessionStablePrefix.js";
 import { session_prompt_actor_schema } from "@/types/sdk/SessionPromptActor.js";
 import type {
@@ -109,7 +109,7 @@ export function encode_session_part_row(
     step_id,
     type,
     content: JSON.stringify(content),
-    created_at: part.type === "inbox" ? part.created_at : message.created_at,
+    created_at: part.type === "input" ? part.created_at : message.created_at,
     updated_at: message.updated_at,
   };
 }
@@ -270,13 +270,13 @@ function decode_session_part(
         data: read_json(content, "data", row),
         ...optional_string(content, "data_id", row),
       };
-    case "inbox":
-      if (role !== "agent") throw invalid_part(row, "Inbox content requires agent role");
-      return decode_session_inbox_part(row, content);
-    case "power": {
+    case "input":
+      if (role !== "agent") throw invalid_part(row, "Input content requires agent role");
+      return decode_session_input_part(row, content);
+    case "view": {
       if (role !== "agent") throw invalid_part(row, "Power content requires agent role");
-      const part = { ...content, type: "power" };
-      validate_session_power_content(part);
+      const part = { ...content, type: "view" };
+      validate_session_view_content(part);
       return { ...part, ...identity, ...optional_string(content, "source_tool_call_id", row) };
     }
     case "action":
@@ -549,7 +549,10 @@ function invalid_meta(row: SessionMessageRow, reason: string): Error {
 
 /** schema 联合类型增加成员时强制 codec 显式解码。 */
 function assert_never(value: never): never {
-  throw new Error(`Unsupported persisted Session Part type: ${String(value)}`);
+  if (["inbox", "power"].includes(String(value))) {
+    throw new Error("session_migration_required: Legacy Session Parts require offline conversion to v12");
+  }
+  throw new Error("session_storage_part_type_invalid");
 }
 
 /** 当前错误使用既有 Part 形状校验，但不占用正文序号或稳定水位。 */

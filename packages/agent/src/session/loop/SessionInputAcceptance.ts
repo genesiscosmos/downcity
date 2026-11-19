@@ -1,23 +1,23 @@
 /**
  * Session 输入的接收边界。
  *
- * User Message 或 inbox Part 成功落盘即成为 accepted 事实，之后的取消不能撤销它。
+ * User Message 或 input Part 成功落盘即成为 accepted 事实，之后的取消不能撤销它。
  * 真人追加输入建立回复边界；运行时输入沿同一 FIFO 在完整 Step 后追加，不关闭 Writer。
  */
 
 import { nanoid } from "nanoid";
-import type { SessionAgentInboxPart, SessionInboxInput, SessionUserMessage } from "@downcity/type";
+import type { SessionAgentInputPart, SessionInputContent, SessionUserMessage } from "@downcity/type";
 import type { SessionCommand } from "@/types/session/SessionCommand.js";
-import type { SessionTurnContext, SessionTurnInboxInput } from "@/types/turn/SessionTurnContext.js";
-import { normalize_inbox_content } from "@/session/messages/SessionUserMessage.js";
+import type { SessionTurnContext, SessionTurnInputInput } from "@/types/turn/SessionTurnContext.js";
+import { normalize_input_content } from "@/session/messages/SessionUserMessage.js";
 import type { SessionQueue } from "./SessionQueue.js";
 
 /** 单次 canonical 输入提交所需的操作；持久化后不再检查普通取消。 */
 export interface SessionInputAcceptanceOptions {
   /** 最后一次接收检查，包含调用方取消、Turn 取消及 stop 代次。 */
   assert_receivable: () => void;
-  /** 返回已经持久化的真人消息或运行时 inbox Part。 */
-  persist: () => Promise<SessionUserMessage | SessionAgentInboxPart>;
+  /** 返回已经持久化的真人消息或运行时 input Part。 */
+  persist: () => Promise<SessionUserMessage | SessionAgentInputPart>;
   /** canonical 输入已经存在时同步兑现接收回执。 */
   accepted: () => void;
   /** 输入归属的执行上下文。 */
@@ -54,19 +54,19 @@ export class SessionInternalInput {
   }) {}
 
   /** 暂存完成不代表已落盘；它保证当前 Turn 在结束前尝试提交，不提前关闭活跃 Step。 */
-  stage(input: SessionTurnInboxInput): void {
+  stage(input: SessionTurnInputInput): void {
     this.options.assert_receivable();
-    const content = normalize_inbox_content(input.content);
+    const content = normalize_input_content(input.content);
     if (content.length === 0) return;
-    const prepared: SessionInboxInput = structuredClone({ ...input, content, inbox_id: input.inbox_id ?? `inbox:${this.options.turn_id}:${nanoid()}` });
+    const prepared: SessionInputContent = structuredClone({ ...input, content, input_id: input.input_id ?? `input:${this.options.turn_id}:${nanoid()}` });
     const command: SessionCommand = {
       kind: "maintenance",
       interrupt: "defer",
       execute: async () => {
         // 已暂存输入即使随后 stop，也要在 Step 结束后保存事实；同一 ID 可安全重试。
         const assistant = this.options.get_context().output.assistant;
-        if (!assistant) throw new Error("Session inbox requires an Assistant output writer");
-        await assistant.append_inbox(prepared);
+        if (!assistant) throw new Error("Session input requires an Assistant output writer");
+        await assistant.append_input(prepared);
         this.pending.delete(command);
       },
     };

@@ -2,6 +2,8 @@
 
 # Session v10→v11 离线转换
 
+本文描述固定的历史 v10→v11 阶段。当前正式格式为 v12；完成本阶段后须继续执行 [v11→v12 离线转换](session-v12-offline-migration.md)。本工具的目标协议由冻结的 v11 loader 提供。
+
 Agent 存储拥有 `AGENT_SESSION_SCHEMA_VERSION` 和 `assert_agent_session_schema`；City 根门禁复用该规则，只额外校验根标记、历史分区与跨 Agent UUID。错误保留 `session_migration_required` 前缀并附带路径、Agent 和实际/目标版本。读取及启动均不隐式迁移。
 
 v11 放宽 `messages.meta` 对 Agent 消息的限制，允许保存 `current_error`。`session-v11-conversion.mjs` 从冻结 v10 schema/codec 校验源库，在私有 SQLite 一致性副本内重建 `messages` 和 `storage_metadata`。先临时保存行，再以原表名创建正式 DDL；复制完成后恢复触发器，避免 RENAME 改写外部引用或触发重复业务写入。正式 DDL、全部消息解码、完整性和外键全部通过后提交。

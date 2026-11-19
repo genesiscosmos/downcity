@@ -22,9 +22,9 @@ export function is_session_part_in_flight(part: SessionAgentMessagePart): boolea
       return part.state === "running";
     case "file":
     case "data":
-    case "power":
+    case "view":
     case "error":
-    case "inbox":
+    case "input":
       return false;
   }
 }

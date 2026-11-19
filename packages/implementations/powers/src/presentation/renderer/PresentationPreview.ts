@@ -1,5 +1,5 @@
 /** Tool JSON 参数前缀的只读预览；只接收完整解码且以换行闭合的 OpenUI 语句。 */
-import type { SessionAgentToolPart, SessionPowerContent } from "@downcity/type";
+import type { SessionAgentToolPart, SessionViewContent } from "@downcity/type";
 import { parse_presentation_content } from "../OpenUICatalog.js";
 
 /** 读取 JSON 字符串前缀，保留不完整 escape 之前的已确定内容，不补全结构。 */
@@ -19,7 +19,7 @@ function read_string(text: string, start: number): { /** 解码值。 */ value: 
 }
 
 /** 只读识别根 action 和 args.content，避免用正则误匹配字符串正文。 */
-export function preview_presentation_tool(tool: SessionAgentToolPart): SessionPowerContent | null {
+export function preview_presentation_tool(tool: SessionAgentToolPart): SessionViewContent | null {
   if (tool.tool_name !== "presentation" || !["input-streaming", "ready", "running"].includes(tool.state)) return null;
   const text = tool.input_text ?? JSON.stringify(tool.input ?? {});
   if (text.length > 300 * 1024) return null;
@@ -47,6 +47,6 @@ export function preview_presentation_tool(tool: SessionAgentToolPart): SessionPo
     const prefix = content.slice(0, content.lastIndexOf("\n") + 1);
     if (!prefix.trim()) return null;
     parse_presentation_content(prefix, false);
-    return { type: "power", power_id: "presentation", schema_version: 2, data: { format: "openui-lang", catalog_id: "downcity.presentation.openui.v1", content: prefix }, fallback_text: "正在生成可视化…" };
+    return { type: "view", power_id: "presentation", schema_version: 2, data: { format: "openui-lang", catalog_id: "downcity.presentation.openui.v1", content: prefix }, fallback_text: "正在生成可视化…" };
   } catch { return null; }
 }

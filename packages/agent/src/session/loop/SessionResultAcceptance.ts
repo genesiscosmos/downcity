@@ -25,7 +25,7 @@ export class SessionResultAcceptance {
     /** 目标 Session 的稳定标识，用于解析 canonical 消息身份。 */
     private readonly session_id: string,
     /** canonical 消息读取端口，是跨重启接收确认的事实源。 */
-    private readonly messages: Pick<SessionMessages, "read_message" | "read_inbox">,
+    private readonly messages: Pick<SessionMessages, "read_message" | "read_input">,
   ) {}
 
   /** 相同请求只能接收一次；是否能注入原 Turn 由同步检查并入队的回调决定。 */
@@ -37,7 +37,7 @@ export class SessionResultAcceptance {
   ): Promise<boolean> {
     const identity = resolve_prompt_request_identity(this.session_id, request_id);
     if (!identity || !turn_id.trim()) throw new Error("Delegation result requires Turn and request identities");
-    const pending = this.pending.get(identity.inbox_id);
+    const pending = this.pending.get(identity.input_id);
     if (pending) {
       if (pending.turn_id !== turn_id) throw new Error("Delegation result belongs to another Turn");
       return await pending.receipt;
@@ -52,11 +52,11 @@ export class SessionResultAcceptance {
       }
       return await enqueue(identity, query);
     })();
-    this.pending.set(identity.inbox_id, { turn_id, receipt });
+    this.pending.set(identity.input_id, { turn_id, receipt });
     try {
       return await receipt;
     } finally {
-      this.pending.delete(identity.inbox_id);
+      this.pending.delete(identity.input_id);
     }
   }
 }

@@ -111,7 +111,7 @@ export function load_protocol_package(package_path, runtime) {
   const manifest = JSON.parse(fs.readFileSync(manifest_path, "utf8"));
   const record = JSON.parse(fs.readFileSync(record_path, "utf8"));
   if (manifest.format_version === 1 || (manifest.format_version === 2 && manifest.schema_version === 9)
-    || (runtime.AGENT_SESSION_SCHEMA_VERSION === transfer_schema_version && manifest.schema_version === 10)) fail("transfer_legacy_package_requires_conversion");
+    || (runtime.AGENT_SESSION_SCHEMA_VERSION === transfer_schema_version && [10, 11].includes(manifest.schema_version))) fail("transfer_legacy_package_requires_conversion");
   if (Object.keys(manifest).sort().join(",") !== "agent_id,allow_unresolved_sources,attachments,export_operation_id,format_version,record_sha256,request_hash,schema_version,session_id,source_attachments,sources,status"
     || manifest.format_version !== transfer_package_version || manifest.schema_version !== runtime.AGENT_SESSION_SCHEMA_VERSION || manifest.status !== "ready" || !uuid_pattern.test(manifest.export_operation_id ?? "")
     || !uuid_pattern.test(manifest.session_id ?? "") || manifest.session_id !== record.metadata?.session_id || typeof manifest.source_attachments !== "string"

@@ -124,11 +124,11 @@ class DefaultSessionTurnContext implements SessionTurnContext {
         await context.init.commit_step_input?.();
       },
       has_pending: () => context.init.has_pending_step_input?.() === true,
-      append_inbox: async (input) => {
-        if (!context.init.append_inbox) {
-          throw new Error("SessionTurnContext cannot persist runtime inbox input");
+      append_input: async (input) => {
+        if (!context.init.append_input) {
+          throw new Error("SessionTurnContext cannot persist runtime input input");
         }
-        await context.init.append_inbox(structuredClone(input));
+        await context.init.append_input(structuredClone(input));
       },
     });
 

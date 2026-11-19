@@ -3,7 +3,7 @@ import { useState, type ReactNode } from "react";
 import { ChevronDown, File, LoaderCircle, Send } from "lucide-react";
 import { TbCheck, TbChevronRight, TbFile as TbFileIcon, TbTerminal } from "./chat-icons";
 import { cn } from "../lib/utils";
-import { ChatInbox } from "./chat-inbox";
+import { ChatInput } from "./chat-inbox";
 import { MarkdownView } from "./markdown/MarkdownView";
 import type { DowncityChatChangedFile, DowncityChatContentPart, DowncityChatMessagePart, DowncityChatPanelProps, DowncityChatQuestion } from "../types/chat";
 function format_value(value: unknown): string {
@@ -107,7 +107,7 @@ function ChangedFiles({ files = [] }: { files?: DowncityChatChangedFile[] }) {
 }
 
 function render_part(part: DowncityChatMessagePart, on_respond_interaction?: DowncityChatPanelProps["on_respond_interaction"], render_interaction?: DowncityChatPanelProps["render_interaction"], streaming = false): ReactNode {
-  if (part.type === "inbox") return <ChatInbox part={part} />;
+  if (part.type === "input") return <ChatInput part={part} />;
   if (part.type === "text") return <MarkdownView text={part.text ?? ""} mode={streaming && part.state === "streaming" ? "streaming" : "static"} layout="embedded" />;
   if (part.type === "reasoning") return <ReasoningActivity part={part} />;
   if (part.type === "tool") return <ToolActivity part={part} />;

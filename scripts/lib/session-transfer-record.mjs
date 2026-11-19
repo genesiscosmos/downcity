@@ -89,7 +89,7 @@ export function validate_protocol_record(record, agent_id, runtime) {
   } finally { database.close(); }
 }
 
-/** 仅重绑file/inbox所属URL与精确框架路径提示，Tool/任意正文引用不做全局字符串替换。 */
+/** 仅重绑 file 和协议声明的运行时输入附件；Tool 与任意正文不做全局字符串替换。 */
 export function rebind_record(record, source_root, target_root, files, runtime) {
   const result = structuredClone(record);
   const rewrite = item => {
@@ -114,7 +114,7 @@ export function rebind_record(record, source_root, target_root, files, runtime) 
   for (const part of result.message_parts) {
     const before = JSON.parse(part.content);
     if (part.type === "file") part.content = JSON.stringify(rewrite(before));
-    else if (part.type === "inbox") {
+    else if (part.type === (runtime.AGENT_SESSION_SCHEMA_VERSION >= 12 ? "input" : "inbox")) {
       const content = before.content.map(item => item.type === "file" ? rewrite(item) : item);
       for (let index = 0; index < content.length; index++) if (content[index].type === "context") content[index] = hint(content[index], before.content[index - 1], content[index - 1]);
       part.content = JSON.stringify({ ...before, content });

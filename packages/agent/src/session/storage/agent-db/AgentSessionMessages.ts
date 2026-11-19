@@ -115,13 +115,13 @@ export class AgentSessionMessages {
     });
   }
 
-  /** Inbox 幂等来源属于 Session 范围，不采用跨记录全局唯一。 */
-  inbox_message(session_id: string, inbox_id: string): SessionMessage | null {
+  /** Input 幂等来源属于 Session 范围，不采用跨记录全局唯一。 */
+  input_message(session_id: string, input_id: string): SessionMessage | null {
     return this.owner.read((database) => {
       const record = this.catalog.by_session_id(session_id);
       const row = database.prepare(`SELECT messages.* FROM messages JOIN message_parts USING(session_key, message_id)
-        WHERE messages.session_key = ? AND message_parts.type = 'inbox'
-          AND json_extract(message_parts.content, '$.inbox_id') = ?`).get(record.session_key, inbox_id);
+        WHERE messages.session_key = ? AND message_parts.type = 'input'
+          AND json_extract(message_parts.content, '$.input_id') = ?`).get(record.session_key, input_id);
       return row ? this.aggregates(database, record, [row as unknown as SessionMessageRow])[0] : null;
     });
   }
@@ -141,14 +141,14 @@ export class AgentSessionMessages {
     }, input.session_id);
   }
 
-  /** 附件授权查询只检查 User/Inbox canonical 文件内容。 */
+  /** 附件授权查询只检查 User/Input canonical 文件内容。 */
   has_attachment(session_id: string, file_path: string): boolean {
     return this.owner.read((database) => {
       const record = this.catalog.by_session_id(session_id);
       return Boolean(database.prepare(`SELECT 1 FROM message_parts JOIN messages USING(session_key, message_id)
         WHERE messages.session_key = ? AND (
           (messages.role = 'user' AND message_parts.type = 'file' AND json_extract(message_parts.content, '$.url') = ?)
-          OR (message_parts.type = 'inbox' AND EXISTS (SELECT 1 FROM json_each(message_parts.content, '$.content') AS item
+          OR (message_parts.type = 'input' AND EXISTS (SELECT 1 FROM json_each(message_parts.content, '$.content') AS item
             WHERE json_extract(item.value, '$.type') = 'file' AND json_extract(item.value, '$.url') = ?))) LIMIT 1`)
         .get(record.session_key, file_path, file_path));
     });

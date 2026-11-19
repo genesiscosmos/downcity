@@ -35,7 +35,7 @@ export type AgentSessionPromptContent = SessionUserContent;
  *   否则其输入会被当成用户输入并入用户的 Turn。
  *
  * 生命周期说明（中文）：
- * - 真人输入写入 User Message；Session/runtime actor 输入写入 Agent inbox Part。
+ * - 真人输入写入 User Message；Session/runtime actor 输入写入 Agent input Part。
  * - `file` part 如果携带 Data URL，会在 Message 入库前解码到 Session 的 attachments 目录。
  * - 持久化 Message 里的 `url` 变成相对 Workspace 根目录的文件路径，而不是 Base64 内容。
  * - 模型执行前，Executor 再按该路径读取文件，并转换成 Downcity `ModelMessage`。
@@ -58,7 +58,7 @@ export interface AgentSessionPromptInput {
    * 调用方为同一业务输入提供的稳定幂等标识。
    *
    * 说明（中文）
-   * - 相同 Session 内重复提交同一个 `request_id`，只会创建一个 canonical 输入事实（User Message 或 inbox Part）。
+   * - 相同 Session 内重复提交同一个 `request_id`，只会创建一个 canonical 输入事实（User Message 或 input Part）。
    * - 已完成的请求直接返回实际绑定的 Turn 结果；进程重启后未完成的请求会复用原 Turn 恢复执行。
    * - 输入并入运行中的 Turn 时仍保留稳定消息标识，不要求 Turn ID 等于请求推导标识。
    * - 幂等输入在入库前被 stop 取消或持久化失败时 prompt 会 reject，调用方可用同一标识重试。
@@ -71,9 +71,9 @@ export interface AgentSessionPromptInput {
    *
    * 说明（中文）
    * - 支持两种格式：
-   *   1. `string`：纯文本输入，按 actor 保存为 User Message 或 inbox 内容。
+   *   1. `string`：纯文本输入，按 actor 保存为 User Message 或 input 内容。
    *   2. `AgentSessionPromptContent[]`：Downcity Session 内容，可直接携带 text、context、file 等内容。
-   * - 调用侧只传本次新增输入；运行时调用必须声明真实 actor，由运行时写入 inbox。
+   * - 调用侧只传本次新增输入；运行时调用必须声明真实 actor，由运行时写入 input。
    * - 它是否并入当前 turn，还是排到下一 turn，由 Session 内部决定。
    */
   query: string | AgentSessionPromptContent[];
@@ -84,8 +84,8 @@ export type NormalizedAgentSessionPromptInput =
   AgentSessionPromptInput & {
     /** 已校验的可信调用对象，用于占用与请求归属。 */
     actor: SessionPromptActor;
-    /** canonical 输入主体；可信后台结果可在用户占用下明确写入 inbox。 */
-    input_kind: "user" | "inbox";
+    /** canonical 输入主体；可信后台结果可在用户占用下明确写入 input。 */
+    input_kind: "user" | "input";
   };
 
 /**

@@ -1,10 +1,10 @@
 /**
- * Agent inbox 的模型投影：将可信运行时事件呈现为带来源的 runtime_input。
+ * Agent input 的模型投影：将可信运行时事件呈现为带来源的 runtime_input。
  *
  * canonical 内容保持原样；只在模型边界转义文本，原生媒体保持独立 file 内容。
  * 文件复用统一附件投影的版本、路径及预算检查，摘要只保留引用；meta 不进入模型上下文。
  */
-import type { ModelContent, ModelMessage, SessionAgentInboxPart } from "@downcity/type";
+import type { ModelContent, ModelMessage, SessionAgentInputPart } from "@downcity/type";
 import { max_request_media_bytes } from "@downcity/type/workspace";
 import { render_session_user_context } from "@/session/messages/SessionUserContext.js";
 import { is_generated_attachment_context, project_session_attachment } from "./SessionAttachmentProjection.js";
@@ -21,9 +21,9 @@ export interface SessionProjectionOptions {
   summary?: boolean;
 }
 
-/** 将单个 inbox 投影为模型 user 消息，按近者优先选取媒体并保留原内容顺序。 */
-export async function project_session_inbox(
-  part: SessionAgentInboxPart,
+/** 将单个 input 投影为模型 user 消息，按近者优先选取媒体并保留原内容顺序。 */
+export async function project_session_input(
+  part: SessionAgentInputPart,
   options: SessionProjectionOptions = {},
 ): Promise<ModelMessage> {
   const content: ModelContent[] = [];
@@ -54,7 +54,7 @@ export async function project_session_inbox(
     }
   }
   const source = JSON.stringify({
-    inbox_id: part.inbox_id,
+    input_id: part.input_id,
     kind: part.kind,
     ...(part.source ? { source: part.source } : {}),
     created_at: part.created_at,
@@ -82,5 +82,5 @@ function escape_xml_text(value: string): string {
 
 /** 新增运行时输入内容种类时，强制显式定义模型投影。 */
 function assert_never(value: never): never {
-  throw new Error(`Unsupported inbox content: ${String((value as { type?: unknown }).type)}`);
+  throw new Error(`Unsupported input content: ${String((value as { type?: unknown }).type)}`);
 }

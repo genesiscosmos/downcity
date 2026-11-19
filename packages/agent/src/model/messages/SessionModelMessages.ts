@@ -7,9 +7,9 @@
 
 import { project_session_attachment, is_generated_attachment_context } from "./SessionAttachmentProjection.js";
 import { max_request_media_bytes } from "@downcity/type/workspace";
-import { model_media_bytes, project_session_inbox, type SessionProjectionOptions } from "./SessionInboxProjection.js";
+import { model_media_bytes, project_session_input, type SessionProjectionOptions } from "./SessionInputProjection.js";
 import { assert_tool_terminal, disclosed_tool_result } from "../results/ResultReference.js";
-import { published_power_summaries, project_published_tool_input } from "./SessionPowerProjection.js";
+import { published_view_summaries, project_published_tool_input } from "./SessionViewProjection.js";
 import type {
   ModelContent,
   ModelMessage,
@@ -63,7 +63,7 @@ export async function project_summary_part(
   return convert_assistant_message(
     { ...message, parts: [part as SessionAgentMessagePart] },
     { summary: true },
-    published_power_summaries(message),
+    published_view_summaries(message),
   );
 }
 
@@ -114,20 +114,20 @@ async function convert_user_parts(
   return content.length > 0 ? { role: "user", content } : null;
 }
 
-/** 按 Part 顺序输出 assistant/tool 与 inbox；先从最新 inbox 分配共享媒体预算。 */
+/** 按 Part 顺序输出 assistant/tool 与 input；先从最新 input 分配共享媒体预算。 */
 async function convert_assistant_message(
   message: SessionAgentMessage,
   options: SessionProjectionOptions = {},
-  published_summaries = published_power_summaries(message),
+  published_summaries = published_view_summaries(message),
 ): Promise<ModelMessage[]> {
   const parts = [...message.parts].sort((left, right) => left.sequence - right.sequence);
-  const inbox_messages = new Map<string, ModelMessage>();
+  const input_messages = new Map<string, ModelMessage>();
   let remaining_media_bytes = options.remaining_media_bytes ?? max_request_media_bytes;
   for (const part of [...parts].reverse()) {
-    if (part.type !== "inbox") continue;
-    const projected = await project_session_inbox(part, { ...options, remaining_media_bytes });
+    if (part.type !== "input") continue;
+    const projected = await project_session_input(part, { ...options, remaining_media_bytes });
     remaining_media_bytes -= model_media_bytes([projected]);
-    inbox_messages.set(part.part_id, projected);
+    input_messages.set(part.part_id, projected);
   }
   const output: ModelMessage[] = [];
   let current_step_id: string | null = null;
@@ -140,11 +140,11 @@ async function convert_assistant_message(
     tool_results.length = 0;
   };
   for (const part of parts) {
-    if (part.type === "inbox") {
-      // 即使 inbox 与前后内容共享 step_id，也必须先完成此前的 assistant/tool 消息。
+    if (part.type === "input") {
+      // 即使 input 与前后内容共享 step_id，也必须先完成此前的 assistant/tool 消息。
       flush_step();
       current_step_id = null;
-      output.push(inbox_messages.get(part.part_id)!);
+      output.push(input_messages.get(part.part_id)!);
       continue;
     }
     const part_step_id = part.step_id ?? "__unscoped__";
@@ -171,7 +171,7 @@ async function convert_assistant_message(
           append_tool_content(part, content, tool_results, published_summaries.get(part.tool_call_id));
         }
         break;
-      case "power":
+      case "view":
         content.push({ type: "text", text: part.fallback_text });
         break;
       case "file":

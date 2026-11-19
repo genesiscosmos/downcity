@@ -128,12 +128,12 @@ export class AgentSessionStorage implements SessionStorage {
   async read_part_message(part_id: string): Promise<SessionMessage | null> {
     await this.initialize(); return await this.options.lease.read({ command: "part_message", session_id: this.session_id, id: part_id });
   }
-  async read_inbox(inbox_id: string): ReturnType<SessionStorage["read_inbox"]> {
+  async read_input(input_id: string): ReturnType<SessionStorage["read_input"]> {
     await this.initialize();
-    const message = await this.options.lease.read<SessionMessage | null>({ command: "inbox_message", session_id: this.session_id, id: inbox_id });
+    const message = await this.options.lease.read<SessionMessage | null>({ command: "input_message", session_id: this.session_id, id: input_id });
     if (!message || message.role !== "agent") return null;
-    const part = message.parts.find(part => part.type === "inbox" && part.inbox_id === inbox_id);
-    if (!part || part.type !== "inbox") throw new Error("session_inbox_invalid");
+    const part = message.parts.find(part => part.type === "input" && part.input_id === input_id);
+    if (!part || part.type !== "input") throw new Error("session_input_invalid");
     return { message, part };
   }
   async read_first_user_message(): Promise<SessionUserMessage | null> {

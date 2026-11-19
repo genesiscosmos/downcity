@@ -42,7 +42,7 @@ export function commit_messenger_completion(
   });
 }
 
-/** 收集本轮直接入站与 Inbox 因果来源；后台续轮通过来源 Turn 关联已提交路由。 */
+/** 收集本轮直接入站与运行时输入的因果来源；后台续轮通过来源 Turn 关联已提交路由。 */
 function resolve_inbound_ids(
   store: MessengerStore,
   agent_id: string,
@@ -61,7 +61,7 @@ function resolve_inbound_ids(
       continue;
     }
     for (const part of message.parts) {
-      if (part.type !== "inbox") continue;
+      if (part.type !== "input") continue;
       const caller_turn_id = part.source?.turn_id;
       if (part.kind === "delegation_result" || part.kind === "session_background") {
         if (!caller_turn_id) throw new Error("Delegated Channel output is missing its caller Turn route");

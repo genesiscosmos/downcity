@@ -31,7 +31,7 @@ export {
   type SessionOriginCategory,
 } from "./types/session/SessionOrigin.js";
 export type * from "./types/session/SessionContent.js";
-export { validate_session_power_content } from "./types/session/SessionPowerContent.js";
+export { validate_session_view_content } from "./types/session/SessionViewContent.js";
 export type * from "./types/session/SessionMessage.js";
 export type * from "./types/session/SessionModelRetry.js";
 export type * from "./types/session/SessionRuntime.js";

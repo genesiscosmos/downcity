@@ -68,14 +68,14 @@ export type AgentSessionReadCommand = {
   /** 页大小及 sequence 边界。 */
   input: AgentSessionMessagePageInput;
 } | {
-  /** 指定消息或 Part 对应消息或 Inbox 对应消息。 */
-  command: "message" | "part_message" | "inbox_message";
+  /** 指定消息或 Part 对应消息或 Input 对应消息。 */
+  command: "message" | "part_message" | "input_message";
   /** 目标永久会话 UUID。 */
   session_id: string;
-  /** 当前 Session 范围中的 message_id / part_id / inbox_id。 */
+  /** 当前 Session 范围中的 message_id / part_id / input_id。 */
   id: string;
 } | {
-  /** 检查 canonical User/Inbox 附件授权。 */
+  /** 检查 canonical User/Input 附件授权。 */
   command: "has_attachment";
   /** 目标永久会话 UUID。 */
   session_id: string;

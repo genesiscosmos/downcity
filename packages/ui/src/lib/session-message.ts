@@ -1,6 +1,6 @@
 /** Session SDK canonical JSONL 到 Chat 展示协议的纯函数 adapter。 */
 import type { DowncityChatContentPart, DowncityChatMessage, DowncityChatMessagePart } from "../types/chat";
-import type { DowncityChatInboxContent } from "../types/chat-inbox";
+import type { DowncityChatInputContent } from "../types/chat-runtime-input";
 
 function to_string(value: unknown): string | undefined {
   return typeof value === "string" ? value : undefined;
@@ -79,17 +79,17 @@ export function session_part_to_chat_part(raw_part: unknown, index = 0): Downcit
   const part = raw_part as Record<string, unknown>;
   const type = String(part.type ?? "");
   const id = typeof part.part_id === "string" ? part.part_id : `${type}-${index}`;
-  if (type === "inbox") {
+  if (type === "input") {
     const source = part.source && typeof part.source === "object" && !Array.isArray(part.source)
       ? part.source as Record<string, unknown> : undefined;
     return {
       id,
       type,
-      inbox_id: to_string(part.inbox_id) ?? id,
+      input_id: to_string(part.input_id) ?? id,
       kind: to_string(part.kind) ?? "runtime_input",
       source: source ? { tool_call_id: to_string(source.tool_call_id), turn_id: to_string(source.turn_id) } : undefined,
       content: Array.isArray(part.content)
-        ? part.content.map(session_inbox_content_to_chat_content).filter((item): item is DowncityChatInboxContent => item !== null) : [],
+        ? part.content.map(session_input_content_to_chat_content).filter((item): item is DowncityChatInputContent => item !== null) : [],
       created_at: typeof part.created_at === "number" ? part.created_at : undefined,
     };
   }
@@ -140,8 +140,8 @@ export function session_part_to_chat_part(raw_part: unknown, index = 0): Downcit
   return null;
 }
 
-/** 只投影 inbox 的文本、上下文和文件展示字段，不透传 meta 或媒体读取权限。 */
-function session_inbox_content_to_chat_content(raw_content: unknown): DowncityChatInboxContent | null {
+/** 只投影 input 的文本、上下文和文件展示字段，不透传 meta 或媒体读取权限。 */
+function session_input_content_to_chat_content(raw_content: unknown): DowncityChatInputContent | null {
   if (!raw_content || typeof raw_content !== "object" || Array.isArray(raw_content)) return null;
   const content = raw_content as Record<string, unknown>;
   if (content.type === "text" && typeof content.text === "string") return { type: "text", text: content.text };

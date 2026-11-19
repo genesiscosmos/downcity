@@ -2,11 +2,11 @@
 import type { JsonValue, SessionMessage } from "@downcity/type";
 
 /** 读取当前消息中由可信执行来源关联的展示摘要。 */
-export function published_power_summaries(message: SessionMessage): ReadonlyMap<string, string> {
+export function published_view_summaries(message: SessionMessage): ReadonlyMap<string, string> {
   const summaries = new Map<string, string>();
   if (message.role !== "agent") return summaries;
   for (const part of message.parts) {
-    if (part.type !== "power" || !part.source_tool_call_id) continue;
+    if (part.type !== "view" || !part.source_tool_call_id) continue;
     const previous = summaries.get(part.source_tool_call_id);
     summaries.set(part.source_tool_call_id, previous ? `${previous}\n${part.fallback_text}` : part.fallback_text);
   }

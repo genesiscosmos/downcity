@@ -11,6 +11,7 @@ import { once } from "node:events";
 import { AgentSessionDatabase } from "../bin/session/storage/agent-db/AgentSessionDatabase.js";
 import { acquire_agent_session_storage } from "../bin/session/storage/agent-db/AgentSessionRuntime.js";
 import { AgentSessionStorageError, agent_session_failure } from "../bin/session/storage/agent-db/AgentSessionErrors.js";
+import { decode_session_message } from "../bin/session/storage/SessionStorageCodec.js";
 
 test("SQLite 主类别与 extended code 保留，原始正文和 stack 不进入安全响应", () => {
   for (const [sqlite_code, code] of [[5, "busy"], [261, "busy"], [6, "locked"], [8, "readonly"], [10, "io_failed"],
@@ -21,6 +22,20 @@ test("SQLite 主类别与 extended code 保留，原始正文和 stack 不进入
   assert.deepEqual(agent_session_failure(new Error("session_not_found: private context")), { code: "session_not_found" });
   assert.deepEqual(agent_session_failure(new Error("private codec text")), { code: "session_storage_transaction_failed" });
   assert.deepEqual(agent_session_failure(Object.assign(new Error("private"), { code: "ERR_SQLITE_ERROR", errcode: "5" })), { code: "session_storage_transaction_failed" });
+});
+
+test("旧 Part 明确报告离线迁移，未知类型保持存储错误且不泄露正文", () => {
+  for (const type of ["inbox", "power", "unknown"]) {
+    let failure;
+    try {
+      decode_session_message({ message_id: "message", sequence: 1, revision: 1, role: "agent", state: "done",
+        stable_part_sequence: 0, meta: null, created_at: 1, updated_at: 1 }, [{ part_id: "part", message_id: "message", sequence: 1, step_id: null,
+        type, content: '{"text":"private message body"}', created_at: 1, updated_at: 1 }], "session");
+      assert.fail("无效 Part 不得被接受");
+    } catch (error) { failure = agent_session_failure(error); }
+    assert.deepEqual(failure, { code: type === "unknown" ? "session_storage_part_type_invalid" : "session_migration_required" });
+    assert.equal(JSON.stringify(failure).includes("private message body"), false);
+  }
 });
 
 for (const memory of [true, false]) {

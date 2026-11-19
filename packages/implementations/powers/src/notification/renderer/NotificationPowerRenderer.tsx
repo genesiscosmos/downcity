@@ -4,6 +4,7 @@
  * Desktop 注入现有表单与专用私密传输，不改变通用 PowerRenderer 协议。
  */
 import { define_power_renderer } from "@downcity/city/power/react";
+import { NOTIFICATION_ACTIVITY_RENDERER } from "@/builtin/renderer/BuiltinActivity.js";
 import type { PowerRendererDefinition } from "@downcity/city/power/react";
 import type { NotificationRendererOptions } from "../types/NotificationRenderer.js";
 import { InboxStore } from "./InboxStore.js";
@@ -17,6 +18,7 @@ export const NOTIFICATION_POWER_RENDERER = create_notification_power_renderer();
 export function create_notification_power_renderer(options: NotificationRendererOptions = {}): PowerRendererDefinition {
   const store = new InboxStore();
   return define_power_renderer({
+    activity: NOTIFICATION_ACTIVITY_RENDERER,
     sidebar: function NotificationSidebar(props) {
       return <InboxSidebar {...props} store={store} options={options} />;
     },

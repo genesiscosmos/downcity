@@ -1,5 +1,5 @@
 /** Presentation 动作与视图的内部输入协议。 */
-import type { PowerMessageComponentProps } from "@downcity/city/power/react";
+import type { PowerViewMessageComponentProps } from "@downcity/city/power/react";
 
 /** 完整描述发布输入，在 Schema 校验后由 Action 读取。 */
 export interface PresentationShowInput {
@@ -10,7 +10,7 @@ export interface PresentationShowInput {
 }
 
 /** 固定描述对应的一次视图实例输入。 */
-export interface PresentationViewProps extends PowerMessageComponentProps {
+export interface PresentationViewProps extends PowerViewMessageComponentProps {
   /** 累计 OpenUI 描述，更新不会改变视图实例身份。 */
   content: string;
   /** 生成预览尚未通过 Action 完整校验。 */

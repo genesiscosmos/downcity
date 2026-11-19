@@ -1,12 +1,12 @@
 /**
  * Chat UI 的运行时输入展示协议。
  *
- * inbox 保持为 Agent Message 内独立的 Part；只携带可展示的内容与来源，
+ * input 保持为 Agent Message 内独立的 Part；只携带可展示的内容与来源，
  * 不包含执行记账 meta，也不依赖 Session SDK 或模型投影格式。
  */
 
 /** 运行时输入中允许展示的内容，按来源顺序排列。 */
-export type DowncityChatInboxContent =
+export type DowncityChatInputContent =
   | {
       /** 普通文本内容。 */
       type: "text";
@@ -33,7 +33,7 @@ export type DowncityChatInboxContent =
     };
 
 /** 运行时输入的因果来源，仅用于识别关联事件。 */
-export interface DowncityChatInboxSource {
+export interface DowncityChatInputSource {
   /** 产生该输入的工具调用标识。 */
   tool_call_id?: string;
   /** 产生该输入的来源 Turn 标识。 */
@@ -41,19 +41,19 @@ export interface DowncityChatInboxSource {
 }
 
 /** Agent Message 内独立展示的运行时输入 Part。 */
-export interface DowncityChatInboxPart {
+export interface DowncityChatInputPart {
   /** 当前 Part 的稳定展示标识。 */
   id: string;
-  /** Part 判别字段，保持为 inbox。 */
-  type: "inbox";
+  /** Part 判别字段，保持为 input。 */
+  type: "input";
   /** 来源事件的稳定幂等标识。 */
-  inbox_id: string;
+  input_id: string;
   /** 运行时输入的语义类别。 */
   kind: string;
   /** 可选的来源工具调用与 Turn 关联。 */
-  source?: DowncityChatInboxSource;
+  source?: DowncityChatInputSource;
   /** 原始事件内容，排除执行记账与嵌套 Part。 */
-  content: DowncityChatInboxContent[];
+  content: DowncityChatInputContent[];
   /** 输入写入时间戳，单位为毫秒。 */
   created_at?: number;
 }

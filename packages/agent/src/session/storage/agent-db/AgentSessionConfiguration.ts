@@ -64,7 +64,7 @@ export class AgentSessionConfiguration {
     });
   }
 
-  /** 校验完整 Step/Inbox/User 单元终点后插入；不能仅凭 Part 终态猜边界。 */
+  /** 校验完整 Step/Input/User 单元终点后插入；不能仅凭 Part 终态猜边界。 */
   insert_checkpoint(input: AgentSessionCheckpointInsert): { checkpoint_id: string } {
     this.assert_namespace(input.namespace);
     return this.owner.write(input.operation_id, { command: "checkpoint_insert", ...input }, (database) => {

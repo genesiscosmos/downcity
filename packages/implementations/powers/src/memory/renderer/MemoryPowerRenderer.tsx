@@ -1,5 +1,7 @@
 /** Memory 主导航只管理用户记忆；Agent 私有内容由 Agent Profile 入口独立管理。 */
+import { MEMORY_INPUT_RENDERER } from "./MemoryInput.js";
 import { define_power_renderer } from "@downcity/city/power/react";
+import { MEMORY_ACTIVITY_RENDERER } from "@/builtin/renderer/BuiltinActivity.js";
 import type { PowerMainviewComponentProps } from "@downcity/city/power/react";
 import { memory_config_view as MemoryConfigView } from "./MemoryConfigView.js";
 import { memory_user_view as MemoryUserView } from "./MemoryUserView.js";
@@ -14,6 +16,8 @@ function read_view(route: PowerMainviewComponentProps["navigation"]["route"]): "
 
 /** Sidebar 直接展示稳定内容入口，不依赖 Provider 状态或范围目录。 */
 export const MEMORY_POWER_RENDERER = define_power_renderer({
+  activity: MEMORY_ACTIVITY_RENDERER,
+  input: MEMORY_INPUT_RENDERER,
   sidebar: function memory_power_sidebar(props) {
     const { navigation, ui } = props;
     const { Sidebar, SidebarSection, SidebarTreeItem } = ui.components;

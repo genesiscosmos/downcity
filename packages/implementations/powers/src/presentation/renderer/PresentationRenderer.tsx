@@ -2,17 +2,18 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Renderer, type ActionEvent } from "@openuidev/react-lang";
 import type { OpenUIError } from "@openuidev/lang-core";
-import type { PowerMessageComponentProps, PowerRendererDefinition } from "@downcity/city/power/react";
+import type { PowerViewMessageComponentProps, PowerRendererDefinition } from "@downcity/city/power/react";
 import type { JsonObject } from "@downcity/type";
 import { PresentationResourceContext } from "./PresentationMedia.js";
 import { PresentationMarkdownContext } from "./PresentationMarkdown.js";
 import { PRESENTATION_LIBRARY } from "./PresentationLibrary.js";
 import { parse_presentation_content } from "../OpenUICatalog.js";
 import { preview_presentation_tool } from "./PresentationPreview.js";
+import { PRESENTATION_ACTIVITY_RENDERER } from "@/builtin/renderer/BuiltinActivity.js";
 import type { PresentationViewProps } from "../types/Presentation.js";
 
 /** 校验协议版本，旧 json-render 历史交给宿主文字回退。 */
-function PresentationMessage(props: PowerMessageComponentProps) {
+function PresentationViewMessage(props: PowerViewMessageComponentProps) {
   const data = props.part.data as Record<string, unknown> | null;
   if (props.part.schema_version !== 2 || !data || data.format !== "openui-lang" || data.catalog_id !== PRESENTATION_LIBRARY.id || typeof data.content !== "string") throw new Error("Unsupported Presentation version; this message requires OpenUI v2");
   return <PresentationView {...props} content={data.content} streaming={Boolean(props.preview)} />;
@@ -70,4 +71,4 @@ function PresentationView(props: PresentationViewProps) {
 }
 
 /** 消息与预览共享同一组件和目录。 */
-export const PRESENTATION_POWER_RENDERER: PowerRendererDefinition = { message: PresentationMessage, preview: preview_presentation_tool };
+export const PRESENTATION_POWER_RENDERER: PowerRendererDefinition = { activity: PRESENTATION_ACTIVITY_RENDERER, view: PresentationViewMessage, preview: preview_presentation_tool };

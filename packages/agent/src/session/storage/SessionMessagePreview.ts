@@ -43,11 +43,11 @@ export function resolve_session_message_preview(
         return part.description ? `${part.title}\n${part.description}` : part.title;
       case "error":
         return part.message;
-      case "power":
+      case "view":
         return part.fallback_text;
       case "text":
       case "reasoning":
-      case "inbox":
+      case "input":
       case "tool":
       case "file":
       case "data":

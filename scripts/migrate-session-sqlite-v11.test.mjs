@@ -11,11 +11,13 @@ import { randomUUID as random_uuid, randomBytes as random_bytes } from "node:cry
 import { DatabaseSync } from "node:sqlite";
 import { spawnSync as spawn_sync } from "node:child_process";
 import { fileURLToPath as file_url_to_path } from "node:url";
-import { load_runtime } from "./lib/session-runtime.mjs";
+import { load_runtime } from "./lib/session-v11-runtime.mjs";
+import { load_runtime as load_current } from "./lib/session-runtime.mjs";
 import { load_runtime as load_v10 } from "./lib/session-v10-runtime.mjs";
 import { load_runtime as load_v9 } from "./lib/session-v9-runtime.mjs";
 import { load_package as load_v9_package } from "./lib/session-v9-transfer-package.mjs";
 import { preflight, plan_batch, migrate, verify_batch, restore_batch, read_manifest } from "./lib/session-v11-migration.mjs";
+import { plan_batch as plan_v12, migrate as migrate_v12 } from "./lib/session-v12-migration.mjs";
 import { fingerprint_file } from "./lib/session-v9-database.mjs";
 import { save_json, file_hash } from "./lib/session-v8-files.mjs";
 import { parse_arguments } from "./migrate-session-sqlite-v11.mjs";
@@ -23,6 +25,7 @@ import { export_session, load_package, load_protocol_package, package_request_ha
 import { convert_legacy_package } from "./lib/session-transfer-conversion.mjs";
 
 const runtime = await load_runtime(true);
+const current_runtime = await load_current(true);
 const historical = await load_v10();
 
 /** 创建完整 v10 源、稳定 Tool、检查点、归档计划及附件，覆盖重建表的全部关系。 */
@@ -192,38 +195,45 @@ test("后续业务写入或附件变化阻止恢复；持有根/附件租约时�
   assert.throws(() => restore_batch(attachment.root_path, attachment.batch_path, runtime, historical), /attachments_changed/);
 });
 
-test("v11 current_error 可持久化并经过导出包完整验证，正文与水位不变", async context => {
+test("v11 current_error 经过 v12 升级与当前导出包完整验证，正文与水位不变", async context => {
   const input = fixture(context); plan_batch(input.root_path, input.batch_path, runtime, historical);
   await migrate(input.root_path, input.batch_path, runtime, historical);
   const current_error = { part_id: "error", sequence: 2, type: "error", scope: "turn", code: "provider_timeout", message: "retry", recoverable: true };
   const database = new DatabaseSync(input.database_path);
   database.prepare("UPDATE messages SET meta=? WHERE message_id='a'").run(JSON.stringify({ current_error })); database.close();
+  const batch_v12 = path.join(input.directory, "batch-v12");
+  plan_v12(input.root_path, batch_v12, current_runtime, runtime);
+  await migrate_v12(input.root_path, batch_v12, current_runtime, runtime);
   const package_path = path.join(input.directory, "package");
   await export_session({ root_path: input.root_path, agent_id: "writer", session_id: input.session_id,
-    package_path, operation_id: random_uuid(), writers_stopped: true }, runtime);
-  const { manifest, record } = load_package(package_path, runtime);
-  assert.equal(manifest.schema_version, 11); assert.equal(manifest.format_version, 3);
+    package_path, operation_id: random_uuid(), writers_stopped: true }, current_runtime);
+  const { manifest, record } = load_package(package_path, current_runtime);
+  assert.equal(manifest.schema_version, 12); assert.equal(manifest.format_version, 3);
   assert.deepEqual(JSON.parse(record.messages[1].meta).current_error, current_error);
   assert.equal(record.messages[1].stable_part_sequence, 1); assert.equal(record.message_parts.length, 2);
 });
 
-test("schema10/schema9 历史包必须显式转换；输出 schema11，原包逐字不变", async context => {
-  for (const schema_version of [10, 9]) {
+test("schema11/schema10/schema9 历史包必须显式转换；输出 schema12，原包逐字不变", async context => {
+  for (const schema_version of [11, 10, 9]) {
     const input = fixture(context); plan_batch(input.root_path, input.batch_path, runtime, historical);
     await migrate(input.root_path, input.batch_path, runtime, historical);
+    const batch_v12 = path.join(input.directory, "batch-v12");
+    plan_v12(input.root_path, batch_v12, current_runtime, runtime);
+    await migrate_v12(input.root_path, batch_v12, current_runtime, runtime);
     const package_path = path.join(input.directory, "package");
     await export_session({ root_path: input.root_path, agent_id: "writer", session_id: input.session_id,
-      package_path, operation_id: random_uuid(), writers_stopped: true }, runtime);
+      package_path, operation_id: random_uuid(), writers_stopped: true }, current_runtime);
     const manifest_path = path.join(package_path, "manifest.json");
     const manifest = JSON.parse(fs.readFileSync(manifest_path));
-    manifest.schema_version = schema_version; manifest.format_version = schema_version === 10 ? 3 : 2;
+    manifest.schema_version = schema_version; manifest.format_version = schema_version >= 10 ? 3 : 2;
     manifest.request_hash = package_request_hash(manifest); save_json(manifest_path, manifest, true);
     const before = file_hash(manifest_path);
-    const original = schema_version === 10 ? load_protocol_package(package_path, historical).record : load_v9_package(package_path, await load_v9()).record;
-    assert.throws(() => load_package(package_path, runtime), /legacy_package_requires_conversion/);
+    const original = schema_version >= 10 ? load_protocol_package(package_path, schema_version === 11 ? runtime : historical).record : load_v9_package(package_path, await load_v9()).record;
+    assert.throws(() => load_package(package_path, current_runtime), /legacy_package_requires_conversion/);
     const output_path = path.join(input.directory, "converted");
-    await convert_legacy_package({ package_path, output_path, operation_id: random_uuid() }, runtime);
-    assert.deepEqual(load_package(output_path, runtime).record, original);
+    await convert_legacy_package({ package_path, output_path, operation_id: random_uuid() }, current_runtime);
+    assert.deepEqual(load_package(output_path, current_runtime).record, original);
+    assert.equal(load_package(output_path, current_runtime).manifest.schema_version, 12);
     assert.equal(file_hash(manifest_path), before);
   }
 });

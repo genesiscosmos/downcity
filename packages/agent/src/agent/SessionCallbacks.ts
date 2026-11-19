@@ -1,5 +1,5 @@
 /**
- * 请求级 callback 适配：从 User 或 inbox 请求记账恢复独立的完成接收方。
+ * 请求级 callback 适配：从 User 或 input 请求记账恢复独立的完成接收方。
  * 每次请求拥有独立 delivery_id，回调确认和重试复用 SessionCompletions 的可靠日志。
  */
 import { createHash } from "node:crypto";

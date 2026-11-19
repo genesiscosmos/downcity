@@ -7,7 +7,7 @@
 
 import type { SessionHistoryMeta } from "@/types/store/SessionHistoryMeta.js";
 import type {
-  SessionAgentInboxPart,
+  SessionAgentInputPart,
   SessionAgentMessage,
   SessionAgentMessagePart,
   SessionMessage,
@@ -91,18 +91,18 @@ export interface SessionStorage {
   list_messages(): Promise<SessionMessage[]>;
   /** 在存储拥有者侧读取输入内容版本、附件引用和交互状态，不返回历史正文。 */
   read_input_versions(): Promise<import("./SessionInputVersions.js").SessionInputVersions>;
-  /** 检查 canonical 用户消息或 Inbox 内容是否登记该精确附件路径，不加载完整历史。 */
+  /** 检查 canonical 用户消息或 Input 内容是否登记该精确附件路径，不加载完整历史。 */
   has_attachment(file_path: string): Promise<boolean>;
   /** 读取指定 Message。 */
   read_message(message_id: string): Promise<SessionMessage | null>;
   /** 通过 canonical Part 主键读取所属消息，供分支中保留的结果引用精确定位。 */
   read_part_message(part_id: string): Promise<SessionMessage | null>;
-  /** 读取当前 Session 内已接收的 Inbox 输入，供幂等接收与 fork 后重试定位。 */
-  read_inbox(inbox_id: string): Promise<{
-    /** 包含该 Inbox Part 的完整 canonical Agent Message。 */
+  /** 读取当前 Session 内已接收的 Input 输入，供幂等接收与 fork 后重试定位。 */
+  read_input(input_id: string): Promise<{
+    /** 包含该 Input Part 的完整 canonical Agent Message。 */
     message: SessionAgentMessage;
-    /** 保留稳定身份、内容及接收时间的 Inbox Part。 */
-    part: SessionAgentInboxPart;
+    /** 保留稳定身份、内容及接收时间的 Input Part。 */
+    part: SessionAgentInputPart;
   } | null>;
   /** 读取最早的 canonical User Message；空 Session 返回 null。 */
   read_first_user_message(): Promise<SessionUserMessage | null>;

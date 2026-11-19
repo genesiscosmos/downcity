@@ -7,6 +7,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { SessionLoop } from "../bin/session/loop/SessionLoop.js";
 import { SessionQueue } from "../bin/session/loop/SessionQueue.js";
+import { SessionEventHub } from "../bin/session/messages/SessionEventHub.js";
 const actor = { kind: "user", user_id: "local" };
 
 /** 创建只覆盖已完成幂等请求读取路径的最小 SessionLoop。 */
@@ -44,13 +45,15 @@ function create_loop(request_id, unfinished = false) {
     parts: [{ part_id: "agent-part", sequence: 1, type: "text", text: "world", state: "done" }],
   };
   let execute_count = 0;
+  const read_completion = async (requested_session_id, requested_turn_id) => !unfinished
+    && requested_session_id === session_id && requested_turn_id === turn_id
+    ? { session_id, turn_id, status: "completed", result: { text: "world", success: true } }
+    : undefined;
   const loop = new SessionLoop({
     session_id,
     completions: {
-      read: async (requested_session_id, requested_turn_id) => !unfinished
-        && requested_session_id === session_id && requested_turn_id === turn_id
-        ? { session_id, turn_id, status: "completed", result: { text: "world", success: true } }
-        : undefined,
+      read: read_completion,
+      read_initial: read_completion,
     },
     session_origin: { category: "work", type: "work" },
     get_workspace_path: () => ("/tmp/downcity-idempotent-prompt"),
@@ -66,7 +69,8 @@ function create_loop(request_id, unfinished = false) {
     state: { ensure_runnable: async () => {} },
     messages: {
       list_history_messages: async () => [user_message, agent_message],
-      read_inbox: async () => null,
+      list_pending_interactions: () => [],
+      read_input: async () => null,
       read_message: async (message_id) => message_id === user_message.message_id
         ? user_message
         : null,
@@ -74,7 +78,7 @@ function create_loop(request_id, unfinished = false) {
         ? agent_message
         : null,
     },
-    events: { publish: () => {} },
+    events: new SessionEventHub(),
     logger: { log: async () => {} },
     queue: new SessionQueue(),
     interactions: { cancel_all: async () => {} },

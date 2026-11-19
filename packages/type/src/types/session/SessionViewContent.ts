@@ -1,11 +1,11 @@
 /** Power 消息外壳的共享校验；业务数据由所属 Power 进一步解释。 */
-import type { SessionPowerContent } from "./SessionContent.js";
+import type { SessionViewContent } from "./SessionContent.js";
 
 /** 发布和读取 Power 内容时统一检查身份、版本与 JSON 数据边界。 */
-export function validate_session_power_content(value: unknown): asserts value is SessionPowerContent {
+export function validate_session_view_content(value: unknown): asserts value is SessionViewContent {
   if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error("Power content must be an object");
   const content = value as Record<string, unknown>;
-  if (content.type !== "power") throw new Error("Power content type must be power");
+  if (content.type !== "view") throw new Error("Power content type must be power");
   if (typeof content.power_id !== "string" || !/^[a-z][a-z0-9_-]*$/.test(content.power_id)) {
     throw new Error("Power content requires a valid power_id");
   }

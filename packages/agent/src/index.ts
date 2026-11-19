@@ -167,7 +167,7 @@ export type {
   ListSessionMessagesInput,
   SessionAgentActionPart,
   SessionAgentDataPart,
-  SessionAgentPowerPart,
+  SessionAgentViewPart,
   SessionAgentFilePart,
   SessionAgentInteraction,
   SessionAgentMessage,

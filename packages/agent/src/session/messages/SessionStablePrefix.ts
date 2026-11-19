@@ -1,7 +1,7 @@
 /**
  * 写入检查点的稳定 Part 前缀计算。
  *
- * 仅完整 Step 或非模型 Inbox 的提交方可以推进水位。未终态内容阻止推进，
+ * 仅完整 Step 或非模型 Input 的提交方可以推进水位。未终态内容阻止推进，
  * 同一 step_id 的全部 Part 是原子单元，边界不能落在其内部。
  */
 import type { SessionAgentMessagePart } from "@downcity/type";

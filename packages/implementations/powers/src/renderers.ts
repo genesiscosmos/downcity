@@ -1,6 +1,7 @@
-/** Downcity 官方 Power Mainview 的 Renderer 专用注册表。 */
+/** Downcity 官方 Power 的浏览器安全 Renderer 注册表，组合 activity 与已有业务 UI 插槽。 */
 
 import type { PowerRendererDefinition } from "@downcity/city/power/react";
+import { TASK_ACTIVITY_RENDERER } from "@/builtin/renderer/BuiltinActivity.js";
 import { PRESENTATION_POWER_RENDERER } from "@/presentation/renderer/PresentationRenderer.js";
 import { MESSENGER_POWER_RENDERER } from "@/messenger/renderer/MessengerPowerRenderer.js";
 import { MEMORY_POWER_RENDERER } from "@/memory/renderer/MemoryPowerRenderer.js";
@@ -14,6 +15,7 @@ export type { NotificationInteractionItem, NotificationListResult, NotificationR
 
 /** 官方 Power ID 到 Renderer 定义的稳定映射。 */
 export const BUILTIN_POWER_RENDERERS: Readonly<Record<string, PowerRendererDefinition>> = {
+  task: { activity: TASK_ACTIVITY_RENDERER },
   notification: NOTIFICATION_POWER_RENDERER,
   presentation: PRESENTATION_POWER_RENDERER,
   skill: SKILL_POWER_RENDERER,

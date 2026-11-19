@@ -23,11 +23,11 @@ test("SessionTurnContext 在检查点消费输入并封装输出缓冲", async (
     commit_step_input: async () => {
       commit_count += 1;
     },
-    append_inbox: async (input) => {
+    append_input: async (input) => {
       internal_messages.push(input);
     },
   });
-  await context.input.append_inbox({ kind: "session_input", content: [{ type: "text", text: "injected" }] });
+  await context.input.append_input({ kind: "session_input", content: [{ type: "text", text: "injected" }] });
   context.output.enqueue_assistant_parts([{
     type: "file",
     media_type: "text/plain",

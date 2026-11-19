@@ -34,7 +34,7 @@ export async function recover_background_sessions(
             latest ??= latest_session_input(messages.items)?.message;
             context.turn_id = latest?.turn_id;
             if (latest?.origin) break;
-            // Tool inbox 可以没有 meta；只向前翻到该 Turn 最近的可信输入，不加载整个会话。
+            // Tool input 可以没有 meta；只向前翻到该 Turn 最近的可信输入，不加载整个会话。
             const turn_id = latest?.turn_id;
             const owner = turn_id && session_input_facts(messages.items).reverse().find((fact) =>
               !fact.message.origin && fact.message.turn_id === turn_id && fact.meta?.from);

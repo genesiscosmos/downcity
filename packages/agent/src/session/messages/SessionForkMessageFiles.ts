@@ -3,7 +3,7 @@
 import path from "node:path";
 import { stat } from "node:fs/promises";
 import { file_read_version } from "@downcity/type/workspace";
-import { copy_session_fork_inbox } from "./SessionForkParts.js";
+import { copy_session_fork_input } from "./SessionForkParts.js";
 import type { SessionFileContent, SessionMessage } from "@downcity/type";
 import type { SessionAttachmentStore } from "@/types/store/SessionAttachmentStore.js";
 
@@ -69,7 +69,7 @@ export async function relocate_fork_message_files(
   return await Promise.all(messages.map(async (message) => {
     const parts = await Promise.all(message.parts.map(async (part) => {
       if (part.type === "file") return await relocate_file(part);
-      if (part.type === "inbox") {
+      if (part.type === "input") {
         const content = await Promise.all(part.content.map(async (item) =>
           item.type === "file" ? await relocate_file(item) : structuredClone(item)));
         for (const [index, item] of content.entries()) {
@@ -80,11 +80,11 @@ export async function relocate_fork_message_files(
           const prefix = `对应${source_file.media_type.startsWith("image/") ? "图片" : "附件"}路径：`;
           if (item.context === `${prefix}${source_file.url}`) item.context = `${prefix}${target_file.url}`;
         }
-        return { ...copy_session_fork_inbox(part), content };
+        return { ...copy_session_fork_input(part), content };
       }
       return structuredClone(part);
     }));
-    // Inbox 身份在目标 Session 内保持稳定，重试可直接命中已复制的输入。
+    // Input 身份在目标 Session 内保持稳定，重试可直接命中已复制的输入。
     return { ...structuredClone(message), parts } as SessionMessage;
   }));
 }

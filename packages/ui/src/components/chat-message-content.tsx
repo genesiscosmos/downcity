@@ -45,7 +45,7 @@ export function AgentMessageContent({ message_id, blocks, streaming, actions, re
 
 /** Power 预览发布后沿用工具来源键，流式阶段不重新挂载业务界面。 */
 function block_key(block: AgentMessageBlock): string {
-  if (block.type === "power" && block.part.source_tool_call_id) return `power-source:${block.part.source_tool_call_id}`;
+  if (block.type === "view" && block.part.source_tool_call_id) return `power-source:${block.part.source_tool_call_id}`;
   if (block.type === "attachment") return `${block.part.part_id}:attachment:${block.offset}`;
   return block.type === "activity" ? block.parts[0]?.part_id ?? "activity" : block.part.part_id;
 }

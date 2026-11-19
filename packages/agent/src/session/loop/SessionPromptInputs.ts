@@ -1,12 +1,12 @@
 /**
  * Prompt 的 canonical 接收与身份校验。
- * 运行时输入先预持久化附件及记账，再经 Turn 唯一 writer 提交 inbox；预处理不构成接收。
+ * 运行时输入先预持久化附件及记账，再经 Turn 唯一 writer 提交 input；预处理不构成接收。
  */
 import { read_prompt_input } from "./SessionInputFacts.js";
 import { create_turn_handle, create_completed_turn_handle } from "./SessionTurnHandles.js";
 import { completion_unavailable } from "./SessionInputAcceptance.js";
 import { nanoid } from "nanoid";
-import type { SessionAgentInboxPart, SessionUserMessage } from "@downcity/type";
+import type { SessionAgentInputPart, SessionUserMessage } from "@downcity/type";
 import type { NormalizedAgentSessionPromptInput } from "@/types/sdk/AgentSessionPrompt.js";
 import { same_session_prompt_actor, session_prompt_actor_schema } from "@/types/sdk/SessionPromptActor.js";
 import type { SessionMessages } from "@/session/messages/SessionMessages.js";
@@ -18,7 +18,7 @@ import type { SessionInputFact } from "./SessionInputFacts.js";
 export function assert_prompt_actor(fact: SessionInputFact, input: NormalizedAgentSessionPromptInput): void {
   const actor = session_prompt_actor_schema.parse(fact.meta?.from);
   if (!same_session_prompt_actor(actor, input.actor)) throw new Error("request_id belongs to a different Session prompt actor");
-  if (("role" in fact.input ? "user" : "inbox") !== input.input_kind) {
+  if (("role" in fact.input ? "user" : "input") !== input.input_kind) {
     throw new Error("request_id belongs to a different Session input kind");
   }
 }
@@ -39,19 +39,19 @@ export interface SessionPromptPersistence {
   assert_receivable: () => void;
 }
 
-/** 只经唯一输出端口追加 inbox；附件准备后的取消仍可阻止 canonical 接收。 */
-export async function persist_prompt_input(options: SessionPromptPersistence): Promise<SessionUserMessage | SessionAgentInboxPart> {
+/** 只经唯一输出端口追加 input；附件准备后的取消仍可阻止 canonical 接收。 */
+export async function persist_prompt_input(options: SessionPromptPersistence): Promise<SessionUserMessage | SessionAgentInputPart> {
   const { prompt, turn_context, messages, project_root, identity, assert_receivable } = options;
   if (prompt.input_kind === "user") {
     return await messages.append_prompt_message({ prompt, project_root, turn_id: turn_context.session.turn_id,
       ...(identity ? { message_id: identity.message_id } : {}), assert_receivable });
   }
   const assistant = turn_context.output.assistant;
-  if (!assistant) throw new Error("Session inbox requires an Assistant output writer");
-  const prepared = await messages.prepare_prompt_inbox({ prompt, project_root,
-    inbox_id: identity?.inbox_id ?? `inbox:${turn_context.session.turn_id}:${nanoid()}`, assert_receivable });
+  if (!assistant) throw new Error("Session input requires an Assistant output writer");
+  const prepared = await messages.prepare_prompt_input({ prompt, project_root,
+    input_id: identity?.input_id ?? `input:${turn_context.session.turn_id}:${nanoid()}`, assert_receivable });
   assert_receivable();
-  return await assistant.append_inbox(prepared, assert_receivable);
+  return await assistant.append_input(prepared, assert_receivable);
 }
 
 /** 幂等请求始终返回原调用快照，不从同 Turn 的 Retry 句柄借结果。 */

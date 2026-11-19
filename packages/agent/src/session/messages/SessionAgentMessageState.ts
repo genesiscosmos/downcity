@@ -455,7 +455,7 @@ export class SessionAgentMessageState {
       publish_mutation?: boolean;
       /** 新输入落盘前的接收校验；不用于已经接收的工具事实。 */
       assert_receivable?: () => void;
-      /** 完整 Step 或 Inbox 提交时推进不可变 Part 水位。 */
+      /** 完整 Step 或 Input 提交时推进不可变 Part 水位。 */
       advance_stable_prefix?: boolean;
     },
   ): Promise<void> {

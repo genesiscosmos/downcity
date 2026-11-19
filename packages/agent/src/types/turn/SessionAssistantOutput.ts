@@ -5,7 +5,7 @@
  */
 
 import type { ModelStreamEvent } from "@downcity/type";
-import type { SessionAgentContent, SessionAgentInboxPart, SessionInboxInput } from "@downcity/type";
+import type { SessionAgentContent, SessionAgentInputPart, SessionInputContent } from "@downcity/type";
 import type { SessionAgentMessagePart } from "@downcity/type";
 import type {
   SessionToolExecutionResult,
@@ -44,7 +44,7 @@ export interface SessionAssistantOutput {
    * 幂等追加运行时输入，惰性建立当前 writer，保持连续 Assistant Message。
    * assert_receivable 必须在 Writer 串行写入点检查；已暂存的工具事实省略它，以便 stop 后保存。
    */
-  append_inbox(input: SessionInboxInput, assert_receivable?: () => void): Promise<SessionAgentInboxPart>;
+  append_input(input: SessionInputContent, assert_receivable?: () => void): Promise<SessionAgentInputPart>;
   /** 把 Action 产生的封闭内容追加到当前 Assistant Message。 */
   append_result_parts(parts: readonly SessionAgentContent[], source_tool_call_id?: string): Promise<SessionAgentMessagePart[]>;
   /** 在 Turn 收口产物之前追加用户可见的 canonical Error Part。 */

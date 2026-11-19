@@ -1,5 +1,5 @@
 /**
- * Explicit historical-package conversion into current format3/schema11. Historical
+ * 显式历史包转换为当前 format3/schema12；历史格式由冻结协议独立校验。
  * parsing stays isolated; current import never branches on old contracts. Missing
  * first-disclosure evidence blocks before the requested output directory is created.
  * Source packages are never changed, and manifest source paths are never opened.
@@ -9,6 +9,8 @@ import path from "node:path";
 import os from "node:os";
 import { load_runtime as load_historical } from "./session-v9-runtime.mjs";
 import { load_runtime as load_v10 } from "./session-v10-runtime.mjs";
+import { load_runtime as load_v11 } from "./session-v11-runtime.mjs";
+import { convert_record } from "./session-v12-conversion.mjs";
 import { convert_v8_package } from "./session-transfer-legacy.mjs";
 import { load_package as load_v9_package } from "./session-v9-transfer-package.mjs";
 import { inspect_record, terminal_policy } from "./session-v10-proof.mjs";
@@ -31,27 +33,30 @@ export async function convert_legacy_package(input, runtime) {
   const original_manifest_hash = file_hash(manifest_path);
   const header = JSON.parse(fs.readFileSync(manifest_path, "utf8"));
   const source_is_v10 = header.format_version === 3 && header.schema_version === 10;
-  const historical = source_is_v10 ? await load_v10() : await load_historical();
-  const read_package = source_is_v10 ? load_protocol_package : load_v9_package;
+  const source_is_v11 = header.format_version === 3 && header.schema_version === 11;
+  const historical = source_is_v11 ? await load_v11() : source_is_v10 ? await load_v10() : await load_historical();
+  const read_package = source_is_v10 || source_is_v11 ? load_protocol_package : load_v9_package;
   let temporary; let package_path = source_path; let cleared_composer_checkpoints = 0;
   try {
     if (header.format_version === 1 && header.schema_version === 8) {
-      temporary = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "downcity-package-v11-")));
+      temporary = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "downcity-package-v12-")));
       package_path = path.join(temporary, "schema9");
       const converted = convert_v8_package({ ...input, package_path: source_path, output_path: package_path }, historical);
       cleared_composer_checkpoints = converted.cleared_composer_checkpoints;
-    } else if (!source_is_v10 && (header.format_version !== 2 || header.schema_version !== 9)) fail("transfer_legacy_package_version_unsupported");
+    } else if (!source_is_v10 && !source_is_v11 && (header.format_version !== 2 || header.schema_version !== 9)) fail("transfer_legacy_package_version_unsupported");
     const { manifest, record, fingerprint } = read_package(package_path, historical);
-    const proof = inspect_record(record, manifest.agent_id, runtime);
+    const converted_record = convert_record(record);
+    const proof = inspect_record(converted_record, manifest.agent_id, runtime);
     if (proof.blockers.length) {
       const error = new Error("v10_first_disclosure_unproven"); error.blockers = proof.blockers; throw error;
     }
-    validate_record(record, manifest.agent_id, runtime);
+    validate_record(converted_record, manifest.agent_id, runtime);
     const planned = { ...manifest, format_version: transfer_package_version, schema_version: transfer_schema_version, export_operation_id: input.operation_id, status: "copying" };
+    planned.record_sha256 = digest(converted_record);
     planned.request_hash = package_request_hash(planned);
     if (file_hash(manifest_path) !== original_manifest_hash || read_package(package_path, historical).fingerprint !== fingerprint) fail("transfer_source_package_changed");
     fs.mkdirSync(output_path, { mode: 0o700 }); save_json(path.join(output_path, "manifest.json"), planned);
-    save_json(path.join(output_path, "record.json"), record);
+    save_json(path.join(output_path, "record.json"), converted_record);
     copy_attachments(path.join(package_path, "attachments"), path.join(output_path, "attachments"), inventory(manifest.attachments));
     if (digest(attachment_inventory(path.join(package_path, "attachments"))) !== digest(inventory(manifest.attachments))
       || file_hash(manifest_path) !== original_manifest_hash || read_package(package_path, historical).fingerprint !== fingerprint) fail("transfer_source_package_changed");

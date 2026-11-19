@@ -17,8 +17,8 @@ import type {
   SessionAgentErrorPart,
   SessionAgentMessage,
   SessionAgentMessagePart,
-  SessionAgentInboxPart,
-  SessionInboxInput,
+  SessionAgentInputPart,
+  SessionInputContent,
   SessionAgentToolPart,
 } from "@downcity/type";
 import type {
@@ -216,24 +216,24 @@ export class SessionAgentMessageWriter {
   }
 
   /** 在完整 Step 之后提交一项运行时输入，不改变当前 Message 的生命周期。 */
-  async append_inbox(input: SessionInboxInput, assert_receivable?: () => void): Promise<SessionAgentInboxPart> {
+  async append_input(input: SessionInputContent, assert_receivable?: () => void): Promise<SessionAgentInputPart> {
     return await this.enqueue_write(async () => {
       if (this.closed) throw new Error("Assistant Message writer is closed");
-      if (this.step_active) throw new Error("Inbox input requires a completed model Step");
-      const inbox_id = input.inbox_id.trim();
-      if (!inbox_id || !input.kind.trim() || input.content.length === 0) {
-        throw new Error("Inbox input requires identity, kind and content");
+      if (this.step_active) throw new Error("Input input requires a completed model Step");
+      const input_id = input.input_id.trim();
+      if (!input_id || !input.kind.trim() || input.content.length === 0) {
+        throw new Error("Input input requires identity, kind and content");
       }
       const existing = this.current_message().parts.find(
-        (part): part is SessionAgentInboxPart => part.type === "inbox" && part.inbox_id === inbox_id,
+        (part): part is SessionAgentInputPart => part.type === "input" && part.input_id === input_id,
       );
       if (existing) return structuredClone(existing);
       assert_receivable?.();
-      const part: SessionAgentInboxPart = {
+      const part: SessionAgentInputPart = {
         ...structuredClone(input),
-        inbox_id,
-        type: "inbox",
-        part_id: `inbox:${generate_id()}`,
+        input_id,
+        type: "input",
+        part_id: `input:${generate_id()}`,
         sequence: this.next_part_sequence(),
         created_at: Date.now(),
       };

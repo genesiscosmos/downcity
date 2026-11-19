@@ -7,20 +7,20 @@
  * React 负责文本转义，组件不加载附件、不解释 Markdown，也不把事件内容混入 Agent 正文。
  */
 import { useState } from "react";
-import { File, Inbox, Paperclip, Terminal, ListTree } from "lucide-react";
-import type { DowncityChatInboxPart } from "../types/chat-inbox";
+import { ArrowDownToLine, File, Paperclip, Terminal, ListTree } from "lucide-react";
+import type { DowncityChatInputPart } from "../types/chat-runtime-input";
 import { TbChevronRight } from "./chat-icons";
 
 /** 运行时输入折叠视图的属性。 */
-interface ChatInboxProps {
-  /** 已经过 UI adapter 筛选的独立 inbox Part。 */
-  part: DowncityChatInboxPart;
+interface ChatInputProps {
+  /** 已经过 UI adapter 筛选的独立 input Part。 */
+  part: DowncityChatInputPart;
 }
 
 /** 展示独立的运行时输入，保留其在消息内部的原始位置。 */
-export function ChatInbox({ part }: ChatInboxProps) {
+export function ChatInput({ part }: ChatInputProps) {
   const [expanded, set_expanded] = useState(false);
-  const title = inbox_title(part.kind);
+  const title = input_title(part.kind);
   const display_content = part.content.filter((item) => item.type === "file"
     || (item.type === "context" ? item.context : item.text).trim().length > 0);
   const file_count = display_content.filter((item) => item.type === "file").length;
@@ -29,7 +29,7 @@ export function ChatInbox({ part }: ChatInboxProps) {
     .filter(Boolean).join(" · ") || "无内容";
   const Icon = part.kind === "shell_result" ? Terminal
     : part.kind === "tool_media" ? Paperclip
-    : part.kind === "delegation_result" || part.kind === "task" ? ListTree : Inbox;
+    : part.kind === "delegation_result" || part.kind === "task" ? ListTree : ArrowDownToLine;
   return <details className="dc-chat-activity-row" onToggle={(event) => {
     if (event.target === event.currentTarget) set_expanded(event.currentTarget.open);
   }}>
@@ -41,16 +41,16 @@ export function ChatInbox({ part }: ChatInboxProps) {
         <TbChevronRight className="dc-chat-activity-chevron" aria-hidden />
       </span>
     </summary>
-    {expanded ? <div className="dc-chat-activity-terminal dc-chat-inbox-details" tabIndex={0} role="region" aria-label={title}>
-      {display_content.length ? <div className={`dc-chat-inbox-content${part.kind === "shell_result" ? " dc-chat-inbox-command" : ""}`}>
+    {expanded ? <div className="dc-chat-activity-terminal dc-chat-input-details" tabIndex={0} role="region" aria-label={title}>
+      {display_content.length ? <div className={`dc-chat-input-content${part.kind === "shell_result" ? " dc-chat-input-command" : ""}`}>
         {display_content.map((item, index) => item.type === "file"
           ? <span className="dc-chat-attachment" key={index} title={item.url}><File aria-hidden /><span>{item.filename || "附件"}</span></span>
-          : <div key={index} className="dc-chat-inbox-entry">
-            {item.type === "context" ? <span className="dc-chat-inbox-context-tag">{item.tag}</span> : null}
-            <div className="dc-chat-inbox-text">{item.type === "context" ? item.context : item.text}</div>
+          : <div key={index} className="dc-chat-input-entry">
+            {item.type === "context" ? <span className="dc-chat-input-context-tag">{item.tag}</span> : null}
+            <div className="dc-chat-input-text">{item.type === "context" ? item.context : item.text}</div>
           </div>)}
-      </div> : <p className="dc-chat-inbox-empty">暂无可展示内容。</p>}
-      <details className="dc-chat-inbox-source">
+      </div> : <p className="dc-chat-input-empty">暂无可展示内容。</p>}
+      <details className="dc-chat-input-source">
         <summary>来源</summary>
         <dl>
           <dt>事件类型</dt><dd>{part.kind}</dd>
@@ -63,7 +63,7 @@ export function ChatInbox({ part }: ChatInboxProps) {
 }
 
 /** 只为已知生产语义指定标题；扩展事件保留通用入口。 */
-function inbox_title(kind: string): string {
+function input_title(kind: string): string {
   switch (kind) {
     case "shell_result": return "命令结果";
     case "delegation_result": return "任务结果";

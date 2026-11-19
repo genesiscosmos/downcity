@@ -20,10 +20,22 @@ export function define_power_renderer(
 export function get_power_renderer_definition_error(value: unknown): string | undefined {
   if (!value || typeof value !== "object" || Array.isArray(value)) return "default export must be an object";
   const definition = value as PowerRendererDefinition;
-  for (const slot of ["sidebar", "mainview", "config", "message", "preview"] as const) {
+  for (const slot of ["sidebar", "mainview", "config", "view", "preview"] as const) {
     if (definition[slot] !== undefined && typeof definition[slot] !== "function") return `${slot} must be a component or function`;
   }
   if (Boolean(definition.sidebar) !== Boolean(definition.mainview)) return "sidebar and mainview must be provided together";
+  const activity = definition.activity;
+  if (activity !== undefined) {
+    if (!activity || typeof activity !== "object" || Array.isArray(activity)) return "activity must be an object";
+    if (typeof activity.describe !== "function") return "activity.describe must be a function";
+    if (activity.detail !== undefined && typeof activity.detail !== "function") return "activity.detail must be a component";
+  }
+  const input = definition.input;
+  if (input !== undefined) {
+    if (!input || typeof input !== "object" || Array.isArray(input)) return "input must be an object";
+    if (typeof input.describe !== "function") return "input.describe must be a function";
+    if (input.detail !== undefined && typeof input.detail !== "function") return "input.detail must be a component";
+  }
   const agent_config = definition.agent_config;
   if (agent_config !== undefined) {
     if (!agent_config || typeof agent_config !== "object" || Array.isArray(agent_config)) return "agent_config must be an object";
@@ -44,9 +56,14 @@ export function get_power_renderer_definition_error(value: unknown): string | un
       if (typeof view.component !== "function") return "views.component must be a component";
     }
   }
-  if (!definition.sidebar && !definition.config && !definition.message && !agent_config && !views?.length) return "at least one UI capability is required";
+  if (!definition.sidebar && !definition.config && !definition.view && !activity && !input && !agent_config && !views?.length) return "at least one UI capability is required";
   return undefined;
 }
+
+export { input_envelope, input_power_id } from "./renderer/Input.js";
+export type { PowerInputProps, PowerInputDetailProps, PowerInputRenderer } from "./types/PowerInputRenderer.js";
+export { CITY_POWER_RENDERERS } from "./renderers.js";
+export type { PowerActivityProps, PowerActivityDescription, PowerActivityRenderer } from "./types/PowerActivityRenderer.js";
 
 export type { PowerRendererNotification } from "./types/PowerNotification.js";
 
@@ -56,8 +73,8 @@ export type {
   PowerAgentConfigComponentProps,
   PowerAgentConfigDefinition,
   PowerMarkdownRenderRequest,
-  PowerMessageComponent,
-  PowerMessageComponentProps,
+  PowerViewMessageComponent,
+  PowerViewMessageComponentProps,
   PowerConfigComponent,
   PowerConfigComponentProps,
   PowerConfigGateway,

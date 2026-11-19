@@ -12,7 +12,7 @@ import {
   SessionMessages,
 } from "@/session/messages/SessionMessages.js";
 import type { SessionAgentContent } from "@downcity/type";
-import type { SessionAgentMessagePart, SessionAgentInboxPart, SessionInboxInput } from "@downcity/type";
+import type { SessionAgentMessagePart, SessionAgentInputPart, SessionInputContent } from "@downcity/type";
 import type { SessionAssistantOutput } from "@/types/turn/SessionAssistantOutput.js";
 import type {
   SessionToolExecutionResult,
@@ -110,14 +110,14 @@ export class SessionAssistantOutputAdapter implements SessionAssistantOutput {
   }
 
   /** 将运行时输入追加到当前 Agent Message，保持 Writer 与回复边界连续。 */
-  async append_inbox(input: SessionInboxInput, assert_receivable?: () => void): Promise<SessionAgentInboxPart> {
-    const existing = await this.messages.read_inbox(input.inbox_id);
+  async append_input(input: SessionInputContent, assert_receivable?: () => void): Promise<SessionAgentInputPart> {
+    const existing = await this.messages.read_input(input.input_id);
     if (existing) {
-      if (existing.message.turn_id !== this.turn_id) throw new Error("Inbox input belongs to another Turn");
+      if (existing.message.turn_id !== this.turn_id) throw new Error("Input belongs to another Turn");
       return existing.part;
     }
     assert_receivable?.();
-    return await (await this.ensure_writer()).append_inbox(input, assert_receivable);
+    return await (await this.ensure_writer()).append_input(input, assert_receivable);
   }
 
   /** 追加 Action 产生的封闭 Assistant 内容。 */

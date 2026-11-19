@@ -19,8 +19,8 @@ const city_source = path.join(public_root, "packages/city/src/");
 
 /** Import only pure runtime modules, with source-local aliases and TS transformation. */
 export async function load_runtime(agent_database = true, protocol = "current") {
-  if (!["current", "historical-v9", "historical-v10"].includes(protocol)) throw new Error("offline_runtime_protocol_invalid");
-  const historical_version = protocol === "historical-v9" ? 9 : protocol === "historical-v10" ? 10 : undefined;
+  if (!["current", "historical-v9", "historical-v10", "historical-v11"].includes(protocol)) throw new Error("offline_runtime_protocol_invalid");
+  const historical_version = protocol === "current" ? undefined : Number(protocol.slice("historical-v".length));
   // City 的错误类使用 TS 参数属性；由已安装编译器转换，避免依赖 Node 的实验转换模式。
   const typescript = agent_database ? create_require(path.join(city_source, "offline.cjs"))("typescript") : undefined;
   const hook = register_hooks({
@@ -86,6 +86,7 @@ export async function load_runtime(agent_database = true, protocol = "current") 
         if (row?.agent_id !== agent_id || row.format_version !== historical_version) throw new Error("session_storage_identity_conflict");
       };
       Object.assign(runtime, await import(new URL(`../fixtures/session-v${historical_version}/readiness.mjs`, import.meta.url)));
+      if (historical_version === 11) Object.assign(runtime, await import(new URL("../fixtures/session-v11/schema.mjs", import.meta.url)));
     }
     return runtime;
   } finally { hook.deregister(); }

@@ -1,7 +1,7 @@
 /**
  * Session 输入请求记账的构建与读取。
  *
- * 真人输入的身份保存在 User Message.meta；自动执行输入的身份保存在 Inbox Part.meta。
+ * 真人输入的身份保存在 User Message.meta；自动执行输入的身份保存在 Input Part.meta。
  * 这些字段仅由受信接收边界写入，不参与模型上下文和用户内容编辑。
  */
 
@@ -34,15 +34,15 @@ export function build_session_message_meta(
   };
 }
 
-/** 读取消息最近一次输入的记账；指定 inbox_id 时只读取对应事件。 */
+/** 读取消息最近一次输入的记账；指定 input_id 时只读取对应事件。 */
 export function read_session_message_meta(
   message: SessionMessage | null | undefined,
-  inbox_id?: string,
+  input_id?: string,
 ): SessionMessageMeta | undefined {
   if (!message) return undefined;
   if (message.role === "user") return message.meta;
   for (const part of [...message.parts].reverse()) {
-    if (part.type === "inbox" && part.meta && (!inbox_id || part.inbox_id === inbox_id)) return part.meta;
+    if (part.type === "input" && part.meta && (!input_id || part.input_id === input_id)) return part.meta;
   }
   return undefined;
 }

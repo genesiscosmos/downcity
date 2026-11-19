@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { PowerJsonValue } from "@downcity/city/power";
 import { define_power_renderer } from "@downcity/city/power/react";
+import { MESSENGER_ACTIVITY_RENDERER } from "@/builtin/renderer/BuiltinActivity.js";
 import type { MessengerAccountDraft, MessengerAccountView, MessengerProvider } from "@/messenger/types/MessengerAccount.js";
 import type { MessengerAccountDetailSnapshot, MessengerDesktopSnapshot } from "@/messenger/types/MessengerDesktop.js";
 import type { FeishuAppRegistrationView } from "@/messenger/types/FeishuAppRegistration.js";
@@ -12,6 +13,7 @@ const create_route = (provider: MessengerProvider) => ({ view: "create", provide
 
 /** Messenger Power Renderer 定义。 */
 export const MESSENGER_POWER_RENDERER = define_power_renderer({
+  activity: MESSENGER_ACTIVITY_RENDERER,
   sidebar: function MessengerPowerSidebar({ power, navigation, ui }) {
     const { Callout, EmptyState, LoadingState, Sidebar, SidebarCreateMenu, SidebarItem, SidebarSection, Status } = ui.components;
     const [snapshot, set_snapshot] = useState<MessengerDesktopSnapshot>();

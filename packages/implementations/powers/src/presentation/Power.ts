@@ -1,6 +1,6 @@
 /** Presentation Power：校验完整声明式界面，并通过标准 Action 消息输出发布。 */
 import { Power, create_action, type PowerActions } from "@downcity/city/power";
-import { validate_session_power_content } from "@downcity/type";
+import { validate_session_view_content } from "@downcity/type";
 import { z } from "zod";
 import { parse_presentation_content, presentation_catalog_prompt } from "./OpenUICatalog.js";
 import type { PresentationShowInput } from "./types/Presentation.js";
@@ -27,13 +27,13 @@ export class PresentationPower extends Power {
         const payload = input as unknown as PresentationShowInput;
         parse_presentation_content(payload.content);
         const part = {
-          type: "power" as const,
+          type: "view" as const,
           power_id: "presentation",
           schema_version: 2,
           data: { format: "openui-lang", catalog_id: "downcity.presentation.openui.v1", content: payload.content },
           fallback_text: payload.fallback_text,
         };
-        validate_session_power_content(part);
+        validate_session_view_content(part);
         return {
           success: true,
           data: {

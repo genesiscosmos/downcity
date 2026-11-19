@@ -15,6 +15,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { define_power_renderer } from "@downcity/city/power/react";
+import { WEB_ACTIVITY_RENDERER } from "@/builtin/renderer/BuiltinActivity.js";
 import type { WebMainviewSnapshot } from "@/web/types/WebMainview.js";
 import {
   CONFIGURED_CAPABILITIES,
@@ -34,6 +35,7 @@ import { WebGeneralView } from "@/web/renderer/WebGeneralView.js";
 
 /** Web Power Renderer 定义。 */
 export const WEB_POWER_RENDERER = define_power_renderer({
+  activity: WEB_ACTIVITY_RENDERER,
   sidebar: function WebPowerSidebar({ power, navigation, ui }) {
     const {
       Callout, LoadingState, Sidebar, SidebarSection, SidebarTreeItem, Status, StatusDot,

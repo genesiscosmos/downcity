@@ -9,7 +9,7 @@
 
 import type { ToolEffect } from "@downcity/type";
 import type {
-  SessionInboxInput,
+  SessionInputContent,
   SessionUserMessage,
 } from "@downcity/type";
 import type { SessionAgentContent } from "@downcity/type";
@@ -24,9 +24,9 @@ import type { SessionHookContextBlock } from "@downcity/type";
 import type { ModelRequestFailureNotice } from "@downcity/type";
 
 /** 内部输入可显式提供幂等键；省略时由 Turn FIFO 在暂存时生成一次。 */
-export type SessionTurnInboxInput = Omit<SessionInboxInput, "inbox_id"> & {
+export type SessionTurnInputInput = Omit<SessionInputContent, "input_id"> & {
   /** 稳定接收标识；用于跨重试去重，省略时仅在当前暂存命令内保持稳定。 */
-  inbox_id?: string;
+  input_id?: string;
 };
 
 /**
@@ -53,8 +53,8 @@ export interface SessionTurnContextInit {
   /** 在 Step 检查点提交 Session 输入队列；持久化消息由 Composer 重新读取。 */
   commit_step_input?: () => Promise<void>;
 
-  /** 暂存运行时 inbox；完整 Step 检查点通过当前 Assistant writer 持久化。 */
-  append_inbox?: (input: SessionTurnInboxInput) => Promise<void>;
+  /** 暂存运行时 input；完整 Step 检查点通过当前 Assistant writer 持久化。 */
+  append_input?: (input: SessionTurnInputInput) => Promise<void>;
 
   /** 判断是否仍有等待下一个 Step 消费的 User prompt。 */
   has_pending_step_input?: () => boolean;
@@ -147,7 +147,7 @@ export interface SessionTurnContext {
     has_pending(): boolean;
 
     /** 暂存只供模型消费的内部输入；下次 compose 前由完整 Step 检查点落盘，返回不代表已持久化。 */
-    append_inbox(input: SessionTurnInboxInput): Promise<void>;
+    append_input(input: SessionTurnInputInput): Promise<void>;
 
   };
 
