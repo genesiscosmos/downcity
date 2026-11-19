@@ -6,7 +6,8 @@ import { use_theme_portal_container } from "../theme-container";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { KeyboardEvent } from "react";
 import { TbCheck, TbChevronRight, TbLoader2, TbSearch } from "react-icons/tb";
-import { Input } from "../input";
+import { InputGroup, InputGroupInput } from "../input-group";
+import { chat_model_trigger_class_name, model_field_surface_class_name, model_popover_class_name, model_preview_class_name, model_menu_item_class_name, model_menu_selected_class_name, model_menu_interaction_class_name, model_field_item_class_name, model_field_selected_class_name } from "./model-control-styles";
 
 import { Button } from "../button";
 import { Popover, PopoverContent, PopoverTrigger } from "../popover";
@@ -18,10 +19,6 @@ import { format_token_count, format_usd_price } from "../../lib/model/model_form
 import { format_model_reasoning, get_default_model_reasoning } from "../../lib/model/model_reasoning";
 import { is_text_model } from "../../lib/model/model_selection";
 import { ControlMessagesProvider, use_control_translation as use_translation } from "../../lib/control-messages";
-
-const menu_item_base_class_name = "relative flex w-full items-center gap-2.5 rounded-lg px-2 py-1.5 text-left text-xs outline-none [&>svg]:size-3.5 [&>svg]:shrink-0";
-const menu_item_highlighted_class_name = "bg-interaction-selected text-foreground";
-const menu_item_interaction_class_name = "hover:bg-interaction-hover focus-visible:bg-interaction-hover";
 
 /** 以一个主 dropdown 承载两个可进入的 submenu。 */
 function ChatModelSelectorContent(props: ChatModelSelectorProps) {
@@ -37,8 +34,8 @@ function ChatModelSelectorContent(props: ChatModelSelectorProps) {
   const [open, set_open] = useState(false);
 
   return <Popover open={open} onOpenChange={set_open}>
-    <PopoverTrigger render={<Button variant="ghost" size="xs" data-popup-open={open || undefined} className="max-w-64 flex-none justify-start gap-1 whitespace-nowrap rounded-full" title={trigger_accessible_label} aria-label={trigger_accessible_label} disabled={props.models_loading && !current_model_id}>{props.models_loading && !current_model_id ? <TbLoader2 className="size-4 animate-spin" /> : <LLMModelIcon model_id={current_model?.model_id || current_model_id} model_name={current_model?.name} tags={current_model?.tags} size_class="size-4" />}<span className="min-w-0 flex-1 truncate">{trigger_label}</span>{selected_effort?.name ? <span className="max-w-20 shrink-0 truncate rounded-full bg-surface-emphasis px-1.5 py-0.5 text-3xs font-medium leading-none text-muted-foreground">{selected_effort.name}</span> : null}</Button>} />
-    <PopoverContent side="top" align="start" sideOffset={4} className="w-64 max-w-[calc(100vw-1rem)] p-1">
+    <PopoverTrigger render={<Button variant="ghost" size="default" data-popup-open={open || undefined} className={cn(chat_model_trigger_class_name, "max-w-64 flex-none justify-start whitespace-nowrap")} title={trigger_accessible_label} aria-label={trigger_accessible_label} disabled={props.models_loading && !current_model_id}>{props.models_loading && !current_model_id ? <TbLoader2 className="size-4 animate-spin" /> : <LLMModelIcon model_id={current_model?.model_id || current_model_id} model_name={current_model?.name} tags={current_model?.tags} size_class="size-4" />}<span className="min-w-0 flex-1 truncate">{trigger_label}</span>{selected_effort?.name ? <span className="max-w-20 shrink-0 truncate rounded-full bg-surface-emphasis px-1.5 py-0.5 text-3xs font-medium leading-none text-muted-foreground">{selected_effort.name}</span> : null}</Button>} />
+    <PopoverContent side="top" align="start" sideOffset={4} className={cn(model_popover_class_name, "w-64 max-w-[calc(100vw-1rem)] p-1")}>
       <SelectorSubmenu label={translate("model.model")} value={current_model?.name || current_model_id || translate("model.select")}>
         <ModelOptions models={text_models} current_model_id={current_model_id} loading={props.models_loading} on_select={props.set_model} />
       </SelectorSubmenu>
@@ -55,14 +52,14 @@ export function SelectorSubmenu({ label, value, children }: SelectorSubmenuProps
   return <Popover open={open} onOpenChange={set_open}>
     <PopoverTrigger render={<button type="button" className={cn("flex min-h-10 w-full items-center gap-2 rounded-item px-2.5 text-left outline-none transition-colors hover:bg-interaction-hover focus-visible:bg-interaction-hover", open && "bg-interaction-selected")}><span className="min-w-0 flex-1"><span className="block text-xs font-medium text-foreground">{label}</span><span className="block truncate text-3xs text-muted-foreground">{value}</span></span><TbChevronRight className="size-3.5 shrink-0 text-subtle-foreground" /></button>} />
     {/* 外层仅限高与裁剪；搜索区和滚动内容分别留白，让滚动条贴齐浮层内边缘。 */}
-    <PopoverContent side="right" align="start" sideOffset={4} className="flex max-h-[min(80vh,var(--available-height,100vh))] w-72 max-w-[calc(100vw-1rem)] flex-col [&>div]:p-0">
+    <PopoverContent side="right" align="start" sideOffset={4} className={cn(model_popover_class_name, "flex max-h-[min(80vh,var(--available-height,100vh))] w-72 max-w-[calc(100vw-1rem)] flex-col")}>
       {children}
     </PopoverContent>
   </Popover>;
 }
 
 /** 带顶部搜索的模型目录列表。 */
-function ModelOptionsContent({ models, current_model_id, loading, on_select, empty_text }: ModelOptionsProps) {
+function ModelOptionsContent({ models, current_model_id, loading, on_select, empty_text, variant = "menu" }: ModelOptionsProps) {
   const translate = use_translation("chat");
   const [query, set_query] = useState("");
   const input_ref = useRef<HTMLInputElement>(null);
@@ -93,20 +90,20 @@ function ModelOptionsContent({ models, current_model_id, loading, on_select, emp
 
   return <div className="flex min-h-0 flex-1 flex-col">
     <div className="shrink-0 p-1">
-      <div className="flex w-full items-center gap-2 px-2">
+      <InputGroup className={cn(model_field_surface_class_name, "h-8 min-h-0 w-full gap-2 px-2.5 text-xs leading-5")}>
         <TbSearch className="size-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
-        <Input ref={input_ref} value={query} aria-label={translate("model.search_placeholder")} placeholder={translate("model.search_placeholder")} spellCheck={false} onChange={(event) => set_query(event.target.value)} onKeyDown={handle_key_down} />
-      </div>
+        <InputGroupInput className="h-full p-0 text-xs leading-5 placeholder:text-[var(--field-placeholder,var(--text-placeholder,var(--muted-foreground)))] placeholder:opacity-100" ref={input_ref} value={query} aria-label={translate("model.search_placeholder")} placeholder={translate("model.search_placeholder")} spellCheck={false} onChange={(event) => set_query(event.target.value)} onKeyDown={handle_key_down} />
+      </InputGroup>
     </div>
     <div className="h-px shrink-0 bg-divider" />
-    {filtered_models.length === 0 ? <p className="p-4 text-center text-xs text-muted-foreground">{query.trim() ? translate("model.no_match") : empty_text || translate("model.empty")}</p> : <div ref={list_ref} className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-1">
+    {filtered_models.length === 0 ? <p className="p-4 text-center text-xs text-muted-foreground">{query.trim() ? translate("model.no_match") : empty_text || translate("model.empty")}</p> : <div ref={list_ref} className={cn("min-h-0 flex-1 overflow-y-auto overscroll-contain p-1", variant === "field" && "space-y-0.5 pb-0.5")} >
       {filtered_models.map((model) => {
         const active = model.model_id === current_model_id;
         return <PreviewCard.Root key={model.model_id}>
-          <PreviewCard.Trigger delay={300} closeDelay={120} render={<button type="button" aria-pressed={active} title={model.name} className={cn(menu_item_base_class_name, active ? menu_item_highlighted_class_name : menu_item_interaction_class_name)} onClick={() => void on_select(model.model_id)} />}>
-            <LLMModelIcon model_id={model.model_id} model_name={model.name} tags={model.tags} size_class="size-3.5" />
+          <PreviewCard.Trigger delay={300} closeDelay={120} render={<button type="button" aria-pressed={active} title={model.name} className={cn(model_menu_item_class_name, variant === "field" && model_field_item_class_name, active ? variant === "field" ? model_field_selected_class_name : model_menu_selected_class_name : model_menu_interaction_class_name, variant === "field" && "focus-visible:ring-2 focus-visible:ring-ring/30")} onClick={() => void on_select(model.model_id)} />}>
+            <LLMModelIcon model_id={model.model_id} model_name={model.name} tags={model.tags} size_class={variant === "field" ? "size-4" : "size-3.5"} />
             <span className="min-w-0 flex-1 truncate">{model.name}</span>
-            {active ? <TbCheck className="ml-auto text-primary" /> : null}
+            {active && variant !== "field" ? <TbCheck className="ml-auto text-primary" /> : null}
           </PreviewCard.Trigger>
           <ModelPreview model={model} />
         </PreviewCard.Root>;
@@ -127,7 +124,7 @@ function ModelPreview({ model }: ModelDetailsProps) {
   const container = use_theme_portal_container();
   return <PreviewCard.Portal container={container}>
     <PreviewCard.Positioner side="right" align="start" sideOffset={8} collisionPadding={12} className="z-[60] outline-none">
-      <PreviewCard.Popup className="w-80 max-w-[calc(100vw-1.5rem)] overflow-hidden rounded-xl border border-divider bg-popover text-popover-foreground outline-none data-open:animate-in data-closed:animate-out data-open:fade-in-0 data-closed:fade-out-0 duration-150">
+      <PreviewCard.Popup className={cn("w-80 max-w-[calc(100vw-1.5rem)] overflow-hidden border outline-none data-open:animate-in data-closed:animate-out data-open:fade-in-0 data-closed:fade-out-0 duration-150", model_preview_class_name)}>
         <ModelDetails model={model} />
       </PreviewCard.Popup>
     </PreviewCard.Positioner>
@@ -173,7 +170,7 @@ function ModelDetail({ label, value }: ModelDetailProps) {
 export function ReasoningOptions({ efforts, selected_effort, on_select }: ReasoningOptionsProps) {
   return <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain"><div className="p-1">{efforts.map((effort) => {
     const active = effort.id === selected_effort;
-    return <button key={effort.id} type="button" aria-pressed={active} onClick={() => void on_select(effort.id)} className={cn(menu_item_base_class_name, active ? menu_item_highlighted_class_name : menu_item_interaction_class_name)}>
+    return <button key={effort.id} type="button" aria-pressed={active} onClick={() => void on_select(effort.id)} className={cn(model_menu_item_class_name, active ? model_menu_selected_class_name : model_menu_interaction_class_name)}>
       <span className="min-w-0 flex-1 truncate">{effort.name}</span>
       {effort.description ? <span className="sr-only">{effort.description}</span> : null}
       {active ? <TbCheck className="ml-auto text-primary" /> : null}

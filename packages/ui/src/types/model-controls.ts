@@ -55,6 +55,7 @@ export interface ModelOptionsProps extends ChatControlMessages {
   /** 目录是否加载中。 */ loading: boolean;
   /** 选择候选。 */ on_select(model_id: string): void | Promise<void>;
   /** 自定义空结果文案。 */ empty_text?: string;
+  /** menu 使用聊天目录行；field 使用表单紧凑行，搜索与详情能力保持一致。 */ variant?: "menu" | "field";
 }
 /** 详情与推理子菜单的入口。 */
 export interface SelectorSubmenuProps {

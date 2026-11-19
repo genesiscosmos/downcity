@@ -9,9 +9,10 @@
 import { clsx, type ClassValue } from "clsx";
 import { extendTailwindMerge } from "tailwind-merge";
 
-// SDK 的主题声明了两档紧凑字号；必须注册为字号，避免被当作文字颜色合并掉。
+// 注册 SDK 自定义字号和语义圆角，确保覆盖默认原语类时按同类规则合并。
 const tw_merge = extendTailwindMerge({
   extend: {
+    theme: { radius: ["control", "chip", "item", "surface"] },
     classGroups: {
       "font-size": [{ text: ["3xs", "2xs"] }],
     },
