@@ -1,13 +1,16 @@
 /**
  * CityHTTP：在一个 HTTP Server 上暴露 City 持有的全部 Agent。
  *
- * 每个执行作用域固定挂载到 `/agents/<agent_id>/workspaces/<workspace_id>`。
- * `RemoteAgent`，transport 只负责路由，不复制 Agent 或 Session 状态。
+ * 监听地址负责接收请求，显式 public_url 负责对外连接与连接码；不管理 Tunnel。
+ * SDK 路由复用既有 Agent 与 Session，不提供内部进程状态或本机管理端点。
  */
 
 import { Hono, type Context } from "hono";
 import { authorized_response } from "./AuthorizedResponse.js";
 import { create_city_cors } from "./CityCors.js";
+import { format_http_address } from "./HttpAddress.js";
+import { encode_city_connection } from "@/remote/CityConnection.js";
+import { normalize_city_connection_url } from "@/remote/CityConnectionUrl.js";
 import {
   AgentHTTP,
   create_agent_http_server_handle,
@@ -41,7 +44,15 @@ export class CityHTTP {
 
   constructor(runtime_access: CityHttpAccess, runtime_options: CityHttpRuntimeOptions = {}) {
     this.runtime_access = runtime_access;
-    this.runtime_options = runtime_options;
+    if (runtime_options.public_url !== undefined && !runtime_options.authorize_agent) {
+      throw new Error("City HTTP public_url requires an authorize_agent callback");
+    }
+    this.runtime_options = {
+      ...runtime_options,
+      ...(runtime_options.public_url !== undefined
+        ? { public_url: normalize_city_connection_url(runtime_options.public_url) }
+        : {}),
+    };
   }
 
   /** 返回按 Agent ID 分区的 Hono Router。 */
@@ -64,12 +75,6 @@ export class CityHTTP {
     root.all("/agents/:agent_id/workspaces/:workspace_id", async (context) => await this.dispatch_workspace(context));
     root.all("/agents/:agent_id/workspaces/:workspace_id/*", async (context) => await this.dispatch_workspace(context));
     if (this.runtime_options.city_router) root.route("/", this.runtime_options.city_router);
-    root.get("/internal/status", (context) => context.json({
-      success: true,
-      status: "ok",
-      pid: process.pid,
-      agent_ids: this.runtime_access.list_agents().map((agent) => agent.id),
-    }));
     this.cached_router = root;
     return root;
   }
@@ -77,7 +82,20 @@ export class CityHTTP {
   /** 返回 City 级 HTTP Server 句柄。 */
   server(): AgentHttpServerHandle {
     if (this.cached_server) return this.cached_server;
-    this.cached_server = create_agent_http_server_handle(this.router());
+    const handle = create_agent_http_server_handle(this.router());
+    this.cached_server = {
+      listen: async options => {
+        const host = (options.host || "127.0.0.1").trim().toLowerCase() || "127.0.0.1";
+        const loopback = host === "localhost" || host === "::1" || host === "[::1]"
+          || (/^127(?:\.(?:\d{1,3})){3}$/.test(host) && host.split(".").every(part => Number(part) <= 255));
+        if (!loopback && !this.runtime_options.authorize_agent) {
+          throw new Error("City HTTP non-loopback listener requires an authorize_agent callback");
+        }
+        return await handle.listen(options);
+      },
+      close: () => handle.close(),
+      binding: () => handle.binding(),
+    };
     return this.cached_server;
   }
 
@@ -89,6 +107,25 @@ export class CityHTTP {
   /** 返回当前监听绑定；尚未监听时返回 null。 */
   binding(): AgentHttpBinding | null {
     return this.cached_server?.binding() ?? null;
+  }
+
+  /**
+   * 返回供客户端使用的地址；不从请求或代理头推断，也不验证 Tunnel 是否在线。
+   * 显式 public_url 可在监听前读取；未配置且尚未监听时为空。
+   * 通配监听地址无法作为连接目标，必须显式配置 public_url。
+   */
+  client_url(): string | null {
+    if (this.runtime_options.public_url) return this.runtime_options.public_url;
+    const binding = this.binding();
+    if (!binding) return null;
+    return normalize_city_connection_url(format_http_address(binding.host, binding.port));
+  }
+
+  /** 封装宿主已签发的独立凭据；不签发、保存或校验凭据的服务端授权。 */
+  connection_code(token: string): string {
+    const url = this.client_url();
+    if (!url) throw new Error("City HTTP requires public_url or an active listener to create a connection code");
+    return encode_city_connection({ url, token });
   }
 
   /** 幂等关闭独立启动的 HTTP Server。 */

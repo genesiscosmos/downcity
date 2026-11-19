@@ -3,6 +3,7 @@
  * 编码仅封装地址与凭据，不提供加密、身份绑定或网络隧道；City 负责权限、到期与撤销。
  */
 import type { CityConnection } from "@/types/remote/CityConnection.js";
+import { normalize_city_connection_url } from "./CityConnectionUrl.js";
 
 const prefix = "citycode:";
 const max_code_length = 32768;
@@ -11,14 +12,10 @@ const max_code_length = 32768;
 function normalize_connection(input: unknown): CityConnection {
   if (!input || typeof input !== "object" || !("url" in input) || !("token" in input)
     || typeof input.url !== "string" || typeof input.token !== "string") throw new Error("Invalid City connection information");
-  let url: URL;
-  try { url = new URL(input.url.trim()); } catch { throw new Error("Invalid City connection address"); }
-  if (url.href.length > 8192 || !/^https?:$/.test(url.protocol) || url.username || url.password || url.search || url.hash || url.hostname.includes("*")) {
-    throw new Error("City connection requires an HTTP/HTTPS address without credentials, query or fragment");
-  }
+  const url = normalize_city_connection_url(input.url);
   const token = input.token.trim();
   if (!token || token.length > 8192 || /\s/.test(token)) throw new Error("Invalid City connection credential");
-  return { url: url.toString().replace(/\/+$/, ""), token };
+  return { url, token };
 }
 
 /** 将本次独立凭据封装为可复制的连接码，不持久化或发送任何数据。 */

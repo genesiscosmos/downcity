@@ -23,6 +23,13 @@ export interface CityAgentHttpExtension {
 /** City HTTP transport 所需的宿主能力。 */
 export interface CityHttpRuntimeOptions {
   /**
+   * 客户端使用的显式 City HTTP/HTTPS 根地址，可包含反向代理保留的路径前缀。
+   * 例如 https://city.example.com；与本机监听地址独立，不创建 Tunnel、证书或 DNS。
+   * 配置此字段时必须提供 authorize_agent；禁止从 Host 或 Forwarded 请求头推断。
+   * 未配置时仅使用实际非通配监听地址；该地址是否能被另一台设备访问由宿主负责。
+   */
+  public_url?: string;
+  /**
    * 允许跨域访问 City HTTP 的精确 HTTP/HTTPS Origin 列表，例如 https://remote.downcity.ai。
    * 省略时不启用 CORS；传空列表时拒绝跨域来源。禁止通配符、路径和内嵌凭据。
    * 预检只允许 GET、POST、OPTIONS 及 Authorization、Content-Type，不替代 Agent 授权。
@@ -54,6 +61,10 @@ export interface CityHttpRuntimeOptions {
     sdk_router: Hono;
   }) => CityAgentHttpExtension;
 
-  /** 挂载到 City HTTP 根路径的宿主扩展 Router。 */
+  /**
+   * 显式挂载到 City HTTP 根路径的宿主扩展 Router。
+   * 不经过 Agent 授权回调；宿主必须为需要保护的路由配置自己的鉴权。
+   * 不应在可经 Tunnel/公网访问的监听上挂载本机管理或未授权的内部接口。
+   */
   city_router?: Hono;
 }

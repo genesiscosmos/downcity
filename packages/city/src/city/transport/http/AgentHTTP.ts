@@ -17,6 +17,7 @@ import { register_sdk_session_routes } from "@/city/transport/http/routes/Sessio
 import { register_runtime_routes } from "@/city/transport/http/routes/RuntimeRoutes.js";
 import { register_sdk_interaction_routes } from "@/city/transport/http/routes/InteractionsRoutes.js";
 import { create_node_http_server } from "@/city/transport/http/NodeHttpAdapter.js";
+import { format_http_address } from "./HttpAddress.js";
 import { SerializedTransport } from "@/city/transport/SerializedTransport.js";
 import type {
   AgentHttpBinding,
@@ -125,7 +126,8 @@ export function create_agent_http_server_handle(app: Hono): AgentHttpServerHandl
     AgentHttpBinding
   >({
     start: async (options) => {
-      const host = String(options.host || DEFAULT_HTTP_HOST).trim() || DEFAULT_HTTP_HOST;
+      const input_host = String(options.host || DEFAULT_HTTP_HOST).trim() || DEFAULT_HTTP_HOST;
+      const host = input_host.startsWith("[") && input_host.endsWith("]") ? input_host.slice(1, -1) : input_host;
       const port = options.port;
       if (!Number.isInteger(port) || port <= 0 || port > 65535) {
         throw new Error("AgentHTTP server requires a valid TCP port");
@@ -148,9 +150,14 @@ export function create_agent_http_server_handle(app: Hono): AgentHttpServerHandl
           resolve();
         });
       });
+      const address = server.address();
+      if (!address || typeof address === "string") {
+        server.close();
+        throw new Error("HTTP listener did not return a TCP address");
+      }
       return {
         resource: server,
-        binding: { url: `http://${host}:${port}`, host, port },
+        binding: { url: format_http_address(address.address, address.port), host: address.address, port: address.port },
       };
     },
     stop: async (server) => {

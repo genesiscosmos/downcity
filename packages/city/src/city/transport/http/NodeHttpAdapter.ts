@@ -9,6 +9,7 @@
 import http from "node:http";
 import { Readable } from "node:stream";
 import { finished } from "node:stream/promises";
+import { format_http_address } from "./HttpAddress.js";
 /**
  * 最小 Fetch API 应用接口。
  */
@@ -39,7 +40,7 @@ export function create_node_http_server(params: {
     res.once("close", disconnect);
     req.once("aborted", disconnect);
     try {
-      const url = new URL(req.url || "/", `http://${host}:${port}`);
+      const url = new URL(req.url || "/", format_http_address(host, port));
       const method = req.method || "GET";
       const body_buffer = await read_request_body(req);
       const body_allowed = method !== "GET" && method !== "HEAD";
@@ -65,10 +66,14 @@ export function create_node_http_server(params: {
       response_stream = body_stream;
       if (controller.signal.aborted) body_stream.destroy();
       else body_stream.pipe(res);
-      await finished(body_stream).catch(() => undefined);
+      // 上游流异常必须关闭下游响应，让远端感知断流，不能留下未结束的连接。
+      await finished(body_stream).catch(() => { res.destroy(); });
     } catch {
-      res.statusCode = 500;
-      res.end("Internal Server Error");
+      if (res.headersSent || res.destroyed) res.destroy();
+      else {
+        res.statusCode = 500;
+        res.end("Internal Server Error");
+      }
     } finally {
       res.off("close", disconnect);
       req.off("aborted", disconnect);
