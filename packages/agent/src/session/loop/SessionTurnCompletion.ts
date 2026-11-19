@@ -6,6 +6,8 @@
  */
 
 import { generate_id } from "@/utils/Id.js";
+import { SessionFailure } from "@/session/SessionFailure.js";
+import { safe_error_diagnostic } from "@/utils/logger/SafeErrorDiagnostic.js";
 import type { JsonValue, SessionMessage } from "@downcity/type";
 import type { AgentSessionTurnResult } from "@/types/sdk/AgentSessionTurn.js";
 import type { SessionTurnExecutionResult } from "@/types/session/SessionExecution.js";
@@ -84,8 +86,9 @@ export async function fail_session_turn(
         message,
         recoverable: true,
       });
-    } catch {
-      // Error Part 兜底写入失败不能阻止 Turn Handle 收口。
+    } catch (failure) {
+      // Error Part 是兜底展示；保留双重失败诊断，不改变已提交的失败结果。
+      await log_turn_warning(options, active_turn, "error presentation failed", new SessionFailure("show_model_error", error, failure));
     }
   }
   // 检查点或后台等待期间抛出的错误也必须关闭原 Writer，不能只发布 Turn 终态。
@@ -185,7 +188,7 @@ async function log_turn_warning(
       session_id: options.session_id,
       turn_id: active_turn.turn_id,
       ...detail,
-      error: error instanceof Error ? error.message : String(error),
+      exception: safe_error_diagnostic(error),
     });
   } catch {
     // Turn 结果已经确定，日志失败不能阻止 Handle 收口。

@@ -261,7 +261,8 @@ export class AgentSessionStore implements SessionStore {
       throw new Error("session_storage_not_found");
     }
     return await acquire_agent_session_storage({ agent_id: this.options.agent_id,
-      database_path: memory ? ":memory:" : database_path, memory_scope: this.memory_scope }, true);
+      database_path: memory ? ":memory:" : database_path, memory_scope: this.memory_scope,
+      on_diagnostic: this.options.on_diagnostic }, true);
   }
 
   private read_connection(): Promise<AgentSessionRuntimeLease> {
@@ -292,7 +293,7 @@ export class AgentSessionStore implements SessionStore {
       }
       return await acquire_agent_session_storage({ agent_id: this.options.agent_id,
         database_path: this.options.database_location.type === "memory" ? ":memory:" : database_path,
-        memory_scope: this.memory_scope, allow_create: true }, false);
+        memory_scope: this.memory_scope, allow_create: true, on_diagnostic: this.options.on_diagnostic }, false);
     })().catch(error => { this.lease = undefined; throw error; });
     return this.lease;
   }

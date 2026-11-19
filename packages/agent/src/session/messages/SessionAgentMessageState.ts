@@ -50,6 +50,8 @@ export class SessionAgentMessageState {
   private readonly options: SessionAgentMessageStateOptions;
   /** 同一 Agent Message 的检查点严格串行，不同 Message 可以独立提交。 */
   private readonly write_chains = new Map<string, Promise<void>>();
+  /** 回滚失败后封闭投影写入，必须成功重读权威快照才能解除。 */
+  private readonly invalid_projections = new Set<string>();
 
   constructor(options: SessionAgentMessageStateOptions) {
     this.session_id = options.session_id;
@@ -214,11 +216,13 @@ export class SessionAgentMessageState {
   /** 丢弃当前未提交 Step 投影，并向订阅方恢复最近持久化快照。 */
   async rollback_projection(message_id: string): Promise<void> {
     await this.enqueue_write(message_id, async () => {
+      this.invalid_projections.add(message_id);
       const persisted = await this.options.store.read_message(message_id);
       if (!persisted || persisted.role !== "agent") {
         throw new Error(`Persisted Agent Message not found: ${message_id}`);
       }
       this.options.cache.accept(persisted);
+      this.invalid_projections.delete(message_id);
     });
   }
 
@@ -459,6 +463,7 @@ export class SessionAgentMessageState {
       advance_stable_prefix?: boolean;
     },
   ): Promise<void> {
+    this.assert_projection_available(message_id);
     const persisted = await this.options.store.read_message(message_id);
     if (!persisted || persisted.role !== "agent") {
       throw new Error(`Agent Message not found: ${message_id}`);
@@ -573,11 +578,17 @@ export class SessionAgentMessageState {
 
   /** 读取当前运行投影中的可写 Agent Message；只有 writer 持有的消息可写。 */
   private require_writable_agent(message_id: string): SessionAgentMessage {
+    this.assert_projection_available(message_id);
     const message = this.options.cache.get(message_id);
     if (!message || message.role !== "agent") {
       throw new Error(`Writable Agent Message not found: ${message_id}`);
     }
     return message;
+  }
+
+  /** 未确认的投影不能被错误展示、Tool 或 Turn 收口再次提交。 */
+  private assert_projection_available(message_id: string): void {
+    if (this.invalid_projections.has(message_id)) throw new Error("session_storage_projection_unavailable");
   }
 }
 

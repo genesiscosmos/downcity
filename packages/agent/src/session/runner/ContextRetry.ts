@@ -9,6 +9,9 @@
 
 import type { Logger } from "@/utils/logger/Logger.js";
 import { ResultSaveFailure } from "@/model/results/ResultSaveFailure.js";
+import { ModelResponseCommitFailure } from "@/model/ModelResponseCommitFailure.js";
+import { SessionFailure, finish_failed_session_operation } from "@/session/SessionFailure.js";
+import { safe_error_diagnostic } from "@/utils/logger/SafeErrorDiagnostic.js";
 import type { SessionTurnExecutionResult } from "@/types/session/SessionExecution.js";
 
 /**
@@ -68,7 +71,8 @@ export class ContextRetry {
       if (advance_count >= MAX_CONTEXT_ADVANCE_ATTEMPTS) return false;
       input.signal?.throwIfAborted();
       if (!await this.advance_context(error, input.signal)) return false;
-      await this.logger.log("info", "[agent] context.advance", { advanceCount: advance_count, error: String(error) });
+      try { await this.logger.log("info", "[agent] context.advance", { advance_count, exception: safe_error_diagnostic(error) }); }
+      catch { /* 诊断不改变已经完成的上下文推进。 */ }
       advance_count += 1;
       if (input.checkpoint) input.checkpoint.advance_count = advance_count;
       return true;
@@ -78,22 +82,25 @@ export class ContextRetry {
         return await input.execute_turn(advance_count, advance_context);
       } catch (error) {
         // 操作已发生，任何 Composer 推进建议都不能授权重新执行。
-        if (error instanceof ResultSaveFailure) return this.build_failure_result({ error_text: error.message });
-        if (error instanceof ModelContextAdvanced || await advance_context(error)) continue;
+        if (error instanceof SessionFailure) throw error;
+        if (error instanceof ResultSaveFailure || error instanceof ModelResponseCommitFailure) {
+          return this.build_failure_result({ error_text: error.message, failure: error });
+        }
+        if (error instanceof ModelContextAdvanced
+          || await finish_failed_session_operation("advance_context", error, () => advance_context(error))) continue;
         if (advance_count > 0) {
           return this.build_failure_result({
             error_text:
               "Context length exceeded and retries failed. Please resend your question.",
+            failure: error,
           });
         }
 
         const error_text = String(error);
         await this.logger.log("error", "Executor execution failed", {
-          error: error_text,
-        });
-        return this.build_failure_result({
-          error_text,
-        });
+          error: error_text, exception: safe_error_diagnostic(error),
+        }).catch(() => {});
+        return this.build_failure_result({ error_text, failure: error });
       }
     }
   }
@@ -103,12 +110,15 @@ export class ContextRetry {
      * 对外暴露的错误文本。
      */
     error_text: string;
+    /** 仅本次执行传递原始异常，不进入公开 Turn 结果。 */
+    failure?: unknown;
 
   }): SessionTurnExecutionResult {
     return {
       success: false,
       text: "",
       error: input.error_text,
+      ...(input.failure !== undefined ? { failure: input.failure } : {}),
     };
   }
 }

@@ -6,6 +6,7 @@
  * 上一代关闭，避免同路径在两个运行时中同时出现写连接。
  */
 import path from "node:path";
+import type { AgentSessionWorkerDiagnostic } from "@/types/store/AgentSessionDiagnostic.js";
 import type {
   AgentSessionRuntimeLease, AgentSessionRuntimeOwner, AgentSessionRuntimeTarget,
   AgentSessionRuntimeWriteOptions,
@@ -32,8 +33,8 @@ function request_payload(target: AgentSessionRuntimeTarget, readonly: boolean, o
 /** 单一进程内资源拥有者，所有 SessionStore 和 Browser 通过 lease 共享。 */
 class AgentSessionRuntime {
   readonly owners = new Map<string, AgentSessionRuntimeOwner>();
-  readonly writers = new AgentSessionWorkerPool(false);
-  readonly readers = new AgentSessionWorkerPool(true);
+  readonly writers = new AgentSessionWorkerPool(false, (target, diagnostic) => this.report_diagnostic(target, diagnostic));
+  readonly readers = new AgentSessionWorkerPool(true, (target, diagnostic) => this.report_diagnostic(target, diagnostic));
   private read_sequence = 0;
   readonly read_scheduler = new AgentStorageScheduler({
     budgets: { concurrency: 2, global_requests: 128, global_bytes: 32 * 1024 * 1024 },
@@ -62,6 +63,18 @@ class AgentSessionRuntime {
     },
   });
 
+  /** 只向目标存储的有效租约发布，不把共享线程绑定到执行 Agent。 */
+  private report_diagnostic(target: string, diagnostic: AgentSessionWorkerDiagnostic): void {
+    const sinks = this.owners.get(target)?.diagnostic_sinks;
+    if (!sinks?.size) {
+      try { console.info("[session.storage.worker]", JSON.stringify(diagnostic)); } catch { /* 尽力诊断。 */ }
+      return;
+    }
+    for (const sink of sinks.keys()) {
+      try { sink(diagnostic); } catch { /* 诊断失败不能改变存储语义。 */ }
+    }
+  }
+
   /** 每个只读任务独立调度，限制同时派发数但允许同 Agent 两个短读并发。 */
   async read(payload: string, signal?: AbortSignal): Promise<string> {
     return await this.read_scheduler.submit({ agent_id: `reader:${++this.read_sequence}`, session_id: "read", payload, signal });
@@ -82,17 +95,20 @@ let shared_closing: Promise<void> | undefined;
 /** 获得独立租约；创建、模型与 Workspace 执行不属于此能力。 */
 export async function acquire_agent_session_storage(target_input: AgentSessionRuntimeTarget, readonly: boolean): Promise<AgentSessionRuntimeLease> {
   if (shared_closing) await shared_closing;
-  const target = { ...target_input, database_path: target_input.database_path === ":memory:" ? ":memory:" : path.resolve(target_input.database_path) };
+  const target = { ...target_input, on_diagnostic: undefined,
+    database_path: target_input.database_path === ":memory:" ? ":memory:" : path.resolve(target_input.database_path) };
   if (!target.agent_id.trim() || (target.database_path === ":memory:" && !target.memory_scope)) throw new Error("session_storage_address_invalid");
   const owner_key = target.database_path === ":memory:" ? `memory:${target.memory_scope}` : target.database_path;
   const runtime = shared ??= new AgentSessionRuntime();
   let owner = runtime.owners.get(owner_key);
-  if (owner?.closing) { await owner.closing; return await acquire_agent_session_storage(target, readonly); }
+  if (owner?.closing) { await owner.closing; return await acquire_agent_session_storage({ ...target, on_diagnostic: target_input.on_diagnostic }, readonly); }
   if (owner && owner.target.agent_id !== target.agent_id) throw new Error("session_storage_identity_conflict");
-  if (!owner) { owner = { target, references: 0 }; runtime.owners.set(owner_key, owner); }
+  if (!owner) { owner = { target, references: 0, diagnostic_sinks: new Map() }; runtime.owners.set(owner_key, owner); }
   if (!readonly && target.allow_create) owner.target.allow_create = true;
   owner.references += 1;
   const retained = owner;
+  const sink = target_input.on_diagnostic;
+  if (sink) retained.diagnostic_sinks.set(sink, (retained.diagnostic_sinks.get(sink) ?? 0) + 1);
   const pending = new Set<Promise<unknown>>();
   let released = false;
   let release_promise: Promise<void> | undefined;
@@ -149,6 +165,7 @@ export async function acquire_agent_session_storage(target_input: AgentSessionRu
         const reconciled = await reconcile_agent_session_operation<T>(operation,
           async () => await runtime.writers.settle_failed_workers(),
           async (operation_id) => JSON.parse(await runtime.read(request_payload(retained.target, true, { command: "receipt", operation_id }))),
+          error,
         );
         retain_files(true);
         return reconciled;
@@ -169,18 +186,26 @@ export async function acquire_agent_session_storage(target_input: AgentSessionRu
             else if (retained.writer_opened) {
               await runtime.writers.execute(request_payload(retained.target, false, { command: "receipt", operation_id: "release" }, true));
             }
-            runtime.owners.delete(owner_key);
+            // 最后拥有者保留诊断路由直到共享池退出，关闭事件仍写入原租约日志。
+            if (runtime.owners.size === 1 && shared === runtime) {
+              shared = undefined;
+              const closing = runtime.dispose(); shared_closing = closing;
+              try { await closing; }
+              finally {
+                if (shared_closing === closing) shared_closing = undefined;
+                runtime.owners.delete(owner_key);
+              }
+            } else runtime.owners.delete(owner_key);
           })();
           try { await retained.closing; } catch (error) { errors.push(error); }
-          if (!runtime.owners.size && shared === runtime) {
-            shared = undefined;
-            const closing = runtime.dispose(); shared_closing = closing;
-            try { await closing; } catch (error) { errors.push(error); }
-            finally { if (shared_closing === closing) shared_closing = undefined; }
-          }
         }
         if (errors.length) throw new AggregateError(errors, "session_storage_release_failed");
-      })());
+      })()).finally(() => {
+        if (!sink) return;
+        const references = (retained.diagnostic_sinks.get(sink) ?? 1) - 1;
+        if (references) retained.diagnostic_sinks.set(sink, references);
+        else retained.diagnostic_sinks.delete(sink);
+      });
       return release_promise;
     },
   };

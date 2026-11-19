@@ -10,6 +10,9 @@
 import { create_deferred, create_active_session_turn_state, create_turn_handle, assert_session_turn_stop, resolve_prompt_request_identity } from "./SessionTurnHandles.js";
 import { isDeepStrictEqual } from "node:util";
 import { nanoid } from "nanoid";
+import { SessionFailure } from "@/session/SessionFailure.js";
+import { reject_failed_session_turn } from "./SessionTurnFailure.js";
+import { finalize_session_execution } from "./SessionTurnFinalization.js";
 import { z } from "zod";
 import type { PromptPowerDescriptor } from "@downcity/type";
 import type { SessionActionEvent } from "@downcity/type";
@@ -60,7 +63,6 @@ import {
   TURN_STOPPED_MESSAGE,
 } from "@/session/loop/SessionTurnCompletion.js";
 import {
-  append_session_turn_file_diff,
   publish_session_turn_file_diff,
 } from "@/session/loop/SessionTurnFileDiff.js";
 import type { SessionTurnCompletionOptions } from "@/types/session/SessionTurnCompletion.js";
@@ -72,7 +74,7 @@ import { SessionChildWorkLifecycle } from "./SessionChildWorkLifecycle.js";
 import { SessionBusyError } from "@/session/SessionBusyError.js";
 import { local_user_prompt_actor, session_prompt_actor_schema, same_session_prompt_actor } from "@/types/sdk/SessionPromptActor.js";
 import type { SessionPromptActor } from "@/types/sdk/SessionPromptActor.js";
-import { CompletionPersistenceError, prepare_session_completion } from "./SessionCompletionJournal.js";
+import { CompletionPersistenceError } from "./SessionCompletionJournal.js";
 import { accept_background_input } from "./SessionBackgroundInput.js";
 import { run_with_execution_lease } from "../SessionExecutionLease.js";
 import { SessionExecutionState } from "./SessionExecutionState.js";
@@ -761,17 +763,23 @@ export class SessionLoop {
   ): Promise<void> {
     this.closing = true;
     this.cancel_queued_prompts();
-    if (active_turn.turn_context) await this.child_work.cancel(active_turn.turn_context);
+    try { if (active_turn.turn_context) await this.child_work.cancel(active_turn.turn_context); }
+    catch (failure) { error = new SessionFailure("cancel_children", error, failure); }
     try { await this.internal_inputs.get(active_turn.turn_id)?.flush(); } catch (failure) {
       // 暂存输入无法落盘时保留内存事实并关闭接收，禁止下一 Turn 重放未知状态。
       this.unknown_turn_id = active_turn.turn_id;
-      error = failure;
+      error = new SessionFailure("flush_inputs", error, failure);
+    }
+    if (error instanceof SessionFailure) {
+      this.unknown_turn_id = active_turn.turn_id;
+      if (this.active_turn === active_turn) this.active_turn = null;
+      await reject_failed_session_turn(active_turn, error, this.logger, this.session_id);
+      return;
     }
     if (error instanceof CompletionPersistenceError) {
       this.recovered_turn_id = active_turn.turn_id;
       if (this.active_turn === active_turn) this.active_turn = null;
-      active_turn.deferred_finished.reject(error);
-      await active_turn.turn_context?.lifecycle.dispose();
+      await reject_failed_session_turn(active_turn, error, this.logger, this.session_id);
       return;
     }
     let final_result: AgentSessionTurnResult;
@@ -783,8 +791,7 @@ export class SessionLoop {
         : await fail_session_turn(this.turn_completion_options(), active_turn, error);
     } catch (failure) {
       if (this.active_turn === active_turn) this.active_turn = null;
-      active_turn.deferred_finished.reject(failure);
-      await active_turn.turn_context?.lifecycle.dispose();
+      await reject_failed_session_turn(active_turn, new SessionFailure("turn_finalize", error, failure), this.logger, this.session_id);
       return;
     }
     if (this.active_turn === active_turn) this.active_turn = null;
@@ -809,78 +816,52 @@ export class SessionLoop {
     try {
       result = await this.run_turn_with_context_advance(turn_context);
     } catch (error) {
+      if (error instanceof SessionFailure) throw error;
       result = {
+        failure: error,
         text: "",
         success: false,
         error: error instanceof Error ? error.message : String(error),
       };
     }
 
-    // 子工作等待可被同步入队唤醒；先消费输入，投递方的 accept 才能兑现。
-    while (result.success && !turn_context.lifecycle.abort_signal.aborted
-      && (this.has_pending_prompt()
-        || await this.child_work.wait(turn_context, () => this.has_pending_prompt(), active => this.execution.set_waiting_child(active))
-        || this.has_pending_prompt())
-      && !turn_context.lifecycle.abort_signal.aborted) {
-      await turn_context.input.checkpoint();
-      if (turn_context.lifecycle.abort_signal.aborted) break;
-      const compact_required = result.compact_required;
-      result = await this.run_turn_with_context_advance(turn_context);
-      if (compact_required) result.compact_required = true;
+    try {
+      // 子工作等待可被同步入队唤醒；先消费输入，投递方的 accept 才能兑现。
+      while (result.success && !turn_context.lifecycle.abort_signal.aborted
+        && (this.has_pending_prompt()
+          || await this.child_work.wait(turn_context, () => this.has_pending_prompt(), active => this.execution.set_waiting_child(active))
+          || this.has_pending_prompt())
+        && !turn_context.lifecycle.abort_signal.aborted) {
+        await turn_context.input.checkpoint();
+        if (turn_context.lifecycle.abort_signal.aborted) break;
+        const compact_required = result.compact_required;
+        result = await this.run_turn_with_context_advance(turn_context);
+        if (compact_required) result.compact_required = true;
+      }
+      // await 返回后已同步复查队列；从最后检查到关闭窗口之间没有 await。
+      this.closing = true;
+      if (!result.success || turn_context.lifecycle.abort_signal.aborted) {
+        if (turn_context.lifecycle.abort_signal.aborted) this.cancel_queued_prompts();
+        await this.child_work.cancel(turn_context);
+      }
+      // 执行器已退出，活跃 Step 已结束；停止也不得丢弃此前接受暂存的内部输入。
+      await this.internal_inputs.get(input.active_turn.turn_id)?.flush();
+
+      await finalize_session_execution(this.turn_completion_options(), input.active_turn, result,
+        this.get_workspace_path(), async () => {
+          await this.drain_queued_maintenance_commands();
+          if (result.compact_required) await this.maintain_context();
+        });
+
+      return {
+        text: result.text,
+        success: result.success,
+        ...(result.error ? { error: result.error } : {}),
+      };
+    } catch (failure) {
+      if (!result.success) throw new SessionFailure("turn_finalize", result.failure ?? new Error(result.error), failure);
+      throw failure;
     }
-    // await 返回后已同步复查队列；从最后检查到关闭窗口之间没有 await。
-    this.closing = true;
-    if (!result.success || turn_context.lifecycle.abort_signal.aborted) {
-      if (turn_context.lifecycle.abort_signal.aborted) this.cancel_queued_prompts();
-      await this.child_work.cancel(turn_context);
-    }
-    // 执行器已退出，活跃 Step 已结束；停止也不得丢弃此前接受暂存的内部输入。
-    await this.internal_inputs.get(input.active_turn.turn_id)?.flush();
-
-    if (!result.success && !turn_context.lifecycle.abort_signal.aborted && result.error
-      && !(await this.messages.read_latest_agent_message(input.active_turn.turn_id))?.current_error) {
-      await assistant_output.append_error({
-        scope: "turn",
-        code: result.error_code || "turn_execution_failed",
-        message: result.error,
-        recoverable: false,
-      });
-    }
-
-    await append_session_turn_file_diff({
-      session_id: this.session_id,
-      turn_id: input.active_turn.turn_id,
-      workspace_path: this.get_workspace_path(),
-      turn_context,
-      assistant_output,
-      logger: this.logger,
-    });
-
-    await this.drain_queued_maintenance_commands();
-    // 必要维护成功后才固定 Turn 终态，避免日志提前确认成功而掩盖压缩失败。
-    if (result.compact_required) await this.maintain_context();
-
-    await prepare_session_completion(this.turn_completion_options(), input.active_turn, {
-      turn_id: input.active_turn.turn_id,
-      text: result.text,
-      success: result.success,
-      ...(result.error ? { error: result.error } : {}),
-    });
-
-    await assistant_output.finish({
-      status: turn_context.lifecycle.abort_signal.aborted
-        ? "stopped"
-        : result.success
-          ? "completed"
-          : "failed",
-      ...(result.error ? { error: result.error } : {}),
-    });
-
-    return {
-      text: result.text,
-      success: result.success,
-      ...(result.error ? { error: result.error } : {}),
-    };
   }
 
   /** 执行 Turn；模型失败重试复用原步骤，上下文推进才重新装配输入。 */

@@ -13,7 +13,7 @@ import { execute_model_request } from "@/model/ModelRequestRunner.js";
 import { run_model_step } from "@/model/ModelStepRunner.js";
 import { ModelStreamFailure, is_manually_retryable_model_failure } from "@/model/ModelStreamFailure.js";
 import { ModelResponseCommitFailure } from "@/model/ModelResponseCommitFailure.js";
-import { ResultSaveFailure } from "@/model/results/ResultSaveFailure.js";
+import { finish_failed_session_operation } from "@/session/SessionFailure.js";
 import { generate_id } from "@/utils/Id.js";
 import type { SessionTurnContext } from "@/types/turn/SessionTurnContext.js";
 import type { SessionStepExecutionInput } from "@/types/session/SessionExecution.js";
@@ -78,15 +78,10 @@ export async function execute_session_provider_step(input: {
           return result;
         } catch (error) {
           // 提交结果未知先回滚到权威快照，保留可能已经落盘的成功响应，禁止再生成。
-          if (error instanceof ModelResponseCommitFailure) {
-            await output?.abort_step();
-            throw error;
+          if (error instanceof ModelResponseCommitFailure || !response_committed) {
+            await finish_failed_session_operation("abort_step", error, () => output?.abort_step());
           }
           // 工具执行或保存异常绝不被包装成模型失败。
-          if (!response_committed) {
-            await output?.abort_step();
-          }
-          if (error instanceof ResultSaveFailure) throw error;
           throw error;
         }
       },
@@ -95,13 +90,16 @@ export async function execute_session_provider_step(input: {
     if (signal.aborted) throw error;
     if (!(error instanceof ModelStreamFailure)) throw error;
     if (!output?.show_model_error || !input.retry_control) throw error;
-    if (input.is_context_limit(error) && await input.advance_context?.(error)) {
-      throw new ModelContextAdvanced();
+    if (input.is_context_limit(error)) {
+      const advanced = await finish_failed_session_operation("advance_context", error,
+        () => input.advance_context?.(error));
+      if (advanced) throw new ModelContextAdvanced();
     }
     const model_error = read_model_error(error)!;
     if (!is_manually_retryable_model_failure(model_error)) throw error;
     const error_part_id = `error:${generate_id()}`;
-    const binding = await output.show_model_error(error_part_id, model_error);
+    const binding = await finish_failed_session_operation("show_model_error", error,
+      () => output.show_model_error!(error_part_id, model_error));
     if (prepared?.current() && step_input.rebind_retry && !signal.aborted) {
       input.retry_control.capture({ binding, call, validate: prepared.validate,
         turn_id: turn_context.session.turn_id, step_id, checkpoint: structuredClone(input.checkpoint),

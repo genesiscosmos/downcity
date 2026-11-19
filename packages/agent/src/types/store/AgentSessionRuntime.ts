@@ -2,6 +2,7 @@
  * Agent Session 存储进程运行时的资源租约协议。
  * 浏览和执行各持有自己的租约，释放执行器不提前释放仍在浏览的唯一存储拥有者。
  */
+import type { AgentSessionDiagnosticSink } from "./AgentSessionDiagnostic.js";
 import type { AgentSessionDatabase } from "@/session/storage/agent-db/AgentSessionDatabase.js";
 import type { AgentSessionReadCommand, AgentSessionWriteCommand } from "./AgentSessionWorker.js";
 
@@ -15,6 +16,8 @@ export interface AgentSessionRuntimeTarget {
   memory_scope?: string;
   /** 只有显式创建/新根允许目标初始化，浏览租约始终 false。 */
   allow_create?: boolean;
+  /** 主线程安全诊断接收端，不经过 Worker IPC；租约释放后解绑。 */
+  on_diagnostic?: AgentSessionDiagnosticSink;
 }
 
 /** 最后一个引用关闭前共享的目标拥有者。 */
@@ -23,6 +26,8 @@ export interface AgentSessionRuntimeOwner {
   target: AgentSessionRuntimeTarget;
   /** 浏览与执行的总租约数。 */
   references: number;
+  /** 各独立租约的诊断订阅；共享池不持有执行 Agent。 */
+  diagnostic_sinks: Map<AgentSessionDiagnosticSink, number>;
   /** 内存模式唯一数据库；不能分配到不同 Worker。 */
   memory?: AgentSessionDatabase;
   /** 只有真正派发过文件写操作才需要向写池发送关闭连接请求。 */

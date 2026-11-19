@@ -2,6 +2,7 @@
  * Session 委派协议：将一次工作与发起会话关联，独立记录执行和结果投递状态。
  * 运行时只依赖存储与 Session 端口，不依赖 Agent、City 或 Desktop。
  */
+import type { SessionFailurePhase } from "@/types/session/SessionFailure.js";
 import type { SessionOrigin, WorkspaceRuntime } from "@downcity/type";
 import type { AgentSession } from "./SessionActor.js";
 import type { AgentSessionTurnResult } from "../sdk/AgentSessionTurn.js";
@@ -97,7 +98,23 @@ export interface SessionDelegationOptions {
   /** 保存委派前验证目标模型；未提供此端口时拒绝显式选择模型。 */
   validate_model?: (model_id: string, workspace: WorkspaceRuntime) => Promise<void>;
   /** 报告后台执行或投递失败；记录保留以便恢复重试。 */
-  report_error: (delegation_id: string, error: unknown) => void;
+  report_error: (delegation_id: string, error: unknown, context?: SessionDelegationFailureContext) => void;
+}
+
+/** 委派失败的安全关联字段，不携带 query、标题或结果正文。 */
+export interface SessionDelegationFailureContext {
+  /** 失败所在的固定执行、准备、回传或记录阶段。 */
+  phase: SessionFailurePhase;
+  /** 实际发起委派的 Agent 标识。 */
+  parent_agent_id?: string;
+  /** 实际发起委派的父会话标识。 */
+  parent_session_id?: string;
+  /** 实际发起委派的父 Turn 标识。 */
+  parent_turn_id?: string;
+  /** 被委派的工作会话标识。 */
+  work_session_id?: string;
+  /** 已接收执行时的工作 Turn 标识；准备失败时可能为空。 */
+  work_turn_id?: string;
 }
 
 /** 工具调用的完整工作输入。 */

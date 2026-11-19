@@ -205,6 +205,10 @@ export interface AgentSessionWorkerResponse {
 export interface AgentSessionWorkerSlot {
   /** 本槽持有的 SQLite Worker。 */
   worker: Worker;
+  /** 创建时的线程编号，退出后仍可关联同一代生命周期。 */
+  worker_id: number;
+  /** 使用过此线程的内部目标键，仅用于路由诊断，不写入日志。 */
+  diagnostic_targets: Set<string>;
   /** 已派发、尚未响应的请求集合。 */
   pending: Map<number, AgentSessionWorkerPending>;
   /** ready 才可派发；terminating 隔离旧线程；terminated 表示已确认退出。 */
@@ -223,6 +227,10 @@ export interface AgentSessionWorkerSlot {
 export interface AgentSessionWorkerPending {
   /** 已派发请求的语义命令名，用于主线程重建安全异常。 */
   command: AgentSessionReadCommand["command"] | AgentSessionWriteCommand["command"];
+  /** 内部诊断路由目标，不允许进入日志。 */
+  diagnostic_target: string;
+  /** 请求实际派发的单调时钟时间，包含 IPC 与执行耗时。 */
+  started_at: number;
   /** 响应后完成序列化业务结果。 */
   resolve: (value: string) => void;
   /** IPC 故障以 outcome_unknown 结算在途写操作。 */

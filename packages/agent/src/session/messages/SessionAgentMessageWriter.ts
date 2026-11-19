@@ -61,6 +61,8 @@ export class SessionAgentMessageWriter {
   private current_step_id: string | null = null;
   private step_active = false;
   private closed = false;
+  /** 回滚失败后此 Writer 永久封闭，避免下一步骤或收尾提交未确认投影。 */
+  private rollback_failure?: Error;
 
   constructor(options: SessionAgentMessageWriterOptions) {
     this.assert_current = options.assert_current ?? (() => {});
@@ -176,7 +178,11 @@ export class SessionAgentMessageWriter {
     await this.enqueue_write(async () => {
       this.tool_part_gate.reject_pending("Assistant canonical step was aborted");
       if (this.step_active) {
-        await this.state.rollback_projection(this.message_id);
+        try { await this.state.rollback_projection(this.message_id); }
+        catch (error) {
+          this.rollback_failure = new Error("session_storage_projection_unavailable", { cause: error });
+          throw error;
+        }
         this.reset_step_state();
       }
     });
@@ -502,7 +508,11 @@ export class SessionAgentMessageWriter {
 
   /** 串行执行对当前 Assistant Message 的全部写操作。 */
   private async enqueue_write<TResult>(operation: () => Promise<TResult>): Promise<TResult> {
-    const guarded = async () => { this.assert_current(); return await operation(); };
+    const guarded = async () => {
+      this.assert_current();
+      if (this.rollback_failure) throw this.rollback_failure;
+      return await operation();
+    };
     const current = this.write_chain.then(guarded, guarded);
     this.write_chain = current.then(() => undefined, () => undefined);
     return await current;

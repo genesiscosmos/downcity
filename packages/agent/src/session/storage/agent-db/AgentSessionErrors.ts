@@ -8,8 +8,9 @@ export class AgentSessionStorageError extends Error {
   /** SQLite 原始数字错误码，保留 extended code 便于判断失败类型。 */
   readonly sqlite_code?: number;
 
-  constructor(command: AgentSessionStorageError["command"], failure: AgentSessionStorageFailure) {
-    super(failure.code);
+  constructor(command: AgentSessionStorageError["command"], failure: AgentSessionStorageFailure, cause?: unknown) {
+    super(failure.code, { cause });
+    this.name = "AgentSessionStorageError";
     this.command = command;
     this.sqlite_code = failure.sqlite_code;
   }

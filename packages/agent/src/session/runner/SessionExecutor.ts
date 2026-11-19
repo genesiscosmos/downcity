@@ -11,6 +11,8 @@
 import type { SessionStepCheckpoint } from "@/types/session/SessionModelInput.js";
 import type { BoundAgentTool } from "@/types/tool/BoundAgentTool.js";
 import { execute_session_provider_step } from "./SessionProviderStep.js";
+import { SessionFailure } from "@/session/SessionFailure.js";
+import { safe_error_diagnostic } from "@/utils/logger/SafeErrorDiagnostic.js";
 import type { SessionModelRetryControl } from "./SessionModelReplay.js";
 import { fit_request } from "./RequestBudget.js";
 import { log_assistant_message_now } from "@/model/messages/SessionMessageLog.js";
@@ -412,6 +414,13 @@ export class SessionExecutor implements SessionExecutorPort {
         compact_required: checkpoint.compact_required,
       });
     } catch (error) {
+      if (error instanceof SessionFailure) {
+        await this.logger.log("error", "SessionExecutor execution failed", {
+          session_id, turn_id: input.turn_context.session.turn_id, step_index,
+          exception: safe_error_diagnostic(error),
+        }).catch(() => {});
+        throw error;
+      }
       if (input.turn_context.lifecycle.abort_signal.aborted) {
         const error_text = TURN_STOPPED_MESSAGE;
         await this.logger.log("info", "[agent] stopped", {
@@ -439,12 +448,14 @@ export class SessionExecutor implements SessionExecutorPort {
         turn_id: input.turn_context.session.turn_id,
         step_index,
         error: error_text,
-      });
+        exception: safe_error_diagnostic(error),
+      }).catch(() => {});
 
       return this.build_result({
         success: false,
         text: extract_assistant_text(checkpoint.assistant_parts),
         error: error_text,
+        failure: error,
         compact_required: checkpoint.compact_required,
       });
     }
@@ -465,12 +476,15 @@ export class SessionExecutor implements SessionExecutorPort {
     error?: string;
     /** 失败时的稳定错误码。 */
     error_code?: string;
+    /** 仅供后续收尾保留异常链，不进入公开结果。 */
+    failure?: unknown;
     /** 本轮结束后是否需要推进上下文。 */
     compact_required: boolean;
   }): SessionTurnExecutionResult {
     return {
       success: input.success,
       text: input.text,
+      ...(input.failure !== undefined ? { failure: input.failure } : {}),
       ...(input.error ? { error: input.error } : {}),
       ...(input.error_code ? { error_code: input.error_code } : {}),
       ...(input.compact_required ? { compact_required: true } : {}),

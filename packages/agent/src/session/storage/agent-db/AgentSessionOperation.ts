@@ -10,8 +10,12 @@ import { storage_digest } from "./AgentSessionCursor.js";
 
 /** 原事务确认未提交或尚未知；调用方不得换 ID 自动重放。 */
 export class AgentSessionCommitError extends Error {
-  constructor(readonly operation_id: string, readonly outcome: "unknown" | "not_committed") {
-    super(`session_storage_${outcome}: ${operation_id}`);
+  /** 稳定提交状态代码，用于安全诊断，不依赖异常消息。 */
+  readonly code: string;
+
+  constructor(readonly operation_id: string, readonly outcome: "unknown" | "not_committed", cause?: unknown) {
+    super(`session_storage_${outcome}: ${operation_id}`, { cause });
+    this.code = `session_storage_${outcome}`;
     this.name = "AgentSessionCommitError";
   }
 }
@@ -47,14 +51,18 @@ export async function reconcile_agent_session_operation<T>(
   operation: AgentSessionWriteCommand,
   settle_writer: () => Promise<void>,
   receipt: (operation_id: string) => Promise<AgentSessionOperationReceipt | null>,
+  original_error?: unknown,
 ): Promise<T> {
   const operation_id = agent_session_operation_id(operation);
   let committed: AgentSessionOperationReceipt | null;
   try {
     await settle_writer();
     committed = await receipt(operation_id);
-  } catch { throw new AgentSessionCommitError(operation_id, "unknown"); }
-  if (!committed) throw new AgentSessionCommitError(operation_id, "not_committed");
+  } catch (error) {
+    throw new AgentSessionCommitError(operation_id, "unknown",
+      original_error === undefined ? error : new AggregateError([original_error, error], "session_storage_reconciliation_failed"));
+  }
+  if (!committed) throw new AgentSessionCommitError(operation_id, "not_committed", original_error);
   if (committed.request_hash !== agent_session_operation_hash(operation)) throw new Error("session_storage_operation_conflict");
   return committed.result as T;
 }

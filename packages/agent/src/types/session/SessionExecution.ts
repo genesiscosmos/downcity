@@ -32,6 +32,9 @@ export interface SessionTurnExecutionResult {
    */
   error?: string;
 
+  /** 仅本次执行内保留的原始异常，不序列化进 Turn 结果或业务消息。 */
+  failure?: unknown;
+
   /**
    * 失败时的稳定错误码；缺省时由 Session 层回退为通用 Turn 失败码。
    *

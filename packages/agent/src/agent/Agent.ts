@@ -8,6 +8,7 @@
  * - Agent 自己那条会话由 `session()` 暴露；它是一条普通 Session。
  */
 
+import { safe_error_diagnostic } from "@/utils/logger/SafeErrorDiagnostic.js";
 import type {
   CityRuntime,
   ModelClient,
@@ -501,8 +502,9 @@ export class Agent {
       this.interaction_collection.dispose();
       results.push(...await Promise.allSettled([
         this.agent_storage?.sessions.dispose() ?? Promise.resolve(),
-        this.logger.save_all_logs(),
       ]));
+      // 存储关闭也会产生诊断；等待关闭后再排空独立日志文件。
+      results.push(...await Promise.allSettled([this.logger.save_all_logs()]));
       const errors = results.flatMap((result) => result.status === "rejected" ? [result.reason] : []);
       this.agent_storage = undefined;
       if (errors.length > 0) throw new AggregateError(errors, "Agent dispose failed");
@@ -525,6 +527,10 @@ export class Agent {
         storage_root_path: scope.root_path,
         agent_id: this.id,
         database_location: scope.database_location,
+        on_diagnostic: diagnostic => {
+          void this.logger.log(diagnostic.event === "request_failed" || diagnostic.event === "termination_failed" ? "error" : "info",
+            "[session.storage.worker]", { ...diagnostic }).catch(() => {});
+        },
       }),
     };
     return this.agent_storage;
@@ -637,11 +643,10 @@ export class Agent {
         if (!await parent_agent.resolve_storage().sessions.has_session(caller.session_id, caller.origin.category)) return undefined;
         return await parent_agent.restore_work_session(caller.session_id, caller.origin.category);
       },
-      report_error: (delegation_id, error) => {
-        this.logger.error("Session delegation failed; retained for retry", {
-          delegation_id,
-          error: String(error),
-        });
+      report_error: (delegation_id, error, context) => {
+        void this.logger.log("error", "Session delegation failed", {
+          delegation_id, ...context, exception: safe_error_diagnostic(error),
+        }).catch(() => {});
       },
     });
     return this.delegations;

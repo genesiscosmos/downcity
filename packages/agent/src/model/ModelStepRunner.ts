@@ -127,7 +127,7 @@ export async function run_model_step(input: RunModelStepInput): Promise<{
   // 完整流先可靠提交，再允许任何工具开始执行；保存失败不进入请求自动重试。
   if (input.assistant_output) {
     try { await input.assistant_output.finish_step(collected.assistant_parts); }
-    catch { throw new ModelResponseCommitFailure(); }
+    catch (error) { throw new ModelResponseCommitFailure(error); }
   }
   input.abort_signal.throwIfAborted();
   await input.on_response_committed?.();
@@ -280,9 +280,9 @@ async function execute_tools(
       else if (result_bytes(project_tool_result(result.output)) > RESULT_BYTES) {
         throw new Error("canonical result storage unavailable");
       }
-    } catch {
+    } catch (error) {
       // 持久化错误在业务执行 catch 之外：操作已发生，禁止自动重新执行。
-      throw new ResultSaveFailure();
+      throw new ResultSaveFailure(error);
     }
     results.push(result);
     // 已执行操作先保存快照，再响应取消；同一批次后续工具不得继续执行。
