@@ -18,7 +18,13 @@ export async function build_federation_instruction(services: Service[]): Promise
   const sections: InstructionSection[] = [];
 
   for (const service of services) {
-    const actions = service._listInstructionActions();
+    const actions = service._listActionDefs().map((definition) => ({
+      id: definition.action.id,
+      method: definition.method,
+      auth: definition.auth,
+      body: definition.body,
+      documentation: definition.documentation,
+    }));
     const body = await resolveInstruction(service.instruction, {
       id: service.id,
       name: service.name,
@@ -33,6 +39,14 @@ export async function build_federation_instruction(services: Service[]): Promise
       actions,
       env: service.env,
       body,
+      description: service.discovery.description,
+      requirements: service.discovery.requirements,
+      native_routes: service._listNativeRouteDefs().map((definition) => ({
+        method: definition.method,
+        path: definition.path,
+        auth: definition.auth,
+        documentation: definition.documentation,
+      })),
     });
   }
 

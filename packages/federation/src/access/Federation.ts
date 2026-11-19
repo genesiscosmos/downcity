@@ -16,6 +16,7 @@ import { FederationUser } from "./FederationUser.js";
 import { track_response } from "./response-lifetime.js";
 import { normalize_federation_url } from "./url.js";
 import type { FederationOptions } from "./types/FederationOptions.js";
+import type { ServiceCatalogSummary, ServiceCatalogDetail } from "../types/ServiceCatalog.js";
 
 /** 账户、AI、业务服务与本地运行资源的唯一公开入口。 */
 export class Federation {
@@ -147,6 +148,33 @@ export class Federation {
   maintenance(): Promise<void> { return this.require_runtime().maintenance(); }
   /** 本地 Service 聚合说明。 */
   instruction(): Promise<string> { return this.require_runtime().instruction(); }
+  /** 无需登录读取当前实例的公开服务摘要与本地可用性。 */
+  async list_services(): Promise<ServiceCatalogSummary[]> {
+    this.assert_open();
+    const result = await requestJSON<{ /** 当前实例注册的服务摘要。 */ items: ServiceCatalogSummary[] }>({
+      fetch: this.fetcher, url: this.url + "/v1/services", init: { method: "GET" },
+    });
+    return result.items;
+  }
+
+  /** 无需登录读取服务详情；不存在的服务以 HTTP 404 错误拒绝。 */
+  async describe_service(service_id: string): Promise<ServiceCatalogDetail> {
+    this.assert_open();
+    if (typeof service_id !== "string" || !service_id.trim()) throw new TypeError("service_id is required");
+    return requestJSON<ServiceCatalogDetail>({
+      fetch: this.fetcher, url: `${this.url}/v1/services/${encodeURIComponent(service_id.trim())}`,
+      init: { method: "GET" },
+    });
+  }
+
+  /** 无需登录读取注册元数据生成的 OpenAPI 3.1 文档。 */
+  async openapi(): Promise<Record<string, unknown>> {
+    this.assert_open();
+    return requestJSON<Record<string, unknown>>({
+      fetch: this.fetcher, url: this.url + "/openapi.json", init: { method: "GET" },
+    });
+  }
+
   /** 两种执行位置返回相同的健康协议。 */
   async health(): Promise<FederationHealthStatus> {
     this.assert_open();

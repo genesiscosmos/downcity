@@ -21,6 +21,8 @@ import type { FederationAdminLoginInput } from "./auth/types.js";
 import type { Runtime } from "./runtime.js";
 import type { RuntimeUser } from "./auth/types.js";
 import { build_federation_instruction } from "./federation-instruction.js";
+import { list_service_catalog, get_service_catalog_detail } from "./service-catalog.js";
+import { build_service_openapi } from "./service-openapi.js";
 import { collect_federation_env_catalog } from "./federation-env-catalog.js";
 import type { FederationRequestTransport, FederationTrustedIdentity } from "./types.js";
 import { AIService } from "../service/ai/ai-service.js";
@@ -173,15 +175,15 @@ export function build_federation_router(params: {
     await next();
   });
 
-  app.get("/v1/services", (c) =>
-    c.json({
-      items: services.map((service) => ({
-        id: service.id,
-        name: service.name,
-        env: service.env ?? [],
-      })),
-    }),
-  );
+  app.get("/v1/services", async (c) => c.json({ items: await list_service_catalog(services) }, 200, no_store_headers()));
+
+  app.get("/v1/services/:service_id", async (c) => {
+    const detail = await get_service_catalog_detail(services, c.req.param("service_id"));
+    if (!detail) return with_no_store(format_http_error(httpError(404, "Service not found"), c.get("federation_request_id")));
+    return c.json(detail, 200, no_store_headers());
+  });
+
+  app.get("/openapi.json", (c) => c.json(build_service_openapi(services, new URL(c.req.url).origin), 200, no_store_headers()));
 
   app.get("/v1/env/catalog", async (c) => {
     try {

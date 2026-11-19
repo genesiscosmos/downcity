@@ -7,6 +7,7 @@
  */
 
 import type { ServiceInstallContext } from "@downcity/federation";
+import { feedback_documentation } from "./documentation.js";
 import { require_service_user_identity } from "../shared/service-identity.js";
 import type { FeedbackService } from "./service.js";
 import type {
@@ -23,6 +24,7 @@ export function register_feedback_routes(service: FeedbackService, ctx: ServiceI
   ctx.route({
     method: "POST",
     path: "/send",
+    documentation: feedback_documentation["/send"],
     auth: ["user"],
     handler: async (c) => {
       const identity = require_service_user_identity(c);
@@ -34,6 +36,7 @@ export function register_feedback_routes(service: FeedbackService, ctx: ServiceI
   ctx.route({
     method: "GET",
     path: "/me",
+    documentation: feedback_documentation["/me"],
     auth: ["user"],
     handler: async (c) => {
       const identity = require_service_user_identity(c);
@@ -47,6 +50,7 @@ export function register_feedback_routes(service: FeedbackService, ctx: ServiceI
   ctx.route({
     method: "GET",
     path: "/messages",
+    documentation: feedback_documentation["/messages"],
     auth: ["admin"],
     handler: async (c) => {
       const input = await c.json<FeedbackQueryInput>();
@@ -57,6 +61,7 @@ export function register_feedback_routes(service: FeedbackService, ctx: ServiceI
   ctx.route({
     method: "POST",
     path: "/reply",
+    documentation: feedback_documentation["/reply"],
     auth: ["admin"],
     handler: async (c) => {
       const body = await c.json<FeedbackReplyInput>();
@@ -67,6 +72,7 @@ export function register_feedback_routes(service: FeedbackService, ctx: ServiceI
   ctx.route({
     method: "POST",
     path: "/status",
+    documentation: feedback_documentation["/status"],
     auth: ["admin"],
     handler: async (c) => {
       const body = await c.json<FeedbackStatusUpdateInput>();

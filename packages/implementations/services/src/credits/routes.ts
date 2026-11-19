@@ -5,6 +5,7 @@
  */
 
 import type { ServiceInstallContext, ServiceRouteContext } from "@downcity/federation";
+import { credits_documentation } from "./documentation.js";
 import type { CreditsService } from "./service.js";
 import type {
   CreditsChargeInput,
@@ -29,25 +30,27 @@ interface CreditsQueryBody extends Record<string, unknown> {
 
 /** 注册 Credits Service 路由。 */
 export function register_credits_routes(service: CreditsService, ctx: ServiceInstallContext): void {
-  ctx.route({ method: "GET", path: "/wallet/me", auth: ["user"], handler: async c => {
+  ctx.route({ method: "GET", path: "/wallet/me", documentation: credits_documentation["/wallet/me"], auth: ["user"], handler: async c => {
     const user_id = read_user_id(c);
     const account = await service.read_account(user_id);
     const cards = await read_wallet_cards(ctx.database, user_id);
     return c.jsonResponse({ available_credits: account.available_credits, primary: account.cards.primary, cards: cards.map(card => ({ kind: card.kind, card_id: card.card_id, name: card.name, credits: card.credits, expires_at: card.expires_at, status: card.status, created_at: card.created_at, updated_at: card.updated_at })) });
   } });
-  ctx.route({ method: "GET", path: "/cards/entries/me", auth: ["user"], handler: async c => {
+  ctx.route({ method: "GET", path: "/cards/entries/me", documentation: credits_documentation["/cards/entries/me"], auth: ["user"], handler: async c => {
     const url = new URL(c.request.url);
     return c.jsonResponse({ items: await read_wallet_entries(ctx.database, read_user_id(c), read_required_text(url.searchParams.get("card_id"), "card_id"), url.searchParams.get("limit") || undefined) });
   } });
   ctx.route({
     method: "GET",
     path: "/me",
+    documentation: credits_documentation["/me"],
     auth: ["user"],
     handler: async (c) => c.jsonResponse(await service.read_account(read_user_id(c))),
   });
   ctx.route({
     method: "GET",
     path: "/transactions/me",
+    documentation: credits_documentation["/transactions/me"],
     auth: ["user"],
     handler: async (c) => {
       const query = read_query(c);
@@ -57,6 +60,7 @@ export function register_credits_routes(service: CreditsService, ctx: ServiceIns
   ctx.route({
     method: "GET",
     path: "/history/me",
+    documentation: credits_documentation["/history/me"],
     auth: ["user"],
     handler: async (c) => {
       const query = read_query(c);
@@ -66,6 +70,7 @@ export function register_credits_routes(service: CreditsService, ctx: ServiceIns
   ctx.route({
     method: "GET",
     path: "/users",
+    documentation: credits_documentation["/users"],
     auth: ["admin"],
     handler: async (c) => {
       const query = read_query(c);
@@ -75,12 +80,14 @@ export function register_credits_routes(service: CreditsService, ctx: ServiceIns
   ctx.route({
     method: "GET",
     path: "/users/get",
+    documentation: credits_documentation["/users/get"],
     auth: ["admin"],
     handler: async (c) => c.jsonResponse(await service.read_account(read_required_text(read_query(c).user_id, "user_id"))),
   });
   ctx.route({
     method: "GET",
     path: "/cards/primary",
+    documentation: credits_documentation["/cards/primary"],
     auth: ["admin"],
     handler: async (c) => c.jsonResponse(await service.cards.get_primary(
       read_required_text(read_query(c).user_id, "user_id"),
@@ -89,6 +96,7 @@ export function register_credits_routes(service: CreditsService, ctx: ServiceIns
   ctx.route({
     method: "GET",
     path: "/cards/ephemeral/get",
+    documentation: credits_documentation["/cards/ephemeral/get"],
     auth: ["admin"],
     handler: async (c) => c.jsonResponse(await service.cards.get_ephemeral(
       read_required_text(new URL(c.request.url).searchParams.get("card_id"), "card_id"),
@@ -97,6 +105,7 @@ export function register_credits_routes(service: CreditsService, ctx: ServiceIns
   ctx.route({
     method: "GET",
     path: "/cards/ephemeral",
+    documentation: credits_documentation["/cards/ephemeral"],
     auth: ["admin"],
     handler: async (c) => {
       const query = read_query(c);
@@ -112,6 +121,7 @@ export function register_credits_routes(service: CreditsService, ctx: ServiceIns
   ctx.route({
     method: "GET",
     path: "/transactions",
+    documentation: credits_documentation["/transactions"],
     auth: ["admin"],
     handler: async (c) => {
       const query = read_query(c);
@@ -121,6 +131,7 @@ export function register_credits_routes(service: CreditsService, ctx: ServiceIns
   ctx.route({
     method: "GET",
     path: "/transactions/get",
+    documentation: credits_documentation["/transactions/get"],
     auth: ["admin"],
     handler: async (c) => c.jsonResponse(await service.get_transaction(
       read_required_text(read_query(c).transaction_id, "transaction_id"),
@@ -129,6 +140,7 @@ export function register_credits_routes(service: CreditsService, ctx: ServiceIns
   ctx.route({
     method: "GET",
     path: "/history",
+    documentation: credits_documentation["/history"],
     auth: ["admin"],
     handler: async (c) => {
       const query = read_query(c);
@@ -138,6 +150,7 @@ export function register_credits_routes(service: CreditsService, ctx: ServiceIns
   ctx.route({
     method: "POST",
     path: "/cards/ephemeral/create",
+    documentation: credits_documentation["/cards/ephemeral/create"],
     auth: ["admin"],
     handler: async (c) => c.jsonResponse(await service.cards.create_ephemeral(
       await c.json<CreditsEphemeralCardCreateInput & Record<string, unknown>>(),
@@ -146,6 +159,7 @@ export function register_credits_routes(service: CreditsService, ctx: ServiceIns
   ctx.route({
     method: "POST",
     path: "/topups/create",
+    documentation: credits_documentation["/topups/create"],
     auth: ["admin"],
     handler: async (c) => c.jsonResponse(await service.topup(
       await c.json<CreditsTopupInput & Record<string, unknown>>(),
@@ -154,6 +168,7 @@ export function register_credits_routes(service: CreditsService, ctx: ServiceIns
   ctx.route({
     method: "POST",
     path: "/charges/create",
+    documentation: credits_documentation["/charges/create"],
     auth: ["admin"],
     handler: async (c) => c.jsonResponse(await service.charge(
       await c.json<CreditsChargeInput & Record<string, unknown>>(),

@@ -5,7 +5,8 @@
  * 以及 Federation 聚合输出时使用的格式化工具。
  */
 
-import type { Context, EnvRequirement, RouteAuth } from "./service.js";
+import type { EnvRequirement, RouteAuth, ServiceRouteMethod } from "./service.js";
+import type { ApiDocumentation } from "../types/ServiceDiscovery.js";
 
 /**
  * 模块说明生成时可访问的只读上下文。
@@ -50,6 +51,22 @@ export interface InstructionActionDefinition {
    * 鉴权要求。
    */
   auth: RouteAuth;
+  /** 入口的注册文档，格式化时不会执行 availability。 */
+  documentation?: ApiDocumentation;
+  /** Action POST 的正文解释方式，GET 始终使用 query。 */
+  body?: "json" | "raw";
+}
+
+/** instruction 中的原生路由定义。 */
+export interface InstructionNativeRouteDefinition {
+  /** 原生路由接受的方法；ALL 表示所有方法。 */
+  method: ServiceRouteMethod;
+  /** 服务 namespace 内的原始路径，可含 wildcard。 */
+  path: string;
+  /** 路由访问身份要求。 */
+  auth: RouteAuth;
+  /** 由注册元数据提供的 API 文档。 */
+  documentation?: ApiDocumentation;
 }
 
 /**
@@ -102,6 +119,12 @@ export interface InstructionSection {
    * 模块补充说明正文。
    */
   body?: string;
+  /** 原生 HTTP route 的注册文档。 */
+  native_routes?: InstructionNativeRouteDefinition[];
+  /** 服务用途摘要。 */
+  description?: string;
+  /** 可公开的服务依赖要求。 */
+  requirements?: string[];
 }
 
 /**
@@ -159,6 +182,8 @@ export function formatInstructionDocument(input: {
     lines.push("");
     lines.push(`## ${section.name} (${section.id})`);
     lines.push(`类型：${section.kind}`);
+    if (section.description) lines.push(section.description);
+    if (section.requirements?.length) lines.push(`依赖要求：${section.requirements.join("；")}`);
 
     if (section.env && section.env.length > 0) {
       lines.push("环境变量：");
@@ -170,8 +195,20 @@ export function formatInstructionDocument(input: {
     if (section.actions.length > 0) {
       lines.push("动作与路由：");
       for (const action of section.actions) {
-        lines.push(`- ${action.method} /v1/${section.id}/${action.id} | auth: ${formatRouteAuth(action.auth)}`);
+        lines.push(`- ${action.method} /v1/${encodeURIComponent(section.id)}/${action.id} | auth: ${formatRouteAuth(action.auth)}`);
+        lines.push(`  输入：${action.method === "GET" ? "query（值为字符串）" : action.body ?? "json"}`);
+        append_api_documentation(lines, action.documentation);
+        for (const [path, documentation] of Object.entries(action.documentation?.aliases ?? {})) {
+          lines.push(`  别名：${action.method} ${path}`);
+          append_api_documentation(lines, documentation);
+        }
       }
+    }
+
+    for (const route of section.native_routes ?? []) {
+      lines.push(`- ${route.method} /v1/${encodeURIComponent(section.id)}${route.path} | auth: ${formatRouteAuth(route.auth)}`);
+      lines.push("  输入：原生 Request；ALL 匹配所有方法，wildcard 保留路径匹配语义。");
+      append_api_documentation(lines, route.documentation);
     }
 
     if (section.body) {
@@ -181,4 +218,29 @@ export function formatInstructionDocument(input: {
   }
 
   return lines.join("\n").trim();
+}
+
+/** 将静态注册文档写入 instruction；不序列化运行回调或读取配置值。 */
+function append_api_documentation(lines: string[], documentation?: ApiDocumentation): void {
+  if (documentation?.description) lines.push(`  ${documentation.description}`);
+  if (documentation?.protocol) lines.push(`  协议：${documentation.protocol}`);
+  const request_schema = documentation?.request_schema;
+  lines.push(`  请求 schema：${request_schema && Object.keys(request_schema).length ? JSON.stringify(request_schema) : "unknown（尚未描述）"}`);
+  if (documentation?.request_content_type) lines.push(`  请求媒体类型：${documentation.request_content_type}`);
+  const response_content = documentation?.response_content;
+  if (response_content && Object.keys(response_content).length) {
+    for (const [content_type, schema] of Object.entries(response_content)) {
+      lines.push(`  响应 ${documentation?.response_status ?? 200} ${content_type} schema：${Object.keys(schema).length ? JSON.stringify(schema) : "unknown（尚未描述）"}`);
+    }
+  } else {
+    const response_schema = documentation?.response_schema;
+    lines.push(`  响应 ${documentation?.response_status ?? 200}${documentation?.response_content_type ? ` ${documentation.response_content_type}` : ""} schema：${response_schema && Object.keys(response_schema).length ? JSON.stringify(response_schema) : "unknown（尚未描述）"}`);
+  }
+  for (const requirement of documentation?.requirements ?? []) lines.push(`  要求：${requirement}`);
+  for (const error of documentation?.errors ?? []) lines.push(`  错误 ${error.status}：${error.description}`);
+  for (const example of documentation?.examples ?? []) {
+    lines.push(`  示例：${example.name}`);
+    if (example.request !== undefined) lines.push(`    请求：${JSON.stringify(example.request)}`);
+    if (example.response !== undefined) lines.push(`    响应：${JSON.stringify(example.response)}`);
+  }
 }

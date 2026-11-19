@@ -125,6 +125,16 @@ export class FederationAdmin {
     return this.require_admin_access().listServices();
   }
 
+  /** 读取单个服务的完整公开说明与入口文档。 */
+  describe_service(service_id: string): ReturnType<AdminPactAccess["describe_service"]> {
+    return this.require_admin_access().describe_service(service_id);
+  }
+
+  /** 读取当前实例生成的 OpenAPI 3.1 文档。 */
+  openapi(): Promise<Record<string, unknown>> {
+    return this.require_admin_access().openapi();
+  }
+
   /** 列出 Federation 当前注册的 AI 模型。 */
   list_models(): Promise<AdminModelRecord[]> {
     return this.require_admin_access().listModels();

@@ -5,6 +5,7 @@
  */
 
 import { ServiceClient } from "../invoker/invoker.js";
+import type { ServiceCatalogDetail } from "../../types/ServiceCatalog.js";
 import { CreditsInvoker } from "../invoker/credits/index.js";
 import { EnvInvoker } from "../invoker/env/index.js";
 import {
@@ -64,6 +65,17 @@ export class AdminPactAccess {
       method: "GET",
     });
     return body.items;
+  }
+
+  /** 获取服务完整 instruction、入口文档及本地可用性。 */
+  describe_service(service_id: string): Promise<ServiceCatalogDetail> {
+    const id = requiredString(service_id, "service_id");
+    return this.json(`/v1/services/${encodeURIComponent(id)}`, { method: "GET" });
+  }
+
+  /** 读取当前实例按注册元数据生成的 OpenAPI 3.1 文档。 */
+  openapi(): Promise<Record<string, unknown>> {
+    return this.json("/openapi.json", { method: "GET" });
   }
 
   /** 列出当前 Federation 注册的模型目录（admin 身份可见额外状态字段）。 */

@@ -15,6 +15,7 @@
 
 import { Hook, type HookFn } from "./hook.js";
 import type { Context } from "./service.js";
+import type { ApiDocumentation } from "../types/ServiceDiscovery.js";
 
 /** Action 的业务逻辑函数 */
 export type ActionFn = (
@@ -31,7 +32,11 @@ export class Action {
   /** 业务逻辑 */
   private readonly _run: ActionFn;
 
-  constructor(id: string, fn: ActionFn) {
+  /** 注册时声明的文档，与 Service 注册表共享同一个事实源。 */
+  readonly documentation?: ApiDocumentation;
+
+  constructor(id: string, fn: ActionFn, documentation?: ApiDocumentation) {
+    this.documentation = documentation;
     this.id = id;
     this._run = fn;
   }

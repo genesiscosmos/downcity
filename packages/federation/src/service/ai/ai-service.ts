@@ -16,6 +16,8 @@
  */
 
 import { Service, type Context } from "../service.js";
+import type { ServiceAvailability } from "../../types/ServiceDiscovery.js";
+import { ai_api_documentation, ai_service_instruction } from "./documentation.js";
 import { httpError } from "../../utils/helpers.js";
 import type { ActionFn } from "../action.js";
 import { pgAsyncJobs, sqliteAsyncJobs } from "../async-job/schema.js";
@@ -121,7 +123,10 @@ export class AIService extends Service {
     super({
       id: "ai",
       name: "AI",
+      description: "提供模型目录、文本模型流、OpenAI兼容对话、图片任务及语音、视频和决策能力。",
+      requirements: ["注册模型及Channel并配置模型要求的环境变量。", "AI用量与结算持久化存储；图片任务创建需要Federation Queue。"],
     });
+    this.instruction = ai_service_instruction;
     this.model_stream_policy = resolve_model_stream_policy(options.model_stream);
     this.database_schemas = {
       sqlite: {
@@ -154,28 +159,29 @@ export class AIService extends Service {
     for (const modality of MODALITIES) {
       this.action(modality, async (ctx) => this.handleModality(modality, ctx), {
         auth: ["user", "admin"],
+        documentation: this.action_documentation(modality),
       }).before((ctx) => this.settlement_runtime.precheck(ctx));
     }
 
     // `/stream` 是 CityModel 唯一模型流入口，不经过旧 UIMessage action。
     this.action("stream", async (ctx) => this.handleLanguageModelStream(ctx), {
-      auth: ["user", "admin"],
+      auth: ["user", "admin"], documentation: this.action_documentation("stream"),
     }).before(async (ctx) => { await Promise.all([this.settlement_runtime.precheck(ctx), this.relay?.precheck(ctx)]); });
 
     // 图片生成的任务式端点。SDK 通过 image_create / image_result 显式访问。
     this.action("image/create", async (ctx) => this.image_runtime.create_job(ctx), {
-      auth: ["user", "admin"],
+      auth: ["user", "admin"], documentation: this.action_documentation("image/create"),
     }).before((ctx) => this.settlement_runtime.precheck(ctx));
     this.action("image/result", async (ctx) => this.image_runtime.read_job(ctx), {
-      auth: ["user", "admin"],
+      auth: ["user", "admin"], documentation: this.action_documentation("image/result"),
     });
     this.action(IMAGE_FETCH_ACTION, async (ctx) => this.image_runtime.fetch_job(ctx), {
-      auth: ["admin"],
+      auth: ["admin"], documentation: this.action_documentation(IMAGE_FETCH_ACTION),
     });
 
     // OpenAI 兼容端点
     this.action("chat/completions", async (ctx) => this.handleChatCompletions(ctx), {
-      auth: ["user", "admin"],
+      auth: ["user", "admin"], documentation: this.action_documentation("chat/completions"),
     }).before(async (ctx) => { await Promise.all([this.settlement_runtime.precheck(ctx), this.relay?.precheck(ctx)]); });
 
     // Queue 只负责唤醒；数据库 Settlement Job 才是可靠结算事实源。
@@ -183,7 +189,7 @@ export class AIService extends Service {
       const usage_id = readOptionalString(ctx.input.usage_id);
       if (!usage_id) throw httpError(422, "usage_id is required");
       return await this.settlement_runtime.process_settlement(ctx, usage_id);
-    }, { auth: ["admin"] });
+    }, { auth: ["admin"], documentation: this.action_documentation("settlement/process") });
 
     // 模型列表走同一路径，根据身份决定可见范围。
     this.action("models", async (ctx) => {
@@ -193,7 +199,50 @@ export class AIService extends Service {
       const relay_items = await this.relay.list_models(ctx, descriptors);
       const native_items = ctx.locals.relay_principal ? [] : items.filter((item) => !this.models.get(item.id)?.runtime.stream);
       return { items: [...relay_items, ...native_items] };
-    }, { method: "GET", auth: ["user", "admin"] });
+    }, { method: "GET", auth: ["user", "admin"], documentation: this.action_documentation("models") });
+  }
+
+  /** 给注册文档附加无副作用的本地检查；目录查询不执行模型或上游探测。 */
+  private action_documentation(action_id: string) {
+    return {
+      ...ai_api_documentation[action_id]!,
+      availability: () => this.check_action_availability(action_id),
+    };
+  }
+
+  /** 按入口检查依赖；模型参数和账户范围仍由实际调用校验。 */
+  private check_action_availability(action_id: string): ServiceAvailability {
+    if (!this._env || !this._database || !this._tables?.usage_records || !this._tables?.settlement_jobs) {
+      return { status: "unavailable", reason: "AI运行依赖尚未初始化。" };
+    }
+    if (action_id === "models") {
+      return this.relay
+        ? { status: "unknown", reason: "Relay目录需根据调用身份读取持久化可见范围。" }
+        : { status: "ready" };
+    }
+    if (action_id === "settlement/process") return { status: "ready" };
+    if (action_id.startsWith("image/")) {
+      if (!this._tables?.async_jobs) return { status: "unavailable", reason: "图片任务存储尚未初始化。" };
+      if (action_id === "image/result") return { status: "ready" };
+      try {
+        if (!this._queue) return { status: "unavailable", reason: "图片任务需要后台队列。" };
+        this._queue.require_available();
+      } catch {
+        return { status: "unavailable", reason: "图片任务后台队列不可用。" };
+      }
+    }
+    if (this.relay && ["stream", "chat/completions"].includes(action_id)) {
+      return { status: "unknown", reason: "Relay模型路由需根据调用身份与持久化目录确定。" };
+    }
+    const mode = action_id === "stream" || action_id === "chat/completions"
+      ? LANGUAGE_MODEL_MODE
+      : action_id.startsWith("image/") ? "image" : action_id;
+    const candidates = this.models.list().filter((model) => Boolean(this.getAction(model, mode)));
+    if (!candidates.length) return { status: "unavailable", reason: "尚未注册支持此入口的模型。" };
+    const configured = candidates.filter((model) => this.models.get_missing_env(model, (key) => this._env!.get(key)).length === 0);
+    return configured.length
+      ? { status: "ready" }
+      : { status: "unavailable", reason: "此入口的模型缺少必要环境配置。" };
   }
 
   // ========== 模型注册 ==========

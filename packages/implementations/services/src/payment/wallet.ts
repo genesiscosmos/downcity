@@ -2,7 +2,7 @@
  * Payment 钱包领域：套餐由管理端版本化维护，订单冻结权益，履约使用独立幂等日志。
  * 用户查询只投影本人安全字段；重试只处理已确认 paid 的订单，不接受回跳状态发卡。
  */
-import { httpError, type ServiceInstallContext } from "@downcity/federation";
+import { httpError, type ApiDocumentation, type ServiceInstallContext } from "@downcity/federation";
 import type { PaymentRecord, PaymentProvider } from "./types.js";
 import type { PaymentCardPlan, PaymentEntitlement, PaymentFulfillment, PaymentFulfillmentContext, PaymentWalletTable } from "./types/Wallet.js";
 
@@ -10,7 +10,7 @@ export class PaymentWallet {
   private readonly plans: PaymentWalletTable<PaymentCardPlan>;
   private readonly fulfillments: PaymentWalletTable<PaymentFulfillment>;
   private readonly payments: PaymentWalletTable<PaymentRecord>;
-  constructor(private readonly ctx: ServiceInstallContext, private readonly providers: PaymentProvider[], private readonly deliver: (record: PaymentRecord, fulfillment: PaymentFulfillmentContext) => Promise<void>) {
+  constructor(private readonly ctx: ServiceInstallContext, private readonly providers: PaymentProvider[], private readonly deliver: (record: PaymentRecord, fulfillment: PaymentFulfillmentContext) => Promise<void>, private readonly documentation: Record<string, ApiDocumentation>) {
     this.plans = ctx.table<PaymentCardPlan>("card_plans");
     this.fulfillments = ctx.table<PaymentFulfillment>("fulfillments");
     this.payments = ctx.table<PaymentRecord>("payments");
@@ -57,9 +57,10 @@ export class PaymentWallet {
   }
   install(): void {
     const ctx = this.ctx;
-    ctx.route({ method: "GET", path: "/card-plans", auth: ["user"], handler: async c => c.jsonResponse({ items: await this.plans.select({ enabled: 1 }) }) });
-    ctx.route({ method: "GET", path: "/card-plans/admin", auth: ["admin"], handler: async c => c.jsonResponse({ items: await this.plans.select() }) });
-    ctx.route({ method: "POST", path: "/card-plans/save", auth: ["admin"], handler: async c => {
+    const payment_documentation = this.documentation;
+    ctx.route({ method: "GET", path: "/card-plans", documentation: payment_documentation["/card-plans"], auth: ["user"], handler: async c => c.jsonResponse({ items: await this.plans.select({ enabled: 1 }) }) });
+    ctx.route({ method: "GET", path: "/card-plans/admin", documentation: payment_documentation["/card-plans/admin"], auth: ["admin"], handler: async c => c.jsonResponse({ items: await this.plans.select() }) });
+    ctx.route({ method: "POST", path: "/card-plans/save", documentation: payment_documentation["/card-plans/save"], auth: ["admin"], handler: async c => {
       const body = await c.json<Record<string, unknown>>();
       const plan_id = text(body.plan_id, "plan_id");
       const existing = (await this.plans.select({ plan_id }))[0];
@@ -80,7 +81,7 @@ export class PaymentWallet {
       return c.jsonResponse(plan);
     } });
     // 删除采用停售；售出的订单引用不可被删除或覆盖。
-    ctx.route({ method: "POST", path: "/card-plans/delete", auth: ["admin"], handler: async c => {
+    ctx.route({ method: "POST", path: "/card-plans/delete", documentation: payment_documentation["/card-plans/delete"], auth: ["admin"], handler: async c => {
       const body = await c.json<Record<string, unknown>>();
       const plan_id = text(body.plan_id, "plan_id"), version = body.version;
       if (typeof version !== "number" || !Number.isSafeInteger(version) || version < 1) throw httpError(422, "invalid plan version");
@@ -88,7 +89,7 @@ export class PaymentWallet {
       if (!changed) throw httpError(409, "plan version conflict");
       return c.jsonResponse({ disabled: true });
     } });
-    ctx.route({ method: "GET", path: "/orders/me", auth: ["user"], handler: async c => {
+    ctx.route({ method: "GET", path: "/orders/me", documentation: payment_documentation["/orders/me"], auth: ["user"], handler: async c => {
       const user_id = text(c.user?.user_id, "user_id");
       const payment_id = new URL(c.request.url).searchParams.get("payment_id");
       const rows = await this.payments.select({ user_id, ...(payment_id ? { payment_id } : {}) });
@@ -100,7 +101,7 @@ export class PaymentWallet {
       }));
       return c.jsonResponse({ items });
     } });
-    ctx.route({ method: "POST", path: "/orders/retry", auth: ["user"], handler: async c => {
+    ctx.route({ method: "POST", path: "/orders/retry", documentation: payment_documentation["/orders/retry"], auth: ["user"], handler: async c => {
       const body = await c.json<Record<string, unknown>>();
       const record = (await this.payments.select({ payment_id: text(body.payment_id, "payment_id"), user_id: text(c.user?.user_id, "user_id") }))[0];
       if (!record) throw httpError(404, "order not found");

@@ -7,6 +7,7 @@
 
 import { InstallableService, httpError, type ServiceInstallContext } from "@downcity/federation";
 import { CREDITS_PER_USD } from "../types/Amount.js";
+import { usage_documentation } from "./documentation.js";
 import { merge_daily_usage } from "./aggregation.js";
 import {
   build_admin_usage_overview,
@@ -28,7 +29,23 @@ export class UsageService extends InstallableService {
   readonly version = "0.4.0";
 
   constructor(private readonly options: UsageServiceOptions) {
-    super();
+    super(undefined, {
+      description: "Read-only aggregation of independently recorded Credits charges, AI technical usage and account registrations.",
+      requirements: ["ai_usage_reader with daily, recent and admin reads", "credits_usage_reader with daily and admin charges", "account_usage_reader with registrations", "User Token or Admin Session as declared by each action"],
+      availability: () => {
+        if (!this._authenticator) return { status: "unavailable", reason: "Usage authentication runtime is not installed." };
+        const readers = this.options;
+        if (typeof readers.ai_usage_reader.aggregate_user_daily_usage !== "function"
+          || typeof readers.ai_usage_reader.list_user_recent_usage !== "function"
+          || typeof readers.ai_usage_reader.aggregate_admin_usage !== "function"
+          || typeof readers.credits_usage_reader.aggregate_user_daily_charges !== "function"
+          || typeof readers.credits_usage_reader.aggregate_admin_charges !== "function"
+          || typeof readers.account_usage_reader.list_usage_account_registrations !== "function") {
+          return { status: "unavailable", reason: "One or more required reader methods are missing." };
+        }
+        return { status: "unknown", reason: "Reader interfaces are installed; underlying reader readiness cannot be established without executing queries." };
+      },
+    });
     if (!options?.ai_usage_reader || !options?.credits_usage_reader || !options?.account_usage_reader) {
       throw new TypeError("UsageService requires ai_usage_reader, credits_usage_reader and account_usage_reader");
     }
@@ -38,6 +55,10 @@ export class UsageService extends InstallableService {
       "用户通过 me 查询最长 400 个当地自然日的每日数据。",
       "用户通过 me/recent 分页查询最近的单次 AI Token 用量。",
       "持有有效 Admin Session 的 Federation 管理员通过 admin/overview、admin/users 和 admin/retention 查询跨用户分析。",
+      "配置：构造时显式注入 AI、Credits、Accounts 三个 Reader；本服务不建事实表，也不调用模型。",
+      "鉴权：me 与 me/recent 要求 User Token，并强制使用认证用户；管理端入口仅接受 Admin Session。",
+      "流程：提供 from/to 当地日期和 IANA timezone 查询每日用量；recent 按返回的 next_cursor 连续分页。",
+      "限制：日期区间包含首尾且最多 400 天；recent 默认 20 条、上限 50；数据源失败会返回错误，不以零冒充完整数据。",
     ].join("\n");
   }
 
@@ -45,6 +66,7 @@ export class UsageService extends InstallableService {
     ctx.route({
       method: "GET",
       path: "/me",
+      documentation: usage_documentation["/me"],
       auth: ["user"],
       handler: async (request_ctx) => {
         const user_id = request_ctx.user?.user_id;
@@ -80,6 +102,7 @@ export class UsageService extends InstallableService {
     ctx.route({
       method: "GET",
       path: "/me/recent",
+      documentation: usage_documentation["/me/recent"],
       auth: ["user"],
       handler: async (request_ctx) => {
         const user_id = request_ctx.user?.user_id;
@@ -108,6 +131,7 @@ export class UsageService extends InstallableService {
     ctx.route({
       method: "GET",
       path: "/admin/overview",
+      documentation: usage_documentation["/admin/overview"],
       auth: ["admin"],
       handler: async (request_ctx) => {
         const query = read_admin_query(request_ctx.request.url);
@@ -124,6 +148,7 @@ export class UsageService extends InstallableService {
     ctx.route({
       method: "GET",
       path: "/admin/users",
+      documentation: usage_documentation["/admin/users"],
       auth: ["admin"],
       handler: async (request_ctx) => {
         const query = read_admin_query(request_ctx.request.url);
@@ -138,6 +163,7 @@ export class UsageService extends InstallableService {
     ctx.route({
       method: "GET",
       path: "/admin/retention",
+      documentation: usage_documentation["/admin/retention"],
       auth: ["admin"],
       handler: async (request_ctx) => {
         const query = read_admin_query(request_ctx.request.url);

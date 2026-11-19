@@ -6,7 +6,7 @@
  * - PaymentService 自己拥有支付订单；paid 后通过 on_paid 通知接入方发放 Credits。
  */
 
-import { httpError, type ServiceInstallContext } from "@downcity/federation";
+import { httpError, type ApiDocumentation, type ServiceInstallContext } from "@downcity/federation";
 import type { PaymentInbox } from "./PaymentInbox.js";
 import type { PaymentEntitlement } from "./types/Wallet.js";
 import { read_entitlement } from "./wallet.js";
@@ -84,7 +84,7 @@ interface PaymentServiceLike {
 /**
  * 注册 Payment 服务路由。
  */
-export function installPaymentRoutes(service: PaymentServiceLike, ctx: ServiceInstallContext): void {
+export function installPaymentRoutes(service: PaymentServiceLike, ctx: ServiceInstallContext, payment_documentation: Record<string, ApiDocumentation>): void {
   const providers = service.getProviders();
   const payments = ctx.table<PaymentRecord>("payments") as PaymentTable;
   const events = ctx.table<PaymentEventRecord>("events") as EventTable;
@@ -92,6 +92,7 @@ export function installPaymentRoutes(service: PaymentServiceLike, ctx: ServiceIn
   ctx.route({
     method: "GET",
     path: "/methods",
+    documentation: payment_documentation["/methods"],
     auth: [],
     handler(requestCtx) {
       return requestCtx.jsonResponse({
@@ -104,6 +105,7 @@ export function installPaymentRoutes(service: PaymentServiceLike, ctx: ServiceIn
   ctx.route({
     method: "POST",
     path: "/checkout/create",
+    documentation: payment_documentation["/checkout/create"],
     auth: ["user"],
     async handler(requestCtx) {
       const body = await requestCtx.json<PaymentCreateCheckoutInput>();
@@ -188,6 +190,7 @@ export function installPaymentRoutes(service: PaymentServiceLike, ctx: ServiceIn
   ctx.route({
     method: "GET",
     path: "/payments/me",
+    documentation: payment_documentation["/payments/me"],
     auth: ["user"],
     async handler(requestCtx) {
       const userId = normalizeRequired(requestCtx.user?.user_id, "user_id");
@@ -198,6 +201,7 @@ export function installPaymentRoutes(service: PaymentServiceLike, ctx: ServiceIn
   ctx.route({
     method: "GET",
     path: "/payments",
+    documentation: payment_documentation["/payments"],
     auth: ["admin"],
     async handler(requestCtx) {
       return requestCtx.jsonResponse({ items: sortPayments(await payments.select()) });
@@ -207,6 +211,7 @@ export function installPaymentRoutes(service: PaymentServiceLike, ctx: ServiceIn
   ctx.route({
     method: "GET",
     path: "/events",
+    documentation: payment_documentation["/events"],
     auth: ["admin"],
     async handler(requestCtx) {
       return requestCtx.jsonResponse({ items: sortEvents(await events.select()) });
@@ -216,6 +221,7 @@ export function installPaymentRoutes(service: PaymentServiceLike, ctx: ServiceIn
   ctx.route({
     method: "POST",
     path: "/webhook",
+    documentation: payment_documentation["/webhook"],
     body: "raw",
     auth: [],
     async handler(requestCtx) {
@@ -267,6 +273,7 @@ export function installPaymentRoutes(service: PaymentServiceLike, ctx: ServiceIn
   ctx.route({
     method: "GET",
     path: "/redirect/success",
+    documentation: payment_documentation["/redirect/success"],
     auth: [],
     handler(requestCtx) {
       return htmlResponse(renderRedirectPage({
@@ -281,6 +288,7 @@ export function installPaymentRoutes(service: PaymentServiceLike, ctx: ServiceIn
   ctx.route({
     method: "GET",
     path: "/redirect/cancel",
+    documentation: payment_documentation["/redirect/cancel"],
     auth: [],
     handler(requestCtx) {
       return htmlResponse(renderRedirectPage({

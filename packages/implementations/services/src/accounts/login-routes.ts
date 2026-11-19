@@ -1,14 +1,15 @@
 /** Public login protocol. Claim credentials travel only in JSON bodies; status never delivers tokens. */
-import type { ServiceInstallContext } from "@downcity/federation";
+import type { ApiDocumentation, ServiceInstallContext } from "@downcity/federation";
 import { httpError } from "@downcity/federation";
 import type { AccountsRuntime } from "./AccountsRuntime.js";
 import type { AccountsLoginContinueRequest, AccountsLoginStartRequest, AccountsLoginExchangeRequest } from "./types.js";
 import { toRecord } from "./utils.js";
 
 /** 注册登录、状态查询、授权码交换及 Provider 浏览器入口。 */
-export function register_login_routes(runtime: AccountsRuntime, ctx: ServiceInstallContext): void {
+export function register_login_routes(runtime: AccountsRuntime, ctx: ServiceInstallContext, accounts_documentation: Record<string, ApiDocumentation>): void {
   ctx.route({
     method: "POST", path: "/login/start", public: true,
+    documentation: accounts_documentation["/login/start"],
     handler: async (request_ctx) => {
       const body = await request_ctx.json<AccountsLoginStartRequest>();
       const provider_id = String(body.provider ?? "");
@@ -30,6 +31,7 @@ export function register_login_routes(runtime: AccountsRuntime, ctx: ServiceInst
   });
   ctx.route({
     method: "POST", path: "/login/continue", public: true,
+    documentation: accounts_documentation["/login/continue"],
     handler: async (request_ctx) => {
       const body = await request_ctx.json<AccountsLoginContinueRequest>();
       const row = await runtime.flow.claim(String(body.login_id ?? ""), String(body.login_secret ?? ""), request_ctx.request);
@@ -49,6 +51,7 @@ export function register_login_routes(runtime: AccountsRuntime, ctx: ServiceInst
   });
   ctx.route({
     method: "POST", path: "/login/result", public: true,
+    documentation: accounts_documentation["/login/result"],
     handler: async (request_ctx) => {
       const body = await request_ctx.json<AccountsLoginContinueRequest>();
       const row = await runtime.flow.claim(String(body.login_id ?? ""), String(body.login_secret ?? ""), request_ctx.request);
@@ -58,13 +61,14 @@ export function register_login_routes(runtime: AccountsRuntime, ctx: ServiceInst
   });
   ctx.route({
     method: "POST", path: "/login/exchange", public: true,
+    documentation: accounts_documentation["/login/exchange"],
     handler: async (request_ctx) => {
       const body = await request_ctx.json<AccountsLoginExchangeRequest>();
       const row = await runtime.flow.claim(String(body.login_id ?? ""), String(body.login_secret ?? ""), request_ctx.request);
       return Response.json(await runtime.exchange_login(row, body), { headers: { "cache-control": "no-store" } });
     },
   });
-  ctx.route({ method: "GET", path: "/oauth/authorize", public: true, handler: {
+  ctx.route({ method: "GET", path: "/oauth/authorize", public: true, documentation: accounts_documentation["/oauth/authorize"], handler: {
     request: async (request) => await runtime.authorize_oauth(new URL(request.url).searchParams.get("login_id") ?? "", request),
   } });
 }

@@ -18,6 +18,8 @@ import { measure_startup } from "./startup-timing.js";
 import { asInstallableService, type ServiceDefinition } from "../service/installable-service.js";
 import { EnvService } from "../service/env/env-service.js";
 import { build_federation_instruction } from "./federation-instruction.js";
+import { list_service_catalog, get_service_catalog_detail } from "./service-catalog.js";
+import { build_service_openapi } from "./service-openapi.js";
 import { initialize_federation, prepare_federation_schema } from "./federation-init.js";
 import { build_federation_router } from "./federation-router.js";
 import { create_federation_runtime } from "./federation-runtime.js";
@@ -122,6 +124,24 @@ export class FederationRuntime {
    */
   get_services(): Service[] {
     return [...this.services.values()];
+  }
+
+  /** 读取当前实例服务目录，执行有界的本地条件检查。 */
+  async list_services(): Promise<import("../types/ServiceCatalog.js").ServiceCatalogSummary[]> {
+    await this.ready();
+    return list_service_catalog(this.get_services());
+  }
+
+  /** 获取服务详细文档，未注册服务返回 undefined。 */
+  async describe_service(service_id: string): Promise<import("../types/ServiceCatalog.js").ServiceCatalogDetail | undefined> {
+    await this.ready();
+    return get_service_catalog_detail(this.get_services(), service_id);
+  }
+
+  /** 从当前注册表生成 OpenAPI，不执行任何业务调用。 */
+  async openapi(): Promise<import("../types/ServiceDiscovery.js").ApiSchema> {
+    await this.ready();
+    return build_service_openapi(this.get_services());
   }
 
   /**

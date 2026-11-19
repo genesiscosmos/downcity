@@ -51,12 +51,22 @@ export class FeedbackService extends InstallableService {
   private messages_table?: FederationTableApi<FeedbackMessage>;
 
   constructor() {
-    super();
+    super(undefined, {
+      description: "Persist user feedback and official replies with user isolation and admin processing.",
+      requirements: ["Prepared Federation database with feedback schema", "User authentication for submission/history; admin session for processing"],
+      availability: () => this.messages_table && this._authenticator
+        ? { status: "ready", reason: "Local feedback table and authentication dependencies are installed; database connectivity is not probed." }
+        : { status: "unavailable", reason: "Feedback table or authentication runtime is not installed." },
+    });
     this.instruction = [
       "允许已登录用户提交产品反馈、问题报告和建议。",
       "管理员可查询反馈、写入官方答复，并更新 open / reviewing / replied / closed 状态。",
       "用户可查看自己提交过的反馈和官方答复。",
       "反馈默认只保存在 Downcity 数据库，不会自动发送到邮件、Slack 或其它外部渠道。",
+      "配置：显式注册 FeedbackService 并准备数据库 schema；无需额外外部发送配置。",
+      "鉴权：send/me 要求 User Token；messages/reply/status 要求 Admin Session。",
+      "流程：send 提交 → me 查询本人反馈；管理员 messages 查询 → reply 答复或 status 更新处理状态。",
+      "限制：message/reply 最长 10000 字符，contact 最长 500；查询默认 100 条，本人上限 200，管理端上限 500。",
     ].join("\n");
   }
 

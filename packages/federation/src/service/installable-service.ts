@@ -21,6 +21,7 @@ import type {
 import type { AnyPgTable } from "drizzle-orm/pg-core";
 import type { AnySQLiteTable } from "drizzle-orm/sqlite-core";
 import type { FederationQueue } from "../federation/queue.js";
+import type { ApiDocumentation, ServiceDiscoveryOptions } from "../types/ServiceDiscovery.js";
 
 /**
  * 框架内部安装入口。
@@ -90,6 +91,8 @@ export type ServiceDatabaseSchemas = Record<string, ServiceDatabaseSchema | unde
 
 /** 进入 Action 与 hook 管线的 HTTP 路由配置。 */
 export interface ServiceActionRouteConfig {
+  /** 由发现接口和 OpenAPI 共用的注册文档。 */
+  documentation?: ApiDocumentation;
   /** 路由接受的 HTTP 方法；POST 按 body 声明解析请求体。 */
   method: "GET" | "POST";
   /** Service namespace 内的 Action 路径，注册时移除前导斜杠。 */
@@ -115,7 +118,11 @@ export interface ServiceActionRouteConfig {
 }
 
 export interface ServiceNativeRouteConfig {
+  /** 由发现接口和 OpenAPI 共用的注册文档。 */
+  documentation?: ApiDocumentation;
+  /** 原生路由接受的方法。 */
   method: ServiceRouteMethod;
+  /** 服务 namespace 内的路径。 */
   path: string;
   /**
    * 是否公开访问。
@@ -189,8 +196,8 @@ export abstract class InstallableService extends Service {
    */
   readonly globalHook = new Hook();
 
-  constructor(env?: EnvRequirement[]) {
-    super({ id: "service", env });
+  constructor(env?: EnvRequirement[], discovery?: ServiceDiscoveryOptions) {
+    super({ id: "service", env, ...discovery });
   }
 
   abstract install(ctx: ServiceInstallContext): void;
@@ -216,6 +223,7 @@ export abstract class InstallableService extends Service {
           path: config.path,
           auth: resolve_route_auth(config),
           handler: config.handler.request,
+          documentation: config.documentation,
         });
         return;
       }
@@ -241,7 +249,7 @@ export abstract class InstallableService extends Service {
             status, headers: { "content-type": "application/json" },
           }),
         });
-      }, { method: config.method, body: config.body, auth: resolve_route_auth(config) });
+      }, { method: config.method, body: config.body, auth: resolve_route_auth(config), documentation: config.documentation });
     }
 
     const ctx: ServiceInstallContext = {
@@ -305,11 +313,16 @@ export function install_service(service: InstallableService, database: Database)
   service[INSTALL_SERVICE](database);
 }
 
-export type ServiceDefinition = {
+export type ServiceDefinition = ServiceDiscoveryOptions & {
+  /** 服务唯一标识。 */
   id: string;
+  /** 服务展示名。 */
   name?: string;
+  /** 服务版本声明。 */
   version?: string;
+  /** 服务拥有的数据表。 */
   schema?: Record<string, unknown>;
+  /** 各数据库方言的表和 DDL。 */
   database_schemas?: ServiceDatabaseSchemas;
   /**
    * 服务依赖的运行时环境变量声明。
@@ -319,14 +332,16 @@ export type ServiceDefinition = {
    * - City 会把这些 key 自动注册到自己的 env requirement 目录中
    */
   env?: EnvRequirement[];
+  /** 公开的完整服务说明。 */
   instruction?: InstructionDefinition;
+  /** 注册服务路由和 hook。 */
   install(ctx: ServiceInstallContext): void;
 };
 
 export function asInstallableService(bp: ServiceDefinition): InstallableService {
   return new (class extends InstallableService {
     constructor() {
-      super(bp.env);
+      super(bp.env, bp);
       (this as any).id = bp.id;
       if (bp.name) (this as any).name = bp.name;
       if (bp.schema) (this as any).tables = bp.schema;

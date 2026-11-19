@@ -5,7 +5,7 @@
  * 认证和持久化规则均由运行时负责。
  */
 
-import type { ServiceInstallContext } from "@downcity/federation";
+import type { ApiDocumentation, ServiceInstallContext } from "@downcity/federation";
 import type { AccountsRefreshRequest, AccountsLogoutRequest } from "./types/AccountsSession.js";
 import type { AccountsRuntime } from "./AccountsRuntime.js";
 import { register_login_routes } from "./login-routes.js";
@@ -14,11 +14,13 @@ import { register_login_routes } from "./login-routes.js";
 export function register_accounts_routes(
   runtime: AccountsRuntime,
   ctx: ServiceInstallContext,
+  accounts_documentation: Record<string, ApiDocumentation>,
 ): void {
-  register_login_routes(runtime, ctx);
+  register_login_routes(runtime, ctx, accounts_documentation);
 
   ctx.route({
     method: "POST", path: "/refresh", public: true,
+    documentation: accounts_documentation["/refresh"],
     handler: async (request_ctx) => {
       const body = await request_ctx.json<AccountsRefreshRequest>();
       const result = await ctx.refresh_user_session(String(body.refresh_token ?? ""), String(body.refresh_id ?? ""));
@@ -29,6 +31,7 @@ export function register_accounts_routes(
   ctx.route({
     method: "ALL",
     path: "/auth/*",
+    documentation: accounts_documentation["/auth/*"],
     public: true,
     handler: {
       request: (request) => runtime.get_auth_handler()(request),
@@ -38,6 +41,7 @@ export function register_accounts_routes(
   ctx.route({
     method: "GET",
     path: "/oauth/callback",
+    documentation: accounts_documentation["/oauth/callback"],
     public: true,
     handler: {
       request: (request) => runtime.handle_oauth_callback(request),
@@ -47,6 +51,7 @@ export function register_accounts_routes(
   ctx.route({
     method: "POST",
     path: "/register",
+    documentation: accounts_documentation["/register"],
     public: true,
     handler: async (request_ctx) => {
       const result = await runtime.register_email_account(
@@ -59,6 +64,7 @@ export function register_accounts_routes(
   ctx.route({
     method: "POST",
     path: "/verify-email",
+    documentation: accounts_documentation["/verify-email"],
     public: true,
     handler: async (request_ctx) => {
       const result = await runtime.verify_email_account(
@@ -72,6 +78,7 @@ export function register_accounts_routes(
   ctx.route({
     method: "GET",
     path: "/providers",
+    documentation: accounts_documentation["/providers"],
     public: true,
     handler: async (request_ctx) => request_ctx.jsonResponse({
       items: runtime.list_visible_providers(),
@@ -81,6 +88,7 @@ export function register_accounts_routes(
   ctx.route({
     method: "GET",
     path: "/me",
+    documentation: accounts_documentation["/me"],
     auth: ["user"],
     handler: async (request_ctx) => {
       const user_id = String(request_ctx.user?.user_id ?? "");
@@ -96,6 +104,7 @@ export function register_accounts_routes(
   ctx.route({
     method: "POST",
     path: "/tokens/issue",
+    documentation: accounts_documentation["/tokens/issue"],
     auth: ["admin"],
     handler: async (request_ctx) => {
       const body = await request_ctx.json<{
@@ -116,6 +125,7 @@ export function register_accounts_routes(
   ctx.route({
     method: "POST",
     path: "/logout",
+    documentation: accounts_documentation["/logout"],
     public: true,
     handler: async (request_ctx) => {
       const body = await request_ctx.json<AccountsLogoutRequest>();
@@ -134,6 +144,7 @@ export function register_accounts_routes(
   ctx.route({
     method: "GET",
     path: "/users",
+    documentation: accounts_documentation["/users"],
     auth: ["admin"],
     handler: async (request_ctx) => {
       try {
@@ -147,6 +158,7 @@ export function register_accounts_routes(
   ctx.route({
     method: "GET",
     path: "/sessions",
+    documentation: accounts_documentation["/sessions"],
     auth: ["admin"],
     handler: async (request_ctx) => {
       try {

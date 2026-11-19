@@ -115,11 +115,22 @@ export class CreditsService extends InstallableService {
   };
 
   constructor() {
-    super();
+    super(undefined, {
+      description: "Maintain permanent and expiring Credits cards with atomic, idempotent ledger transactions.",
+      requirements: ["Prepared Credits database schema with atomic SQL support", "User Token for own reads; Admin Session for ledger writes and cross-user reads"],
+      availability: () => this.database && this._authenticator
+        ? { status: "ready", reason: "Local database and authentication dependencies are installed; database connectivity and balances are not probed." }
+        : { status: "unavailable", reason: "Credits database or authentication runtime is not installed." },
+    });
     this.instruction = [
       "提供用户级 Credits、永久 Primary Card 与限时 Ephemeral Card。",
       "Topup 给指定 Card 入账；Charge 默认优先消费最早到期的 Ephemeral Card，再消费 Primary Card。",
       "所有写操作使用 Transaction 和 Transaction Entries 原子、幂等记账，任何 Card 都不能透支。",
+      "配置：注册 CreditsService 并显式 prepare 数据库以建立索引、余额约束和历史数据校验；无需第三方 Provider。",
+      "鉴权：本人 me/wallet/me/transactions/me/history/me/cards/entries/me 要求 User Token；其他入口仅 Admin Session。",
+      "流程：管理端 topups/create 给 Primary 入账或 cards/ephemeral/create 发限时卡 → charges/create 消费 → 用户查询钱包与不可变流水。",
+      "限制：额度必须为正安全整数，总可用余额不能超过 MAX_SAFE_INTEGER，每用户最多 100 张有效且有余额的限时卡。",
+      "幂等键在同一 Transaction kind 内唯一，重试必须复用完整相同参数；查询默认 100 条，上限 500。",
     ].join("\n");
   }
 

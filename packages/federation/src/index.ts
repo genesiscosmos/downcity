@@ -5,6 +5,14 @@
  */
 
 export type { UserSessionCredentials } from "./types/UserSession.js";
+export type {
+  ApiSchema, ApiExample, ApiError, ApiDocumentation,
+  ServiceAvailability, ServiceAvailabilityCheck, ServiceDiscoveryOptions,
+} from "./types/ServiceDiscovery.js";
+export type {
+  PublicApiDocumentation, ServiceEndpointSummary, ServiceEndpointDetail,
+  ServiceCatalogSummary, ServiceCatalogDetail,
+} from "./types/ServiceCatalog.js";
 export { Federation } from "./access/Federation.js";
 export { FederationUser } from "./access/FederationUser.js";
 export { FederationAdmin } from "./access/FederationAdmin.js";
@@ -99,6 +107,11 @@ export type {
   Context,
   RouteAuth,
   EnvRequirement,
+  ActionOptions,
+  ServiceActionDefinition,
+  ServiceNativeRouteDefinition,
+  ServiceNativeRouteHandler,
+  ServiceRouteMethod,
 } from "./service/service.js";
 
 export type {
@@ -122,12 +135,15 @@ export type {
   ServiceTransactionContext,
   ServiceDatabaseSchema,
   ServiceDatabaseSchemas,
+  ServiceActionRouteConfig,
+  ServiceNativeRouteConfig,
 } from "./service/installable-service.js";
 
 export type {
   InstructionDefinition,
   InstructionContext,
   InstructionActionDefinition,
+  InstructionNativeRouteDefinition,
   InstructionCapable,
 } from "./service/instruction.js";
 

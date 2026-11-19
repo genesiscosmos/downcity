@@ -8,6 +8,7 @@
 import { UserPactAccess } from "../pact/user/index.js";
 import type { ServiceClient } from "../pact/invoker/invoker.js";
 import type { UserServiceSummary } from "../pact/user/types.js";
+import type { ServiceCatalogDetail } from "../types/ServiceCatalog.js";
 import {
   defaultFetch,
   type FetchLike,
@@ -71,6 +72,16 @@ export class FederationUser {
   /** 列出 Federation 当前公开的 Service。 */
   list_services(): Promise<UserServiceSummary[]> {
     return this.user_access.listServices();
+  }
+
+  /** 读取单个服务的完整公开说明与入口文档。 */
+  describe_service(service_id: string): Promise<ServiceCatalogDetail> {
+    return this.user_access.describe_service(service_id);
+  }
+
+  /** 读取当前实例生成的 OpenAPI 3.1 文档。 */
+  openapi(): Promise<Record<string, unknown>> {
+    return this.user_access.openapi();
   }
 
   /** 执行一次账户登录编排。 */

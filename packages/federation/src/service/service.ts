@@ -21,6 +21,7 @@ import type { FederationStorage } from "../federation/storage.js";
 import type { FederationRequestTransport } from "../federation/types.js";
 import type { ServiceDatabaseContext } from "../types/database/Database.js";
 import type { ServiceDatabaseSchemas } from "./installable-service.js";
+import type { ApiDocumentation, ServiceDiscoveryOptions } from "../types/ServiceDiscovery.js";
 
 /**
  * 框架内部初始化入口。
@@ -136,6 +137,8 @@ export interface ActionOptions {
   body?: "json" | "raw";
   /** 允许访问该 action 的身份集合；默认 `["user"]`，传 `[]` 表示免登录 */
   auth?: RouteAuth;
+  /** 由发现接口和 OpenAPI 共用的公开文档及本地就绪检查。 */
+  documentation?: ApiDocumentation;
 }
 
 /** 已注册 Action 及其供 Federation 路由消费的 HTTP 元数据。 */
@@ -151,6 +154,8 @@ export interface ServiceActionDefinition {
   body?: "json" | "raw";
   /** 已归一化的允许访问身份集合；空数组表示公开访问。 */
   auth: RouteAuth;
+  /** 注册时声明的公开 API 文档。 */
+  documentation?: ApiDocumentation;
 }
 
 /** Service route 支持的 HTTP 方法。 */
@@ -177,6 +182,8 @@ export interface ServiceNativeRouteDefinition {
   auth: RouteAuth;
   /** 原生 HTTP route 处理器。 */
   handler: ServiceNativeRouteHandler;
+  /** 原生协议的公开说明、schema 和本地就绪检查。 */
+  documentation?: ApiDocumentation;
 }
 
 /**
@@ -207,6 +214,8 @@ export class Service {
   readonly env?: EnvRequirement[];
   /** 当前模块可选的说明文档。 */
   instruction?: InstructionDefinition;
+  /** 服务级公开说明及本地条件检查。 */
+  readonly discovery: ServiceDiscoveryOptions;
 
   /** Action 注册表 */
   private actionMap = new Map<string, ServiceActionDefinition>();
@@ -233,16 +242,25 @@ export class Service {
   /** 当前 Service 声明的数据表；仅由 Federation 初始化阶段注入。 */
   _tables?: Record<string, CityTableApi>;
 
-  constructor(options: {
+  constructor(options: ServiceDiscoveryOptions & {
+    /** 服务唯一 ID，也是 HTTP namespace。 */
     id: string;
+    /** 服务展示名称，默认使用 ID。 */
     name?: string;
+    /** 服务拥有的数据表。 */
     tables?: Record<string, AnySQLiteTable | AnyPgTable>;
+    /** 可公开的环境变量声明，禁止包含实际值。 */
     env?: EnvRequirement[];
   }) {
     this.id = options.id;
     this.name = options.name ?? options.id;
     this.tables = options.tables;
     this.env = options.env;
+    this.discovery = {
+      description: options.description,
+      requirements: options.requirements,
+      availability: options.availability,
+    };
   }
 
   // ========== 生命周期 ==========
@@ -307,12 +325,13 @@ export class Service {
     if (this.actionMap.has(id)) {
       throw new Error(`Duplicate action: ${this.id}.${id}`);
     }
-    const action = new Action(id, fn);
+    const action = new Action(id, fn, opts?.documentation);
     this.actionMap.set(id, {
       action,
       method: opts?.method ?? "POST",
       body: opts?.body ?? "json",
       auth: normalizeRouteAuth(opts?.auth),
+      documentation: opts?.documentation,
     });
     return action;
   }
@@ -336,10 +355,16 @@ export class Service {
    * 注册原生 HTTP route（Federation 内部使用）。
    */
   _registerNativeRoute(definition: {
+    /** 接受的方法；ALL 匹配所有方法。 */
     method: ServiceRouteMethod;
+    /** namespace 内的原生路径，可包含 wildcard。 */
     path: string;
+    /** 可访问身份，默认 user。 */
     auth?: RouteAuth;
+    /** 直接处理原始 Request 的回调。 */
     handler: ServiceNativeRouteHandler;
+    /** 原生协议的公开文档。 */
+    documentation?: ApiDocumentation;
   }): void {
     const path = normalizeNativeRoutePath(definition.path);
     const method = definition.method;
@@ -352,6 +377,7 @@ export class Service {
       path,
       auth: normalizeRouteAuth(definition.auth),
       handler: definition.handler,
+      documentation: definition.documentation,
     });
   }
 
@@ -368,6 +394,7 @@ export class Service {
       id: item.action.id,
       method: item.method,
       auth: item.auth,
+      documentation: item.documentation,
     }));
   }
 }

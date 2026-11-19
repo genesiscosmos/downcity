@@ -1405,7 +1405,7 @@ test("Federation exposes service env requirements and env catalog", async () => 
 
     const body = await response.json()
     const stripe = body.items.find((item) => item.id === "payment.stripe")
-    assert.deepEqual(stripe, {
+    assert.deepEqual({ id: stripe.id, name: stripe.name, env: stripe.env }, {
       id: "payment.stripe",
       name: "Stripe Payment",
       env: [

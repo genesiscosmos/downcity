@@ -1,6 +1,7 @@
 /** Organizations Service 的 HTTP Action 装配模块。 */
 
 import type { ServiceInstallContext } from "@downcity/federation";
+import { organization_documentation } from "./documentation.js";
 import { require_service_user_identity } from "../shared/service-identity.js";
 import type { OrganizationsService } from "./service.js";
 import type {
@@ -23,6 +24,7 @@ export function register_organization_routes(
   context.route({
     method: "GET",
     path: "/my",
+    documentation: organization_documentation["/my"],
     auth: ["user"],
     handler: async (request) => {
       const identity = require_service_user_identity(request);
@@ -38,6 +40,7 @@ export function register_organization_routes(
   context.route({
     method: "GET",
     path: "/get",
+    documentation: organization_documentation["/get"],
     auth: ["user"],
     handler: async (request) => {
       const identity = require_service_user_identity(request);
@@ -50,6 +53,7 @@ export function register_organization_routes(
   context.route({
     method: "POST",
     path: "/create",
+    documentation: organization_documentation["/create"],
     auth: ["user"],
     handler: async (request) => {
       const identity = require_service_user_identity(request);
@@ -62,6 +66,7 @@ export function register_organization_routes(
   context.route({
     method: "POST",
     path: "/update",
+    documentation: organization_documentation["/update"],
     auth: ["user"],
     handler: async (request) => {
       const identity = require_service_user_identity(request);
@@ -74,6 +79,7 @@ export function register_organization_routes(
   context.route({
     method: "POST",
     path: "/archive",
+    documentation: organization_documentation["/archive"],
     auth: ["user"],
     handler: async (request) => {
       const identity = require_service_user_identity(request);
@@ -86,6 +92,7 @@ export function register_organization_routes(
   context.route({
     method: "GET",
     path: "/membership/get",
+    documentation: organization_documentation["/membership/get"],
     auth: ["user"],
     handler: async (request) => {
       const identity = require_service_user_identity(request);
@@ -98,6 +105,7 @@ export function register_organization_routes(
   context.route({
     method: "GET",
     path: "/members/list",
+    documentation: organization_documentation["/members/list"],
     auth: ["user"],
     handler: async (request) => {
       const identity = require_service_user_identity(request);
@@ -110,6 +118,7 @@ export function register_organization_routes(
   context.route({
     method: "POST",
     path: "/members/role",
+    documentation: organization_documentation["/members/role"],
     auth: ["user"],
     handler: async (request) => {
       const identity = require_service_user_identity(request);
@@ -122,6 +131,7 @@ export function register_organization_routes(
   context.route({
     method: "POST",
     path: "/members/remove",
+    documentation: organization_documentation["/members/remove"],
     auth: ["user"],
     handler: async (request) => {
       const identity = require_service_user_identity(request);
@@ -134,6 +144,7 @@ export function register_organization_routes(
   context.route({
     method: "POST",
     path: "/members/leave",
+    documentation: organization_documentation["/members/leave"],
     auth: ["user"],
     handler: async (request) => {
       const identity = require_service_user_identity(request);
@@ -146,6 +157,7 @@ export function register_organization_routes(
   context.route({
     method: "POST",
     path: "/owner/transfer",
+    documentation: organization_documentation["/owner/transfer"],
     auth: ["user"],
     handler: async (request) => {
       const identity = require_service_user_identity(request);
@@ -158,6 +170,7 @@ export function register_organization_routes(
   context.route({
     method: "POST",
     path: "/join-requests/create",
+    documentation: organization_documentation["/join-requests/create"],
     auth: ["user"],
     handler: async (request) => {
       const identity = require_service_user_identity(request);
@@ -170,6 +183,7 @@ export function register_organization_routes(
   context.route({
     method: "POST",
     path: "/join-requests/cancel",
+    documentation: organization_documentation["/join-requests/cancel"],
     auth: ["user"],
     handler: async (request) => {
       const identity = require_service_user_identity(request);
@@ -182,6 +196,7 @@ export function register_organization_routes(
   context.route({
     method: "GET",
     path: "/join-requests/list",
+    documentation: organization_documentation["/join-requests/list"],
     auth: ["user"],
     handler: async (request) => {
       const identity = require_service_user_identity(request);
@@ -194,6 +209,7 @@ export function register_organization_routes(
   context.route({
     method: "POST",
     path: "/join-requests/decide",
+    documentation: organization_documentation["/join-requests/decide"],
     auth: ["user"],
     handler: async (request) => {
       const identity = require_service_user_identity(request);

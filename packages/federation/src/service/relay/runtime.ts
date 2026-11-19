@@ -19,6 +19,8 @@ import { RelayKeyStore } from "./keys.js";
 import { RelayRouter } from "./router.js";
 import { pg_relay_index_ddl } from "./schema.pg.js";
 import type { RelayAdminMetadata, RelayAdminHealth } from "../../types/RelayAdmin.js";
+import type { ApiDocumentation, ServiceAvailability } from "../../types/ServiceDiscovery.js";
+import { relay_documentation } from "./documentation.js";
 
 /** 可选中转功能，生命周期由 AIService 管理。 */
 export class RelayRuntime {
@@ -26,29 +28,31 @@ export class RelayRuntime {
   private catalog_store?: RelayCatalogStore;
   private key_store?: RelayKeyStore;
   private router?: RelayRouter;
+  /** 仅在目录加载成功后置位，避免部分初始化被公开为 ready。 */
+  private initialized = false;
 
   constructor(service: Service) {
     service.action("keys/create", async (ctx) => {
       return await this.keys().create(this.user_id(ctx), ctx.input);
-    }, { auth: ["user"] });
+    }, { auth: ["user"], documentation: this.documentation("keys/create") });
     service.action("keys/list", async (ctx) => await this.keys().list(this.user_id(ctx)), {
-      method: "GET", auth: ["user"],
+      method: "GET", auth: ["user"], documentation: this.documentation("keys/list"),
     });
     service.action("keys/update", async (ctx) => await this.keys().update(this.user_id(ctx), ctx.input), {
-      auth: ["user"],
+      auth: ["user"], documentation: this.documentation("keys/update"),
     });
     service.action("keys/revoke", async (ctx) => await this.keys().update(this.user_id(ctx), {
       key_id: ctx.input.key_id, status: "revoked",
-    }), { auth: ["user"] });
+    }), { auth: ["user"], documentation: this.documentation("keys/revoke") });
     service.action("relay/catalog", async () => structuredClone(await this.catalog().read(true)), {
-      method: "GET", auth: ["admin"],
+      method: "GET", auth: ["admin"], documentation: this.documentation("relay/catalog"),
     });
     service.action("relay/metadata", (): RelayAdminMetadata => ({
       adapters: ["registered", "openai_chat_completions"],
       templates: this.dependencies!.models.filter((model) => model.runtime.stream).map((model) => ({
         id: model.id, name: model.name, channel_id: model.channel_id, upstream_model: model.upstream_model,
       })),
-    }), { method: "GET", auth: ["admin"] });
+    }), { method: "GET", auth: ["admin"], documentation: this.documentation("relay/metadata") });
     service.action("relay/health", async (): Promise<RelayAdminHealth> => {
       const { catalog } = await this.catalog().read();
       const checked_at = Date.now();
@@ -63,22 +67,50 @@ export class RelayRuntime {
         cooldown_until: cooldowns.get(deployment.id) ?? null,
         cooling: (cooldowns.get(deployment.id) ?? 0) > checked_at,
       })) };
-    }, { method: "GET", auth: ["admin"] });
+    }, { method: "GET", auth: ["admin"], documentation: this.documentation("relay/health") });
     service.action("relay/configure", async (ctx) => await this.catalog().replace(ctx.input.catalog, ctx.input.revision), {
-      auth: ["admin"],
+      auth: ["admin"], documentation: this.documentation("relay/configure"),
     });
     service.action("relay/requests", async (ctx) => await this.list_requests(ctx, this.user_id(ctx)), {
-      method: "GET", auth: ["user"],
+      method: "GET", auth: ["user"], documentation: this.documentation("relay/requests"),
     });
     service.action("relay/admin/requests", async (ctx) => await this.list_requests(ctx), {
-      method: "GET", auth: ["admin"],
+      method: "GET", auth: ["admin"], documentation: this.documentation("relay/admin/requests"),
     });
     service.action("relay/attempts", async (ctx) => await this.list_attempts(ctx, this.user_id(ctx)), {
-      method: "GET", auth: ["user"],
+      method: "GET", auth: ["user"], documentation: this.documentation("relay/attempts"),
     });
     service.action("relay/admin/attempts", async (ctx) => await this.list_attempts(ctx), {
-      method: "GET", auth: ["admin"],
+      method: "GET", auth: ["admin"], documentation: this.documentation("relay/admin/attempts"),
     });
+  }
+
+  /** 为注册 ID 绑定当前实例的只读可用性检查，不修改共享文档。 */
+  private documentation(action_id: keyof typeof relay_documentation): ApiDocumentation {
+    return {
+      ...relay_documentation[action_id],
+      availability: () => this.availability(action_id),
+    };
+  }
+
+  /** 仅查看本地初始化标记与资源引用；不读表、环境变量或上游。 */
+  private availability(action_id: keyof typeof relay_documentation): ServiceAvailability {
+    if (!this.initialized) {
+      return { status: "unavailable", reason: "AI Relay initialization has not completed." };
+    }
+    const database_bound = typeof this.dependencies?.database?.query === "function";
+    const resources_bound = action_id.startsWith("keys/") ? Boolean(this.key_store)
+      : action_id === "relay/metadata" ? Array.isArray(this.dependencies?.models)
+      : action_id === "relay/catalog" || action_id === "relay/configure" ? Boolean(this.catalog_store)
+      : action_id === "relay/health" ? Boolean(this.catalog_store) && database_bound
+      : database_bound;
+    if (!resources_bound) {
+      return { status: "unknown", reason: "Local Relay resource bindings cannot be confirmed." };
+    }
+    return {
+      status: "ready",
+      reason: "Required local Relay resources are initialized; storage and upstream reachability are not checked.",
+    };
   }
 
   /** 部署时创建索引并写入默认目录；所有资源显式注入，不依赖 initialize。 */
@@ -97,11 +129,13 @@ export class RelayRuntime {
 
   /** 绑定运行时存储并加载目录，不执行结构 DDL。 */
   async initialize(dependencies: RelayInitialization): Promise<void> {
+    this.initialized = false;
     this.dependencies = dependencies;
     this.catalog_store = new RelayCatalogStore(dependencies.table("relay_catalog"), dependencies.models);
     this.key_store = new RelayKeyStore(dependencies.table("relay_keys"), dependencies.database);
     this.router = new RelayRouter(dependencies);
     await this.catalog_store.initialize();
+    this.initialized = true;
   }
 
   /** 不赋予登录权限，只将计费用户和最小凭据主体附加到请求。 */

@@ -8,6 +8,7 @@ import { PaymentInvoker } from "../invoker/payment/index.js";
 import { ServiceClient } from "../invoker/invoker.js";
 import { UserInvoker } from "../invoker/user/index.js";
 import type { FederationActionInput, UserPactAccessOptions, UserServiceSummary } from "./types.js";
+import type { ServiceCatalogDetail } from "../../types/ServiceCatalog.js";
 import {
   defaultFetch,
   requiredString,
@@ -85,6 +86,17 @@ export class UserPactAccess {
   async listServices(): Promise<UserServiceSummary[]> {
     return this.json<{ items: UserServiceSummary[] }>("/v1/services", { method: "GET" })
       .then((body) => body.items);
+  }
+
+  /** 获取服务完整 instruction、入口文档及本地可用性。 */
+  describe_service(service_id: string): Promise<ServiceCatalogDetail> {
+    const id = requiredString(service_id, "service_id");
+    return this.json(`/v1/services/${encodeURIComponent(id)}`, { method: "GET" });
+  }
+
+  /** 读取当前实例按注册元数据生成的 OpenAPI 3.1 文档。 */
+  openapi(): Promise<Record<string, unknown>> {
+    return this.json("/openapi.json", { method: "GET" });
   }
 
   // ===================================================================
