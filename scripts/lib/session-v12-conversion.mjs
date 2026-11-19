@@ -10,13 +10,17 @@ import { exists } from "./session-v8-files.mjs";
 import { open_source, database_fingerprint, schema_descriptor, validate_v9 } from "./session-v9-database.mjs";
 import { assert_protocol_database } from "./session-v10-proof.mjs";
 
-/** 唯一的字段映射；只解释框架字段，不递归替换正文、业务数据或工具快照。 */
+/** JSON 日志与 SQLite 共享运行时输入身份映射。 */
+export function convert_input_identity({ inbox_id, ...content }) {
+  if (typeof inbox_id !== "string" || !inbox_id || "input_id" in content) fail("v12_input_identity_invalid");
+  return { input_id: inbox_id, ...content };
+}
+
+/** 只解释框架字段，不递归替换正文、业务数据或工具快照。 */
 export function convert_part(row) {
   if (row.type === "power") return { ...row, type: "view" };
   if (row.type !== "inbox") return row;
-  const { inbox_id, ...content } = JSON.parse(row.content);
-  if (typeof inbox_id !== "string" || !inbox_id || "input_id" in content) fail("v12_input_identity_invalid");
-  return { ...row, type: "input", content: JSON.stringify({ input_id: inbox_id, ...content }) };
+  return { ...row, type: "input", content: JSON.stringify(convert_input_identity(JSON.parse(row.content))) };
 }
 
 /** 单记录包与整库迁移共用相同映射，不清除 Composer 边界或修改原记录。 */
