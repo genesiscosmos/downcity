@@ -39,13 +39,13 @@ Deployment uploads the static build and binds the custom domain with managed HTT
 
 ## Connecting
 
-1. In Desktop, enable **Settings → City Remote**, then select **Create connection code**. Enter a recipient note and a City address reachable by the recipient, choose Agent permissions and expiry, and create the code. Every creation issues an independent token.
-2. Copy the complete code from its one-time display and send it privately. Closing the dialog clears the code. Existing authorizations can be edited or revoked, but their plaintext cannot be recovered; create another code if needed.
+1. Create a connection code with the City CLI or another compatible City host, choosing the recipient's reachable City address, Agent permissions and expiry. Every share uses an independent credential.
+2. Send the complete code privately. Existing authorizations can be edited or revoked by the owner; plaintext cannot be recovered from authorization summaries.
 3. Paste the code into Remote's single connection-code field. Remote decodes it locally and shows the City address. Confirm the address, then click **Connect** to access the authorized Agents.
 
-For Desktop and Remote on the same computer, use `http://127.0.0.1:5314` as the City address and open a local Remote at `http://127.0.0.1:5173` or `http://localhost:5173`. Desktop permits both local origins and `https://remote.downcity.ai` through CORS. Other recipients need a City address reachable from their own browser.
+The HTTPS Remote page permits HTTP targets with the exact loopback host `127.0.0.1`, `localhost` or `[::1]` for a City on the browser's own device. Keep City running and allow local network access if prompted; its Origin allowlist must still permit Remote. IPv6 targets require an actual IPv6 listener. Other HTTP targets, including LAN addresses, require an HTTPS endpoint on the production Remote page. Browser support and enterprise policy can still prevent local access.
 
-For an HTTPS Remote site, the code must contain a reachable City HTTPS address with a certificate the browser trusts. Other City hosts must permit the application's exact origin through `runtime.http.allowed_origins` or their own CORS policy. Endpoints must support `OPTIONS`, `GET`, `POST`, `Authorization` and `Content-Type`, and pass streaming responses without buffering. Configure any reverse proxy, VPN or tunnel yourself. DNS and CORS alone do not expose a private City or provide HTTPS.
+For City on another device, the code must contain a reachable HTTPS address with a certificate the browser trusts. Other City hosts must permit the application's exact origin through `runtime.http.allowed_origins` or their own CORS policy. Endpoints must support `OPTIONS`, `GET`, `POST`, `Authorization` and `Content-Type`, and pass streaming responses without buffering. Configure any reverse proxy, VPN or tunnel yourself. DNS and CORS alone do not expose a private City or provide HTTPS.
 
 The connection-code format is `citycode:<base64url UTF-8 JSON {url,token}>`. `@downcity/city/browser` exports `encode_city_connection({ url, token })`, `decode_city_connection(code)` and the `CityConnection` type with `url` and `token` fields. The helpers strictly validate the format locally; decoding does not verify reachability or authorization. Encoding is not encryption: anyone holding a code can use its authorized Agents until expiry or revocation. A recipient note does not bind access to a person's identity or prevent forwarding. Send codes privately and revoke exposed authorizations.
 

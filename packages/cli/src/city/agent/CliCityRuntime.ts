@@ -28,6 +28,7 @@ import { resolve_local_city_id, RootLease, resolve_resource_root, ResourceCoordi
 import { read_city_host_state } from "@downcity/city";
 import { create_cli_resources } from "../resources/CliResources.js";
 import { create_cli_local_data, type CliLocalData } from "@/city/runtime/LocalData.js";
+import { read_city_remote_settings } from "@/city/shared/CityRemoteConfig.js";
 
 /** 已启动的 CLI City Runtime。 */
 export class CliCityRuntime {
@@ -123,6 +124,7 @@ export class CliCityRuntime {
     if (http_port === rpc_port) throw new Error("City HTTP and RPC ports must be different");
 
     const root_path = data.root_path;
+    const remote_config = read_city_remote_settings(data.settings);
     const coordinator = new ResourceCoordinator();
     let resources: ResourceService;
     const host_instance_id = String(process.env.DOWNCITY_DAEMON_INSTANCE_ID || "").trim() || create_city_host_instance_id();
@@ -165,6 +167,8 @@ export class CliCityRuntime {
         return await create_cli_workspace(workspace_config, data.root_path);
       },
       http: {
+        public_url: remote_config.public_url ?? undefined,
+        allowed_origins: remote_config.allowed_origins,
         authorize_agent: ({ agent, request }) => {
           const auth = new AuthService({ agent_id: agent.id, repository: data.city_tokens });
           try {

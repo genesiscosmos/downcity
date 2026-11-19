@@ -14,6 +14,7 @@ import { fileURLToPath } from "node:url";
 import { Command, Option, CommanderError } from "commander";
 import { resolve_resource_root } from "@downcity/city/local";
 import { register_city_token_command } from "@/city/command/TokenCommand.js";
+import { register_city_remote_command } from "@/city/command/RemoteCommand.js";
 import { registerAgentCommands } from "@/city/command/AgentCommand.js";
 import { register_workspace_commands, register_session_commands } from "./command/ResourceCommands.js";
 import { register_extension_commands } from "./command/ExtensionCommands.js";
@@ -105,6 +106,7 @@ export function registerCityCommands(program: Command): void {
   });
   registerPowersCommand(program);
   register_city_token_command(program);
+  register_city_remote_command(program);
 
   program.showHelpAfterError();
   program.showSuggestionAfterError();

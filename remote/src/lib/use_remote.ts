@@ -8,7 +8,8 @@ import type { DowncityChatConnection } from "@downcity/ui";
 import { connect_remote_chat } from "./chat_connection";
 import type { RemoteAgentSession } from "@downcity/agent";
 import type { Remote_state } from "../types/remote";
-import { connection_error, normalize_city_url, remember_city_url } from "./preferences";
+import { connection_error, remember_city_url } from "./preferences";
+import { normalize_city_url } from "./endpoint";
 
 const initial_state: Remote_state = { city_url: "", agents: [], sessions: [], busy: false, loading_more: false };
 const session_filter = { category: "chat", limit: 30 };

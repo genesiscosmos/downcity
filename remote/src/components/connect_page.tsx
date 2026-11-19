@@ -2,7 +2,7 @@
 import { useState } from "react";
 import { decode_city_connection } from "@downcity/city/browser";
 import { ArrowRight, LoaderCircle } from "lucide-react";
-import { normalize_city_url } from "../lib/preferences";
+import { inspect_city_endpoint, normalize_city_url } from "../lib/endpoint";
 import type { Connect_page_props } from "../types/components";
 
 /** 输入时仅解析，不请求网络；用户确认目标并点击连接后才访问 City。 */
@@ -12,10 +12,13 @@ export function Connect_page({ locale, busy, error, on_connect }: Connect_page_p
   const [invalid_code, set_invalid_code] = useState(false);
   let city_url = "";
   let requires_https = false;
+  let local_http = false;
   if (connection_code.trim()) {
     try {
-      city_url = decode_city_connection(connection_code).url;
-      requires_https = window.location.protocol === "https:" && new URL(city_url).protocol === "http:";
+      const endpoint = inspect_city_endpoint(decode_city_connection(connection_code).url);
+      city_url = endpoint.url;
+      requires_https = endpoint.requires_https;
+      local_http = endpoint.local_http;
     } catch { /* 输入尚未完整时不回显连接码或解析错误。 */ }
   }
 
@@ -43,13 +46,14 @@ export function Connect_page({ locale, busy, error, on_connect }: Connect_page_p
         <label htmlFor="connection-code">{text("Connection code", "连接码")}</label>
         <input id="connection-code" name="connection_code" type="password" required autoComplete="off" spellCheck={false} autoCapitalize="off" placeholder="citycode:…" value={connection_code} disabled={busy} aria-invalid={invalid_code} aria-describedby="connection-code-note" onBlur={() => set_invalid_code(Boolean(connection_code.trim() && !city_url))} onChange={event => { set_connection_code(event.target.value); set_invalid_code(false); }} />
         {city_url ? <p className="connection-target" role="status"><span>{text("Connect to", "连接到")}</span><strong>{city_url}</strong></p> : null}
+        {local_http ? <p className="connection-note">{text("Connects to the City on this device. Keep City running and allow local network access if your browser asks. This address cannot reach a City on someone else’s device.", "连接此设备上的 City。请保持 City 运行，并在浏览器提示时允许本地网络访问。此地址无法连接别人设备上的 City。")}</p> : null}
         {invalid_code ? <p className="form-error" role="alert">{text("This connection code is incomplete or invalid. Ask the sender for the complete code.", "连接码不完整或无效，请向分享者索取完整连接码。")}</p> : null}
-        {requires_https ? <p className="form-error" role="alert">{text("This code uses an HTTP address. Ask the sender for a reachable HTTPS connection code.", "此连接码使用 HTTP 地址，请向分享者索取浏览器可访问的 HTTPS 连接码。")}</p> : null}
+        {requires_https ? <p className="form-error" role="alert">{text("A City on another device needs a reachable HTTPS address. Ask the sender for an HTTPS connection code.", "连接其他设备上的 City 需要可访问的 HTTPS 地址，请向分享者索取 HTTPS 连接码。")}</p> : null}
         {error ? <p className="form-error" role="alert">{error}</p> : null}
         <button className="primary-button connect-submit" type="submit" disabled={busy || !city_url || requires_https}>{busy ? <LoaderCircle className="spin" size={17} /> : null}{busy ? text("Connecting…", "正在连接…") : text("Connect", "连接")}<ArrowRight size={17} /></button>
       </form>
       <p id="connection-code-note" className="connection-note">{text("A connection code grants access to its authorized agents. Share it privately. It is read locally and is never saved in your browser.", "持有连接码即可访问获授权的 Agent，请私下发送。连接码仅在本地解析，不保存在浏览器中。")}</p>
-      <details className="connection-help"><summary>{text("Where do I get a code?", "如何获取连接码？")}</summary><p>{text("Ask your City owner to create a connection code in Desktop’s City Remote settings. They choose the agents and expiry. Your browser must be able to reach the City address.", "请 City 的拥有者在 Desktop 的 City Remote 设置中创建连接码，选择 Agent 和有效期。你的浏览器需要能访问对应的 City 地址。")}</p></details>
+      <details className="connection-help"><summary>{text("Where do I get a code?", "如何获取连接码？")}</summary><p>{text("Ask the City owner for a connection code with the Agents and expiry you need. City CLI and compatible hosts can create one. Use a reachable HTTPS address for another device, or a loopback address for City on this device.", "请 City 拥有者通过 City CLI 或其他支持的宿主创建连接码，选择 Agent 和有效期。跨设备使用可访问的 HTTPS 地址，本机 City 可使用回环地址。")}</p></details>
     </section>
   </main>;
 }

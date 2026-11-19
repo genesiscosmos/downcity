@@ -28,7 +28,7 @@ export async function select_token(token_id?: string): Promise<CityTokenSummary>
 }
 
 /** 参数预填、交互补齐；update 只在明确提供字段时修改对应设置。 */
-export async function collect_token_config(options: CityTokenCommandOptions, previous?: CityTokenSummary): Promise<CityTokenConfig> {
+export async function collect_token_config(options: CityTokenCommandOptions, previous?: CityTokenSummary, client = new ResourceClient()): Promise<CityTokenConfig> {
   if (options.allAgents && options.agents !== undefined) throw new Error("--all-agents and --agents are mutually exclusive");
   if (options.neverExpires && options.expiresAt !== undefined) throw new Error("--never-expires and --expires-at are mutually exclusive");
   const interactive_edit = previous && !options.name && options.agents === undefined && !options.allAgents && options.expiresAt === undefined && !options.neverExpires;
@@ -41,7 +41,7 @@ export async function collect_token_config(options: CityTokenCommandOptions, pre
   if (all_agents === undefined && agent_ids === undefined) {
     all_agents = await token_question({ type: "select", name: "value", message: "授权范围", choices: [{ title: "指定 Agents", value: false }, { title: "全部 Agents（包含未来创建的 Agent）", value: true }] }) === true;
     if (!all_agents) {
-      const agents = ((await new ResourceClient().call("agent.list")).data as AgentListData).items;
+      const agents = ((await client.call("agent.list")).data as AgentListData).items;
       const known = new Set(agents.map((agent) => agent.agent_id));
       agent_ids = await token_question({ type: "multiselect", name: "value", message: "选择允许访问的 Agents", choices: [
         ...agents.map((agent) => ({ title: agent.name || agent.agent_id, description: `${agent.agent_id} · ${agent.description ?? ""}`, value: agent.agent_id })),
@@ -50,7 +50,7 @@ export async function collect_token_config(options: CityTokenCommandOptions, pre
     }
   }
   if (!all_agents && !agent_ids?.length) throw new Error("必须至少选择一个 Agent");
-  const registered = new Set(((await new ResourceClient().call("agent.list")).data as AgentListData).items.map((agent) => agent.agent_id));
+  const registered = new Set(((await client.call("agent.list")).data as AgentListData).items.map((agent) => agent.agent_id));
   for (const id of agent_ids ?? []) if (!registered.has(id) && !previous?.agent_ids.includes(id)) throw new Error(`Agent not found: ${id}`);
   let expires_at: string | null | undefined = options.neverExpires ? null : options.expiresAt;
   if (expires_at === undefined && previous && !interactive_edit) expires_at = previous.expires_at;
