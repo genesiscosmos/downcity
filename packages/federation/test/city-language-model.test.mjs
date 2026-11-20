@@ -98,7 +98,7 @@ test("CityModel converts an incomplete Federation SSE envelope into transport_er
     type: "model_error",
     error: {
       code: "transport_error",
-      message: "Federation model stream ended with an incomplete SSE event",
+      message: "Federation model stream ended with an incomplete SSE event (reason: incomplete_sse)",
       retryable: true,
       provider_request_id: "federation_req_1",
     },
@@ -127,7 +127,7 @@ test("CityModel converts a complete invalid Federation SSE envelope into provide
     type: "model_error",
     error: {
       code: "provider_error",
-      message: "Federation returned an invalid model stream event",
+      message: "Federation model stream contained invalid JSON (reason: invalid_json)",
       retryable: false,
     },
   })

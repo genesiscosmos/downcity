@@ -7,6 +7,8 @@
 
 import { guard_model_stream, resolve_model_stream_policy } from "@downcity/type";
 import { create_upstream_model_error, classify_upstream_model_error } from "./UpstreamModelError.js";
+import { OpenAIStreamDiagnostics, read_stream_request_id } from "./OpenAIStreamDiagnostics.js";
+import type { OpenAIStreamIdentity } from "../../types/OpenAIStreamDiagnostics.js";
 import type {
   ModelContent,
   ModelFileContent,
@@ -68,7 +70,7 @@ export async function stream_openai_compatible_model(
   if (!response.ok) throw await create_upstream_model_error(response, options.api_key);
   if (!response.body) throw new Error("OpenAI-compatible provider returned an empty response body");
 
-  const request_id = response.headers.get("x-request-id") ?? `req_${crypto.randomUUID()}`;
+  const request_id = read_stream_request_id(response.headers.get("x-request-id"));
   return {
     stream: create_event_stream(response.body, {
       request_id,
@@ -211,64 +213,89 @@ function stringify_tool_result(parts: ModelToolResultPart[]): string {
 /** 创建逐块解析上游 SSE 的标准事件流。 */
 function create_event_stream(
   body: ReadableStream<Uint8Array>,
-  identity: { request_id: string; model_id: string },
+  identity: OpenAIStreamIdentity,
   api_key: string,
 ): ReadableStream<ModelStreamEvent> {
   const reader = body.getReader();
   const decoder = new TextDecoder();
+  const diagnostics = new OpenAIStreamDiagnostics(identity);
+  let cancelled = false;
+  let released = false;
   return new ReadableStream<ModelStreamEvent>({
-    async start(controller) {
-      const state = new OpenAIStreamState(controller, identity.request_id, api_key);
-      const response_events: string[] = [];
-      controller.enqueue({ type: "model_start", ...identity });
-      let buffer = "";
-      try {
-        while (true) {
-          const chunk = await reader.read();
-          if (chunk.done) break;
-          buffer += decoder.decode(chunk.value, { stream: true });
-          const parsed = consume_sse_events(buffer);
-          buffer = parsed.rest;
-          for (const data of parsed.data) {
-            response_events.push(data);
-            if (data === "[DONE]") continue;
-            state.accept(parse_sse_data(data));
-          }
-        }
-        buffer += decoder.decode();
-        const final_events = consume_sse_events(buffer);
-        for (const data of final_events.data) {
-          response_events.push(data);
-          if (data !== "[DONE]") state.accept(parse_sse_data(data));
-        }
-        if (final_events.rest.trim()) {
-          throw new OpenAIStreamError(
-            "transport_error",
-            "Model provider stream ended with an incomplete SSE event",
-          );
-        }
-        state.finish(identity.request_id, identity.model_id, response_events);
-        controller.close();
-      } catch (error) {
-        const error_code = classify_stream_error(error);
-        controller.enqueue({
-          type: "model_error",
-          error: error instanceof OpenAIStreamError && error.model_error ? error.model_error : {
-            code: error_code,
-            message: normalize_stream_error_message(error),
-            retryable: error_code === "transport_error",
-            provider_request_id: identity.request_id,
-          },
-        });
-        controller.close();
-      } finally {
-        reader.releaseLock();
-      }
+    start(controller) {
+      // 不把 start 绑定到整条上游流，取消必须能立即打断尚在读取的请求。
+      void consume(controller);
     },
-    async cancel(reason) {
-      await reader.cancel(reason);
+    cancel(reason) {
+      cancelled = true;
+      diagnostics.finish("cancelled");
+      release_reader(reason);
     },
   });
+
+  /** DONE 是协议终态；finish_reason 后的 usage 仍在它之前正常消费。 */
+  async function consume(controller: ReadableStreamDefaultController<ModelStreamEvent>): Promise<void> {
+    const emit = (event: ModelStreamEvent): void => {
+      if (cancelled) return;
+      diagnostics.accept(event);
+      controller.enqueue(event);
+    };
+    const state = new OpenAIStreamState({ enqueue: emit }, identity.request_id, api_key, diagnostics);
+    emit({ type: "model_start", ...identity });
+    let buffer = "";
+    let done_received = false;
+    try {
+      while (!cancelled && !done_received) {
+        const chunk = await reader.read();
+        if (cancelled) return;
+        buffer += chunk.done ? decoder.decode() : decoder.decode(chunk.value, { stream: true });
+        const parsed = consume_sse_events(buffer);
+        buffer = parsed.rest;
+        for (const data of parsed.data) {
+          if (data === "[DONE]") {
+            diagnostics.mark_boundary("done");
+            done_received = true;
+            break;
+          }
+          state.accept(parse_sse_data(data));
+        }
+        if (chunk.done) {
+          diagnostics.mark_boundary("eof");
+          if (!done_received && buffer.trim()) {
+            throw new OpenAIStreamError("transport_error", "Model provider stream ended with an incomplete SSE event");
+          }
+          break;
+        }
+      }
+      if (cancelled) return;
+      state.finish();
+      diagnostics.finish(done_received ? "done" : "eof");
+      controller.close();
+    } catch (error) {
+      if (cancelled) return;
+      const error_code = classify_stream_error(error);
+      emit({ type: "model_error", error: error instanceof OpenAIStreamError && error.model_error ? error.model_error : {
+        code: error_code, message: normalize_stream_error_message(error),
+        retryable: error_code === "transport_error", provider_request_id: identity.request_id,
+      } });
+      diagnostics.finish("error", error_code);
+      controller.close();
+    } finally {
+      release_reader();
+    }
+  }
+
+  /** 清理不等待供应商 cancel；挂起的取消钩子不能延长已确认的终态。 */
+  function release_reader(reason?: unknown): void {
+    if (released) return;
+    released = true;
+    try { void reader.cancel(reason).catch(() => undefined); }
+    catch { /* 取消异常不覆盖模型结果。 */ }
+    finally {
+      try { reader.releaseLock(); }
+      catch { /* 待读取已被取消，释放异常不覆盖已确定终态。 */ }
+    }
+  }
 }
 
 /** Provider 流在协议或传输边界产生的稳定内部错误。 */
@@ -315,9 +342,10 @@ class OpenAIStreamState {
   }>();
 
   constructor(
-    private readonly controller: ReadableStreamDefaultController<ModelStreamEvent>,
+    private readonly controller: Pick<ReadableStreamDefaultController<ModelStreamEvent>, "enqueue">,
     private readonly request_id: string,
     private readonly api_key: string,
+    private readonly diagnostics: OpenAIStreamDiagnostics,
   ) {}
 
   /** 消费一个上游 JSON chunk。 */
@@ -358,26 +386,28 @@ class OpenAIStreamState {
       for (const item of delta.tool_calls) this.accept_tool_call(as_record(item));
     }
     const finish_reason = read_finish_reason(choice.finish_reason);
-    if (finish_reason) this.finish_reason = finish_reason;
+    if (finish_reason) {
+      this.finish_reason = finish_reason;
+      this.diagnostics.mark_finish(finish_reason);
+    }
   }
 
   /** 收口全部内容块和模型执行。 */
-  finish(request_id: string, model_id: string, response_events: readonly string[]): void {
+  finish(): void {
     if (this.finished) return;
     this.finished = true;
     if (!this.usage_received) {
-      console.error(
-        "[OpenAICompatibleModelAdapter] provider did not return usage",
-        JSON.stringify({ request_id, model_id, response_events }),
-      );
-      throw new Error("OpenAI-compatible provider did not return usage");
+      throw new OpenAIStreamError("provider_error", "OpenAI-compatible provider did not return usage");
+    }
+    if (!this.finish_reason) {
+      throw new OpenAIStreamError("transport_error", "Model provider stream ended without a finish reason");
     }
     if (this.reasoning_started) {
       this.controller.enqueue({ type: "reasoning_finish", content_id: "reasoning_1" });
     }
     if (this.text_started) this.controller.enqueue({ type: "text_finish", content_id: "text_1" });
     for (const tool of this.tool_calls.values()) {
-      if (!tool.started) throw new Error("OpenAI-compatible provider returned a tool call without a name");
+      if (!tool.started) throw new OpenAIStreamError("provider_error", "OpenAI-compatible provider returned a tool call without a name");
       const parsed_input = parse_tool_input(tool.input_text, this.finish_reason);
       this.controller.enqueue({
         type: "tool_call_finish",
@@ -523,11 +553,10 @@ function classify_stream_error(error: unknown): "cancelled" | OpenAIStreamError[
 
 /** 将 Node fetch 的底层连接错误转换成可操作且不依赖运行时实现的说明。 */
 function normalize_stream_error_message(error: unknown): string {
-  const message = error instanceof Error ? error.message : String(error);
-  if (message.trim().toLowerCase() === "terminated") {
-    return "Model provider stream terminated before completion";
-  }
-  return message || "Model provider stream failed";
+  if (error instanceof OpenAIStreamError) return error.message;
+  if (input_cancelled(error)) return "Model provider stream was cancelled";
+  return classify_stream_error(error) === "transport_error"
+    ? "Model provider stream terminated before completion" : "Model provider stream failed";
 }
 
 /** 将未知值安全收敛为普通对象。 */

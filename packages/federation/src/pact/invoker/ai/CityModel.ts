@@ -1,7 +1,8 @@
 /**
  * CityModel 原生 Downcity Model Protocol 客户端实现。
  *
- * 类内部负责请求 Federation 并把 SSE 解码成标准 ModelStreamEvent。
+ * 类内部负责请求 Federation、校验 SSE 与模型状态机，并把失败转换为安全的标准终态。
+ * 流诊断仅记录请求关联、事件统计和固定原因，禁止记录原始帧与底层异常文本。
  */
 
 import {
@@ -60,123 +61,208 @@ export class CityModel implements CityModelContract {
     if (!response.body) throw new Error("Federation language model response body is empty");
     const content_type = response.headers?.get("content-type");
     if (content_type && !content_type.toLowerCase().includes("text/event-stream")) {
-      throw new Error(`Federation language model returned unsupported content type: ${content_type}`);
+      throw new Error("Federation language model returned unsupported content type");
     }
+    const header_id = response.headers?.get("x-request-id");
     return parse_city_model_stream(response.body, {
       model_id: this.id,
-      request_id: response.headers?.get("x-request-id") || undefined,
+      request_id: header_id && REQUEST_ID_PATTERN.test(header_id) ? header_id : undefined,
       signal,
     });
   }
 }
 
-/** 解析 Federation 返回的标准 SSE 数据流。 */
+/** 关联标识只允许有限长度的协议字符，不记录任意响应头或上游文本。 */
+const REQUEST_ID_PATTERN = /^[A-Za-z0-9_.:/-]{1,128}$/;
+
+/** 固定的安全诊断原因；任何网络正文与异常文本都不能进入这些消息。 */
+const STREAM_FAILURES = {
+  eof_before_terminal: {
+    code: "transport_error",
+    message: "Federation model stream ended before a terminal event was received",
+    retryable: true,
+  },
+  incomplete_sse: {
+    code: "transport_error",
+    message: "Federation model stream ended with an incomplete SSE event",
+    retryable: true,
+  },
+  read_failed: {
+    code: "transport_error",
+    message: "Federation model stream could not be read to completion",
+    retryable: true,
+  },
+  cancelled: {
+    code: "cancelled",
+    message: "Federation model stream was cancelled",
+    retryable: false,
+  },
+  invalid_json: {
+    code: "provider_error",
+    message: "Federation model stream contained invalid JSON",
+    retryable: false,
+  },
+  invalid_envelope: {
+    code: "provider_error",
+    message: "Federation model stream contained an invalid envelope",
+    retryable: false,
+  },
+  unsupported_protocol_version: {
+    code: "provider_error",
+    message: "Federation model stream used an unsupported protocol version",
+    retryable: false,
+  },
+  invalid_event: {
+    code: "provider_error",
+    message: "Federation model stream contained an invalid event object",
+    retryable: false,
+  },
+  invalid_state_transition: {
+    code: "provider_error",
+    message: "Federation model stream violated event order or field requirements",
+    retryable: false,
+  },
+} as const;
+
+/** 仅携带固定原因，避免校验器的动态字段内容泄漏到模型错误或日志。 */
+class CityModelStreamError extends Error {
+  constructor(
+    /** 本地固定诊断原因，不包含远端数据。 */
+    readonly reason: keyof typeof STREAM_FAILURES,
+  ) {
+    super(`${STREAM_FAILURES[reason].message} (reason: ${reason})`);
+  }
+}
+
+/** 解析 Federation 返回的标准 SSE 数据流，并独立维护传输结束与协议终态。 */
 function parse_city_model_stream(
   body: ReadableStream<Uint8Array>,
-  context: { model_id: string; request_id?: string; signal?: AbortSignal },
+  context: {
+    /** 当前调用的模型标识，用于合成起始事件与关联诊断。 */
+    model_id: string;
+    /** Federation 响应头中的请求标识，沿用现有 transport 错误映射。 */
+    request_id?: string;
+    /** 调用方取消信号，取消必须保留独立失败语义。 */
+    signal?: AbortSignal;
+  },
 ): ReadableStream<ModelStreamEvent> {
   const reader = body.getReader();
   const decoder = new TextDecoder();
+  const validator = new ModelStreamValidator();
   let buffer = "";
   let data_lines: string[] = [];
+  const pending_events: string[] = [];
   let model_started = false;
-  const validator = new ModelStreamValidator();
+  let body_done = false;
+  let consumer_cancelled = false;
+  let diagnostic_written = false;
+  let reader_released = false;
+  let upstream_request_id: string | undefined;
+  let request_id = context.request_id || `transport_${crypto.randomUUID()}`;
+  // 统计只包含通过校验的远端事件，合成的起始与错误事件不计入。
+  let event_count = 0;
+  let last_event_type: ModelStreamEvent["type"] | undefined;
 
   return new ReadableStream<ModelStreamEvent>({
     async pull(controller) {
-      try {
-        while (true) {
-          const event = read_sse_event();
-          if (event !== undefined) {
-            const parsed_event = parse_stream_event(event);
-            validator.accept(parsed_event);
-            if (parsed_event.type === "model_start") model_started = true;
-            controller.enqueue(parsed_event);
-            return;
-          }
-          const chunk = await reader.read();
-          if (chunk.done) {
-            buffer += decoder.decode();
-            consume_sse_lines(false);
-            const final_event = read_sse_event();
-            if (final_event !== undefined) {
-              const parsed_event = parse_stream_event(final_event);
-              validator.accept(parsed_event);
-              if (parsed_event.type === "model_start") model_started = true;
-              controller.enqueue(parsed_event);
-              return;
-            }
-            if (buffer.trim() || data_lines.some((line) => line.trim())) {
-              enqueue_stream_error(
-                controller,
-                "transport_error",
-                "Federation model stream ended with an incomplete SSE event",
-                true,
-              );
-              return;
-            }
-            validator.finish();
-            controller.close();
-            return;
-          }
-          buffer += decoder.decode(chunk.value, { stream: true });
-          consume_sse_lines(false);
+      while (!consumer_cancelled) {
+        if (context.signal?.aborted) {
+          end_with_failure(controller, "cancelled");
+          return;
         }
-      } catch (error) {
-        const cancelled = context.signal?.aborted === true ||
-          (error instanceof DOMException && error.name === "AbortError");
-        const transport_error = cancelled || error instanceof TypeError;
-        enqueue_stream_error(
-          controller,
-          cancelled ? "cancelled" : transport_error ? "transport_error" : "provider_error",
-          cancelled
-            ? "Federation model stream was cancelled"
-            : transport_error
-              ? "Federation model stream terminated before completion"
-              : "Federation returned an invalid model stream event",
-          transport_error && !cancelled,
-        );
+        const data = pending_events.shift();
+        if (data !== undefined) {
+          let parsed_event: ModelStreamEvent;
+          try {
+            parsed_event = parse_stream_event(data);
+            validator.accept(parsed_event);
+          } catch (error) {
+            end_with_failure(controller, error instanceof CityModelStreamError
+              ? error.reason : "invalid_state_transition");
+            return;
+          }
+          event_count += 1;
+          last_event_type = parsed_event.type;
+          if (parsed_event.type === "model_start") {
+            model_started = true;
+            if (REQUEST_ID_PATTERN.test(parsed_event.request_id)) {
+              upstream_request_id = parsed_event.request_id;
+              if (!context.request_id) request_id = upstream_request_id;
+            }
+          }
+          controller.enqueue(parsed_event);
+          if (parsed_event.type === "model_finish" || parsed_event.type === "model_error") {
+            // 合法终态就是生命周期边界：停止读取，保留真实终态，不等待无界 EOF。
+            write_diagnostic(parsed_event.type === "model_error" ? "model_error" : "completed");
+            controller.close();
+            void cancel_reader();
+          }
+          return;
+        }
+        if (body_done) {
+          if (buffer.trim() || data_lines.some((line) => line.trim())) {
+            end_with_failure(controller, "incomplete_sse");
+          } else {
+            // 完整 SSE 帧之后缺少终态也是断流，不能让 validator.finish() 抹成协议错误。
+            end_with_failure(controller, "eof_before_terminal");
+          }
+          return;
+        }
+        let chunk: ReadableStreamReadResult<Uint8Array>;
+        try {
+          chunk = await reader.read();
+        } catch (error) {
+          if (consumer_cancelled) return;
+          const cancelled = context.signal?.aborted === true ||
+            (error instanceof DOMException && error.name === "AbortError");
+          end_with_failure(controller, cancelled ? "cancelled" : "read_failed");
+          return;
+        }
+        if (consumer_cancelled) return;
+        body_done = chunk.done;
+        buffer += chunk.done ? decoder.decode() : decoder.decode(chunk.value, { stream: true });
+        consume_sse_lines();
       }
     },
-    async cancel(reason) {
-      await reader.cancel(reason);
+    cancel() {
+      consumer_cancelled = true;
+      write_diagnostic("consumer_cancelled");
+      // 消费方取消原因可能包含调用方数据，不向日志或底层取消回调透传。
+      cancel_reader();
     },
   });
 
-  /** 把当前 buffer 中的完整行消费进 SSE data 队列。 */
-  function consume_sse_lines(flush: boolean): void {
+  /** 完整帧单独排队，避免把空 data 行当成帧结束或跳过后续已缓存事件。 */
+  function consume_sse_lines(): void {
     const lines = buffer.split(/\r?\n/u);
-    buffer = flush ? "" : lines.pop() ?? "";
+    buffer = lines.pop() ?? "";
     for (const line of lines) {
       if (line === "") {
-        if (data_lines.length > 0) data_lines.push("");
+        if (data_lines.length > 0) {
+          const event = data_lines.join("\n");
+          if (event) pending_events.push(event);
+          data_lines = [];
+        }
         continue;
       }
       if (line.startsWith(":")) continue;
-      if (line.startsWith("data:")) data_lines.push(line.slice(5).trimStart());
+      if (line === "data") data_lines.push("");
+      else if (line.startsWith("data:")) data_lines.push(line.slice(5).replace(/^ /u, ""));
     }
   }
 
-  /** 读取一个已经以空行结尾的 SSE event。 */
-  function read_sse_event(): string | undefined {
-    const boundary = data_lines.indexOf("");
-    if (boundary < 0) return undefined;
-    const event = data_lines.slice(0, boundary).join("\n");
-    data_lines = data_lines.slice(boundary + 1);
-    return event || undefined;
-  }
-
-  /** 以标准终态结束损坏的 transport，供 Agent 复用统一恢复策略。 */
-  function enqueue_stream_error(
+  /** 此入口只处理终态前的失败；合法终态在接受时已关闭流，不再合成第二终态。 */
+  function end_with_failure(
     controller: ReadableStreamDefaultController<ModelStreamEvent>,
-    code: "cancelled" | "provider_error" | "transport_error",
-    message: string,
-    retryable: boolean,
+    reason: keyof typeof STREAM_FAILURES,
   ): void {
+    const failure = STREAM_FAILURES[reason];
+    const error = new CityModelStreamError(reason);
+    write_diagnostic(reason);
     if (!model_started) {
       const start_event: ModelStreamEvent = {
         type: "model_start",
-        request_id: context.request_id || `transport_${crypto.randomUUID()}`,
+        request_id,
         model_id: context.model_id,
       };
       validator.accept(start_event);
@@ -186,31 +272,64 @@ function parse_city_model_stream(
     const event: ModelStreamEvent = {
       type: "model_error",
       error: {
-        code,
-        message,
-        retryable,
+        code: failure.code,
+        message: error.message,
+        retryable: failure.retryable,
+        // 沿用现有响应头映射；不把 model_start 的关联 ID 冒充供应商请求 ID。
         ...(context.request_id ? { provider_request_id: context.request_id } : {}),
       },
     };
     validator.accept(event);
     controller.enqueue(event);
     controller.close();
+    void cancel_reader();
+  }
+
+  /** 每条流只写一条克制统计，不记录 delta、未知事件类型或任意原始异常。 */
+  function write_diagnostic(reason: keyof typeof STREAM_FAILURES | "completed" | "model_error" | "consumer_cancelled"): void {
+    if (diagnostic_written) return;
+    diagnostic_written = true;
+    try {
+      console.info("model_stream.transport", {
+        request_id, upstream_request_id,
+        model_id: context.model_id,
+        phase: reason === "cancelled" || reason === "consumer_cancelled" ? "cancelled"
+          : reason === "completed" ? "finished" : "failed",
+        event_count, last_event_type, reason,
+      });
+    } catch { /* 诊断失败不能覆盖模型结果。 */ }
+  }
+
+  /** 传输资源由解析器持有；清理异常既不能覆盖主错误，也不能带出底层消息。 */
+  function cancel_reader(): void {
+    if (reader_released) return;
+    reader_released = true;
+    try { void reader.cancel().catch(() => undefined); }
+    catch { /* 已关闭或损坏的传输不再产生第二个错误。 */ }
+    finally {
+      try { reader.releaseLock(); }
+      catch { /* 清理失败不能覆盖已确定终态。 */ }
+    }
   }
 }
 
-/** 校验并解码单个 City transport 流事件。 */
+/** 校验并解码单个 City transport 流事件，只抛出固定安全原因。 */
 function parse_stream_event(data: string): ModelStreamEvent {
   let parsed: ModelStreamEnvelope;
   try {
     parsed = JSON.parse(data) as ModelStreamEnvelope;
   } catch {
-    throw new Error("Federation returned an invalid model stream JSON event");
+    throw new CityModelStreamError("invalid_json");
+  }
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed) ||
+    !("protocol_version" in parsed) || !("event" in parsed)) {
+    throw new CityModelStreamError("invalid_envelope");
   }
   if (parsed.protocol_version !== MODEL_PROTOCOL_VERSION) {
-    throw new Error(`Unsupported Downcity model protocol: ${String(parsed.protocol_version)}`);
+    throw new CityModelStreamError("unsupported_protocol_version");
   }
   if (!parsed.event || typeof parsed.event !== "object" || Array.isArray(parsed.event)) {
-    throw new Error("Federation returned an invalid Downcity model stream event");
+    throw new CityModelStreamError("invalid_event");
   }
   return parsed.event;
 }
