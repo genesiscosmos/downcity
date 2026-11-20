@@ -9,6 +9,9 @@
  */
 
 import assert from "node:assert/strict";
+import { mkdtemp, rm } from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
 import test from "node:test";
 import {
   MESSENGER_ENVIRONMENT_CONTEXT_TAG,
@@ -18,8 +21,8 @@ import {
 import {
   build_messenger_environment_input,
   render_messenger_environment_body,
-  resolve_current_messenger_channel,
 } from "../bin/messenger/runtime/MessengerEnvironment.js";
+import { MessengerRuntime } from "../bin/messenger/runtime/MessengerRuntime.js";
 import { build_inbound_prompt_parts } from "../bin/messenger/runtime/InboundPromptParts.js";
 
 /** 构造一份最小的 Conversation 记录。 */
@@ -136,28 +139,38 @@ test("环境正文包含路由事实，并按需携带 chat_title", () => {
   assert.match(with_title, /^thread_id: 42$/mu);
 });
 
-test("resolve_current_messenger_channel 只在 chat 来源上返回 channel", () => {
-  const chat_origin = {
-    session_id: "session-1",
-    session_origin: { category: "chat", type: "channel", channel: "telegram", chat_id: "chat-1" },
-  };
-  assert.equal(resolve_current_messenger_channel(chat_origin), "telegram");
-
-  assert.equal(
-    resolve_current_messenger_channel({
+test("Channel Session 通过 Messenger 存储解析当前账号平台", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "downcity-messenger-provider-"));
+  let accounts = [{
+    account_id: "bot",
+    name: "Bot",
+    provider: "telegram",
+    enabled: false,
+    bot_token: "test-token",
+  }];
+  const runtime = new MessengerRuntime({
+    storage: { path: root },
+    logger: { warn() {} },
+    config: { get: () => ({ accounts }) },
+  });
+  try {
+    runtime.store.resolve_conversation({
+      account_id: "bot",
+      external_chat_id: "chat-1",
+      chat_type: "private",
+      agent_id: "agent-1",
       session_id: "session-1",
-      session_origin: { category: "chat", type: "desktop" },
-    }),
-    null,
-  );
-  assert.equal(
-    resolve_current_messenger_channel({
-      session_id: "session-1",
-      session_origin: { category: "chat", type: "channel", channel: "unknown", chat_id: "chat-1" },
-    }),
-    null,
-  );
-  assert.equal(resolve_current_messenger_channel(undefined), null);
+      last_message_at: 1,
+    });
+    assert.equal(runtime.session_provider("agent-1", "session-1"), "telegram");
+    assert.equal(runtime.session_provider("agent-2", "session-1"), undefined);
+    assert.equal(runtime.session_provider("agent-1", "missing"), undefined);
+    accounts = [];
+    assert.equal(runtime.session_provider("agent-1", "session-1"), undefined);
+  } finally {
+    await runtime.dispose();
+    await rm(root, { recursive: true, force: true });
+  }
 });
 
 test("Desktop 可据此区分系统注入与用户撰写", () => {

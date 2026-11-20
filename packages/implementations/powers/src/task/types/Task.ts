@@ -57,8 +57,8 @@ export interface TaskDeliverySession {
   /** 目标 Agent Session 的稳定标识。 */
   session_id: string;
 
-  /** 目标 Agent Session 的来源分区；允许任意非空字符串。 */
-  category: string;
+  /** 目标 Agent Session 的顶层类型，只允许 chat 或 work。 */
+  type: "chat" | "work";
 }
 
 /**

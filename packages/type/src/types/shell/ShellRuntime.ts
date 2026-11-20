@@ -35,7 +35,7 @@ export interface ShellCompletionTarget {
   /** 发起Session标识。 */
   session_id: string;
   /** Session持久化分区。 */
-  category: string;
+  type: string;
   /** 发起命令的原始执行标识。 */
   turn_id: string;
 }
@@ -54,7 +54,7 @@ export interface ShellExecutionContext {
     /** 可信宿主绑定的主体标识；无来源身份时不启用自动回投。 */
     readonly agent_id?: string;
     /** 当前Session的实际存储分区。 */
-    readonly category?: string;
+    readonly type?: string;
   };
   /**
    * 当前 Shell Tool Call 标识。

@@ -1,7 +1,7 @@
 /** Messenger Power 的 City 级 Bot Account、Inbox、Outbox 与 Agent Turn 运行时。 */
 
 import path from "node:path";
-import { SESSION_ORIGIN_CATEGORY_CHAT, SESSION_ORIGIN_TYPE_CHANNEL, type SessionTurnCommittedHookValue } from "@downcity/type";
+import { SESSION_KIND_CHANNEL, SESSION_TYPE_CHAT, type SessionTurnCommittedHookValue } from "@downcity/type";
 import { commit_messenger_completion } from "./MessengerCompletion.js";
 import { MessengerTyping } from "./MessengerTyping.js";
 import { MessengerAccounts } from "./MessengerAccounts.js";
@@ -19,6 +19,7 @@ import { MessengerAccessService } from "@/messenger/access/MessengerAccessServic
 import { build_inbound_prompt_parts } from "./InboundPromptParts.js";
 import { build_messenger_environment_input } from "./MessengerEnvironment.js";
 import { MessengerStore } from "@/messenger/storage/MessengerStore.js";
+import { read_messenger_accounts_config } from "@/messenger/accounts/MessengerAccountConfig.js";
 import type {
   MessengerAccountConfig,
   MessengerAccountConnectionState,
@@ -127,19 +128,9 @@ export class MessengerRuntime {
     // 每条路由独立提交，启动中断后仅重试尚未完成的升级。
     for (const conversation of this.store.list_pending_channel_conversations()) {
       this.context.abort_signal.throwIfAborted();
-      const account = configured_accounts.find((item) => item.account_id === conversation.account_id);
       const session = await this.context.system.create_agent_session({
         agent_id: conversation.agent_id,
-        origin: {
-          category: SESSION_ORIGIN_CATEGORY_CHAT,
-          type: SESSION_ORIGIN_TYPE_CHANNEL,
-          account_id: conversation.account_id,
-          ...(account ? { channel: account.provider } : {}),
-          chat_id: conversation.external_chat_id,
-          chat_type: conversation.chat_type,
-          ...(conversation.thread_id ? { thread_id: conversation.thread_id } : {}),
-          ...(conversation.title ? { chat_title: conversation.title } : {}),
-        },
+        type: SESSION_TYPE_CHAT, kind: SESSION_KIND_CHANNEL,
       });
       this.context.abort_signal.throwIfAborted();
       this.store.complete_channel_session_upgrade(conversation.conversation_id, session.session_id);
@@ -161,6 +152,15 @@ export class MessengerRuntime {
   /** 返回指定 Account 当前运行状态。 */
   get_account_state(account_id: string): MessengerRuntimeAccountState | undefined {
     return this.account_lifecycle.get_account_state(String(account_id || ""));
+  }
+
+  /** 平台提示词使用当前会话的 Conversation 和 Account 配置。 */
+  session_provider(agent_id: string, session_id: string): MessengerAccountConfig["provider"] | undefined {
+    const conversation = this.store.get_conversation_by_session(session_id);
+    if (conversation?.agent_id !== agent_id) return undefined;
+    return read_messenger_accounts_config(this.context.config.get()).accounts.find(
+      (account) => account.account_id === conversation.account_id,
+    )?.provider;
   }
 
   /** 使用最新配置重启一个 Account，并重置自愈重连计数。 */
@@ -396,16 +396,7 @@ export class MessengerRuntime {
           if (!current) return;
           const session = await this.context.system.create_agent_session({
             agent_id: current.agent_id,
-            origin: {
-              category: SESSION_ORIGIN_CATEGORY_CHAT,
-              type: SESSION_ORIGIN_TYPE_CHANNEL,
-              account_id: account.account_id,
-              channel: account.provider,
-              chat_id: current.external_chat_id,
-              chat_type: current.chat_type,
-              ...(current.thread_id ? { thread_id: current.thread_id } : {}),
-              ...(current.title ? { chat_title: current.title } : {}),
-            },
+            type: SESSION_TYPE_CHAT, kind: SESSION_KIND_CHANNEL,
           });
           this.store.update_conversation({
             conversation_id: current.conversation_id,
@@ -491,16 +482,7 @@ export class MessengerRuntime {
       const target = await this.resolve_account_target(account);
       const session = await this.context.system.create_agent_session({
         agent_id: target,
-        origin: {
-          category: SESSION_ORIGIN_CATEGORY_CHAT,
-          type: SESSION_ORIGIN_TYPE_CHANNEL,
-          account_id: account.account_id,
-          channel: account.provider,
-          chat_id: input.chatId,
-          chat_type,
-          ...(thread_id ? { thread_id } : {}),
-          ...(input.chatTitle ? { chat_title: input.chatTitle } : {}),
-        },
+        type: SESSION_TYPE_CHAT, kind: SESSION_KIND_CHANNEL,
       });
       return this.store.resolve_conversation({
         account_id: account.account_id,
@@ -538,7 +520,7 @@ export class MessengerRuntime {
     const workspace = await this.context.system.get_agent_session_workspace({
       agent_id: conversation.agent_id,
       session_id: conversation.session_id,
-      category: SESSION_ORIGIN_CATEGORY_CHAT,
+      type: SESSION_TYPE_CHAT,
     });
     if (workspace) roots.push(workspace.workspace_path);
     roots.push(path.join(this.context.storage.path, "accounts", conversation.account_id));
@@ -648,7 +630,7 @@ export class MessengerRuntime {
         actor: { kind: "user", user_id: JSON.stringify([conversation.account_id, inbound.message.provider, inbound.message.sender_id]) },
         agent_id: conversation.agent_id,
         session_id: conversation.session_id,
-        category: SESSION_ORIGIN_CATEGORY_CHAT,
+        type: SESSION_TYPE_CHAT,
         request_id: inbound.inbound_id,
         query: [
           { type: "context", tag: "messenger_request", context: JSON.stringify({ inbound_id: inbound.inbound_id }) },

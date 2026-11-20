@@ -3,22 +3,23 @@
  * 运行时只依赖存储与 Session 端口，不依赖 Agent、City 或 Desktop。
  */
 import type { SessionFailurePhase } from "@/types/session/SessionFailure.js";
-import type { SessionOrigin, WorkspaceRuntime } from "@downcity/type";
+import type { SessionDescriptor, WorkspaceRuntime } from "@downcity/type";
 import type { AgentSession } from "./SessionActor.js";
 import type { AgentSessionTurnResult } from "../sdk/AgentSessionTurn.js";
 
 /** 工具运行时提供的发起身份；不允许模型自行指定回传目标。 */
-export interface SessionDelegationCaller {
+export interface SessionDelegationCaller extends SessionDescriptor {
   /** 发起工作的 Agent 标识；用于将结果回传给真实调用方。 */
   agent_id: string;
   /** 来源 Session 的实际工作区，无工作区时省略。 */
   workspace_id?: string;
   /** 发起工作的 Session 稳定标识。 */
   session_id: string;
-  /** 发起会话的持久化来源分区。 */
-  origin: SessionOrigin;
+
   /** 发起调用所属 Turn；用于审计和幂等身份。 */
   turn_id: string;
+  /** 当前执行代次；同 Turn 的显式重试使用新标识，恢复沿用已保存标识。 */
+  execution_id: string;
   /** 发起调用的模型工具标识；同一调用重试复用原委派。 */
   tool_call_id: string;
 }
@@ -31,7 +32,7 @@ export interface SessionDelegationRecord {
   caller: SessionDelegationCaller;
   /** 预先分配的子会话标识，创建中断后仍复用同一会话。 */
   work_session_id: string;
-  /** true 表示显式 session.send 补充已有工作，允许进入当前轮次。 */
+  /** true 表示显式 session.input 补充已有工作，允许进入当前轮次。 */
   followup: boolean;
   /** 子会话的项目 Workspace 标识，恢复时交由宿主解析。 */
   workspace_id: string;
@@ -68,9 +69,9 @@ export interface SessionDelegationStore {
   /** 读取尚未投递且尚未取消的委派，供显式恢复或重试。 */
   pending(): Promise<SessionDelegationRecord[]>;
   /** 读取全部直接子会话的创建记录；包含已结束和已取消记录。 */
-  children(agent_id: string, category: string, session_id: string): Promise<SessionDelegationRecord[]>;
-  /** 原子封闭父 Turn 的后续提交，与创建使用同一事务锁。 */
-  close_turn(agent_id: string, category: string, session_id: string, turn_id: string): Promise<void>;
+  children(agent_id: string, type: string, session_id: string): Promise<SessionDelegationRecord[]>;
+  /** 原子取消父执行代次的后续输入，与创建使用同一事务锁。 */
+  cancel_execution(agent_id: string, type: string, session_id: string, turn_id: string, execution_id: string): Promise<void>;
 }
 
 /** 委派运行时依赖；所有宿主资源都在执行前通过端口解析。 */
@@ -87,7 +88,7 @@ export interface SessionDelegationOptions {
     workspace: WorkspaceRuntime,
     delegation_depth?: number,
     /** 运行时生成的子来源，包含不可变父子关系。 */
-    child_origin?: SessionOrigin,
+    child_descriptor?: SessionDescriptor,
   ) => Promise<AgentSession>;
   /** 恢复已有工作会话；只允许继续 Work 来源的会话。 */
   get_work_session: (session_id: string) => Promise<AgentSession>;
@@ -150,9 +151,9 @@ export interface SessionDelegationPort {
   /** 保存委派，准备子会话，然后启动后台执行。 */
   spawn(input: SessionDelegationInput, caller: SessionDelegationCaller): Promise<SessionDelegationReceipt>;
   /** 向已有工作会话追加输入，并沿用持久化结果回传机制。 */
-  send(input: SessionDelegationMessage, caller: SessionDelegationCaller): Promise<SessionDelegationReceipt>;
+  input(input: SessionDelegationMessage, caller: SessionDelegationCaller): Promise<SessionDelegationReceipt>;
   /** 撤销目标子会话未投递的委派，必须先于 Session.stop 调用。 */
   cancel(session_id: string, suppress_delivery?: boolean): Promise<void>;
   /** 返回当前 Agent 内会话的直接子会话标识，供递归停止与归档检查。 */
-  children(session_id: string, category: string): Promise<string[]>;
+  children(session_id: string, type: string): Promise<string[]>;
 }

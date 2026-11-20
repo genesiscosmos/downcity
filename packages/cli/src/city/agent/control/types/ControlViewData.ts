@@ -79,13 +79,14 @@ export interface ControlTimelineEvent {
  * Control 会话摘要。
  */
 export interface ControlSessionSummary {
-  /**
-   * 会话 ID。
-   *
-   * 说明（中文）
-   * - 对内对外统一使用 `session_id` 语义。
-   */
-  session_id: string;
+  /** Session 永久标识；消息和跨对象引用继续使用 session_id。 */
+  id: string;
+  /** Session 是对话还是工作。 */
+  type: "chat" | "work";
+  /** 创建入口或工作用途。 */
+  kind: string;
+  /** 实际创建当前 Session 的父执行引用；根会话省略。 */
+  parent?: import("@downcity/type").SessionParent;
 
   /**
    * 消息数量。

@@ -2,7 +2,7 @@
  * Turn 子工作收尾协调：以输入入队、子工作完成和 abort 唤醒等待。
  * 不消费队列、不启动模型，也不新增执行循环；所有监听在单次等待退出时释放。
  */
-import { read_session_delegation_depth } from "@downcity/type";
+import { read_session_delegation_depth, normalize_session_descriptor } from "@downcity/type";
 import type { SessionChildWork, SessionChildWorkInput } from "@/types/session/SessionChildWork.js";
 import type { SessionTurnContext } from "@/types/turn/SessionTurnContext.js";
 import type { Logger } from "@/utils/logger/Logger.js";
@@ -28,10 +28,10 @@ export class SessionChildWorkLifecycle {
    * wait 的完成必须表示本 Turn 已无待投递子工作，不能仅表示子模型结束。
    */
   async wait(context: SessionTurnContext, has_pending: () => boolean, waiting: (active: boolean) => void = () => {}): Promise<boolean> {
-    const origin = context.session.origin;
+    const descriptor = context.session;
     const signal = context.lifecycle.abort_signal;
-    if (!this.child_work || origin.category !== "work"
-      || read_session_delegation_depth(origin) !== 1 || signal.aborted) return false;
+    if (!this.child_work || descriptor.type !== "work"
+      || read_session_delegation_depth(descriptor) !== 1 || signal.aborted) return false;
 
     // 先装监听再检查输入，覆盖子结果在 wait 调用前同步入队的窗口。
     let wake_input!: () => void;
@@ -70,7 +70,7 @@ export class SessionChildWorkLifecycle {
    */
   async cancel(context: SessionTurnContext): Promise<void> {
     // Chat 的本轮交流结束不撤销自主 Main；只有 Work 执行负责所属 Child。
-    if (!this.child_work || context.session.origin.category !== "work") return;
+    if (!this.child_work || context.session.type !== "work") return;
     let operation = this.cancellations.get(context);
     if (!operation) {
       operation = Promise.resolve().then(async () => {
@@ -97,8 +97,9 @@ export class SessionChildWorkLifecycle {
   private input(context: SessionTurnContext, abort_signal: AbortSignal): SessionChildWorkInput {
     return {
       session_id: context.session.session_id,
-      origin: context.session.origin,
+      ...normalize_session_descriptor(context.session),
       turn_id: context.session.turn_id,
+      execution_id: context.session.execution_id,
       abort_signal,
     };
   }

@@ -1,9 +1,9 @@
 /** Agent scope 中未完成委派与完成通知的只读引用投影；不恢复投递或创建文件。 */
 import fs from "node:fs/promises";
 import { createHash } from "node:crypto";
-import path from "node:path";
 import type { SessionDelegationRecord } from "../../types/agent/SessionDelegation.js";
 import type { SessionCompletionRecord } from "../../types/agent/SessionCompletion.js";
+import path from "node:path";
 
 /** 持久化后台工作引用摘要。 */
 export interface AgentPendingReference {
@@ -30,7 +30,7 @@ export async function read_agent_pending_references(storage_root_path: string, a
     if (!record.event?.completion_id || !record.state) throw new Error("Invalid pending completion reference record");
     if (record.state === "delivered") continue;
     const ids = new Set([agent_id]);
-    collect_route_ids(record.origin, ids);
+    collect_route_ids(record, ids);
     // 只检查输入的结构化请求记账，不把运行时正文或私密回答当作引用。
     for (const message of record.event.messages) {
       if (message.role === "user") collect_route_ids(message.meta, ids);

@@ -217,8 +217,6 @@ export async function runTaskNow(params: {
       runDirAbs,
       runSessionId,
       userSimulatorSessionId,
-      task_id: task.taskId,
-      execution_id: executionId,
       delivery_session: task.delivery_session,
     });
     let lastRoundRuleErrors: string[] = [];

@@ -1,3 +1,4 @@
+/** Frozen published v12 protocol from 9a983f62a; offline conversion only. */
 /**
  * Session 来源元数据。
  *
@@ -15,7 +16,7 @@
  * - Agent 主会话通过持久指针定位；归档不改变身份，重建主会话分配新 UUID。
  */
 
-import type { JsonValue } from "../json/Json.js";
+
 
 /** 对话类分类：与用户或外部渠道对话的会话。 */
 export const SESSION_ORIGIN_CATEGORY_CHAT = "chat";
@@ -50,9 +51,9 @@ export const SESSION_ORIGIN_TYPE_TASK = "task";
 export const SESSION_DELEGATION_MAX_DEPTH = 2;
 
 /** 顶层分类的封闭取值。 */
-export type SessionOriginCategory =
-  | typeof SESSION_ORIGIN_CATEGORY_CHAT
-  | typeof SESSION_ORIGIN_CATEGORY_WORK;
+
+
+
 
 /**
  * 已知角色到分类的映射。
@@ -60,7 +61,7 @@ export type SessionOriginCategory =
  * 这是「角色归属哪个分类」的唯一权威来源；调用方自定义角色不受此表约束，
  * 但必须在创建时显式给出 `category`。
  */
-const ORIGIN_CATEGORY_BY_TYPE: Readonly<Record<string, SessionOriginCategory>> = Object.freeze({
+const ORIGIN_CATEGORY_BY_TYPE                                                  = Object.freeze({
   [SESSION_ORIGIN_TYPE_AGENT]: SESSION_ORIGIN_CATEGORY_CHAT,
   [SESSION_ORIGIN_TYPE_CHANNEL]: SESSION_ORIGIN_CATEGORY_CHAT,
   [SESSION_ORIGIN_TYPE_GROUP]: SESSION_ORIGIN_CATEGORY_CHAT,
@@ -70,32 +71,32 @@ const ORIGIN_CATEGORY_BY_TYPE: Readonly<Record<string, SessionOriginCategory>> =
 });
 
 /** Session 的创建来源。 */
-export type SessionOrigin = {
-  /**
-   * 顶层业务分类，用于目录过滤和访问目标的一致性校验。
-   *
-   * 取值封闭为 `chat` / `work`；分类不决定物理位置或身份作用域，也不授予
-   * 细粒度执行能力。
-   */
-  readonly category: SessionOriginCategory;
-  /**
-   * 具体角色。
-   *
-   * 已知角色见本模块导出的常量；调用方也可以声明自己的稳定角色，
-   * 此时必须同时给出正确的 `category`。
-   */
-  readonly type: string;
-  /**
-   * 创建方附加的可序列化来源信息。
-   *
-   * 除 `category` 与 `type` 外的字段由创建方拥有、校验和解释，Agent 核心
-   * 只负责完整持久化。
-   */
-  readonly [key: string]: JsonValue;
-};
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 /** 规范化一个 Session 来源分类。 */
-export function normalize_session_origin_category(input: unknown): SessionOriginCategory {
+export function normalize_session_origin_category(input         )                        {
   const category = typeof input === "string" ? input.trim() : "";
   if (
     category === SESSION_ORIGIN_CATEGORY_CHAT
@@ -109,14 +110,14 @@ export function normalize_session_origin_category(input: unknown): SessionOrigin
 }
 
 /** 规范化一个 Session 来源角色。 */
-export function normalize_session_origin_type(input: unknown): string {
+export function normalize_session_origin_type(input         )         {
   const origin_type = typeof input === "string" ? input.trim() : "";
   if (!origin_type) throw new Error("Session origin.type requires a non-empty string");
   return origin_type;
 }
 
 /** 返回已知角色所属的分类；未知角色返回 undefined。 */
-export function resolve_origin_category(origin_type: string): SessionOriginCategory | undefined {
+export function resolve_origin_category(origin_type        )                                    {
   return ORIGIN_CATEGORY_BY_TYPE[normalize_session_origin_type(origin_type)];
 }
 
@@ -127,9 +128,9 @@ export function resolve_origin_category(origin_type: string): SessionOriginCateg
  * 静默塞进某个分类。
  */
 function resolve_origin_category_input(
-  origin: Record<string, JsonValue>,
-  origin_type: string,
-): SessionOriginCategory {
+  origin                           ,
+  origin_type        ,
+)                        {
   const declared = origin.category === undefined
     ? undefined
     : normalize_session_origin_category(origin.category);
@@ -149,12 +150,12 @@ function resolve_origin_category_input(
 }
 
 /** 规范化创建输入；未指定来源时使用默认工作会话。 */
-export function normalize_session_origin(input?: SessionOrigin): SessionOrigin {
+export function normalize_session_origin(input                )                {
   const source = input ?? {
     category: SESSION_ORIGIN_CATEGORY_WORK,
     type: SESSION_ORIGIN_TYPE_WORK,
   };
-  let serialized: unknown;
+  let serialized         ;
   try {
     serialized = JSON.parse(JSON.stringify(source));
   } catch {
@@ -163,7 +164,7 @@ export function normalize_session_origin(input?: SessionOrigin): SessionOrigin {
   if (!serialized || typeof serialized !== "object" || Array.isArray(serialized)) {
     throw new Error("Session origin must be a JSON object");
   }
-  const origin = serialized as Record<string, JsonValue>;
+  const origin = serialized                             ;
   const origin_type = normalize_session_origin_type(origin.type);
   return {
     ...origin,
@@ -183,8 +184,8 @@ export function normalize_session_origin(input?: SessionOrigin): SessionOrigin {
  * 该函数只服务于写操作；读取历史不依赖深度。
  */
 export function read_session_delegation_depth(
-  origin: { readonly [key: string]: unknown } | undefined,
-): number {
+  origin                                                 ,
+)         {
   const depth = origin?.delegation_depth;
   if (depth === undefined && origin?.category === SESSION_ORIGIN_CATEGORY_CHAT) return 0;
   if (depth === undefined && origin?.category === SESSION_ORIGIN_CATEGORY_WORK
@@ -201,8 +202,8 @@ export function read_session_delegation_depth(
  * Task Session 负责当前运行，执行器与模拟评审器均不能继续委派。
  */
 export function resolve_delegation_blocked_reason(
-  origin: { readonly [key: string]: unknown } | undefined,
-): string | null {
+  origin                                                 ,
+)                {
   if (origin?.type === SESSION_ORIGIN_TYPE_TASK) {
     return "Task Sessions must execute the current run directly and cannot delegate work";
   }
@@ -226,25 +227,25 @@ export function resolve_delegation_blocked_reason(
  * Chat 和普通 Work Main 可以创建；Task Session 不分派，Work Child 达到上限。
  */
 export function can_delegate_work(
-  origin: { readonly [key: string]: unknown } | undefined,
-): boolean {
+  origin                                                 ,
+)          {
   return resolve_delegation_blocked_reason(origin) === null;
 }
 
 /** 判断一个来源是否表示 Agent 自己的会话。 */
 export function is_agent_session_origin(
-  origin: { type?: string } | undefined,
-): boolean {
+  origin                               ,
+)          {
   return String(origin?.type || "").trim() === SESSION_ORIGIN_TYPE_AGENT;
 }
 
 /** 恢复 Metadata，并校验来源 category 与调用方期望一致；category 不决定永久身份或物理位置。 */
 export function restore_session_origin(
-  input: unknown,
-  expected_category: string,
-): SessionOrigin {
+  input         ,
+  expected_category        ,
+)                {
   if (!input) throw new Error("Session metadata requires origin");
-  const origin = normalize_session_origin(input as SessionOrigin);
+  const origin = normalize_session_origin(input                 );
   const normalized_expected = normalize_session_origin_category(expected_category);
   if (origin.category !== normalized_expected) {
     throw new Error(

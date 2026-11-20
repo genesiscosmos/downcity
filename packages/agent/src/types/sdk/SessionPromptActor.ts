@@ -1,7 +1,7 @@
 /** Session 普通输入的可信调用对象；身份由宿主绑定，不接受模型自行指定。 */
 import { z } from "zod";
-
 import type { SessionPromptActor } from "@downcity/type";
+
 export type { SessionPromptActor } from "@downcity/type";
 
 /** 统一验证进程内与传输输入，拒绝缺失身份及额外身份字段。 */
@@ -12,7 +12,7 @@ export const session_prompt_actor_schema = z.discriminatedUnion("kind", [
     agent_id: z.string().trim().min(1),
     workspace_id: z.string().trim().min(1).nullable(),
     session_id: z.string().trim().min(1),
-    category: z.string().trim().min(1),
+    type: z.string().trim().min(1),
   }).strict(),
   z.object({ kind: z.literal("runtime"), namespace: z.string().trim().min(1), object_id: z.string().trim().min(1) }).strict(),
 ]);
@@ -30,14 +30,14 @@ export function create_session_prompt_actor(input: {
   /** 来源 Agent 标识。 */ agent_id: string;
   /** 来源 Workspace 标识；无工作区时为 null。 */ workspace_id: string | null;
   /** 来源 Session 标识。 */ session_id: string;
-  /** 来源 Session 存储分区。 */ category: string;
+  /** 来源 Session 存储分区。 */ type: string;
 }): SessionPromptActor {
   return {
     kind: "session",
     agent_id: input.agent_id,
     workspace_id: input.workspace_id,
     session_id: input.session_id,
-    category: input.category,
+    type: input.type,
   };
 }
 
@@ -55,5 +55,5 @@ export function same_session_prompt_actor(left: SessionPromptActor, right: Sessi
   if (left.kind === "runtime") return right.kind === "runtime" && left.namespace === right.namespace && left.object_id === right.object_id;
   return right.kind === "session" && left.agent_id === right.agent_id
     && left.workspace_id === right.workspace_id && left.session_id === right.session_id
-    && left.category === right.category;
+    && left.type === right.type;
 }

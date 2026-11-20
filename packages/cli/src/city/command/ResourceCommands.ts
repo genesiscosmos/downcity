@@ -33,13 +33,13 @@ export function register_workspace_commands(program: Command): void {
     .action(async (id, options) => await execute_resource_command("workspace.remove", options, { id }));
 }
 
-/** 会话地址始终携带 Agent 和 category；不暴露伪造的 origin 或 actor。 */
+/** 会话地址始终携带 Agent 和 type；不暴露伪造的 origin 或 actor。 */
 export function register_session_commands(program: Command): void {
   const session = program.command("session").description("Browse and manage Agent-owned Sessions");
-  const common = (command: Command): Command => resource_options(command.option("--agent <agent_id>").option("--category <category>", "chat or work", "work"));
-  common(session.command("create").option("--workspace <id>").option("--workspace-path <path>"))
+  const common = (command: Command): Command => resource_options(command.option("--agent <agent_id>").option("--type <type>", "chat or work"));
+  common(session.command("create").option("--kind <kind>", "Session purpose", "work").option("--workspace <id>").option("--workspace-path <path>"))
     .action(async (options) => await execute_resource_command("session.create", options));
-  common(session.command("list").option("--workspace <id>").option("--origin-type <type>").option("--query <text>").option("--archived").option("--limit <number>").option("--cursor <opaque>"))
+  common(session.command("list").option("--workspace <id>").option("--kind <kind>", "Session purpose", "work").option("--query <text>").option("--archived").option("--limit <number>").option("--cursor <opaque>"))
     .action(async (options) => await execute_resource_command("session.list", options));
   common(session.command("get <session_id>").option("--archived", "Require archived state for this permanent Session ID"))
     .action(async (session_id, options) => await execute_resource_command("session.get", options, { session_id }));

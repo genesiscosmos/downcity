@@ -2,7 +2,7 @@
  * Power 后台 Session 宿主端口。
  * 统一负责可信配置选择、创建幂等、持久化完成读取和有界来源分页，不认识 Memory Job 内容。
  */
-import { normalize_session_origin } from "@downcity/type";
+import { normalize_session_descriptor } from "@downcity/type";
 import { z } from "zod";
 import type { Agent } from "@downcity/agent";
 import type { CityPowerRuntimeOptions } from "@/city/types/CityPowerRuntime.js";
@@ -16,7 +16,7 @@ export type CityPowerSessionHost = Pick<PowerHostSystem,
 /** 后台结果只接受宿主路由与 JSON 数据，不接受模型执行权限或新 Turn 策略。 */
 const session_result_schema = z.object({
   agent_id: z.string().trim().min(1),
-  category: z.string().trim().min(1),
+  type: z.string().trim().min(1),
   session_id: z.string().trim().min(1),
   caller_turn_id: z.string().trim().min(1),
   delivery_id: z.string().min(1).refine((value) => value.trim().length > 0),
@@ -40,14 +40,14 @@ export function create_power_session_host(power_id: string, access: CityPowerRun
     create_agent_session: async (input) => {
       const agent = require_agent(access, input.agent_id);
       profiles.attach_agent(agent);
-      const origin = normalize_session_origin(input.origin as import("@downcity/type").SessionOrigin);
+      const descriptor = normalize_session_descriptor(input);
       if (input.execution_profile_id) {
         if (input.inherit_workspace) throw new Error("execution_profile_immutable: default Workspace inheritance is forbidden");
         if (input.execution_profile_version === undefined) throw new Error("execution_profile_version_required");
         profiles.assert_owner(power_id, input.execution_profile_id, input.execution_profile_version);
         if (input.workspace_id) access.require_workspace(input.agent_id, input.workspace_id);
         const session = await agent.sessions.create_execution_session({
-          origin, workspace_id: input.workspace_id,
+          ...descriptor, workspace_id: input.workspace_id,
           execution_profile_id: input.execution_profile_id,
           execution_profile_version: input.execution_profile_version,
           model_id: input.model_id, creation_key: input.creation_key,
@@ -56,17 +56,17 @@ export function create_power_session_host(power_id: string, access: CityPowerRun
       }
       if (input.execution_profile_version !== undefined || input.model_id || input.creation_key) throw new Error("execution_profile_required: execution options require a registered profile");
       const workspace = input.workspace_id ? await access.enter_workspace(input.agent_id, input.workspace_id) : undefined;
-      const session = await agent.sessions.create({ workspace, origin, inherit_workspace: input.inherit_workspace === true });
+      const session = await agent.sessions.create({ workspace, ...descriptor, inherit_workspace: input.inherit_workspace === true });
       return { session_id: session.id };
     },
     deliver_agent_session_result: async (input) => {
       const result = session_result_schema.parse(input);
       const agent = require_agent(access, result.agent_id);
-      const storage = await agent.sessions.read_session_storage(result.session_id, result.category);
+      const storage = await agent.sessions.read_session_storage(result.session_id, result.type);
       const metadata = await storage.read_metadata();
       // 结果端口不继承专用配置所有权，即使当前 Power 拥有目标配置也拒绝，阻断后台递归。
       if (metadata.execution_profile) throw new Error("session_result_execution_profile_forbidden");
-      const session = await agent.sessions.get(result.session_id, result.category);
+      const session = await agent.sessions.get(result.session_id, result.type);
       const delivered = await session.accept_delegation_result(result.caller_turn_id,
         `power_result:${JSON.stringify([power_id, result.delivery_id])}`, [{
           type: "context",
@@ -83,16 +83,16 @@ export function create_power_session_host(power_id: string, access: CityPowerRun
     },
     stop_agent_session: async (input) => {
       const agent = require_agent(access, input.agent_id);
-      await assert_power_session_owner(power_id, agent, profiles, input.session_id, input.category);
-      await agent.sessions.runtime(input.session_id, input.category).stop(input.turn_id);
+      await assert_power_session_owner(power_id, agent, profiles, input.session_id, input.type);
+      await agent.sessions.runtime(input.session_id, input.type).stop(input.turn_id);
     },
     read_agent_session: async (input) => {
       const agent = require_agent(access, input.agent_id);
       profiles.attach_agent(agent);
-      const storage = await agent.sessions.read_session_storage(input.session_id, input.category);
+      const storage = await agent.sessions.read_session_storage(input.session_id, input.type);
       const metadata = await storage.read_metadata();
-      const state = await agent.sessions.read_execution_state(input.session_id, input.category, input);
-      return { session_id: input.session_id, executing: agent.sessions.runtime(input.session_id, input.category).is_executing(),
+      const state = await agent.sessions.read_execution_state(input.session_id, input.type, input);
+      return { session_id: input.session_id, executing: agent.sessions.runtime(input.session_id, input.type).is_executing(),
         ...(metadata.execution_profile ? { execution_profile: metadata.execution_profile } : {}), ...state };
     },
     read_agent_session_messages: async (input) => {
@@ -105,7 +105,7 @@ export function create_power_session_host(power_id: string, access: CityPowerRun
       }
       const before_sequence = Math.min(input.before_sequence ?? Infinity,
         input.through_sequence === undefined ? Infinity : input.through_sequence + 1);
-      const storage = await agent.sessions.read_session_storage(input.session_id, input.category);
+      const storage = await agent.sessions.read_session_storage(input.session_id, input.type);
       const page = await storage.list_message_page({
         ...(Number.isFinite(before_sequence) ? { before_sequence } : {}), limit: limit + 1,
       });
@@ -134,9 +134,9 @@ function bounded_integer(value: number | undefined, fallback: number, maximum: n
 }
 
 /** 在执行前校验当前 Power 确实拥有专用配置；读取其他来源不授予执行权。 */
-export async function assert_power_session_owner(power_id: string, agent: Agent, profiles: CityExecutionProfiles, session_id: string, category: string): Promise<void> {
+export async function assert_power_session_owner(power_id: string, agent: Agent, profiles: CityExecutionProfiles, session_id: string, type: string): Promise<void> {
   profiles.attach_agent(agent);
-  const storage = await agent.sessions.read_session_storage(session_id, category);
+  const storage = await agent.sessions.read_session_storage(session_id, type);
   const reference = (await storage.read_metadata()).execution_profile;
   if (reference) profiles.assert_owner(power_id, reference.id, reference.version);
 }

@@ -6,28 +6,18 @@
  * - 不暴露具体 Session class，也不包含 Session 集合管理能力。
  */
 
-import type { ModelClient } from "@downcity/type";
-import type {
-  SessionAgentContent,
-  SessionUserContent,
-  SessionMessage,
-} from "@downcity/type";
+import type { ModelClient, SessionAgentContent, SessionUserContent, SessionMessage, SessionMutationSubscriber, SessionMutationUnsubscribe, SessionDescriptor } from "@downcity/type";
 import type { AgentSessionPromptInput } from "@/types/sdk/AgentSessionPrompt.js";
 import type { AgentSessionStopResult } from "@/types/sdk/AgentSessionStop.js";
 import type { AgentSessionTurnHandle } from "@/types/sdk/AgentSessionTurn.js";
-import type {
-  SessionMutationSubscriber,
-  SessionMutationUnsubscribe,
-} from "@downcity/type";
 
 /**
  * 单个 Session 实例端口。
  */
-export interface SessionPort {
+export interface SessionPort extends SessionDescriptor {
   /** 当前 Session 稳定标识。 */
-  readonly session_id: string;
-  /** 当前 Session 持久化的真实来源，不由适配层猜测。 */
-  readonly origin: import("@downcity/type").SessionOrigin;
+  readonly id: string;
+
   /** 当前执行项目标识；切换工作区后读取最新值。 */
   readonly workspace_id?: string;
 

@@ -7,34 +7,15 @@
  * - 内部使用 `SessionMessages` 管理 SQLite 中的 canonical Message 聚合。
  */
 
-import {
-  type ModelClient,
-  read_model_context_window,
-  type AgentTool as Tool,
-} from "@downcity/type";
+import { type ModelClient, read_model_context_window, type AgentTool as Tool, normalize_session_descriptor, session_call_context } from "@downcity/type";
 import { submit_with_execution_lease } from "./SessionExecutionLease.js";
 import { SessionMessages } from "@/session/messages/SessionMessages.js";
 import { resolve_model_client } from "@/model/DeferredModelClient.js";
-import type {
-  AgentSessionConfigSnapshot,
-  AgentSessionForkInput,
-  AgentSessionInfo,
-  AgentSessionStatus,
-  AgentSessionSetInput,
-  AgentSessionSetOptions,
-  AgentSessionSystemSnapshot,
-} from "@/types/agent/SessionTypes.js";
+import type { AgentSessionConfigSnapshot, AgentSessionForkInput, AgentSessionInfo, AgentSessionStatus, AgentSessionSetInput, AgentSessionSetOptions, AgentSessionSystemSnapshot } from "@/types/agent/SessionTypes.js";
 import type { AgentSession } from "@/types/agent/SessionActor.js";
 import { create_runtime_session_port } from "@/session/storage/RuntimeSessionPort.js";
 import type { SessionPort } from "@/types/session/SessionPort.js";
-import type { SessionMutationSubscriber, SessionMutationUnsubscribe } from "@downcity/type";
-import type {
-  RespondSessionInteractionInput,
-  SessionApprovalMode,
-  SessionInteractionResult,
-  SessionInteractionRequest,
-} from "@downcity/type";
-import type { ListSessionMessagesInput, SessionMessagePage } from "@downcity/type";
+import type { SessionMutationSubscriber, SessionMutationUnsubscribe, RespondSessionInteractionInput, SessionApprovalMode, SessionInteractionResult, SessionInteractionRequest, ListSessionMessagesInput, SessionMessagePage, ToolCallContext, ToolHookSet, WorkspaceRuntime } from "@downcity/type";
 import type { AgentSessionPromptInput } from "@/types/sdk/AgentSessionPrompt.js";
 import type { AgentSessionStopResult } from "@/types/sdk/AgentSessionStop.js";
 import type { AgentSessionTurnHandle } from "@/types/sdk/AgentSessionTurn.js";
@@ -43,28 +24,20 @@ import { create_session_local_state, SessionState } from "@/session/loop/Session
 import { SessionLoop } from "@/session/loop/SessionLoop.js";
 import { SessionQueue } from "@/session/loop/SessionQueue.js";
 import type { SessionLocalState } from "@/types/session/SessionLocalState.js";
-import type {
-  AgentSessionStateKey,
-  AgentSessionStateValues,
-} from "@/types/agent/SessionState.js";
+import type { AgentSessionStateKey, AgentSessionStateValues } from "@/types/agent/SessionState.js";
 import type { SessionOptions } from "@/types/session/SessionOptions.js";
-import type { ToolCallContext, ToolHookSet, WorkspaceRuntime } from "@downcity/type";
 import { SessionInteractions } from "@/session/messages/SessionInteractions.js";
 import { DefaultSessionComposer } from "@/session/input/composer/DefaultSessionComposer.js";
-import type { SessionComposer } from "@/types/session/SessionComposer.js";
+import type { SessionComposer, SessionContextAdvanceTrigger } from "@/types/session/SessionComposer.js";
 import { generate_id } from "@/utils/Id.js";
 import { generate_session_id, normalize_session_id } from "@/session/SessionIdentity.js";
 import { nanoid } from "nanoid";
 import { read_session_information } from "./SessionInformation.js";
 import type { SessionStorage } from "@/types/store/SessionStorage.js";
-import type {
-  AppendExternalSessionAgentMessageInput,
-  AppendExternalSessionUserMessageInput,
-} from "@/types/session/SessionMessages.js";
+import type { AppendExternalSessionAgentMessageInput, AppendExternalSessionUserMessageInput } from "@/types/session/SessionMessages.js";
 import { StepInput } from "@/session/input/StepInput.js";
 import { relocate_fork_message_files, resolve_session_fork_messages } from "@/session/messages/SessionForkMessageFiles.js";
 import { create_session_model_request_warning } from "@/session/messages/SessionModelRequestWarning.js";
-import type { SessionContextAdvanceTrigger } from "@/types/session/SessionComposer.js";
 
 /**
  * SDK 本地 Session。
@@ -84,7 +57,22 @@ export class Session implements AgentSession {
   /** 创建时确定的 Workspace 归属；未装配执行资源时仍保留。 */
   readonly workspace_id?: string;
   /** 当前 Session 的创建来源。 */
-  readonly origin: SessionOptions["origin"];
+  /** 会话的顶层类型。 */
+  readonly type!: import("@downcity/type").SessionType;
+  /** 创建入口或工作用途。 */
+  readonly kind!: string;
+  /** 已有创建事实中的父执行引用。 */
+  readonly parent?: import("@downcity/type").SessionParent;
+  /** 已有创建事实中的固定派生深度。 */
+  readonly delegation_depth?: number;
+  /** 已有父会话类型。 */
+  readonly parent_session_type?: import("@downcity/type").SessionType;
+  /** 已有派生事实中的根 Chat 引用。 */
+  readonly root_chat_session_id?: string;
+  /** 群组成员所属的群组标识。 */
+  readonly group_id?: string;
+  /** 所属群组对话标识。 */
+  readonly group_session_id?: string;
 
   private readonly store: SessionStorage;
   private readonly create_session_store: SessionOptions["create_session_store"];
@@ -138,7 +126,7 @@ export class Session implements AgentSession {
     this.workspace_id = Object.hasOwn(options, "workspace_id") ? options.workspace_id : options.workspace?.id;
     Object.defineProperty(this, "workspace_id", { writable: false, configurable: false });
     if (options.workspace && (!options.workspace.id || options.workspace.id !== this.workspace_id)) throw new Error("session_workspace_immutable");
-    this.origin = options.origin;
+    Object.assign(this, normalize_session_descriptor(options));
     this.store = options.store;
     this.create_session_store = options.create_session_store;
     this.read_result_session = options.read_result_session;
@@ -196,7 +184,7 @@ export class Session implements AgentSession {
       get_agent_name: this.get_agent_name,
       get_agent_description: this.get_agent_description,
       session_id: this.id,
-      session_origin: this.origin,
+      ...session_call_context(this),
       get_workspace_path: () => this.get_workspace_path(),
       store: this.store,
       composer: this.composer,
@@ -215,7 +203,7 @@ export class Session implements AgentSession {
       workspace_id: this.workspace_id,
       agent_id: this.agent_id,
       session_id: this.id,
-      origin: this.origin,
+      ...normalize_session_descriptor(this),
       store: this.store,
       state: this.local_state,
       logger: this.logger,
@@ -229,7 +217,7 @@ export class Session implements AgentSession {
       completions: options.completions,
       child_work: this.child_work,
       session_id: this.id,
-      session_origin: this.origin,
+      ...session_call_context(this),
       get_workspace_path: () => this.get_workspace_path(),
       step_input: this.step_input,
       advance_context: async (trigger, signal) => await this.advance_context(trigger, signal),
@@ -529,7 +517,7 @@ export class Session implements AgentSession {
   async status(): Promise<AgentSessionStatus> {
     await this.session_loop.initialize_occupation();
     return {
-      session_id: this.id,
+      id: this.id,
       ...this.session_loop.execution.snapshot(),
       occupied_by: this.session_loop.occupied_by(),
       security: {
@@ -718,7 +706,7 @@ export class Session implements AgentSession {
     if (this.runtime_port) return this.runtime_port;
     this.runtime_port = create_runtime_session_port({
       session_id: this.id,
-      origin: this.origin,
+      ...normalize_session_descriptor(this),
       get_workspace_id: () => this.workspace_id,
       get_model: () => this.get_model(),
       messages: async () => await this.session_messages.list_history_messages(),
@@ -766,7 +754,7 @@ export class Session implements AgentSession {
         this.get_instruction_system_blocks().map((block) => block.content),
       ),
       session_id: this.id,
-      session_origin: this.origin,
+      ...session_call_context(this),
       ...(workspace ? { workspace } : {}),
       turn_id: input.turn_id,
       abort_signal: input.abort_signal,
@@ -798,7 +786,7 @@ export class Session implements AgentSession {
       ...(this.local_state.current_workspace
         ? { workspace: this.local_state.current_workspace }
         : {}),
-      origin: this.origin,
+      ...normalize_session_descriptor(this),
       store,
       create_session_store: this.create_session_store,
       read_result_session: this.read_result_session,

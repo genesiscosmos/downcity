@@ -21,5 +21,5 @@ export interface AgentArchivedSessionAddress {
   /** 列表返回的永久会话 UUID，必须原样传回。 */
   session_id: string;
   /** 可选分类校验；不能用于跨分类扫描。 */
-  category?: string;
+  type?: string;
 }

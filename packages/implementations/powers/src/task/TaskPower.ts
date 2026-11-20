@@ -16,7 +16,7 @@ import { capture_task, revise_task } from "./application/TaskIntakeService.js";
 import { recover_task_executions } from "./application/TaskExecutionRecovery.js";
 import { TaskPreparationCoordinator } from "./application/TaskPreparationCoordinator.js";
 import { Power, create_action } from "@downcity/city/power";
-import { SESSION_ORIGIN_TYPE_TASK, type AgentTool } from "@downcity/type";
+import { SESSION_KIND_TASK, type AgentTool } from "@downcity/type";
 import { z } from "zod";
 import type { PowerJsonValue } from "@downcity/city/power";
 import type { TaskWorkspaceSnapshot } from "@/task/types/TaskWorkflow.js";
@@ -66,8 +66,8 @@ export class TaskPower extends Power {
   /** Task 执行器与模拟评审器只完成本次执行，不获得任务管理能力。 */
   readonly availability = (context: PowerContext): PowerAvailability => ({
     enabled: true,
-    available: context.snapshot.session_origin?.type !== SESSION_ORIGIN_TYPE_TASK,
-    reasons: context.snapshot.session_origin?.type === SESSION_ORIGIN_TYPE_TASK
+    available: context.snapshot.session_kind !== SESSION_KIND_TASK,
+    reasons: context.snapshot.session_kind === SESSION_KIND_TASK
       ? [task_session_blocked_reason]
       : [],
   });
@@ -78,9 +78,9 @@ export class TaskPower extends Power {
     if (!tool) return null;
     return {
       ...tool,
-      is_available: (context) => context.session_origin?.type !== SESSION_ORIGIN_TYPE_TASK,
+      is_available: (context) => context.session_kind !== SESSION_KIND_TASK,
       execute: async (input, context) => {
-        if (context.session_origin?.type === SESSION_ORIGIN_TYPE_TASK) {
+        if (context.session_kind === SESSION_KIND_TASK) {
           const message = task_session_blocked_reason;
           return { output: { success: false, power: this.name, error: message, message }, messages: [] };
         }
@@ -166,7 +166,7 @@ export class TaskPower extends Power {
             const task = await readTask({ storage: this.require_storage(), taskId: value.task_id });
             if (task.kind !== "user" && task.agent_id !== context.agent.id && task.delivery_session?.agent_id !== context.agent.id) throw new Error("Task belongs to another Agent");
           }
-          const delivery_session = context.session ? { agent_id: context.agent.id, workspace_id: context.workspace?.id ?? null, session_id: context.session.id, category: context.session.origin.category } : undefined;
+          const delivery_session = context.session ? { agent_id: context.agent.id, workspace_id: context.workspace?.id ?? null, session_id: context.session.id, type: context.session.type } : undefined;
           const result = await this.generate_task(value, delivery_session);
           const error = result.task.definition.preparing?.error;
           return { success: !error, data: result as unknown as PowerJsonValue, ...(error ? { error } : {}) };

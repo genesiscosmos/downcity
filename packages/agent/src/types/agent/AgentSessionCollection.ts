@@ -4,20 +4,11 @@
  * Session 归 Agent 所有；Workspace 归属在创建时确定，恢复仅装配同 ID 执行资源。
  */
 
-import type { WorkspaceRuntime } from "@downcity/type";
+import type { WorkspaceRuntime, SessionDescriptor } from "@downcity/type";
 import type { AgentSession } from "@/types/agent/SessionActor.js";
-import type { AgentCreateSessionInput } from "@/types/agent/SessionTypes.js";
+import type { AgentCreateSessionInput, AgentArchiveSessionInput, AgentArchiveSessionResult, AgentArchiveSessionsInput, AgentArchiveSessionsResult, AgentCleanArchiveResult, AgentListSessionsInput, AgentSessionSummaryPage } from "@/types/agent/SessionTypes.js";
 import type { SessionPort } from "@/types/session/SessionPort.js";
 import type { SessionRemovalEvent } from "@/types/agent/SessionRemoval.js";
-import type {
-  AgentArchiveSessionInput,
-  AgentArchiveSessionResult,
-  AgentArchiveSessionsInput,
-  AgentArchiveSessionsResult,
-  AgentCleanArchiveResult,
-  AgentListSessionsInput,
-  AgentSessionSummaryPage,
-} from "@/types/agent/SessionTypes.js";
 
 /** 创建 Agent Session 的公开参数。 */
 export interface AgentCreateSessionOptions extends AgentCreateSessionInput {
@@ -38,7 +29,7 @@ export interface AgentSessionCollection {
   /**
    * 打开 Agent 自己的那段对话；不存在时创建。
    *
-   * 关键点（中文）：它就是一条普通 Session，角色由 `origin.type = "agent"` 表达；
+   * 关键点（中文）：它就是一条普通 Session，角色由 `type = "chat"`、`kind = "main"` 表达；
    * 一个 Agent 至多一条，被归档或删除后下一次调用自然重建。
    */
   /** 返回 Agent 自己的那条会话；不存在时创建。 */
@@ -51,15 +42,14 @@ export interface AgentSessionCollection {
   register_execution_profile(profile: import("./SessionExecutionProfile.js").SessionExecutionProfile): () => void;
 
   /** 宿主幂等创建专用 Session；显式配置完整替换 Agent 的默认能力。 */
-  create_execution_session(input: import("./SessionExecutionProfile.js").SessionExecutionProfileSelection & {
-    /** 专用 Session 的业务来源。 */
-    origin: import("@downcity/type").SessionOrigin;
+  create_execution_session(input: import("./SessionExecutionProfile.js").SessionExecutionProfileSelection & SessionDescriptor & {
+
     /** 只作为范围元数据的 Workspace 标识。 */
     workspace_id?: string;
   }): Promise<AgentSession>;
 
   /** 按持久化请求身份读取完成写前日志，不依赖内存 Promise。 */
-  read_execution_state(session_id: string, category: string, input: {
+  read_execution_state(session_id: string, type: string, input: {
     /** 指定 Turn ID，与 request_id 互斥。 */
     turn_id?: string;
     /** prompt 使用的业务幂等键。 */
@@ -67,7 +57,7 @@ export interface AgentSessionCollection {
   }): Promise<import("@/agent/SessionExecutionRead.js").SessionExecutionReadResult>;
 
   /** 宿主读取原始持久化视图；读取前仍校验 Session 的执行配置可恢复。 */
-  read_session_storage(session_id: string, category: string): Promise<import("@/types/store/SessionStorage.js").SessionStorage>;
+  read_session_storage(session_id: string, type: string): Promise<import("@/types/store/SessionStorage.js").SessionStorage>;
 
   /** 监听本地新会话初始化完成；监听器完成后创建才返回，取消函数释放订阅。 */
   on_created(listener: (session: AgentSession) => void | Promise<void>): () => void;
@@ -81,12 +71,12 @@ export interface AgentSessionCollection {
   /** 在指定 Workspace 中恢复一个已经属于当前 Agent 的 Session。 */
   get(
     session_id: string,
-    category?: string,
+    type?: string,
     options?: AgentGetSessionOptions,
   ): Promise<AgentSession>;
 
   /** 按永久 UUID 读取活动历史；分类仅用于一致性校验，不恢复执行器。 */
-  read(session_id: string, category?: string): Promise<import("../store/SessionReadView.js").SessionReadView>;
+  read(session_id: string, type?: string): Promise<import("../store/SessionReadView.js").SessionReadView>;
 
   /** 只读当前主会话指针；空值不创建会话或执行器。 */
   read_main(): Promise<import("../store/SessionReadView.js").SessionReadView | null>;
@@ -113,13 +103,13 @@ export interface AgentSessionCollection {
   clean_archive(): Promise<AgentCleanArchiveResult>;
 
   /** 获取 Session runtime port。 */
-  runtime(session_id: string, category?: string): SessionPort;
+  runtime(session_id: string, type?: string): SessionPort;
 
   /** 宿主移除资源前同步关闭空闲缓存会话输入，忙碌拒绝；返回显式解锁函数。 */
   guard_idle(workspace_id?: string): () => void;
 
   /** 只观察已缓存实例；不存在时返回 undefined，不触发恢复执行或目录注入。 */
-  peek(session_id: string, category?: string): AgentSession | undefined;
+  peek(session_id: string, type?: string): AgentSession | undefined;
 
   /** 当前集合仍有接收、活 Turn 或收尾需保护；当前模型故障不释放该能力。 */
   has_live_execution(workspace_id?: string): boolean;
@@ -128,10 +118,10 @@ export interface AgentSessionCollection {
   list_executing_session_ids(): string[];
 
   /** 永久删除 Session。 */
-  remove(session_id: string, category?: string): Promise<boolean>;
+  remove(session_id: string, type?: string): Promise<boolean>;
 
   /** 清空 Session 消息。 */
-  clear_messages(session_id: string, category?: string): Promise<boolean>;
+  clear_messages(session_id: string, type?: string): Promise<boolean>;
 
   /**
    * 释放一个空闲 Session 的运行时实例。
@@ -140,5 +130,5 @@ export interface AgentSessionCollection {
    * 正在执行的 Session 不会被释放，返回是否真的释放。
    * 调用方必须先解除对该实例的订阅，否则重新 `get()` 得到的新实例不会再被订阅。
    */
-  release(session_id: string, category?: string): boolean;
+  release(session_id: string, type?: string): boolean;
 }

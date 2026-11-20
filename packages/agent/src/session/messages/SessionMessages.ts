@@ -8,52 +8,19 @@
 
 import { generate_id } from "@/utils/Id.js";
 import { prepare_session_prompt_input, type PrepareSessionPromptInputInput } from "./SessionRuntimeInput.js";
-import type { SessionAgentInputPart, SessionInputContent } from "@downcity/type";
+import type { SessionAgentInputPart, SessionInputContent, JsonObject, ListSessionMessagesInput, SessionActionStatus, SessionAgentActionPart, SessionAgentErrorPart, SessionAgentInteraction, SessionAgentMessage, SessionMessage, SessionMessagePage, SessionUserMessage, SessionUserMessagePart, SessionInteractionCloseInput, SessionInteractionRequest, SessionInteractionResponse, SessionActionEvent } from "@downcity/type";
 import { assert_tool_terminal } from "@/model/results/ResultReference.js";
 import { fail_tool } from "@/model/results/ToolTerminal.js";
 import { SessionAgentMessageWriter } from "@/session/messages/SessionAgentMessageWriter.js";
 import { SessionAgentMessageState } from "@/session/messages/SessionAgentMessageState.js";
-import {
-  has_assistant_result_content,
-  normalize_session_user_parts,
-} from "@/session/messages/SessionUserMessage.js";
+import { has_assistant_result_content, normalize_session_user_parts } from "@/session/messages/SessionUserMessage.js";
 import { build_session_message_meta } from "@/session/messages/SessionMessageMeta.js";
-import type { JsonObject } from "@downcity/type";import type {
-  ListSessionMessagesInput,
-  SessionActionStatus,
-  SessionAgentActionPart,
-  SessionAgentErrorPart,
-  SessionAgentInteraction,
-  SessionAgentMessage,
-  SessionMessage,
-  SessionMessagePage,
-  SessionUserMessage,
-  SessionUserMessagePart,
-} from "@downcity/type";
 import { SessionMessageCache } from "@/session/messages/SessionMessageCache.js";
 import { resolve_session_message_state } from "@/session/messages/SessionMessageState.js";
-import {
-  next_agent_part_sequence,
-  resolve_changed_agent_parts,
-} from "@/session/messages/SessionAgentParts.js";
-import type { SessionMessageStorageStats } from "@/types/store/SessionStorage.js";
-import type {
-  SessionInteractionCloseInput,
-  SessionInteractionRequest,
-  SessionInteractionResponse,
-} from "@downcity/type";
-import type { SessionActionEvent } from "@downcity/type";
+import { next_agent_part_sequence, resolve_changed_agent_parts } from "@/session/messages/SessionAgentParts.js";
+import type { SessionMessageStorageStats, SessionStorage } from "@/types/store/SessionStorage.js";
 import { persist_user_prompt_file_parts } from "@/model/messages/SessionAttachmentMapper.js";
-import type {
-  AppendExternalSessionAgentMessageInput,
-  AppendExternalSessionUserMessageInput,
-  AppendSessionAgentErrorPartInput,
-  AppendSessionPromptMessageInput,
-  AppendSessionUserMessageInput,
-  OpenSessionAgentMessageInput,
-  SessionMessagesOptions,
-} from "@/types/session/SessionMessages.js";
-import type { SessionStorage } from "@/types/store/SessionStorage.js";
+import type { AppendExternalSessionAgentMessageInput, AppendExternalSessionUserMessageInput, AppendSessionAgentErrorPartInput, AppendSessionPromptMessageInput, AppendSessionUserMessageInput, OpenSessionAgentMessageInput, SessionMessagesOptions } from "@/types/session/SessionMessages.js";
 import type { SessionAttachmentStore } from "@/types/store/SessionAttachmentStore.js";
 
 export { SessionAgentMessageWriter } from "@/session/messages/SessionAgentMessageWriter.js";
@@ -155,7 +122,7 @@ export class SessionMessages {
             }
             return {
               ...fail_tool(part, { session_id: message.session_id, message_id: message.message_id,
-                message_sequence: message.sequence, part_id: part.part_id, category: this.store.origin.category },
+                message_sequence: message.sequence, part_id: part.part_id, type: this.store.type },
                 "Tool interrupted before completion."),
               interactions,
             };
@@ -243,7 +210,7 @@ export class SessionMessages {
       `agent:${this.session_id}:${generate_id()}`;
     // 先建立持有关系，创建消息时的首次接受才会被登记为可写 Message。
     const writer = new SessionAgentMessageWriter({
-      category: this.store.origin.category,
+      type: this.store.type,
       message_id,
       assert_current: input.assert_current,
       state: this.agent_state,
@@ -255,6 +222,7 @@ export class SessionMessages {
         message_id,
         session_id: this.session_id,
         turn_id: input.turn_id,
+        ...(input.execution_id ? { execution_id: input.execution_id } : {}),
         sequence,
         revision: 1,
         created_at,
@@ -272,9 +240,9 @@ export class SessionMessages {
   }
 
   /** 同一 canonical 消息原位恢复，只能由有效失败检查点取得新 Writer。 */
-  async resume_agent_message(message_id: string, revision: number, error_part_id: string, assert_receivable: () => void, assert_current: () => void = assert_receivable): Promise<SessionAgentMessageWriter> {
-    await this.agent_state.resume(message_id, revision, error_part_id, assert_receivable);
-    return new SessionAgentMessageWriter({ category: this.store.origin.category, message_id,
+  async resume_agent_message(message_id: string, revision: number, error_part_id: string, assert_receivable: () => void, assert_current: () => void = assert_receivable, execution_id?: string): Promise<SessionAgentMessageWriter> {
+    await this.agent_state.resume(message_id, revision, error_part_id, assert_receivable, execution_id);
+    return new SessionAgentMessageWriter({ type: this.store.type, message_id,
       state: this.agent_state, cache: this.cache, assert_current });
   }
 
@@ -772,4 +740,3 @@ function create_action_part(input: {
     ...(input.data ? { data: structuredClone(input.data) } : {}),
   };
 }
-

@@ -10,23 +10,12 @@ import { nanoid } from "nanoid";
 import type { Agent } from "@/agent/Agent.js";
 import type { AgentSession } from "@/types/agent/SessionActor.js";
 import type { GroupMessage } from "@/types/group/Group.js";
-import type {
-  GroupMemberRuntime,
-  GroupEventSubscriber,
-  GroupEventUnsubscribe,
-  GroupPromptInput,
-  GroupPromptResult,
-  GroupSessionContract,
-} from "@/types/group/GroupSession.js";
+import type { GroupMemberRuntime, GroupEventSubscriber, GroupEventUnsubscribe, GroupPromptInput, GroupPromptResult, GroupSessionContract } from "@/types/group/GroupSession.js";
 import type { DispatchDecision, DispatchStrategy } from "@/types/group/DispatchStrategy.js";
 import type { ModelClient, WorkspaceRuntime, RespondSessionInteractionInput } from "@downcity/type";
-import { SESSION_ORIGIN_CATEGORY_CHAT, SESSION_ORIGIN_TYPE_GROUP } from "@downcity/type";
+import { SESSION_TYPE_CHAT, SESSION_KIND_GROUP, normalize_session_descriptor } from "@downcity/type";
 import type { GroupSessionDataStore } from "@/types/group/GroupSessionStore.js";
-import {
-  GroupDispatchRuntime,
-  GroupDispatchStoppedError,
-  GroupDispatchSupersededError,
-} from "@/group/GroupDispatchRuntime.js";
+import { GroupDispatchRuntime, GroupDispatchStoppedError, GroupDispatchSupersededError } from "@/group/GroupDispatchRuntime.js";
 import type { GroupDispatchResult } from "@/types/group/GroupDispatch.js";
 import { normalize_session_title } from "@/session/storage/Metadata.js";
 import { create_runtime_prompt_actor } from "@/types/sdk/SessionPromptActor.js";
@@ -132,10 +121,10 @@ export class GroupSession implements GroupSessionContract {
       const member = this.get_member(agent_id);
       if (!member) continue;
       try {
-        const session = await member.sessions.get(session_id, SESSION_ORIGIN_CATEGORY_CHAT, {
+        const session = await member.sessions.get(session_id, SESSION_TYPE_CHAT, {
           ...(this.workspace ? { workspace: this.workspace } : {}),
         });
-        this.assert_member_session_origin(session);
+        this.assert_member_session_descriptor(session);
         this.member_sessions.set(agent_id, session);
         this.member_session_ids.set(agent_id, session.id);
         this.subscribe_member_session(agent_id, session);
@@ -501,12 +490,12 @@ export class GroupSession implements GroupSessionContract {
   private async create_member_session(agent: Agent): Promise<AgentSession> {
     const session = await agent.sessions.create({
       ...(this.workspace ? { workspace: this.workspace } : {}),
-      origin: {
-        category: SESSION_ORIGIN_CATEGORY_CHAT,
-        type: SESSION_ORIGIN_TYPE_GROUP,
+      ...normalize_session_descriptor({
+        type: SESSION_TYPE_CHAT,
+        kind: SESSION_KIND_GROUP,
         group_id: this.group_id,
         group_session_id: this.id,
-      },
+      }),
     });
     this.member_sessions.set(agent.id, session);
     this.member_session_ids.set(agent.id, session.id);
@@ -517,8 +506,8 @@ export class GroupSession implements GroupSessionContract {
   }
 
   /** 校验恢复的成员 Session 确实属于当前 GroupSession。 */
-  private assert_member_session_origin(session: AgentSession): void {
-    if (session.origin.type !== SESSION_ORIGIN_TYPE_GROUP || session.origin.group_id !== this.group_id || session.origin.group_session_id !== this.id) {
+  private assert_member_session_descriptor(session: AgentSession): void {
+    if (session.kind !== SESSION_KIND_GROUP || session.group_id !== this.group_id || session.group_session_id !== this.id) {
       throw new Error(`Agent Session "${session.id}" does not belong to GroupSession "${this.id}"`);
     }
   }

@@ -5,26 +5,14 @@
  * 串行写入 Agent Message 状态与运行缓存。它不理解 UI Message 或 Provider 私有事件。
  */
 
-import type { ModelStreamEvent } from "@downcity/type";
+import type { ModelStreamEvent, SessionAgentContent, SessionAgentErrorPart, SessionAgentMessage, SessionAgentMessagePart, SessionAgentInputPart, SessionInputContent, SessionAgentToolPart } from "@downcity/type";
 import { finalize_tool } from "@/model/results/ToolTerminal.js";
 import { assert_tool_terminal } from "@/model/results/ResultReference.js";
 import type { SessionAgentMessageState } from "@/session/messages/SessionAgentMessageState.js";
 import type { SessionMessageCache } from "@/session/messages/SessionMessageCache.js";
 import { to_session_json_value } from "@/session/messages/SessionJsonValue.js";
 import { SessionToolPartGate } from "@/session/messages/SessionToolPartGate.js";
-import type { SessionAgentContent } from "@downcity/type";
-import type {
-  SessionAgentErrorPart,
-  SessionAgentMessage,
-  SessionAgentMessagePart,
-  SessionAgentInputPart,
-  SessionInputContent,
-  SessionAgentToolPart,
-} from "@downcity/type";
-import type {
-  SessionToolExecutionResult,
-  SessionToolInputReady,
-} from "@/types/session/SessionTool.js";
+import type { SessionToolExecutionResult, SessionToolInputReady } from "@/types/session/SessionTool.js";
 import { generate_id } from "@/utils/Id.js";
 import { create_session_agent_content_part } from "@/session/messages/SessionAgentContent.js";
 import { next_agent_part_sequence } from "@/session/messages/SessionAgentParts.js";
@@ -40,7 +28,7 @@ export interface SessionAgentMessageWriterOptions {
   /** Message 运行缓存。 */
   cache: SessionMessageCache;
   /** canonical 存储分类，保证 internal 等分区可精确定位。 */
-  category?: string;
+  type?: string;
 }
 
 /** 单个 Assistant Message 的流式 Writer。 */
@@ -51,7 +39,7 @@ export class SessionAgentMessageWriter {
   private readonly assert_current: () => void;
   private readonly state: SessionAgentMessageState;
   private readonly cache: SessionMessageCache;
-  private readonly category?: string;
+  private readonly type?: string;
   private readonly content_part_ids = new Map<string, string>();
   private readonly tool_call_ids = new Map<string, string>();
   private readonly current_step_part_ids = new Set<string>();
@@ -68,7 +56,7 @@ export class SessionAgentMessageWriter {
     this.assert_current = options.assert_current ?? (() => {});
     this.state = options.state;
     this.cache = options.cache;
-    this.category = options.category;
+    this.type = options.type;
     this.message_id = options.message_id;
   }
 
@@ -124,7 +112,7 @@ export class SessionAgentMessageWriter {
       const message = this.current_message();
       const terminal = finalize_tool(tool, {
         location: { session_id: message.session_id, message_id: message.message_id,
-          message_sequence: message.sequence, part_id: tool.part_id, category: this.category },
+          message_sequence: message.sequence, part_id: tool.part_id, type: this.type },
         state: result.succeeded ? "completed" : "failed", output: result.output,
         disclosed: result.disclosed,
         ...(!result.succeeded ? { error: read_tool_error(result.output) } : {}),

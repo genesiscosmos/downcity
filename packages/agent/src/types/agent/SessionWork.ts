@@ -10,14 +10,10 @@
  * - 所有角色可读取当前 Agent 的会话；创建和控制依赖可信调用身份与直接父子关系。
  */
 
-import type { ListSessionMessagesInput, SessionMessagePage } from "@downcity/type";
+import type { ListSessionMessagesInput, SessionMessagePage, SessionInteractionResponse } from "@downcity/type";
 import type { AgentArchiveSessionResult } from "./SessionTypes.js";
-import type { SessionInteractionResponse } from "@downcity/type";
 import type { SessionDelegationCaller, SessionDelegationInput, SessionDelegationMessage, SessionDelegationReceipt } from "./SessionDelegation.js";
-import type {
-  SessionCheckDetailToolOutput,
-  SessionToolSummary,
-} from "@/types/tools/session/SessionTools.js";
+import type { SessionCheckDetailToolOutput, SessionToolSummary } from "@/types/tools/session/SessionTools.js";
 
 /** Agent 会话可用的会话工作运行时。 */
 export interface SessionWorkContract {
@@ -25,7 +21,7 @@ export interface SessionWorkContract {
   spawn(input: SessionDelegationInput, caller: SessionDelegationCaller): Promise<SessionDelegationReceipt>;
 
   /** 向已有工作会话追加指令；执行结果自动回传给本次调用方。 */
-  send(input: SessionDelegationMessage, caller: SessionDelegationCaller): Promise<SessionDelegationReceipt>;
+  input(input: SessionDelegationMessage, caller: SessionDelegationCaller): Promise<SessionDelegationReceipt>;
 
   /** 列出当前 Agent 的全部工作会话摘要，按最近更新倒序。 */
   list(input?: { limit?: number }): Promise<SessionToolSummary[]>;
@@ -35,7 +31,7 @@ export interface SessionWorkContract {
     /** 目标会话稳定标识。 */
     session_id: string;
     /** 目标所属分类，明确区分 chat/work 分区。 */
-    session_category: "chat" | "work";
+    session_type: "chat" | "work";
     /** 期望读取归档记录；省略仅查询活动状态。 */
     archived?: boolean;
     /** 返回的最近消息条数上限。 */
@@ -47,7 +43,7 @@ export interface SessionWorkContract {
     /** 目标会话稳定标识。 */
     session_id: string;
     /** 目标所属分类。 */
-    session_category: "chat" | "work";
+    session_type: "chat" | "work";
     /** 期望的归档状态；永久 UUID 和 Agent 范围仍需校验。 */
     archived?: boolean;
   }): Promise<SessionMessagePage>;

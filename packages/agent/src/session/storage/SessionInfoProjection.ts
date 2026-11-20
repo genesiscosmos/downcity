@@ -5,6 +5,7 @@
 import type { AgentSessionInfo } from "@/types/agent/SessionTypes.js";
 import type { SessionInfoProjectionInput } from "@/types/store/SessionInfoProjection.js";
 import { resolve_session_message_preview } from "./SessionMessagePreview.js";
+import { normalize_session_descriptor } from "@downcity/type";
 
 /** 裁剪用户可见预览。 */
 function truncate_text(input: string, max_chars: number): string {
@@ -20,8 +21,7 @@ export function build_session_info(input: SessionInfoProjectionInput): AgentSess
     ? truncate_text(resolve_session_message_preview(latest_message), 180)
     : input.metadata.preview_text;
   return {
-    agent_id: input.agent_id,
-    session_id: input.session_id,
+    id: input.session_id,
     ...(input.metadata.title?.trim() ? { title: input.metadata.title.trim() } : {}),
     ...(preview_text ? { preview_text } : {}),
     message_count: input.metadata.message_count ?? input.messages?.length ?? 0,
@@ -32,10 +32,9 @@ export function build_session_info(input: SessionInfoProjectionInput): AgentSess
       ? { updated_at: input.metadata.updated_at }
       : {}),
     ...(input.metadata.model_label ? { model_label: input.metadata.model_label } : {}),
-    origin: input.metadata.origin,
+    ...normalize_session_descriptor(input.metadata),
     ...(input.metadata.workspace_id ? { workspace_id: input.metadata.workspace_id } : {}),
     ...(input.metadata.timezone ? { timezone: input.metadata.timezone } : {}),
     ...(input.executing ? { executing: true } : {}),
   };
 }
-

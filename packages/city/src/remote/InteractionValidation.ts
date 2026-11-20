@@ -30,7 +30,7 @@ export function validate_interaction_response_input(input: unknown): AgentRespon
     throw new Error("Invalid Agent interaction response input");
   }
   const reference = input.reference;
-  const reference_keys = ["session_category", "session_id", "turn_id", "interaction_id"];
+  const reference_keys = ["session_type", "session_id", "turn_id", "interaction_id"];
   if (!is_record(reference) || Object.keys(reference).some((key) => !reference_keys.includes(key))
     || reference_keys.some((key) => typeof reference[key] !== "string" || !reference[key].trim())) {
     throw new Error("Agent Interaction requires a complete Session/Turn/Interaction reference");

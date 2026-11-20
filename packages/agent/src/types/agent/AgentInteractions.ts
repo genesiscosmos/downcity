@@ -4,12 +4,7 @@
  * Agent 绑定主体身份，引用只定位原 Session 与 Turn；状态始终来自 canonical Interaction。
  * 私密输入仅允许受信宿主经 submit_private 提交，普通 respond 不接受私密答案。
  */
-import type {
-  SessionAgentInteraction,
-  SessionOrigin,
-  SessionInteractionResponse,
-  SessionInteractionResult,
-} from "@downcity/type";
+import type { SessionAgentInteraction, SessionDescriptor, SessionInteractionResponse, SessionInteractionResult } from "@downcity/type";
 import type { AgentSessions } from "@/agent/AgentSessions.js";
 import type { SessionStore } from "@/types/store/SessionStore.js";
 import type { Logger } from "@/utils/logger/Logger.js";
@@ -17,7 +12,7 @@ import type { Logger } from "@/utils/logger/Logger.js";
 /** 当前 Agent 内唯一的原交互引用；不得省略分类或 Turn 身份。 */
 export interface AgentInteractionReference {
   /** 原 Session 的来源分类，区分同名 Chat、Work 与其他分类。 */
-  session_category: string;
+  session_type: string;
   /** 原 Session 的稳定标识。 */
   session_id: string;
   /** 原交互所属 Turn，响应时在原 Session 串行链内验证。 */
@@ -27,9 +22,8 @@ export interface AgentInteractionReference {
 }
 
 /** 原 Session Interaction 的只读快照，不另行持久化处理状态。 */
-export interface AgentInteraction {
-  /** 原主体读取的准确 Session 来源；无法读取时明确缺失，不根据存储分类推断角色。 */
-  origin?: SessionOrigin;
+export interface AgentInteraction extends Partial<SessionDescriptor> {
+
   /** 当前 Agent 内定位原请求的完整引用。 */
   reference: AgentInteractionReference;
   /** 原 Session 保存的 canonical Interaction 快照，包含请求与当前状态。 */
@@ -62,7 +56,7 @@ export type AgentInteractionChange = {
   /** 原 Session 已移出活动集合或历史被清空，调用方移除其全部交互投影。 */
   type: "removed";
   /** 被移出或清空的 Session 分类。 */
-  session_category: string;
+  session_type: string;
   /** 被移出或清空的 Session 标识。 */
   session_id: string;
 };

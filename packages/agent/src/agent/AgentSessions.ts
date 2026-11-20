@@ -14,25 +14,12 @@ import { read_session_execution } from "./SessionExecutionRead.js";
 import { SessionExecutionProfiles } from "./SessionExecutionProfiles.js";
 import type { ResolvedSessionExecutionProfile, SessionExecutionProfile, SessionExecutionProfileSelection } from "@/types/agent/SessionExecutionProfile.js";
 import { allocate_session_id, normalize_session_id } from "@/session/SessionIdentity.js";
-import type { ModelClient, AgentTool as Tool } from "@downcity/type";
+import type { ModelClient, AgentTool as Tool, ToolHookSet, WorkspaceRuntime, SessionDescriptor } from "@downcity/type";
 import type { SessionCompletionPort } from "@/types/agent/SessionCompletion.js";
 import type { Logger } from "@/utils/logger/Logger.js";
-import type {
-  AgentCreateSessionInput,
-  AgentArchiveSessionInput,
-  AgentArchiveSessionsInput,
-  AgentArchiveSessionResult,
-  AgentArchiveSessionsResult,
-  AgentCleanArchiveResult,
-  AgentListSessionsInput,
-  AgentSessionSummaryPage,
-  AgentSessionSystemBlock,
-} from "@/types/agent/SessionTypes.js";
+import type { AgentCreateSessionInput, AgentArchiveSessionInput, AgentArchiveSessionsInput, AgentArchiveSessionResult, AgentArchiveSessionsResult, AgentCleanArchiveResult, AgentListSessionsInput, AgentSessionSummaryPage, AgentSessionSystemBlock } from "@/types/agent/SessionTypes.js";
 import type { AgentSessionConstructor } from "@/types/agent/AgentOptions.js";
-import type {
-  AgentSession,
-  AgentSessions as AgentSessionsContract,
-} from "@/types/agent/SessionActor.js";
+import type { AgentSession, AgentSessions as AgentSessionsContract } from "@/types/agent/SessionActor.js";
 import { isDeepStrictEqual } from "node:util";
 import type { SessionChildWork } from "@/types/session/SessionChildWork.js";
 import type { AgentManagedSession } from "@/types/session/SessionOptions.js";
@@ -42,15 +29,11 @@ import type { SessionPort } from "@/types/session/SessionPort.js";
 import type { SessionComposer } from "@/types/session/SessionComposer.js";
 import { create_instruction_system_blocks } from "@/agent/AgentInstructions.js";
 import { DefaultSessionComposer } from "@/session/input/composer/DefaultSessionComposer.js";
-import type { ToolHookSet } from "@downcity/type";
 import type { SessionStore } from "@/types/store/SessionStore.js";
 import type { SessionStorage } from "@/types/store/SessionStorage.js";
-import type { WorkspaceRuntime } from "@downcity/type";
-import type { SessionOrigin } from "@downcity/type";
-import { normalize_session_origin, normalize_session_origin_category, SESSION_ORIGIN_CATEGORY_WORK, SESSION_ORIGIN_TYPE_WORK } from "@downcity/type";
+import { normalize_session_descriptor, normalize_session_type, SESSION_TYPE_WORK, SESSION_KIND_WORK } from "@downcity/type";
 import type { SessionContextResolution } from "@/types/agent/SessionContext.js";
-import { create_agent_session_origin } from "@/agent/AgentSessionIdentity.js";
-
+import { create_main_session_descriptor } from "@/agent/AgentSessionIdentity.js";
 import { resolve_session_snapshot } from "./SessionModelSnapshot.js";
 
 type AgentSessionsOptions = {
@@ -270,20 +253,20 @@ export class AgentSessions implements AgentSessionsContract<AgentSession> {
   }
 
   /** 观察已有内存实例；不打开存储、不恢复 Workspace 或 executor。 */
-  peek(session_id: string, category = SESSION_ORIGIN_CATEGORY_WORK): AgentSession | undefined {
-    return this.sessions_by_id.get(this.session_cache_key(session_id, category));
+  peek(session_id: string, type = SESSION_TYPE_WORK): AgentSession | undefined {
+    return this.sessions_by_id.get(this.session_cache_key(session_id, type));
   }
 
   /** 返回当前所有执行中的 Session 标识；可按 Workspace 与来源分类限定。 */
-  list_executing_session_ids(workspace_id?: string, category?: string): string[] {
-    const resolved_category = category
-      ? normalize_session_origin_category(category)
+  list_executing_session_ids(workspace_id?: string, type?: string): string[] {
+    const resolved_category = type
+      ? normalize_session_type(type)
       : undefined;
     return this.list_cached_sessions()
       .filter((session) =>
         session.is_executing()
         && (!workspace_id || session.workspace_id === workspace_id)
-        && (!resolved_category || session.origin.category === resolved_category)
+        && (!resolved_category || session.type === resolved_category)
       )
       .map((session) => session.id);
   }
@@ -322,15 +305,15 @@ export class AgentSessions implements AgentSessionsContract<AgentSession> {
    * runtime 是执行层的内部投影，不负责创建 Session。需要创建时必须
    * 通过 `create()` 获取内部生成的 ID；需要恢复时必须先调用 `get()`。
    */
-  runtime(session_id: string, category = SESSION_ORIGIN_CATEGORY_WORK): SessionPort {
+  runtime(session_id: string, type = SESSION_TYPE_WORK): SessionPort {
     const resolved_session_id = normalize_session_id(session_id);
-    const resolved_category = normalize_session_origin_category(category);
+    const resolved_category = normalize_session_type(type);
     const session = this.sessions_by_id.get(
       this.session_cache_key(resolved_session_id, resolved_category),
     );
     if (!session) {
       throw new Error(
-        `Session "${resolved_session_id}" is not loaded from category "${resolved_category}"; call sessions.get(session_id, category) first`,
+        `Session "${resolved_session_id}" is not loaded from type "${resolved_category}"; call sessions.get(session_id, type) first`,
       );
     }
     return session.get_runtime_port();
@@ -359,9 +342,9 @@ export class AgentSessions implements AgentSessionsContract<AgentSession> {
     return await this.run_agent_session_creation(async () => {
       const cached = await this.find_agent_session();
       if (cached) return cached;
-      const origin = create_agent_session_origin();
+      const descriptor = create_main_session_descriptor();
       const context = this.resolve_session_context({
-        origin,
+        ...normalize_session_descriptor(descriptor),
         creating: true,
         ...(input?.workspace ? { workspace: input.workspace } : {}),
       });
@@ -371,7 +354,7 @@ export class AgentSessions implements AgentSessionsContract<AgentSession> {
       const workspace = context.get_workspace();
       if (workspace && workspace.id !== metadata.workspace_id) throw new Error("session_workspace_immutable");
       const restored_model = await resolve_session_snapshot(storage, this.get_agent_model(), true);
-      const session = this.get_or_create_session({ session_id, origin, workspace, workspace_id: metadata.workspace_id, inherit_workspace: false, storage, restored_model });
+      const session = this.get_or_create_session({ session_id, ...normalize_session_descriptor(descriptor), workspace, workspace_id: metadata.workspace_id, inherit_workspace: false, storage, restored_model });
       await session.initialize();
       await this.notify_created(session);
       return session;
@@ -384,10 +367,10 @@ export class AgentSessions implements AgentSessionsContract<AgentSession> {
    * 关键点（中文）：查找不切换目录，宿主负责注入恢复后的 Workspace 实例。
    */
   private async find_agent_session(): Promise<AgentSession | undefined> {
-    const origin = create_agent_session_origin();
-    const context = this.resolve_session_context({ origin });
+    const descriptor = create_main_session_descriptor();
+    const context = this.resolve_session_context({ ...normalize_session_descriptor(descriptor) });
     const current = await context.store.read_main();
-    return current ? await this.get(current.session_id, origin.category) : undefined;
+    return current ? await this.get(current.session_id, descriptor.type) : undefined;
   }
 
   /** 串行化 Agent 会话创建；失败时释放链，使下一次调用可以重试。 */
@@ -409,11 +392,11 @@ export class AgentSessions implements AgentSessionsContract<AgentSession> {
   async create(
     input?: AgentCreateSessionInput & { workspace?: WorkspaceRuntime; /** 显式关闭默认 Workspace 继承。 */ inherit_workspace?: boolean },
   ): Promise<AgentSession> {
-    const origin = normalize_session_origin(input?.origin);
+    const descriptor = normalize_session_descriptor(input);
     return await this.lifecycle.access(async () => {
-      const session_id = await this.allocate_session_id(origin);
-      return await this.create_with_id(session_id, origin, input?.workspace, input?.inherit_workspace);
-    }, this.session_parent_keys(origin));
+      const session_id = await this.allocate_session_id(descriptor);
+      return await this.create_with_id(session_id, descriptor, input?.workspace, input?.inherit_workspace, input?.title);
+    }, this.session_parent_keys(descriptor));
   }
 
   /** 注册宿主可信配置；撤销后缓存会话也不得继续执行。 */
@@ -422,68 +405,67 @@ export class AgentSessions implements AgentSessionsContract<AgentSession> {
   }
 
   /** 专用会话按业务创建键稳定定位；不继承默认 Workspace 或 Agent 业务能力。 */
-  async create_execution_session(input: SessionExecutionProfileSelection & {
-    /** 完整业务来源，由可信宿主提供。 */
-    origin: SessionOrigin;
+  async create_execution_session(input: SessionExecutionProfileSelection & SessionDescriptor & {
+
     /** 仅用作范围元数据，不授予目录能力。 */
     workspace_id?: string;
   }): Promise<AgentSession> {
-    const origin = normalize_session_origin(input.origin);
+    const descriptor = normalize_session_descriptor(input);
     const creation_key = input.creation_key?.trim();
     if (input.creation_key !== undefined && (!creation_key || creation_key.length > 512)) throw new Error("execution_creation_key_invalid");
-    const candidate_id = await this.allocate_session_id(origin);
-    const key = creation_key ? `creation:${origin.category}:${creation_key}` : this.session_cache_key(candidate_id, origin.category);
+    const candidate_id = await this.allocate_session_id(descriptor);
+    const key = creation_key ? `creation:${descriptor.type}:${creation_key}` : this.session_cache_key(candidate_id, descriptor.type);
     const pending = this.execution_creations.get(key);
     if (pending) {
       await pending;
       return await this.create_execution_session(input);
     }
     const operation = this.lifecycle.access(async () => {
-      const context = this.resolve_session_context({ origin });
-      await this.assert_parent_available(origin, context.store);
+      const context = this.resolve_session_context({ ...normalize_session_descriptor(descriptor) });
+      await this.assert_parent_available(descriptor, context.store);
       const storage = creation_key
-        ? await context.store.ensure_creation(creation_key, origin, input.workspace_id)
-        : context.store.create_session(candidate_id, origin, input.workspace_id);
+        ? await context.store.ensure_creation(creation_key, descriptor, input.workspace_id)
+        : context.store.create_session(candidate_id, descriptor, input.workspace_id);
       const session_id = storage.session_id;
-      return await this.lifecycle.read(this.session_cache_key(session_id, origin.category), async () => {
+      return await this.lifecycle.read(this.session_cache_key(session_id, descriptor.type), async () => {
         const metadata = await storage.read_metadata();
-        if (!isDeepStrictEqual(metadata.origin, origin) || metadata.workspace_id !== input.workspace_id) throw new Error("execution_creation_conflict: origin or scope differs");
+        if (!isDeepStrictEqual(normalize_session_descriptor(metadata), descriptor) || metadata.workspace_id !== input.workspace_id) throw new Error("execution_creation_conflict: descriptor or scope differs");
         const persisted = metadata.execution_profile;
         if (persisted && (persisted.id !== input.execution_profile_id || persisted.version !== input.execution_profile_version
           || persisted.creation_key !== creation_key)) throw new Error("execution_creation_conflict: profile or key differs");
         if (!persisted && await storage.message_count() > 0) throw new Error("execution_profile_missing: existing history has no profile");
         const execution_profile = await this.execution_profiles.resolve({ ...input, creation_key }, {
-          agent_id: this.agent_id, session_id, origin, workspace_id: input.workspace_id,
+          agent_id: this.agent_id, session_id, ...normalize_session_descriptor(descriptor), workspace_id: input.workspace_id,
           default_model: this.get_agent_model(),
         }, persisted);
         await storage.bind_execution_profile(execution_profile.reference);
-        const session = this.get_or_create_session({ session_id, origin, storage, execution_profile, workspace_id: metadata.workspace_id, inherit_workspace: false });
+        const session = this.get_or_create_session({ session_id, ...normalize_session_descriptor(descriptor), storage, execution_profile, workspace_id: metadata.workspace_id, inherit_workspace: false });
         await session.initialize();
         if (!persisted) await this.notify_created(session);
         return session;
       });
-    }, [key, ...this.session_parent_keys(origin)]);
+    }, [key, ...this.session_parent_keys(descriptor)]);
     this.execution_creations.set(key, operation);
     try { return await operation; }
     finally { if (this.execution_creations.get(key) === operation) this.execution_creations.delete(key); }
   }
 
   /** 读取写前完成日志与真实运行状态；中断不伪装成模型成功。 */
-  async read_execution_state(session_id: string, category: string, input: {
+  async read_execution_state(session_id: string, type: string, input: {
     /** 指定 Turn ID。 */
     turn_id?: string;
     /** 指定业务请求键。 */
     request_id?: string;
   }) {
-    const storage = await this.read_session_storage(session_id, category);
-    return await read_session_execution(storage, this.sessions_by_id.get(this.session_cache_key(session_id, category))?.has_live_execution() === true, input,
+    const storage = await this.read_session_storage(session_id, type);
+    return await read_session_execution(storage, this.sessions_by_id.get(this.session_cache_key(session_id, type))?.has_live_execution() === true, input,
       this.resolve_session_context().completions);
   }
 
   /** 读取宿主存储端口；先经过精确配置恢复，避免读取路径意外装配全权限会话。 */
-  async read_session_storage(session_id: string, category: string): Promise<SessionStorage> {
-    await this.get(session_id, category);
-    return await this.resolve_session_context().store.open_session(session_id, category);
+  async read_session_storage(session_id: string, type: string): Promise<SessionStorage> {
+    await this.get(session_id, type);
+    return await this.resolve_session_context().store.open_session(session_id, type);
   }
 
   /**
@@ -497,47 +479,48 @@ export class AgentSessions implements AgentSessionsContract<AgentSession> {
     session_id: string,
     workspace: WorkspaceRuntime,
     delegation_depth?: number,
-    child_origin?: SessionOrigin,
+    child_descriptor?: SessionDescriptor,
   ): Promise<AgentSession> {
-    const origin = child_origin ?? { category: SESSION_ORIGIN_CATEGORY_WORK, type: SESSION_ORIGIN_TYPE_WORK };
-    return await this.lifecycle.access(() => this.open_work_session(session_id, workspace, delegation_depth, child_origin),
-      [this.session_cache_key(session_id, origin.category), ...this.session_parent_keys(origin)]);
+    const descriptor = child_descriptor ?? { type: SESSION_TYPE_WORK, kind: SESSION_KIND_WORK };
+    return await this.lifecycle.access(() => this.open_work_session(session_id, workspace, delegation_depth, child_descriptor),
+      [this.session_cache_key(session_id, descriptor.type), ...this.session_parent_keys(descriptor)]);
   }
 
   /** 生命周期保护内恢复幂等委派或创建会话。 */
-  private async open_work_session(session_id: string, workspace: WorkspaceRuntime, delegation_depth?: number, child_origin?: SessionOrigin): Promise<AgentSession> {
-    const origin: SessionOrigin = child_origin ?? {
-      category: SESSION_ORIGIN_CATEGORY_WORK,
-      type: SESSION_ORIGIN_TYPE_WORK,
+  private async open_work_session(session_id: string, workspace: WorkspaceRuntime, delegation_depth?: number, child_descriptor?: SessionDescriptor): Promise<AgentSession> {
+    const descriptor: SessionDescriptor = child_descriptor ?? {
+      type: SESSION_TYPE_WORK,
+      kind: SESSION_KIND_WORK,
       ...(delegation_depth === undefined ? {} : { delegation_depth }),
     };
-    const context = this.resolve_session_context({ origin, workspace });
-    if (await context.store.has_session(session_id, origin.category)) {
-      const session = await this.get(session_id, origin.category, { workspace });
-      if (child_origin && !isDeepStrictEqual(session.origin, child_origin)) {
-        throw new Error("session_relation_invalid: persisted Work Session origin differs from creation record");
+    const context = this.resolve_session_context({ ...normalize_session_descriptor(descriptor), workspace });
+    if (await context.store.has_session(session_id, descriptor.type)) {
+      const session = await this.get(session_id, descriptor.type, { workspace });
+      if (child_descriptor && !isDeepStrictEqual(normalize_session_descriptor(session), normalize_session_descriptor(child_descriptor))) {
+        throw new Error("session_relation_invalid: persisted Work Session descriptor differs from creation record");
       }
       return session;
     }
-    return await this.create_with_id(session_id, origin, workspace);
+    return await this.create_with_id(session_id, descriptor, workspace);
   }
 
   /** 创建入口共享装配过程；固定标识只供已持久化委派使用。 */
   private async create_with_id(
     session_id: string,
-    origin: SessionOrigin,
+    descriptor: SessionDescriptor,
     workspace?: WorkspaceRuntime,
     inherit_workspace = true,
+    title?: string,
   ): Promise<AgentSession> {
     const context = this.resolve_session_context({
-      origin,
+      ...normalize_session_descriptor(descriptor),
       creating: inherit_workspace,
       ...(workspace ? { workspace } : {}),
     });
-    await this.assert_parent_available(origin, context.store);
-    const storage = context.store.create_session(session_id, origin, context.workspace_id);
+    await this.assert_parent_available(descriptor, context.store);
+    const storage = context.store.create_session(session_id, descriptor, context.workspace_id, title);
     const restored_model = await resolve_session_snapshot(storage, this.get_agent_model(), true);
-    const session = this.get_or_create_session({ session_id, workspace, origin, inherit_workspace, storage, restored_model });
+    const session = this.get_or_create_session({ session_id, workspace, ...normalize_session_descriptor(descriptor), inherit_workspace, storage, restored_model });
     await session.initialize();
     await this.notify_created(session);
     return session;
@@ -552,21 +535,28 @@ export class AgentSessions implements AgentSessionsContract<AgentSession> {
    */
   async get(
     session_id: string,
-    category = SESSION_ORIGIN_CATEGORY_WORK,
-    input?: { workspace?: WorkspaceRuntime },
+    type?: string,
+    input?: { /** 恢复既有工作区的运行资源。 */ workspace?: WorkspaceRuntime },
   ): Promise<AgentSession> {
-    return await this.lifecycle.read(this.session_cache_key(session_id, normalize_session_origin_category(category)),
-      () => this.open_existing_session(session_id, category, input));
+    let resolved_type = type === undefined ? undefined : normalize_session_type(type);
+    if (resolved_type === undefined) {
+      const [entry] = await this.resolve_session_context().store.read_metadata([{ session_id }]);
+      if (!entry || entry.archived) throw new Error("session_not_found");
+      resolved_type = entry.metadata.type;
+    }
+    const session_type = resolved_type;
+    return await this.lifecycle.read(this.session_cache_key(session_id, session_type),
+      () => this.open_existing_session(session_id, session_type, input));
   }
 
   /** 生命周期保护内读取持久化信息并恢复 Session 句柄。 */
-  private async open_existing_session(session_id: string, category: string, input?: { /** 恢复时注入的 Workspace 实例。 */ workspace?: WorkspaceRuntime }): Promise<AgentSession> {
+  private async open_existing_session(session_id: string, type: string, input?: { /** 恢复时注入的 Workspace 实例。 */ workspace?: WorkspaceRuntime }): Promise<AgentSession> {
     if (input && "workspace" in input && input.workspace === null) throw new Error("session_workspace_immutable");
     const resolved_session_id = normalize_session_id(session_id);
     if (!resolved_session_id) {
       throw new Error("sessions.get requires a non-empty session_id");
     }
-    const resolved_category = normalize_session_origin_category(category);
+    const resolved_category = normalize_session_type(type);
     const cache_key = this.session_cache_key(resolved_session_id, resolved_category);
     const cached = this.sessions_by_id.get(cache_key);
     const context = this.resolve_session_context({
@@ -578,7 +568,7 @@ export class AgentSessions implements AgentSessionsContract<AgentSession> {
       !(await store.has_session(resolved_session_id, resolved_category))
     ) {
       throw new Error(
-        `Session "${resolved_session_id}" not found in category "${resolved_category}"`,
+        `Session "${resolved_session_id}" not found in type "${resolved_category}"`,
       );
     }
     const storage = await store.open_session(resolved_session_id, resolved_category);
@@ -587,7 +577,7 @@ export class AgentSessions implements AgentSessionsContract<AgentSession> {
     const execution_profile = reference ? await this.execution_profiles.resolve({
       execution_profile_id: reference.id, execution_profile_version: reference.version,
       creation_key: reference.creation_key,
-    }, { agent_id: this.agent_id, session_id: resolved_session_id, origin: persisted_metadata.origin,
+    }, { agent_id: this.agent_id, session_id: resolved_session_id, ...normalize_session_descriptor(persisted_metadata),
       workspace_id: persisted_metadata.workspace_id, default_model: this.get_agent_model() }, reference) : undefined;
     if (execution_profile && input?.workspace) throw new Error("execution_profile_immutable: Workspace capabilities cannot be attached");
     const persisted_workspace_id = persisted_metadata.workspace_id;
@@ -605,7 +595,7 @@ export class AgentSessions implements AgentSessionsContract<AgentSession> {
       workspace: input?.workspace,
       workspace_id: persisted_workspace_id,
       inherit_workspace: false,
-      origin: persisted_metadata.origin,
+      ...normalize_session_descriptor(persisted_metadata),
       storage,
       execution_profile,
       // 惰性模型解析发生在执行时，应读取随后装配的同 ID 资源。
@@ -623,18 +613,18 @@ export class AgentSessions implements AgentSessionsContract<AgentSession> {
    * - 正在执行的 Session 会先停止，避免删除后继续写入。
    * - 该方法不处理任何 Power 自有数据。
    */
-  async remove(session_id: string, category = SESSION_ORIGIN_CATEGORY_WORK): Promise<boolean> {
-    return await this.lifecycle.access(() => this.remove_existing_session(session_id, category),
-      [this.session_cache_key(session_id, normalize_session_origin_category(category))]);
+  async remove(session_id: string, type = SESSION_TYPE_WORK): Promise<boolean> {
+    return await this.lifecycle.access(() => this.remove_existing_session(session_id, type),
+      [this.session_cache_key(session_id, normalize_session_type(type))]);
   }
 
   /** 生命周期保护内删除单个活动会话。 */
-  private async remove_existing_session(session_id: string, category: string): Promise<boolean> {
+  private async remove_existing_session(session_id: string, type: string): Promise<boolean> {
     const resolved_session_id = normalize_session_id(session_id);
     if (!resolved_session_id) {
       throw new Error("sessions.remove requires a non-empty session_id");
     }
-    const resolved_category = normalize_session_origin_category(category);
+    const resolved_category = normalize_session_type(type);
     const cache_key = this.session_cache_key(resolved_session_id, resolved_category);
     const cached = this.sessions_by_id.get(cache_key);
     if (cached?.has_live_execution()) {
@@ -650,8 +640,8 @@ export class AgentSessions implements AgentSessionsContract<AgentSession> {
     );
     this.delete_cached_session(cache_key);
     if (existed) await this.notify_removed({
-      type: "deleted", session_id: resolved_session_id,
-      category: resolved_category, origin_type: existing_record?.metadata.origin.type ?? cached?.origin.type ?? SESSION_ORIGIN_TYPE_WORK,
+      action: "deleted", session_id: resolved_session_id,
+      type: resolved_category, kind: existing_record?.metadata.kind ?? cached?.kind ?? SESSION_KIND_WORK,
       workspace_id: existing_record?.metadata.workspace_id ?? cached?.workspace_id,
     });
     return existed;
@@ -660,18 +650,18 @@ export class AgentSessions implements AgentSessionsContract<AgentSession> {
   /**
    * 清空一个 Session 的消息目录。
    */
-  async clear_messages(session_id: string, category = SESSION_ORIGIN_CATEGORY_WORK): Promise<boolean> {
-    return await this.lifecycle.access(() => this.clear_existing_messages(session_id, category),
-      [this.session_cache_key(session_id, normalize_session_origin_category(category))]);
+  async clear_messages(session_id: string, type = SESSION_TYPE_WORK): Promise<boolean> {
+    return await this.lifecycle.access(() => this.clear_existing_messages(session_id, type),
+      [this.session_cache_key(session_id, normalize_session_type(type))]);
   }
 
   /** 生命周期保护内清理消息，避免与归档搬迁同时进行。 */
-  private async clear_existing_messages(session_id: string, category: string): Promise<boolean> {
+  private async clear_existing_messages(session_id: string, type: string): Promise<boolean> {
     const resolved_session_id = normalize_session_id(session_id);
     if (!resolved_session_id) {
       throw new Error("sessions.clear_messages requires a non-empty session_id");
     }
-    const resolved_category = normalize_session_origin_category(category);
+    const resolved_category = normalize_session_type(type);
     const cache_key = this.session_cache_key(resolved_session_id, resolved_category);
     const cached = this.sessions_by_id.get(cache_key);
     if (cached?.has_live_execution()) {
@@ -688,8 +678,8 @@ export class AgentSessions implements AgentSessionsContract<AgentSession> {
   }
 
   /** 读取永久身份的活动历史，不恢复执行器或读取模型配置。 */
-  async read(session_id: string, category = SESSION_ORIGIN_CATEGORY_WORK) {
-    return await this.resolve_session_context().store.read_session(session_id, category);
+  async read(session_id: string, type = SESSION_TYPE_WORK) {
+    return await this.resolve_session_context().store.read_session(session_id, type);
   }
 
   /** 只读当前主会话，不恢复执行器；显式 self() 才确保创建。 */
@@ -706,10 +696,10 @@ export class AgentSessions implements AgentSessionsContract<AgentSession> {
   async list(
     input?: AgentListSessionsInput,
   ): Promise<AgentSessionSummaryPage> {
-    const category = normalize_session_origin_category(input?.category ?? SESSION_ORIGIN_CATEGORY_WORK);
+    const type = normalize_session_type(input?.type ?? SESSION_TYPE_WORK);
     return await this.resolve_session_context().store.list_sessions(
-      { ...(input || {}), category },
-      new Set(this.list_executing_session_ids(undefined, category)),
+      { ...(input || {}), type },
+      new Set(this.list_executing_session_ids(undefined, type)),
     );
   }
 
@@ -728,9 +718,9 @@ export class AgentSessions implements AgentSessionsContract<AgentSession> {
       return await this.lifecycle.archive(() => archive_session_subtree(input, {
         agent_id: this.agent_id,
         store: this.resolve_session_context().store,
-        get_cached: (session_id, category) => this.sessions_by_id.get(this.session_cache_key(session_id, category)),
-        remove_cached: (session_id, category) => this.delete_cached_session(this.session_cache_key(session_id, category)),
-        reserve_sessions: (plan) => this.lifecycle.reserve_archive(plan.map((item) => this.session_cache_key(item.id, item.category!))),
+        get_cached: (session_id, type) => this.sessions_by_id.get(this.session_cache_key(session_id, type)),
+        remove_cached: (session_id, type) => this.delete_cached_session(this.session_cache_key(session_id, type)),
+        reserve_sessions: (plan) => this.lifecycle.reserve_archive(plan.map((item) => this.session_cache_key(item.id, item.type!))),
         record_removal: (event) => { removals.push(event); },
       }));
     } finally {
@@ -769,7 +759,7 @@ export class AgentSessions implements AgentSessionsContract<AgentSession> {
     return result;
   }
 
-  private get_or_create_session(input?: {
+  private get_or_create_session(input?: Partial<SessionDescriptor> & {
     /**
      * 可选指定 session id。
      */
@@ -778,8 +768,7 @@ export class AgentSessions implements AgentSessionsContract<AgentSession> {
     workspace?: WorkspaceRuntime;
     /** 恢复时的持久化归属；显式 undefined 表示创建时无归属。 */
     workspace_id?: string;
-    /** 当前 Session 的创建来源。 */
-    origin?: SessionOrigin;
+
     /** 已由集合层创建或打开的单 Session Storage。 */
     storage?: SessionStorage;
     /** 是否允许新会话继承 Agent 默认目录。 */
@@ -793,8 +782,8 @@ export class AgentSessions implements AgentSessionsContract<AgentSession> {
       input?.session_id || input?.storage?.session_id || "",
     );
     if (!resolved_session_id) throw new Error("Session creation requires an allocated ID");
-    const resolved_origin = normalize_session_origin(input?.origin);
-    const cache_key = this.session_cache_key(resolved_session_id, resolved_origin.category);
+    const resolved_descriptor = normalize_session_descriptor(input);
+    const cache_key = this.session_cache_key(resolved_session_id, resolved_descriptor.type);
     const cached = this.sessions_by_id.get(cache_key);
     if (cached) return cached;
     const profile = input?.execution_profile;
@@ -804,7 +793,7 @@ export class AgentSessions implements AgentSessionsContract<AgentSession> {
     }) : this.load_instruction_system_blocks();
 
     const context = this.resolve_session_context({
-      ...(input?.origin ? { origin: input.origin } : {}),
+      ...(input ? { ...normalize_session_descriptor(input) } : {}),
       creating: !profile && input?.inherit_workspace !== false,
       ...(input?.workspace ? { workspace: input.workspace } : {}),
     });
@@ -819,7 +808,7 @@ export class AgentSessions implements AgentSessionsContract<AgentSession> {
         this.assert_resource_available(workspace_id);
         return this.acquire_execution?.() ?? (() => {});
       },
-      read_result_session: (session_id, category) => read_result_session(context.store, session_id, category),
+      read_result_session: (session_id, type) => read_result_session(context.store, session_id, type),
       ...(profile ? { assert_execution_profile: assert_profile } : {}),
       agent_id: this.agent_id,
       get_agent_name: this.get_agent_name,
@@ -827,15 +816,15 @@ export class AgentSessions implements AgentSessionsContract<AgentSession> {
       workspace_id,
       workspace_path: context.workspace_path,
       ...(context.get_workspace() ? { workspace: context.get_workspace() } : {}),
-      origin: resolved_origin,
-      store: input?.storage || context.store.create_session(resolved_session_id, resolved_origin, workspace_id),
-      create_session_store: (session_id) => context.store.create_session(session_id, resolved_origin, workspace_id),
-      allocate_session_id: () => this.allocate_session_id(resolved_origin),
+      ...normalize_session_descriptor(resolved_descriptor),
+      store: input?.storage || context.store.create_session(resolved_session_id, resolved_descriptor, workspace_id),
+      create_session_store: (session_id) => context.store.create_session(session_id, resolved_descriptor, workspace_id),
+      allocate_session_id: () => this.allocate_session_id(resolved_descriptor),
       register_forked_session: (session) => this.register_forked_session(session),
       session_id: resolved_session_id,
       get_tools: (workspace) => {
         assert_profile();
-        return profile ? profile.resources.tools : this.resolve_session_context({ origin: resolved_origin, workspace }).get_tools();
+        return profile ? profile.resources.tools : this.resolve_session_context({ ...normalize_session_descriptor(resolved_descriptor), workspace }).get_tools();
       },
       logger: context.logger,
       instruction_system_blocks: instruction_blocks(),
@@ -845,7 +834,7 @@ export class AgentSessions implements AgentSessionsContract<AgentSession> {
       get_hooks: () => { assert_profile(); return profile ? profile.resources.hooks : context.get_hooks(); },
       completions: profile ? context.result_completions : context.completions,
       child_work: profile ? undefined : context.child_work,
-      archive_session: async (session_id) => await this.archive({ id: session_id, category: resolved_origin.category }),
+      archive_session: async (session_id) => await this.archive({ id: session_id, type: resolved_descriptor.type }),
       composer: profile ? profile.resources.composer : this.session_composer,
     });
     this.sessions_by_id.set(cache_key, created);
@@ -862,12 +851,12 @@ export class AgentSessions implements AgentSessionsContract<AgentSession> {
    * - 返回是否真的释放。调用方必须先自行解除对该实例的订阅，否则重新 `get()` 会拿到新实例
    *   而旧订阅仍然挂在被丢弃的实例上。
    */
-  release(session_id: string, category = SESSION_ORIGIN_CATEGORY_WORK): boolean {
+  release(session_id: string, type = SESSION_TYPE_WORK): boolean {
     const resolved_session_id = normalize_session_id(session_id);
     if (!resolved_session_id) return false;
     const cache_key = this.session_cache_key(
       resolved_session_id,
-      normalize_session_origin_category(category),
+      normalize_session_type(type),
     );
     if (this.lifecycle.is_busy(cache_key)) return false;
     const cached = this.sessions_by_id.get(cache_key);
@@ -883,7 +872,7 @@ export class AgentSessions implements AgentSessionsContract<AgentSession> {
     if (session.agent_id !== this.agent_id) {
       throw new Error(`Cannot register Session "${session.id}" for another Agent`);
     }
-    const cache_key = this.session_cache_key(session.id, session.origin.category);
+    const cache_key = this.session_cache_key(session.id, session.type);
     const cached = this.sessions_by_id.get(cache_key);
     if (cached && cached !== session) {
       throw new Error(`Session "${session.id}" already has another runtime instance`);
@@ -924,37 +913,37 @@ export class AgentSessions implements AgentSessionsContract<AgentSession> {
   }
 
   /** 返回来源分类内唯一的 Session 运行时缓存键。 */
-  private session_cache_key(session_id: string, category: string): string {
-    return `${category}\u0000${normalize_session_id(session_id)}`;
+  private session_cache_key(session_id: string, type: string): string {
+    return `${type}\u0000${normalize_session_id(session_id)}`;
   }
 
   /** 新建节点必须连接仍在活动存储中的同 Agent 父节点。 */
-  private async assert_parent_available(origin: SessionOrigin, store: SessionStore): Promise<void> {
-    if (origin.parent_agent_id === this.agent_id && typeof origin.parent_session_id === "string"
-      && typeof origin.parent_session_category === "string"
-      && !await store.has_session(origin.parent_session_id, origin.parent_session_category)) {
+  private async assert_parent_available(descriptor: SessionDescriptor, store: SessionStore): Promise<void> {
+    const { parent, parent_session_type } = descriptor;
+    if (parent?.agent_id === this.agent_id && parent_session_type !== undefined
+      && !await store.has_session(parent.session_id, parent_session_type)) {
       throw new Error("session_parent_unavailable: parent Session is missing or archived");
     }
   }
 
   /** 创建期间同时保护同 Agent 的直接父节点，阻止归档计划确定后新增后代。 */
-  private session_parent_keys(origin: SessionOrigin): string[] {
-    if (origin.parent_agent_id !== this.agent_id || typeof origin.parent_session_id !== "string"
-      || typeof origin.parent_session_category !== "string") return [];
-    return [this.session_cache_key(origin.parent_session_id, origin.parent_session_category)];
+  private session_parent_keys(descriptor: SessionDescriptor): string[] {
+    const { parent, parent_session_type } = descriptor;
+    if (parent?.agent_id !== this.agent_id || parent_session_type === undefined) return [];
+    return [this.session_cache_key(parent.session_id, parent_session_type)];
   }
 
   /** 检查持久化与进程内预留标识，避免并发创建复用尚未初始化的 ID。 */
   private readonly reserved_session_ids = new Set<string>();
 
   /** 为新建和 fork 统一分配 ID；已分配的标识在进程生命周期内不复用。 */
-  private async allocate_session_id(origin: SessionOrigin): Promise<string> {
-    const store = this.resolve_session_context({ origin }).store;
+  private async allocate_session_id(descriptor: SessionDescriptor): Promise<string> {
+    const store = this.resolve_session_context({ ...normalize_session_descriptor(descriptor) }).store;
     return await allocate_session_id(async (session_id) => {
-      const key = this.session_cache_key(session_id, origin.category);
+      const key = this.session_cache_key(session_id, descriptor.type);
       if (this.reserved_session_ids.has(key)) return true;
       this.reserved_session_ids.add(key);
-      if (await store.has_session(session_id, origin.category)) return true;
+      if (await store.has_session(session_id, descriptor.type)) return true;
       return false;
     });
   }

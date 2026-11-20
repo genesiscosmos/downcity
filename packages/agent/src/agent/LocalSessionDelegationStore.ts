@@ -24,13 +24,14 @@ export class LocalSessionDelegationStore implements SessionDelegationStore {
 
   /** 同一工具调用只创建一条委派。 */
   async create(record: SessionDelegationRecord): Promise<SessionDelegationRecord> {
+    if (!record.caller.execution_id) throw new Error("Session input requires a parent execution identity");
     await this.files.ensure_directory("delegations");
-    // 创建与父 Turn 封闭共用事务锁；重复请求复用记录，独立请求可创建多个子会话。
+    // 创建与父执行取消共用事务锁；重复请求复用记录，独立请求可创建多个子会话。
     return await this.files.with_file_lock("delegations/create.lock", async () => {
       const existing = await this.get(record.delegation_id);
-      if (await this.files.path_exists(this.closed_turn_path(record.caller.agent_id,
-        record.caller.origin.category, record.caller.session_id, record.caller.turn_id))) {
-        throw new Error("Parent Turn is closed; cannot submit child work");
+      if (await this.files.path_exists(this.cancelled_execution_path(record.caller.agent_id,
+        record.caller.type, record.caller.session_id, record.caller.turn_id, record.caller.execution_id))) {
+        throw new Error("Parent execution was cancelled; cannot accept input from this execution");
       }
       if (existing) return existing;
       await this.save(record);
@@ -56,25 +57,25 @@ export class LocalSessionDelegationStore implements SessionDelegationStore {
   }
 
   /** 从创建记录恢复全部直接子关系，包含已结束和已归档的子会话。 */
-  async children(agent_id: string, category: string, session_id: string): Promise<SessionDelegationRecord[]> {
+  async children(agent_id: string, type: string, session_id: string): Promise<SessionDelegationRecord[]> {
     return (await this.list_records()).filter((record) => !record.followup
-      && record.caller.agent_id === agent_id && record.caller.origin.category === category
+      && record.caller.agent_id === agent_id && record.caller.type === type
       && record.caller.session_id === session_id);
   }
 
-  /** 停止封闭与创建共用事务锁，覆盖异步准备期间尚未提交的子请求。 */
-  async close_turn(agent_id: string, category: string, session_id: string, turn_id: string): Promise<void> {
+  /** 取消与创建共用事务锁，只拒绝所属执行代次的迟到请求。 */
+  async cancel_execution(agent_id: string, type: string, session_id: string, turn_id: string, execution_id: string): Promise<void> {
     await this.files.ensure_directory("delegations");
     await this.files.with_file_lock("delegations/create.lock", async () => {
-      await this.files.ensure_directory("delegations/closed");
-      await this.files.write_file_atomically(this.closed_turn_path(agent_id, category, session_id, turn_id), "closed");
+      await this.files.ensure_directory("delegations/cancelled");
+      await this.files.write_file_atomically(this.cancelled_execution_path(agent_id, type, session_id, turn_id, execution_id), "cancelled");
     });
   }
 
-  /** 已停止父 Turn 的稳定标识，禁止跨重启复活迟到的子请求。 */
-  private closed_turn_path(agent_id: string, category: string, session_id: string, turn_id: string): string {
-    const key = createHash("sha256").update(JSON.stringify([agent_id, category, session_id, turn_id])).digest("hex");
-    return `delegations/closed/${key}`;
+  /** 持久化执行代次的取消身份，跨重启仍拒绝旧请求且不影响新执行。 */
+  private cancelled_execution_path(agent_id: string, type: string, session_id: string, turn_id: string, execution_id: string): string {
+    const key = createHash("sha256").update(JSON.stringify([agent_id, type, session_id, turn_id, execution_id])).digest("hex");
+    return `delegations/cancelled/${key}`;
   }
 
   /** 扫描权威快照，不额外维护可能漂移的父子关系索引。 */

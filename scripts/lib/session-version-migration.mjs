@@ -67,7 +67,7 @@ export function create_version_migration({ source_schema, target_schema, migrati
       let database;
       try {
         database = open_source(inside(root_path, agent.relative_path));
-        agent.proof = inspect_database(database, agent.agent_id, historical);
+        agent.proof = inspect_database(database, agent.agent_id, historical, runtime);
         for (const row of database.prepare("SELECT session_id FROM sessions").iterate()) {
           if (identities.has(row.session_id)) fail("session_storage_identity_conflict"); identities.add(row.session_id);
         }

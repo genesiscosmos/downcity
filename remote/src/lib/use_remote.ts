@@ -12,7 +12,7 @@ import { connection_error, remember_city_url } from "./preferences";
 import { normalize_city_url } from "./endpoint";
 
 const initial_state: Remote_state = { city_url: "", agents: [], sessions: [], busy: false, loading_more: false };
-const session_filter = { category: "chat", limit: 30 };
+const session_filter = { type: "chat", kind: "remote", limit: 30 };
 
 /** 返回页面可见状态与最小连接操作；卸载与断开都会释放本 hook 拥有的资源。 */
 export function use_remote() {
@@ -84,7 +84,7 @@ export function use_remote() {
     const page = await refresh_sessions(agent, generation);
     if (!is_current(generation)) return;
     if (page.items[0]) {
-      const session = await agent.sessions.get(page.items[0].session_id, "chat");
+      const session = await agent.sessions.get(page.items[0].id, "chat");
       if (is_current(generation)) await attach_session(session, agent, generation);
     }
   };
@@ -142,7 +142,7 @@ export function use_remote() {
     const generation = begin();
     set_state(value => ({ ...value, session_id: undefined }));
     try {
-      const session = await agent.sessions.create({ origin: { category: "chat", type: "agent" } });
+      const session = await agent.sessions.create({ type: "chat", kind: "remote" });
       if (!is_current(generation)) return;
       // 先保存身份，订阅失败后仍可重新打开已创建会话，避免重试时重复创建。
       set_state(value => ({ ...value, session_id: session.id }));
@@ -162,7 +162,7 @@ export function use_remote() {
     try {
       const page = await agent.sessions.list({ ...session_filter, cursor });
       if (is_current(generation)) set_state(value => ({ ...value,
-        sessions: [...new Map([...value.sessions, ...page.items].map(item => [item.session_id, item])).values()],
+        sessions: [...new Map([...value.sessions, ...page.items].map(item => [item.id, item])).values()],
         next_cursor: page.next_cursor,
       }));
     } catch (error) {
@@ -190,7 +190,7 @@ export function use_remote() {
     if (!agent) throw new Error("No agent connected.");
     const items = await agent.interactions.list();
     return items.find(item => item.reference.session_id === session_id
-      && item.reference.session_category === "chat" && item.reference.interaction_id === interaction_id);
+      && item.reference.session_type === "chat" && item.reference.interaction_id === interaction_id);
   }, []);
 
   return { state, connect, disconnect, select_agent, select_session, create_session, load_more, read_interaction };

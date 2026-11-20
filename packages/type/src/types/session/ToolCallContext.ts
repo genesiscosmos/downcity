@@ -12,7 +12,7 @@
 
 import type { ModelMessage } from "../model/ModelMessage.js";
 import type { ReadFileToolInput, ReadFileToolResult } from "../workspace/FileTool.js";
-import type { SessionOrigin } from "./SessionOrigin.js";
+import type { SessionCallContext } from "./SessionCallContext.js";
 import type { SessionInteractionPort } from "./SessionInteraction.js";
 import type { WorkspaceRuntime } from "../workspace/WorkspaceRuntime.js";
 
@@ -25,7 +25,7 @@ export interface ToolCallUserMessage {
 }
 
 /** 工具与 Hook 执行时获得的调用环境。 */
-export interface ToolCallContext {
+export interface ToolCallContext extends SessionCallContext {
   /** 当前 Agent 稳定标识。 */
   readonly agent_id: string;
   /** 当前 Agent 用户可见名称。 */
@@ -36,8 +36,6 @@ export interface ToolCallContext {
   readonly agent_instructions: readonly string[];
   /** 当前 Session 稳定标识。 */
   readonly session_id: string;
-  /** 当前 Session 来源，同时也是持久化分区。 */
-  readonly session_origin: SessionOrigin;
   /** 当前 Session 绑定的 Workspace 实例；未绑定 Workspace 时为空。 */
   readonly workspace?: WorkspaceRuntime;
   /** 仅尝试读取当前 Session 登记且持有的附件；非附件返回 null，不授予写权限。 */
@@ -46,6 +44,8 @@ export interface ToolCallContext {
   readonly reserve_media?: (bytes: number, existing_bytes: number, estimated_tokens: number) => boolean;
   /** 当前 Turn 稳定标识；非 Turn 调用时为空。 */
   readonly turn_id?: string;
+  /** 当前执行代次；模型工具使用它隔离同 Turn 的重试与取消。 */
+  readonly execution_id?: string;
   /** 当前调用的协作式取消信号；没有取消来源时为空。 */
   readonly abort_signal?: AbortSignal;
   /** 当前模型工具调用标识；Hook 调用时为空。 */

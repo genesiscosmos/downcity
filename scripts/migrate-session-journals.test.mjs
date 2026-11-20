@@ -21,11 +21,10 @@ function fixture(context, child_started = false) {
   for (const name of ["completions", "delegations"]) fs.mkdirSync(path.join(agent_path, name), { recursive: true });
   const db = new DatabaseSync(path.join(agent_path, "sessions.db"));
   try {
-    db.exec(`CREATE TABLE sessions (session_key INTEGER, session_id TEXT, type TEXT, descriptor TEXT);
+    db.exec(`CREATE TABLE sessions (session_key INTEGER, session_id TEXT, type TEXT, kind TEXT, relations TEXT);
       CREATE TABLE messages (session_key INTEGER, message_id TEXT, turn_id TEXT);
       CREATE TABLE message_parts (session_key INTEGER, message_id TEXT, type TEXT, content TEXT);
-      INSERT INTO sessions VALUES (1,'parent','chat','{"type":"chat","kind":"main"}'),
-        (2,'child','work','{"type":"work","kind":"work"}');
+      INSERT INTO sessions VALUES (1,'parent','chat','main','{}'), (2,'child','work','work','{}');
       INSERT INTO messages VALUES (1,'message','turn');
       INSERT INTO message_parts VALUES (1,'message','tool','{"tool_call_id":"call"}');`);
     if (child_started) db.exec("INSERT INTO messages VALUES (2,'started','child-turn')");
@@ -70,7 +69,9 @@ test("保留完成快照和重试状态，只关闭可证实尚未执行的旧�
 
   const after = files.map(file_path => fs.readFileSync(file_path));
   const [completion, delegation] = after.map(content => JSON.parse(content));
-  assert.deepEqual(completion.descriptor, { type: "chat", kind: "main" });
+  assert.equal(completion.type, "chat");
+  assert.equal(completion.kind, "main");
+  assert.equal(completion.descriptor, undefined);
   assert.deepEqual(completion.deliveries, input.deliveries);
   assert.equal(completion.state, "prepared");
   assert.deepEqual([completion.event.result.text, completion.current.result.text], ["original", "retry"]);
@@ -94,4 +95,27 @@ test("缺少执行身份但子会话已有消息时阻止转换", context => {
   assert.equal(invoke(input, "preflight").report.reason, "unbound_delegation_requires_review");
   assert.equal(invoke(input, "apply").report.reason, "unbound_delegation_requires_review");
   assert(!fs.existsSync(input.batch));
+});
+
+test("展开过渡日志描述时保留附加创建事实和委派执行身份", context => {
+  const input = fixture(context);
+  const completion = JSON.parse(fs.readFileSync(input.completion_path, "utf8"));
+  const delegation = JSON.parse(fs.readFileSync(input.delegation_path, "utf8"));
+  delete completion.origin;
+  delete delegation.caller.origin;
+  completion.descriptor = { type: "chat", kind: "main", channel: "fixture" };
+  delegation.caller.descriptor = { type: "chat", kind: "main", account_id: "fixture" };
+  delegation.caller.execution_id = "fixture-execution";
+  fs.writeFileSync(input.completion_path, JSON.stringify(completion));
+  fs.writeFileSync(input.delegation_path, JSON.stringify(delegation));
+
+  assert.equal(invoke(input, "apply").report.status, "ready");
+  const converted_completion = JSON.parse(fs.readFileSync(input.completion_path, "utf8"));
+  const converted_delegation = JSON.parse(fs.readFileSync(input.delegation_path, "utf8"));
+  assert.equal(converted_completion.channel, "fixture");
+  assert.equal(converted_completion.descriptor, undefined);
+  assert.equal(converted_delegation.caller.account_id, "fixture");
+  assert.equal(converted_delegation.caller.execution_id, "fixture-execution");
+  assert.equal(converted_delegation.caller.descriptor, undefined);
+  assert.equal(invoke(input, "verify").report.status, "ready");
 });

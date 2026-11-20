@@ -6,7 +6,7 @@
  * 模型输出或已移除的媒体授权字段。请求记账沿用 prompt actor 的统一校验。
  */
 import { z } from "../../../packages/agent/node_modules/zod/index.js";
-import { session_prompt_actor_schema } from "../../../packages/agent/src/types/sdk/SessionPromptActor.ts";
+import { session_prompt_actor_schema } from "../session-v12/prompt-actor.mjs";
 const inbox_content_schema = z.discriminatedUnion("type", [
     z.object({ type: z.literal("text"), text: z.string() }).strict(),
     z.object({ type: z.literal("context"), tag: z.string(), context: z.string() }).strict(),

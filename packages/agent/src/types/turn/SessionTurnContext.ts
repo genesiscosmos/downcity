@@ -7,21 +7,9 @@
  * - 可变状态只能通过行为方法更新，消费者不能直接操作内部数组、lease 或 callback。
  */
 
-import type { ToolEffect } from "@downcity/type";
-import type {
-  SessionInputContent,
-  SessionUserMessage,
-} from "@downcity/type";
-import type { SessionAgentContent } from "@downcity/type";
+import type { ToolEffect, SessionInputContent, SessionUserMessage, SessionAgentContent, SessionInteractionPort, SessionDescriptor, SessionHookContextBlock, ModelRequestFailureNotice, SessionCallContext } from "@downcity/type";
 import type { SessionAssistantOutput, SessionAssistantResultBatch } from "@/types/turn/SessionAssistantOutput.js";
-import type {
-  AgentSessionActionCallback,
-  AgentSessionActionEvent,
-} from "@/types/sdk/AgentSessionAction.js";
-import type { SessionInteractionPort } from "@downcity/type";
-import type { SessionOrigin } from "@downcity/type";
-import type { SessionHookContextBlock } from "@downcity/type";
-import type { ModelRequestFailureNotice } from "@downcity/type";
+import type { AgentSessionActionCallback, AgentSessionActionEvent } from "@/types/sdk/AgentSessionAction.js";
 
 /** 内部输入可显式提供幂等键；省略时由 Turn FIFO 在暂存时生成一次。 */
 export type SessionTurnInputInput = Omit<SessionInputContent, "input_id"> & {
@@ -34,15 +22,15 @@ export type SessionTurnInputInput = Omit<SessionInputContent, "input_id"> & {
  *
  * 该类型只服务 SDK 内部装配，不代表另一种运行上下文。
  */
-export interface SessionTurnContextInit {
+export interface SessionTurnContextInit extends SessionCallContext {
   /** 当前执行所属的 Session 标识。 */
   session_id: string;
 
-  /** 当前执行所属 Session 的完整来源元数据。 */
-  session_origin: SessionOrigin;
-
   /** 当前执行所属的非空 Turn 标识。 */
   turn_id: string;
+
+  /** 当前执行代次；显式重试使用新身份，恢复沿用持久化身份。 */
+  execution_id?: string;
 
   /** 当前 Agent 绑定的项目根目录。 */
   project_root?: string;
@@ -80,15 +68,15 @@ export interface SessionTurnContextInit {
  */
 export interface SessionTurnContext {
   /** 当前运行的稳定身份与项目归属。 */
-  readonly session: {
+  readonly session: SessionDescriptor & {
     /** 当前执行所属的 Session 标识。 */
     readonly session_id: string;
 
-    /** 当前执行所属 Session 的完整来源元数据。 */
-    readonly origin: SessionOrigin;
-
     /** 当前执行所属的 Turn 标识。 */
     readonly turn_id: string;
+
+    /** 当前执行代次，取消及子工作只作用于这一代。 */
+    readonly execution_id: string;
 
     /** 当前 Agent 绑定的项目根目录。 */
     readonly project_root?: string;

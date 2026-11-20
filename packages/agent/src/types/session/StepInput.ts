@@ -5,22 +5,16 @@
  * Message、Store、Model 或 Power 生命周期。
  */
 
-import type {
-  ModelClient,
-  AgentTool as Tool,
-  SessionOrigin,
-  ToolHookSet,
-  WorkspaceRuntime,
-} from "@downcity/type";
+import type { ModelClient, AgentTool as Tool, SessionDescriptor, ToolHookSet, WorkspaceRuntime, SessionCallContext } from "@downcity/type";
 import type { AgentSessionSystemBlock } from "@/types/agent/SessionTypes.js";
 import type { SessionStorage } from "@/types/store/SessionStorage.js";
 import type { SessionComposer } from "@/types/session/SessionComposer.js";
 import type { Logger } from "@/utils/logger/Logger.js";
 
 /** StepInput 构造参数。 */
-export interface StepInputOptions {
+export interface StepInputOptions extends SessionCallContext {
   /** 当前 Agent 已授权会话的只读访问；供 lookup 解析外部与归档引用。 */
-  read_result_session?: (session_id: string, category: string) => Promise<import("@/types/store/SessionReadView.js").SessionReadView>;
+  read_result_session?: (session_id: string, type: string) => Promise<import("@/types/store/SessionReadView.js").SessionReadView>;
   /** 当前 Session 所属 Agent 的稳定标识。 */
   agent_id: string;
   /** 读取当前 Agent 的用户可见名称；实时读取，与 system 身份保持一致。 */
@@ -29,8 +23,7 @@ export interface StepInputOptions {
   get_agent_description: () => string;
   /** 当前 Session 的稳定标识。 */
   session_id: string;
-  /** 当前 Session 的创建来源。 */
-  session_origin: SessionOrigin;
+
   /** 当前 Session 使用的目录解析器；目录是可变的会话状态。 */
   get_workspace_path: () => string;
   /** 当前 Session 的领域持久化视图。 */

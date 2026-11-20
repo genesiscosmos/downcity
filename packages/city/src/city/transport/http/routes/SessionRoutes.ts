@@ -7,7 +7,7 @@
  * - 不复用 control API 的控制台语义，避免 transport 面混入非 SDK 约束。
  */
 
-import { SESSION_ORIGIN_CATEGORY_WORK } from "@downcity/type";
+import { SESSION_TYPE_WORK } from "@downcity/type";
 import type { Hono } from "hono";
 import type {
   AgentListSessionsInput,
@@ -40,17 +40,18 @@ export function register_sdk_session_routes(
   runtime_options: AgentHttpRuntimeOptions = {},
 ): void {
   register_archived_session_routes(app, sessions);
-  const get_category = (input: unknown): string => String(input || SESSION_ORIGIN_CATEGORY_WORK).trim() || SESSION_ORIGIN_CATEGORY_WORK;
-  const get_session = async (session_id: string, category?: string) => await sessions.get(
+  const get_type = (input: unknown): string => String(input || SESSION_TYPE_WORK).trim() || SESSION_TYPE_WORK;
+  const get_session = async (session_id: string, type?: string) => await sessions.get(
     session_id,
-    get_category(category),
+    type,
     workspace ? { workspace } : undefined,
   );
   const prompt_with_powers = register_prompt_power_routes(app, get_session);
   app.get("/api/sdk/sessions", async (c) => {
     try {
       const input: AgentListSessionsInput = {
-        category: get_category(c.req.query("category")),
+        type: get_type(c.req.query("type")),
+        ...(c.req.query("kind") ? { kind: c.req.query("kind") } : {}),
         ...(c.req.query("limit") ? { limit: Number(c.req.query("limit")) } : {}),
         ...(c.req.query("cursor") ? { cursor: c.req.query("cursor") } : {}),
         ...(c.req.query("query") ? { query: c.req.query("query") } : {}),
@@ -101,7 +102,7 @@ export function register_sdk_session_routes(
       if (!session_id) {
         return c.json({ success: false, error: "Missing session_id" }, 400);
       }
-      const session = await get_session(session_id, c.req.query("category"));
+      const session = await get_session(session_id, c.req.query("type"));
       return c.json({
         success: true,
         session: await session.get_info(),
@@ -124,7 +125,7 @@ export function register_sdk_session_routes(
         return c.json({ success: false, error: "Missing session_id" }, 400);
       }
       const body = (await c.req.json()) as RemotePromptInput;
-      const session = await get_session(session_id, c.req.query("category"));
+      const session = await get_session(session_id, c.req.query("type"));
       const turn = await prompt_with_powers(c, body, (input) => session.prompt(input));
       return c.json({
         success: true,
@@ -155,7 +156,7 @@ export function register_sdk_session_routes(
       if (!session_id) {
         return c.json({ success: false, error: "Missing session_id" }, 400);
       }
-      const session = await get_session(session_id, c.req.query("category"));
+      const session = await get_session(session_id, c.req.query("type"));
       const body = await c.req.json<{ expected_turn_id?: string; expected_message?: import("@downcity/type").SessionMessageCheckpoint }>().catch(() => ({} as { expected_turn_id?: string; expected_message?: import("@downcity/type").SessionMessageCheckpoint }));
       const result = await session.stop(body.expected_turn_id, body.expected_message);
       return c.json({
@@ -180,7 +181,7 @@ export function register_sdk_session_routes(
     }
 
     try {
-      const session = await get_session(session_id, c.req.query("category"));
+      const session = await get_session(session_id, c.req.query("type"));
       const encoder = new TextEncoder();
       const requestSignal = c.req.raw.signal;
 
@@ -249,7 +250,7 @@ export function register_sdk_session_routes(
       if (!session_id) {
         return c.json({ success: false, error: "Missing session_id" }, 400);
       }
-      const session = await get_session(session_id, c.req.query("category"));
+      const session = await get_session(session_id, c.req.query("type"));
       const messages = await session.messages({
         ...(c.req.query("before_sequence")
           ? { before_sequence: Number(c.req.query("before_sequence")) }
@@ -276,7 +277,7 @@ export function register_sdk_session_routes(
       if (!session_id) {
         return c.json({ success: false, error: "Missing session_id" }, 400);
       }
-      const session = await get_session(session_id, c.req.query("category"));
+      const session = await get_session(session_id, c.req.query("type"));
       return c.json({
         success: true,
         system: await session.system(),
@@ -304,7 +305,7 @@ export function register_sdk_session_routes(
         /** 是否原地替换源 Session 历史。 */
         replace?: unknown;
       };
-      const session = await get_session(session_id, c.req.query("category"));
+      const session = await get_session(session_id, c.req.query("type"));
       const message_id = String(body.message_id || "").trim() || undefined;
       const forked = await session.fork({
         message_id,
@@ -334,7 +335,8 @@ export function register_sdk_session_routes(
       }
       const body = await c.req.json().catch(() => ({})) as Partial<AgentArchiveSessionInput>;
       const input: AgentArchiveSessionInput = {
-        id: session_id, category: get_category(c.req.query("category")),
+        id: session_id, type: get_type(c.req.query("type")),
+        ...(c.req.query("kind") ? { kind: c.req.query("kind") } : {}),
         ...(body.operation_id ? { operation_id: body.operation_id } : {}),
         ...(body.root_session_id ? { root_session_id: body.root_session_id } : {}),
       };
@@ -354,7 +356,7 @@ export function register_sdk_session_routes(
     try {
       const session = await get_session(
         String(c.req.param("session_id") || "").trim(),
-        c.req.query("category"),
+        c.req.query("type"),
       );
       return c.json({ success: true, interactions: await session.interactions() });
     } catch (error) {
@@ -366,7 +368,7 @@ export function register_sdk_session_routes(
     try {
       const session = await get_session(
         String(c.req.param("session_id") || "").trim(),
-        c.req.query("category"),
+        c.req.query("type"),
       );
       return c.json({ success: true, status: await session.status() });
     } catch (error) {
@@ -378,7 +380,7 @@ export function register_sdk_session_routes(
     try {
       const session = await get_session(
         String(c.req.param("session_id") || "").trim(),
-        c.req.query("category"),
+        c.req.query("type"),
       );
       const body = await c.req.json().catch(() => null) as {
         model_id?: unknown;
@@ -449,7 +451,7 @@ export function register_sdk_session_routes(
         || typeof body.error_part_id !== "string" || !body.error_part_id.trim()) {
         return c.json({ success: false, error: "Current message_id and error_part_id are required" }, 400);
       }
-      const session = await get_session(String(c.req.param("session_id") || "").trim(), c.req.query("category"));
+      const session = await get_session(String(c.req.param("session_id") || "").trim(), c.req.query("type"));
       const result = await session.retry_model_step({ message_id: body.message_id, error_part_id: body.error_part_id });
       return c.json({ success: true, result });
     } catch (error) {
@@ -461,7 +463,7 @@ export function register_sdk_session_routes(
     try {
       const session = await get_session(
         String(c.req.param("session_id") || "").trim(),
-        c.req.query("category"),
+        c.req.query("type"),
       );
       const body = await c.req.json().catch(() => null) as Partial<RespondSessionInteractionInput> | null;
       const interaction_id = String(body?.interaction_id || "").trim();
@@ -484,7 +486,8 @@ export function register_sdk_session_routes(
   app.get("/api/sdk/archived-sessions", async (c) => {
     try {
       const input: AgentArchiveSessionsInput = {
-        category: get_category(c.req.query("category")),
+        type: get_type(c.req.query("type")),
+        ...(c.req.query("kind") ? { kind: c.req.query("kind") } : {}),
         ...(c.req.query("limit") ? { limit: Number(c.req.query("limit")) } : {}),
         ...(c.req.query("cursor") ? { cursor: c.req.query("cursor") } : {}),
         ...(c.req.query("query") ? { query: c.req.query("query") } : {}),

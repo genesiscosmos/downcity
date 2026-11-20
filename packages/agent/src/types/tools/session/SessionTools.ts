@@ -50,7 +50,7 @@ export interface SessionToolSummary {
   /** 用户可见标题；未生成时省略。 */
   title?: string;
   /** 会话的来源分类；与 session_id 一起构成完整引用。 */
-  session_category: "chat" | "work";
+  session_type: "chat" | "work";
   /** 是否为已归档的只读历史。 */
   archived?: boolean;
   /** 当前状态。 */
@@ -73,8 +73,8 @@ export interface SessionStartToolOutput {
   status: "started";
 }
 
-/** `session.send` 的输出；每条追加消息拥有独立的结果回传关联。 */
-export interface SessionSendToolOutput {
+/** `session.input` 的输出；每条追加消息拥有独立的结果回传关联。 */
+export interface SessionInputToolOutput {
   /** 接收本次消息的工作会话及其当前状态。 */
   session: SessionToolSummary;
   /** 本次消息的工作关联标识，用于执行去重与结果回传。 */

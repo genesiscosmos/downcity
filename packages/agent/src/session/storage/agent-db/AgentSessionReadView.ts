@@ -2,7 +2,7 @@
  * 目标 Agent DB 的只读投影；元数据、消息和配置独立查询。
  * 所有视图操作重新校验记录身份和归档状态，防止归档重建后旧活动地址读到新记录。
  */
-import { restore_session_origin } from "@downcity/type";
+import { normalize_session_descriptor } from "@downcity/type";
 import type { AgentSessionRecord, AgentSessionConfigurationRow } from "@/types/store/AgentSessionDatabase.js";
 import type { AgentSessionRuntimeLease } from "@/types/store/AgentSessionRuntime.js";
 import type { AgentSessionMessagePage } from "@/types/store/AgentSessionMessages.js";
@@ -12,11 +12,12 @@ import type { AgentSessionSummary } from "@/types/agent/SessionTypes.js";
 import type { SessionMessage } from "@downcity/type";
 import { decode_model_binding } from "../ModelBindingCodec.js";
 import { collect_pending_interactions } from "../SessionInteractionReader.js";
+import { decode_session_record } from "./AgentSessionRelations.js";
 
 /** 小字段事实投影，列表不 JOIN configuration 或正文。 */
 export function project_agent_session_record(agent_id: string, row: AgentSessionRecord): AgentSessionSummary {
-  return { agent_id, session_id: row.session_id,
-    origin: restore_session_origin(JSON.parse(row.origin), row.category), message_count: row.message_count,
+  return { id: row.session_id,
+    ...normalize_session_descriptor(decode_session_record(row)), message_count: row.message_count,
     created_at: row.created_at, updated_at: row.updated_at,
     ...(row.title ? { title: row.title } : {}), ...(row.preview_text ? { preview_text: row.preview_text } : {}),
     ...(row.workspace_id ? { workspace_id: row.workspace_id } : {}), ...(row.model_label ? { model_label: row.model_label } : {}),
@@ -25,7 +26,8 @@ export function project_agent_session_record(agent_id: string, row: AgentSession
 
 /** 同库记录投影为领域元数据，只有执行配置读取显式传入时才包含大字段相关配置。 */
 export function project_agent_session_metadata(agent_id: string, row: AgentSessionRecord, configuration?: AgentSessionConfigurationRow): SessionHistoryMeta {
-  return { ...project_agent_session_record(agent_id, row), v: 2, timezone: row.timezone, updated_at: row.updated_at,
+  const { id, ...summary } = project_agent_session_record(agent_id, row);
+  return { ...summary, session_id: id, agent_id, v: 2, timezone: row.timezone, updated_at: row.updated_at,
     ...(configuration?.approval_mode ? { approval_mode: configuration.approval_mode } : {}),
     ...(configuration?.execution_profile ? { execution_profile: JSON.parse(configuration.execution_profile) } : {}),
   };
@@ -37,7 +39,7 @@ export function agent_session_read_view(lease: AgentSessionRuntimeLease, agent_i
   const assert_record = async () => {
     const current = await lease.read<AgentSessionRecord | null>({ command: "find", address: archived
       ? { archived: true, session_id: row.session_id }
-      : { archived: false, category: row.category, session_id: row.session_id } });
+      : { archived: false, type: row.type, session_id: row.session_id } });
     if (!current || current.session_id !== row.session_id) throw new Error("session_address_changed");
   };
   return {

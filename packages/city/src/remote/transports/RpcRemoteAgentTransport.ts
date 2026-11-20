@@ -60,18 +60,18 @@ export class RpcRemoteAgentTransport implements RemoteAgentTransport {
     return await this.client.create_session(input);
   }
 
-  async get_info(session_id: string, category: string): Promise<AgentSessionInfo> {
-    return await this.client.get_session(session_id, category);
+  async get_info(session_id: string, type?: string): Promise<AgentSessionInfo> {
+    return await this.client.get_session(session_id, type);
   }
 
   async prompt(
     session_id: string,
-    category: string,
+    type: string,
     input: RemotePromptInput,
   ): Promise<import("@/types/remote/RemoteTurn.js").RemotePromptTurn> {
     return await this.client.prompt_session({
       session_id,
-      category,
+      type,
       input,
     });
   }
@@ -80,20 +80,20 @@ export class RpcRemoteAgentTransport implements RemoteAgentTransport {
     return await this.client.open_power_channel(input);
   }
 
-  async stop(session_id: string, category: string, expected_turn_id?: string, expected_message?: import("@downcity/type").SessionMessageCheckpoint): Promise<AgentSessionStopResult> {
-    return await this.client.stop_session(session_id, category, expected_turn_id, expected_message);
+  async stop(session_id: string, type: string, expected_turn_id?: string, expected_message?: import("@downcity/type").SessionMessageCheckpoint): Promise<AgentSessionStopResult> {
+    return await this.client.stop_session(session_id, type, expected_turn_id, expected_message);
   }
 
   async subscribe(params: {
     session_id: string;
-    category: string;
+    type: string;
     on_ready: () => void;
     on_event: (event: SessionMutation) => void;
     on_close: (error?: unknown) => void;
   }): Promise<TransportSubscription> {
     const subscription = await this.client.subscribe_session({
       session_id: params.session_id,
-      category: params.category,
+      type: params.type,
       on_ready: params.on_ready,
       on_event: params.on_event,
       on_close: params.on_close,
@@ -107,23 +107,23 @@ export class RpcRemoteAgentTransport implements RemoteAgentTransport {
 
   async messages(
     session_id: string,
-    category: string,
+    type: string,
     input?: ListSessionMessagesInput,
   ): Promise<SessionMessagePage> {
     return await this.client.get_session_messages({
       session_id,
-      category,
+      type,
       input,
     });
   }
 
-  async system(session_id: string, category: string): Promise<AgentSessionSystemSnapshot> {
-    return await this.client.get_session_system(session_id, category);
+  async system(session_id: string, type: string): Promise<AgentSessionSystemSnapshot> {
+    return await this.client.get_session_system(session_id, type);
   }
 
   async fork(
     session_id: string,
-    category: string,
+    type: string,
     input?: AgentSessionForkInput | string,
   ): Promise<AgentSessionInfo> {
     const message_id =
@@ -132,7 +132,7 @@ export class RpcRemoteAgentTransport implements RemoteAgentTransport {
         : String(input?.message_id || "").trim() || undefined;
     return await this.client.fork_session({
       session_id,
-      category,
+      type,
       ...(message_id ? { message_id } : {}),
       ...(typeof input !== "string" && input?.include_message === false ? { include_message: false } : {}),
       ...(typeof input !== "string" && input?.replace === true ? { replace: true } : {}),
@@ -205,34 +205,34 @@ export class RpcRemoteAgentTransport implements RemoteAgentTransport {
     return await this.client.submit_private_interaction(input);
   }
 
-  async interactions(session_id: string, category: string): Promise<SessionInteractionRequest[]> {
-    return await this.client.get_session_interactions(session_id, category);
+  async interactions(session_id: string, type: string): Promise<SessionInteractionRequest[]> {
+    return await this.client.get_session_interactions(session_id, type);
   }
 
-  async status(session_id: string, category: string): Promise<AgentSessionStatus> {
-    return await this.client.get_session_status(session_id, category);
+  async status(session_id: string, type: string): Promise<AgentSessionStatus> {
+    return await this.client.get_session_status(session_id, type);
   }
 
   /** Retry 仅转交原 Session 的控制屏障。 */
-  async retry_model_step(session_id: string, category: string, input: import("@downcity/type").SessionModelRetryInput): Promise<import("@downcity/type").SessionModelRetryResult> {
-    return await this.client.retry_model_step(session_id, category, input);
+  async retry_model_step(session_id: string, type: string, input: import("@downcity/type").SessionModelRetryInput): Promise<import("@downcity/type").SessionModelRetryResult> {
+    return await this.client.retry_model_step(session_id, type, input);
   }
 
   async set(
     session_id: string,
-    category: string,
+    type: string,
     input: RemoteSessionSetInput,
     options?: AgentSessionSetOptions,
   ): Promise<void> {
-    await this.client.set_session(session_id, category, input, options);
+    await this.client.set_session(session_id, type, input, options);
   }
 
   async respond(
     session_id: string,
-    category: string,
+    type: string,
     input: RespondSessionInteractionInput,
   ): Promise<SessionInteractionResult> {
-    return await this.client.respond_session_interaction(session_id, category, input);
+    return await this.client.respond_session_interaction(session_id, type, input);
   }
 
   async close(): Promise<void> {

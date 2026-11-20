@@ -15,14 +15,14 @@ export function create_shell_completion_handler(
     const agent = resolve_agent(target.agent_id);
     if (!agent) return "retry";
     try {
-      const existing = await agent.sessions.read(target.session_id, target.category).catch((error: unknown) => {
+      const existing = await agent.sessions.read(target.session_id, target.type).catch((error: unknown) => {
         if (error instanceof Error && error.message === "session_not_found") return null;
         throw error;
       });
       if (!existing) return "discarded";
       const workspace_id = existing.metadata.workspace_id;
       const workspace = workspace_id ? await resolve_workspace(agent.id, workspace_id) : undefined;
-      const session = await agent.sessions.get(target.session_id, target.category, { workspace });
+      const session = await agent.sessions.get(target.session_id, target.type, { workspace });
       abort_signal.throwIfAborted();
       return await session.accept_background_result({
         turn_id: target.turn_id, request_id: `shell_exit:${snapshot.shell_id}`,
@@ -35,7 +35,7 @@ export function create_shell_completion_handler(
       });
     } catch (error) {
       // 唯有集合明确确认目标已不存在时结束投递；临时存储或装配故障保留重试。
-      if (error instanceof Error && error.message === `Session "${target.session_id}" not found in category "${target.category}"`) return "discarded";
+      if (error instanceof Error && error.message === `Session "${target.session_id}" not found in type "${target.type}"`) return "discarded";
       throw error;
     }
   };

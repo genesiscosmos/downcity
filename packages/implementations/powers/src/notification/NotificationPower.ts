@@ -14,7 +14,7 @@ import { notification_target_key, notification_target_matches, notification_targ
 import { session_notification, notification_session_title } from "./NotificationPolicy.js";
 
 /** 来源引用由宿主校验，模型没有审批入口。 */
-const reference_schema = z.object({ session_category: z.enum(["chat", "work"]), session_id: z.string().min(1),
+const reference_schema = z.object({ session_type: z.enum(["chat", "work"]), session_id: z.string().min(1),
   turn_id: z.string().min(1), interaction_id: z.string().min(1) }).strict();
 const response_schema = z.object({ agent_id: z.string().min(1), reference: reference_schema,
   response: z.object({ type: z.string(), outcome: z.string(), payload: z.json() }).passthrough() }).strict();
@@ -52,7 +52,7 @@ export class NotificationPower extends Power {
 
   readonly hooks: PowerHooks = { effect: { "session.turn_committed": [Object.assign(async ({ context, value }) => {
     const event = value as unknown as SessionTurnCommittedHookValue;
-    const input = session_notification(context.agent.id, context.snapshot.session_origin, event);
+    const input = session_notification(context.agent.id, context.session, event);
     if (input) await this.publish({ source_kind: "session", power_id: this.name, agent_id: context.agent.id }, input);
   }, { handler_id: "work_update" })] } };
 

@@ -158,7 +158,7 @@ export class MemoryCoordinator {
         agent_id: job.access.agent_id, workspace_id: job.access.workspace_id, inherit_workspace: false,
         execution_profile_id: "memory", execution_profile_version: MEMORY_SESSION_PROFILE_VERSION, model_id: this.options.model_id,
         creation_key: `memory:${job.job_id}:${attempt}`,
-        origin: { category: "work", type: MEMORY_SESSION_KIND, memory_job_id: job.job_id, memory_attempt: attempt },
+        type: "work", kind: MEMORY_SESSION_KIND,
       });
       job = await this.options.jobs.update(job.job_id, { status: "running", attempt, session_id: session.session_id });
     }
@@ -169,16 +169,16 @@ export class MemoryCoordinator {
     const session_id = job.session_id!;
     const request_id = `memory:${job.job_id}:${job.attempt}`;
     let state = await host.system.read_agent_session({
-      agent_id: job.access.agent_id, category: "work", session_id, request_id,
+      agent_id: job.access.agent_id, type: "work", session_id, request_id,
     });
     if (state.status === "running") {
       const deadline = Date.now() + 120_000;
       while (state.status === "running" && Date.now() < deadline && !this.stopped) {
         await new Promise<void>((resolve) => setTimeout(resolve, 500));
-        state = await host.system.read_agent_session({ agent_id: job.access.agent_id, category: "work", session_id, request_id });
+        state = await host.system.read_agent_session({ agent_id: job.access.agent_id, type: "work", session_id, request_id });
       }
       if (state.status === "running") {
-        await host.system.stop_agent_session({ agent_id: job.access.agent_id, category: "work", session_id });
+        await host.system.stop_agent_session({ agent_id: job.access.agent_id, type: "work", session_id });
         throw new Error("Memory Session exceeded the recovery processing budget");
       }
     }
@@ -187,7 +187,7 @@ export class MemoryCoordinator {
       if (!state.result?.success) throw new Error(state.result?.error ?? "Memory Session failed");
     } else {
       const turn = await host.system.prompt_agent_session({
-        agent_id: job.access.agent_id, session_id, category: "work", request_id,
+        agent_id: job.access.agent_id, session_id, type: "work", request_id,
         actor: { kind: "runtime", namespace: "memory", object_id: job.job_id },
         query: "Process the bound Memory Job using memory_sources. Stage supported changes or explicitly skip; the host alone commits.",
       });
@@ -200,7 +200,7 @@ export class MemoryCoordinator {
         ]);
         if (!result.success) throw new Error(result.error ?? "Memory Session failed");
       } catch (error) {
-        await host.system.stop_agent_session({ agent_id: job.access.agent_id, category: "work", session_id, turn_id: turn.turn_id });
+        await host.system.stop_agent_session({ agent_id: job.access.agent_id, type: "work", session_id, turn_id: turn.turn_id });
         throw error;
       } finally { if (timer) clearTimeout(timer); }
     }

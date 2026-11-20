@@ -11,17 +11,9 @@ import { safe_error_diagnostic } from "@/utils/logger/SafeErrorDiagnostic.js";
 import { generate_session_id } from "@/session/SessionIdentity.js";
 import { resolve_prompt_request_identity } from "@/session/loop/SessionTurnHandles.js";
 import { create_session_prompt_actor } from "@/types/sdk/SessionPromptActor.js";
-import { SESSION_ORIGIN_CATEGORY_WORK, read_session_delegation_depth } from "@downcity/type";
-import { create_work_origin, require_direct_work_child, require_work_creator } from "./SessionWorkPolicy.js";
-import type {
-  SessionDelegationCaller,
-  SessionDelegationInput,
-  SessionDelegationMessage,
-  SessionDelegationOptions,
-  SessionDelegationPort,
-  SessionDelegationReceipt,
-  SessionDelegationRecord,
-} from "@/types/agent/SessionDelegation.js";
+import { SESSION_TYPE_WORK, read_session_delegation_depth } from "@downcity/type";
+import { create_work_descriptor, require_direct_work_child, require_work_creator } from "./SessionWorkPolicy.js";
+import type { SessionDelegationCaller, SessionDelegationInput, SessionDelegationMessage, SessionDelegationOptions, SessionDelegationPort, SessionDelegationReceipt, SessionDelegationRecord } from "@/types/agent/SessionDelegation.js";
 import type { AgentSession } from "@/types/agent/SessionActor.js";
 import type { SessionChildWorkInput } from "@/types/session/SessionChildWork.js";
 
@@ -44,21 +36,21 @@ export class SessionDelegations implements SessionDelegationPort {
   /** 保存稳定身份，确保子会话准备完成后立即返回。 */
   async spawn(input: SessionDelegationInput, caller: SessionDelegationCaller): Promise<SessionDelegationReceipt> {
     require_work_creator(caller);
-    return await this.submit(input, caller);
+    return await this.accept_input(input, caller);
   }
 
   /** 继续同一工作上下文；每次消息独立记录结果回传与幂等身份。 */
-  async send(input: SessionDelegationMessage, caller: SessionDelegationCaller): Promise<SessionDelegationReceipt> {
+  async input(input: SessionDelegationMessage, caller: SessionDelegationCaller): Promise<SessionDelegationReceipt> {
     const session = await this.options.get_work_session(input.session_id);
-    if (session.origin.category !== SESSION_ORIGIN_CATEGORY_WORK || !session.workspace_id) {
-      throw new Error("session.send requires a project Work Session");
+    if (session.type !== SESSION_TYPE_WORK || !session.workspace_id) {
+      throw new Error("session.input requires a project Work Session");
     }
     require_direct_work_child(this.options.agent_id, caller, session);
-    return await this.submit({ query: input.query, workspace_id: session.workspace_id }, caller, session.id, true);
+    return await this.accept_input({ query: input.query, workspace_id: session.workspace_id }, caller, session.id, true);
   }
 
   /** 新建与继续工作共用一份持久化提交和恢复协议。 */
-  private async submit(
+  private async accept_input(
     input: SessionDelegationInput,
     caller: SessionDelegationCaller,
     session_id = generate_session_id(),
@@ -68,7 +60,7 @@ export class SessionDelegations implements SessionDelegationPort {
     const query = input.query.trim();
     const workspace_id = input.workspace_id.trim();
     if (!query || !workspace_id) throw new Error("Session work requires query and project workspace_id");
-    if (!caller.agent_id || !caller.session_id || !caller.turn_id || !caller.tool_call_id) {
+    if (!caller.agent_id || !caller.session_id || !caller.turn_id || !caller.execution_id || !caller.tool_call_id) {
       throw new Error("Session work requires an Agent and Session Turn tool call identity");
     }
     // 先校验项目，非法派发不能留下等待恢复的记录。
@@ -78,7 +70,7 @@ export class SessionDelegations implements SessionDelegationPort {
       await this.options.validate_model(input.model_id, workspace);
     }
     const delegation_id = createHash("sha256")
-      .update(JSON.stringify([caller.agent_id, caller.origin.category, caller.session_id, caller.turn_id, caller.tool_call_id]))
+      .update(JSON.stringify([caller.agent_id, caller.type, caller.session_id, caller.turn_id, caller.execution_id, caller.tool_call_id]))
       .digest("hex");
     const record = await this.options.store.create({
       delegation_id,
@@ -152,7 +144,7 @@ export class SessionDelegations implements SessionDelegationPort {
 
   /** 父失败或停止时先撤销投递，再停止未完成的直接子执行。 */
   async cancel_children(parent: SessionChildWorkInput, caller_agent_id = this.options.agent_id): Promise<void> {
-    await this.options.store.close_turn(caller_agent_id, parent.origin.category, parent.session_id, parent.turn_id);
+    await this.options.store.cancel_execution(caller_agent_id, parent.type, parent.session_id, parent.turn_id, parent.execution_id);
     const records = await this.pending_children(parent, caller_agent_id);
     const cancelled = await Promise.allSettled(records.map(async (record) => {
       await this.cancel(record.work_session_id);
@@ -167,13 +159,13 @@ export class SessionDelegations implements SessionDelegationPort {
   /** 只协调当前 Agent、分类和原 Turn，不能把历史创建关系当成未完成执行。 */
   private async pending_children(parent: SessionChildWorkInput, caller_agent_id: string): Promise<SessionDelegationRecord[]> {
     return (await this.options.store.pending()).filter((record) => record.caller.agent_id === caller_agent_id
-      && record.caller.origin.category === parent.origin.category && record.caller.session_id === parent.session_id
-      && record.caller.turn_id === parent.turn_id);
+      && record.caller.type === parent.type && record.caller.session_id === parent.session_id
+      && record.caller.turn_id === parent.turn_id && record.caller.execution_id === parent.execution_id);
   }
 
   /** 子会话关系来自持久化创建记录，包含已完成工作。 */
-  async children(session_id: string, category: string): Promise<string[]> {
-    return (await this.options.store.children(this.options.agent_id, category, session_id))
+  async children(session_id: string, type: string): Promise<string[]> {
+    return (await this.options.store.children(this.options.agent_id, type, session_id))
       .map((record) => record.work_session_id);
   }
 
@@ -250,13 +242,13 @@ export class SessionDelegations implements SessionDelegationPort {
     const existing = this.preparations.get(record.delegation_id);
     if (existing) return await existing;
     // 子会话深度在派发时确定并随委派记录持久化，恢复时不会随调用方变动。
-    const child_depth = read_session_delegation_depth(record.caller.origin) + 1;
+    const child_depth = read_session_delegation_depth(record.caller) + 1;
     const operation = (async () => {
       const workspace = await this.options.resolve_workspace(record.workspace_id);
-      // send 只恢复已有目标，不能用当前调用快照重写来源、深度或父子关系。
+      // input 只恢复已有目标，不能用当前调用快照重写来源、深度或父子关系。
       const session = record.followup
         ? await this.options.get_work_session(record.work_session_id)
-        : await this.options.ensure_work_session(record.work_session_id, workspace, child_depth, create_work_origin(record.caller));
+        : await this.options.ensure_work_session(record.work_session_id, workspace, child_depth, create_work_descriptor(record.caller));
       await this.options.prepare_session(session, record.model_id);
       if (record.title && record.execution_state === "pending") await session.rename(record.title);
       return session;
@@ -313,7 +305,7 @@ export class SessionDelegations implements SessionDelegationPort {
           agent_id: record.caller.agent_id,
           workspace_id: record.caller.workspace_id ?? null,
           session_id: record.caller.session_id,
-          category: record.caller.origin.category,
+          type: record.caller.type,
         }),
         query: record.query,
       });
@@ -377,9 +369,10 @@ export class SessionDelegations implements SessionDelegationPort {
       }
       const receipt = await parent.accept_background_result({
         turn_id: record.caller.turn_id,
+        ...(record.caller.type === "work" ? { execution_id: record.caller.execution_id } : {}),
         request_id: `delegation_result:${delegation_id}`,
-        resume_after_turn: record.caller.origin.category === "chat",
-        allow_stopped_turn: record.caller.origin.category === "chat",
+        resume_after_turn: record.caller.type === "chat",
+        allow_stopped_turn: record.caller.type === "chat",
         query: [
           {
             type: "context",
@@ -389,7 +382,7 @@ export class SessionDelegations implements SessionDelegationPort {
               caller_turn_id: record.caller.turn_id,
               agent_id: this.options.agent_id,
               session_id: record.work_session_id,
-              session_category: SESSION_ORIGIN_CATEGORY_WORK,
+              session_type: SESSION_TYPE_WORK,
               turn_id: record.result.turn_id,
               state: record.execution_state,
               text: record.result.text,

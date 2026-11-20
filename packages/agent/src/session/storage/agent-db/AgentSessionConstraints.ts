@@ -7,10 +7,10 @@
  */
 export const AGENT_SESSION_CONSTRAINTS_SQL = `
 CREATE TRIGGER sessions_identity_immutable
-BEFORE UPDATE OF session_key, session_id, category, origin, created_at ON sessions
+BEFORE UPDATE OF session_key, session_id, type, kind, relations, created_at ON sessions
 WHEN OLD.session_key IS NOT NEW.session_key
-  OR OLD.session_id IS NOT NEW.session_id OR OLD.category IS NOT NEW.category
-  OR OLD.origin IS NOT NEW.origin OR OLD.created_at IS NOT NEW.created_at
+  OR OLD.session_id IS NOT NEW.session_id OR OLD.type IS NOT NEW.type
+  OR OLD.kind IS NOT NEW.kind OR OLD.relations IS NOT NEW.relations OR OLD.created_at IS NOT NEW.created_at
 BEGIN
   SELECT RAISE(ABORT, 'session identity is immutable');
 END;
@@ -42,7 +42,7 @@ END;
 CREATE TRIGGER agent_session_state_valid_insert BEFORE INSERT ON agent_session_state
 WHEN NEW.main_session_id IS NOT NULL AND NOT EXISTS (
   SELECT 1 FROM sessions WHERE session_id = NEW.main_session_id AND archived = 0
-    AND category = 'chat' AND json_extract(origin, '$.type') = 'agent'
+    AND type = 'chat' AND kind = 'main'
 )
 BEGIN
   SELECT RAISE(ABORT, 'invalid main Session pointer');
@@ -51,7 +51,7 @@ END;
 CREATE TRIGGER agent_session_state_valid_update BEFORE UPDATE OF main_session_id ON agent_session_state
 WHEN NEW.main_session_id IS NOT NULL AND NOT EXISTS (
   SELECT 1 FROM sessions WHERE session_id = NEW.main_session_id AND archived = 0
-    AND category = 'chat' AND json_extract(origin, '$.type') = 'agent'
+    AND type = 'chat' AND kind = 'main'
 )
 BEGIN
   SELECT RAISE(ABORT, 'invalid main Session pointer');

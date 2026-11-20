@@ -15,10 +15,10 @@ const action_sentences: Readonly<Record<string, Record<PowerActivityDescription[
     complete: ["工作已提交", "Work submitted"],
     failed: ["工作提交失败", "Work submission failed"],
   },
-  "send": {
-    running: ["正在追加工作指令", "Submitting work instructions"],
+  "input": {
+    running: ["正在输入工作要求", "Providing work input"],
     waiting: ["追加指令等待确认", "Instructions awaiting confirmation"],
-    complete: ["工作指令已提交", "Work instructions submitted"],
+    complete: ["会话已接收输入", "Session input accepted"],
     failed: ["工作指令提交失败", "Instructions submission failed"],
   },
   "check": {

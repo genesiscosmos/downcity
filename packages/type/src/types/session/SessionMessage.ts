@@ -348,6 +348,8 @@ export type SessionAgentMessagePart =
 
 /** Agent 顶层 Message。 */
 export interface SessionAgentMessage extends SessionMessageBase {
+  /** 当前 Writer 所属执行代次；持久化用于恢复子工作取消范围，不参与模型输入。 */
+  execution_id?: string;
   /** Message 主体角色固定为 agent。 */
   role: "agent";
   /** 当前调用留下的错误；Retry 接收时清除，不属于稳定正文或工具 Parts。 */

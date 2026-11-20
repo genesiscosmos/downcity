@@ -56,7 +56,7 @@ export class ResourceClient {
             throw new ResourceError(error.code, error.message, error.exit_code, error.retryable, { ...receipt, outcome: receipt.accepted ? "accepted" : "not_accepted" });
           } catch (recovery_error) {
             if (recovery_error instanceof ResourceError && (recovery_error.exit_code === 8 || recovery_error.details.outcome === "accepted" || recovery_error.details.outcome === "not_accepted")) throw recovery_error;
-            throw new ResourceError(error.code, error.message, error.exit_code, false, { request_id: input.request_id, session_address: { agent_id: input.agent, category: input.category ?? "work", session_id: input.session_id }, outcome: "unknown", recovery_error: recovery_error instanceof ResourceError ? recovery_error.code : "internal_error" });
+            throw new ResourceError(error.code, error.message, error.exit_code, false, { request_id: input.request_id, session_address: { agent_id: input.agent, type: input.type ?? "work", session_id: input.session_id }, outcome: "unknown", recovery_error: recovery_error instanceof ResourceError ? recovery_error.code : "internal_error" });
           }
         }
         return { data, meta: { root_path: this.root_path, host: { owner: state.owner, instance_id: state.instance_id }, source: "host", observed_at: new Date().toISOString() } };

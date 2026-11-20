@@ -1,7 +1,7 @@
 /** 验证 View Part 的 schema guard、角色约束、重放及模型摘要边界。 */
 import assert from "node:assert/strict";
 import test from "node:test";
-import { create_result_ref } from "../bin/model/results/ResultReference.js";
+import { create_result_ref, parse_result_ref, result_digest } from "../bin/model/results/ResultReference.js";
 import { AgentSessionDatabase } from "../bin/session/storage/agent-db/AgentSessionDatabase.js";
 import { assert_agent_session_schema, AGENT_SESSION_SCHEMA_VERSION } from "../bin/session/storage/agent-db/AgentSessionSchema.js";
 import { create_session_agent_content_part } from "../bin/session/messages/SessionAgentContent.js";
@@ -13,13 +13,22 @@ import { project_published_tool_input } from "../bin/model/messages/SessionViewP
 /** 代表性的业务内容，不依赖具体 Renderer。 */
 const content = { type: "view", power_id: "presentation", schema_version: 1, data: { private_spec: "not model text" }, fallback_text: "调整参数查看结果" };
 
+test("ResultRef v2 保留已有编码并向运行时返回 Session type", () => {
+  const identity = { session_id: "a4aaa5a0-0741-4679-bfe6-cf2b86fe4ced", message_id: "agent-1", message_sequence: 1, part_id: "tool-1" };
+  const value = { success: true };
+  const digest = result_digest(value);
+  const stored_reference = `res_2_${Buffer.from(JSON.stringify({ ...identity, category: "work", digest })).toString("base64url")}`;
+  assert.deepEqual(parse_result_ref(stored_reference), { ...identity, type: "work", digest });
+  assert.equal(create_result_ref({ ...identity, type: "work" }, value), stored_reference);
+});
+
 test("当前 schema 支持 Agent View Part 并拒绝自动迁移旧版本，User 仍受约束", () => {
   const owner = new AgentSessionDatabase({ agent_id: "test", database_path: ":memory:", allow_create: true });
   const database = owner.database;
   try {
     database.exec(`
-      INSERT INTO sessions(session_key, session_id, category, origin, timezone, created_at, updated_at)
-      VALUES (1, 'a4aaa5a0-0741-4679-bfe6-cf2b86fe4ced', 'work', '{"category":"work","type":"work"}', 'UTC', 1, 1);
+      INSERT INTO sessions(session_key, session_id, type, descriptor, timezone, created_at, updated_at)
+      VALUES (1, 'a4aaa5a0-0741-4679-bfe6-cf2b86fe4ced', 'work', '{"type":"work","kind":"work"}', 'UTC', 1, 1);
       INSERT INTO messages(session_key, message_id, sequence, role, state, created_at, updated_at)
       VALUES (1, 'user-1', 1, 'user', NULL, 1, 1), (1, 'agent-1', 2, 'agent', 'done', 2, 2);
       INSERT INTO message_parts VALUES (1, 'text-1', 'user-1', 1, NULL, 'text', '{"text":"原消息"}', 1, 1);
@@ -34,6 +43,8 @@ test("当前 schema 支持 Agent View Part 并拒绝自动迁移旧版本，User
     insert.run("power-1", "agent-1", JSON.stringify(content));
     assert.throws(() => insert.run("power-2", "user-1", JSON.stringify(content)), /incompatible/);
     assert.deepEqual(database.prepare("PRAGMA foreign_key_check").all(), []);
+    database.exec("ALTER TABLE sessions RENAME COLUMN descriptor TO origin");
+    assert.throws(() => assert_agent_session_schema(database, "test"), /session_migration_required.*SessionDescriptor/);
   } finally { owner.close(); }
 });
 

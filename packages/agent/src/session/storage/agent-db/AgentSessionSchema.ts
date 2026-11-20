@@ -1,5 +1,5 @@
 /**
- * Agent 范围 Session 数据库的正式 v12 schema。
+ * Agent 范围 Session 数据库的正式 v13 schema。
  *
  * sessions 是目录唯一事实源；canonical、配置和 Composer 数据通过内部 session_key
  * 关联。session_id 是永久 UUID，主会话由同库持久指针选择，归档不会改变身份。
@@ -10,9 +10,9 @@ import { AGENT_ARCHIVE_PLAN_SCHEMA_SQL } from "./AgentArchivePlanSchema.js";
 import { AGENT_SESSION_CONSTRAINTS_SQL } from "./AgentSessionConstraints.js";
 
 /** 与每 Session v7 分库明确区分的 Agent DB 格式。 */
-export const AGENT_SESSION_SCHEMA_VERSION = 12;
+export const AGENT_SESSION_SCHEMA_VERSION = 13;
 
-/** 校验版本和数据库拥有者；只读调用绝不初始化数据库。 */
+/** 校验版本、目录结构和数据库拥有者；只读调用绝不初始化数据库。 */
 export function assert_agent_session_schema(database: DatabaseSync, agent_id: string): void {
   const version = Number(database.prepare("PRAGMA user_version").get()?.user_version ?? 0);
   if (version !== AGENT_SESSION_SCHEMA_VERSION) {
@@ -23,6 +23,7 @@ export function assert_agent_session_schema(database: DatabaseSync, agent_id: st
   if (metadata?.agent_id !== agent_id || metadata.format_version !== AGENT_SESSION_SCHEMA_VERSION) {
     throw new Error("session_storage_identity_conflict: Agent database identity does not match");
   }
+
 }
 
 /** 正式关系结构；创建与元数据写入由拥有者放在同一事务内完成。 */
@@ -30,7 +31,7 @@ export const AGENT_SESSION_SCHEMA_SQL = `
 CREATE TABLE storage_metadata (
   singleton_id INTEGER PRIMARY KEY CHECK (singleton_id = 1),
   agent_id TEXT NOT NULL CHECK (length(trim(agent_id)) > 0),
-  format_version INTEGER NOT NULL CHECK (format_version = 12),
+  format_version INTEGER NOT NULL CHECK (format_version = 13),
   generation TEXT NOT NULL CHECK (length(generation) = 36),
   cursor_secret BLOB NOT NULL CHECK (length(cursor_secret) = 32),
   created_at INTEGER NOT NULL,
@@ -47,14 +48,10 @@ CREATE TABLE sessions (
     AND length(replace(session_id, '-', '')) = 32
     AND replace(session_id, '-', '') NOT GLOB '*[^0-9a-f]*'
   ),
-  category TEXT NOT NULL CHECK (length(trim(category)) > 0),
-  origin TEXT NOT NULL CHECK (
-    json_valid(origin) AND json_type(origin) = 'object'
-    AND COALESCE(json_type(origin, '$.category') = 'text', 0)
-    AND COALESCE(json_extract(origin, '$.category') = category, 0)
-    AND COALESCE(json_type(origin, '$.type') = 'text', 0)
-    AND COALESCE(length(trim(json_extract(origin, '$.type'))) > 0, 0)
-  ),
+  type TEXT NOT NULL CHECK (type IN ('chat', 'work')),
+  kind TEXT NOT NULL CHECK (length(trim(kind)) > 0 AND kind = trim(kind)),
+  relations TEXT NOT NULL DEFAULT '{}' CHECK (json_valid(relations) AND json_type(relations) = 'object'
+    AND json_type(relations, '$.type') IS NULL AND json_type(relations, '$.kind') IS NULL),
   workspace_id TEXT CHECK (workspace_id IS NULL OR length(trim(workspace_id)) > 0),
   timezone TEXT NOT NULL,
   title TEXT,
@@ -83,10 +80,10 @@ CREATE TABLE retired_session_ids (
 
 -- 业务创建键独立于永久 UUID；记录删除后保留映射，不能复活旧身份。
 CREATE TABLE session_creation_keys (
-  category TEXT NOT NULL,
+  type TEXT NOT NULL,
   creation_key TEXT NOT NULL CHECK (length(creation_key) BETWEEN 1 AND 512),
   session_id TEXT NOT NULL UNIQUE,
-  PRIMARY KEY (category, creation_key)
+  PRIMARY KEY (type, creation_key)
 ) STRICT;
 
 -- 离线转换的旧操作仅供审计，绝不当作新协议下的幂等证明。
@@ -95,8 +92,9 @@ CREATE TABLE legacy_operation_ids (
   source_schema INTEGER NOT NULL,
   audit_sha256 TEXT NOT NULL CHECK (length(audit_sha256) = 64)
 ) STRICT;
-CREATE INDEX sessions_agent_list ON sessions(category, archived, updated_at DESC, session_key DESC);
-CREATE INDEX sessions_workspace_list ON sessions(workspace_id, category, archived, updated_at DESC, session_key DESC);
+CREATE INDEX sessions_type_list ON sessions(type, archived, updated_at DESC, session_key DESC);
+CREATE INDEX sessions_agent_list ON sessions(type, kind, archived, updated_at DESC, session_key DESC);
+CREATE INDEX sessions_workspace_list ON sessions(workspace_id, type, kind, archived, updated_at DESC, session_key DESC);
 
 CREATE TABLE session_configuration (
   session_key INTEGER PRIMARY KEY REFERENCES sessions(session_key) ON DELETE CASCADE,

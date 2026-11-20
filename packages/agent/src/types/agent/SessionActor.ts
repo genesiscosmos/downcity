@@ -6,48 +6,12 @@
  * - session 的数据结构、history/system payload 放在 `SessionTypes.ts`。
  */
 
-import type {
-  AgentCreateSessionInput,
-  AgentArchiveSessionInput,
-  AgentArchiveSessionsInput,
-  AgentArchiveSessionResult,
-  AgentArchiveSessionsResult,
-  AgentCleanArchiveResult,
-  AgentListSessionsInput,
-  AgentSessionConfigSnapshot,
-  AgentSessionForkInput,
-  AgentSessionInfo,
-  AgentSessionSetInput,
-  AgentSessionSetOptions,
-  AgentSessionStatus,
-  AgentSessionSummaryPage,
-  AgentSessionSystemSnapshot,
-  RemoteSessionSetInput,
-} from "@/types/agent/SessionTypes.js";
-import type {
-  SessionMutationSubscriber,
-  SessionMutationUnsubscribe,
-} from "@downcity/type";
-import type {
-  RespondSessionInteractionInput,
-  SessionInteractionResult,
-  SessionInteractionRequest,
-} from "@downcity/type";
-import type {
-  ListSessionMessagesInput,
-  SessionMessagePage,
-  WorkspaceRuntime,
-} from "@downcity/type";
+import type { AgentCreateSessionInput, AgentArchiveSessionInput, AgentArchiveSessionsInput, AgentArchiveSessionResult, AgentArchiveSessionsResult, AgentCleanArchiveResult, AgentListSessionsInput, AgentSessionConfigSnapshot, AgentSessionForkInput, AgentSessionInfo, AgentSessionSetInput, AgentSessionSetOptions, AgentSessionStatus, AgentSessionSummaryPage, AgentSessionSystemSnapshot, RemoteSessionSetInput } from "@/types/agent/SessionTypes.js";
+import type { SessionMutationSubscriber, SessionMutationUnsubscribe, RespondSessionInteractionInput, SessionInteractionResult, SessionInteractionRequest, ListSessionMessagesInput, SessionMessagePage, WorkspaceRuntime, SessionDescriptor } from "@downcity/type";
 import type { AgentSessionPromptInput } from "@/types/sdk/AgentSessionPrompt.js";
 import type { AgentSessionStopResult } from "@/types/sdk/AgentSessionStop.js";
 import type { AgentSessionTurnHandle } from "@/types/sdk/AgentSessionTurn.js";
-import type { SessionOrigin } from "@downcity/type";
-import type {
-  AgentSessionStateKey,
-  AgentSessionStateValues,
-  RemoteSessionStateKey,
-  RemoteSessionStateValues,
-} from "@/types/agent/SessionState.js";
+import type { AgentSessionStateKey, AgentSessionStateValues, RemoteSessionStateKey, RemoteSessionStateValues } from "@/types/agent/SessionState.js";
 
 /**
  * SDK Session 集合入口。
@@ -57,7 +21,7 @@ export interface AgentSessions<TSession extends AgentSessionActor = AgentSession
   create(input?: AgentCreateSessionInput): Promise<TSession>;
 
   /** 获取一个已存在的 session。 */
-  get(session_id: string, category?: string): Promise<TSession>;
+  get(session_id: string, type?: string): Promise<TSession>;
 
   /** 列出当前 agent 的 session 摘要页。 */
   list(input?: AgentListSessionsInput): Promise<AgentSessionSummaryPage>;
@@ -81,14 +45,12 @@ export interface AgentSessions<TSession extends AgentSessionActor = AgentSession
 /**
  * Session actor 公共能力。
  */
-export interface AgentSessionActor {
+export interface AgentSessionActor extends SessionDescriptor {
   /** 当前 session 稳定标识。 */
   readonly id: string;
 
   /** 当前 Session 创建时确定的当前目录；可在会话中切换。 */
   readonly workspace_id?: string;
-  /** 当前 Session 的创建来源。 */
-  readonly origin: SessionOrigin;
 
   /** 读取当前 session 详情。 */
   get_info(): Promise<AgentSessionInfo>;

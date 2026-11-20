@@ -794,7 +794,7 @@ export class AgentChatTuiCoordinator {
       const created = await createRemoteChatSession({
         remote_agent: this.options.remote_agent,
       });
-      await this.switch_session(created.session_id);
+      await this.switch_session(created.id);
     } catch (error) {
       this.add_error_message(this.format_error(error));
       this.request_render();

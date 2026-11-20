@@ -2,7 +2,7 @@
  * 宿主可信的 Session 执行配置协议。
  * 配置完整替换业务指令、Composer、模型、工具和 hooks；来源元数据不授予能力。
  */
-import type { AgentTool, ModelClient, SessionOrigin, ToolHookSet } from "@downcity/type";
+import type { AgentTool, ModelClient, SessionDescriptor, ToolHookSet } from "@downcity/type";
 import type { SessionComposer } from "@/types/session/SessionComposer.js";
 
 /** 随 Session 持久化的不可变执行身份。 */
@@ -18,13 +18,14 @@ export interface SessionExecutionProfileReference {
 }
 
 /** 宿主解析配置时可见的 Session 身份；所有范围由宿主确定。 */
-export interface SessionExecutionProfileContext {
+export interface SessionExecutionProfileContext extends SessionDescriptor {
   /** 持有当前 Session 的真实 Agent。 */
   agent_id: string;
   /** 已分配的稳定 Session ID，可用于工具闭包绑定。 */
   session_id: string;
-  /** 持久化的业务路由元数据。 */
-  origin: SessionOrigin;
+
+  /** 宿主创建时固定的业务键；恢复时沿用记录中的值，供配置绑定私有业务对象。 */
+  creation_key?: string;
   /** 可选范围元数据，不自动授予 Workspace 能力。 */
   workspace_id?: string;
   /** 创建时请求或恢复时固定的模型身份。 */

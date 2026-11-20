@@ -33,8 +33,8 @@ export function execute_agent_session_command(owner: AgentSessionDatabase, opera
       new AgentArchivePlans(owner).commit(operation.input);
       return { operation_id: operation.input.operation_id, position: operation.input.position };
     }
-    case "categories": return owner.read(database => database.prepare("SELECT DISTINCT category FROM sessions WHERE archived = ? ORDER BY category")
-      .all(operation.archived ? 1 : 0).map(row => String(row.category)));
+    case "categories": return owner.read(database => database.prepare("SELECT DISTINCT type FROM sessions WHERE archived = ? ORDER BY type")
+      .all(operation.archived ? 1 : 0).map(row => String(row.type)));
     case "first_user": return messages.first_user(operation.session_id);
     case "latest_agent": return messages.latest_agent(operation.session_id, operation.turn_id);
     case "message_stats": {
@@ -52,8 +52,10 @@ export function execute_agent_session_command(owner: AgentSessionDatabase, opera
     case "checkpoint": return configuration.checkpoint(operation.session_id, operation.namespace, operation.schema_version);
     case "metadata": return owner.read(database => {
       if (operation.addresses.length > 100) throw new Error("session_metadata_limit_invalid");
-      const by_record = database.prepare("SELECT * FROM sessions WHERE session_id = ? AND category = ?");
-      return operation.addresses.map(address => by_record.get(address.session_id, address.category) ?? null);
+      const by_record = database.prepare("SELECT * FROM sessions WHERE session_id = ? AND type = ?");
+      const by_id = database.prepare("SELECT * FROM sessions WHERE session_id = ?");
+      return operation.addresses.map(address => (address.type === undefined
+        ? by_id.get(address.session_id) : by_record.get(address.session_id, address.type)) ?? null);
     });
     case "list": return catalog.list(operation.input);
     case "find": return catalog.find(operation.address);
@@ -76,4 +78,3 @@ export function execute_agent_session_command(owner: AgentSessionDatabase, opera
     default: throw new Error("session_storage_command_invalid");
   }
 }
-

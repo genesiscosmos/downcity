@@ -8,28 +8,8 @@ export type {
   JsonPrimitive,
   JsonValue,
 } from "./types/json/Json.js";
-export {
-  can_delegate_work,
-  is_agent_session_origin,
-  normalize_session_origin,
-  normalize_session_origin_category,
-  normalize_session_origin_type,
-  read_session_delegation_depth,
-  resolve_delegation_blocked_reason,
-  resolve_origin_category,
-  restore_session_origin,
-  SESSION_DELEGATION_MAX_DEPTH,
-  SESSION_ORIGIN_CATEGORY_CHAT,
-  SESSION_ORIGIN_CATEGORY_WORK,
-  SESSION_ORIGIN_TYPE_AGENT,
-  SESSION_ORIGIN_TYPE_CHANNEL,
-  SESSION_ORIGIN_TYPE_CHROME,
-  SESSION_ORIGIN_TYPE_GROUP,
-  SESSION_ORIGIN_TYPE_TASK,
-  SESSION_ORIGIN_TYPE_WORK,
-  type SessionOrigin,
-  type SessionOriginCategory,
-} from "./types/session/SessionOrigin.js";
+export * from "./types/session/SessionDescriptor.js";
+export * from "./types/session/SessionCallContext.js";
 export type * from "./types/session/SessionContent.js";
 export { validate_session_view_content } from "./types/session/SessionViewContent.js";
 export type * from "./types/session/SessionMessage.js";

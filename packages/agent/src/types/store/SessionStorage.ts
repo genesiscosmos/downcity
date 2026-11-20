@@ -6,15 +6,7 @@
  */
 
 import type { SessionHistoryMeta } from "@/types/store/SessionHistoryMeta.js";
-import type {
-  SessionAgentInputPart,
-  SessionAgentMessage,
-  SessionAgentMessagePart,
-  SessionMessage,
-  SessionOrigin,
-  SessionUserMessage,
-  SessionUserMessagePart,
-} from "@downcity/type";
+import type { SessionAgentInputPart, SessionAgentMessage, SessionAgentMessagePart, SessionMessage, SessionDescriptor, SessionUserMessage, SessionUserMessagePart } from "@downcity/type";
 import type { SessionAttachmentStore } from "@/types/store/SessionAttachmentStore.js";
 
 /** 不含存储分配序号的新消息候选；Worker 提交后返回最终完整聚合。 */
@@ -60,11 +52,10 @@ export interface SessionDerivedStore {
 }
 
 /** 单个 Session 的结构化持久化能力。 */
-export interface SessionStorage {
+export interface SessionStorage extends SessionDescriptor {
   /** 当前 Session 的永久唯一 UUID。 */
   readonly session_id: string;
-  /** 当前 Session 的不可变创建来源。 */
-  readonly origin: SessionOrigin;
+
   /** 当前 Session 的附件存储。 */
   readonly attachments: SessionAttachmentStore;
 

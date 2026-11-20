@@ -3,8 +3,8 @@ import type { SessionHistoryMeta } from "../store/SessionHistoryMeta.js";
 
 /** 精确记录 UUID 优先；无 UUID 时只允许查询当前活动逻辑地址。 */
 export interface SessionMetadataAddress {
-  /** 来源分类，用于逻辑查询和记录身份交叉校验。 */
-  category: string;
+  /** 可选的 Session 类型一致性校验，不参与 UUID 身份。 */
+  type?: string;
   /** 分类内逻辑会话标识，不能用于猜测归档记录。 */
   session_id: string;
 }

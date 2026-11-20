@@ -2,16 +2,15 @@
  * Agent 持久化完成通知协议。
  * 每个 Turn 只有一个稳定完成事件；回调至少投递一次，处理器按 completion_id 幂等消费。
  */
-import type { EffectHook, FileSystem, SessionOrigin, SessionTurnCommittedHookValue, ToolCallContext } from "@downcity/type";
+import type { EffectHook, FileSystem, SessionDescriptor, SessionTurnCommittedHookValue, ToolCallContext } from "@downcity/type";
 
 /** 完成事件的可恢复投递记录，不保存函数、环境变量或运行时句柄。 */
-export interface SessionCompletionRecord {
+export interface SessionCompletionRecord extends SessionDescriptor {
   /** 该 Turn 已持久化的完成事件与结果。 */
   event: SessionTurnCommittedHookValue;
   /** 同一 Turn 最近一次 Retry 调用的当前结果；原投递 event 永不改变。 */
   current?: SessionTurnCommittedHookValue;
-  /** 会话来源分区，用于重启后恢复正确的 Session。 */
-  origin: SessionOrigin;
+
   /** 事件发生时的项目标识；回调恢复时使用该执行上下文。 */
   workspace_id?: string;
   /** 成功表示所有当时注册的处理器已接受；失败仍可重试。 */

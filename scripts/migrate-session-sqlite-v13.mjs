@@ -1,11 +1,13 @@
-/** SessionDescriptor 离线迁移入口，复用整根批次的备份、发布、验证与恢复。 */
+/** 正式版本与过渡版 v12→v13 离线入口；显式停写后才允许发布或恢复。 */
 import { parse_arguments } from "./migrate-session-sqlite-v12.mjs";
-import { create_version_migration } from "./lib/session-version-migration.mjs";
-import { content_digest, inspect_database, convert_database } from "./lib/session-descriptor-conversion.mjs";
+import { load_runtime } from "./lib/session-runtime.mjs";
+import { load_runtime as load_historical } from "./lib/session-v12-runtime.mjs";
+import * as migration from "./lib/session-v13-migration.mjs";
 import { diagnostic } from "./lib/session-v8-files.mjs";
 
-const help = `SessionDescriptor 离线迁移（先构建 Agent、Type 和 City）
-node scripts/migrate-session-descriptor.mjs --preflight|--apply|--verify|--status|--restore
+const help = `Session v12 → v13 offline migration (Node >=22.18; installed workspace dependencies)
+支持正式 category/origin v12 和 session-descriptor-v12 过渡格式。
+node scripts/migrate-session-sqlite-v13.mjs --preflight|--apply|--verify|--status|--restore
   --root PATH          显式指定数据目录
   --batch PATH         数据目录外的私有批次目录，预检时必须尚未创建
   --writers-stopped    apply 和 restore 必需，调用前退出全部宿主和写进程
@@ -15,18 +17,8 @@ try {
   const input = parse_arguments(process.argv.slice(2));
   if (input.help) console.log(help);
   else {
-    const modules = await Promise.all([
-      import("../packages/agent/bin/session/storage/agent-db/AgentSessionSchema.js"),
-      import("../packages/agent/bin/session/storage/agent-db/AgentSessionFileLease.js"),
-      import("../packages/agent/bin/session/storage/SessionStorageCodec.js"),
-      import("../packages/type/bin/types/session/SessionDescriptor.js"),
-      import("../packages/city/bin/local/resources/RootLease.js"),
-    ]);
-    const runtime = Object.assign({}, ...modules);
-    // 源格式由转换器固定的 DDL 摘要识别，预检用目标 codec 验证转换后的消息。
-    const historical = { ...runtime, AGENT_SESSION_SCHEMA_VERSION: 12 };
-    const migration = create_version_migration({ source_schema: 12, target_schema: 12,
-      migration_policy: "session-descriptor-v12", content_digest, inspect_database, convert_database });
+    const runtime = await load_runtime(true);
+    const historical = await load_historical();
     const { mode, root_path, batch_path } = input;
     const result = mode === "preflight" ? (batch_path ? migration.plan_batch(root_path, batch_path, runtime, historical) : migration.preflight(root_path, runtime, historical))
       : mode === "apply" ? await migration.migrate(root_path, batch_path, runtime, historical)

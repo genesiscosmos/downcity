@@ -4,13 +4,8 @@
  * 该端口直接消费 Downcity Model Protocol 事件，不定义或转发 UI-shaped chunk。
  */
 
-import type { ModelStreamEvent } from "@downcity/type";
-import type { SessionAgentContent, SessionAgentInputPart, SessionInputContent } from "@downcity/type";
-import type { SessionAgentMessagePart } from "@downcity/type";
-import type {
-  SessionToolExecutionResult,
-  SessionToolInputReady,
-} from "@/types/session/SessionTool.js";
+import type { ModelStreamEvent, SessionAgentContent, SessionAgentInputPart, SessionInputContent, SessionAgentMessagePart } from "@downcity/type";
+import type { SessionToolExecutionResult, SessionToolInputReady } from "@/types/session/SessionTool.js";
 
 /** Tool 结果产生的内容批次，收口时合并已发布事实而不重复追加。 */
 export interface SessionAssistantResultBatch {

@@ -17,7 +17,9 @@ export interface AgentChatCliOptions {
   /** 已登记 Workspace 的路径，与 workspace 互斥。 */
   workspace_path?: string;
   /** 完整会话来源分类。 */
-  category?: string;
+  type?: string;
+  /** 创建用途或最近会话过滤；普通工作默认 work。 */
+  kind?: string;
   /** 目标 agent id。 */
   to?: string;
   /** 本次对话使用的完整 Workspace ID。 */
@@ -90,8 +92,8 @@ export interface AgentChatSessionOptions {
  * TUI 内展示的 session 摘要。
  */
 export interface AgentChatSessionSummaryView {
-  /** 当前 session_id。 */
-  session_id: string;
+  /** 当前 Session 稳定标识。 */
+  id: string;
   /** 可读标题。 */
   title?: string;
   /** 最近预览文本。 */

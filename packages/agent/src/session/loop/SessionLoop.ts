@@ -14,59 +14,30 @@ import { SessionFailure } from "@/session/SessionFailure.js";
 import { reject_failed_session_turn } from "./SessionTurnFailure.js";
 import { finalize_session_execution } from "./SessionTurnFinalization.js";
 import { z } from "zod";
-import type { PromptPowerDescriptor } from "@downcity/type";
-import type { SessionActionEvent } from "@downcity/type";
+import type { PromptPowerDescriptor, SessionActionEvent, SessionInteractionLifecycle, SessionInteractionPort } from "@downcity/type";
 import type { AgentSessionPromptInput, NormalizedAgentSessionPromptInput } from "@/types/sdk/AgentSessionPrompt.js";
 import type { AgentSessionStopResult } from "@/types/sdk/AgentSessionStop.js";
-import type {
-  AgentSessionTurnHandle,
-  AgentSessionTurnResult,
-} from "@/types/sdk/AgentSessionTurn.js";
+import type { AgentSessionTurnHandle, AgentSessionTurnResult } from "@/types/sdk/AgentSessionTurn.js";
 import { snapshot_prompt_powers, describe_prompt_powers, set_turn_prompt_powers, clear_turn_prompt_powers } from "@/session/input/PromptPowers.js";
 import { latest_session_input, read_prompt_input, session_input_facts, type SessionInputFact } from "./SessionInputFacts.js";
 import { assert_prompt_actor, persist_prompt_input, resolve_idempotent_prompt } from "./SessionPromptInputs.js";
 import { is_agent_session_prompt_input_empty } from "@/types/sdk/AgentSessionPrompt.js";
 import type { SessionStepExecutionInput, SessionTurnExecutionResult } from "@/types/session/SessionExecution.js";
-import {
-  is_provider_context_limit_error,
-  SessionExecutor,
-  type SessionExecutorPort,
-} from "@/session/runner/SessionExecutor.js";
+import { is_provider_context_limit_error, SessionExecutor, type SessionExecutorPort } from "@/session/runner/SessionExecutor.js";
 import type { StepInput } from "@/session/input/StepInput.js";
 import type { SessionTurnContext } from "@/types/turn/SessionTurnContext.js";
 import { create_session_turn_context } from "@/session/loop/SessionTurnContext.js";
 import { SessionEventHub } from "@/session/messages/SessionEventHub.js";
 import { SessionState } from "@/session/loop/SessionState.js";
-import {
-  SessionMessages,
-} from "@/session/messages/SessionMessages.js";
-import type {
-  SessionInteractionLifecycle,
-  SessionInteractionPort,
-} from "@downcity/type";
+import { SessionMessages } from "@/session/messages/SessionMessages.js";
 import { SessionAssistantOutputAdapter } from "@/session/messages/SessionAssistantOutputAdapter.js";
 import { SessionQueue } from "@/session/loop/SessionQueue.js";
-import type {
-  PromptRequestIdentity,
-  ActiveSessionTurnState,
-  SessionDeferred,
-  SessionLoopOptions,
-} from "@/types/session/SessionLoop.js";
-import type {
-  SessionCommand,
-  SessionCommandCompletion,
-} from "@/types/session/SessionCommand.js";
+import type { PromptRequestIdentity, ActiveSessionTurnState, SessionDeferred, SessionLoopOptions } from "@/types/session/SessionLoop.js";
+import type { SessionCommand, SessionCommandCompletion } from "@/types/session/SessionCommand.js";
 import { create_session_model_request_warning } from "@/session/messages/SessionModelRequestWarning.js";
-import {
-  complete_session_turn, settle_session_turn,
-  fail_session_turn,
-  TURN_STOPPED_MESSAGE,
-} from "@/session/loop/SessionTurnCompletion.js";
-import {
-  publish_session_turn_file_diff,
-} from "@/session/loop/SessionTurnFileDiff.js";
+import { complete_session_turn, settle_session_turn, fail_session_turn, TURN_STOPPED_MESSAGE } from "@/session/loop/SessionTurnCompletion.js";
+import { publish_session_turn_file_diff } from "@/session/loop/SessionTurnFileDiff.js";
 import type { SessionTurnCompletionOptions } from "@/types/session/SessionTurnCompletion.js";
-
 import { SessionModelRetryControl } from "../runner/SessionModelReplay.js";
 import { SessionOccupation } from "./SessionOccupation.js";
 import { SessionResultAcceptance } from "./SessionResultAcceptance.js";
@@ -81,8 +52,9 @@ import { SessionExecutionState } from "./SessionExecutionState.js";
 import { persist_command_completion } from "./SessionCommandCompletion.js";
 import { create_model_retry_command } from "./SessionRetryCommand.js";
 import type { SessionBackgroundInput, SessionBackgroundReceipt } from "@/types/session/SessionBackgroundInput.js";
-
 import { accept_session_input, completion_unavailable, SessionInternalInput } from "./SessionInputAcceptance.js";
+import { session_call_context, read_session_call_context } from "@downcity/type";
+
 const QUEUED_PROMPT_CANCELLED_MESSAGE =
   "Prompt cancelled because session was stopped";
 
@@ -93,7 +65,7 @@ export class SessionLoop {
   private readonly session_id: string;
   /** 由 Agent 提供的写前日志，失败不能通过普通 Hook 吞掉。 */
   private readonly completions: SessionLoopOptions["completions"];
-  private readonly session_origin: SessionLoopOptions["session_origin"];
+  private readonly session_descriptor: import("@downcity/type").SessionDescriptor;
   /** 子工作等待与取消由独立模块管理，输入消费仍归本 Loop。 */
   private readonly child_work: SessionChildWorkLifecycle;
   /** 当前 Session 的目录解析器。 */
@@ -138,6 +110,8 @@ export class SessionLoop {
   private occupation_initialized?: Promise<void>;
   /** 重启后尚未恢复执行的 Turn。 */
   private recovered_turn_id?: string;
+  /** 恢复未结束执行时沿用原代次，显式重试则分配新代次。 */
+  private recovered_execution_id?: string;
   /** 恢复预占用在原 Turn 完成后释放。 */
   private recovered_release?: () => void;
   /** 结果日志故障保留的占用，只能在同对象恢复并可靠完成后释放。 */
@@ -157,7 +131,7 @@ export class SessionLoop {
     this.acquire_execution = options.acquire_execution;
     this.session_id = String(options.session_id || "").trim();
     this.completions = options.completions;
-    this.session_origin = options.session_origin;
+    this.session_descriptor = read_session_call_context(options);
     this.child_work = new SessionChildWorkLifecycle(options.child_work, options.logger);
     this.get_workspace_path = options.get_workspace_path;
     this.maintain_context = options.maintain_context;
@@ -308,6 +282,7 @@ export class SessionLoop {
       const recovered_release = this.recovered_release;
       this.recovered_release = undefined;
       this.recovered_turn_id = undefined;
+      this.recovered_execution_id = undefined;
       void handle.finished.then(() => {
         release(); recovered_release?.();
         for (const failed_release of this.failed_releases.splice(0)) failed_release();
@@ -337,10 +312,13 @@ export class SessionLoop {
       if (!from) return;
       const completed = await this.completions?.read(this.session_id, latest.turn_id);
       if (completed) return;
+      const latest_agent = [...history].reverse().find(message => message.role === "agent" && message.turn_id === latest.turn_id);
+      const execution_id = latest_agent?.role === "agent" ? latest_agent.execution_id : undefined;
       const actor = session_prompt_actor_schema.parse(from);
       if (!this.completions) {
         this.unknown_turn_id = latest.turn_id;
         this.recovered_turn_id = latest.turn_id;
+        this.recovered_execution_id = execution_id;
         this.recovered_release = this.occupation.acquire(actor, this.session_id, latest.turn_id);
         return;
       }
@@ -348,6 +326,7 @@ export class SessionLoop {
         && message.parts.some(part => part.type === "error"))
         || actor.kind === "runtime" && actor.namespace === "session_background") {
         const interrupted = create_active_session_turn_state(latest.turn_id);
+        if (execution_id) interrupted.execution_id = execution_id;
         interrupted.turn_context = this.create_turn_context(interrupted);
         this.active_turn = interrupted;
         await this.fail_active_turn(interrupted, new Error("Execution was interrupted; saved input and completed results are preserved. Review before starting a new request."));
@@ -356,6 +335,7 @@ export class SessionLoop {
         return;
       }
       this.recovered_turn_id = latest.turn_id;
+      this.recovered_execution_id = execution_id;
       this.recovered_release = this.occupation.acquire(actor, this.session_id, latest.turn_id);
     })();
     const initialization = this.occupation_initialized;
@@ -376,10 +356,11 @@ export class SessionLoop {
   }
 
   /** 可信委派结果仅可注入原活动 Turn；调用方必须先验证持久化委派记录。 */
-  async accept_delegation_result(turn_id: string, request_id: string, query: AgentSessionPromptInput["query"]): Promise<boolean> {
+  async accept_delegation_result(turn_id: string, request_id: string, query: AgentSessionPromptInput["query"], execution_id?: string): Promise<boolean> {
     const generation = this.stop_generation;
     return await this.result_acceptance.accept(turn_id, request_id, query, async (identity, parts) => {
       const actor = this.occupation.occupied_by;
+      if (execution_id && this.current_execution_id() !== execution_id) return false;
       if (!actor || this.stopping || generation !== this.stop_generation || this.closing || this.active_turn?.turn_id !== turn_id) return false;
       // 检查目标后同步入队，不允许迟到结果漂移到下一 Turn。
       const content = typeof parts === "string" ? [{ type: "text" as const, text: parts }] : parts;
@@ -517,10 +498,11 @@ export class SessionLoop {
     return this.require_active_turn().turn_id;
   }
 
-  /** 返回当前 Active Turn 标识；Session 空闲时返回 undefined。 */
-  current_turn_id(): string | undefined {
-    return this.active_turn?.turn_id ?? this.recovered_turn_id;
-  }
+  /** 当前实际执行身份；恢复尚未运行时返回已保存的代次。 */
+  current_execution_id(): string | undefined { return this.active_turn?.execution_id ?? this.recovered_execution_id; }
+
+  /** 返回活动或待恢复的 Turn 标识；Session 空闲时返回 undefined。 */
+  current_turn_id(): string | undefined { return this.active_turn?.turn_id ?? this.recovered_turn_id; }
 
   /** 调度循环或排队命令仍活动时，禁止并行绕过输入队列执行。 */
   is_active(): boolean {
@@ -546,6 +528,7 @@ export class SessionLoop {
       if (expected_turn_id && expected_turn_id !== this.current_turn_id() && expected_turn_id !== observed_turn?.turn_id) throw turn_changed();
       if (!this.active_turn && this.recovered_turn_id) {
         const recovered = create_active_session_turn_state(this.recovered_turn_id);
+        if (this.recovered_execution_id) recovered.execution_id = this.recovered_execution_id;
         recovered.turn_context = this.create_turn_context(recovered);
         this.active_turn = recovered;
         recovered.turn_context.lifecycle.abort(new Error(TURN_STOPPED_MESSAGE));
@@ -554,6 +537,7 @@ export class SessionLoop {
         this.recovered_release?.();
         this.recovered_release = undefined;
         this.recovered_turn_id = undefined;
+        this.recovered_execution_id = undefined;
         for (const release of this.failed_releases.splice(0)) release();
         await settle_session_turn(this.turn_completion_options(), recovered);
         return { stopped: true, turn_id: recovered.turn_id, cancelled_queued_prompts: 0, reason: "stopped" };
@@ -601,6 +585,9 @@ export class SessionLoop {
 
       const turn_id = command.turn_id || `turn:${this.session_id}:${Date.now()}:${nanoid(6)}`;
       const active_turn = Object.assign(create_active_session_turn_state(turn_id), { replay: command.replay, is_retry: command.kind === "retry", settle_after_release: true });
+      if (command.kind !== "retry" && turn_id === this.recovered_turn_id && this.recovered_execution_id) {
+        active_turn.execution_id = this.recovered_execution_id;
+      }
       if (command.replay) active_turn.resumed_message = { message_id: command.replay.binding.message_id, revision: command.replay.message_revision! };
       this.active_turn = active_turn;
       this.closing = false;
@@ -778,6 +765,7 @@ export class SessionLoop {
     }
     if (error instanceof CompletionPersistenceError) {
       this.recovered_turn_id = active_turn.turn_id;
+      this.recovered_execution_id = active_turn.execution_id;
       if (this.active_turn === active_turn) this.active_turn = null;
       await reject_failed_session_turn(active_turn, error, this.logger, this.session_id);
       return;
@@ -906,6 +894,7 @@ export class SessionLoop {
   ): SessionTurnContext {
     const assistant_output = new SessionAssistantOutputAdapter({
       turn_id: active_turn.turn_id,
+      execution_id: active_turn.execution_id,
       messages: this.messages,
       ...(active_turn.replay ? { resume: { message_id: active_turn.replay.binding.message_id,
         revision: active_turn.replay.message_revision!, error_part_id: active_turn.replay.binding.error_part_id } } : {}),
@@ -926,8 +915,9 @@ export class SessionLoop {
     this.internal_inputs.set(active_turn.turn_id, internal_input);
     return create_session_turn_context({
       turn_id: active_turn.turn_id,
+      execution_id: active_turn.execution_id,
       session_id: this.session_id,
-      session_origin: this.session_origin,
+      ...session_call_context(this.session_descriptor),
       project_root: this.get_workspace_path(),
       commit_step_input: () => this.drain_queued_inputs(),
       append_input: async (input) => internal_input.stage(input),

@@ -203,10 +203,10 @@ export class SessionPickerComponent implements Component, Focusable {
 
     const session_items = sessions
       .map((session) => ({
-        value: session.session_id,
-        label: session.title || session.session_id,
+        value: session.id,
+        label: session.title || session.id,
         description: this.build_session_description(session),
-        is_current: session.session_id === this.current_session_id,
+        is_current: session.id === this.current_session_id,
         is_create: false,
       }));
 

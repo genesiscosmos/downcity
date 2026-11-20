@@ -11,7 +11,7 @@ export interface ResultLocation {
   /** canonical Tool Part 的稳定 ID，与执行调用 ID 分离。 */
   part_id: string;
   /** 可选来源分类一致性校验；不能扩大会话身份命名空间。 */
-  category?: string;
+  type?: string;
 }
 
 /** 已发布结果的定位和内容摘要，前缀 res_2_ 固定协议版本。 */

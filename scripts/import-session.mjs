@@ -10,8 +10,8 @@ import { import_session } from "./lib/session-transfer-import.mjs";
 const help_text = `Single Session import (Node >= 22.18, checkout dependencies required)
 node scripts/import-session.mjs --root PATH --agent ID --package PATH --batch PATH --operation-id UUID --writers-stopped
   --allow-unresolved-sources  Preserve exact unavailable source references; never rebind by logical ID.
-The target must be an existing ready v12 database belonging to the SAME Agent.
-Accepts format 3/schema 12 only. Preserves permanent session_id and active/archive status; never selects the main pointer. Conflicts never overwrite records or files.
+The target must be an existing ready v13 database belonging to the SAME Agent.
+Accepts format 3/schema 13 only. Preserves permanent session_id and active/archive status; never selects the main pointer. Conflicts never overwrite records or files.
 Batch must be outside the data root and package. Resume with the SAME arguments and operation UUID.
 No automatic import retry, source removal, root migration, or service stop/start.`;
 

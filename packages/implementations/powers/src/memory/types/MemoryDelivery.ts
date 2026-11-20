@@ -5,7 +5,7 @@ export interface MemoryResultRecipient {
   /** 拥有原会话的 Agent，不能由模型自由指定。 */
   agent_id: string;
   /** 原会话持久化分区。 */
-  category: string;
+  type: string;
   /** 原会话稳定标识。 */
   session_id: string;
   /** 发起操作的原始轮次，运行时据此决定注入或恢复方式。 */

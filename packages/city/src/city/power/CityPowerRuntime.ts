@@ -12,7 +12,7 @@
 
 import type { Hono } from "hono";
 import type { Agent, Group, Logger } from "@downcity/agent";
-import { EMPTY_TOOL_HOOK_SET, normalize_session_origin, SESSION_ORIGIN_CATEGORY_WORK, SESSION_ORIGIN_TYPE_WORK } from "@downcity/type";
+import { EMPTY_TOOL_HOOK_SET, SESSION_TYPE_WORK, read_session_call_context, session_call_context } from "@downcity/type";
 import type { PowerSurface } from "@downcity/type";
 import type { WorkspaceRuntime } from "@/workspace/index.js";
 import type { AgentPowerRuntime } from "@/power/types/PowerExecutionRuntime.js";
@@ -26,7 +26,6 @@ import type {
   PowerJsonValue,
   PowerLifecycleContext,
   PowerRuntimeHost,
-  PowerSessionHandle,
   PowerSnapshot,
 } from "@/power/index.js";
 import { create_power_call, StepSnapshot } from "@/power/index.js";
@@ -39,10 +38,9 @@ import { PowerRegistry } from "@/power/core/PowerRegistry.js";
 import { CityPowerLifecycle } from "./CityPowerLifecycle.js";
 import {
   create_power_context,
-  create_power_session_handle,
   freeze_power_config,
 } from "@/power/core/PowerContext.js";
-import { create_power_session_collection } from "@/city/power/PowerSessionBridge.js";
+import { create_power_session_collection, create_power_session_handle } from "@/city/power/PowerSessionBridge.js";
 import { register_power_http_routes } from "@/power/core/PowerHttpRoutes.js";
 import { CityExecutionProfiles } from "./CityExecutionProfiles.js";
 import { assert_power_session_owner, create_power_session_host } from "./CityPowerSessionHost.js";
@@ -208,8 +206,8 @@ export class CityPowerRuntime implements PowerRuntimeHost {
         get_sessions: () => agent.sessions,
         workspace,
       }),
-      session: this.resolve_session_handle(agent, workspace, site),
-      ...(site.turn_id ? { turn: Object.freeze({ id: site.turn_id, abort_signal: call.abort_signal }) } : {}),
+      session: this.resolve_session_handle(agent, site),
+      ...(site.turn_id ? { turn: Object.freeze({ id: site.turn_id, execution_id: site.execution_id, abort_signal: call.abort_signal }) } : {}),
       snapshot: this.resolve_snapshot(site, workspace, agent),
       call,
       config: freeze_power_config(this.options.host?.config?.(power_id).get() ?? {}),
@@ -229,22 +227,13 @@ export class CityPowerRuntime implements PowerRuntimeHost {
    */
   private resolve_session_handle(
     agent: Agent,
-    workspace: WorkspaceRuntime | undefined,
     site: PowerCallSite,
   ): PowerContext["session"] {
     const session_id = String(site.session_id || "").trim();
     if (!session_id) return undefined;
-    const origin = normalize_session_origin(
-      site.session_origin ?? { category: SESSION_ORIGIN_CATEGORY_WORK, type: SESSION_ORIGIN_TYPE_WORK },
-    );
     try {
-      const runtime = agent.sessions.runtime(session_id, origin.category);
-      return create_power_session_handle(
-        runtime as unknown as PowerSessionHandle,
-        session_id,
-        origin,
-        workspace?.id,
-      );
+      const runtime = agent.sessions.runtime(session_id, site.session_type ?? SESSION_TYPE_WORK);
+      return create_power_session_handle(runtime);
     } catch {
       return undefined;
     }
@@ -260,7 +249,7 @@ export class CityPowerRuntime implements PowerRuntimeHost {
     const turn_id = String(site.turn_id || "").trim();
     return new StepSnapshot({
       ...(session_id ? { session_id } : {}),
-      ...(site.session_origin ? { session_origin: site.session_origin } : {}),
+      ...(site.session_type ? session_call_context(read_session_call_context({ ...site, session_type: site.session_type, session_kind: site.session_kind ?? "work" })) : {}),
       ...(turn_id ? { turn_id } : {}),
       ...(workspace ? { project_root: workspace.path } : {}),
       workspace_env: site.workspace_env ?? workspace?.get_env() ?? {},
@@ -535,9 +524,9 @@ export class CityPowerRuntime implements PowerRuntimeHost {
             : undefined;
           const agent = this.options.runtime_access.get_agent(input.agent_id);
           if (!agent) throw new Error(`Agent not found in City: ${input.agent_id}`);
-          await assert_power_session_owner(power_id, agent, this.execution_profiles, input.session_id, input.category);
-          await agent.sessions.get(input.session_id, input.category, { workspace });
-          const session = agent.sessions.runtime(input.session_id, input.category);
+          await assert_power_session_owner(power_id, agent, this.execution_profiles, input.session_id, input.type);
+          await agent.sessions.get(input.session_id, input.type, { workspace });
+          const session = agent.sessions.runtime(input.session_id, input.type);
           const turn = await session.prompt({
             actor: input.actor,
             query: input.query,
@@ -565,17 +554,17 @@ export class CityPowerRuntime implements PowerRuntimeHost {
             : undefined;
           const agent = this.options.runtime_access.get_agent(input.agent_id);
           if (!agent) throw new Error(`Agent not found in City: ${input.agent_id}`);
-          await assert_power_session_owner(power_id, agent, this.execution_profiles, input.session_id, input.category);
-          await agent.sessions.get(input.session_id, input.category, { workspace });
+          await assert_power_session_owner(power_id, agent, this.execution_profiles, input.session_id, input.type);
+          await agent.sessions.get(input.session_id, input.type, { workspace });
           await agent.sessions.runtime(
             input.session_id,
-            input.category,
+            input.type,
           ).append_agent_message({ text: input.text });
         },
         get_agent_session_workspace: async (input) => {
           const agent = this.options.runtime_access.get_agent(input.agent_id);
           if (!agent) throw new Error(`Agent not found in City: ${input.agent_id}`);
-          const session = await agent.sessions.get(input.session_id, input.category);
+          const session = await agent.sessions.get(input.session_id, input.type);
           const workspace = session.get("workspace");
           return workspace ? {
             workspace_id: workspace.id,

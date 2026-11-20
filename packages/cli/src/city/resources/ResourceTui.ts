@@ -51,20 +51,20 @@ export async function manage_resources_tui(): Promise<void> {
 
 /** 会话列表仅把完整地址交给用例，不注入 Workspace。 */
 async function sessions_tui(client: ResourceClient, agent: string): Promise<void> {
-  const scope = await prompts([{ type: "select", name: "category", message: "Category", choices: [{ title: "Work", value: "work" }, { title: "Chat", value: "chat" }] }, { type: "confirm", name: "archived", message: "Archived history?", initial: false }]);
-  if (!scope.category) return;
+  const scope = await prompts([{ type: "select", name: "type", message: "Type", choices: [{ title: "Work", value: "work" }, { title: "Chat", value: "chat" }] }, { type: "confirm", name: "archived", message: "Archived history?", initial: false }]);
+  if (!scope.type) return;
   const cursors: (string | undefined)[] = [undefined];
   const pages: SessionListData[] = [];
   let page_index = 0;
   while (true) {
     let page: SessionListData;
-    try { page = pages[page_index] ?? (await client.call("session.list", { agent, ...scope, cursor: cursors[page_index] })).data as SessionListData; pages[page_index] = page; }
+    try { page = pages[page_index] ?? (await client.call("session.list", { agent, ...scope, ...(scope.type === "work" ? { kind: "work" } : {}), cursor: cursors[page_index] })).data as SessionListData; pages[page_index] = page; }
     catch (error) {
       if (error instanceof Error && "code" in error && error.code === "cursor_expired") { cursors.splice(1); pages.length = 0; page_index = 0; await show_result("Session snapshot expired; reloading the first page."); continue; }
       throw error;
     }
     const choices = [
-      ...page.items.map((item) => ({ title: `${item.title ?? item.session_id} · ${item.session_id}`, value: `session:${item.session_id}` })),
+      ...page.items.map((item) => ({ title: `${item.title ?? item.id} · ${item.id}`, value: `session:${item.id}` })),
       ...(page_index > 0 ? [{ title: "Previous page", value: "previous" }] : []),
       ...(page.pagination_available && page.next_cursor ? [{ title: "Next page", value: "next" }] : []),
       { title: "Refresh first page", value: "refresh" }, { title: "Back", value: "back" },
@@ -75,7 +75,7 @@ async function sessions_tui(client: ResourceClient, agent: string): Promise<void
     if (selected.id === "previous") { page_index -= 1; continue; }
     if (selected.id === "refresh") { cursors.splice(1); pages.length = 0; page_index = 0; continue; }
     const session_id = String(selected.id).slice("session:".length);
-    const input = { agent, category: scope.category, session_id };
+    const input = { agent, type: scope.type, session_id };
     const action = await prompts({ type: "select", name: "value", message: session_id, choices: [{ title: "Details", value: "get" }, { title: "History", value: "history" }, { title: "Stop current Turn", value: "stop" }, { title: "Archive", value: "archive" }] });
     if (action.value) await show_result((await client.call(`session.${action.value}`, input)).data);
     if (action.value === "archive") { cursors.splice(1); pages.length = 0; page_index = 0; }

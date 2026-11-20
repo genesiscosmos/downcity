@@ -15,15 +15,15 @@ export async function read_session_agent_references(root_path: string, agent_ids
       for (const reference of await read_agent_pending_references(path.join(root_path, "agents", agent_id), agent_id)) {
         if (reference.referenced_agent_id === target_agent_id) references.push({ ...reference });
       }
-      for (const category of await browser.categories()) {
+      for (const type of await browser.categories()) {
         let cursor: string | undefined;
         do {
-          const page = await browser.list({ category, limit: 200, ...(cursor ? { cursor } : {}) });
+          const page = await browser.list({ type, limit: 200, ...(cursor ? { cursor } : {}) });
           for (const item of page.items) {
-            const view = await browser.get(item.session_id, category);
-            if (agent_id !== target_agent_id && contains_agent_reference(view.metadata.origin, target_agent_id)) references.push({ kind: "session_origin", agent_id, category, session_id: item.session_id });
+            const view = await browser.get(item.id, type);
+            if (agent_id !== target_agent_id && view.metadata.parent?.agent_id === target_agent_id) references.push({ kind: "session_parent", agent_id, type, session_id: item.id });
             const interactions = await view.interactions();
-            if (agent_id === target_agent_id && interactions.length) references.push({ kind: "pending_interaction", agent_id, category, session_id: item.session_id });
+            if (agent_id === target_agent_id && interactions.length) references.push({ kind: "pending_interaction", agent_id, type, session_id: item.id });
             // callback 在 User Message 中持久化；只检查未终态 Agent 聚合的路由引用。
             const checked_turns = new Map<string, boolean>();
             let before_sequence: number | undefined;
@@ -32,12 +32,12 @@ export async function read_session_agent_references(root_path: string, agent_ids
               for (const message of messages.items) {
                 if (message.role === "user" && agent_id === target_agent_id && message.turn_id) {
                   let delivered = checked_turns.get(message.turn_id);
-                  if (delivered === undefined) { delivered = await has_delivered_session_turn(path.join(root_path, "agents", agent_id), item.session_id, message.turn_id); checked_turns.set(message.turn_id, delivered); }
-                  if (!delivered) references.push({ kind: "unsettled_prompt", agent_id, category, session_id: item.session_id, turn_id: message.turn_id });
+                  if (delivered === undefined) { delivered = await has_delivered_session_turn(path.join(root_path, "agents", agent_id), item.id, message.turn_id); checked_turns.set(message.turn_id, delivered); }
+                  if (!delivered) references.push({ kind: "unsettled_prompt", agent_id, type, session_id: item.id, turn_id: message.turn_id });
                 }
                 if (message.role !== "agent" || message.state !== "streaming") continue;
-                if (agent_id === target_agent_id) references.push({ kind: "pending_execution", agent_id, category, session_id: item.session_id });
-                else if (contains_agent_reference(message, target_agent_id)) references.push({ kind: "pending_callback", agent_id, category, session_id: item.session_id });
+                if (agent_id === target_agent_id) references.push({ kind: "pending_execution", agent_id, type, session_id: item.id });
+                else if (contains_agent_reference(message, target_agent_id)) references.push({ kind: "pending_callback", agent_id, type, session_id: item.id });
               }
               before_sequence = messages.next_before_sequence;
             } while (before_sequence !== undefined);
@@ -57,8 +57,8 @@ export async function count_workspace_sessions(root_path: string, agent_ids: rea
   for (const agent_id of agent_ids) {
     const browser = new AgentSessionBrowser({ storage_root_path: path.join(root_path, "agents", agent_id), agent_id, immutable });
     try {
-      for (const archived of [false, true]) for (const category of await browser.categories(archived)) {
-        total += (await browser.list({ category, workspace_id, limit: 1 }, archived)).total;
+      for (const archived of [false, true]) for (const type of await browser.categories(archived)) {
+        total += (await browser.list({ type, workspace_id, limit: 1 }, archived)).total;
       }
     } finally { await browser.dispose(); }
   }

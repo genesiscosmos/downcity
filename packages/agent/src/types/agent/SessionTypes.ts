@@ -6,13 +6,8 @@
  * - session actor 方法接口拆到 `SessionActor.ts`。
  */
 
-import type { ModelClient } from "@downcity/type";
-import type { SessionApprovalMode } from "@downcity/type";
-import type { SessionOrigin } from "@downcity/type";
-import type {
-  SessionSystemBlock,
-  SessionSystemBlockSource,
-} from "@downcity/type/session";
+import type { ModelClient, SessionApprovalMode, SessionDescriptor } from "@downcity/type";
+import type { SessionSystemBlock, SessionSystemBlockSource } from "@downcity/type/session";
 
 /**
  * 新建 Session 的输入参数。
@@ -20,14 +15,10 @@ import type {
  * Session ID 由 AgentSessions 在创建时生成，调用方只能在恢复时通过
  * `sessions.get(session_id)` 指定已有 ID。
  */
-export interface AgentCreateSessionInput {
-  /**
-   * 当前 Session 的创建来源。
-   *
-   * 省略时使用默认工作会话（`work` 分类、`work` 角色）；调用方也可以声明
-   * 自己的角色，但必须同时给出所在分类。
-   */
-  readonly origin?: SessionOrigin;
+export interface AgentCreateSessionInput extends Partial<SessionDescriptor> {
+  /** 可选的用户可见标题，与会话目录记录在同一创建事务中保存。 */
+  readonly title?: string;
+
 }
 
 /**
@@ -35,13 +26,13 @@ export interface AgentCreateSessionInput {
  */
 export interface AgentListSessionsInput {
   /** 要查询的来源分类；省略时查询 `work` 分类。 */
-  category?: string;
+  type?: string;
   /**
    * 分类内按角色过滤；省略时返回该分类的全部会话。
    *
    * 用于区分同一分类下的不同角色，例如在 `chat` 分类里只看 Agent 主会话。
    */
-  origin_type?: string;
+  kind?: string;
   /**
    * 只返回绑定到指定 Workspace 的 Session。
    *
@@ -153,8 +144,8 @@ export interface AgentSessionSecurityStatus {
 
 /** Session 当前运行状态。 */
 export type AgentSessionStatus = import("@downcity/type").SessionRuntimeSnapshot & {
-  /** 当前状态所属 Session 标识。 */
-  session_id: string;
+  /** 当前 Session 的稳定标识。 */
+  id: string;
   /** 当前 Turn 的普通输入占用对象，空闲时为 null。 */
   occupied_by?: import("../sdk/SessionPromptActor.js").SessionPromptActor | null;
   /** 当前 Session 的安全状态。 */
@@ -238,10 +229,8 @@ export type AgentSessionSystemBlock = SessionSystemBlock;
  * 当前 session 的稳定上下文信息。
  */
 export interface AgentSessionSystemSessionInfo {
-  /** 当前 session 所属 agent_id。 */
-  agent_id: string;
   /** 当前 session 唯一标识。 */
-  session_id: string;
+  id: string;
   /** 当前 agent 绑定的项目根目录。 */
   project_root: string;
   /**
@@ -284,11 +273,9 @@ export interface AgentSessionSystemSnapshot {
 /**
  * Session 摘要。
  */
-export interface AgentSessionSummary {
-  /** 当前 session 所属 agent_id。 */
-  agent_id: string;
+export interface AgentSessionSummary extends SessionDescriptor {
   /** 当前 session 唯一标识。 */
-  session_id: string;
+  id: string;
   /**
    * 当前 session 可读标题。
    *
@@ -314,8 +301,7 @@ export interface AgentSessionSummary {
   message_count: number;
   /** 当前 session 绑定模型的可读标签。 */
   model_label?: string;
-  /** 当前 Session 的创建来源。 */
-  origin: SessionOrigin;
+
   /** 当前 Session 绑定的 Workspace ID；未绑定时为空。 */
   workspace_id?: string;
   /** 当前 session 是否处于执行中。 */
@@ -395,15 +381,17 @@ export interface AgentArchiveSessionInput {
    */
   id: string;
   /** Session 所在的来源分类；省略时使用 `work`。 */
-  category?: string;
+  type?: string;
 }
 
 /**
  * 列出已归档 session 的输入参数。
  */
 export interface AgentArchiveSessionsInput {
+  /** 按创建入口或工作用途过滤；游标与该条件绑定。 */
+  kind?: string;
   /** 要查询的来源分类；省略时查询 `work` 分类。 */
-  category?: string;
+  type?: string;
   /**
    * 只返回绑定到指定 Workspace 的归档 Session。
    *

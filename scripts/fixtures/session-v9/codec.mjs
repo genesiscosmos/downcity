@@ -7,8 +7,8 @@
 
 import { validate_session_power_content } from "../session-v11/view-validator.mjs";
 import { decode_session_inbox_part } from "../session-v11/input-codec.mjs";
-import { validate_session_stable_prefix } from "../../../packages/agent/src/session/storage/SessionStablePrefix.ts";
-import { session_prompt_actor_schema } from "../../../packages/agent/src/types/sdk/SessionPromptActor.ts";
+import { validate_session_stable_prefix } from "../session-v12/stable-prefix.mjs";
+import { session_prompt_actor_schema } from "../session-v12/prompt-actor.mjs";
              
              
             

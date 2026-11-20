@@ -7,13 +7,12 @@
  * - Composer 仍然是 Session 级能力，不向 Agent 的执行策略层泄漏。
  */
 
-import type { ModelClient, AgentTool as Tool, ToolHookSet, WorkspaceRuntime } from "@downcity/type";
+import type { ModelClient, AgentTool as Tool, ToolHookSet, WorkspaceRuntime, SessionDescriptor } from "@downcity/type";
 import type { SessionChildWork } from "./SessionChildWork.js";
 import type { SessionCompletionPort } from "@/types/agent/SessionCompletion.js";
 import type { AgentSession } from "@/types/agent/SessionActor.js";
 import type { SessionPort } from "@/types/session/SessionPort.js";
 import type { AgentSessionSystemBlock } from "@/types/agent/SessionTypes.js";
-import type { SessionOrigin } from "@downcity/type";
 import type { SessionComposer } from "@/types/session/SessionComposer.js";
 import type { Logger } from "@/utils/logger/Logger.js";
 import type { SessionStorage } from "@/types/store/SessionStorage.js";
@@ -58,11 +57,11 @@ export interface AgentManagedSession extends AgentSession {
 /**
  * 本地 Session 构造参数。
  */
-export interface SessionOptions {
+export interface SessionOptions extends SessionDescriptor {
   /** 在任何输入初始化 await 前同步取得租约，完整 Turn 结算后释放；读取不调用。 */
   acquire_execution?: () => () => void;
   /** 当前 Agent 已授权会话的只读访问；包含归档，不恢复执行器。 */
-  read_result_session?: (session_id: string, category: string) => Promise<import("@/types/store/SessionReadView.js").SessionReadView>;
+  read_result_session?: (session_id: string, type: string) => Promise<import("@/types/store/SessionReadView.js").SessionReadView>;
   /** 专用配置存活校验；存在时禁止修改模型、Workspace、Prompt Powers 和分叉执行。 */
   assert_execution_profile?: () => void;
   /** Agent 的完成事件写前日志；在 canonical Turn 终态之前必须提交成功。 */
@@ -90,9 +89,6 @@ export interface SessionOptions {
 
   /** 没有 Workspace 时用于 system 快照与项目根展示的回退路径。 */
   workspace_path: string;
-
-  /** 当前 Session 的创建来源与物理存储分区。 */
-  origin: SessionOrigin;
 
   /** 当前 Session 独享的领域持久化视图。 */
   store: SessionStorage;
@@ -147,7 +143,6 @@ export interface SessionOptions {
 
   /** 在每个 Step 检查点读取当前生效的扩展处理器集合。 */
   get_hooks: () => ToolHookSet;
-
 
   /** 读取 Agent 当前持有的运行时模型实例。 */
   get_agent_model: () => ModelClient | undefined;

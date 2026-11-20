@@ -14,8 +14,11 @@ export async function list_control_session_summaries(
   sessions: AgentSessions<AgentSession>,
   limit: number,
 ): Promise<ControlSessionSummary[]> {
-  return (await sessions.list({ limit })).items.map((session) => ({
-    session_id: session.session_id,
+  return (await sessions.list({ limit, type: "work", kind: "work" })).items.map((session) => ({
+    id: session.id,
+    type: session.type,
+    kind: session.kind,
+    ...(session.parent ? { parent: session.parent } : {}),
     message_count: session.message_count,
     ...(typeof session.updated_at === "number"
       ? { updated_at: session.updated_at }

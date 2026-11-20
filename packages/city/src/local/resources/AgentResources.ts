@@ -47,9 +47,10 @@ export class AgentResources {
       if (references.length) throw new ResourceError("dependency_conflict", "Agent ID has unresolved references", 4, false, { references });
       const model_id = optional_model(input.model);
       const definition_id = optional_text(input.definition_id);
+      const reasoning_effort = optional_text(input.reasoning_effort);
       if (definition_id && !this.dependencies.extensions?.catalog.agents.has(definition_id)) throw new ResourceError("definition_unavailable", "The selected Agent definition is unavailable", 2);
       await this.dependencies.host?.resolve_model(model_id);
-      const config = this.dependencies.agents.create({ agent_id, name: input.name as string, description: optional_text(input.description) ?? "", instruction: optional_text(input.instruction) ?? "", ...((model_id || definition_id) ? { execution: { ...(model_id ? { model_id } : {}), ...(definition_id ? { definition_id } : {}) } } : {}) });
+      const config = this.dependencies.agents.create({ agent_id, name: input.name as string, description: optional_text(input.description) ?? "", instruction: optional_text(input.instruction) ?? "", ...((model_id || definition_id || reasoning_effort) ? { execution: { ...(model_id ? { model_id } : {}), ...(definition_id ? { definition_id } : {}), ...(reasoning_effort ? { reasoning_effort } : {}) } } : {}) });
       try {
         if (this.dependencies.host) this.dependencies.host.city.agents.add(await this.dependencies.host.create_agent(config));
       } catch (error) { this.application_failed(config, error); }

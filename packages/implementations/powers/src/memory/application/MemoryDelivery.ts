@@ -7,8 +7,8 @@ import { MemoryDeliveryStore } from "../storage/MemoryDeliveryStore.js";
 
 /** 仅由原始调用身份形成接收方；被读取的源 Session 不参与路由。 */
 export function memory_result_recipient(context: PowerContext): MemoryResultRecipient | null {
-  if (!context.session || !context.turn || context.session.origin.type === "memory") return null;
-  return { agent_id: context.agent.id, category: context.session.origin.category,
+  if (!context.session || !context.turn || context.session.kind === "memory") return null;
+  return { agent_id: context.agent.id, type: context.session.type,
     session_id: context.session.id, caller_turn_id: context.turn.id };
 }
 

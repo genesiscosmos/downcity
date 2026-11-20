@@ -9,7 +9,7 @@ import path from "node:path";
 import { randomUUID as random_uuid } from "node:crypto";
 import { isDeepStrictEqual as is_deep_strict_equal } from "node:util";
 import type { SessionAgentMessage, SessionMessage, SessionUserMessage } from "@downcity/type";
-import { restore_session_origin } from "@downcity/type";
+import { normalize_session_descriptor } from "@downcity/type";
 import type { SessionStorage, SessionMessageCreateInput, SessionMessageUpdate, SessionDerivedStore, SessionMessageStorageStats } from "@/types/store/SessionStorage.js";
 import type { SessionHistoryMeta } from "@/types/store/SessionHistoryMeta.js";
 import type { AgentSessionRecord, AgentSessionConfigurationRow } from "@/types/store/AgentSessionDatabase.js";
@@ -21,11 +21,27 @@ import type { AgentSessionConfigurationUpdate } from "@/types/store/AgentSession
 import { LocalSessionAttachmentStore } from "../LocalSessionAttachmentStore.js";
 import { decode_model_binding } from "../ModelBindingCodec.js";
 import { resolve_system_timezone } from "../Metadata.js";
+import { decode_session_record } from "./AgentSessionRelations.js";
 
 /** 不拥有数据库连接的 Session 范围视图。 */
 export class AgentSessionStorage implements SessionStorage {
   readonly session_id: string;
-  readonly origin: AgentSessionStorageOptions["origin"];
+  /** 会话的顶层类型。 */
+  readonly type!: import("@downcity/type").SessionType;
+  /** 创建入口或工作用途。 */
+  readonly kind!: string;
+  /** 已有创建事实中的父执行引用。 */
+  readonly parent?: import("@downcity/type").SessionParent;
+  /** 已有创建事实中的固定派生深度。 */
+  readonly delegation_depth?: number;
+  /** 已有父会话类型。 */
+  readonly parent_session_type?: import("@downcity/type").SessionType;
+  /** 已有派生事实中的根 Chat 引用。 */
+  readonly root_chat_session_id?: string;
+  /** 群组成员所属的群组标识。 */
+  readonly group_id?: string;
+  /** 所属群组对话标识。 */
+  readonly group_session_id?: string;
   private record?: AgentSessionRecord;
   private pending?: Promise<void>;
   private disposed = false;
@@ -34,10 +50,9 @@ export class AgentSessionStorage implements SessionStorage {
 
   constructor(private readonly options: AgentSessionStorageOptions) {
     this.session_id = options.session_id;
-    this.origin = structuredClone(options.origin);
+    Object.assign(this, normalize_session_descriptor(options));
     this.record = options.record;
   }
-
 
   /** 附件路径只含不可变记录身份，不随归档变化。 */
   get attachments(): LocalSessionAttachmentStore {
@@ -54,18 +69,18 @@ export class AgentSessionStorage implements SessionStorage {
   private async initialize_record(): Promise<void> {
     if (!this.record) {
       let found: AgentSessionRecord | null = null;
-      try { found = await this.options.lease.read({ command: "find", address: { archived: false, category: this.origin.category, session_id: this.session_id } }); }
+      try { found = await this.options.lease.read({ command: "find", address: { archived: false, type: this.type, session_id: this.session_id } }); }
       catch (error) { if (!(error instanceof Error) || error.message !== "session_storage_not_found") throw error; }
       if (!found) {
         await this.options.lease.write("collection", { command: "create", operation_id: this.create_operation_id, input: {
-          session_id: this.session_id, origin: this.origin,
-          workspace_id: this.options.workspace_id, timezone: resolve_system_timezone(), created_at: this.created_at,
+          session_id: this.session_id, ...normalize_session_descriptor(this),
+          title: this.options.title, workspace_id: this.options.workspace_id, timezone: resolve_system_timezone(), created_at: this.created_at,
         } });
         found = await this.options.lease.read({ command: "record", session_id: this.session_id });
       }
       this.record = found!;
     }
-    if (this.record.session_id !== this.session_id || !is_deep_strict_equal(JSON.parse(this.record.origin), this.origin)) {
+    if (this.record.session_id !== this.session_id || !is_deep_strict_equal(decode_session_record(this.record), normalize_session_descriptor(this))) {
       throw new Error("session_storage_identity_conflict");
     }
   }
@@ -75,7 +90,7 @@ export class AgentSessionStorage implements SessionStorage {
     const row = await this.options.lease.read<AgentSessionRecord>({ command: "record", session_id: this.session_id });
     const config = await this.configuration();
     return { v: 2, session_id: row.session_id, agent_id: this.options.agent_id,
-      origin: restore_session_origin(JSON.parse(row.origin), row.category), timezone: row.timezone,
+      ...normalize_session_descriptor(decode_session_record(row)), timezone: row.timezone,
       created_at: row.created_at, updated_at: row.updated_at, message_count: row.message_count,
       ...(row.workspace_id ? { workspace_id: row.workspace_id } : {}), ...(row.title ? { title: row.title } : {}),
       ...(row.model_label ? { model_label: row.model_label } : {}), ...(row.preview_text ? { preview_text: row.preview_text } : {}),
@@ -86,7 +101,7 @@ export class AgentSessionStorage implements SessionStorage {
 
   async write_metadata(metadata: SessionHistoryMeta): Promise<void> {
     if (metadata.session_id !== this.session_id || metadata.agent_id !== this.options.agent_id
-      || !is_deep_strict_equal(metadata.origin, this.origin)) throw new Error("session_storage_identity_conflict");
+      || !is_deep_strict_equal(normalize_session_descriptor(metadata), normalize_session_descriptor(this))) throw new Error("session_storage_identity_conflict");
     const current = await this.read_metadata();
     if (metadata.workspace_id !== current.workspace_id) throw new Error("session_workspace_immutable");
     await this.configure({ title: metadata.title ?? null,

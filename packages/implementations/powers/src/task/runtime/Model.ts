@@ -68,14 +68,14 @@ function normalize_task_delivery_session(
   const agent_id = String(value.agent_id ?? "").trim();
   const workspace_id = String(value.workspace_id ?? "").trim();
   const session_id = String(value.session_id ?? "").trim();
-  const category = String(value.category ?? "").trim();
-  if (!agent_id || !session_id || !category) {
+  const type = String(value.type ?? "").trim();
+  if (!agent_id || !session_id || (type !== "chat" && type !== "work")) {
     return {
       ok: false,
-      error: "Invalid delivery_session: agent_id, session_id and category are required",
+      error: "Invalid delivery_session: agent_id and session_id are required; type must be chat or work",
     };
   }
-  return { ok: true, value: { agent_id, workspace_id: workspace_id || null, session_id, category } };
+  return { ok: true, value: { agent_id, workspace_id: workspace_id || null, session_id, type } };
 }
 
 /** 解析布尔型字段，兼容字符串写法以容忍手写文件。 */

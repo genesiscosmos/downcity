@@ -7,17 +7,7 @@
  * - 不含 `tool_call_id`：一个 Step 可以发起多次调用，调用身份属于 `PowerCall`。
  */
 
-import type { PowerJsonValue } from "./Json.js";
-
-/** 当前 Session 来源；与 SessionOrigin 同形。 */
-export interface StepSnapshotOrigin {
-  /** 顶层分类，同时也是持久化分区；取值只有 chat / work。 */
-  readonly category: "chat" | "work";
-  /** 具体角色。 */
-  readonly type: string;
-  /** 来源协议允许携带的其他 JSON 字段。 */
-  readonly [key: string]: PowerJsonValue;
-}
+import { session_call_context, read_session_call_context, type SessionDescriptor, type SessionCallContext } from "@downcity/type";
 
 /** 一步内冻结的事实快照。 */
 export class StepSnapshot {
@@ -25,7 +15,21 @@ export class StepSnapshot {
   readonly session_id?: string;
 
   /** 当前 Session 来源。 */
-  readonly session_origin?: StepSnapshotOrigin;
+  readonly session_type?: SessionDescriptor["type"];
+  /** 当前 Session 的用途。 */
+  readonly session_kind?: string;
+  /** 当前 Session 的父创建引用。 */
+  readonly session_parent?: SessionDescriptor["parent"];
+  /** 已有派生深度，完整保留调用事实。 */
+  readonly session_delegation_depth?: number;
+  /** 父 Session 的固定类型。 */
+  readonly session_parent_type?: SessionDescriptor["type"];
+  /** 根对话的稳定引用。 */
+  readonly session_root_chat_id?: string;
+  /** 群组绑定的稳定引用。 */
+  readonly session_group_id?: string;
+  /** 群组对话的稳定引用。 */
+  readonly session_group_session_id?: string;
 
   /** 当前 Turn 标识。 */
   readonly turn_id?: string;
@@ -39,11 +43,9 @@ export class StepSnapshot {
   /** 当前 Step 提交的 Agent 指令快照。 */
   readonly agent_systems: readonly string[];
 
-  constructor(input: {
+  constructor(input: Partial<SessionCallContext> & {
     /** 当前 Session 标识。 */
     readonly session_id?: string;
-    /** 当前 Session 来源。 */
-    readonly session_origin?: StepSnapshotOrigin;
     /** 当前 Turn 标识。 */
     readonly turn_id?: string;
     /** 当前 Workspace 根目录；无项目会话时为空。 */
@@ -57,7 +59,11 @@ export class StepSnapshot {
     this.workspace_env = Object.freeze({ ...input.workspace_env });
     this.agent_systems = Object.freeze([...input.agent_systems]);
     if (input.session_id) this.session_id = input.session_id;
-    if (input.session_origin) this.session_origin = Object.freeze({ ...input.session_origin });
+    if (input.session_type || input.session_kind) {
+      Object.assign(this, session_call_context(read_session_call_context({
+        ...input, session_type: input.session_type ?? "work", session_kind: input.session_kind ?? "work",
+      })));
+    }
     if (input.turn_id) this.turn_id = input.turn_id;
     Object.freeze(this);
   }

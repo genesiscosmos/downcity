@@ -8,7 +8,7 @@ import type { NotificationInteractionItem } from "./types/NotificationRenderer.j
 
 /** 目标边界只接受当前明确协议，不将任意旧路由解释成 Session 身份。 */
 export const notification_target_schema = z.discriminatedUnion("kind", [
-  z.object({ kind: z.literal("agent_session"), agent_id: z.string().min(1), category: z.enum(["chat", "work"]), session_id: z.string().uuid(), origin_type: z.string().min(1) }).strict(),
+  z.object({ kind: z.literal("agent_session"), agent_id: z.string().min(1), type: z.enum(["chat", "work"]), session_id: z.string().uuid(), session_kind: z.string().min(1) }).strict(),
   z.object({ kind: z.literal("group_session"), group_id: z.string().min(1), session_id: z.string().min(1) }).strict(),
   z.object({ kind: z.literal("power"), power_id: z.string().min(1), route: z.record(z.string(), z.json()) }).strict(),
 ]);
@@ -33,6 +33,6 @@ export function notification_source_key(target: PowerNotificationTarget): string
 /** 原始交互引用是跨消费者去重的唯一依据。 */
 export function notification_interaction_key(item: NotificationInteractionItem): string {
   const reference = item.interaction.reference;
-  return JSON.stringify([item.agent_id, reference.session_category, reference.session_id, reference.turn_id, reference.interaction_id]);
+  return JSON.stringify([item.agent_id, reference.session_type, reference.session_id, reference.turn_id, reference.interaction_id]);
 }
 

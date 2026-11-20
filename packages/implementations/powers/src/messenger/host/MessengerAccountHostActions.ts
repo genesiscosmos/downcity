@@ -13,7 +13,7 @@ import {
   to_messenger_account_view,
   update_messenger_account,
 } from "@/messenger/accounts/MessengerAccountConfig.js";
-import { SESSION_ORIGIN_CATEGORY_CHAT, SESSION_ORIGIN_TYPE_CHANNEL } from "@downcity/type";
+import { SESSION_KIND_CHANNEL, SESSION_TYPE_CHAT } from "@downcity/type";
 import type { MessengerRuntime } from "@/messenger/runtime/MessengerRuntime.js";
 import type {
   MessengerAccountDetailSnapshot,
@@ -196,7 +196,7 @@ export function register_messenger_account_host_actions(
       const next_session = route_changed
         ? await context.system.create_agent_session({
             agent_id,
-            origin: conversation_origin(account.provider, current),
+            type: SESSION_TYPE_CHAT, kind: SESSION_KIND_CHANNEL,
           })
         : undefined;
       return as_json(resolve_runtime().store.update_conversation({
@@ -218,7 +218,7 @@ export function register_messenger_account_host_actions(
       if (!account) throw new Error(`Messenger Account not found: ${current.account_id}`);
       const session = await context.system.create_agent_session({
         agent_id: current.agent_id,
-        origin: conversation_origin(account.provider, current),
+        type: SESSION_TYPE_CHAT, kind: SESSION_KIND_CHANNEL,
       });
       return as_json(resolve_runtime().store.update_conversation({
         conversation_id,
@@ -373,21 +373,4 @@ function read_optional_scope(
   value: PowerJsonValue | undefined,
 ): "direct" | "group" | "all" | undefined {
   return value === undefined ? undefined : read_scope(value);
-}
-
-/** 构建新 Session 使用的 Messenger 来源元数据。 */
-function conversation_origin(
-  provider: import("@/messenger/types/MessengerAccount.js").MessengerProvider,
-  conversation: import("@/messenger/types/MessengerReliability.js").MessengerConversationRecord,
-) {
-  return {
-    category: SESSION_ORIGIN_CATEGORY_CHAT,
-    type: SESSION_ORIGIN_TYPE_CHANNEL,
-    account_id: conversation.account_id,
-    channel: provider,
-    chat_id: conversation.external_chat_id,
-    chat_type: conversation.chat_type,
-    ...(conversation.thread_id ? { thread_id: conversation.thread_id } : {}),
-    ...(conversation.title ? { chat_title: conversation.title } : {}),
-  };
 }

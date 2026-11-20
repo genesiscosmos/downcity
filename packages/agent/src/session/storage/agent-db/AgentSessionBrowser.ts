@@ -6,7 +6,7 @@
  */
 import fs from "node:fs/promises";
 import path from "node:path";
-import { normalize_session_origin_category } from "@downcity/type";
+import { normalize_session_type } from "@downcity/type";
 import type { SessionMessage } from "@downcity/type";
 import type { AgentSessionBrowserOptions, AgentArchivedSessionAddress } from "@/types/store/AgentSessionBrowser.js";
 import type { AgentSessionRuntimeLease } from "@/types/store/AgentSessionRuntime.js";
@@ -50,11 +50,11 @@ export class AgentSessionBrowser {
   }
 
   /** 活动地址只查活动记录，归档必须使用 get_archived 的稳定地址。 */
-  async get(session_id: string, category = "work"): Promise<SessionReadView> {
+  async get(session_id: string, type = "work"): Promise<SessionReadView> {
     if (!session_id || session_id.trim() !== session_id) throw new Error("session_validation_error");
     const lease = await this.connection();
     const record = await lease.read<AgentSessionRecord | null>({ command: "find", address: {
-      archived: false, category: normalize_session_origin_category(category), session_id,
+      archived: false, type: normalize_session_type(type), session_id,
     } });
     if (!record) throw new Error("session_not_found");
     return agent_session_read_view(lease, this.options.agent_id, record);
@@ -66,7 +66,7 @@ export class AgentSessionBrowser {
     const record = await lease.read<AgentSessionRecord | null>({ command: "find", address: { archived: true, session_id: address.session_id } });
     if (!record) throw new Error("session_not_found");
     if ((address.session_id !== undefined && address.session_id !== record.session_id)
-      || (address.category !== undefined && normalize_session_origin_category(address.category) !== record.category)) {
+      || (address.type !== undefined && normalize_session_type(address.type) !== record.type)) {
       throw new Error("session_address_conflict");
     }
     return agent_session_read_view(lease, this.options.agent_id, record);
@@ -77,15 +77,15 @@ export class AgentSessionBrowser {
     return await (await this.connection()).read({ command: "configuration", session_id });
   }
 
-  async model_binding(session_id: string, category: string) {
-    const view = await this.get(session_id, category);
+  async model_binding(session_id: string, type: string) {
+    const view = await this.get(session_id, type);
     const config = await this.configuration(view.session_id);
     return config.model_binding ? decode_model_binding(config.model_binding) : undefined;
   }
 
   /** canonical 接收事实在同一个精确活动记录中读取，不恢复执行。 */
-  async receipt(session_id: string, category: string, request_id: string) {
-    const view = await this.get(session_id, category);
+  async receipt(session_id: string, type: string, request_id: string) {
+    const view = await this.get(session_id, type);
     const identity = resolve_prompt_request_identity(session_id, request_id);
     if (!identity) throw new Error("session_validation_error");
     const message = await (await this.connection()).read<SessionMessage | null>({ command: "message", session_id: view.session_id, id: identity.message_id });
@@ -103,12 +103,12 @@ export class AgentSessionBrowser {
   /** 实时 keyset 分页：精确 total 与页处于同一 Worker 短事务，不保存全量快照。 */
   async list(input: AgentListSessionsInput = {}, archived = false): Promise<AgentSessionSummaryPage> {
     const generation = this.generation;
-    const category = normalize_session_origin_category(input.category ?? "work");
+    const type = normalize_session_type(input.type ?? "work");
     const limit = input.limit ?? 30;
     if (!Number.isSafeInteger(limit) || limit < 1 || limit > 200) throw new Error("session_list_limit_invalid");
     // 游标引用已有数据库世代，只有无游标首页可按未初始化集合处理。
     const lease = input.cursor === undefined ? await this.collection_connection() : await this.connection();
-    const page: AgentSessionRecordPage = lease ? await lease.read({ command: "list", input: { ...input, category, archived } })
+    const page: AgentSessionRecordPage = lease ? await lease.read({ command: "list", input: { ...input, type, archived } })
       : { items: [], total: 0, has_more: false };
     this.assert_available();
     if (generation !== this.generation) throw new Error("session_address_changed");

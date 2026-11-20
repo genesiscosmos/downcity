@@ -13,24 +13,8 @@ import { assert_tool_terminal } from "@/model/results/ResultReference.js";
 import { resolve_stable_part_sequence } from "./SessionStablePrefix.js";
 import { create_session_part_mutation } from "@/session/messages/SessionMutationFactory.js";
 import { resolve_session_message_state } from "@/session/messages/SessionMessageState.js";
-import {
-  is_same_agent_part,
-  next_agent_part_sequence,
-  resolve_changed_agent_parts,
-} from "@/session/messages/SessionAgentParts.js";
-import type {
-  SessionAgentErrorPart,
-  SessionAgentInteraction,
-  SessionAgentMessage,
-  SessionAgentMessagePart,
-  SessionAgentToolPart,
-  SessionMessage,
-} from "@downcity/type";
-import type {
-  SessionInteractionCloseInput,
-  SessionInteractionRequest,
-  SessionInteractionResponse,
-} from "@downcity/type";
+import { is_same_agent_part, next_agent_part_sequence, resolve_changed_agent_parts } from "@/session/messages/SessionAgentParts.js";
+import type { SessionAgentErrorPart, SessionAgentInteraction, SessionAgentMessage, SessionAgentMessagePart, SessionAgentToolPart, SessionMessage, SessionInteractionCloseInput, SessionInteractionRequest, SessionInteractionResponse } from "@downcity/type";
 import type { SessionOpenMessageToolLocation } from "@/types/session/SessionTool.js";
 import type { SessionAgentMessageStateOptions } from "@/types/session/SessionAgentMessageState.js";
 
@@ -235,7 +219,7 @@ export class SessionAgentMessageState {
   }
 
   /** 原位恢复已结束消息；提交前由原 revision 与本次 signal 再次校验所有权。 */
-  async resume(message_id: string, revision: number, error_part_id: string, assert_receivable: () => void): Promise<void> {
+  async resume(message_id: string, revision: number, error_part_id: string, assert_receivable: () => void, execution_id?: string): Promise<void> {
     await this.enqueue_write(message_id, async () => {
       const current = await this.options.store.read_message(message_id);
       if (!current || current.role !== "agent" || current.state !== "done"
@@ -245,7 +229,7 @@ export class SessionAgentMessageState {
       assert_receivable();
       this.options.cache.set_held(message_id);
       try {
-        await this.persist_snapshot(message_id, current.parts, { current_error: null, assert_receivable });
+        await this.persist_snapshot(message_id, current.parts, { current_error: null, assert_receivable, execution_id });
       } catch (error) {
         this.options.cache.release_held(message_id);
         throw error;
@@ -440,10 +424,10 @@ export class SessionAgentMessageState {
     return structuredClone(this.require_interaction(interaction_id).interaction);
   }
 
-  /** Build a first failure snapshot using the exact persisted message/category location. */
+  /** Build a first failure snapshot using the exact persisted message/type location. */
   private fail_tool_part(message: SessionAgentMessage, part: SessionAgentToolPart, error: string): SessionAgentToolPart {
     return fail_tool(part, { session_id: message.session_id, message_id: message.message_id,
-      message_sequence: message.sequence, part_id: part.part_id, category: this.options.store.origin.category }, error);
+      message_sequence: message.sequence, part_id: part.part_id, type: this.options.store.type }, error);
   }
 
   /** 原子保存完整 Message 快照；变更比较以数据库事实而非运行投影为准。 */
@@ -451,6 +435,8 @@ export class SessionAgentMessageState {
     message_id: string,
     parts: SessionAgentMessagePart[],
     options?: {
+      /** 恢复时更新 Writer 所属执行代次，其余写入保留原值。 */
+      execution_id?: string;
       /** 当前调用的错误；null 清除，省略保持原值。 */
       current_error?: SessionAgentErrorPart | null;
       /** 本次提交后是否仍由 writer 持有；收口时传 false。省略时读取当前持有关系。 */
@@ -474,6 +460,7 @@ export class SessionAgentMessageState {
     );
     const message: SessionAgentMessage = {
       ...persisted,
+      ...(options?.execution_id ? { execution_id: options.execution_id } : {}),
       ...(options?.current_error !== undefined ? { current_error: options.current_error ?? undefined } : {}),
       state: resolve_session_message_state(
         next_parts,
@@ -640,4 +627,3 @@ function create_terminal_error_part(
     recoverable: true,
   };
 }
-

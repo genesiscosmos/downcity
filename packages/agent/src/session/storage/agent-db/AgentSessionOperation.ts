@@ -3,7 +3,7 @@
  * 不重放事务；只有原写者已终止后才能把缺失 receipt 判为未提交。错误携带稳定
  * operation_id 供宿主定位，不含正文；相同 ID 的请求摘要不同则拒绝采信。
  */
-import { normalize_session_origin_category, normalize_session_origin } from "@downcity/type";
+import { normalize_session_type, normalize_session_descriptor } from "@downcity/type";
 import type { AgentSessionWriteCommand } from "@/types/store/AgentSessionWorker.js";
 import type { AgentSessionOperationReceipt } from "@/types/store/AgentSessionDatabase.js";
 import { storage_digest } from "./AgentSessionCursor.js";
@@ -23,10 +23,10 @@ export class AgentSessionCommitError extends Error {
 /** 与数据库实际 write() 输入保持同一确定性摘要规则。 */
 export function agent_session_operation_hash(operation: AgentSessionWriteCommand): string {
   switch (operation.command) {
-    case "archive_prepare": return storage_digest({ command: "archive_prepare", ...operation.input, category: normalize_session_origin_category(operation.input.category) });
-    case "ensure_creation": return storage_digest({ command: "ensure_creation", input: { ...operation.input, origin: normalize_session_origin(operation.input.origin) } });
+    case "archive_prepare": return storage_digest({ command: "archive_prepare", ...operation.input, type: normalize_session_type(operation.input.type) });
+    case "ensure_creation": return storage_digest({ command: "ensure_creation", input: { ...operation.input, ...normalize_session_descriptor(operation.input) } });
     case "ensure_main": return storage_digest({ command: "ensure_main", input: operation.input });
-    case "create": return storage_digest({ command: "create", input: { ...operation.input, origin: normalize_session_origin(operation.input.origin) } });
+    case "create": return storage_digest({ command: "create", input: { ...operation.input, ...normalize_session_descriptor(operation.input) } });
     case "archive": return storage_digest({ command: "archive", address: operation.address, archived_at: operation.archived_at });
     case "remove": return storage_digest({ command: "remove", address: operation.address });
     default: return storage_digest({ command: operation.command, ...operation.input });

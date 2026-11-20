@@ -9,7 +9,7 @@
  */
 
 import type { PowerContext, PowerSessionHandle, PowerStorage } from "@downcity/city/power";
-import { SESSION_ORIGIN_CATEGORY_WORK, SESSION_ORIGIN_TYPE_TASK } from "@downcity/type";
+import { SESSION_KIND_TASK, SESSION_TYPE_WORK } from "@downcity/type";
 import type { TaskSessionRuntimePort } from "@/task/types/TaskRunner.js";
 import type { TaskDeliverySession } from "@/task/types/Task.js";
 
@@ -28,8 +28,6 @@ export async function createTaskSessionRuntimePort(params: {
   runDirAbs: string;
   runSessionId: string;
   userSimulatorSessionId: string;
-  task_id: string;
-  execution_id: string;
   delivery_session?: TaskDeliverySession;
 }): Promise<TaskSessionRuntimePort> {
   const { context, runSessionId, userSimulatorSessionId } = params;
@@ -38,35 +36,23 @@ export async function createTaskSessionRuntimePort(params: {
     && params.delivery_session.workspace_id === (context.workspace?.id ?? null)
     ? {
         session_id: params.delivery_session.session_id,
-        category: params.delivery_session.category,
+        type: params.delivery_session.type,
       }
     : undefined;
   const task_session = await context.agent.sessions.create({
-    origin: {
-      category: SESSION_ORIGIN_CATEGORY_WORK,
-      type: SESSION_ORIGIN_TYPE_TASK,
-      task_id: params.task_id,
-      execution_id: params.execution_id,
-      role: "executor",
-      delegation_depth: 1,
-    },
+    type: SESSION_TYPE_WORK,
+    kind: SESSION_KIND_TASK,
     ...(inherit_model_from ? { inherit_model_from } : {}),
   });
   const user_simulator_session = await context.agent.sessions.create({
-    origin: {
-      category: SESSION_ORIGIN_CATEGORY_WORK,
-      type: SESSION_ORIGIN_TYPE_TASK,
-      task_id: params.task_id,
-      execution_id: params.execution_id,
-      role: "user_simulator",
-      // 评审器保留独立身份；与执行器一样，Task 来源禁止继续分派。
-      delegation_depth: 2,
-    },
+    type: SESSION_TYPE_WORK,
+    kind: SESSION_KIND_TASK,
+    // 独立评审会话仍使用 task 用途，执行器和评审器均禁止继续分派。
     ...(inherit_model_from ? { inherit_model_from } : {}),
   });
   const sessions_by_alias = new Map<string, PowerSessionHandle>([
-    [runSessionId, context.agent.sessions.runtime(task_session.id, SESSION_ORIGIN_CATEGORY_WORK)],
-    [userSimulatorSessionId, context.agent.sessions.runtime(user_simulator_session.id, SESSION_ORIGIN_CATEGORY_WORK)],
+    [runSessionId, context.agent.sessions.runtime(task_session.id, SESSION_TYPE_WORK)],
+    [userSimulatorSessionId, context.agent.sessions.runtime(user_simulator_session.id, SESSION_TYPE_WORK)],
   ]);
   return {
     get_session(session_id: string): PowerSessionHandle {

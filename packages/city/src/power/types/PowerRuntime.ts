@@ -55,7 +55,9 @@ export interface PowerSessionExecutionScope {
   /** Session 稳定标识。 */
   readonly session_id: string;
   /** Session 来源。 */
-  readonly origin: { readonly type: string; readonly [key: string]: PowerJsonValue };
+  readonly type: import("@downcity/type").SessionType;
+  /** 当前会话的业务用途。 */
+  readonly kind: string;
   /** Turn 稳定标识。 */
   readonly turn_id: string;
 }

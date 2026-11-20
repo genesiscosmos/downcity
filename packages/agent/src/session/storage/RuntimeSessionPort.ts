@@ -9,22 +9,19 @@
 import type { SessionPort } from "@/types/session/SessionPort.js";
 import type { AgentSessionPromptInput } from "@/types/sdk/AgentSessionPrompt.js";
 import type { AgentSessionStopResult } from "@/types/sdk/AgentSessionStop.js";
-import type {
-  SessionMutationSubscriber,
-  SessionMutationUnsubscribe,
-} from "@downcity/type";
+import type { SessionMutationSubscriber, SessionMutationUnsubscribe, SessionDescriptor } from "@downcity/type";
 import type { AgentSessionTurnHandle } from "@/types/sdk/AgentSessionTurn.js";
+import { normalize_session_descriptor } from "@downcity/type";
 
 /**
  * 构造 SDK SessionPort 的参数。
  */
-export interface CreateRuntimeSessionPortParams {
+export interface CreateRuntimeSessionPortParams extends SessionDescriptor {
   /**
    * 当前 session_id。
    */
   session_id: string;
-  /** 来源在 Session 创建时固定，保持真实投影。 */
-  origin: SessionPort["origin"];
+
   /** 从 Session 读取当前项目，不持有过期目录副本。 */
   get_workspace_id: () => string | undefined;
   /** 获取当前 Session 优先解析后的运行时模型实例。 */
@@ -70,8 +67,8 @@ export function create_runtime_session_port(
   params: CreateRuntimeSessionPortParams,
 ): SessionPort {
   return {
-    session_id: params.session_id,
-    origin: params.origin,
+    id: params.session_id,
+    ...normalize_session_descriptor(params),
     get workspace_id() { return params.get_workspace_id(); },
     get_model: () => params.get_model(),
     messages: async () => await params.messages(),

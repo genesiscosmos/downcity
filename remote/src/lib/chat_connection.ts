@@ -22,7 +22,7 @@ export function connect_remote_chat(session: RemoteAgentSession, agent: RemoteCi
     respond: async input => {
       const pending = await agent.interactions.list();
       const item = pending.find(item => item.reference.session_id === session.id
-        && item.reference.session_category === session.origin.category
+        && item.reference.session_type === session.type
         && item.reference.interaction_id === input.interaction_id);
       if (!item?.can_respond) throw new Error("This interaction is no longer awaiting a response.");
       const response = { reference: item.reference, response: input.response };

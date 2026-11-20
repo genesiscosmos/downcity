@@ -43,7 +43,7 @@ export class ChatSecurityController {
       const session = this.options.get_session();
       if (!session) return false;
       const status = await session.status();
-      if (status.session_id !== this.options.get_session_id()) return false;
+      if (status.id !== this.options.get_session_id()) return false;
       this.options.on_status({
         is_executing: status.state === "running",
         live_execution: status.live_execution,

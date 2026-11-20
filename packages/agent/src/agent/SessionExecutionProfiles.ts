@@ -2,13 +2,7 @@
  * 宿主执行配置注册表与精确恢复校验。
  * 注册项只由可信宿主传入，缺失配置、版本或模型均拒绝运行。
  */
-import type {
-  ResolvedSessionExecutionProfile,
-  SessionExecutionProfile,
-  SessionExecutionProfileContext,
-  SessionExecutionProfileReference,
-  SessionExecutionProfileSelection,
-} from "@/types/agent/SessionExecutionProfile.js";
+import type { ResolvedSessionExecutionProfile, SessionExecutionProfile, SessionExecutionProfileContext, SessionExecutionProfileReference, SessionExecutionProfileSelection } from "@/types/agent/SessionExecutionProfile.js";
 
 /** Agent 持有的可信配置注册表，不暴露为模型工具。 */
 export class SessionExecutionProfiles {
@@ -42,7 +36,8 @@ export class SessionExecutionProfiles {
   ): Promise<ResolvedSessionExecutionProfile> {
     const profile = this.profiles.get(this.key(selection.execution_profile_id, selection.execution_profile_version));
     if (!profile) throw new Error(`execution_profile_unavailable: ${selection.execution_profile_id}@${selection.execution_profile_version}`);
-    const resources = await profile.resolve({ ...context, model_id: persisted?.model_id ?? selection.model_id });
+    const creation_key = persisted ? persisted.creation_key : selection.creation_key;
+    const resources = await profile.resolve({ ...context, creation_key, model_id: persisted?.model_id ?? selection.model_id });
     const model_id = resources.model?.id?.trim();
     if (!model_id) throw new Error("execution_profile_model_missing: actual model identity required");
     if (persisted && model_id !== persisted.model_id) throw new Error("execution_profile_model_changed: restore requires the persisted model");
@@ -54,7 +49,7 @@ export class SessionExecutionProfiles {
         id: profile.id,
         version: profile.version,
         model_id,
-        ...(selection.creation_key ? { creation_key: selection.creation_key } : {}),
+        ...(creation_key ? { creation_key } : {}),
       },
       resources,
     };

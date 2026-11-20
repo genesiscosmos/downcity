@@ -24,6 +24,8 @@ export function register_memory_session_profile(
   return host.system.register_execution_profile({
     id: "memory", version: MEMORY_SESSION_PROFILE_VERSION,
     resolve: async (context) => {
+      const job_id = /^memory:([a-f0-9]{64}):[1-9]\d*$/u.exec(context.creation_key ?? "")?.[1];
+      if (!job_id) throw new Error("Memory Session requires a valid Job creation key");
       const model = context.model_id
         ? context.default_model?.id === context.model_id
           ? context.default_model
@@ -33,7 +35,7 @@ export function register_memory_session_profile(
       if (context.model_id && model.id !== context.model_id) throw new Error("Memory Session model identity changed");
       return {
         instruction: [MEMORY_INSTRUCTION], composer: new MemoryComposer(), model,
-        tools: create_memory_session_tools(options), hooks: { guard: {}, pipeline: {}, effect: {} },
+        tools: create_memory_session_tools(options, job_id), hooks: { guard: {}, pipeline: {}, effect: {} },
       };
     },
   });

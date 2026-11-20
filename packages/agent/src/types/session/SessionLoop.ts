@@ -6,24 +6,17 @@
 
 import type { SessionChildWork } from "./SessionChildWork.js";
 import type { SessionCompletionPort } from "@/types/agent/SessionCompletion.js";
-import type { ToolCallContext, ToolHookSet } from "@downcity/type";
+import type { ToolCallContext, ToolHookSet, SessionInteractionLifecycle, SessionInteractionPort, SessionDescriptor, SessionCallContext } from "@downcity/type";
 import type { SessionEventHub } from "@/session/messages/SessionEventHub.js";
 import type { SessionMessages } from "@/session/messages/SessionMessages.js";
 import type { SessionState } from "@/session/loop/SessionState.js";
 import type { AgentSessionTurnResult } from "@/types/sdk/AgentSessionTurn.js";
-import type {
-  SessionInteractionLifecycle,
-  SessionInteractionPort,
-} from "@downcity/type";
-import type {
-  SessionContextAdvanceTrigger,
-} from "@/types/session/SessionComposer.js";
+import type { SessionContextAdvanceTrigger } from "@/types/session/SessionComposer.js";
 import type { StepInput } from "@/session/input/StepInput.js";
 import type { SessionExecutorPort } from "@/session/runner/SessionExecutor.js";
 import type { SessionQueue } from "@/session/loop/SessionQueue.js";
 import type { Logger } from "@/utils/logger/Logger.js";
 import type { SessionTurnContext } from "@/types/turn/SessionTurnContext.js";
-import type { SessionOrigin } from "@downcity/type";
 
 /** Promise 延迟控制器。 */
 export interface SessionDeferred<T> {
@@ -47,6 +40,8 @@ export interface PromptRequestIdentity {
 
 /** 当前活跃 Turn 的内存状态。 */
 export interface ActiveSessionTurnState {
+  /** 本次实际执行身份；独立于逻辑 Turn，重试创建新值。 */
+  execution_id: string;
   /** 当前 Turn 的稳定标识。 */
   turn_id: string;
   /** Retry 消息的接收水位；同 Turn 的旧 Stop 不能控制恢复后的新调用。 */
@@ -79,7 +74,7 @@ export interface SessionPromptLookupOptions {
 }
 
 /** SessionLoop 构造参数。 */
-export interface SessionLoopOptions {
+export interface SessionLoopOptions extends SessionCallContext {
   /** Turn 实际执行（包括恢复）的宿主租约，覆盖完整收尾。 */
   acquire_execution?: () => () => void;
   /** Turn 终态前的可靠写前日志；省略时只提供普通 Session Hook。 */
@@ -88,8 +83,7 @@ export interface SessionLoopOptions {
   child_work?: SessionChildWork;
   /** 当前 Session 的稳定标识。 */
   session_id: string;
-  /** 当前 Session 的完整来源元数据。 */
-  session_origin: SessionOrigin;
+
   /**
    * 当前 Session 的目录解析器。
    *

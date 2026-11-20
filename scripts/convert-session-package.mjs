@@ -1,6 +1,6 @@
 /**
  * 显式离线包转换入口；不读取运行数据根。旧包由隔离历史协议验证，
- * 首次披露证据不足时阻断；输出新路径 format3/schema12，保留UUID及固定视图。
+ * 首次披露证据不足时阻断；输出新路径 format3/schema13，保留UUID及固定视图。
  */
 import path from "node:path";
 import { pathToFileURL as path_to_file_url } from "node:url";
@@ -30,7 +30,7 @@ export function parse_arguments(arguments_) {
 /** 只输出结构状态；不展示包正文或原始 SQL/文件错误。 */
 export async function run(input) {
   if (input.help) {
-    console.log("node scripts/convert-session-package.mjs --package PATH --output NEW_PATH --operation-id UUID\nConverts format 3/schema 10 or 11, proven format 2/schema 9 or self-contained format 1/schema 8 packages to format 3/schema 12. Missing/unknown/conflicting first-disclosure evidence blocks conversion. Original package stays unchanged; incomplete outputs require review, never overwrite.");
+    console.log("node scripts/convert-session-package.mjs --package PATH --output NEW_PATH --operation-id UUID\nConverts format 3/schema 10, 11 or 12, proven format 2/schema 9 or self-contained format 1/schema 8 packages to format 3/schema 13. Missing/unknown/conflicting first-disclosure evidence blocks conversion. Original package stays unchanged; incomplete outputs require review, never overwrite.");
     return 0;
   }
   console.log(JSON.stringify(await convert_legacy_package(input, await load_runtime(true))));

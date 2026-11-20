@@ -199,12 +199,12 @@ export async function resolveAgentChatEntry(params: {
 
   try {
     const client = new ResourceClient({ root: params.options.root });
-    const target = await resolve_chat_entry(client, { agent: agent_id, category: params.options.category, session_id: selected.explicit_session_id || undefined, new_session: selected.create_new_session, workspace: params.options.workspace, workspace_path: params.options.workspace_path, interactive: process.stdin.isTTY === true && process.stdout.isTTY === true });
+    const target = await resolve_chat_entry(client, { agent: agent_id, type: params.options.type, kind: params.options.kind, session_id: selected.explicit_session_id || undefined, new_session: selected.create_new_session, workspace: params.options.workspace, workspace_path: params.options.workspace_path, interactive: process.stdin.isTTY === true && process.stdout.isTTY === true });
     const remote_agent = await createRemoteAgent({ agent_id, workspace: target.workspace_id, root: params.options.root });
     const original_get = remote_agent.sessions.get.bind(remote_agent.sessions);
     const original_list = remote_agent.sessions.list.bind(remote_agent.sessions);
-    remote_agent.sessions.get = async (id, category) => await original_get(id, category ?? target.category);
-    remote_agent.sessions.list = async (input) => await original_list({ ...input, category: input?.category ?? target.category });
+    remote_agent.sessions.get = async (id, type) => await original_get(id, type ?? target.type);
+    remote_agent.sessions.list = async (input) => await original_list({ ...input, type: input?.type ?? target.type, kind: input?.kind ?? target.kind });
     return { success: true, target, remote_agent };
   } catch (error) {
     return {

@@ -14,11 +14,11 @@ export interface PowerNotificationSessionTarget {
   /** 持有原 Session 的 Agent。 */
   agent_id: string;
   /** Session 存储分区。 */
-  category: string;
+  type: string;
   /** 原 Session 标识。 */
   session_id: string;
   /** Session 角色，用于 Chat 和 Work 的导航投影。 */
-  origin_type: string;
+  session_kind: string;
 }
 
 /** GroupSession 稳定目标。 */

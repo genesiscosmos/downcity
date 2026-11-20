@@ -21,7 +21,7 @@ function part_preview(message: SessionMessage, part: SessionMessage["parts"][num
 }
 
 /** 消息页优先保留最近消息，因字节预算省略的较早消息仍可用 before 游标访问。 */
-export function history_page(page: SessionMessagePage, session_id: string, session_category: string, archived?: boolean) {
+export function history_page(page: SessionMessagePage, session_id: string, session_type: string, archived?: boolean) {
   const items = page.items.map(message => ({
     message_id: message.message_id, session_id, sequence: message.sequence, role: message.role,
     created_at: message.created_at, updated_at: message.updated_at,
@@ -32,7 +32,7 @@ export function history_page(page: SessionMessagePage, session_id: string, sessi
     truncated: message.parts.length > 4 || message.parts.some(part => json_bytes(part) > 1024),
   }));
   const result = {
-    source: "canonical_history", trust_level: "reference", view: "history_preview", session_id, session_category, archived: archived === true,
+    source: "canonical_history", trust_level: "reference", view: "history_preview", session_id, session_type, archived: archived === true,
     items, total: page.total, start_sequence: items[0]?.sequence, end_sequence: items.at(-1)?.sequence,
     has_more: page.has_more, next_before_sequence: page.next_before_sequence,
     truncated: items.some(item => item.truncated), read_action: "session.part",
@@ -49,12 +49,12 @@ export function history_page(page: SessionMessagePage, session_id: string, sessi
 
 /** 读取指定消息的 Part 页或单个字段；原文从不被预览或递归投影替换。 */
 export async function read_history_part(work: SessionWorkContract, input: z.infer<typeof session_part_input>) {
-  const page = await work.messages({ session_id: input.session_id, session_category: input.session_category, archived: input.archived,
+  const page = await work.messages({ session_id: input.session_id, session_type: input.session_type, archived: input.archived,
     before_sequence: input.message_sequence + 1, limit: 1 });
   const message = page.items.find(item => item.message_id === input.message_id && item.sequence === input.message_sequence);
   if (!message) throw new Error("Canonical message not found at the supplied ID and sequence");
   const base = { source: "canonical_history", trust_level: "reference", session_id: input.session_id,
-    session_category: input.session_category, archived: input.archived === true, message_id: message.message_id, message_sequence: message.sequence };
+    session_type: input.session_type, archived: input.archived === true, message_id: message.message_id, message_sequence: message.sequence };
   if (!input.part_id) {
     const remaining = message.parts.filter(part => part.sequence > (input.after_part_sequence ?? 0));
     const parts = remaining.slice(0, input.limit ?? 20).map(part => part_preview(message, part));

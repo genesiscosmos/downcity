@@ -42,7 +42,7 @@ import type {
   RemoteSessionTransport,
   TransportSubscription,
 } from "@/remote/RemoteTransport.js";
-import type { SessionOrigin } from "@downcity/agent";
+import type { SessionType, SessionParent } from "@downcity/type";
 
 type Deferred<T> = {
   /** 当前延迟 Promise。 */
@@ -65,8 +65,12 @@ type RemoteTurnLifecycle = {
 /** 远程 Session 客户端。 */
 export class RemoteSession implements RemoteAgentSession {
   readonly id: string;
-  readonly agent_id: string;
-  readonly origin: SessionOrigin;
+  /** 平台固定的会话分类。 */
+  readonly type: SessionType;
+  /** 创建方定义的业务用途。 */
+  readonly kind: string;
+  /** 已持久化的创建来源关系。 */
+  readonly parent?: SessionParent;
 
   /** 创建时与详情刷新时的可序列化状态快照。 */
   private state: RemoteSessionStateValues;
@@ -83,9 +87,10 @@ export class RemoteSession implements RemoteAgentSession {
 
   constructor(transport: RemoteSessionTransport, info: AgentSessionInfo) {
     this.transport = transport;
-    this.id = info.session_id;
-    this.agent_id = info.agent_id;
-    this.origin = info.origin;
+    this.id = info.id;
+    this.type = info.type;
+    this.kind = info.kind;
+    this.parent = info.parent;
     this.state = build_remote_state(info);
     this.event_hub = new SessionEventHub();
   }
@@ -101,7 +106,7 @@ export class RemoteSession implements RemoteAgentSession {
 
   /** 读取当前远程 Session 详情。 */
   async get_info(): Promise<AgentSessionInfo> {
-    const info = await this.transport.get_info(this.id, this.origin.category);
+    const info = await this.transport.get_info(this.id, this.type);
     this.state = build_remote_state(info);
     return info;
   }
@@ -124,14 +129,14 @@ export class RemoteSession implements RemoteAgentSession {
       let channel_id: string | undefined;
       if (execution) {
         const channel = await this.transport.open_power_channel({
-          session_id: this.id, category: this.origin.category,
+          session_id: this.id, type: this.type,
           on_event: (event) => execution.on_event(event),
           on_close: () => { void execution.close().catch(() => {}); },
         });
         execution.attach(channel);
         channel_id = channel.id;
       }
-      const turn = await this.transport.prompt(this.id, this.origin.category, {
+      const turn = await this.transport.prompt(this.id, this.type, {
         ...wire_input,
         ...(execution ? { powers: execution.descriptors, execution_channel_id: channel_id } : {}),
       });
@@ -150,7 +155,7 @@ export class RemoteSession implements RemoteAgentSession {
   /** 停止当前远程 Session Turn。 */
   async stop(expected_turn_id?: string, expected_message?: import("@downcity/type").SessionMessageCheckpoint): Promise<AgentSessionStopResult> {
     await this.ensure_event_pump();
-    return await this.transport.stop(this.id, this.origin.category, expected_turn_id, expected_message);
+    return await this.transport.stop(this.id, this.type, expected_turn_id, expected_message);
   }
 
   /** 订阅当前 Session 的全部未来 Mutation。 */
@@ -178,28 +183,28 @@ export class RemoteSession implements RemoteAgentSession {
 
   /** 读取远程 Message 快照。 */
   async messages(input?: ListSessionMessagesInput): Promise<SessionMessagePage> {
-    return await this.transport.messages(this.id, this.origin.category, input);
+    return await this.transport.messages(this.id, this.type, input);
   }
 
   /** 读取远程 Session 的 System 快照。 */
   async system(): Promise<AgentSessionSystemSnapshot> {
-    return await this.transport.system(this.id, this.origin.category);
+    return await this.transport.system(this.id, this.type);
   }
 
   /** 列出当前远程 Session 正在等待用户响应的 Interaction。 */
   async interactions(): Promise<SessionInteractionRequest[]> {
-    return await this.transport.interactions(this.id, this.origin.category);
+    return await this.transport.interactions(this.id, this.type);
   }
 
   /** 读取当前远程 Session 的运行与安全状态。 */
   async status(): Promise<AgentSessionStatus> {
-    return await this.transport.status(this.id, this.origin.category);
+    return await this.transport.status(this.id, this.type);
   }
 
   /** 向原宿主提交原失败请求的新执行；传输未知时调用方只读状态，不自动重发。 */
   async retry_model_step(input: import("@downcity/type").SessionModelRetryInput): Promise<import("@downcity/type").SessionModelRetryResult> {
     await this.ensure_event_pump();
-    try { return await this.transport.retry_model_step(this.id, this.origin.category, input); }
+    try { return await this.transport.retry_model_step(this.id, this.type, input); }
     finally { await this.maybe_stop_event_pump(); }
   }
 
@@ -208,17 +213,17 @@ export class RemoteSession implements RemoteAgentSession {
     input: RemoteSessionSetInput,
     options?: AgentSessionSetOptions,
   ): Promise<void> {
-    await this.transport.set(this.id, this.origin.category, input, options);
+    await this.transport.set(this.id, this.type, input, options);
   }
 
   /** 提交当前远程 Session 的 Interaction 用户响应。 */
   async respond(input: RespondSessionInteractionInput): Promise<SessionInteractionResult> {
-    return await this.transport.respond(this.id, this.origin.category, input);
+    return await this.transport.respond(this.id, this.type, input);
   }
 
   /** 创建远程分支；原地替换时返回当前远程 Session 实例。 */
   async fork(input?: AgentSessionForkInput | string): Promise<RemoteAgentSession> {
-    const info = await this.transport.fork(this.id, this.origin.category, input);
+    const info = await this.transport.fork(this.id, this.type, input);
     if (typeof input !== "string" && input?.replace === true) {
       this.state = build_remote_state(info);
       return this;
@@ -233,7 +238,7 @@ export class RemoteSession implements RemoteAgentSession {
       let resolved_ready = false;
       this.event_subscription = await this.transport.subscribe({
         session_id: this.id,
-        category: this.origin.category,
+        type: this.type,
         on_ready: () => {
           resolved_ready = true;
         },

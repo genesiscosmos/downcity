@@ -11,6 +11,7 @@ import { createHash } from "node:crypto";
 import type { EffectHook, JsonValue, SessionTurnCommittedHookValue, ToolCallContext } from "@downcity/type";
 import { select_session_input, session_input_facts } from "@/session/loop/SessionInputFacts.js";
 import type { SessionCompletionOptions, SessionCompletionRecord } from "@/types/agent/SessionCompletion.js";
+import { normalize_session_descriptor, read_session_call_context } from "@downcity/type";
 
 /** Agent 唯一的完成通知队列；生命周期跟随 Agent。 */
 export class SessionCompletions {
@@ -70,7 +71,7 @@ export class SessionCompletions {
         if (await this.options.files.path_exists(file_path)) return;
         await this.save({
           event: structuredClone(event),
-          origin: structuredClone(context.session_origin),
+          ...normalize_session_descriptor(structuredClone(read_session_call_context(context))),
           ...(context.workspace ? { workspace_id: context.workspace.id } : {}),
           state: notify ? "prepared" : "delivered",
           deliveries: Object.fromEntries(recipient_ids.map((id) => [id, { delivered: false, attempt_count: 0, retry_at: 0 }])),
@@ -379,7 +380,7 @@ export class SessionCompletions {
   /** 读取单条投递记录；异常上报后保留原文件供排查。 */
   private async read_record(file_path: string): Promise<SessionCompletionRecord> {
     const record = JSON.parse((await this.options.files.read_file(file_path)).toString("utf8")) as SessionCompletionRecord;
-    if (!record.event?.completion_id || !record.event.session_id || !record.origin?.type || !record.deliveries) {
+    if (!record.event?.completion_id || !record.event.session_id || !record?.type || !record.deliveries) {
       throw new Error(`Invalid Session completion record: ${file_path}`);
     }
     return record;

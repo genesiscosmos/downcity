@@ -12,7 +12,7 @@ export class MemoryDeliveryStore {
   /** 为同一 Job 与真实调用轮次创建唯一订阅，调用重放不会多次发送。 */
   async subscribe(job_id: string, recipient: MemoryResultRecipient): Promise<void> {
     const subscription_id = createHash("sha256").update(JSON.stringify([job_id, recipient.agent_id,
-      recipient.category, recipient.session_id, recipient.caller_turn_id])).digest("hex");
+      recipient.type, recipient.session_id, recipient.caller_turn_id])).digest("hex");
     await this.storage.with_scope_lock("delivery-state", async () => {
       const key = this.key(subscription_id);
       if (await this.storage.has(key)) return;

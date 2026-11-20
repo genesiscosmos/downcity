@@ -25,7 +25,7 @@ export class NotificationQuery {
         const previous = new Map((this.known_interactions.get(agent.agent_id) ?? []).map(item => [notification_interaction_key(item), item]));
         this.known_interactions.set(agent.agent_id, (pending as unknown as AgentInteraction[]).map(interaction => {
           const item: NotificationInteractionItem = { agent_id: agent.agent_id, agent_name: agent.name, interaction,
-            target: interaction_target(agent.agent_id, interaction.reference.session_id, interaction.origin), availability: "unknown" };
+            target: interaction_target(agent.agent_id, interaction.reference.session_id, interaction), availability: "unknown" };
           item.session_title = previous.get(notification_interaction_key(item))?.session_title;
           return item;
         }));

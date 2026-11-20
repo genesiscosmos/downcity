@@ -41,6 +41,7 @@ async function receive_background_input(host: SessionBackgroundHost, input: Sess
     return "accepted";
   }
   if (!host.is_current()) return "retry";
+  if (input.execution_id && host.loop.current_execution_id() !== input.execution_id) return "discarded";
   const query = [
     { type: "context" as const, tag: "background_source", context: JSON.stringify({ caller_turn_id: input.turn_id }) },
     ...(typeof input.query === "string" ? [{ type: "text" as const, text: input.query }] : input.query),
@@ -52,7 +53,7 @@ async function receive_background_input(host: SessionBackgroundHost, input: Sess
       await host.loop.prompt_input({ actor, request_id: input.request_id, query });
       return "accepted";
     }
-    return await host.loop.accept_delegation_result(input.turn_id, input.request_id, query) ? "accepted" : "retry";
+    return await host.loop.accept_delegation_result(input.turn_id, input.request_id, query, input.execution_id) ? "accepted" : "retry";
   }
   if (!input.resume_after_turn) {
     return await host.completions?.read(host.session_id, input.turn_id) ? "discarded" : "retry";

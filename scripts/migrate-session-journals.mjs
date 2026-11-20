@@ -2,15 +2,15 @@
 import fs from "node:fs";
 import path from "node:path";
 import { createHash } from "node:crypto";
-import { AgentSessionFileLease } from "../packages/agent/bin/session/storage/agent-db/AgentSessionFileLease.js";
-import { LocalFileSystem } from "../packages/city/bin/workspace/LocalFileSystem.js";
-import { RootLease, resolve_resource_root } from "../packages/city/bin/local/resources/RootLease.js";
+import { load_runtime } from "./lib/session-runtime.mjs";
+import { discover_deliveries, convert_delivery } from "./lib/session-delivery-conversion.mjs";
+const { AgentSessionFileLease, LocalFileSystem, RootLease, resolve_resource_root } = await load_runtime(true, "current", true);
 import { parse_arguments } from "./migrate-session-sqlite-v12.mjs";
 import { convert_journal, with_session_catalog } from "./lib/session-descriptor-journal-conversion.mjs";
 import { copy_verified_file, diagnostic, exists, file_hash, inside, ordinary, save_json, sync_path } from "./lib/session-v8-files.mjs";
 import { fail } from "./lib/session-v7-database.mjs";
 
-const help = `Session 完成与委派记录离线迁移（先构建 Agent、Type 和 City，并迁移 sessions.db）
+const help = `Session v13 完成、委派及 Task/Memory 交付引用离线迁移（先迁移 sessions.db）
 node scripts/migrate-session-journals.mjs --preflight|--apply|--verify|--status|--restore
   --root PATH          显式指定数据目录
   --batch PATH         apply 使用数据目录外的新目录，续跑、验证和恢复使用同一批次
@@ -26,7 +26,7 @@ const local_files = root_path => new LocalFileSystem({ root_path, file_mode: 0o6
 function discover(root_path) {
   const agents_path = path.join(root_path, "agents");
   const agents = [], records = [];
-  if (!exists(agents_path)) return { agents, records };
+  if (!exists(agents_path)) return { agents, records: discover_deliveries(root_path) };
   ordinary(agents_path, true);
   for (const agent_id of fs.readdirSync(agents_path).sort()) {
     const agent_path = path.join(agents_path, agent_id);
@@ -45,14 +45,21 @@ function discover(root_path) {
       }
     }
   }
+  records.push(...discover_deliveries(root_path));
   return { agents, records };
+}
+
+/** 已声明的业务交付引用与 Agent 日志分别使用各自的定点转换。 */
+function convert(source, scope, read_session) {
+  return ["completions", "delegations"].includes(scope.kind)
+    ? convert_journal(source, scope, read_session) : convert_delivery(source, scope);
 }
 
 /** 逐条生成源和目标摘要，确保准备阶段所得的投影与预检计划一致。 */
 async function plan(root_path, records) {
   return await with_session_catalog(root_path, read_session => records.map(scope => {
     const source = fs.readFileSync(inside(root_path, scope.relative_path));
-    const { content, state, stopped } = convert_journal(source, scope, read_session);
+    const { content, state, stopped } = convert(source, scope, read_session);
     const source_hash = hash(source);
     return { relative_path: scope.relative_path, kind: scope.kind, state, stopped,
       source_hash, target_hash: content === source ? source_hash : hash(content) };
@@ -86,7 +93,7 @@ async function stage(root_path, batch_path, manifest, records) {
       const staged = path.join("staged", item.relative_path);
       const target = inside(batch_path, staged);
       if (!exists(target)) {
-        const { content } = convert_journal(fs.readFileSync(original), records[index], read_session);
+        const { content } = convert(fs.readFileSync(original), records[index], read_session);
         if (hash(content) !== item.target_hash) fail("journal_conversion_plan_changed");
         await files.write_file_atomically(staged, content);
       }
@@ -118,14 +125,11 @@ function verify(root_path, batch_path, manifest, expected_side, verify_copies = 
 async function publish(root_path, batch_path, manifest, directory) {
   const target_key = directory === "staged" ? "target_hash" : "source_hash";
   const prior_key = directory === "staged" ? "source_hash" : "target_hash";
-  const agents = new Map();
+  const files = local_files(root_path);
   const directories = new Set();
   for (const item of manifest.records) {
     if (item.source_hash === item.target_hash) continue;
-    const [, agent_id, ...segments] = item.relative_path.split(path.sep);
-    const agent_file = path.join(...segments);
-    if (!agents.has(agent_id)) agents.set(agent_id, local_files(inside(root_path, path.join("agents", agent_id))));
-    const files = agents.get(agent_id);
+    const agent_file = item.relative_path;
     const target = inside(root_path, item.relative_path);
     directories.add(path.dirname(target));
     await files.with_file_lock(`${agent_file}.lock`, async () => {

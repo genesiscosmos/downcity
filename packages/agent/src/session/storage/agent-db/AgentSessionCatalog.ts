@@ -6,13 +6,11 @@
  */
 import type { DatabaseSync, SQLInputValue } from "node:sqlite";
 import { assert_session_id } from "../../SessionIdentity.js";
-import { normalize_session_origin, normalize_session_origin_category } from "@downcity/type";
-import type {
-  AgentSessionAddress, AgentSessionConfigurationRow, AgentSessionCreateRecord,
-  AgentSessionListQuery, AgentSessionRecord, AgentSessionRecordPage, AgentSessionEnsureMainInput, AgentSessionEnsureCreationInput,
-} from "@/types/store/AgentSessionDatabase.js";
+import { is_main_session, normalize_session_descriptor, normalize_session_type, normalize_session_kind } from "@downcity/type";
+import type { AgentSessionAddress, AgentSessionConfigurationRow, AgentSessionCreateRecord, AgentSessionListQuery, AgentSessionRecord, AgentSessionRecordPage, AgentSessionEnsureMainInput, AgentSessionEnsureCreationInput } from "@/types/store/AgentSessionDatabase.js";
 import { AgentSessionDatabase } from "./AgentSessionDatabase.js";
 import { decode_agent_session_cursor, encode_agent_session_cursor, storage_digest } from "./AgentSessionCursor.js";
+import { decode_session_record, encode_session_relations } from "./AgentSessionRelations.js";
 
 /** AgentStorage 和只读浏览租约共享的同库目录能力。 */
 export class AgentSessionCatalog {
@@ -20,10 +18,10 @@ export class AgentSessionCatalog {
 
   /** 创建活动记录；重试使用 operation_id，不能复用归档或已删除身份。 */
   create(operation_id: string, input: AgentSessionCreateRecord): { session_id: string } {
-    const origin = normalize_session_origin(input.origin);
+    const descriptor = normalize_session_descriptor(input);
     assert_session_id(input.session_id);
-    return this.owner.write(operation_id, { command: "create", input: { ...input, origin } }, database => {
-      this.insert(database, { ...input, origin });
+    return this.owner.write(operation_id, { command: "create", input: { ...input, ...normalize_session_descriptor(descriptor) } }, database => {
+      this.insert(database, { ...input, ...normalize_session_descriptor(descriptor) });
       return { session_id: input.session_id };
     });
   }
@@ -39,7 +37,7 @@ export class AgentSessionCatalog {
     return this.owner.write(operation_id, { command: "ensure_main", input }, database => {
       const current = this.read_main(database);
       if (current) return { session_id: current.session_id };
-      this.insert(database, { ...input, origin: { category: "chat", type: "agent" } });
+      this.insert(database, { ...input, ...normalize_session_descriptor({ type: "chat", kind: "main" }) });
       database.prepare("UPDATE agent_session_state SET main_session_id = ? WHERE singleton_id = 1").run(input.session_id);
       return { session_id: input.session_id };
     });
@@ -48,22 +46,22 @@ export class AgentSessionCatalog {
   /** 持久业务键只选择一次 UUID，后续重入不能因归档/删除改选新记录。 */
   ensure_creation(operation_id: string, input: AgentSessionEnsureCreationInput): { session_id: string } {
     assert_session_id(input.session_id);
-    const origin = normalize_session_origin(input.origin);
+    const descriptor = normalize_session_descriptor(input);
     if (!input.creation_key || input.creation_key !== input.creation_key.trim() || input.creation_key.length > 512) {
       throw new Error("session_creation_key_invalid");
     }
-    return this.owner.write(operation_id, { command: "ensure_creation", input: { ...input, origin } }, database => {
-      const mapped = database.prepare("SELECT session_id FROM session_creation_keys WHERE category = ? AND creation_key = ?")
-        .get(origin.category, input.creation_key);
+    return this.owner.write(operation_id, { command: "ensure_creation", input: { ...input, ...normalize_session_descriptor(descriptor) } }, database => {
+      const mapped = database.prepare("SELECT session_id FROM session_creation_keys WHERE type = ? AND creation_key = ?")
+        .get(descriptor.type, input.creation_key);
       if (mapped) {
         if (database.prepare("SELECT 1 FROM retired_session_ids WHERE session_id = ?").get(mapped.session_id)) throw new Error("session_identity_retired");
         const record = this.by_session_id(String(mapped.session_id));
         if (record.archived) throw new Error("session_archived");
         return { session_id: record.session_id };
       }
-      this.insert(database, { ...input, origin });
-      database.prepare("INSERT INTO session_creation_keys(category, creation_key, session_id) VALUES (?, ?, ?)")
-        .run(origin.category, input.creation_key, input.session_id);
+      this.insert(database, { ...input, ...normalize_session_descriptor(descriptor) });
+      database.prepare("INSERT INTO session_creation_keys(type, creation_key, session_id) VALUES (?, ?, ?)")
+        .run(descriptor.type, input.creation_key, input.session_id);
       return { session_id: input.session_id };
     });
   }
@@ -73,32 +71,32 @@ export class AgentSessionCatalog {
     if (!state) throw new Error("session_main_pointer_invalid");
     if (state.main_session_id === null) return null;
     const row = database.prepare("SELECT * FROM sessions WHERE session_id = ?").get(state.main_session_id) as unknown as AgentSessionRecord | undefined;
-    if (!row || row.archived || row.category !== "chat" || JSON.parse(row.origin).type !== "agent") {
+    if (!row || row.archived || !is_main_session(decode_session_record(row))) {
       throw new Error("session_main_pointer_invalid");
     }
     return row;
   }
 
   private insert(database: DatabaseSync, input: AgentSessionCreateRecord): void {
-    const origin = normalize_session_origin(input.origin);
+    const descriptor = normalize_session_descriptor(input);
     if (database.prepare("SELECT 1 FROM retired_session_ids WHERE session_id = ?").get(input.session_id)) {
       throw new Error("session_identity_retired");
     }
     if (database.prepare("SELECT 1 FROM sessions WHERE session_id = ?").get(input.session_id)) throw new Error("session_address_conflict");
-    database.prepare(`INSERT INTO sessions(session_id, category, origin, workspace_id, timezone, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?)`)
-      .run(input.session_id, origin.category, JSON.stringify(origin), input.workspace_id ?? null,
-        input.timezone, input.created_at, input.created_at);
+    database.prepare(`INSERT INTO sessions(session_id, type, kind, relations, workspace_id, timezone, title, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+      .run(input.session_id, descriptor.type, descriptor.kind, encode_session_relations(descriptor), input.workspace_id ?? null,
+        input.timezone, input.title?.trim() || null, input.created_at, input.created_at);
   }
 
   /** 精确活动/归档地址，不扫描目录、不创建数据、不回落另一状态。 */
   find(address: AgentSessionAddress): AgentSessionRecord | null {
     const database = this.owner.database;
     assert_session_id(address.session_id);
-    const row = address.category === undefined
+    const row = address.type === undefined
       ? database.prepare("SELECT * FROM sessions WHERE session_id = ? AND archived = ?").get(address.session_id, address.archived ? 1 : 0)
-      : database.prepare("SELECT * FROM sessions WHERE session_id = ? AND archived = ? AND category = ?")
-        .get(address.session_id, address.archived ? 1 : 0, normalize_session_origin_category(address.category));
+      : database.prepare("SELECT * FROM sessions WHERE session_id = ? AND archived = ? AND type = ?")
+        .get(address.session_id, address.archived ? 1 : 0, normalize_session_type(address.type));
     return (row as unknown as AgentSessionRecord | undefined) ?? null;
   }
 
@@ -120,18 +118,18 @@ export class AgentSessionCatalog {
 
   /** 实时 keyset 分页，不保留全量列表快照，也不使用 OFFSET。 */
   list(input: AgentSessionListQuery): AgentSessionRecordPage {
-    const category = normalize_session_origin_category(input.category);
-    const origin_type = input.origin_type?.trim() || undefined;
+    const type = normalize_session_type(input.type);
+    const kind = input.kind === undefined ? undefined : normalize_session_kind(input.kind);
     const workspace_id = input.workspace_id?.trim() || undefined;
     const query = input.query?.trim() || undefined;
     const limit = input.limit ?? 30;
     if (!Number.isSafeInteger(limit) || limit < 1 || limit > 200) throw new Error("session_list_limit_invalid");
-    const filter = { category, archived: Boolean(input.archived), origin_type, workspace_id, query };
+    const filter = { type, archived: Boolean(input.archived), kind, workspace_id, query };
     const filter_hash = storage_digest(filter);
     const cursor = input.cursor ? decode_agent_session_cursor(input.cursor, this.owner.metadata, filter_hash) : undefined;
-    const clauses = ["category = ?", "archived = ?"];
-    const parameters: SQLInputValue[] = [category, filter.archived ? 1 : 0];
-    if (origin_type) { clauses.push("json_extract(origin, '$.type') = ?"); parameters.push(origin_type); }
+    const clauses = ["type = ?", "archived = ?"];
+    const parameters: SQLInputValue[] = [type, filter.archived ? 1 : 0];
+    if (kind) { clauses.push("kind = ?"); parameters.push(kind); }
     if (workspace_id) { clauses.push("workspace_id = ?"); parameters.push(workspace_id); }
     if (query) {
       // instr 使用字面包含语义，避免用户输入 %/_ 意外改变匹配范围。

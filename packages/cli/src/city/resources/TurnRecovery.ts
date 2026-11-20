@@ -11,7 +11,7 @@ export function recoverable_chat_session(session: RemoteAgentSession, client: Re
     if (property !== "prompt") { const value = Reflect.get(target, property); return typeof value === "function" ? value.bind(target) : value; }
     return async (input: Parameters<RemoteAgentSession["prompt"]>[0]) => {
       const request_id = input.request_id ?? randomUUID();
-      const address = { agent: agent_id, category: target.origin.category, session_id: target.id, request_id };
+      const address = { agent: agent_id, type: target.type, session_id: target.id, request_id };
       const deadline = Date.now() + 300_000;
       const recover = async (): Promise<AgentSessionTurnResult> => {
         while (Date.now() < deadline) {

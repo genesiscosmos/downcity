@@ -7,28 +7,18 @@
  * - 不负责 Turn 编排、Message 创建或 Action 生命周期。
  */
 
-import {
-  read_model_context_window,
-  read_model_label,
-  type ModelClient,
-} from "@downcity/type";
-import {
-  normalize_session_title,
-  resolve_system_timezone,
-} from "@/session/storage/Metadata.js";
+import { read_model_context_window, read_model_label, type ModelClient, normalize_session_descriptor } from "@downcity/type";
+import { normalize_session_title, resolve_system_timezone } from "@/session/storage/Metadata.js";
 import { ensure_session_title } from "@/session/loop/SessionTitle.js";
-import type {
-  AgentSessionConfigSnapshot,
-} from "@/types/agent/SessionTypes.js";
+import type { AgentSessionConfigSnapshot } from "@/types/agent/SessionTypes.js";
 import type { SessionLocalState } from "@/types/session/SessionLocalState.js";
 import { generate_id } from "@/utils/Id.js";
 import type { Logger } from "@/utils/logger/Logger.js";
 import { SessionTitleTask } from "@/session/loop/SessionTitleTask.js";
 import type { SessionStateOptions } from "@/types/session/SessionState.js";
 import type { SessionStorage } from "@/types/store/SessionStorage.js";
-import type { SessionApprovalMode } from "@downcity/type";
+import type { SessionApprovalMode, WorkspaceRuntime } from "@downcity/type";
 import { create_session_model_request_warning } from "@/session/messages/SessionModelRequestWarning.js";
-import type { WorkspaceRuntime } from "@downcity/type";
 
 /** 创建单个 Session 唯一的可变内存状态。 */
 export function create_session_local_state(input: {
@@ -64,7 +54,22 @@ export class SessionState {
   private readonly workspace_id?: string;
   private readonly agent_id: string;
   private readonly session_id: string;
-  private readonly origin: SessionStateOptions["origin"];
+  /** 会话的顶层类型。 */
+  readonly type!: import("@downcity/type").SessionType;
+  /** 创建入口或工作用途。 */
+  readonly kind!: string;
+  /** 已有创建事实中的父执行引用。 */
+  readonly parent?: import("@downcity/type").SessionParent;
+  /** 已有创建事实中的固定派生深度。 */
+  readonly delegation_depth?: number;
+  /** 已有父会话类型。 */
+  readonly parent_session_type?: import("@downcity/type").SessionType;
+  /** 已有派生事实中的根 Chat 引用。 */
+  readonly root_chat_session_id?: string;
+  /** 群组成员所属的群组标识。 */
+  readonly group_id?: string;
+  /** 所属群组对话标识。 */
+  readonly group_session_id?: string;
   private readonly store: SessionStorage;
   private readonly state: SessionLocalState;
   private readonly logger: Logger;
@@ -77,7 +82,7 @@ export class SessionState {
     this.workspace_id = options.workspace_id;
     this.agent_id = options.agent_id;
     this.session_id = options.session_id;
-    this.origin = options.origin;
+    Object.assign(this, normalize_session_descriptor(options));
     this.store = options.store;
     this.state = options.state;
     this.logger = options.logger;
@@ -133,10 +138,9 @@ export class SessionState {
             : resolve_system_timezone();
         await this.store.write_metadata({
           ...metadata,
-          agent_id: this.agent_id,
           created_at: created_at,
           timezone,
-          origin: this.origin,
+          ...normalize_session_descriptor(this),
         });
         this.state.created_at = created_at;
         this.state.timezone = timezone;
@@ -200,7 +204,6 @@ export class SessionState {
         const metadata = await this.store.read_metadata();
         await this.store.write_metadata({
           ...metadata,
-          agent_id: this.agent_id,
           ...(next_model_label ? { model_label: next_model_label } : {}),
         });
       });

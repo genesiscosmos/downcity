@@ -38,7 +38,7 @@ export async function resolve_notification_targets(
         try {
           const addresses = batch.map(index => {
             const target = targets[index] as Extract<PowerNotificationTarget, { kind: "agent_session" }>;
-            return { category: target.category, session_id: target.session_id };
+            return { type: target.type, session_id: target.session_id };
           });
           const records = await agent_map.get(agent_id)!.sessions.read_metadata(addresses);
           for (const [position, index] of batch.entries()) {

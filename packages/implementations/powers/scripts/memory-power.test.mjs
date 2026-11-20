@@ -489,8 +489,9 @@ test("Memory Session authorizes structured ownership with opaque backend IDs", a
     recall: async () => ({ items: [record, foreign].map((memory) => ({ memory, score: 1, snippet: memory.content })) }),
     read: async ({ memory_id }) => ({ memory_id, memory: memory_id === record.memory_id ? record : foreign }),
   };
-  const tools = create_memory_session_tools({ provider, jobs: { read: async () => job, stage: async (_id, _session, value) => { staged = value; } } });
-  const context = { agent_id: access.agent_id, session_id: job.session_id, session_origin: { type: MEMORY_SESSION_KIND, memory_job_id: job.job_id } };
+  const tools = create_memory_session_tools({ provider, jobs: { read: async (job_id) => job_id === job.job_id ? job : null, stage: async (_id, _session, value) => { staged = value; } } }, job.job_id);
+  const context = { agent_id: access.agent_id, session_id: job.session_id, session_descriptor: { type: "work", kind: MEMORY_SESSION_KIND } };
+  await assert.rejects(tools.memory_query.execute({ query: "fact" }, { ...context, session_id: "foreign" }), /does not own/);
   const recalled = await tools.memory_query.execute({ query: "fact" }, context);
   assert.deepEqual(recalled.items.map((item) => item.memory.memory_id), [record.memory_id]);
   assert.equal((await tools.memory_read.execute({ memory_id: record.memory_id }, context)).memory.version, "v1");

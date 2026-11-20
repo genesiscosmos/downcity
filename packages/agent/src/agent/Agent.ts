@@ -9,47 +9,25 @@
  */
 
 import { safe_error_diagnostic } from "@/utils/logger/SafeErrorDiagnostic.js";
-import type {
-  CityRuntime,
-  ModelClient,
-  AgentTool as Tool,
-  StorageProvider,
-  ToolCallContext,
-  ToolHookSet,
-  WorkspaceRuntime,
-} from "@downcity/type";
-
-import {
-  create_instruction_system_blocks,
-  normalize_instruction_input,
-} from "@/agent/AgentInstructions.js";
-import type {
-  AgentOptions,
-  AgentSessionConstructor,
-} from "@/types/agent/AgentOptions.js";
+import type { CityRuntime, ModelClient, AgentTool as Tool, StorageProvider, ToolCallContext, ToolHookSet, WorkspaceRuntime, SessionTurnCommittedHookValue, SessionSystemMessage } from "@downcity/type";
+import { create_instruction_system_blocks, normalize_instruction_input } from "@/agent/AgentInstructions.js";
+import type { AgentOptions, AgentSessionConstructor } from "@/types/agent/AgentOptions.js";
 import type { AgentBehavior } from "@/types/agent/AgentBehavior.js";
 import type { AgentReconfigureInput } from "@/types/agent/AgentReconfigureInput.js";
-import type {
-  AgentSessionCollection,
-} from "@/types/agent/AgentSessionCollection.js";
+import type { AgentSessionCollection } from "@/types/agent/AgentSessionCollection.js";
 import { Logger } from "@/utils/logger/Logger.js";
 import { AgentSessions } from "@/agent/AgentSessions.js";
 import { AgentInteractions } from "@/agent/AgentInteractions.js";
 import type { AgentInteractionCollection } from "@/types/agent/AgentInteractions.js";
 import { AgentMemoryStorageProvider } from "@/agent/AgentMemoryStorage.js";
 import { AgentSessionStore } from "@/session/storage/agent-db/AgentSessionStore.js";
-import { EMPTY_TOOL_HOOK_SET, SESSION_HOOK_POINTS } from "@downcity/type";
-import type { SessionTurnCommittedHookValue } from "@downcity/type";
+import { EMPTY_TOOL_HOOK_SET, SESSION_HOOK_POINTS, normalize_session_type, SESSION_TYPE_WORK, type SessionDescriptor, normalize_session_descriptor, session_call_context } from "@downcity/type";
 import { compile_session_callbacks } from "@/agent/SessionCallbacks.js";
 import { SessionCompletions } from "@/agent/SessionCompletions.js";
 import type { AgentStorage } from "@/types/agent/AgentStorage.js";
-import type { SessionSystemMessage } from "@downcity/type";
 import type { SessionComposer } from "@/types/session/SessionComposer.js";
 import type { SessionChildWorkInput } from "@/types/session/SessionChildWork.js";
-import {
-  build_session_system_blocks,
-  resolve_session_power_system_blocks,
-} from "@/session/input/SessionSystem.js";
+import { build_session_system_blocks, resolve_session_power_system_blocks } from "@/session/input/SessionSystem.js";
 import type { AgentSessionSystemBlock } from "@/types/agent/SessionTypes.js";
 import { resolve_system_timezone } from "@/session/storage/Metadata.js";
 import { SessionWork } from "@/agent/SessionWork.js";
@@ -58,7 +36,6 @@ import { SessionDelegations } from "@/agent/SessionDelegations.js";
 import { recover_background_sessions } from "@/agent/SessionBackgroundRecovery.js";
 import { AgentSessionStorageError } from "@/session/storage/agent-db/AgentSessionErrors.js";
 import { LocalSessionDelegationStore } from "@/agent/LocalSessionDelegationStore.js";
-import { normalize_session_origin_category, SESSION_ORIGIN_CATEGORY_WORK, type SessionOrigin } from "@downcity/type";
 import type { AgentWorkHost } from "@/types/agent/AgentWorkHost.js";
 import type { AgentSessionInput } from "@/types/agent/AgentSessionInput.js";
 import type { AgentSession } from "@/types/agent/SessionActor.js";
@@ -380,10 +357,10 @@ export class Agent {
     if (this.dispose_promise) throw new Error("Agent is disposing");
     await this.resolve_completions().resume();
     await recover_background_sessions(this.resolve_storage().sessions, {
-      restore: async (session_id, category) => await this.restore_work_session(session_id, category),
+      restore: async (session_id, type) => await this.restore_work_session(session_id, type),
       is_completed: async (session_id, turn_id) => Boolean(await this.resolve_completions().read(session_id, turn_id)),
-      has_recoverable_messages: async (session_id, category) => {
-        const storage = await this.resolve_storage().sessions.open_session(session_id, category);
+      has_recoverable_messages: async (session_id, type) => {
+        const storage = await this.resolve_storage().sessions.open_session(session_id, type);
         return (await storage.list_recoverable_agent_messages()).length > 0;
       },
       report_error: (error, context) => this.logger.error("Background follow-up recovery failed", {
@@ -407,7 +384,7 @@ export class Agent {
       /** 目标 Session 稳定标识。 */
       session_id: string;
       /** 目标 Session 所在分类；省略时按 `work` 查找。 */
-      category?: string;
+      type?: string;
     },
   ): Promise<SessionSystemMessage[]> {
     const session_id = String(input.session_id || "").trim();
@@ -416,9 +393,9 @@ export class Agent {
     }
     // 真实来源以持久化 metadata 为准：system 组装与 Power 上下文必须看到同一个身份，
     // 不能用调用参数顶替。
-    const category = normalize_session_origin_category(input.category ?? SESSION_ORIGIN_CATEGORY_WORK);
+    const type = normalize_session_type(input.type ?? SESSION_TYPE_WORK);
     const storage = this.resolve_storage();
-    const session_storage = await storage.sessions.open_session(session_id, category);
+    const session_storage = await storage.sessions.open_session(session_id, type);
     const metadata = await session_storage.read_metadata();
     if (workspace.id !== metadata.workspace_id) throw new Error("session_workspace_immutable");
     const instruction_system_blocks = create_instruction_system_blocks({
@@ -430,7 +407,7 @@ export class Agent {
     const context = this.create_session_call_context({
       session_id,
       workspace,
-      origin: metadata.origin,
+      ...normalize_session_descriptor(metadata),
       instruction_system_blocks,
     });
     const power_system_blocks = await resolve_session_power_system_blocks({
@@ -451,13 +428,12 @@ export class Agent {
   }
 
   /** 构造不属任何 Turn 的调用环境；用于 system 查询。 */
-  private create_session_call_context(input: {
+  private create_session_call_context(input: SessionDescriptor & {
     /** 目标 Session 稳定标识。 */
     readonly session_id: string;
     /** 当前使用的 Workspace 实例。 */
     readonly workspace: WorkspaceRuntime;
-    /** 目标 Session 的真实来源，来自持久化 metadata。 */
-    readonly origin: SessionOrigin;
+
     /** 当前 Agent 指令快照。 */
     readonly instruction_system_blocks: readonly AgentSessionSystemBlock[];
   }): ToolCallContext {
@@ -469,7 +445,7 @@ export class Agent {
         input.instruction_system_blocks.map((block) => block.content),
       ),
       session_id: input.session_id,
-      session_origin: input.origin,
+      ...session_call_context(input),
       workspace: input.workspace,
       messages: Object.freeze([]),
       workspace_env: Object.freeze({ ...input.workspace.get_env() }),
@@ -568,39 +544,39 @@ export class Agent {
     this.session_work ??= new SessionWork({
       agent_id: this.id,
       list_sessions: async (input) => {
-        const pages = await Promise.all(["chat", "work"].flatMap((category) => [
-          this.session_manager.list({ ...input, category }),
-          this.session_manager.archived({ ...input, category }).then((page) => ({
+        const pages = await Promise.all(["chat", "work"].flatMap((type) => [
+          this.session_manager.list({ ...input, type }),
+          this.session_manager.archived({ ...input, type }).then((page) => ({
             ...page, items: page.items.map((item) => ({ ...item, archived: true })),
           })),
         ]));
         return { items: pages.flatMap((page) => page.items)
           .sort((left, right) => (right.updated_at ?? 0) - (left.updated_at ?? 0)).slice(0, input.limit) };
       },
-      read_runtime: async (session_id, category) => await this.session_manager.peek(session_id, category)?.status(),
-      read_session: async (session_id, category) => await this.resolve_storage().sessions.read_session(session_id, category),
+      read_runtime: async (session_id, type) => await this.session_manager.peek(session_id, type)?.status(),
+      read_session: async (session_id, type) => await this.resolve_storage().sessions.read_session(session_id, type),
       read_archived_session: async (session_id) => await this.resolve_storage().sessions.read_archived_session(session_id),
       read_archive_plan: async operation_id => await this.resolve_storage().sessions.read_archive_plan(operation_id),
       archive_session: async input => await this.session_manager.archive(input),
-      get_session: async (session_id, category) => await this.restore_work_session(session_id, category),
+      get_session: async (session_id, type) => await this.restore_work_session(session_id, type),
       delegations: this.resolve_delegations(),
     });
     return this.session_work;
   }
 
   /** 使用会话当前持久化目录恢复上下文，并完成宿主的模型与事件订阅装配。 */
-  private async restore_work_session(session_id: string, category: string): Promise<AgentSession> {
+  private async restore_work_session(session_id: string, type: string): Promise<AgentSession> {
     const storage = this.resolve_storage();
-    if (!(await storage.sessions.has_session(session_id, category))) {
+    if (!(await storage.sessions.has_session(session_id, type))) {
       throw new Error(`Session is unavailable or archived: ${session_id}`);
     }
-    const session_storage = await storage.sessions.open_session(session_id, category);
+    const session_storage = await storage.sessions.open_session(session_id, type);
     const metadata = await session_storage.read_metadata();
     const workspace_id = metadata.workspace_id;
     const workspace = workspace_id
       ? workspace_id === this.workspace?.id ? this.workspace : await this.resolve_project_workspace(workspace_id)
       : undefined;
-    const session = await this.session_manager.get(session_id, category, { workspace });
+    const session = await this.session_manager.get(session_id, type, { workspace });
     await this.prepare_work_session?.(session);
     return session;
   }
@@ -630,18 +606,18 @@ export class Agent {
       agent_id: this.id,
       store: storage.delegations,
       resolve_workspace,
-      ensure_work_session: async (session_id, workspace, delegation_depth, child_origin) =>
-        await this.session_manager.ensure_work_session(session_id, workspace, delegation_depth, child_origin),
+      ensure_work_session: async (session_id, workspace, delegation_depth, child_descriptor) =>
+        await this.session_manager.ensure_work_session(session_id, workspace, delegation_depth, child_descriptor),
       prepare_session,
       validate_model: async (model_id, workspace) => {
         if (!this.resolve_work_model) throw new Error("Session model selection is not configured by the host");
         await this.resolve_work_model(model_id, workspace);
       },
-      get_work_session: async (session_id) => await this.restore_work_session(session_id, SESSION_ORIGIN_CATEGORY_WORK),
+      get_work_session: async (session_id) => await this.restore_work_session(session_id, SESSION_TYPE_WORK),
       get_parent_session: async (caller) => {
         const parent_agent = this.resolve_work_agent(caller.agent_id);
-        if (!await parent_agent.resolve_storage().sessions.has_session(caller.session_id, caller.origin.category)) return undefined;
-        return await parent_agent.restore_work_session(caller.session_id, caller.origin.category);
+        if (!await parent_agent.resolve_storage().sessions.has_session(caller.session_id, caller.type)) return undefined;
+        return await parent_agent.restore_work_session(caller.session_id, caller.type);
       },
       report_error: (delegation_id, error, context) => {
         void this.logger.log("error", "Session delegation failed", {
@@ -666,7 +642,7 @@ export class Agent {
       files: this.resolve_storage().files,
       get_handlers: () => this.resolve_raw_hooks().effect[SESSION_HOOK_POINTS.turn_committed] ?? [],
       restore_context: async (record) => {
-        const session = await this.restore_work_session(record.event.session_id, record.origin.category);
+        const session = await this.restore_work_session(record.event.session_id, record.type);
         const workspace = record.workspace_id
           ? record.workspace_id === this.workspace?.id ? this.workspace : await this.resolve_project_workspace(record.workspace_id)
           : undefined;
@@ -676,7 +652,7 @@ export class Agent {
           agent_description: this.description,
           agent_instructions: [...this.get_instructions()],
           session_id: session.id,
-          session_origin: record.origin,
+          ...session_call_context(record),
           turn_id: record.event.turn_id,
           ...(workspace ? { workspace } : {}),
           workspace_env: workspace?.get_env() ?? {},

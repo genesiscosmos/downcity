@@ -12,20 +12,20 @@ export async function recover_background_sessions(
   store: Pick<SessionStore, "list_sessions" | "read_session">,
   options: SessionBackgroundRecoveryOptions,
 ): Promise<void> {
-  for (const category of ["chat", "work"]) {
+  for (const type of ["chat", "work"]) {
     let cursor: string | undefined;
     do {
-      const page = await store.list_sessions({ category, limit: 100, ...(cursor ? { cursor } : {}) }, new Set())
+      const page = await store.list_sessions({ type, limit: 100, ...(cursor ? { cursor } : {}) }, new Set())
         .catch(error => {
-          options.report_error(error, { category, phase: "list_sessions" });
+          options.report_error(error, { type, phase: "list_sessions" });
           throw error;
         });
       for (const entry of page.items) {
         const context: SessionBackgroundRecoveryContext = {
-          session_id: entry.session_id, category, phase: "read_session",
+          session_id: entry.id, type, phase: "read_session",
         };
         try {
-          const view = await store.read_session(entry.session_id, category);
+          const view = await store.read_session(entry.id, type);
           let before_sequence: number | undefined;
           let latest: SessionMessage | undefined;
           for (;;) {
@@ -43,12 +43,12 @@ export async function recover_background_sessions(
               if (actor.kind === "runtime" && actor.namespace === "session_background") {
                 context.phase = "read_completion";
                 // 完成日志是执行终态事实；通知尚在重试也不需要重新装配执行对象。
-                if (await options.is_completed(entry.session_id, turn_id)) {
+                if (await options.is_completed(entry.id, turn_id)) {
                   context.phase = "read_recoverable_messages";
-                  if (!(await options.has_recoverable_messages(entry.session_id, category))) break;
+                  if (!(await options.has_recoverable_messages(entry.id, type))) break;
                 }
                 context.phase = "restore_session";
-                const session = await options.restore(entry.session_id, category);
+                const session = await options.restore(entry.id, type);
                 context.phase = "restore_status";
                 await session.status();
               }

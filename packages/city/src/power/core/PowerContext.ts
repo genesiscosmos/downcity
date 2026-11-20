@@ -16,7 +16,6 @@ import type {
   PowerNotificationPublisher,
   PowerSessionCollection,
   PowerSessionHandle,
-  PowerSessionOrigin,
 } from "@/power/index.js";
 import type { PowerLogger } from "@/power/types/PowerContext.js";
 import type { PowerCall } from "@/power/types/PowerCall.js";
@@ -129,21 +128,6 @@ export function create_power_context(input: CreatePowerContextInput): PowerConte
       ),
     },
     ...(input.notifications ? { notifications: input.notifications } : {}),
-  });
-}
-
-/** 从 Session runtime 端口构造 Power 可调用的稳定句柄。 */
-export function create_power_session_handle(
-  runtime: PowerSessionHandle,
-  session_id: string,
-  origin: PowerSessionOrigin,
-  workspace_id: string | undefined,
-): PowerSessionHandle {
-  return Object.freeze({
-    ...(runtime as unknown as PowerSessionHandle),
-    id: session_id,
-    origin,
-    ...(workspace_id ? { workspace_id } : {}),
   });
 }
 

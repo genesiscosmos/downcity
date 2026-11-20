@@ -22,11 +22,10 @@ export function validate_resource_input(method: string, input: Record<string, un
   }
   if (method.startsWith("session.")) {
     require_agent_id(input.agent);
-    require_resource_value(input.category === undefined || input.category === "work" || input.category === "chat", "category must be chat or work");
+    require_resource_value(input.type === undefined || input.type === "work" || input.type === "chat", "type must be chat or work");
     if (!["session.list", "session.create"].includes(method)) require_resource_value(typeof input.session_id === "string" && input.session_id.trim() && input.session_id.trim() === input.session_id, "A complete Session ID is required");
     if (method === "session.send") require_resource_value(typeof input.message === "string" && input.message.trim(), "message must not be empty");
-    if (method === "session.create") require_resource_value(input.category === undefined || input.category === "work", "Ordinary Session creation uses category work");
-    require_resource_value(!(input.archived && input.origin_type !== undefined), "Archived lists do not support origin_type");
+    if (method === "session.create") require_resource_value(input.type === undefined || input.type === "work", "Ordinary Session creation uses type work");
   }
   require_resource_value(!(input.workspace !== undefined && input.workspace_path !== undefined), "workspace and workspace-path are mutually exclusive");
   if (input.limit !== undefined) require_resource_value(Number.isSafeInteger(Number(input.limit)) && Number(input.limit) >= 1 && Number(input.limit) <= 200, "limit must be an integer from 1 to 200");

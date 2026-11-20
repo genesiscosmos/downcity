@@ -12,12 +12,12 @@ export async function run_resource_chat(agent_id: string, options: Record<string
   try {
     await prepare_resource_input(input);
     if (input.message !== undefined) {
-      const target = await resolve_chat_entry(client, { agent: agent_id, category: typeof input.category === "string" ? input.category : undefined, session_id: typeof input.session_id === "string" ? input.session_id : undefined, new_session: input.new_session === true, workspace: typeof input.workspace === "string" ? input.workspace : undefined, workspace_path: typeof input.workspace_path === "string" ? input.workspace_path : undefined, interactive: !input.json && process.stdin.isTTY === true && process.stdout.isTTY === true });
-      await execute_resource_command("session.send", { ...options, messageFile: undefined, no_wait: options.wait === false }, { ...input, agent: agent_id, category: target.category, session_id: target.session_id, no_wait: options.wait === false });
+      const target = await resolve_chat_entry(client, { agent: agent_id, type: typeof input.type === "string" ? input.type : undefined, kind: typeof input.kind === "string" ? input.kind : undefined, session_id: typeof input.session_id === "string" ? input.session_id : undefined, new_session: input.new_session === true, workspace: typeof input.workspace === "string" ? input.workspace : undefined, workspace_path: typeof input.workspace_path === "string" ? input.workspace_path : undefined, interactive: !input.json && process.stdin.isTTY === true && process.stdout.isTTY === true });
+      await execute_resource_command("session.send", { ...options, messageFile: undefined, no_wait: options.wait === false }, { ...input, agent: agent_id, type: target.type, session_id: target.session_id, no_wait: options.wait === false });
       return;
     }
     if (input.json || !process.stdin.isTTY || !process.stdout.isTTY) throw new ResourceError("usage_error", "Interactive chat requires a TTY; use message or message-file for a one-shot send", 2);
-    await chatCommand({ to: agent_id, root: typeof input.root === "string" ? input.root : undefined, workspace: typeof input.workspace === "string" ? input.workspace : undefined, workspace_path: typeof input.workspace_path === "string" ? input.workspace_path : undefined, category: typeof input.category === "string" ? input.category : undefined, session_id: typeof input.session_id === "string" ? input.session_id : undefined, newSession: input.new_session === true });
+    await chatCommand({ to: agent_id, root: typeof input.root === "string" ? input.root : undefined, workspace: typeof input.workspace === "string" ? input.workspace : undefined, workspace_path: typeof input.workspace_path === "string" ? input.workspace_path : undefined, type: typeof input.type === "string" ? input.type : undefined, kind: typeof input.kind === "string" ? input.kind : undefined, session_id: typeof input.session_id === "string" ? input.session_id : undefined, newSession: input.new_session === true });
   } catch (error) {
     const failure = as_resource_error(error);
     process.exitCode = failure.exit_code;

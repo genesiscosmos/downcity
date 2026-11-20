@@ -6,7 +6,7 @@
  * - 不处理 RemoteSession 的 turn lifecycle，避免 transport 与 actor 逻辑混在一起。
  */
 
-import { SESSION_ORIGIN_CATEGORY_WORK } from "@downcity/type";
+import { SESSION_TYPE_WORK } from "@downcity/type";
 import type { SessionModelRetryHttpPayload } from "@/types/remote/SessionModelRetry.js";
 import type { AgentInteraction, AgentInteractionChange, AgentListInteractionsInput, AgentRespondInteractionInput } from "@downcity/agent";
 import type { RemoteInteractionSubscriptionInput } from "@/types/remote/RemoteAgentInteractions.js";
@@ -78,8 +78,8 @@ export class HttpRemoteAgentTransport implements RemoteAgentTransport {
   }
 
   /** 构建携带确定性来源分区的单 Session URL。 */
-  private session_url(session_id: string, category: string, suffix = ""): string {
-    const query = new URLSearchParams({ category });
+  private session_url(session_id: string, type: string | undefined, suffix = ""): string {
+    const query = new URLSearchParams(type ? { type } : undefined);
     return `${this.base_url}/api/sdk/sessions/${encodeURIComponent(session_id)}${suffix}?${query.toString()}`;
   }
 
@@ -95,21 +95,21 @@ export class HttpRemoteAgentTransport implements RemoteAgentTransport {
       }),
       body: JSON.stringify(input ?? {}),
     });
-    if (!payload.success || !payload.session?.session_id) {
+    if (!payload.success || !payload.session?.id) {
       throw new Error(String(payload.error || "Remote session create failed"));
     }
     return payload.session;
   }
 
-  async get_info(session_id: string, category: string): Promise<AgentSessionInfo> {
+  async get_info(session_id: string, type?: string): Promise<AgentSessionInfo> {
     const payload = await read_http_json<{
       success?: boolean;
       error?: string;
       session?: AgentSessionInfo;
-    }>(this.session_url(session_id, category), {
+    }>(this.session_url(session_id, type), {
       headers: this.headers(),
     });
-    if (!payload.success || !payload.session?.session_id) {
+    if (!payload.success || !payload.session?.id) {
       throw new Error(String(payload.error || "Remote session info failed"));
     }
     return payload.session;
@@ -117,14 +117,14 @@ export class HttpRemoteAgentTransport implements RemoteAgentTransport {
 
   async prompt(
     session_id: string,
-    category: string,
+    type: string,
     input: RemotePromptInput,
   ): Promise<import("@/types/remote/RemoteTurn.js").RemotePromptTurn> {
     const payload = await read_http_json<{
       success?: boolean;
       error?: string;
       turn?: import("@/types/remote/RemoteTurn.js").RemotePromptTurn;
-    }>(this.session_url(session_id, category, "/prompt"), {
+    }>(this.session_url(session_id, type, "/prompt"), {
       method: "POST",
       headers: this.headers({
         "Content-Type": "application/json",
@@ -139,19 +139,19 @@ export class HttpRemoteAgentTransport implements RemoteAgentTransport {
   }
 
   async open_power_channel(input: OpenPromptPowerChannel): Promise<PromptPowerChannel> {
-    const channel = await open_http_power_channel(this.session_url(input.session_id, input.category, "/power-executions/events"), this.headers(), input);
+    const channel = await open_http_power_channel(this.session_url(input.session_id, input.type, "/power-executions/events"), this.headers(), input);
     const close = async () => { this.resources.delete(close); await channel.close(); };
     if (this.closed) { await channel.close(); throw new Error("Remote City connection closed"); }
     this.resources.add(close);
     return { id: channel.id, result: (result) => channel.result(result), close };
   }
 
-  async stop(session_id: string, category: string, expected_turn_id?: string, expected_message?: import("@downcity/type").SessionMessageCheckpoint): Promise<AgentSessionStopResult> {
+  async stop(session_id: string, type: string, expected_turn_id?: string, expected_message?: import("@downcity/type").SessionMessageCheckpoint): Promise<AgentSessionStopResult> {
     const payload = await read_http_json<{
       success?: boolean;
       error?: string;
       result?: AgentSessionStopResult;
-    }>(this.session_url(session_id, category, "/stop"), {
+    }>(this.session_url(session_id, type, "/stop"), {
       method: "POST",
       body: JSON.stringify({ expected_turn_id, expected_message }),
       headers: this.headers({
@@ -166,7 +166,7 @@ export class HttpRemoteAgentTransport implements RemoteAgentTransport {
 
   async subscribe(params: {
     session_id: string;
-    category: string;
+    type: string;
     on_ready: () => void;
     on_event: (event: SessionMutation) => void;
     on_close: (error?: unknown) => void;
@@ -179,7 +179,7 @@ export class HttpRemoteAgentTransport implements RemoteAgentTransport {
       reject_ready = reject;
     });
     const response = await fetch(
-      this.session_url(params.session_id, params.category, "/events"),
+      this.session_url(params.session_id, params.type, "/events"),
       {
         headers: this.headers(),
         signal: abort_controller.signal,
@@ -228,10 +228,10 @@ export class HttpRemoteAgentTransport implements RemoteAgentTransport {
 
   async messages(
     session_id: string,
-    category: string,
+    type: string,
     input?: ListSessionMessagesInput,
   ): Promise<SessionMessagePage> {
-    const query = new URLSearchParams({ category });
+    const query = new URLSearchParams(type ? { type } : undefined);
     if (input?.before_sequence !== undefined) {
       query.set("before_sequence", String(input.before_sequence));
     }
@@ -251,12 +251,12 @@ export class HttpRemoteAgentTransport implements RemoteAgentTransport {
     return payload.messages;
   }
 
-  async system(session_id: string, category: string): Promise<AgentSessionSystemSnapshot> {
+  async system(session_id: string, type: string): Promise<AgentSessionSystemSnapshot> {
     const payload = await read_http_json<{
       success?: boolean;
       error?: string;
       system?: AgentSessionSystemSnapshot;
-    }>(this.session_url(session_id, category, "/system"), {
+    }>(this.session_url(session_id, type, "/system"), {
       headers: this.headers(),
     });
     if (!payload.success || !payload.system || !Array.isArray(payload.system.blocks)) {
@@ -267,7 +267,7 @@ export class HttpRemoteAgentTransport implements RemoteAgentTransport {
 
   async fork(
     session_id: string,
-    category: string,
+    type: string,
     input?: AgentSessionForkInput | string,
   ): Promise<AgentSessionInfo> {
     const message_id =
@@ -279,7 +279,7 @@ export class HttpRemoteAgentTransport implements RemoteAgentTransport {
       success?: boolean;
       error?: string;
       session?: AgentSessionInfo;
-    }>(this.session_url(session_id, category, "/fork"), {
+    }>(this.session_url(session_id, type, "/fork"), {
       method: "POST",
       headers: this.headers({
         "Content-Type": "application/json",
@@ -290,7 +290,7 @@ export class HttpRemoteAgentTransport implements RemoteAgentTransport {
         ...(typeof input !== "string" && input?.replace === true ? { replace: true } : {}),
       }),
     });
-    if (!payload.success || !payload.session?.session_id) {
+    if (!payload.success || !payload.session?.id) {
       throw new Error(String(payload.error || "Remote session fork failed"));
     }
     return payload.session;
@@ -298,7 +298,8 @@ export class HttpRemoteAgentTransport implements RemoteAgentTransport {
 
   async list_sessions(input?: AgentListSessionsInput): Promise<AgentSessionSummaryPage> {
     const query = new URLSearchParams();
-    query.set("category", input?.category || SESSION_ORIGIN_CATEGORY_WORK);
+    query.set("type", input?.type || SESSION_TYPE_WORK);
+    if (input?.kind) query.set("kind", input.kind);
     if (input?.limit !== undefined) query.set("limit", String(input.limit));
     if (input?.cursor) query.set("cursor", input.cursor);
     if (input?.query) query.set("query", input.query);
@@ -335,7 +336,7 @@ export class HttpRemoteAgentTransport implements RemoteAgentTransport {
       plan_fingerprint?: string;
       changed?: boolean;
     }>(
-      this.session_url(session_id, input.category || SESSION_ORIGIN_CATEGORY_WORK, "/archive"),
+      this.session_url(session_id, input.type || SESSION_TYPE_WORK, "/archive"),
       {
         method: "POST",
         headers: this.headers({ "Content-Type": "application/json" }),
@@ -359,7 +360,8 @@ export class HttpRemoteAgentTransport implements RemoteAgentTransport {
     input?: AgentArchiveSessionsInput,
   ): Promise<AgentArchiveSessionsResult> {
     const query = new URLSearchParams();
-    query.set("category", input?.category || SESSION_ORIGIN_CATEGORY_WORK);
+    query.set("type", input?.type || SESSION_TYPE_WORK);
+    if (input?.kind) query.set("kind", input.kind);
     if (input?.limit !== undefined) query.set("limit", String(input.limit));
     if (input?.cursor) query.set("cursor", input.cursor);
     if (input?.query) query.set("query", input.query);
@@ -529,12 +531,12 @@ export class HttpRemoteAgentTransport implements RemoteAgentTransport {
     return payload.result;
   }
 
-  async interactions(session_id: string, category: string): Promise<SessionInteractionRequest[]> {
+  async interactions(session_id: string, type: string): Promise<SessionInteractionRequest[]> {
     const payload = await read_http_json<{
       success?: boolean;
       error?: string;
       interactions?: SessionInteractionRequest[];
-    }>(this.session_url(session_id, category, "/interactions"), {
+    }>(this.session_url(session_id, type, "/interactions"), {
       headers: this.headers(),
     });
     if (!payload.success || !Array.isArray(payload.interactions)) {
@@ -543,12 +545,12 @@ export class HttpRemoteAgentTransport implements RemoteAgentTransport {
     return payload.interactions;
   }
 
-  async status(session_id: string, category: string): Promise<AgentSessionStatus> {
+  async status(session_id: string, type: string): Promise<AgentSessionStatus> {
     const payload = await read_http_json<{
       success?: boolean;
       error?: string;
       status?: AgentSessionStatus;
-    }>(this.session_url(session_id, category, "/status"), {
+    }>(this.session_url(session_id, type, "/status"), {
       headers: this.headers(),
     });
     if (!payload.success || !payload.status) {
@@ -558,9 +560,9 @@ export class HttpRemoteAgentTransport implements RemoteAgentTransport {
   }
 
   /** HTTP 只提交一次；结果未知交由调用方回读权威快照。 */
-  async retry_model_step(session_id: string, category: string, input: import("@downcity/type").SessionModelRetryInput): Promise<import("@downcity/type").SessionModelRetryResult> {
+  async retry_model_step(session_id: string, type: string, input: import("@downcity/type").SessionModelRetryInput): Promise<import("@downcity/type").SessionModelRetryResult> {
     const payload = await read_http_json<SessionModelRetryHttpPayload>(
-      this.session_url(session_id, category, "/retry-model-step"), {
+      this.session_url(session_id, type, "/retry-model-step"), {
         method: "POST", headers: this.headers({ "Content-Type": "application/json" }), body: JSON.stringify(input),
       });
     if (!payload.success || !payload.result) throw new Error(payload.error || "Remote model retry submission failed");
@@ -569,7 +571,7 @@ export class HttpRemoteAgentTransport implements RemoteAgentTransport {
 
   async set(
     session_id: string,
-    category: string,
+    type: string,
     input: RemoteSessionSetInput,
     options?: AgentSessionSetOptions,
   ): Promise<void> {
@@ -577,7 +579,7 @@ export class HttpRemoteAgentTransport implements RemoteAgentTransport {
       success?: boolean;
       error?: string;
       queued?: boolean;
-    }>(this.session_url(session_id, category, "/set"), {
+    }>(this.session_url(session_id, type, "/set"), {
       method: "POST",
       headers: this.headers({
         "Content-Type": "application/json",
@@ -591,14 +593,14 @@ export class HttpRemoteAgentTransport implements RemoteAgentTransport {
 
   async respond(
     session_id: string,
-    category: string,
+    type: string,
     input: RespondSessionInteractionInput,
   ): Promise<SessionInteractionResult> {
     const payload = await read_http_json<{
       success?: boolean;
       result?: SessionInteractionResult;
       error?: string;
-    }>(this.session_url(session_id, category, "/respond"), {
+    }>(this.session_url(session_id, type, "/respond"), {
       method: "POST",
       headers: this.headers({
         "Content-Type": "application/json",

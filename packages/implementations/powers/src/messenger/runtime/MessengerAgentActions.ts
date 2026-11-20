@@ -2,7 +2,7 @@
 
 import { create_action } from "@downcity/city/power";
 import type { PowerActions } from "@downcity/city/power";
-import { SESSION_ORIGIN_CATEGORY_CHAT } from "@downcity/type";
+import { SESSION_TYPE_CHAT } from "@downcity/type";
 import { z } from "zod";
 import type { MessengerRuntime } from "./MessengerRuntime.js";
 
@@ -57,7 +57,7 @@ export function create_messenger_agent_actions(
         if (!conversation || conversation.agent_id !== context.agent.id) {
           return { success: false, error: "Messenger conversation is not owned by the current Agent" };
         }
-        const session = await context.agent.sessions.get(session_id, SESSION_ORIGIN_CATEGORY_CHAT);
+        const session = await context.agent.sessions.get(session_id, SESSION_TYPE_CHAT);
         return { success: true, data: await session.messages() };
       },
     }),

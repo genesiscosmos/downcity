@@ -233,7 +233,7 @@ export async function writeTaskRunInputArtifact(
             `- delivery_session_id: \`${params.task.delivery_session.session_id}\``,
             `- delivery_agent_id: \`${params.task.delivery_session.agent_id}\``,
             `- delivery_workspace_id: \`${params.task.delivery_session.workspace_id}\``,
-            `- delivery_category: \`${params.task.delivery_session.category}\``,
+            `- delivery_type: \`${params.task.delivery_session.type}\``,
           ]
         : []),
       `- kind: \`${params.taskKind}\``,

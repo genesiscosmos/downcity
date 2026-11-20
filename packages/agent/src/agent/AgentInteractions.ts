@@ -5,13 +5,7 @@
  * 实时消息从 Session canonical mutations 投影，回应回到已加载的原 Session 串行入口。
  */
 import type { SessionMutation } from "@downcity/type";
-import type {
-  AgentInteractionChange,
-  AgentInteractionCollection,
-  AgentListInteractionsInput,
-  AgentRespondInteractionInput,
-  AgentInteractionsOptions,
-} from "@/types/agent/AgentInteractions.js";
+import type { AgentInteractionChange, AgentInteractionCollection, AgentListInteractionsInput, AgentRespondInteractionInput, AgentInteractionsOptions } from "@/types/agent/AgentInteractions.js";
 import type { AgentSession } from "@/types/agent/SessionActor.js";
 import type { AgentManagedSession } from "@/types/session/SessionOptions.js";
 import { project_agent_interaction } from "@/session/storage/SessionInteractionReader.js";
@@ -27,7 +21,7 @@ export class AgentInteractions implements AgentInteractionCollection {
 
   constructor(private readonly options: AgentInteractionsOptions) {
     this.unsubscribe_removed = options.sessions.on_removed((event) => {
-      this.emit({ type: "removed", session_category: event.category, session_id: event.session_id });
+      this.emit({ type: "removed", session_type: event.type, session_id: event.session_id });
     });
   }
 
@@ -42,11 +36,11 @@ export class AgentInteractions implements AgentInteractionCollection {
     const sessions = this.options.sessions.list_cached_sessions();
     for (const item of items) {
       const session = sessions.find((candidate) => candidate.id === item.reference.session_id
-        && candidate.origin.category === item.reference.session_category);
+        && candidate.type === item.reference.session_type);
       item.can_respond = session?.can_respond_interaction(item.reference.interaction_id, item.reference.turn_id) ?? false;
     }
     items.sort((left, right) => left.interaction.request.created_at - right.interaction.request.created_at
-      || left.reference.session_category.localeCompare(right.reference.session_category)
+      || left.reference.session_type.localeCompare(right.reference.session_type)
       || left.reference.session_id.localeCompare(right.reference.session_id)
       || left.reference.interaction_id.localeCompare(right.reference.interaction_id));
     return input?.limit === undefined ? items : items.slice(0, input.limit);
@@ -88,7 +82,7 @@ export class AgentInteractions implements AgentInteractionCollection {
     const unsubscribe = session.subscribe((mutation) => this.project_mutation(session, mutation));
     return () => {
       unsubscribe();
-      this.emit({ type: "removed", session_category: session.origin.category, session_id: session.id });
+      this.emit({ type: "removed", session_type: session.type, session_id: session.id });
     };
   }
 
@@ -103,12 +97,12 @@ export class AgentInteractions implements AgentInteractionCollection {
   private resolve_session(input: AgentRespondInteractionInput): AgentSession {
     this.assert_active();
     const reference = input.reference;
-    if (!reference || [reference.session_category, reference.session_id, reference.turn_id, reference.interaction_id]
+    if (!reference || [reference.session_type, reference.session_id, reference.turn_id, reference.interaction_id]
       .some((value) => typeof value !== "string" || !value.trim())) {
       throw new Error("Agent Interaction requires a complete Session/Turn/Interaction reference");
     }
     const session = this.options.sessions.list_cached_sessions().find((candidate) =>
-      candidate.id === reference.session_id && candidate.origin.category === reference.session_category);
+      candidate.id === reference.session_id && candidate.type === reference.session_type);
     if (!session) throw new Error("Agent Interaction original Session is not running; the request cannot be resumed");
     return session;
   }
@@ -116,7 +110,7 @@ export class AgentInteractions implements AgentInteractionCollection {
   /** 只处理包含 canonical Tool 快照的 mutation，文本增量不触发查询。 */
   private project_mutation(session: AgentManagedSession, mutation: SessionMutation): void {
     if (mutation.variant === "session" && mutation.type === "truncate") {
-      this.emit({ type: "removed", session_category: session.origin.category, session_id: session.id });
+      this.emit({ type: "removed", session_type: session.type, session_id: session.id });
       return;
     }
     const parts = mutation.variant === "part" && mutation.type === "tool" ? [mutation.part]
@@ -126,7 +120,7 @@ export class AgentInteractions implements AgentInteractionCollection {
       for (const interaction of part.interactions ?? []) {
         const can_respond = interaction.status === "pending"
           && session.can_respond_interaction(interaction.interaction_id, interaction.request.turn_id);
-        this.emit({ type: "updated", item: project_agent_interaction(session.id, session.origin.category, interaction, can_respond, session.origin) });
+        this.emit({ type: "updated", item: project_agent_interaction(session.id, session.type, interaction, can_respond, session) });
       }
     }
   }

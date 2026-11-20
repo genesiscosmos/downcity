@@ -90,7 +90,7 @@ export class SshShell implements WorkspaceShell {
     describe_sandbox(): null { return null; }
     async reset_sandbox(): Promise<void> { throw new Error("SSH Workspace has no local Sandbox to reset"); }
     has_active_sessions(): boolean { return [...this.sessions.values()].some((session) => session.exit_code === null); }
-    private owner_id(context: ToolCallContext): string { return `${context.agent_id}:${context.session_origin.category}:${context.session_id}`; }
+    private owner_id(context: ToolCallContext): string { return `${context.agent_id}:${context.session_type}:${context.session_id}`; }
     private async start(input: SshCommandOptions, context?: ToolCallContext): Promise<SshProcessSession> {
         const serialized = JSON.stringify(input);
         if (serialized.includes("${secrets.") || (context?.interactions && JSON.stringify(context.interactions.redact_secret_values(input)) !== serialized)) throw new Error("Private values are only supported in SSH session stdin, not command source or connection parameters");

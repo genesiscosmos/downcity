@@ -4,7 +4,7 @@ import type { JsonValue, RespondSessionInteractionInput } from "@downcity/type";
 /** 原Session请求的精确引用。 */
 export interface PowerInteractionReference {
   /** Session持久化分区。 */
-  session_category: "chat" | "work";
+  session_type: "chat" | "work";
   /** 原Session稳定标识。 */
   session_id: string;
   /** 原请求所属执行标识。 */

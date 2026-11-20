@@ -1,6 +1,7 @@
 /** 单记录转移的外部来源清单与精确校验；引用不授予权限，不回落同逻辑ID。 */
 import { digest, fail } from "./session-v7-database.mjs";
 import { uuid_pattern } from "./session-transfer-record.mjs";
+import { record_sources as historical_sources, verify_sources as verify_historical_sources } from "./session-transfer-historical-sources.mjs";
 
 /** 从Tool保存的result_ref/model_output递归提取框架引用，字符串原文不搜索替换。 */
 function result_references(value, output = new Set()) {
@@ -12,6 +13,7 @@ function result_references(value, output = new Set()) {
 
 /** 包只登记来源身份，不包含其他Session的canonical正文。 */
 export function record_sources(record, runtime) {
+  if (runtime.AGENT_SESSION_SCHEMA_VERSION < 13) return historical_sources(record, runtime);
   const sources = new Map();
   // 同一消息可被数百个结果引用指向；每轮只解码一次，缓存不跨 record 或数据库快照。
   const messages = new Map(record.messages.map(message => [message.message_id, message]));
@@ -22,16 +24,16 @@ export function record_sources(record, runtime) {
     if (part.type === "tool") tools.set(part.part_id, part);
   }
   const add = source => sources.set(digest(source), source);
-  const session_source = (agent_id, session_id, category) => {
+  const session_source = (agent_id, session_id, type) => {
     if (!uuid_pattern.test(session_id ?? "") || typeof agent_id !== "string" || !agent_id) fail("transfer_source_identity_invalid");
-    add({ kind: "session", agent_id, session_id, ...(category ? { category } : {}) });
+    add({ kind: "session", agent_id, session_id, ...(type ? { type } : {}) });
   };
   const meta_source = meta => {
-    if (meta?.from?.kind === "session") session_source(meta.from.agent_id, meta.from.session_id, meta.from.category);
+    if (meta?.from?.kind === "session") session_source(meta.from.agent_id, meta.from.session_id, meta.from.type);
   };
-  const origin = JSON.parse(record.metadata.origin);
-  if (origin.parent_session_id !== undefined) session_source(origin.parent_agent_id, origin.parent_session_id, origin.parent_session_category);
-  if (origin.root_chat_session_id !== undefined) session_source(runtime.agent_id, origin.root_chat_session_id, "chat");
+  const relations = JSON.parse(record.metadata.relations);
+  if (relations.parent !== undefined) session_source(relations.parent.agent_id, relations.parent.session_id, relations.parent_session_type);
+  if (relations.root_chat_session_id !== undefined) session_source(runtime.agent_id, relations.root_chat_session_id, "chat");
   for (const message of record.messages) {
     if (message.origin_session_id) add({ kind: "fork", agent_id: runtime.agent_id,
       session_id: message.origin_session_id, message_id: message.origin_message_id, turn_id: message.origin_turn_id });
@@ -54,7 +56,7 @@ export function record_sources(record, runtime) {
         }
         const tool = decoded_messages.get(local.message_id).get(local.part_id);
         const own = location.session_id === record.metadata.session_id && location.message_id === message.message_id
-          && location.message_sequence === message.sequence && (!location.category || location.category === record.metadata.category);
+          && location.message_sequence === message.sequence && (!location.type || location.type === record.metadata.type);
         const copied = message.origin_session_id === location.session_id && message.origin_message_id === location.message_id
           && tool?.result_ref === result_ref;
         if (own || copied) {
@@ -71,6 +73,7 @@ export function record_sources(record, runtime) {
 
 /** 来源仅在当前 Agent 权限内精确解析；显式保留缺失来源不会放宽身份或摘要校验。 */
 export function verify_sources(database, record, sources, runtime, allow_unresolved = false) {
+  if (runtime.AGENT_SESSION_SCHEMA_VERSION < 13) return verify_historical_sources(database, record, sources, runtime, allow_unresolved);
   const unresolved = [];
   for (const source of sources) {
     if (!uuid_pattern.test(source.session_id ?? "") || !["session", "fork", "result"].includes(source.kind)) fail("transfer_source_identity_invalid");
@@ -79,7 +82,7 @@ export function verify_sources(database, record, sources, runtime, allow_unresol
     const row = own ? { ...record.metadata, session_key: null }
       : database.prepare("SELECT * FROM sessions WHERE session_id=?").get(source.session_id);
     if (!row) { unresolved.push(source); continue; }
-    if (row.session_id !== source.session_id || (source.category && row.category !== source.category)) fail("transfer_source_identity_conflict");
+    if (row.session_id !== source.session_id || (source.type && row.type !== source.type)) fail("transfer_source_identity_conflict");
     if (source.kind === "session") continue;
     const message = own ? record.messages.find(message => message.message_id === source.message_id)
       : database.prepare("SELECT * FROM messages WHERE session_key=? AND message_id=?").get(row.session_key, source.message_id);

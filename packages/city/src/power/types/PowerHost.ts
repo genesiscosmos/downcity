@@ -103,7 +103,7 @@ export interface PowerHostSystem extends PowerInteractionHost {
     /** Session 所属真实 Agent。 */
     readonly agent_id: string;
     /** Session 的持久化分区。 */
-    readonly category: string;
+    readonly type: string;
     /** Session 的稳定 ID。 */
     readonly session_id: string;
     /** 可选预期 Turn，避免迟到的取消停止后续工作。 */
@@ -114,7 +114,7 @@ export interface PowerHostSystem extends PowerInteractionHost {
     /** Session 所属真实 Agent。 */
     readonly agent_id: string;
     /** Session 的持久化分区。 */
-    readonly category: string;
+    readonly type: string;
     /** Session 的稳定 ID。 */
     readonly session_id: string;
     /** 指定 Turn；与 request_id 互斥。 */
@@ -155,8 +155,12 @@ export interface PowerHostSystem extends PowerInteractionHost {
     readonly model_id?: string;
     /** 稳定 attempt 创建键；同键重试找回原 Session。 */
     readonly creation_key?: string;
-    /** 新 Session 的来源及其业务路由元数据。 */
-    readonly origin: { readonly type: string; readonly [key: string]: PowerJsonValue };
+    /** 新 Session 的业务类型、入口用途及创建关系。 */
+    readonly type: import("@downcity/type").SessionType;
+    /** 创建方定义的业务用途。 */
+    readonly kind: string;
+    /** 可信宿主绑定的派生来源。 */
+    readonly parent?: import("@downcity/type").SessionParent;
   }): Promise<{ readonly session_id: string }>;
   /** 在指定 Agent 与 Workspace 上恢复或创建 Session，并提交一次用户输入。 */
   prompt_agent_session(input: {
@@ -169,7 +173,7 @@ export interface PowerHostSystem extends PowerInteractionHost {
     /** 目标 Session 的稳定 ID。 */
     readonly session_id: string;
     /** Session 的持久化来源分区。 */
-    readonly category: string;
+    readonly type: string;
     /** 同一 Session 内标识本次业务输入的稳定幂等键。 */
     readonly request_id?: string;
     /** 提交给 Session 的文本或结构化内容。 */
@@ -183,7 +187,7 @@ export interface PowerHostSystem extends PowerInteractionHost {
     /** 原 Session 所属的真实 Agent 稳定标识。 */
     readonly agent_id: string;
     /** 原 Session 的持久化分区。 */
-    readonly category: string;
+    readonly type: string;
     /** 原 Session 的稳定标识；必须已经存在。 */
     readonly session_id: string;
     /** 发起后台工作的原始 Turn；结果不能漂移到后续 Turn。 */
@@ -207,7 +211,7 @@ export interface PowerHostSystem extends PowerInteractionHost {
     /** 目标 Session 的稳定 ID。 */
     readonly session_id: string;
     /** 目标 Session 的来源分区。 */
-    readonly category: string;
+    readonly type: string;
     /** 要追加的纯文本消息。 */
     readonly text: string;
   }): Promise<void>;
@@ -218,7 +222,7 @@ export interface PowerHostSystem extends PowerInteractionHost {
     /** Session 的稳定 ID。 */
     readonly session_id: string;
     /** Session 的来源存储分区。 */
-    readonly category: string;
+    readonly type: string;
   }): Promise<PowerHostWorkspace | undefined>;
   /** 读取既有 Session 的 canonical 消息，供后台增量处理；不发起 turn。 */
   read_agent_session_messages(input: {
@@ -227,7 +231,7 @@ export interface PowerHostSystem extends PowerInteractionHost {
     /** Session 稳定标识。 */
     readonly session_id: string;
     /** Session 持久化来源分区。 */
-    readonly category: string;
+    readonly type: string;
     /** 返回此 sequence 之前的消息，默认从最新边界开始。 */
     readonly before_sequence?: number;
     /** 返回此 sequence 之后的消息，用于固定来源起点。 */

@@ -5,7 +5,7 @@ import type { NotificationListResult, NotificationInteractionItem } from "../typ
 /** 同一交互在消息与Part事件中重复出现时只保留一项。 */
 export function interaction_key(item: NotificationInteractionItem): string {
   const ref = item.interaction.reference;
-  return JSON.stringify([item.agent_id, ref.session_category, ref.session_id, ref.turn_id, ref.interaction_id]);
+  return JSON.stringify([item.agent_id, ref.session_type, ref.session_id, ref.turn_id, ref.interaction_id]);
 }
 
 /** 私密问题保持原分类，只将展示语义标记为私密输入。 */

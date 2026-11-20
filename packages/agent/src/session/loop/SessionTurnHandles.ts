@@ -1,5 +1,5 @@
 /** Turn 句柄、延迟结果及 Prompt 幂等身份的纯构造函数，不持有调度状态。 */
-import { createHash } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import type { AgentSessionTurnHandle, AgentSessionTurnResult } from "@/types/sdk/AgentSessionTurn.js";
 import type { ActiveSessionTurnState, SessionDeferred, PromptRequestIdentity } from "@/types/session/SessionLoop.js";
 
@@ -13,7 +13,7 @@ export function create_deferred<T>(): SessionDeferred<T> {
 
 /** 建立尚未接受首条输入的 Turn。 */
 export function create_active_session_turn_state(turn_id: string): ActiveSessionTurnState {
-  return { turn_id, result: null, deferred_finished: create_deferred<AgentSessionTurnResult>(), turn_context: null, prompt_started: false };
+  return { turn_id, execution_id: randomUUID(), result: null, deferred_finished: create_deferred<AgentSessionTurnResult>(), turn_context: null, prompt_started: false };
 }
 
 /** 句柄只观察所属 Turn，不跟随 Session 后续 Turn。 */

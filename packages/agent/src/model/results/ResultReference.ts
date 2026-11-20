@@ -7,9 +7,9 @@ import { createHash } from "node:crypto";
 import type { ModelJsonValue, SessionAgentToolPart } from "@downcity/type";
 import { project_tool_result } from "../messages/ToolResultProjection.js";
 import { DISCLOSURE_VERSION, RESULT_BYTES, result_bytes } from "./ResultDisclosure.js";
-
 import { assert_session_id } from "../../session/SessionIdentity.js";
 import type { ResultLocation, ResultSnapshot } from "@/types/model/ResultReference.js";
+
 export type { ResultLocation, ResultSnapshot } from "@/types/model/ResultReference.js";
 
 /** 只对已清理的阅读值计算固定格式摘要。 */
@@ -20,13 +20,15 @@ export function result_digest(value: ModelJsonValue): string {
 /** 生成可跨重启解析的引用；调用方只在持久化成功后向模型发布。 */
 export function create_result_ref(location: ResultLocation, value: ModelJsonValue): string {
   assert_session_id(location.session_id);
-  return `res_2_${Buffer.from(JSON.stringify({ ...location, digest: result_digest(value) })).toString("base64url")}`;
+  const { type, ...identity } = location;
+  // v2 引用已发布到模型快照与消息中，编码继续使用固定的 category 字段。
+  return `res_2_${Buffer.from(JSON.stringify({ ...identity, category: type, digest: result_digest(value) })).toString("base64url")}`;
 }
 
 /** 校验引用语法，位置只作为宿主读取参数，绝不拼接物理路径。 */
 export function parse_result_ref(result_ref: string): ResultSnapshot {
   if (typeof result_ref !== "string" || !result_ref.startsWith("res_2_") || result_ref.length > 4096) throw new Error("result_ref_invalid");
-  let value: ResultSnapshot;
+  let value: Omit<ResultSnapshot, "type"> & { /** v2 编码中的来源类型。 */ category?: string };
   try { value = JSON.parse(Buffer.from(result_ref.slice(6), "base64url").toString()); }
   catch { throw new Error("result_ref_invalid"); }
   if (!value || typeof value.session_id !== "string" || typeof value.message_id !== "string" || typeof value.part_id !== "string"
@@ -35,7 +37,8 @@ export function parse_result_ref(result_ref: string): ResultSnapshot {
     || (value.category !== undefined && (typeof value.category !== "string" || !value.category.trim()))
     || Object.keys(value).some(key => !["session_id", "message_id", "message_sequence", "part_id", "category", "digest"].includes(key))) throw new Error("result_ref_invalid");
   try { assert_session_id(value.session_id); } catch { throw new Error("result_ref_invalid"); }
-  return value;
+  const { category, ...snapshot } = value;
+  return category === undefined ? snapshot : { ...snapshot, type: category };
 }
 
 /** 统一阅读事实源；二进制只保留元信息，不将载荷当文本分页。 */

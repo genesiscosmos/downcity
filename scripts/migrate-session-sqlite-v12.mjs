@@ -4,7 +4,7 @@
  */
 import path from "node:path";
 import { pathToFileURL as path_to_file_url } from "node:url";
-import { load_runtime } from "./lib/session-runtime.mjs";
+import { load_runtime } from "./lib/session-v12-runtime.mjs";
 import { load_runtime as load_historical } from "./lib/session-v11-runtime.mjs";
 import { preflight, plan_batch, migrate, read_manifest, verify_batch, restore_batch } from "./lib/session-v12-migration.mjs";
 import { fail } from "./lib/session-v7-database.mjs";

@@ -14,15 +14,14 @@ import { RemoteSession } from "../bin/remote/RemoteSession.js";
 test("RemoteSession forwards set observability options to its transport", async () => {
   const calls = [];
   const transport = {
-    async set(session_id, category, input, options) {
-      calls.push({ session_id, category, input, options });
+    async set(session_id, type, input, options) {
+      calls.push({ session_id, type, input, options });
     },
   };
   const session = new RemoteSession(transport, {
-    agent_id: "agent_test",
-    session_id: "session_test",
+    id: "session_test",
+    type: "work", kind: "task",
     message_count: 0,
-    origin: { category: "work", type: "task" },
   });
 
   await session.set(
@@ -32,7 +31,7 @@ test("RemoteSession forwards set observability options to its transport", async 
 
   assert.deepEqual(calls, [{
     session_id: "session_test",
-    category: "work",
+    type: "work",
     input: { security: { approval_mode: "ask" } },
     options: { persist_action: false, publish_mutation: false },
   }]);
@@ -68,10 +67,9 @@ test("RemoteSession reconnects the event pump after transport close", async () =
     },
   };
   const session = new RemoteSession(transport, {
-    agent_id: "agent_test",
-    session_id: "session_test",
+    id: "session_test",
+    type: "work", kind: "task",
     message_count: 0,
-    origin: { category: "work", type: "task" },
   });
 
   const first_turn = await session.prompt({ actor: { kind: "user", user_id: "local" }, query: "first" });

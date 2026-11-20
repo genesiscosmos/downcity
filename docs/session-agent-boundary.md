@@ -245,7 +245,7 @@ flowchart TB
 | [`SessionCaller.ts`](../packages/city/src/city/power/builtin/session/SessionCaller.ts) `require_session_coordinator` | 同上：非 task 且深度 < 3 | **真正的硬拦截**：`session.*` 与 `agent.delegate` 的执行期守卫 |
 | [`SessionWork.ts`](../packages/agent/src/agent/SessionWork.ts) `archive` | 分类为 `work` 则允许 | `session.archive` 只接受工作分类 |
 | [`SessionWork.ts`](../packages/agent/src/agent/SessionWork.ts) 清单 | 排除角色为 `agent` 的会话 | 会话清单不列「自己」 |
-| [`SessionDelegations.ts`](../packages/agent/src/agent/SessionDelegations.ts) `send` | 必须 `work` 分类且有 `workspace_id` | `session.send` 只续接项目工作会话 |
+| [`SessionDelegations.ts`](../packages/agent/src/agent/SessionDelegations.ts) `input` | 必须 `work` 分类且有 `workspace_id` | `session.input` 只续接项目工作会话 |
 | [`GroupSession.ts`](../packages/agent/src/group/GroupSession.ts) `assert_member_session_origin` | 角色为 `group` 且 `group_id`/`group_session_id` 匹配 | 恢复成员会话时校验归属 |
 | [`MessengerEnvironment.ts`](../packages/implementations/powers/src/messenger/runtime/MessengerEnvironment.ts) | 角色为 `channel` 且有 `chat_id` 与有效平台 | 选择平台 prompt、构造本轮环境事实 |
 | [`MessengerPower.ts`](../packages/implementations/powers/src/messenger/MessengerPower.ts) | 角色为 `channel` | `turn_committed` 只对外部聊天会话执行自动回复 |
@@ -268,7 +268,7 @@ flowchart TB
 | 主会话也是普通 Session，无专属字段/索引/存储 | **已实现** | 文件注释即此声明；确无专属表或索引 |
 | `session.get()` 键表（`workspace_id` / `model_label` / `approval_mode` / `title` / `timezone` / `created_at` / `updated_at`） | **已实现，逐键一致** | [`Session.ts:299`](../packages/agent/src/session/Session.ts) 的 switch 与文档表完全对应 |
 | 删除 `get_workspace()` / `set_workspace()` / `workspace_id` 属性 | **未完成** | `get_workspace()` 仍存在于 [`Session.ts:593`](../packages/agent/src/session/Session.ts)；`workspace_id` 仍是 [`SessionActor.ts:83`](../packages/agent/src/types/agent/SessionActor.ts) 的公开只读字段。公开读写入口确已收敛到 `set`/`get` |
-| 「主会话与 Channel 会话提供一个 `session` 工具」 | **已实现，但载体是 power 不是 tool** | [`SessionPower.ts:20`](../packages/city/src/city/power/builtin/session/SessionPower.ts) `name = "session"`；四个动作 `start` / `check` / `reply` / `stop`，另加 `send` / `messages` / `archive` |
+| 「主会话与 Channel 会话提供一个 `session` 工具」 | **已实现，但载体是 power 不是 tool** | [`SessionPower.ts:20`](../packages/city/src/city/power/builtin/session/SessionPower.ts) `name = "session"`；四个动作 `start` / `check` / `reply` / `stop`，另加 `input` / `messages` / `archive` |
 | 注入依据是「Agent 主会话与 `channel` 会话获得该工具，Work 会话不能递归派发」 | **部分实现** | 执行期守卫到位（[`SessionCaller.ts:9`](../packages/city/src/city/power/builtin/session/SessionCaller.ts)）；但工具**没有被隐藏**，只是 system block 被抑制（见 2.3.1） |
 | `session.start` 必须传项目 `workspace_id`，由 `resolve_work_workspace` 校验，禁止继承 main 目录 | **已实现** | [`SessionDelegations.ts:60`](../packages/agent/src/agent/SessionDelegations.ts) 起要求 `query` 与 `workspace_id` 非空；Desktop 端只接受已登记项目（[`AgentController.ts:1547`](../../private/apps/desktop/src/main/agent/AgentController.ts)） |
 | 主会话目录固定为 `~/.downcity/agents/<agent_id>/main`，不进入项目列表 | **已实现（Desktop 侧）** | [`AgentMainWorkspace.ts:20`](../../private/apps/desktop/src/main/agent/AgentMainWorkspace.ts)、[:15](../../private/apps/desktop/src/main/agent/AgentMainWorkspace.ts) |

@@ -196,8 +196,7 @@ test("chat.send 返回受理回执而不是送达承诺", async () => {
     create_runtime_stub({ delivery_id: "delivery_test_1", status: "pending" }),
   );
   const result = await actions.send.execute({
-    context: { agent: { id: "agent-1" } },
-    execution: { snapshot: { session_id: "session-1" } },
+    context: { agent: { id: "agent-1" }, snapshot: { session_id: "session-1" } },
     input: { text: "hello" },
   });
 
@@ -215,8 +214,7 @@ test("chat.react 同样返回受理回执", async () => {
     create_runtime_stub({ delivery_id: "delivery_test_2", status: "retry_wait" }),
   );
   const result = await actions.react.execute({
-    context: { agent: { id: "agent-1" } },
-    execution: { snapshot: { session_id: "session-1" } },
+    context: { agent: { id: "agent-1" }, snapshot: { session_id: "session-1" } },
     input: { message_id: "9", emoji: "👍" },
   });
 

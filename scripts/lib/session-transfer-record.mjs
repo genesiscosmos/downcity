@@ -1,5 +1,6 @@
 /** 单记录转移的canonical/配置/Composer读写与正式schema校验，不创建执行器。 */
 import { assert_transfer_runtime } from "./session-transfer-protocol.mjs";
+import { validate_protocol_record as validate_historical_record } from "./session-transfer-historical-record.mjs";
 import path from "node:path";
 import { fileURLToPath as file_url_to_path, pathToFileURL as path_to_file_url } from "node:url";
 import { randomUUID as random_uuid, randomBytes as random_bytes } from "node:crypto";
@@ -40,8 +41,8 @@ export function insert_record(database, record) {
   database.prepare("UPDATE session_configuration SET model_binding=?,approval_mode=?,execution_profile=?,system_snapshot=? WHERE session_key=?")
     .run(config.model_binding, config.approval_mode, config.execution_profile, config.system_snapshot, session_key);
   const creation_key = config.execution_profile ? JSON.parse(config.execution_profile).creation_key : undefined;
-  if (creation_key !== undefined) database.prepare("INSERT INTO session_creation_keys(category,creation_key,session_id) VALUES(?,?,?)")
-    .run(record.metadata.category, creation_key, record.metadata.session_id);
+  if (creation_key !== undefined) database.prepare("INSERT INTO session_creation_keys(type,creation_key,session_id) VALUES(?,?,?)")
+    .run(record.metadata.type, creation_key, record.metadata.session_id);
   for (const row of record.messages) insert(database, "messages", { ...row, stable_part_sequence: 0, session_key });
   for (const row of record.message_parts) insert(database, "message_parts", { ...row, session_key });
   for (const row of record.messages) if (row.stable_part_sequence) database.prepare("UPDATE messages SET stable_part_sequence=? WHERE session_key=? AND message_id=?").run(row.stable_part_sequence, session_key, row.message_id);
@@ -57,12 +58,15 @@ export function validate_record(record, agent_id, runtime) {
 
 /** 显式离线转换复用记录校验；历史 runtime 必须由调用方的冻结 loader 提供。 */
 export function validate_protocol_record(record, agent_id, runtime) {
+  if (runtime.AGENT_SESSION_SCHEMA_VERSION < 13) return validate_historical_record(record, agent_id, runtime);
+  assert_transfer_runtime(runtime);
   if (!record || Object.keys(record).sort().join(",") !== "composer_checkpoints,configuration,message_parts,messages,metadata"
     || !uuid_pattern.test(record.metadata?.session_id ?? "") || !record_tables.every(table => Array.isArray(record[table]))) fail("transfer_record_invalid");
   if (record.metadata.message_count !== record.messages.length) fail("transfer_count_invalid");
-  const origin = JSON.parse(record.metadata.origin);
-  runtime.restore_session_origin(origin, record.metadata.category);
-  if (origin.category !== record.metadata.category) fail("transfer_origin_invalid");
+  const relations = JSON.parse(record.metadata.relations);
+  if (!relations || typeof relations !== "object" || Array.isArray(relations)
+    || "type" in relations || "kind" in relations) fail("transfer_relations_invalid");
+  runtime.restore_session_descriptor({ ...relations, type: record.metadata.type, kind: record.metadata.kind }, record.metadata.type);
   if (record.configuration.model_binding) runtime.decode_model_binding(record.configuration.model_binding);
   const message_ids = new Set(record.messages.map(message => message.message_id));
   if (record.message_parts.some(part => !message_ids.has(part.message_id))) fail("transfer_part_orphan");

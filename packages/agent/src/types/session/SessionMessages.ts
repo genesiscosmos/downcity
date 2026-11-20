@@ -5,17 +5,10 @@
  */
 
 import type { SessionCompletionPort } from "@/types/agent/SessionCompletion.js";
-import type { JsonObject } from "@downcity/type";
+import type { JsonObject, SessionAgentContent, SessionMessageMeta, SessionUserContent, SessionUserPartContent, SessionMutation } from "@downcity/type";
 import type { SessionStorage } from "@/types/store/SessionStorage.js";
 import type { SessionAttachmentStore } from "@/types/store/SessionAttachmentStore.js";
 import type { AgentSessionPromptInput, NormalizedAgentSessionPromptInput } from "@/types/sdk/AgentSessionPrompt.js";
-import type {
-  SessionAgentContent,
-  SessionMessageMeta,
-  SessionUserContent,
-} from "@downcity/type";
-import type { SessionUserPartContent } from "@downcity/type";
-import type { SessionMutation } from "@downcity/type";
 
 /** SessionMessages 构造参数。 */
 export interface SessionMessagesOptions {
@@ -49,6 +42,8 @@ export interface AppendSessionUserMessageInput {
 
 /** Assistant Message 创建参数。 */
 export interface OpenSessionAgentMessageInput {
+  /** Writer 所属实际执行代次，用于恢复时识别子工作。 */
+  execution_id?: string;
   /** 当前调用的 Writer 所有权检查，旧流不能写入恢复后的同一消息。 */
   assert_current?: () => void;
   /** 当前 Assistant 所属 Turn。 */
@@ -120,6 +115,8 @@ export interface SessionMessageResume {
 
 /** 每次普通方法调用独占的输出 Adapter 依赖。 */
 export interface SessionAssistantOutputAdapterOptions {
+  /** 本次实际执行代次；同 Turn 重试创建新身份。 */
+  execution_id?: string;
   /** 原逻辑 Turn 标识。 */ turn_id: string;
   /** 当前调用的对象所有权检查，旧流不能写新调用。 */ assert_current?: () => void;
   /** 恢复事务提交前确认本次 signal 未停止；不约束已接收事实的失败收口。 */ assert_resumable?: () => void;

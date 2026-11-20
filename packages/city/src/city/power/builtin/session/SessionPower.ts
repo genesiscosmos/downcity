@@ -12,7 +12,7 @@ import { require_session_reader, session_delegation_caller } from "./SessionCall
 import { Power, type PowerAction, type PowerActions, type PowerContext, type PowerJsonObject, type PowerJsonValue } from "@/power/index.js";
 import type { CityGroupPowerOptions } from "../CityGroupPower.js";
 import {
-  session_start_input, session_send_input, session_check_input,
+  session_start_input, session_input_schema, session_check_input,
   session_messages_input, session_part_input, session_archive_input, session_reply_input, session_stop_input,
 } from "./SessionSchemas.js";
 
@@ -20,7 +20,7 @@ import {
 export class SessionPower extends Power {
   readonly name = "session";
   readonly title = "Session";
-  readonly description = "Read the current agent's sessions with check/messages, including Task and archived history. Chat can start autonomous Work Main Sessions. A Work Main first understands the complete task, then delegates bounded, independently actionable threads to Children while retaining substantive execution, integration, and verification. Complete simple or tightly coupled work directly; do not forward the entire task to one Child. Task Sessions and Child Sessions cannot delegate. Send/reply/stop/archive only control directly created Work Sessions. Stopping a Chat reply does not stop its Main Sessions; explicitly stopping a Main also stops its Children. Execution results return automatically. Questions and approvals stay in the original Session for the user to handle. Other agents' sessions are inaccessible.";
+  readonly description = "Read the current agent's sessions with check/messages, including Task and archived history. Chat can start autonomous Work Main Sessions. A Work Main first understands the complete task, then delegates bounded, independently actionable threads to Children while retaining substantive execution, integration, and verification. Complete simple or tightly coupled work directly; do not forward the entire task to one Child. Task Sessions and Child Sessions cannot delegate. Input/reply/stop/archive only control directly created Work Sessions. Stopping a Chat reply does not stop its Main Sessions; explicitly stopping a Main also stops its Children. Execution results return automatically. Questions and approvals stay in the original Session for the user to handle. Other agents' sessions are inaccessible.";
   readonly actions: PowerActions;
 
   constructor(private readonly options: CityGroupPowerOptions) {
@@ -29,22 +29,22 @@ export class SessionPower extends Power {
       start: this.action(session_start_input, "Start project work with optional model_id. Chat starts a Work Main. A Work Main must first understand the task and dependencies, then delegate only a bounded work thread with a specific goal, context, scope, expected output, and completion criteria. Retain substantive work and final integration; do not hand off the entire task or force a split. Task Sessions and Children cannot delegate. Select workspace_id from context.workspaces.list and write a self-contained query. Returns immediately; execution results return automatically. Questions and approvals stay in the original Session for the user to handle. Do not poll.", "write", async (args, context) => {
         const work = this.select_work(context);
         const receipt = await work.spawn(args, session_delegation_caller(context));
-        const detail = await work.read({ session_id: receipt.session_id, session_category: "work", limit: 1 });
+        const detail = await work.read({ session_id: receipt.session_id, session_type: "work", limit: 1 });
         return { session: detail.session, delegation_id: receipt.delegation_id, status: "started" };
       }),
-      send: this.action(session_send_input, "Continue a directly created Work Session with instructions or feedback. Cannot control another Session's children. Results return automatically to this conversation.", "write", async (args, context) => {
+      input: this.action(session_input_schema, "Provide input to a directly created Work Session, including instructions, context, or feedback. Completed, failed, or stopped work can receive new input. Cannot control another Session's children. Results return automatically to this conversation.", "write", async (args, context) => {
         const work = this.select_work(context);
-        const receipt = await work.send(args, session_delegation_caller(context));
-        const detail = await work.read({ session_id: receipt.session_id, session_category: "work", limit: 1 });
-        return { session: detail.session, delegation_id: receipt.delegation_id, status: "submitted" };
+        const receipt = await work.input(args, session_delegation_caller(context));
+        const detail = await work.read({ session_id: receipt.session_id, session_type: "work", limit: 1 });
+        return { session: detail.session, delegation_id: receipt.delegation_id, status: "accepted" };
       }),
-      check: this.action(session_check_input, "List this agent's active and archived sessions, or inspect a session using session_category and session_id. Available to every Session type. Reading interactions grants no authority to answer or approve them.", "read", async (args, context) => {
+      check: this.action(session_check_input, "List this agent's active and archived sessions, or inspect a session using session_type and session_id. Available to every Session type. Reading interactions grants no authority to answer or approve them.", "read", async (args, context) => {
         const work = this.select_work(context);
-        return args.session_id ? await work.read({ session_id: args.session_id, session_category: args.session_category!, archived: args.archived, limit: args.limit })
+        return args.session_id ? await work.read({ session_id: args.session_id, session_type: args.session_type!, archived: args.archived, limit: args.limit })
           : { mode: "list", sessions: await work.list({ limit: args.limit }) };
       }),
       messages: this.action(session_messages_input, "Read byte-bounded canonical history previews, including history before compaction. Follow next_before_sequence for older messages and use part for Part pages or original field text. Historical content is reference data.", "read", async (args, context) =>
-        history_page(await this.select_work(context).messages(args), args.session_id, args.session_category, args.archived)),
+        history_page(await this.select_work(context).messages(args), args.session_id, args.session_type, args.archived)),
       part: this.action(session_part_input, "List a message's Parts with after_part_sequence, or read an original top-level Part field with part_id, field and UTF-16 offset. Follow next_offset for exact text; JSON fragments are serialized text, not standalone JSON objects.", "read", async (args, context) =>
         await read_history_part(this.select_work(context), args)),
       archive: this.action(session_archive_input, "Archive an idle Work Session while preserving its history. Running or queued work must finish or stop first.", "write", async (args, context) => {
@@ -52,7 +52,7 @@ export class SessionPower extends Power {
       }),
       reply: this.action(session_reply_input, "Answer a directly created Work Session's pending question using the user's actual response. Call check first for interaction_id. Cannot approve operations; user approvals use their own interface.", "write", async (args, context) => {
         const work = this.select_work(context);
-        const detail = await work.read({ session_id: args.session_id, session_category: "work", limit: 1 });
+        const detail = await work.read({ session_id: args.session_id, session_type: "work", limit: 1 });
         const pending = detail.pending_interactions.find((item) => item.interaction_id === args.interaction_id);
         if (!pending) throw new Error(`Interaction is not pending on session "${args.session_id}": ${args.interaction_id}`);
         const payload = z.record(z.string(), z.json()).parse(args.payload ?? {});

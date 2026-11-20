@@ -319,8 +319,8 @@ export interface MemoryRememberResult {
 export interface MemoryDigestInput {
   /** 原始会话标识。 */
   session_id: string;
-  /** 原始会话物理分类。 */
-  category: "chat" | "work";
+  /** 原始会话类型。 */
+  type: "chat" | "work";
   /** 本次明确允许的唯一写入范围。 */
   target: MemoryWriteTarget;
   /** 源消息数量上限，默认 30，最大 100。 */

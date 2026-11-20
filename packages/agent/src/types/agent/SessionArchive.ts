@@ -15,9 +15,9 @@ export type SessionArchiveOptions = {
   /** 当前 Agent 的唯一 Session 存储，负责活动和归档数据的查询与搬迁。 */
   store: SessionStore;
   /** 同步读取已有实例，不恢复实例，也不打开数据库。 */
-  get_cached: (session_id: string, category: string) => AgentManagedSession | undefined;
+  get_cached: (session_id: string, type: string) => AgentManagedSession | undefined;
   /** 成功搬迁后释放集合缓存及其观察订阅。 */
-  remove_cached: (session_id: string, category: string) => void;
+  remove_cached: (session_id: string, type: string) => void;
   /** 原子预留完整计划并结束关系扫描保护；失败时尚未搬迁任何节点。 */
   reserve_sessions: (plan: AgentArchiveSessionInput[]) => void;
   /** 记录已提交的移除事实；宿主通知在归档生命周期保护外进行。 */

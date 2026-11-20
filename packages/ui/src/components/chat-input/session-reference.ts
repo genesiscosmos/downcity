@@ -7,12 +7,12 @@ export function read_session_reference(text: string): Record<string, unknown> & 
   try {
     const value: unknown = JSON.parse(text);
     if (!value || typeof value !== "object") return;
-    const { session_id, agent_id, category, origin_type, workspace_id, session_path, title, archived } = value as Record<string, unknown>;
+    const { session_id, agent_id, type, session_kind, workspace_id, session_path, title, archived } = value as Record<string, unknown>;
     if (typeof session_id !== "string" || !session_id || typeof agent_id !== "string" || !agent_id
-      || typeof category !== "string" || !category || typeof origin_type !== "string" || !origin_type
+      || typeof type !== "string" || !type || typeof session_kind !== "string" || !session_kind
       || typeof workspace_id !== "string" || typeof title !== "string"
       || (session_path !== undefined && typeof session_path !== "string")) return;
-    return { ...(archived === true ? { archived: true } : {}), session_id, agent_id, category, origin_type, workspace_id, ...(session_path ? { session_path } : {}), title };
+    return { ...(archived === true ? { archived: true } : {}), session_id, agent_id, type, session_kind, workspace_id, ...(session_path ? { session_path } : {}), title };
   } catch { return; }
 }
 

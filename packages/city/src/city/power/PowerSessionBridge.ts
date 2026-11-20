@@ -7,7 +7,7 @@
  * - Workspace 由 City 在调用点注入，Power 不自行解析。
  */
 
-import { SESSION_ORIGIN_CATEGORY_WORK } from "@downcity/type";
+import { SESSION_TYPE_WORK, normalize_session_descriptor } from "@downcity/type";
 import type { AgentSession, AgentSessionCollection, SessionPort } from "@downcity/agent";
 import type { WorkspaceRuntime } from "@/workspace/index.js";
 import type {
@@ -15,8 +15,22 @@ import type {
   PowerSessionCollection,
   PowerSessionHandle,
   PowerSessionMutation,
-  PowerSessionOrigin,
 } from "@/power/index.js";
+
+/** 由实际 Session runtime 投影供 Power 使用的操作和创建描述。 */
+export function create_power_session_handle(runtime: SessionPort): PowerSessionHandle {
+  return Object.freeze<PowerSessionHandle>({
+    id: runtime.id,
+    ...normalize_session_descriptor(runtime),
+    ...(runtime.workspace_id ? { workspace_id: runtime.workspace_id } : {}),
+    prompt: async (input) => await runtime.prompt(input),
+    stop: async () => await runtime.stop() as unknown as PowerJsonObject,
+    subscribe: (subscriber) => runtime.subscribe((mutation) =>
+      subscriber(mutation as unknown as PowerSessionMutation)),
+    messages: async () => await runtime.messages() as unknown as PowerJsonObject[],
+    append_agent_message: async (input) => await runtime.append_agent_message(input),
+  });
+}
 
 /** 把 Agent Session 集合收窄为 Power 可调用的端口。 */
 export function create_power_session_collection(input: {
@@ -27,37 +41,15 @@ export function create_power_session_collection(input: {
 }): PowerSessionCollection {
   const read_sessions = (): AgentSessionCollection => input.get_sessions();
 
-  /** 由 Session runtime 端口构造 Power 可调用的稳定句柄。 */
-  const to_handle = (
-    session_id: string,
-    origin: PowerSessionOrigin,
-    workspace_id: string | undefined,
-  ): PowerSessionHandle => {
-    // Session 分区由 category 决定，type 只是分区内的角色。
-    const runtime: SessionPort = read_sessions().runtime(session_id, origin.category);
-    return Object.freeze({
-      id: session_id,
-      origin,
-      ...(workspace_id ? { workspace_id } : {}),
-      prompt: async (prompt_input) => await runtime.prompt(prompt_input),
-      stop: async () => await runtime.stop() as unknown as PowerJsonObject,
-      subscribe: (subscriber) => runtime.subscribe((mutation) =>
-        subscriber(mutation as unknown as PowerSessionMutation)),
-      messages: async () => await runtime.messages() as unknown as PowerJsonObject[],
-      append_agent_message: async (message_input) =>
-        await runtime.append_agent_message(message_input),
-    });
-  };
-
   /** 按来源 Session 复制模型选择；来源未配置模型时保持默认。 */
   const inherit_model = async (
     session: AgentSession,
-    source?: { readonly session_id: string; readonly category?: string },
+    source?: { readonly session_id: string; readonly type?: string },
   ): Promise<void> => {
     if (!source) return;
     const source_session = await read_sessions().get(
       source.session_id,
-      source.category,
+      source.type,
       { workspace: input.workspace },
     );
     const source_model = source_session.get("model");
@@ -71,25 +63,25 @@ export function create_power_session_collection(input: {
   return Object.freeze({
     create: async (create_input) => {
       const session = await read_sessions().create({
-        ...(create_input?.origin ? { origin: create_input.origin } : {}),
+        type: create_input?.type,
+        kind: create_input?.kind,
+        parent: create_input?.parent,
         workspace: input.workspace,
       });
       await inherit_model(session, create_input?.inherit_model_from);
-      return to_handle(session.id, session.origin, session.workspace_id);
+      return create_power_session_handle(read_sessions().runtime(session.id, session.type));
     },
-    get: async (session_id, category = SESSION_ORIGIN_CATEGORY_WORK) => {
-      const session = await read_sessions().get(session_id, category, {
+    get: async (session_id, type = SESSION_TYPE_WORK) => {
+      const session = await read_sessions().get(session_id, type, {
         workspace: input.workspace,
       });
-      return to_handle(session.id, session.origin, session.workspace_id);
+      return create_power_session_handle(read_sessions().runtime(session.id, session.type));
     },
-    runtime: (session_id, category = SESSION_ORIGIN_CATEGORY_WORK) => {
-      const runtime = read_sessions().runtime(session_id, category);
-      return to_handle(session_id, runtime.origin, runtime.workspace_id);
-    },
-    remove: async (session_id, category) => {
-      await read_sessions().get(session_id, category, { workspace: input.workspace });
-      return await read_sessions().remove(session_id, category);
+    runtime: (session_id, type = SESSION_TYPE_WORK) =>
+      create_power_session_handle(read_sessions().runtime(session_id, type)),
+    remove: async (session_id, type) => {
+      await read_sessions().get(session_id, type, { workspace: input.workspace });
+      return await read_sessions().remove(session_id, type);
     },
   });
 }

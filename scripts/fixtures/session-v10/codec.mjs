@@ -5,10 +5,10 @@
  * Message envelope 与 Part 分表保存；公开领域对象仍保持 Message 聚合拥有 parts[]。
  */
 import { validate_session_power_content } from "../session-v11/view-validator.mjs";
-import { assert_tool_terminal, parse_result_ref } from "../../../packages/agent/src/model/results/ResultReference.ts";
+import { assert_tool_terminal, parse_result_ref } from "../session-v12/result-reference.mjs";
 import { decode_session_inbox_part } from "../session-v11/input-codec.mjs";
-import { validate_session_stable_prefix } from "../../../packages/agent/src/session/storage/SessionStablePrefix.ts";
-import { session_prompt_actor_schema } from "../../../packages/agent/src/types/sdk/SessionPromptActor.ts";
+import { validate_session_stable_prefix } from "../session-v12/stable-prefix.mjs";
+import { session_prompt_actor_schema } from "../session-v12/prompt-actor.mjs";
 /** 把 Message 聚合拆为数据库 envelope row。 */
 export function encode_session_message_row(message) {
     return {

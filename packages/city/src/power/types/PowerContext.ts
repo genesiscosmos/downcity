@@ -8,7 +8,7 @@
  */
 
 import type { Federation } from "@downcity/federation";
-import type { SessionUserContent } from "@downcity/type";
+import type { SessionDescriptor, SessionUserContent } from "@downcity/type";
 import type { WorkspaceShell } from "@/workspace/index.js";
 import type { FileSystem } from "@downcity/type";
 import type { SessionInteractionPort } from "@downcity/type";
@@ -39,16 +39,6 @@ export interface PowerLogger {
   warn(message: string, details?: PowerLogDetails): void;
   /** 写入失败日志。 */
   error(message: string, details?: PowerLogDetails): void;
-}
-
-/** Power 可观察的 Session 来源。 */
-export interface PowerSessionOrigin {
-  /** 顶层分类，同时也是 Session 的持久化分区；取值只有 chat / work。 */
-  readonly category: string;
-  /** 具体角色，用于能力判定与语义表达。 */
-  readonly type: string;
-  /** 来源协议允许携带的其他 JSON 字段。 */
-  readonly [key: string]: PowerJsonValue;
 }
 
 /** Power 发起 Session prompt 时复用的标准无身份内容片段。 */
@@ -87,11 +77,21 @@ export interface PowerSessionMutation extends PowerJsonObject {
 }
 
 /** Power 可直接调用的单个 Session 句柄。 */
-export interface PowerSessionHandle {
+export interface PowerSessionHandle extends SessionDescriptor {
   /** Session 稳定标识。 */
   readonly id: string;
   /** Session 创建来源。 */
-  readonly origin: PowerSessionOrigin;
+  readonly type: SessionDescriptor["type"];
+  /** 创建方自定义用途。 */
+  readonly kind: string;
+  /** 已有派生创建引用。 */
+  readonly parent?: SessionDescriptor["parent"];
+  /** 现有派生工作层级，不由界面猜测。 */
+  readonly delegation_depth?: number;
+  /** 父创建事实中的类型。 */
+  readonly parent_session_type?: SessionDescriptor["parent_session_type"];
+  /** 派生工作起始对话。 */
+  readonly root_chat_session_id?: string;
   /** Session 绑定的 Workspace 标识。 */
   readonly workspace_id?: string;
   /** 向 Session 提交一条用户输入。 */
@@ -118,19 +118,23 @@ export interface PowerSessionCollection {
   /** 创建属于当前 Agent 的 Session。 */
   create(input?: {
     /** 可选 Session 来源。 */
-    readonly origin?: PowerSessionOrigin;
+    readonly type?: SessionDescriptor["type"];
+    /** 创建方自定义用途。 */
+    readonly kind?: string;
+    /** 可信宿主记录的派生关系。 */
+    readonly parent?: SessionDescriptor["parent"];
     /** 可选来源 Session；新 Session 会继承其模型选择。 */
     readonly inherit_model_from?: {
       /** 来源 Session 稳定标识。 */ readonly session_id: string;
-      /** 来源 Session 的持久化分区。 */ readonly category?: string;
+      /** 来源 Session 的持久化分区。 */ readonly type?: string;
     };
   }): Promise<PowerSessionHandle>;
   /** 恢复属于当前 Agent 的 Session。 */
-  get(session_id: string, category?: string): Promise<PowerSessionHandle>;
+  get(session_id: string, type?: string): Promise<PowerSessionHandle>;
   /** 读取单个 Session 的运行句柄。 */
-  runtime(session_id: string, category?: string): PowerSessionHandle;
+  runtime(session_id: string, type?: string): PowerSessionHandle;
   /** 永久删除一个 Session。 */
-  remove(session_id: string, category?: string): Promise<boolean>;
+  remove(session_id: string, type?: string): Promise<boolean>;
 }
 
 /** Power 可直接调用的 Agent 受限句柄。 */
@@ -161,6 +165,8 @@ export interface PowerWorkspaceHandle {
 
 /** 当前调用所属的 Session Turn 句柄。 */
 export interface PowerTurnHandle {
+  /** 本次执行代次；仅有实际 Session 执行时提供。 */
+  readonly execution_id?: string;
   /** Turn 稳定标识。 */
   readonly id: string;
   /** 当前 Turn 的取消信号。 */

@@ -13,7 +13,7 @@ export function memory_request_hash(value: unknown): string {
 export function explicit_memory_source(context: PowerContext, content: string): MemoryJobSource {
   return {
     source_id: `request:${memory_request_hash([context.agent.id, context.session?.id, context.call?.tool_call_id ?? context.turn?.id ?? randomUUID(), content])}`,
-    agent_id: context.agent.id, category: context.session?.origin.category ?? "work",
+    agent_id: context.agent.id, category: context.session?.type ?? "work",
     session_id: context.session?.id, role: "request", text: content,
   };
 }
@@ -23,16 +23,16 @@ export async function read_memory_sources(
   context: PowerContext,
   host: PowerLifecycleContext,
   session_id: string,
-  category: string,
+  type: string,
   max_messages: number,
 ): Promise<MemoryJobSource[]> {
-  if (!["chat", "work"].includes(category)) throw new Error("Invalid source Session category");
+  if (!["chat", "work"].includes(type)) throw new Error("Invalid source Session type");
   if (!Number.isInteger(max_messages) || max_messages < 1 || max_messages > 100) throw new Error("max_messages must be between 1 and 100");
-  const session = await context.agent.sessions.get(session_id, category);
-  if (session.origin.type === MEMORY_SESSION_KIND) throw new Error("Memory Session history cannot become a memory source");
+  const session = await context.agent.sessions.get(session_id, type);
+  if (session.kind === MEMORY_SESSION_KIND) throw new Error("Memory Session history cannot become a memory source");
   if (session.workspace_id && session.workspace_id !== context.workspace?.id) throw new Error("Source Session belongs to another Workspace");
   const page = await host.system.read_agent_session_messages({
-    agent_id: context.agent.id, session_id, category, limit: max_messages, max_bytes: 256_000,
+    agent_id: context.agent.id, session_id, type, limit: max_messages, max_bytes: 256_000,
   });
   const sources = page.messages.flatMap((raw_message) => {
     const message = raw_message as unknown as PowerJsonObject;
@@ -45,8 +45,8 @@ export async function read_memory_sources(
     const message_id = typeof message.message_id === "string" ? message.message_id : typeof message.id === "string" ? message.id : "";
     if (!message_id || !text) return [];
     return [{
-      source_id: `message:${memory_request_hash([context.agent.id, category, session_id, message_id])}`,
-      agent_id: context.agent.id, category, session_id, message_id,
+      source_id: `message:${memory_request_hash([context.agent.id, type, session_id, message_id])}`,
+      agent_id: context.agent.id, category: type, session_id, message_id,
       role: message.role, text,
     } satisfies MemoryJobSource];
   });

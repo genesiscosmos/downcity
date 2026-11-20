@@ -7,16 +7,11 @@
  * - Power 每次只获得新建的只读快照，不能越过扩展边界访问内核运行能力。
  */
 
-import type { ToolEffect } from "@downcity/type";
-import type { SessionUserMessage } from "@downcity/type";
+import { randomUUID } from "node:crypto";
+import type { ToolEffect, SessionUserMessage, SessionHookContextBlock, SessionDescriptor } from "@downcity/type";
 import type { SessionAssistantResultBatch } from "@/types/turn/SessionAssistantOutput.js";
-import type {
-  SessionTurnContext,
-  SessionTurnContextInit,
-} from "@/types/turn/SessionTurnContext.js";
-import type { SessionHookContextBlock } from "@downcity/type";
-import type { SessionOrigin } from "@downcity/type";
-import { normalize_session_origin } from "@downcity/type";
+import type { SessionTurnContext, SessionTurnContextInit } from "@/types/turn/SessionTurnContext.js";
+import { normalize_session_descriptor, read_session_call_context } from "@downcity/type";
 
 /** SessionTurnContext 的唯一内置实现。 */
 class DefaultSessionTurnContext implements SessionTurnContext {
@@ -55,8 +50,9 @@ class DefaultSessionTurnContext implements SessionTurnContext {
     const project_root = String(init.project_root || "").trim();
     this.session = Object.freeze({
       session_id,
-      origin: Object.freeze(normalize_session_origin(init.session_origin)),
+      ...read_session_call_context(init),
       turn_id,
+      execution_id: init.execution_id ?? randomUUID(),
       ...(project_root ? { project_root } : {}),
     });
     this.interactions = init.interactions;

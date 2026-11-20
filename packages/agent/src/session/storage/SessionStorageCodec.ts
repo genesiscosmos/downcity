@@ -9,17 +9,7 @@ import { assert_tool_terminal, parse_result_ref } from "@/model/results/ResultRe
 import { decode_session_input_part } from "./SessionInputCodec.js";
 import { validate_session_stable_prefix } from "./SessionStablePrefix.js";
 import { session_prompt_actor_schema } from "@/types/sdk/SessionPromptActor.js";
-import type {
-  JsonObject,
-  JsonValue,
-  SessionAgentInteraction,
-  SessionAgentMessagePart,
-  SessionInteractionRequest,
-  SessionInteractionResponse,
-  SessionMessage,
-  SessionMessageMeta,
-  SessionUserMessagePart,
-} from "@downcity/type";
+import type { JsonObject, JsonValue, SessionAgentInteraction, SessionAgentMessage, SessionAgentMessagePart, SessionInteractionRequest, SessionInteractionResponse, SessionMessage, SessionMessageMeta, SessionUserMessagePart } from "@downcity/type";
 
 /** messages 表读取行。 */
 export interface SessionMessageRow {
@@ -82,7 +72,8 @@ export function encode_session_message_row(message: SessionMessage): SessionMess
     state: message.role === "agent" ? message.state : null,
     stable_part_sequence: message.role === "agent" ? message.stable_part_sequence : 0,
     meta: message.role === "user" ? (message.meta ? JSON.stringify(message.meta) : null)
-      : message.current_error ? JSON.stringify({ current_error: message.current_error }) : null,
+      : message.current_error || message.execution_id
+        ? JSON.stringify({ current_error: message.current_error, execution_id: message.execution_id }) : null,
     origin_session_id: message.origin?.session_id ?? null,
     origin_message_id: message.origin?.message_id ?? null,
     origin_turn_id: message.origin?.turn_id ?? null,
@@ -162,7 +153,7 @@ export function decode_session_message(
     state: row.state,
     stable_part_sequence: row.stable_part_sequence,
     parts: agent_parts,
-    ...(row.meta ? { current_error: decode_current_error(row) } : {}),
+    ...(row.meta ? decode_agent_meta(row) : {}),
   };
   for (const part of agent_parts) {
     if (part.type !== "tool" || !part.result_ref) continue;
@@ -553,6 +544,16 @@ function assert_never(value: never): never {
     throw new Error("session_migration_required: Legacy Session Parts require offline conversion to v12");
   }
   throw new Error("session_storage_part_type_invalid");
+}
+
+/** 执行身份与错误随 Agent envelope 保存，不进入模型正文或占用 Part 水位。 */
+function decode_agent_meta(row: SessionMessageRow): Pick<SessionAgentMessage, "execution_id" | "current_error"> {
+  const meta = JSON.parse(row.meta!);
+  if (meta.execution_id !== undefined && (typeof meta.execution_id !== "string" || !meta.execution_id.trim())) {
+    throw new Error("Invalid Message execution identity");
+  }
+  return { ...(meta.execution_id ? { execution_id: meta.execution_id } : {}),
+    ...(meta.current_error ? { current_error: decode_current_error(row) } : {}) };
 }
 
 /** 当前错误使用既有 Part 形状校验，但不占用正文序号或稳定水位。 */

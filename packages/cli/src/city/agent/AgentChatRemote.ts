@@ -149,10 +149,10 @@ export async function listRemoteChatSessions(params: {
  */
 export async function createRemoteChatSession(params: {
   remote_agent: AgentChatClient;
-}): Promise<{ session_id: string }> {
+}): Promise<{ id: string }> {
   const session = await params.remote_agent.sessions.create();
   return {
-    session_id: session.id,
+    id: session.id,
   };
 }
 
@@ -163,7 +163,7 @@ export function toSessionSummaryView(
   summary: AgentSessionSummary,
 ): AgentChatSessionSummaryView {
   return {
-    session_id: summary.session_id,
+    id: summary.id,
     ...(summary.title ? { title: summary.title } : {}),
     ...(summary.preview_text ? { preview_text: summary.preview_text } : {}),
     message_count: summary.message_count,

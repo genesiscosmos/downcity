@@ -161,7 +161,7 @@ export class MemoryPower extends Power {
     pipeline: {
       [SESSION_HOOK_POINTS.system_context]: [async ({ context, value }) => {
         const input = value as unknown as SessionSystemContextHookValue;
-        if (context.session?.origin.type === MEMORY_SESSION_KIND) return value;
+        if (context.session?.kind === MEMORY_SESSION_KIND) return value;
         const blocks = [...input.blocks];
         const scopes: ProfileScope[] = [{ target: "user" }, { target: "agent", agent_id: context.agent.id }];
         for (const scope of scopes) {
@@ -174,7 +174,7 @@ export class MemoryPower extends Power {
         return { ...input, blocks } as unknown as PowerJsonValue;
       }],
       [SESSION_HOOK_POINTS.turn_context]: [async ({ context, value }) => {
-        if (!this.profile_runtime || context.session?.origin.type === MEMORY_SESSION_KIND) return value;
+        if (!this.profile_runtime || context.session?.kind === MEMORY_SESSION_KIND) return value;
         const input = value as unknown as SessionTurnContextHookValue;
         const updates = await build_profile_updates(this.profile_runtime, context.agent.id, input.system_blocks ?? []);
         return { ...input, blocks: [...input.blocks, ...updates] } as unknown as PowerJsonValue;
@@ -554,7 +554,7 @@ export class MemoryPower extends Power {
             const source_key = createHash("sha256").update(JSON.stringify([context.agent.id, context.session?.id, context.call?.tool_call_id ?? context.turn?.id ?? randomUUID(), content])).digest("hex");
             const current = await this.profile_runtime.read(scope);
             await this.profile_runtime.append(scope, content, { source_key, source_refs: [
-              `request:${context.agent.id}:${context.session?.origin.category ?? "work"}:${context.session?.id ?? "host"}:${context.turn?.id ?? source_key}`,
+              `request:${context.agent.id}:${context.session?.type ?? "work"}:${context.session?.id ?? "host"}:${context.turn?.id ?? source_key}`,
             ] }, current.version);
             const profile_id = target === "user" ? `user/${LOCAL_USER_ID}/profile` : `agent/${context.agent.id}/profile`;
             return { success: true, data: { target, mode: "profile", status: "saved", profile_id, activation: "next_turn_or_new_session", location: "PROFILE.md" } };
@@ -576,36 +576,36 @@ export class MemoryPower extends Power {
       input_schema: {
         zod: z.object({
           session_id: z.string(),
-          category: z.enum(["chat", "work"]),
+          type: z.enum(["chat", "work"]),
           target: memory_write_target_schema,
           max_messages: z.number().int().min(1).max(100).optional(),
         }),
         json_schema: {
           type: "object",
           additionalProperties: false,
-          required: ["session_id", "category", "target"],
+          required: ["session_id", "type", "target"],
           properties: {
             session_id: { type: "string" },
-            category: { type: "string", enum: ["chat", "work"] },
+            type: { type: "string", enum: ["chat", "work"] },
             target: { type: "string", enum: ["user", "agent", "current_workspace"] },
             max_messages: { type: "number", minimum: 1, maximum: 100 },
           },
         },
       },
-      examples: [{ title: "Digest a Session", payload: { session_id: "sess-1", category: "chat", target: "agent" } }],
+      examples: [{ title: "Digest a Session", payload: { session_id: "sess-1", type: "chat", target: "agent" } }],
       command: {
         description: "Digest a canonical Session transcript.",
         configure(command: Command) {
           command
             .requiredOption("--session-id <session_id>", "Session identifier.")
-            .requiredOption("--category <category>", "chat or work.")
+            .requiredOption("--type <type>", "chat or work.")
             .requiredOption("--target <target>", "user, agent or current_workspace.")
             .option("--max-messages <number>", "Maximum message count.", parse_positive_integer);
         },
         map_input({ opts }) {
           return {
             session_id: String(opts.sessionId || ""),
-            category: String(opts.category || ""),
+            type: String(opts.type || ""),
             target: String(opts.target || ""),
             ...(typeof opts.maxMessages === "number" ? { max_messages: opts.maxMessages } : {}),
           };
@@ -615,7 +615,7 @@ export class MemoryPower extends Power {
         const body = read_body_object(input);
         return await this.run_action(async () => await this.service.digest(context,
           await this.resolve_action_access(context), {
-            session_id: read_string(body, "session_id"), category: read_string(body, "category"),
+            session_id: read_string(body, "session_id"), type: read_string(body, "type"),
             target: read_memory_write_target(body), max_messages: read_optional_number(body, "max_messages") ?? 30,
           }));
       },

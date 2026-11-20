@@ -7,14 +7,8 @@
  * - SDK 不在 system 中注入动态变量；动态上下文应由调用方放入 user message。
  */
 
-import type {
-  AgentSessionSystemBlock,
-  AgentSessionSystemSessionInfo,
-} from "@/types/agent/SessionTypes.js";
-import type {
-  BuildSessionSystemBlocksInput,
-  ResolveSessionPowerSystemBlocksInput,
-} from "@/types/session/SessionSystem.js";
+import type { AgentSessionSystemBlock, AgentSessionSystemSessionInfo } from "@/types/agent/SessionTypes.js";
+import type { BuildSessionSystemBlocksInput, ResolveSessionPowerSystemBlocksInput } from "@/types/session/SessionSystem.js";
 import type { JsonValue, SessionSystemContextHookValue } from "@downcity/type";
 import { SESSION_HOOK_POINTS } from "@downcity/type";
 import { run_pipeline_point } from "@/session/input/SessionHookRunner.js";
@@ -104,8 +98,7 @@ function create_session_info(
 ): AgentSessionSystemSessionInfo {
   const created_at = Number.isFinite(input.created_at) ? input.created_at : 0;
   return {
-    agent_id: String(input.agent_id || "").trim(),
-    session_id: String(input.session_id || "").trim(),
+    id: String(input.session_id || "").trim(),
     project_root: String(input.project_root || "").trim(),
     created_at: new Date(created_at).toISOString(),
     timezone: String(input.timezone || "").trim() || "UTC",
@@ -117,7 +110,7 @@ function create_session_system_block(
 ): AgentSessionSystemBlock {
   const content = [
     "Current session context:",
-    `This session is "${session.session_id}".`,
+    `This session is "${session.id}".`,
     `The current project root is "${session.project_root}".`,
     `This session was created at ${session.created_at}, with ${session.timezone} as its reference timezone.`,
     "This creation time is a stable reference for the session and does not represent the current time for every run.",

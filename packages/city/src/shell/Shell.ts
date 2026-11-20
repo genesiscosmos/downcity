@@ -268,15 +268,15 @@ export class Shell {
     const session_id = execution.session?.session_id;
     const turn_id = execution.session?.turn_id;
     const agent_id = execution.session?.agent_id;
-    const category = execution.session?.category;
+    const type = execution.session?.type;
     const context = this.create_host_context(execution);
     const request = {
       ...payload,
       ...(session_id ? { owner_context_id: session_id } : {}),
       ...(turn_id ? { turn_id } : {}),
       ...(execution.tool_call_id ? { tool_call_id: execution.tool_call_id } : {}),
-      ...(agent_id && session_id && category && turn_id ? {
-        completion_target: { agent_id, session_id, category, turn_id },
+      ...(agent_id && session_id && type && turn_id ? {
+        completion_target: { agent_id, session_id, type, turn_id },
       } : { completion_target: undefined }),
     };
     switch (action) {

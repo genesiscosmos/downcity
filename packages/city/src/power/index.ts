@@ -47,7 +47,6 @@ export type {
   PowerSessionCollection,
   PowerSessionHandle,
   PowerSessionMutation,
-  PowerSessionOrigin,
   PowerSessionPromptContent,
   PowerSessionTurnHandle,
   PowerSessionTurnResult,

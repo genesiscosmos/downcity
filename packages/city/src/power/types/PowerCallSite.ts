@@ -11,7 +11,7 @@
 
 import type {
   SessionInteractionPort,
-  SessionOrigin,
+  SessionCallContext,
   WorkspaceRuntime,
 } from "@downcity/type";
 import type { PowerCityPowers, PowerContext } from "./PowerContext.js";
@@ -19,7 +19,7 @@ import type { PowerJsonValue } from "./Json.js";
 import type { PowerActionResult, PowerSnapshot } from "./PowerRuntime.js";
 
 /** 一次 Power 调用的来源身份。 */
-export interface PowerCallSite {
+export interface PowerCallSite extends Partial<SessionCallContext> {
   /** 发起调用的 Agent 稳定标识。 */
   readonly agent_id: string;
 
@@ -29,11 +29,11 @@ export interface PowerCallSite {
   /** 调用所属 Session 标识；非 Session 入口为空。 */
   readonly session_id?: string;
 
-  /** 调用所属 Session 来源。 */
-  readonly session_origin?: SessionOrigin;
-
   /** 调用所属 Turn 标识。 */
   readonly turn_id?: string;
+
+  /** 当前实际执行身份；同一 Turn 的重试使用独立值。 */
+  readonly execution_id?: string;
 
   /** 当前 Step 提交的 Workspace 环境快照。 */
   readonly workspace_env?: Readonly<Record<string, string>>;
@@ -64,9 +64,9 @@ export interface PowerCallSite {
  * 需要用它与基础来源身份合并，声明本次调用属于哪个 Session / Turn。
  * 只能覆盖身份字段，不能覆盖 agent_id 与 workspace。
  */
-export type PowerCallSiteOverride = Pick<
+export type PowerCallSiteOverride = Partial<SessionCallContext> & Pick<
   PowerCallSite,
-  "session_id" | "session_origin" | "turn_id" | "workspace_env" | "agent_instructions" | "tool_call_id"
+  "session_id" | "turn_id" | "execution_id" | "workspace_env" | "agent_instructions" | "tool_call_id"
 >;
 
 /**

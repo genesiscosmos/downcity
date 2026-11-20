@@ -13,7 +13,7 @@ import { DISCLOSURE_VERSION, disclose_result } from "./ResultDisclosure.js";
 
 /** Inputs describing the actual first terminal result, never a historical reconstruction. */
 export interface ToolTerminalInput {
-  /** Exact canonical source location, including the session category when available. */
+  /** Exact canonical source location, including the session type when available. */
   location: ResultLocation;
   /** Actual execution outcome; interruptions and rejected interactions use failed. */
   state: "completed" | "failed";

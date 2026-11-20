@@ -73,7 +73,7 @@ export type {
   SessionCheckListToolOutput,
   SessionCheckToolOutput,
   SessionReplyToolOutput,
-  SessionSendToolOutput,
+  SessionInputToolOutput,
   SessionStartToolOutput,
   SessionStopToolOutput,
   SessionToolState,
@@ -127,7 +127,7 @@ export type { SessionDerivedStore } from "./types/store/SessionStorage.js";
 export type { SessionAttachmentStore } from "./types/store/SessionAttachmentStore.js";
 export type { AgentStorage } from "./types/agent/AgentStorage.js";
 export { Session } from "./session/Session.js";
-export type { SessionOrigin } from "@downcity/type";
+export type { SessionDescriptor, SessionType, SessionParent, SessionCallContext } from "@downcity/type";
 export { SESSION_HOOK_POINTS } from "@downcity/type";
 export type {
   SessionCommittedTurnStatus,

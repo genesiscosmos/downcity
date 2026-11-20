@@ -2,14 +2,14 @@
  * Agent DB 内部关系记录、地址和查询类型。
  * session_key 只用于存储实现；所有活动、归档和转移引用均使用永久 session_id。
  */
-import type { SessionOrigin } from "@downcity/type";
+import type { SessionDescriptor } from "@downcity/type";
 
 /** 不暴露内部整数主键的精确记录地址。 */
 export interface AgentSessionAddress {
   /** 期望的归档状态；不匹配返回不存在，不解析另一条记录。 */
   archived: boolean;
   /** 可选来源分类校验，不参与身份命名空间。 */
-  category?: string;
+  type?: string;
   /** 不因归档、Workspace 变化或同记录转移而改变的 UUIDv4。 */
   session_id: string;
 }
@@ -20,10 +20,12 @@ export interface AgentSessionRecord {
   session_key: number;
   /** 全分类及活动/归档范围内永久唯一的 UUIDv4。 */
   session_id: string;
-  /** 与 origin.category 受 CHECK 约束保持一致的分类。 */
-  category: string;
+  /** 与 descriptor.type 受 CHECK 约束保持一致的分类。 */
+  type: string;
   /** 完整不可变来源的 JSON 字符串，由唯一归一化入口创建。 */
-  origin: string;
+  kind: string;
+  /** 不包含 type/kind 的不可变派生与群组创建事实 JSON。 */
+  relations: string;
   /** 可变 Workspace 绑定；脱离项目时为 null。 */
   workspace_id: string | null;
   /** 当前 Session 的时区标识。 */
@@ -63,11 +65,12 @@ export interface AgentSessionConfigurationRow {
 }
 
 /** 创建新记录的完整领域身份，不使用文件路径推导。 */
-export interface AgentSessionCreateRecord {
+export interface AgentSessionCreateRecord extends SessionDescriptor {
+  /** 可选的初始标题，与目录身份在同一事务落盘。 */
+  title?: string;
   /** 调用方已分配的永久 UUIDv4；同 operation_id 重入必须使用相同候选。 */
   session_id: string;
-  /** 不可变完整来源，数据库再验证 category/type。 */
-  origin: SessionOrigin;
+
   /** 创建时可选 Workspace 绑定。 */
   workspace_id?: string;
   /** 创建时区。 */
@@ -97,11 +100,11 @@ export interface AgentSessionEnsureMainInput {
 /** 列表过滤输入，必须经过归一化后绑定游标。 */
 export interface AgentSessionListQuery {
   /** 唯一来源分类。 */
-  category: string;
+  type: string;
   /** 是否仅查询归档。 */
   archived: boolean;
   /** 可选来源角色。 */
-  origin_type?: string;
+  kind?: string;
   /** 可选 Workspace ID，不参与不可变身份。 */
   workspace_id?: string;
   /** ID、标题和预览的字面包含匹配，不是全文检索。 */

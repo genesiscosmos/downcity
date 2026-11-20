@@ -10,36 +10,20 @@
 
 import { model_input_digest } from "../runner/SessionModelInput.js";
 import { build_model_step_call } from "@/model/ModelStepCall.js";
-import type {
-  JsonValue,
-  ModelClient,
-  AgentTool as Tool,
-  SessionHookContextBlock,
-  SessionTurnContextHookValue,
-  ToolCallContext,
-  WorkspaceRuntime,
-} from "@downcity/type";
+import type { JsonValue, ModelClient, AgentTool as Tool, SessionHookContextBlock, SessionTurnContextHookValue, ToolCallContext, WorkspaceRuntime } from "@downcity/type";
 import { compose_prompt_power_tools, prompt_power_context_blocks, read_turn_prompt_powers, set_turn_prompt_powers } from "./PromptPowers.js";
 import type { BoundAgentTool, ToolCallSite } from "@/types/tool/BoundAgentTool.js";
 import { create_lookup_tool } from "@/model/results/LookupTool.js";
 import { lookup_result } from "@/model/results/ResultReader.js";
-import type {
-  AgentSessionSystemBlock,
-  AgentSessionSystemSnapshot,
-} from "@/types/agent/SessionTypes.js";
-import type {
-  SessionComposeIdentity,
-  SessionComposeInput,
-  SessionStepInput,
-} from "@/types/session/SessionComposer.js";
+import type { AgentSessionSystemBlock, AgentSessionSystemSnapshot } from "@/types/agent/SessionTypes.js";
+import type { SessionComposeIdentity, SessionComposeInput, SessionStepInput } from "@/types/session/SessionComposer.js";
 import type { SessionStepExecutionInput } from "@/types/session/SessionExecution.js";
 import type { StepInputOptions } from "@/types/session/StepInput.js";
 import type { SessionTurnContext } from "@/types/turn/SessionTurnContext.js";
 import type { SessionDerivedStore } from "@/types/store/SessionStorage.js";
-import { is_action_result } from "@downcity/type";
+import { is_action_result, SESSION_HOOK_POINTS, session_call_context, read_session_call_context } from "@downcity/type";
 import { max_request_media_bytes } from "@downcity/type/workspace";
 import { measure_request } from "@/session/runner/RequestBudget.js";
-import { SESSION_HOOK_POINTS } from "@downcity/type";
 import { run_pipeline_point } from "@/session/input/SessionHookRunner.js";
 import { resolve_session_power_system_blocks } from "@/session/input/SessionSystem.js";
 import { to_system_messages } from "./composer/ComposerAssembly.js";
@@ -210,8 +194,7 @@ export class StepInput {
     return {
       session_id: this.options.session_id,
       session: {
-        agent_id: this.options.agent_id,
-        session_id: this.options.session_id,
+        id: this.options.session_id,
         project_root: this.options.get_workspace_path(),
         created_at: new Date(this.options.get_created_at()).toISOString(),
         timezone: this.options.get_timezone(),
@@ -254,6 +237,7 @@ export class StepInput {
   /** 创建 Composer 共用的稳定 Session 身份快照。 */
   identity(): SessionComposeIdentity {
     return {
+      ...session_call_context(read_session_call_context(this.options)),
       agent_id: this.options.agent_id,
       session_id: this.options.session_id,
       project_root: this.options.get_workspace_path(),
@@ -551,7 +535,7 @@ export class StepInput {
         this.effective_instruction_blocks.map((block) => block.content),
       ),
       session_id: this.options.session_id,
-      session_origin: this.options.session_origin,
+      ...session_call_context(read_session_call_context(this.options)),
       ...(workspace ? { workspace } : {}),
       messages: Object.freeze([]),
       workspace_env,
@@ -572,7 +556,7 @@ export class StepInput {
       agent_description: this.options.get_agent_description(),
       agent_instructions: Object.freeze([...(agent_systems ?? [])]),
       session_id: this.options.session_id,
-      session_origin: this.options.session_origin,
+      ...session_call_context(read_session_call_context(this.options)),
       ...(workspace ? { workspace } : {}),
       read_attachment: async (input: import("@downcity/type/workspace").ReadFileToolInput) => {
         site.abort_signal?.throwIfAborted();
@@ -584,6 +568,7 @@ export class StepInput {
         return await attachments.read_file(input, site.abort_signal);
       },
       turn_id: turn_context.session.turn_id,
+      execution_id: turn_context.session.execution_id,
       abort_signal: site.abort_signal,
       tool_call_id: site.tool_call_id,
       messages: site.messages,

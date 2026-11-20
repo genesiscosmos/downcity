@@ -6,22 +6,16 @@
  */
 
 import type { SessionMessageResume, SessionAssistantOutputAdapterOptions } from "@/types/session/SessionMessages.js";
-import type { ModelStreamEvent } from "@downcity/type";
-import {
-  SessionAgentMessageWriter,
-  SessionMessages,
-} from "@/session/messages/SessionMessages.js";
-import type { SessionAgentContent } from "@downcity/type";
-import type { SessionAgentMessagePart, SessionAgentInputPart, SessionInputContent } from "@downcity/type";
+import type { ModelStreamEvent, SessionAgentContent, SessionAgentMessagePart, SessionAgentInputPart, SessionInputContent } from "@downcity/type";
+import { SessionAgentMessageWriter, SessionMessages } from "@/session/messages/SessionMessages.js";
 import type { SessionAssistantOutput } from "@/types/turn/SessionAssistantOutput.js";
-import type {
-  SessionToolExecutionResult,
-  SessionToolInputReady,
-} from "@/types/session/SessionTool.js";
+import type { SessionToolExecutionResult, SessionToolInputReady } from "@/types/session/SessionTool.js";
 
 /** 单个 Turn 使用的 Assistant 输出 Adapter。 */
 export class SessionAssistantOutputAdapter implements SessionAssistantOutput {
   private readonly turn_id: string;
+  /** 本次执行身份随 Writer 保存，重试不沿用旧代次。 */
+  private readonly execution_id?: string;
   private readonly messages: SessionMessages;
   /** 当前尚未成功收口的 Writer；持久化失败时保留供重试。 */
   private writer: SessionAgentMessageWriter | null = null;
@@ -41,6 +35,7 @@ export class SessionAssistantOutputAdapter implements SessionAssistantOutput {
 
   constructor(options: SessionAssistantOutputAdapterOptions) {
     this.turn_id = String(options.turn_id || "").trim();
+    this.execution_id = options.execution_id;
     this.messages = options.messages;
     this.resume = options.resume;
     this.assert_current = options.assert_current ?? (() => {});
@@ -96,7 +91,6 @@ export class SessionAssistantOutputAdapter implements SessionAssistantOutput {
   async show_model_error(part_id: string, error: import("@downcity/type").ModelError): Promise<import("@downcity/type").SessionModelRetry> {
     return await (await this.ensure_writer()).show_model_error(part_id, error);
   }
-
 
   /**
    * 在 Step 边界关闭当前 Assistant Message，失败时保留原 Writer 供重试。
@@ -177,8 +171,8 @@ export class SessionAssistantOutputAdapter implements SessionAssistantOutput {
   private async open_writer(): Promise<SessionAgentMessageWriter> {
     const resume = this.resume;
     const writer = this.writer ?? (resume
-      ? await this.messages.resume_agent_message(resume.message_id, resume.revision, resume.error_part_id, this.assert_resumable, this.assert_current)
-      : await this.messages.open_agent_message({ turn_id: this.turn_id, assert_current: this.assert_current }));
+      ? await this.messages.resume_agent_message(resume.message_id, resume.revision, resume.error_part_id, this.assert_resumable, this.assert_current, this.execution_id)
+      : await this.messages.open_agent_message({ turn_id: this.turn_id, execution_id: this.execution_id, assert_current: this.assert_current }));
     this.resume = undefined;
     this.writer = writer;
     if (this.step_pending) {

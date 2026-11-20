@@ -49,15 +49,15 @@ export class MemoryService {
   /** 原始会话按分类和消息边界指定；不把末尾文本直接归档成长期知识。 */
   async digest(context: PowerContext, access: MemoryAccessContext, input: {
     /** 指定来源会话。 */ session_id: string;
-    /** 来源物理分类。 */ category: string;
+    /** 来源 Session 类型。 */ type: string;
     /** 本次来源消息预算。 */ max_messages: number;
     /** 唯一写入目标。 */ target: MemoryWriteTarget;
   }): Promise<MemoryJobView> {
-    const sources = await read_memory_sources(context, this.host, input.session_id, input.category, input.max_messages);
+    const sources = await read_memory_sources(context, this.host, input.session_id, input.type, input.max_messages);
     return await this.submit(context, {
       kind: "digest", access, target: input.target, mode: "knowledge", sources,
       instruction: "Extract supported durable decisions, reasons, constraints and reusable knowledge. Do not store transient task status or assistant proposals as accepted decisions.",
-      request_key: memory_request_hash(["digest-v1", input.session_id, input.category, sources]),
+      request_key: memory_request_hash(["digest-v1", input.session_id, input.type, sources]),
     });
   }
 

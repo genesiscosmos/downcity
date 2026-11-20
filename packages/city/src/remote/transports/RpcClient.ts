@@ -7,7 +7,7 @@
  * - 当前只承载 Session actor 所需方法。
  */
 
-import { SESSION_ORIGIN_CATEGORY_WORK } from "@downcity/type";
+import { SESSION_TYPE_WORK } from "@downcity/type";
 import type { SessionModelRetryRpcPayload } from "@/types/remote/SessionModelRetry.js";
 import net from "node:net";
 import type { AgentInteraction, AgentListInteractionsInput, AgentRespondInteractionInput } from "@downcity/agent";
@@ -131,7 +131,7 @@ export class RpcClient {
       method: "sdk.sessions.archive",
       params: {
         session_id: input.id, operation_id: input.operation_id, root_session_id: input.root_session_id,
-        category: input.category || SESSION_ORIGIN_CATEGORY_WORK,
+        type: input.type || SESSION_TYPE_WORK,
       },
     });
     return data.result;
@@ -175,12 +175,12 @@ export class RpcClient {
   /**
    * 获取远程 session 信息。
    */
-  async get_session(session_id: string, category: string): Promise<AgentSessionInfo> {
+  async get_session(session_id: string, type?: string): Promise<AgentSessionInfo> {
     const data = await this.request<{ session: AgentSessionInfo }>({
       method: "sdk.sessions.get",
       params: {
         session_id: session_id,
-        category,
+        type,
       },
     });
     return data.session;
@@ -191,14 +191,14 @@ export class RpcClient {
    */
   async prompt_session(params: {
     session_id: string;
-    category: string;
+    type: string;
     input: RemotePromptInput;
   }): Promise<import("@/types/remote/RemoteTurn.js").RemotePromptTurn> {
     const data = await this.request<{ turn: import("@/types/remote/RemoteTurn.js").RemotePromptTurn }>({
       method: "sdk.sessions.prompt",
       params: {
         session_id: params.session_id,
-        category: params.category,
+        type: params.type,
         input: params.input,
       },
     });
@@ -208,13 +208,13 @@ export class RpcClient {
   /**
    * 停止远程 session 当前 turn。
    */
-  async stop_session(session_id: string, category: string, expected_turn_id?: string, expected_message?: import("@downcity/type").SessionMessageCheckpoint): Promise<AgentSessionStopResult> {
+  async stop_session(session_id: string, type: string, expected_turn_id?: string, expected_message?: import("@downcity/type").SessionMessageCheckpoint): Promise<AgentSessionStopResult> {
     const data = await this.request<{ result: AgentSessionStopResult }>({
       method: "sdk.sessions.stop",
       params: {
         expected_turn_id, expected_message,
         session_id: session_id,
-        category,
+        type,
       },
     });
     return data.result;
@@ -225,14 +225,14 @@ export class RpcClient {
    */
   async get_session_messages(params: {
     session_id: string;
-    category: string;
+    type: string;
     input?: ListSessionMessagesInput;
   }): Promise<SessionMessagePage> {
     const data = await this.request<{ messages: SessionMessagePage }>({
       method: "sdk.sessions.messages",
       params: {
         session_id: params.session_id,
-        category: params.category,
+        type: params.type,
         input: params.input,
       },
     });
@@ -242,12 +242,12 @@ export class RpcClient {
   /**
    * 读取 system snapshot。
    */
-  async get_session_system(session_id: string, category: string): Promise<AgentSessionSystemSnapshot> {
+  async get_session_system(session_id: string, type: string): Promise<AgentSessionSystemSnapshot> {
     const data = await this.request<{ system: AgentSessionSystemSnapshot }>({
       method: "sdk.sessions.system",
       params: {
         session_id: session_id,
-        category,
+        type,
       },
     });
     return data.system;
@@ -307,50 +307,50 @@ export class RpcClient {
     } catch { throw new Error("Private Agent interaction submission failed"); }
   }
 
-  async get_session_interactions(session_id: string, category: string): Promise<SessionInteractionRequest[]> {
+  async get_session_interactions(session_id: string, type: string): Promise<SessionInteractionRequest[]> {
     const data = await this.request<{ interactions: SessionInteractionRequest[] }>({
       method: "sdk.sessions.interactions",
-      params: { session_id: session_id, category },
+      params: { session_id: session_id, type },
     });
     return data.interactions;
   }
 
-  async get_session_status(session_id: string, category: string): Promise<AgentSessionStatus> {
+  async get_session_status(session_id: string, type: string): Promise<AgentSessionStatus> {
     const data = await this.request<{ status: AgentSessionStatus }>({
       method: "sdk.sessions.status",
-      params: { session_id: session_id, category },
+      params: { session_id: session_id, type },
     });
     return data.status;
   }
 
   /** 单次控制提交；不自动重发结果未知的动作。 */
-  async retry_model_step(session_id: string, category: string, input: import("@downcity/type").SessionModelRetryInput): Promise<import("@downcity/type").SessionModelRetryResult> {
+  async retry_model_step(session_id: string, type: string, input: import("@downcity/type").SessionModelRetryInput): Promise<import("@downcity/type").SessionModelRetryResult> {
     const data = await this.request<SessionModelRetryRpcPayload>({
-      method: "sdk.sessions.retry_model_step", params: { session_id, category, input },
+      method: "sdk.sessions.retry_model_step", params: { session_id, type, input },
     });
     return data.result;
   }
 
   async set_session(
     session_id: string,
-    category: string,
+    type: string,
     input: RemoteSessionSetInput,
     options?: AgentSessionSetOptions,
   ): Promise<void> {
     await this.request<{ queued: true }>({
       method: "sdk.sessions.set",
-      params: { session_id: session_id, category, input, ...(options ? { options } : {}) },
+      params: { session_id: session_id, type, input, ...(options ? { options } : {}) },
     });
   }
 
   async respond_session_interaction(
     session_id: string,
-    category: string,
+    type: string,
     input: RespondSessionInteractionInput,
   ): Promise<SessionInteractionResult> {
     const data = await this.request<{ result: SessionInteractionResult }>({
       method: "sdk.sessions.respond",
-      params: { session_id: session_id, category, input },
+      params: { session_id: session_id, type, input },
     });
     return data.result;
   }
@@ -360,7 +360,7 @@ export class RpcClient {
    */
   async fork_session(params: {
     session_id: string;
-    category: string;
+    type: string;
     message_id?: string;
     include_message?: boolean;
     /** 为 true 时原地截断源 Session，不创建分支。 */
@@ -370,7 +370,7 @@ export class RpcClient {
       method: "sdk.sessions.fork",
       params: {
         session_id: params.session_id,
-        category: params.category,
+        type: params.type,
         ...(params.message_id ? { message_id: params.message_id } : {}),
         ...(params.include_message === false ? { include_message: false } : {}),
         ...(params.replace === true ? { replace: true } : {}),
@@ -384,7 +384,7 @@ export class RpcClient {
    */
   async subscribe_session(params: {
     session_id: string;
-    category: string;
+    type: string;
     on_ready: () => void;
     on_event: (event: SessionMutation) => void;
     on_close: (error?: unknown) => void;
@@ -393,7 +393,7 @@ export class RpcClient {
       method: "sdk.sessions.subscribe",
       params: {
         session_id: params.session_id,
-        category: params.category,
+        type: params.type,
       },
     });
     const subscription_id = String(data.subscription_id || "").trim();
@@ -426,7 +426,7 @@ export class RpcClient {
     this.power_subscriptions.set(subscription_id, input);
     try {
       const data = await this.request<{ channel_id: string }>({
-        method: "sdk.powers.open", params: { session_id: input.session_id, category: input.category, subscription_id },
+        method: "sdk.powers.open", params: { session_id: input.session_id, type: input.type, subscription_id },
       });
       let closed = false;
       return {

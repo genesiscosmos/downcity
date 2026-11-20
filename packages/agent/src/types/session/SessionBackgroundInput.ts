@@ -5,6 +5,8 @@ import type { AgentSessionPromptInput } from "../sdk/AgentSessionPrompt.js";
 export interface SessionBackgroundInput {
   /** 发起后台工作的原始 Turn；用于阻止结果混入无关执行。 */
   turn_id: string;
+  /** 结果限定的父执行代次；独立 Main 回传 Chat 时省略以允许异步续行。 */
+  execution_id?: string;
   /** 稳定业务输入标识；重复投递共用同一 canonical 消息。 */
   request_id: string;
   /** 后台事实和继续处理的说明；内容作为参考数据，不作为用户授权。 */

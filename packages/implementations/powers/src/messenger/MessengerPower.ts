@@ -1,7 +1,7 @@
 /** MessengerPower：Desktop Channel 工作区与可靠消息运行时的 City 级所有者。 */
 
 import { Power } from "@downcity/city/power";
-import { SESSION_HOOK_POINTS, SESSION_ORIGIN_TYPE_CHANNEL, type SessionTurnCommittedHookValue, type SessionExecutionStateHookValue } from "@downcity/type";
+import { SESSION_HOOK_POINTS, SESSION_KIND_CHANNEL, SESSION_TYPE_CHAT, type SessionTurnCommittedHookValue, type SessionExecutionStateHookValue } from "@downcity/type";
 import type {
   PowerActions,
   PowerHooks,
@@ -34,7 +34,7 @@ export class MessengerPower extends Power {
   readonly hooks: PowerHooks = {
     effect: {
       [SESSION_HOOK_POINTS.execution_state]: [({ context, value }) => {
-        if (context.session?.origin.type !== SESSION_ORIGIN_TYPE_CHANNEL || !context.turn) return;
+        if (context.session?.kind !== SESSION_KIND_CHANNEL || !context.turn) return;
         this.require_runtime().sync_execution(
           context.agent.id,
           value as unknown as SessionExecutionStateHookValue,
@@ -42,7 +42,7 @@ export class MessengerPower extends Power {
         );
       }],
       [SESSION_HOOK_POINTS.turn_committed]: [Object.assign(async ({ context, value }: Parameters<NonNullable<PowerHooks["effect"]>[string][number]>[0]) => {
-        if (context.session?.origin.type !== SESSION_ORIGIN_TYPE_CHANNEL) return;
+        if (context.session?.kind !== SESSION_KIND_CHANNEL) return;
         this.require_runtime().commit_completion(context.agent.id, value as unknown as SessionTurnCommittedHookValue);
       }, { handler_id: "channel_reply" })],
     },
@@ -62,9 +62,15 @@ export class MessengerPower extends Power {
 
   /** System Provider 只投影静态提示资产，不产生启动副作用。 */
   readonly system = async (
-    _context: PowerContext,
+    context: PowerContext,
     execution_context?: StepSnapshot,
-  ): Promise<string> => buildMessengerPowerSystem(execution_context);
+  ): Promise<string> => {
+    const session_id = execution_context?.session_id;
+    const channel = execution_context?.session_type === SESSION_TYPE_CHAT && execution_context.session_kind === SESSION_KIND_CHANNEL && session_id
+      ? this.runtime?.session_provider(context.agent.id, session_id)
+      : undefined;
+    return buildMessengerPowerSystem(channel);
+  };
 
   /** 从 City 唯一配置恢复全部 enabled Bot Account 和可靠 Worker。 */
   async initialize(context: PowerLifecycleContext): Promise<void> {

@@ -10,6 +10,7 @@
  * - Composer 不拥有 Message、Turn 或数据库连接生命周期，也不修改 canonical history。
  */
 
+import type { SessionCallContext } from "@downcity/type";
 import type { ModelClient, ModelMessage, AgentTool } from "@downcity/type";
 import type { SessionSystemMessage } from "@downcity/type";
 import type { AgentSessionSystemBlock } from "@/types/agent/SessionTypes.js";
@@ -19,7 +20,7 @@ import type { ContextCompactionDiagnostic } from "./ContextCompaction.js";
 import type { SessionDerivedStore } from "@/types/store/SessionStorage.js";
 
 /** Composer 可读取的 Session 身份快照。 */
-export interface SessionComposeIdentity {
+export interface SessionComposeIdentity extends SessionCallContext {
   /** 当前 Agent 的稳定标识。 */
   agent_id: string;
   /** 当前 Session 的稳定标识。 */

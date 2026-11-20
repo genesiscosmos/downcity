@@ -3,21 +3,22 @@
  * 从调用方提供的消息筛选 pending 项，构造带 Agent 路由的独立引用快照；
  * 不打开数据库、不恢复执行器，也不依赖物理存储布局。
  */
-import type { SessionAgentInteraction, SessionMessage, SessionOrigin } from "@downcity/type";
+import type { SessionAgentInteraction, SessionMessage, SessionDescriptor } from "@downcity/type";
 import type { AgentInteraction } from "@/types/agent/AgentInteractions.js";
+import { normalize_session_descriptor } from "@downcity/type";
 
 /** 为原交互构造当前 Agent 内可验证的公开引用，返回独立快照。 */
 export function project_agent_interaction(
   session_id: string,
-  session_category: string,
+  session_type: string,
   interaction: SessionAgentInteraction,
   can_respond = false,
-  origin?: SessionOrigin,
+  descriptor?: SessionDescriptor,
 ): AgentInteraction {
   return {
-    origin: origin ? structuredClone(origin) : undefined,
+    ...(descriptor ? normalize_session_descriptor(descriptor) : {}),
     reference: {
-      session_category,
+      session_type,
       session_id,
       turn_id: interaction.request.turn_id,
       interaction_id: interaction.interaction_id,
