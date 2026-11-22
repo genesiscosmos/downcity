@@ -1,4 +1,4 @@
-/** Session 生产的工作结果与通用可读输入；内部维护和模型媒体不占消息行。 */
+/** Session 生产的执行结果与通用可读输入；内部维护和模型媒体不占消息行。 */
 import { createElement as create_element } from "react";
 import type { PowerInputProps, PowerInputDetailProps, PowerInputRenderer } from "../types/PowerInputRenderer.js";
 import { input_envelope } from "./Input.js";
@@ -12,7 +12,7 @@ function readable_content(props: PowerInputProps) {
   return props.input.content.slice(0, 24).filter(item => item.type === "file" || (item.type === "text" && item.text.trim()));
 }
 
-/** 终态来自 SessionDelegations.state，不根据结果措辞猜工作状态。 */
+/** 工作会话的单次执行结果来自 SessionDelegations，不把结果回传说成会话已关闭。 */
 function describe(props: PowerInputProps) {
   const { input, locale } = props;
   const zh = is_chinese(locale);
@@ -20,10 +20,9 @@ function describe(props: PowerInputProps) {
   if (input.kind === "delegation_result") {
     const data = input_envelope(input, "delegation_result");
     const state = text_value(data.state);
-    const title = state === "failed" ? (zh ? "工作执行失败" : "Work failed")
-      : state === "stopped" ? (zh ? "工作已停止" : "Work stopped")
-      : state === "succeeded" ? (zh ? "工作已完成" : "Work completed")
-      : (zh ? "收到工作结果" : "Work result received");
+    const title = state === "failed" ? (zh ? "工作会话执行失败" : "Work session failed")
+      : state === "stopped" ? (zh ? "工作会话已停止" : "Work session stopped")
+      : (zh ? "收到工作会话结果" : "Work session result received");
     return { title, tone: state === "failed" ? "failed" as const : "complete" as const,
       has_detail: Boolean(text_value(data.text).trim() || text_value(data.error).trim()) };
   }
@@ -33,17 +32,17 @@ function describe(props: PowerInputProps) {
     tone: "complete" as const, has_detail: true };
 }
 
-/** 只展开真正交付正文，绝不显示回执后附给 Agent 的处理指令。 */
+/** 只展开真正交付正文；外壳由 Input 宿主负责间距，不显示附给 Agent 的处理指令。 */
 function detail(props: PowerInputDetailProps) {
   if (props.input.kind === "delegation_result") {
     const data = input_envelope(props.input, "delegation_result");
     const text = text_value(data.text).slice(0, 48_000);
     const error = text_value(data.error).slice(0, 4_000);
-    return create_element("div", { className: "space-y-3 p-3" },
+    return create_element("div", { className: "space-y-3" },
       text ? props.render_text(text) : null,
       error ? create_element("p", { className: "text-destructive whitespace-pre-wrap" }, error) : null);
   }
-  return create_element("div", { className: "space-y-3 p-3" }, ...readable_content(props).map((item, index) =>
+  return create_element("div", { className: "space-y-3" }, ...readable_content(props).map((item, index) =>
     create_element("div", { key: index }, item.type === "file" ? props.render_file(item) : item.type === "text" ? props.render_text(item.text.slice(0, 48_000)) : null)));
 }
 

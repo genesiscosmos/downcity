@@ -3,7 +3,7 @@ import type { ReactNode } from "react";
 import type { SessionAgentActionPart, SessionAgentDataPart, SessionAgentErrorPart, SessionAgentFilePart, SessionAgentInputPart, SessionAgentViewPart, SessionAgentReasoningPart, SessionAgentTextPart, SessionAgentToolPart, SessionTurnFileDiffData, SessionUserMessagePart } from "@downcity/type";
 import type { DowncityChatPanelProps } from "./chat";
 /** 共享同一时间线的活动记录。 */
-export type AgentActivityPart = SessionAgentToolPart | SessionAgentActionPart | SessionAgentReasoningPart;
+export type AgentActivityPart = SessionAgentToolPart | SessionAgentActionPart | SessionAgentReasoningPart | SessionAgentInputPart;
 /** 正文协议中已解析的附件信息；本地路径由宿主按权限解释。 */
 export interface AgentMessageAttachment {
   /** 附件路径或资源位置。 */ path: string;
@@ -12,10 +12,9 @@ export interface AgentMessageAttachment {
 }
 /** 按 canonical 顺序呈现的单层内容块。 */
 export type AgentMessageBlock =
-  | { /** 运行时输入。 */ type: "input"; /** canonical 输入快照。 */ part: SessionAgentInputPart }
   | { /** Power 内容。 */ type: "view"; /** canonical 内容或受信任宿主预览。 */ part: SessionAgentViewPart; /** 是否只为生成中的预览。 */ preview?: boolean }
   | { /** 正文。 */ type: "text"; /** canonical 正文。 */ part: SessionAgentTextPart }
-  | { /** 连续活动。 */ type: "activity"; /** 原位有序的工具、操作与推理。 */ parts: AgentActivityPart[] }
+  | { /** 连续活动。 */ type: "activity"; /** 原位有序的工具、操作、输入与推理。 */ parts: AgentActivityPart[] }
   | { /** 文件。 */ type: "file"; /** canonical 文件。 */ part: SessionAgentFilePart }
   | { /** 正文附件。 */ type: "attachment"; /** 来源正文。 */ part: SessionAgentTextPart; /** 标签在原文的字符位置。 */ offset: number; /** 完整标签。 */ source: string; /** 经过协议解析的附件。 */ file: AgentMessageAttachment }
   | { /** 文件差异。 */ type: "file-diff"; /** 来源数据。 */ part: SessionAgentDataPart; /** 已验证的差异。 */ data: SessionTurnFileDiffData }

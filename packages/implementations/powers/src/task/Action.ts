@@ -523,6 +523,7 @@ export async function runTaskDefinition(params: {
       return {
         success: true,
         accepted: false,
+        task_id: taskId,
         message: "The task is already running.",
         title,
       };
@@ -540,6 +541,7 @@ export async function runTaskDefinition(params: {
     return {
       success: true,
       accepted: true,
+      task_id: taskId,
       // 关键点（中文）：这里直接返回给 agent 作为 tool result，提醒它这是异步任务，无需等待完成即可继续后续流程。
       message: "The task has started. Its result will be available in Task history and, when configured, appended to the associated Session. Continue the current flow without waiting for completion.",
       executionId,

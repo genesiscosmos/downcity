@@ -144,6 +144,12 @@ async function read_memory(
   if (!memory) {
     return { found: false, memory_id: result.memory_id, error: "记忆不存在或已被删除。" };
   }
+  // 详情页的 scope 是读取边界；逻辑 ID 不授予跨 Agent 或项目的读取能力。
+  const subject = memory.subject;
+  const in_scope = input.scope === "agent"
+    ? subject.kind === "user" || subject.kind === "agent" && (!input.agent_id || subject.agent_id === input.agent_id)
+    : subject.kind === "city" || subject.kind === "workspace" && subject.workspace_id === input.workspace_id;
+  if (memory.memory_id !== input.memory_id || !in_scope) throw new Error("Memory is outside the selected detail scope");
   return {
     found: true,
     memory_id: memory.memory_id,

@@ -3,73 +3,19 @@
  * 所有事实只来自本次 tool.output.data；不查询实时状态，不提供回复、批准或控制按钮。
  * 折叠阶段只判断业务字段是否存在，正文归一化与格式化在展开时进行。
  */
+import { session_activity_resource } from "./SessionActivityResource.js";
+import { action_sentences, preparing_sentence } from "./SessionCopy.js";
+import { with_activity_error } from "./ActivityError.js";
 import { createElement as create_element, type ReactNode } from "react";
 import type { PowerActivityProps, PowerActivityRenderer, PowerActivityDescription } from "../types/PowerActivityRenderer.js";
-import { action_id, activity_tone, failure_text, input_args, is_chinese, output_data, preparing_description, record_items, record_value, short_text, text_value } from "./Activity.js";
+import { action_id, activity_tone, failure_text, input_args, is_chinese, output_data, record_items, record_value, short_text, text_value } from "./Activity.js";
 
-/** Session 自有中英文动作名称。 */
-const action_sentences: Readonly<Record<string, Record<PowerActivityDescription["tone"], readonly [string, string]>>> = {
-  "start": {
-    running: ["正在提交工作", "Submitting work"],
-    waiting: ["工作提交等待确认", "Work submission awaiting confirmation"],
-    complete: ["工作已提交", "Work submitted"],
-    failed: ["工作提交失败", "Work submission failed"],
-  },
-  "input": {
-    running: ["正在输入工作要求", "Providing work input"],
-    waiting: ["追加指令等待确认", "Instructions awaiting confirmation"],
-    complete: ["会话已接收输入", "Session input accepted"],
-    failed: ["工作指令提交失败", "Instructions submission failed"],
-  },
-  "check": {
-    running: ["正在查看会话", "Inspecting sessions"],
-    waiting: ["会话查询等待确认", "Session query awaiting confirmation"],
-    complete: ["已查看会话", "Sessions inspected"],
-    failed: ["会话查询失败", "Session query failed"],
-  },
-  "messages": {
-    running: ["正在读取会话历史", "Reading session history"],
-    waiting: ["历史读取等待确认", "History read awaiting confirmation"],
-    complete: ["已读取会话历史", "Session history read"],
-    failed: ["会话历史读取失败", "History read failed"],
-  },
-  "part": {
-    running: ["正在读取消息内容", "Reading message content"],
-    waiting: ["消息读取等待确认", "Message read awaiting confirmation"],
-    complete: ["已读取消息内容", "Message content read"],
-    failed: ["消息内容读取失败", "Message read failed"],
-  },
-  "archive": {
-    running: ["正在归档会话", "Archiving session"],
-    waiting: ["会话归档等待确认", "Archive awaiting confirmation"],
-    complete: ["会话已归档", "Session archived"],
-    failed: ["会话归档失败", "Session archive failed"],
-  },
-  "reply": {
-    running: ["正在回复工作问题", "Answering work question"],
-    waiting: ["问题回复等待确认", "Answer awaiting confirmation"],
-    complete: ["工作问题已回复", "Work question answered"],
-    failed: ["工作问题回复失败", "Answer submission failed"],
-  },
-  "stop": {
-    running: ["正在请求停止工作", "Requesting work stop"],
-    waiting: ["停止工作等待确认", "Work stop awaiting confirmation"],
-    complete: ["已请求停止工作", "Work stop requested"],
-    failed: ["停止工作请求失败", "Work stop request failed"],
-  },
-  "": {
-    running: ["正在读取 Session 动作", "Reading Session actions"],
-    waiting: ["Session 操作等待确认", "Session operation awaiting confirmation"],
-    complete: ["已读取 Session 动作", "Session actions read"],
-    failed: ["Session 操作失败", "Session operation failed"],
-  },
-};
 
 /** 快照状态只描述目标当时的状态，idle 不代表工作成功。 */
 const state_labels: Readonly<Record<string, readonly [string, string]>> = {
   running: ["运行中", "Running"], waiting_for_user: ["等待用户", "Waiting for user"],
   idle: ["空闲", "Idle"], started: ["已启动", "Started"], stopped: ["已停止", "Stopped"],
-  resolved: ["已响应", "Resolved"], denied: ["已拒绝", "Denied"], submitted: ["已提交", "Submitted"],
+  resolved: ["已响应", "Resolved"], denied: ["已拒绝", "Denied"], submitted: ["等待继续", "Waiting to continue"],
 };
 
 /** 仅检查可读的会话事实，只有技术标识的结果不可展开。 */
@@ -105,22 +51,32 @@ function has_history_text(data: Record<string, unknown>): boolean {
 
 /** 描述只挑选标题和稳定目标；不展开 JSON、消息正文或完整历史。 */
 function describe_session(props: PowerActivityProps): PowerActivityDescription {
-  const preparing = preparing_description(props, "Session");
-  if (preparing) return preparing;
+  if (props.tool.state === "input-streaming") return { title: preparing_sentence[is_chinese(props.locale) ? 0 : 1], tone: "running", has_detail: false };
   const args = input_args(props);
   const data = output_data(props);
   const target = record_value(data.session);
   const action = action_id(props);
   const chinese = is_chinese(props.locale);
   const tone = activity_tone(props);
-  const title = action_sentences[action]?.[tone] ?? action_sentences[""]![tone];
   const is_list = action === "check" && !text_value(args.session_id);
+  // 查看动作可跨会话类型，仅依据明确的请求或结果类型选择名称；列表仍用通用“会话”。
+  const session_type = text_value(args.session_type) || text_value(target.session_type);
+  const copy_key = !is_list && ["check", "messages", "part"].includes(action) && ["work", "chat"].includes(session_type)
+    ? `${action}.${session_type}` : action;
+  let title = (action_sentences[copy_key] ?? action_sentences.unknown)![tone];
   const has_messages = record_items(data.messages).some(item => text_value(item.text));
   const has_pending = record_items(data.pending_interactions).some(item => text_value(item.title) || text_value(item.description));
   const count = Array.isArray(data.sessions) ? data.sessions.length : undefined;
+  if (tone === "complete") {
+    if (action === "reply" && data.status === "denied") title = ["工作会话请求已拒绝", "Work session request declined"];
+    if (is_list && count !== undefined) title = count === 0 ? ["暂无会话", "No sessions"]
+      : [`${count} 个会话`, `${count} ${count === 1 ? "session" : "sessions"}`];
+  }
+
+  const resource = session_activity_resource(props);
   return {
-    title: title[chinese ? 0 : 1],
-    summary: is_list && count !== undefined ? (chinese ? `${count} 个会话` : `${count} ${count === 1 ? "session" : "sessions"}`) : short_text(target.title) || short_text(args.title),
+    title: title[chinese ? 0 : 1], resource,
+    summary: resource?.label || (is_list ? undefined : short_text(target.title) || short_text(args.title)),
     tone,
     has_detail: !is_list && Boolean(text_value(args.query) || has_response(props) || has_session(data.session)
       || has_messages || has_history_text(data) || has_pending || text_value(data.failure) || failure_text(props)),
@@ -171,7 +127,7 @@ function session_detail(props: PowerActivityProps) {
   const messages = record_items(data.messages).filter(message => text_value(message.text));
   const pending = record_items(data.pending_interactions).filter(item => text_value(item.title) || text_value(item.description));
   const response = has_response(props) ? text_value(args.note) : "";
-  const failure = failure_text(props) || text_value(data.failure);
+  const failure = text_value(data.failure);
   return create_element("div", { className: "space-y-3 p-3 text-xs leading-relaxed" },
     sessions.length ? section(chinese ? "会话快照" : "Session snapshot", sessions.map((session, index) => session_snapshot(session, chinese, index))) : null,
     text_value(args.query) ? section(chinese ? "工作指令" : "Instruction", text_block(text_value(args.query))) : null,
@@ -187,4 +143,4 @@ function session_detail(props: PowerActivityProps) {
 }
 
 /** Session 自有 activity 插槽。 */
-export const SESSION_ACTIVITY_RENDERER: PowerActivityRenderer = { describe: describe_session, detail: session_detail };
+export const SESSION_ACTIVITY_RENDERER: PowerActivityRenderer = with_activity_error({ describe: describe_session, detail: session_detail });

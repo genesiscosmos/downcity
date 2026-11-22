@@ -422,6 +422,7 @@ test("Memory 内容 action 拒绝无效范围，空 Workspace 不回退且共享
 });
 
 test("Memory 内容与 Job action 在选定执行范围上调用领域 action", async (context) => {
+  let memory_record = null;
   const job_view = {
     job_id: "a".repeat(64), kind: "revise", status: "queued",
     target: "agent", mode: "knowledge", agent_id: "agent-a", workspace_id: "workspace-a",
@@ -433,7 +434,7 @@ test("Memory 内容与 Job action 在选定执行范围上调用领域 action", 
         return { success: true, data: { provider: "builtin", items: [], total: 0 } };
       }
       if (input.action_id === "read") {
-        return { success: true, data: { memory_id: "agent/agent_a/wiki/x", memory: null } };
+        return { success: true, data: { memory_id: "agent/agent_a/wiki/x", memory: memory_record } };
       }
       if (input.action_id === "remember") {
         return { success: true, data: {
@@ -451,6 +452,19 @@ test("Memory 内容与 Job action 在选定执行范围上调用领域 action", 
     },
   });
   const scope = { scope: "agent", agent_id: "agent-a", workspace_id: "workspace-a" };
+  const memory_id = "agent/agent_a/wiki/x";
+  memory_record = { memory_id, content: "Scoped knowledge", memory_type: "knowledge", subject: { kind: "agent", agent_id: "agent-a" },
+    metadata: { title: "Scoped knowledge" }, source_refs: [], observed_at: "2026-01-01T00:00:00.000Z" };
+  assert.equal((await actions.get("memory.read").run({ ...scope, memory_id })).found, true);
+  memory_record = { ...memory_record, subject: { kind: "agent", agent_id: "agent-b" } };
+  await assert.rejects(() => actions.get("memory.read").run({ ...scope, memory_id }), /outside the selected detail scope/u);
+  memory_record = { ...memory_record, subject: { kind: "workspace", workspace_id: "workspace-b" } };
+  await assert.rejects(() => actions.get("memory.read").run({ ...scope, scope: "city", memory_id }), /outside the selected detail scope/u);
+  memory_record = { ...memory_record, subject: { kind: "workspace", workspace_id: "workspace-a" } };
+  assert.equal((await actions.get("memory.read").run({ ...scope, scope: "city", memory_id })).found, true);
+  await assert.rejects(() => actions.get("memory.read").run({ ...scope, memory_id }), /outside the selected detail scope/u);
+  memory_record = null;
+  invocations.length = 0;
 
   const scopes = await actions.get("memory.scopes").run(undefined);
   assert.deepEqual(scopes.agents.map((agent) => agent.agent_id), ["agent-a", "agent-b"]);

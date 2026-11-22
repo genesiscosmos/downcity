@@ -120,7 +120,7 @@ function render_part(part: DowncityChatMessagePart, on_respond_interaction?: Dow
   return null;
 }
 
-/** 按 Duobox MessageRenderer 的规则，把连续的 reasoning/tool/step-start 合并成一个 activity 区块。 */
+/** 连续 Tool、Action 与 Input 保持同一活动流；Reasoning 保留独立分组语义。 */
 export function render_message_parts(parts: DowncityChatMessagePart[], on_respond_interaction?: DowncityChatPanelProps["on_respond_interaction"], render_interaction?: DowncityChatPanelProps["render_interaction"], streaming = false): ReactNode[] {
   const nodes: ReactNode[] = [];
   let activity: DowncityChatMessagePart[] = [];
@@ -130,7 +130,10 @@ export function render_message_parts(parts: DowncityChatMessagePart[], on_respon
     activity = [];
   };
   for (const part of parts) {
-    if (part.type === "reasoning" || part.type === "tool" || part.type === "step-start") activity.push(part);
+    if (part.type === "reasoning") {
+      flush_activity();
+      nodes.push(<div className="dc-chat-activity-list" key={part.id}>{render_part(part, on_respond_interaction, render_interaction, streaming)}</div>);
+    } else if (part.type === "tool" || part.type === "step-start" || part.type === "operation" || part.type === "input") activity.push(part);
     else { flush_activity(); nodes.push(<div className="dc-chat-part" key={part.id}>{render_part(part, on_respond_interaction, render_interaction, streaming)}</div>); }
   }
   flush_activity();

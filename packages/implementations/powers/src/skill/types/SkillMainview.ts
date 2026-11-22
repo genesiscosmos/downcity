@@ -144,6 +144,10 @@ export interface SkillMainviewSnapshot {
  * 读取一个 Skill 的输入。
  */
 export interface SkillMainviewReadInput {
+  /** 当前聊天绑定的宿主 Workspace 标识，仅允许在登记的 Workspace 中发现项目技能。 */
+  readonly workspace_id?: string;
+  /** lookup 生产头中的路径；只有与重新发现的同 ID 技能路径一致时才可读取。 */
+  readonly expected_path?: string;
   /**
    * 目标 Agent 稳定 ID。
    */

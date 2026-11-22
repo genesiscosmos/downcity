@@ -52,6 +52,7 @@ async function start_messenger_power() {
 async function start_skill_power(data_root_path, workspace_path) {
   const actions = new Map();
   await new SkillPower().initialize({
+    abort_signal: new AbortController().signal,
     power: {
       id: "skill",
       action(action) { actions.set(action.id, action); },
@@ -307,6 +308,25 @@ test("Skill Power 按 Agent 浏览、关联与读取 Skill", async () => {
     assert.deepEqual(removed.agents[0].skills, []);
     assert.deepEqual(removed.available.find((item) => item.id === "home-demo").linked_agent_ids, []);
     assert.equal(fs.existsSync(path.join(home_skill_path, "SKILL.md")), true);
+
+    // 聊天文件入口按发现根核对 ID/path；home 来源无需先关联，项目来源必须属于登记 Workspace。
+    const home_read = await actions.get("skill.read").run({ agent_id: "test-agent", skill_id: "home-demo", expected_path: path.join(home_skill_path, "SKILL.md") });
+    assert.equal(home_read.success, true);
+    assert.match(home_read.content, /# Home Demo/u);
+    const project_skill_path = path.join(workspace_path, ".agents", "skills", "project-demo", "SKILL.md");
+    fs.mkdirSync(path.dirname(project_skill_path), { recursive: true });
+    fs.writeFileSync(project_skill_path, "---\nname: Project Demo\ndescription: Project example\n---\n\n# Project Demo\n");
+    const project_read = await actions.get("skill.read").run({ agent_id: "test-agent", skill_id: "project-demo", workspace_id: "test", expected_path: project_skill_path });
+    assert.equal(project_read.success, true);
+    assert.match(project_read.content, /# Project Demo/u);
+    const unregistered_read = await actions.get("skill.read").run({ agent_id: "test-agent", skill_id: "project-demo", workspace_id: "unknown", expected_path: project_skill_path });
+    assert.equal(unregistered_read.success, false);
+    const mismatched_read = await actions.get("skill.read").run({ agent_id: "test-agent", skill_id: "home-demo", expected_path: project_skill_path });
+    assert.equal(mismatched_read.success, false);
+    const outside_path = path.join(base_path, "private.txt");
+    fs.writeFileSync(outside_path, "not a Skill");
+    const outside_read = await actions.get("skill.read").run({ agent_id: "test-agent", skill_id: "home-demo", expected_path: outside_path });
+    assert.equal(outside_read.success, false);
   } finally {
     if (previous_home === undefined) delete process.env.HOME;
     else process.env.HOME = previous_home;

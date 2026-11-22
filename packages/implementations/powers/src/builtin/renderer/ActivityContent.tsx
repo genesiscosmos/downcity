@@ -27,18 +27,16 @@ export function data_of(props: PowerActivityProps): Record<string, unknown> { re
 export function error_of(props: PowerActivityProps): string { return text(props.tool.error) || text(record(props.tool.output).error); }
 /** 仅 canonical 调用状态；业务信封由各 Power 自己解释。 */
 export function call_tone(props: PowerActivityProps): PowerActivityDescription["tone"] {
-  if (props.tool.state === "failed" || record(props.tool.output).success === false) return "failed";
+  if (props.tool.state === "failed" || props.tool.state === "completed" && record(props.tool.output).success === false) return "failed";
   if (props.tool.state === "waiting-user") return "waiting";
   return props.tool.state === "completed" ? "complete" : "running";
 }
-/** 安全正文及有界错误只在 detail 挂载后计算。 */
-export function ActivityText({ body, error, render_text }: {
+/** 安全业务正文只在 detail 挂载后计算；错误交由宿主统一详情。 */
+export function ActivityText({ body, render_text }: {
   /** 已明确解释的可读正文，不接受任意对象。 */ body?: string;
-  /** 用户可处理的失败原因。 */ error?: string;
   /** 宿主的安全 Markdown 阅读端口；不注入执行能力。 */ render_text?: (text: string) => ReactNode;
 }) {
   return <div className="space-y-3 p-3 text-xs leading-relaxed">
     {body ? render_text?.(body.slice(0, 48_000)) ?? <p className="whitespace-pre-wrap break-words">{body.slice(0, 48_000)}</p> : null}
-    {error ? <p className="text-destructive whitespace-pre-wrap break-words">{error.slice(0, 4_000)}</p> : null}
   </div>;
 }

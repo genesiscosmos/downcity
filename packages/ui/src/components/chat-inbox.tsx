@@ -7,7 +7,7 @@
  * React 负责文本转义，组件不加载附件、不解释 Markdown，也不把事件内容混入 Agent 正文。
  */
 import { useState } from "react";
-import { ArrowDownToLine, File, Paperclip, Terminal, ListTree } from "lucide-react";
+import { File, Inbox, MessageCircle, Pill, Terminal, ListTree } from "lucide-react";
 import type { DowncityChatInputPart } from "../types/chat-runtime-input";
 import { TbChevronRight } from "./chat-icons";
 
@@ -27,15 +27,16 @@ export function ChatInput({ part }: ChatInputProps) {
   const text_count = display_content.length - file_count;
   const count_label = [text_count ? `${text_count} 段内容` : "", file_count ? `${file_count} 个附件` : ""]
     .filter(Boolean).join(" · ") || "无内容";
-  const Icon = part.kind === "shell_result" ? Terminal
-    : part.kind === "tool_media" ? Paperclip
-    : part.kind === "delegation_result" || part.kind === "task" ? ListTree : ArrowDownToLine;
-  return <details className="dc-chat-activity-row" onToggle={(event) => {
+  const Icon = part.kind === "delegation_result" ? MessageCircle
+    : part.kind === "shell_result" ? Terminal
+    : part.kind === "tool_media" && part.content.some(item => item.type === "context" && item.tag === "skill") ? Pill
+    : part.kind === "task" ? ListTree : Inbox;
+  return <details className="dc-chat-activity-row is-incoming" onToggle={(event) => {
     if (event.target === event.currentTarget) set_expanded(event.currentTarget.open);
   }}>
     <summary className="dc-chat-activity-summary">
       <span className="dc-chat-activity-main">
-        <Icon aria-hidden />
+        <span className="dc-chat-input-icon" aria-hidden><Icon /></span>
         <span className="dc-chat-activity-state">{title}</span>
         <span className="dc-chat-activity-name">{count_label}</span>
         <TbChevronRight className="dc-chat-activity-chevron" aria-hidden />
@@ -66,7 +67,7 @@ export function ChatInput({ part }: ChatInputProps) {
 function input_title(kind: string): string {
   switch (kind) {
     case "shell_result": return "命令结果";
-    case "delegation_result": return "任务结果";
+    case "delegation_result": return "工作会话结果";
     case "power_result": return "后台结果";
     case "tool_media": return "收到附件";
     case "task": return "任务指令";

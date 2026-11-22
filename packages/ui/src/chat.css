@@ -208,3 +208,26 @@
   outline: 2px solid var(--ring);
   outline-offset: 2px;
 }
+
+
+/* Input 摘要为轻底色胶囊，来源图标无单独底色，正文沿用活动详情布局。 */
+.dc-chat-activity-row.is-incoming > .dc-chat-activity-summary {
+  box-sizing: border-box;
+  width: fit-content;
+  max-width: 100%;
+  padding: .16rem .5rem;
+  border-radius: 999px;
+  background: var(--surface-subtle);
+}
+.dc-chat-input-icon {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 1rem;
+  height: 1rem;
+  color: var(--muted-foreground);
+}
+.dc-chat-input-icon > svg { width: .875rem; height: .875rem; }
+.dc-chat-activity-row.is-incoming > .dc-chat-activity-summary .dc-chat-activity-main > * { animation: none; }
+.dc-chat-activity-row.is-incoming.is-failed > .dc-chat-activity-summary .dc-chat-input-icon { color: var(--destructive); }

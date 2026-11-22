@@ -50,18 +50,8 @@ export function activity_tone(props: PowerActivityProps): PowerActivityDescripti
   if (tool.state === "failed") return "failed";
   if (tool.state === "waiting-user") return "waiting";
   const output = record_value(tool.output);
-  if (output.success === false) return "failed";
+  if (tool.state === "completed" && output.success === false) return "failed";
   return tool.state === "completed" ? "complete" : "running";
-}
-
-/** 流式输入未收口时不能推断为查看动作索引。 */
-export function preparing_description(props: PowerActivityProps, power_name: string): PowerActivityDescription | undefined {
-  if (props.tool.state !== "input-streaming") return undefined;
-  return {
-    title: is_chinese(props.locale) ? `正在准备 ${power_name} 操作` : `Preparing ${power_name} operation`,
-    tone: "running",
-    has_detail: false,
-  };
 }
 
 /** 本次调用失败的明确说明，不扫描完整输出或目标会话的 failure 快照。 */

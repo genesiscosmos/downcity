@@ -152,9 +152,9 @@ export async function execute_task_history_action(params: {
     storage: params.storage,
     request: params.payload,
   });
-  if (result.success) await assert_task_agent(params.storage, params.payload.title, params.context.agent.id);
-  return result.success
-    ? { success: true, data: { runs: result.runs ?? [] } as unknown as PowerJsonValue }
+  const task = result.success ? await assert_task_agent(params.storage, params.payload.title, params.context.agent.id) : undefined;
+  return result.success && task
+    ? { success: true, data: { task_id: task.taskId, title: task.title, runs: result.runs ?? [] } as unknown as PowerJsonValue }
     : { success: false, error: result.error || "task history failed" };
 }
 
@@ -171,9 +171,9 @@ export async function execute_task_run_detail_action(params: {
     storage: params.storage,
     request: params.payload,
   });
-  if (result.success) await assert_task_agent(params.storage, params.payload.title, params.context.agent.id);
-  return result.success && result.run
-    ? { success: true, data: { run: result.run } as unknown as PowerJsonValue }
+  const task = result.success ? await assert_task_agent(params.storage, params.payload.title, params.context.agent.id) : undefined;
+  return result.success && result.run && task
+    ? { success: true, data: { task_id: task.taskId, title: task.title, run: result.run } as unknown as PowerJsonValue }
     : { success: false, error: result.error || "task run detail failed" };
 }
 
@@ -383,10 +383,11 @@ export async function executeTaskStatusAction(params: {
 }
 
 /** 保证 Agent action 只能读取或修改绑定到当前 Agent 的 Task。 */
-async function assert_task_agent(storage: PowerStorage, title: string, agent_id: string): Promise<void> {
+async function assert_task_agent(storage: PowerStorage, title: string, agent_id: string) {
   const task_id = await resolveTaskIdByTitle({ storage, title });
   const task = await readTask({ storage, taskId: task_id });
   if (task.agent_id !== agent_id) {
     throw new Error(`Task belongs to another Agent: ${task.agent_id}`);
   }
+  return task;
 }

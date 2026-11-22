@@ -256,7 +256,10 @@ export type TaskRunRequest = {
 };
 
 export type TaskRunResponse = {
+  /** 本次同步执行受理操作是否成功。 */
   success: boolean;
+  /** 已校验所属范围的稳定 Task ID，供宿主导航；失败且未确认任务时省略。 */
+  task_id?: string;
   /** 是否已受理后台执行（true 表示任务已开始异步执行） */
   accepted?: boolean;
   /** 给调用方的简短提示（例如“任务已开始，完成后结果会写入关联 Session，请直接继续后续流程，无需等待完成”）。 */

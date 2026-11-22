@@ -3,7 +3,7 @@
  *
  * 关键点（中文）
  * - 权威数据是 Agent 技能目录 `agents/<agent-id>/skills`。
- * - 可关联来源只有用户目录 `~/.agents/skills`；不做 Workspace 维度，也不在界面里安装。
+ * - 可关联来源只有用户目录 `~/.agents/skills`；聊天文件入口可核对宿主登记项目的 Skill 来源。
  * - 动作不依赖 Agent 运行实例，Agent 列表由宿主作为只读能力注入。
  */
 
@@ -71,7 +71,7 @@ export function register_skill_power_host_actions(
   });
   context.power.action({
     id: "skill.read",
-    run: async (input) => as_json(await read_skill(runtime, read_read_input(input))),
+    run: async (input) => as_json(await read_skill(context, runtime, read_read_input(input))),
   });
   context.power.action({
     id: "skill.link",
@@ -142,15 +142,23 @@ function list_agent_skills(
 
 /** 重新发现后读取一个 Skill，避免信任 Renderer 传入的本地路径。 */
 async function read_skill(
+  context: PowerLifecycleContext,
   runtime: SkillPowerHostRuntime,
   input: SkillMainviewReadInput,
 ) {
-  const skills = listSkills({
-    scope: "agent",
-    context: create_agent_context(runtime, input.agent_id),
-    options: resolveSkillPowerOptions(),
-  }).skills;
-  return await read_discovered_skill(skills, input.skill_id);
+  const root = create_agent_context(runtime, input.agent_id);
+  const options = resolveSkillPowerOptions();
+  const skills = listSkills({ scope: "agent", context: root, options }).skills;
+  const expected_path = input.expected_path;
+  if (!expected_path) return await read_discovered_skill(skills, input.skill_id);
+  // 聊天入口可引用 lookup 的 home/project 来源；只在已有发现根中核对 ID 与路径。
+  skills.push(...listSkills({ scope: "home", context: root, options }).skills);
+  if (input.workspace_id) {
+    const workspace = (await context.system.list_workspaces()).find(item => item.workspace_id === input.workspace_id);
+    if (workspace) skills.push(...listSkills({ scope: "project", context: { ...root, workspace_path: workspace.workspace_path }, options }).skills);
+  }
+  const matches = skills.filter(skill => skill.id === input.skill_id && path.resolve(skill.skill_md_path) === path.resolve(expected_path));
+  return await read_discovered_skill(matches, input.skill_id);
 }
 
 /** 把用户目录中的 Skill 软链接进 Agent 技能目录。 */
@@ -318,9 +326,12 @@ function read_record(value: PowerJsonValue | undefined): Record<string, PowerJso
 
 /** 解析 read 输入。 */
 function read_read_input(input: PowerJsonValue | undefined): SkillMainviewReadInput {
+  const record = read_record(input);
   return {
     agent_id: read_required_string(input, "agent_id"),
     skill_id: read_required_string(input, "skill_id"),
+    workspace_id: typeof record.workspace_id === "string" ? record.workspace_id : undefined,
+    expected_path: typeof record.expected_path === "string" ? record.expected_path : undefined,
   };
 }
 

@@ -61,9 +61,10 @@ export function get_power_renderer_definition_error(value: unknown): string | un
 }
 
 export { input_envelope, input_power_id } from "./renderer/Input.js";
-export type { PowerInputProps, PowerInputDetailProps, PowerInputRenderer } from "./types/PowerInputRenderer.js";
+export type { PowerInputProps, PowerInputDetailProps, PowerInputRenderer, PowerInputDescription, PowerInputFile } from "./types/PowerInputRenderer.js";
 export { CITY_POWER_RENDERERS } from "./renderers.js";
-export type { PowerActivityProps, PowerActivityDescription, PowerActivityRenderer } from "./types/PowerActivityRenderer.js";
+export type { PowerActivityProps, PowerActivityDescription, PowerActivityError, PowerActivityRenderer } from "./types/PowerActivityRenderer.js";
+export type { PowerActivityResource } from "./types/PowerActivityResource.js";
 
 export type { PowerRendererNotification } from "./types/PowerNotification.js";
 
@@ -125,3 +126,5 @@ export type {
   PowerSidebarComponent,
   PowerSidebarComponentProps,
 } from "./types/PowerRenderer.js";
+
+export { activity_error_reason, with_activity_error } from "./renderer/ActivityError.js";

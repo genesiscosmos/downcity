@@ -161,7 +161,7 @@ export function createTaskPowerActions(params: {
     }),
     history: create_action({
       description: "List persisted execution records for one task.",
-      returns: "runs(timestamp, status, started_at, finished_at, summary)",
+      returns: "task_id, title, runs(timestamp, status, started_at, finished_at, summary)",
       access: "read",
       input_schema: {
         zod: TASK_HISTORY_SCHEMA,
@@ -182,7 +182,7 @@ export function createTaskPowerActions(params: {
     }),
     run_detail: create_action({
       description: "Read one persisted task execution and its user-visible artifacts.",
-      returns: "run(timestamp, status, input, output, result, error, artifacts)",
+      returns: "task_id, title, run(timestamp, status, input, output, result, error, artifacts)",
       access: "read",
       input_schema: {
         zod: TASK_RUN_DETAIL_SCHEMA,
@@ -267,7 +267,7 @@ export function createTaskPowerActions(params: {
     }),
     run: create_action({
       description: "Run a task manually.",
-      returns: "accepted, message, execution_id",
+      returns: "task_id, accepted, message, executionId",
       access: "write",
       input_schema: {
         zod: TASK_RUN_SCHEMA,
