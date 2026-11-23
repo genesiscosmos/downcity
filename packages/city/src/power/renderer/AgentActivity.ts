@@ -14,7 +14,7 @@ function describe(props: PowerActivityProps): PowerActivityDescription {
   let sentence = (action_sentences[action] ?? action_sentences.unknown)![tone];
   if (tone === "complete" && action === "agent.list" && Array.isArray(data.agents)) {
     const count = data.agents.length;
-    sentence = count === 0 ? ["暂无可用 Agent", "No agents available"] : [`${count} 个可用 Agent`, `${count} available ${count === 1 ? "agent" : "agents"}`];
+    sentence = [`已列出 ${count} 个可用 Agent`, `Listed ${count} available ${count === 1 ? "agent" : "agents"}`];
   }
   if (tone === "failed") sentence = (action_sentences[action] ?? action_sentences.unknown)!.failed;
   if (tone === "waiting") sentence = (action_sentences[action] ?? action_sentences.unknown)!.waiting;

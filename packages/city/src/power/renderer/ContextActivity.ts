@@ -11,12 +11,16 @@ function describe(props: PowerActivityProps): PowerActivityDescription {
   const data = output_data(props);
   const tone = activity_tone(props);
   let sentence = (action_sentences[action] ?? action_sentences.unknown)![tone];
-  if (tone === "complete" && action === "sandbox.explain_path") sentence = ["已检查路径访问权限", "Path access checked"];
   if (tone === "failed") sentence = (action_sentences[action] ?? action_sentences.unknown)!.failed;
-  if (tone === "complete" && action === "sandbox.explain_path" && typeof data.allowed !== "boolean") sentence = ["已检查路径访问权限", "Path access checked"];
   if (tone === "complete" && action === "workspaces.list" && Array.isArray(data.workspaces)) {
     const count = data.workspaces.length;
-    sentence = count === 0 ? ["暂无工作区", "No workspaces"] : [`${count} 个工作区`, `${count} ${count === 1 ? "workspace" : "workspaces"}`];
+    sentence = count === 0 ? ["未找到工作区", "Found no workspaces"]
+      : [`已找到 ${count} 个工作区`, `Found ${count} ${count === 1 ? "workspace" : "workspaces"}`];
+  }
+  if (tone === "complete" && action === "sandbox.list_mounts" && Array.isArray(data.mounts)) {
+    const count = data.mounts.length;
+    sentence = count === 0 ? ["未找到挂载目录", "Found no mounted directories"]
+      : [`已找到 ${count} 个挂载目录`, `Found ${count} mounted ${count === 1 ? "directory" : "directories"}`];
   }
   if (tone === "waiting") sentence = (action_sentences[action] ?? action_sentences.unknown)!.waiting;
   if (props.tool.state === "input-streaming") sentence = preparing_sentence;

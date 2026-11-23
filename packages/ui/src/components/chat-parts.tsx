@@ -3,6 +3,7 @@ import { useState, type ReactNode } from "react";
 import { ChevronDown, File, LoaderCircle, Send } from "lucide-react";
 import { TbCheck, TbChevronRight, TbFile as TbFileIcon, TbTerminal } from "./chat-icons";
 import { cn } from "../lib/utils";
+import { use_control_translation } from "../lib/control-messages";
 import { ChatInput } from "./chat-inbox";
 import { MarkdownView } from "./markdown/MarkdownView";
 import type { DowncityChatChangedFile, DowncityChatContentPart, DowncityChatMessagePart, DowncityChatPanelProps, DowncityChatQuestion } from "../types/chat";
@@ -22,11 +23,12 @@ function ToolActivity({ part }: { part: DowncityChatContentPart }) {
   const is_failed = part.tool_state === "failed" || Boolean(part.error);
   const is_file_tool = /write|edit|patch|file/i.test(part.tool_name ?? "");
   const is_write = part.tool_name === "write";
-  const state_label = is_failed ? "失败"
-    : is_generating ? (is_write ? "生成文件内容中" : "生成参数中")
-    : part.tool_state === "ready" ? "等待执行"
-    : part.tool_state === "running" ? (is_write ? "写入文件中" : "执行中")
-    : part.tool_state === "completed" ? "已完成" : "等待处理";
+  const translate = use_control_translation("chat");
+  const tool_kind = part.tool_name === "ask_user" ? "ask" : ["read", "write", "edit", "grep", "find"].includes(part.tool_name ?? "") ? part.tool_name : "generic";
+  const state_label = translate(is_failed ? `activity.${tool_kind}.failed`
+    : part.tool_state === "waiting-user" ? "activity.waiting_confirmation"
+    : is_generating || part.tool_state === "ready" ? is_write ? "activity.preparing_write" : "activity.preparing_tool"
+    : `activity.${tool_kind}.${part.tool_state === "completed" ? "completed" : "running"}`);
   const input_text = part.input_text ?? (typeof part.input === "string" ? part.input : "");
   return (
     <details className={cn("dc-chat-activity-row", is_running && "is-running", is_failed && "is-failed")} open={part.tool_state === "input-streaming"}>
@@ -46,6 +48,19 @@ function ToolActivity({ part }: { part: DowncityChatContentPart }) {
       </div>
     </details>
   );
+}
+
+/** 已知 Session 动作使用 Agent 视角标题；业务对象名称与未知动作标签保持调用方语义。 */
+function OperationActivity({ part }: { /** 已投影的只读 Session 动作。 */ part: DowncityChatContentPart }) {
+  const translate = use_control_translation("chat");
+  const operation = part.operation;
+  if (!operation) return null;
+  const kind = operation.name === "history-fork" ? "fork" : operation.name === "context-compaction" ? "compaction" : operation.name === "command" ? "command" : undefined;
+  const state = operation.status === "failed" ? "failed" : operation.status === "running" ? "running" : "completed";
+  const key = operation.name === "command" && state === "completed" && operation.label === "Session configuration updated" ? "activity.detail.config_updated"
+    : operation.name === "context-compaction" && state === "completed" && operation.label === "No session context to compact" ? "activity.detail.nothing_to_compact"
+    : kind ? `activity.detail.action.${kind}.${state}` : undefined;
+  return <div className="dc-chat-operation"><LoaderCircle className={operation.status === "running" ? "animate-spin" : ""} /><span>{key ? translate(key) : operation.label ?? operation.name}</span></div>;
 }
 
 function ReasoningActivity({ part }: { part: DowncityChatContentPart }) {
@@ -113,7 +128,7 @@ function render_part(part: DowncityChatMessagePart, on_respond_interaction?: Dow
   if (part.type === "tool") return <ToolActivity part={part} />;
   if (part.type === "interaction") return render_interaction?.({ part, on_respond_interaction }) ?? <InteractionCard part={part} on_respond_interaction={on_respond_interaction} />;
   if (part.type === "changed-files") return <ChangedFiles files={part.files} />;
-  if (part.type === "operation") return <div className="dc-chat-operation"><LoaderCircle className={part.operation?.status === "running" ? "animate-spin" : ""} /><span>{part.operation?.label ?? part.operation?.name}</span></div>;
+  if (part.type === "operation") return <OperationActivity part={part} />;
   if (part.type === "file") return <a className="dc-chat-attachment" href={part.url} target="_blank" rel="noreferrer"><File />{part.filename ?? "附件"}</a>;
   if (part.type === "data" && part.data_type && ["reference", "task_result", "file-reference", "session-reference"].includes(part.data_type)) return <details className="text-xs"><summary>{part.data_type}</summary><pre className="whitespace-pre-wrap">{format_value(part.data)}</pre></details>;
   if (part.type === "source") return <a className="dc-chat-source" href={part.source_url} target="_blank" rel="noreferrer">{part.source_title ?? part.source_url}</a>;

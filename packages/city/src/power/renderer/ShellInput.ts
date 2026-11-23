@@ -1,4 +1,4 @@
-/** Shell 后台终态只读取 ShellCompletionBridge 的确切信封，不补造命令。 */
+/** 终端会话退出或失去监管的回传，只读取 ShellCompletionBridge 的确切信封。 */
 import { createElement as create_element } from "react";
 import type { PowerInputProps, PowerInputDetailProps, PowerInputRenderer } from "../types/PowerInputRenderer.js";
 import { input_envelope } from "./Input.js";
@@ -10,7 +10,7 @@ function describe(props: PowerInputProps) {
   if (!Object.keys(data).length) return null;
   const zh = is_chinese(props.locale);
   const failed = typeof data.exit_code === "number" && data.exit_code !== 0 || Boolean(data.interruption_reason) || data.status === "failed" || data.status === "killed";
-  return { title: failed ? (zh ? "命令执行失败" : "Command failed") : (zh ? "命令已结束" : "Command finished"),
+  return { title: zh ? "收到终端会话结果" : "Received terminal session result",
     tone: failed ? "failed" as const : "complete" as const,
     has_detail: Boolean(text_value(data.output_preview).trim() || text_value(data.interruption_reason).trim() || typeof data.exit_code === "number" && data.exit_code !== 0) };
 }

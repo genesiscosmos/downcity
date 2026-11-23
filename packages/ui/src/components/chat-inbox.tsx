@@ -7,6 +7,7 @@
  * React 负责文本转义，组件不加载附件、不解释 Markdown，也不把事件内容混入 Agent 正文。
  */
 import { useState } from "react";
+import { use_control_translation } from "../lib/control-messages";
 import { File, Inbox, MessageCircle, Pill, Terminal, ListTree } from "lucide-react";
 import type { DowncityChatInputPart } from "../types/chat-runtime-input";
 import { TbChevronRight } from "./chat-icons";
@@ -20,7 +21,8 @@ interface ChatInputProps {
 /** 展示独立的运行时输入，保留其在消息内部的原始位置。 */
 export function ChatInput({ part }: ChatInputProps) {
   const [expanded, set_expanded] = useState(false);
-  const title = input_title(part.kind);
+  const translate = use_control_translation("chat");
+  const title = translate(input_title(part));
   const display_content = part.content.filter((item) => item.type === "file"
     || (item.type === "context" ? item.context : item.text).trim().length > 0);
   const file_count = display_content.filter((item) => item.type === "file").length;
@@ -64,17 +66,18 @@ export function ChatInput({ part }: ChatInputProps) {
 }
 
 /** 只为已知生产语义指定标题；扩展事件保留通用入口。 */
-function input_title(kind: string): string {
-  switch (kind) {
-    case "shell_result": return "命令结果";
-    case "delegation_result": return "工作会话结果";
-    case "power_result": return "后台结果";
-    case "tool_media": return "收到附件";
-    case "task": return "任务指令";
-    case "memory": return "记忆处理";
-    case "maintenance": return "上下文维护";
-    case "incomplete_response_recovery": return "回复续写";
-    case "max_steps_finalization": return "执行收尾";
-    default: return "运行时输入";
+function input_title(part: DowncityChatInputPart): string {
+  if (part.kind === "tool_media" && part.content.some(item => item.type === "context" && item.tag === "skill")) return "runtime_input.skill";
+  switch (part.kind) {
+    case "shell_result": return "runtime_input.command_result";
+    case "delegation_result": return "runtime_input.work_result";
+    case "power_result": return "runtime_input.background_result";
+    case "tool_media": return "runtime_input.attachment";
+    case "task": return "runtime_input.task";
+    case "memory": return "runtime_input.memory";
+    case "maintenance": return "runtime_input.maintenance";
+    case "incomplete_response_recovery": return "runtime_input.recovery";
+    case "max_steps_finalization": return "runtime_input.finalization";
+    default: return "runtime_input.message";
   }
 }

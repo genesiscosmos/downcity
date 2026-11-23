@@ -11,7 +11,7 @@ function describe(props: PowerInputProps): PowerInputDescription | null {
   if (!header) return null;
   const [, name, skill_id, path] = header;
   if (!name?.trim() || !skill_id?.trim() || !path?.trim()) return null;
-  return { title: chinese(props.locale) ? "已加载技能" : "Skill loaded", summary: name, tone: "complete", has_detail: false,
+  return { title: chinese(props.locale) ? "已加载技能" : "Loaded skill", summary: name, tone: "complete", has_detail: false,
     file: { kind: "skill", skill_id, label: name, path } };
 }
 /** Skill 自有单行入口，无内联正文。 */

@@ -63,16 +63,16 @@ function describe_shell(props: PowerActivityProps): PowerActivityDescription {
   let title = (action_sentences[action] ?? action_sentences.unknown)![tone];
   const command_action = action === "exec" || action === "session_start";
   const code = exit_code(props);
-  if (tone === "complete" && action === "exec" && ["running", "starting"].includes(text_value(data.status))) title = ["命令已启动", "Command started"];
-  if (tone === "complete" && action === "session_read" && data.output === "") title = ["暂无输出", "No output"];
+  if (tone === "complete" && action === "exec" && ["running", "starting"].includes(text_value(data.status))) title = ["已启动命令", "Started command"];
+  if (tone === "complete" && action === "session_read" && data.output === "") title = ["已读取终端输出", "Read terminal output"];
   if (tone === "complete" && action === "session_list" && Array.isArray(data.sessions)) {
     const count = data.sessions.length;
-    title = count === 0 ? ["暂无终端会话", "No terminal sessions"] : [`${count} 个终端会话`, `${count} terminal ${count === 1 ? "session" : "sessions"}`];
+    title = [`已列出 ${count} 个终端会话`, `Listed ${count} terminal ${count === 1 ? "session" : "sessions"}`];
   }
   if (tone === "failed" && command_action && data.status === "killed") title = action === "session_start"
-    ? ["终端会话已中断", "Terminal session interrupted"] : ["命令已中断", "Command interrupted"];
+    ? ["未能启动终端会话", "Could not start terminal session"] : ["未能执行命令", "Could not execute command"];
   if (tone === "failed" && ["denied", "rejected"].includes(text_value(data.approval_status))) title = action === "exec"
-    ? ["命令未获允许", "Command not approved"] : (action_sentences[action] ?? action_sentences.unknown)!.failed;
+    ? ["未能执行命令", "Could not execute command"] : (action_sentences[action] ?? action_sentences.unknown)!.failed;
   return {
     title: title[chinese ? 0 : 1],
     error: tone === "failed" && command_action && code !== undefined && code !== 0 ? { reason: chinese ? `进程以退出码 ${code} 结束。` : `The process exited with code ${code}.` } : undefined,

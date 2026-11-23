@@ -40,22 +40,22 @@ function describe(props: PowerActivityProps): PowerActivityDescription {
   if (props.tool.state === "completed" && (data.success === false || action === "run" && data.accepted === false || operation_error(props))) tone = "failed";
   let sentence = (action_sentences[key] ?? action_sentences.unknown)![tone];
   const preparation = record(task_definition(props).preparing);
-  if (tone === "complete" && action === "generate" && preparation.status === "needs_input") sentence = ["任务信息已整理", "Task information reviewed"];
+  if (tone === "complete" && action === "generate" && preparation.status === "needs_input") sentence = ["已整理任务信息", "Reviewed task information"];
   if (tone === "failed") sentence = action === "generate" && text(data.task_id)
-    ? text(data.start_error) || text(preparation.start_error) ? ["任务已创建，尚未开始", "Task created, not started"]
-      : text(data.schedule_error) || text(preparation.schedule_error) ? ["任务已创建，安排未生效", "Task created, but schedule not active"]
-      : ["任务已创建，尚未准备好", "Task created, but not ready"] : (action_sentences[key] ?? action_sentences.unknown)!.failed;
+    ? text(data.start_error) || text(preparation.start_error) ? ["未能开始任务", "Could not start task"]
+      : text(data.schedule_error) || text(preparation.schedule_error) ? ["未能安排任务", "Could not schedule task"]
+      : ["未能准备任务", "Could not prepare task"] : (action_sentences[key] ?? action_sentences.unknown)!.failed;
   if (tone === "complete" && action === "list" && Array.isArray(data.tasks)) {
     const count = data.tasks.length;
-    sentence = count ? [`${count} 项任务`, `${count} ${count === 1 ? "task" : "tasks"}`] : ["暂无任务", "No tasks"];
+    sentence = [`已列出 ${count} 项任务`, `Listed ${count} ${count === 1 ? "task" : "tasks"}`];
   }
   if (tone === "complete" && action === "history" && Array.isArray(data.runs)) {
     const count = data.runs.length;
-    sentence = count ? [`${count} 次任务执行`, `${count} task ${count === 1 ? "run" : "runs"}`] : ["暂无执行记录", "No task runs"];
+    sentence = [`已列出 ${count} 次任务执行`, `Listed ${count} task ${count === 1 ? "run" : "runs"}`];
   }
   if (tone === "complete" && action === "inbox" && Array.isArray(data.tasks)) {
     const count = data.tasks.length;
-    sentence = count ? [`${count} 项任务需要处理`, `${count} ${count === 1 ? "task needs" : "tasks need"} attention`] : ["没有待处理事项", "Nothing needs attention"];
+    sentence = [`已找到 ${count} 项待处理任务`, `Found ${count} ${count === 1 ? "task" : "tasks"} needing attention`];
   }
   if (tone === "waiting") sentence = (action_sentences[key] ?? action_sentences.unknown)!.waiting;
   if (props.tool.state === "input-streaming") sentence = preparing_sentence;

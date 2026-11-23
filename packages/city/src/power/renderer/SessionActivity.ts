@@ -68,9 +68,8 @@ function describe_session(props: PowerActivityProps): PowerActivityDescription {
   const has_pending = record_items(data.pending_interactions).some(item => text_value(item.title) || text_value(item.description));
   const count = Array.isArray(data.sessions) ? data.sessions.length : undefined;
   if (tone === "complete") {
-    if (action === "reply" && data.status === "denied") title = ["工作会话请求已拒绝", "Work session request declined"];
-    if (is_list && count !== undefined) title = count === 0 ? ["暂无会话", "No sessions"]
-      : [`${count} 个会话`, `${count} ${count === 1 ? "session" : "sessions"}`];
+    if (action === "reply" && data.status === "denied") title = ["已拒绝工作会话请求", "Declined work session request"];
+    if (is_list && count !== undefined) title = [`已列出 ${count} 个会话`, `Listed ${count} ${count === 1 ? "session" : "sessions"}`];
   }
 
   const resource = session_activity_resource(props);

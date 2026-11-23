@@ -20,15 +20,13 @@ function describe(props: PowerInputProps) {
   if (input.kind === "delegation_result") {
     const data = input_envelope(input, "delegation_result");
     const state = text_value(data.state);
-    const title = state === "failed" ? (zh ? "工作会话执行失败" : "Work session failed")
-      : state === "stopped" ? (zh ? "工作会话已停止" : "Work session stopped")
-      : (zh ? "收到工作会话结果" : "Work session result received");
+    const title = zh ? "收到工作会话结果" : "Received work session result";
     return { title, tone: state === "failed" ? "failed" as const : "complete" as const,
       has_detail: Boolean(text_value(data.text).trim() || text_value(data.error).trim()) };
   }
   if (input.kind === "power_result" || input.kind === "shell_result") return null;
   if (!readable_content(props).length) return null;
-  return { title: input.kind === "task" ? (zh ? "收到任务指令" : "Task instructions received") : (zh ? "收到补充内容" : "Additional content received"),
+  return { title: input.kind === "task" ? (zh ? "收到任务指令" : "Received task instructions") : (zh ? "收到消息内容" : "Received message content"),
     tone: "complete" as const, has_detail: true };
 }
 

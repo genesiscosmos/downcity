@@ -16,9 +16,9 @@ function describe(props: PowerActivityProps): PowerActivityDescription {
     const collection = action === "list" ? data.skills : action === "servers" ? data.servers : data.tools;
     if (Array.isArray(collection)) {
       const count = collection.length;
-      sentence = action === "list" ? count ? [`${count} 个可用技能`, `${count} available ${count === 1 ? "skill" : "skills"}`] : ["暂无可用技能", "No skills available"]
-        : action === "servers" ? count ? [`${count} 个已配置服务`, `${count} configured ${count === 1 ? "service" : "services"}`] : ["暂无外部服务", "No services configured"]
-        : count ? [`${count} 个可用工具`, `${count} available ${count === 1 ? "tool" : "tools"}`] : ["暂无可用工具", "No tools available"];
+      sentence = action === "list" ? [`已列出 ${count} 个可用技能`, `Listed ${count} available ${count === 1 ? "skill" : "skills"}`]
+        : action === "servers" ? [`已列出 ${count} 个已配置服务`, `Listed ${count} configured ${count === 1 ? "service" : "services"}`]
+        : [`已列出 ${count} 个可用工具`, `Listed ${count} available ${count === 1 ? "tool" : "tools"}`];
     }
   }
   if (tone === "failed") sentence = (action_sentences[action] ?? action_sentences.unknown)!.failed;

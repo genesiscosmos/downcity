@@ -5,20 +5,20 @@ import type { PowerActivityDescription } from "@downcity/city/power/react";
 export const action_sentences: Readonly<Record<string, Record<PowerActivityDescription["tone"], readonly [string, string]>>> = {
   "show": {
     running: ["正在展示内容", "Displaying content"],
-    complete: ["内容已展示", "Content displayed"],
-    failed: ["内容展示失败", "Could not display content"],
+    complete: ["已展示内容", "Displayed content"],
+    failed: ["未能展示内容", "Could not display content"],
     waiting: ["等待你允许展示内容", "Waiting for permission to display content"],
   },
   "": {
     running: ["正在查看可用功能", "Checking available actions"],
-    complete: ["已查看可用功能", "Available actions checked"],
-    failed: ["无法查看可用功能", "Could not check available actions"],
+    complete: ["已查看可用功能", "Checked available actions"],
+    failed: ["未能查看可用功能", "Could not check available actions"],
     waiting: ["等待你允许查看可用功能", "Waiting for permission to check available actions"],
   },
   "unknown": {
     running: ["正在准备展示内容", "Preparing content"],
-    complete: ["内容展示已结束", "Content display finished"],
-    failed: ["内容展示失败", "Could not display content"],
+    complete: ["已展示内容", "Displayed content"],
+    failed: ["未能展示内容", "Could not display content"],
     waiting: ["等待你确认展示内容", "Waiting for confirmation to display content"],
   },
 };

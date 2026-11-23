@@ -14,8 +14,8 @@ function describe(props: PowerInputProps) {
   let payload: Record<string, unknown>;
   try { payload = record(JSON.parse(result.slice(result_prefix.length))); } catch { return null; }
   const zh = chinese(props.locale);
-  if (payload.status === "succeeded") return { title: zh ? "记忆已更新" : "Memory updated", tone: "complete" as const, has_detail: false };
-  if (payload.status === "failed") return { title: zh ? "记忆整理失败" : "Memory processing failed", tone: "failed" as const, has_detail: false };
+  if (payload.status === "succeeded") return { title: zh ? "收到记忆整理结果" : "Received memory processing result", tone: "complete" as const, has_detail: false };
+  if (payload.status === "failed") return { title: zh ? "收到记忆整理结果" : "Received memory processing result", tone: "failed" as const, has_detail: false };
   // skipped 没有需要用户处理的变更，不制造后台正常维护消息。
   return null;
 }

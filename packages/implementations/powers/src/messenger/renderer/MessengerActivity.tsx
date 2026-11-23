@@ -20,7 +20,7 @@ function describe(props: PowerActivityProps): PowerActivityDescription {
   let tone = call_tone(props);
   let sentence = (action_sentences[action] ?? action_sentences.unknown)![tone];
   if (tone === "complete" && (action === "send" || action === "react") && data.status === "delivered") sentence = action === "send"
-    ? ["消息已送达", "Message delivered"] : ["回应已添加", "Reaction added"];
+    ? ["已送达消息", "Delivered message"] : ["已添加回应", "Added reaction"];
   if (tone === "failed") sentence = (action_sentences[action] ?? action_sentences.unknown)!.failed;
   if (tone === "waiting") sentence = (action_sentences[action] ?? action_sentences.unknown)!.waiting;
   if (props.tool.state === "input-streaming") sentence = preparing_sentence;

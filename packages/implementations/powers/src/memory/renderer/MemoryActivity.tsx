@@ -33,19 +33,19 @@ function describe(props: PowerActivityProps): PowerActivityDescription {
   let sentence = (action_sentences[action] ?? action_sentences.unknown)![tone];
   if (tone === "complete" && ["remember", "digest", "revise", "optimize"].includes(action)) {
     if (status === "succeeded" || action === "remember" && ["saved", "created"].includes(status)) sentence = memory_completion_sentence(action);
-    else if (status === "skipped") sentence = ["无需更新记忆", "No memory updates needed"];
+    else if (status === "skipped") sentence = ["已检查记忆更新", "Checked memory updates"];
   }
   if (tone === "complete" && ["search", "list", "jobs"].includes(action) && Array.isArray(data.items)) {
     const count = data.items.length;
     const empty_page = data.total !== 0 && (typeof data.total === "number" && data.total > 0 || typeof args.offset === "number" && args.offset > 0);
-    if (action === "search") sentence = count ? [`找到 ${count} 条相关记忆`, `${count} matching ${count === 1 ? "memory" : "memories"} found`] : ["没有想起相关内容", "No matching memories"];
-    else if (action === "list") sentence = count ? [`显示 ${count} 条记忆`, `Showing ${count} ${count === 1 ? "memory" : "memories"}`]
-      : empty_page ? ["本页没有记忆", "No memories on this page"] : ["暂无记忆", "No memories"];
-    else sentence = count ? [`显示 ${count} 条整理记录`, `Showing ${count} memory activity ${count === 1 ? "record" : "records"}`]
-      : empty_page ? ["本页没有整理记录", "No memory activity on this page"] : ["暂无整理记录", "No memory activity"];
+    if (action === "search") sentence = count ? [`已找到 ${count} 条相关记忆`, `Found ${count} matching ${count === 1 ? "memory" : "memories"}`] : ["未找到相关记忆", "Found no matching memories"];
+    else if (action === "list") sentence = count ? [`已列出 ${count} 条记忆`, `Listed ${count} ${count === 1 ? "memory" : "memories"}`]
+      : empty_page ? ["已列出本页 0 条记忆", "Listed 0 memories on this page"] : ["已列出 0 条记忆", "Listed 0 memories"];
+    else sentence = count ? [`已列出 ${count} 条整理记录`, `Listed ${count} memory activity ${count === 1 ? "record" : "records"}`]
+      : empty_page ? ["已列出本页 0 条整理记录", "Listed 0 memory activity records on this page"] : ["已列出 0 条整理记录", "Listed 0 memory activity records"];
   }
-  if (tone === "complete" && (action === "forget" && data.forgotten === false || action === "read" && data.memory === null)) sentence = ["没有找到这条记忆", "Memory not found"];
-  if (tone === "complete" && action === "forget" && typeof data.forgotten !== "boolean") sentence = ["忘记操作已结束", "Memory removal finished"];
+  if (tone === "complete" && (action === "forget" && data.forgotten === false || action === "read" && data.memory === null)) sentence = ["未找到这条记忆", "Found no matching memory"];
+  if (tone === "complete" && action === "forget" && typeof data.forgotten !== "boolean") sentence = ["已处理忘记请求", "Processed memory removal request"];
   if (tone === "waiting") sentence = (action_sentences[action] ?? action_sentences.unknown)!.waiting;
   if (props.tool.state === "input-streaming") sentence = preparing_sentence;
   const detail = action === "read" ? Boolean(text(record(data.memory).content).trim()) : action === "job_detail"

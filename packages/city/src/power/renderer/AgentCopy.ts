@@ -5,32 +5,32 @@ import type { PowerActivityDescription } from "../types/PowerActivityRenderer.js
 export const action_sentences: Readonly<Record<string, Record<PowerActivityDescription["tone"], readonly [string, string]>>> = {
   "agent.list": {
     running: ["正在查看可用 Agent", "Checking available agents"],
-    complete: ["已查看可用 Agent", "Available agents checked"],
-    failed: ["无法查看 Agent", "Could not list agents"],
+    complete: ["已查看可用 Agent", "Checked available agents"],
+    failed: ["未能查看可用 Agent", "Could not list agents"],
     waiting: ["等待你允许查看可用 Agent", "Waiting for permission to check available agents"],
   },
   "agent.create": {
     running: ["正在创建 Agent", "Creating agent"],
-    complete: ["Agent 已创建", "Agent created"],
-    failed: ["Agent 创建失败", "Could not create agent"],
+    complete: ["已创建Agent", "Created agent"],
+    failed: ["未能创建 Agent", "Could not create agent"],
     waiting: ["等待你允许创建 Agent", "Waiting for permission to create the agent"],
   },
   "agent.delegate": {
     running: ["正在创建工作会话", "Creating work session"],
-    complete: ["工作会话已创建", "Work session created"],
-    failed: ["工作会话创建失败", "Could not create work session"],
+    complete: ["已创建工作会话", "Created work session"],
+    failed: ["未能创建工作会话", "Could not create work session"],
     waiting: ["等待你允许创建工作会话", "Waiting for permission to create the work session"],
   },
   "": {
     running: ["正在查看可用功能", "Checking available actions"],
-    complete: ["已查看可用功能", "Available actions checked"],
-    failed: ["无法查看可用功能", "Could not check available actions"],
+    complete: ["已查看可用功能", "Checked available actions"],
+    failed: ["未能查看可用功能", "Could not check available actions"],
     waiting: ["等待你允许查看可用功能", "Waiting for permission to check available actions"],
   },
   "unknown": {
     running: ["正在准备协作", "Preparing collaboration"],
-    complete: ["协作处理已结束", "Collaboration finished"],
-    failed: ["协作未能完成", "Could not complete collaboration"],
+    complete: ["已完成协作", "Completed collaboration"],
+    failed: ["未能完成协作", "Could not complete collaboration"],
     waiting: ["等待你确认协作", "Waiting for confirmation about collaboration"],
   },
 };
