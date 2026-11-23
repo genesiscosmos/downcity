@@ -10,7 +10,7 @@
  * - 这里只解析配置结构，不负责验证模型是否真实存在于 City AIService 中。
  * - 当前只接受 agent 包已经落地支持的执行绑定格式。
  */
-
+import { is_model_reference } from "@downcity/type";
 import type { DowncityConfig } from "@/city/types/config/DowncityConfig.js";
 import type { ExecutionBindingConfig } from "@/city/types/config/ExecutionBinding.js";
 
@@ -18,7 +18,7 @@ import type { ExecutionBindingConfig } from "@/city/types/config/ExecutionBindin
  * 读取项目执行绑定。
  *
  * 关键点（中文）
- * - 当前只接受 `execution.type = "api"` 且存在非空 `model_id` 的配置。
+ * - 当前只接受 `execution.type = "api"` 且存在完整结构化 `model` 的配置。
  * - 若结构不满足最小要求，则返回 `null`，由调用方决定是兜底还是报错。
  */
 export function read_project_execution_binding(
@@ -27,11 +27,11 @@ export function read_project_execution_binding(
   const execution = config.execution;
   if (!execution || typeof execution !== "object") return null;
   if (execution.type !== "api") return null;
-  const model_id = String(execution.model_id || "").trim();
-  if (!model_id) return null;
+  const model = execution.model;
+  if (!is_model_reference(model)) return null;
   return {
     type: "api",
-    model_id,
+    model,
     ...(typeof execution.reasoning_effort === "string" && execution.reasoning_effort.trim()
       ? { reasoning_effort: execution.reasoning_effort.trim() } : {}),
   };
@@ -47,6 +47,6 @@ export function read_project_execution_binding(
 export function assert_project_execution_target(config: DowncityConfig): void {
   if (read_project_execution_binding(config) !== null) return;
   throw new Error(
-    'Invalid Agent config: "execution" is required and must be { "type": "api", "model_id": "..." }',
+    'Invalid Agent config: "execution" is required and must be { "type": "api", "model": { "downtown": "...", "id": "..." } }',
   );
 }

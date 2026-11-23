@@ -24,8 +24,8 @@ import {
   DeferredModelClient,
   type AgentOptions,
 } from "@downcity/agent";
-import type { DowntownModelReference, ModelClient } from "@downcity/type";
-import { downtown_model_id } from "@downcity/city";
+import type { ModelReference, ModelClient } from "@downcity/type";
+import { is_model_reference, same_model } from "@downcity/type";
 import { AskQuestionsTool } from "@downcity/agent/tools";
 import { Shell, Workspace } from "@downcity/city";
 import {
@@ -115,42 +115,30 @@ export async function create_cli_workspace(
 /** 恢复默认模型时保留历史浏览；不明确的旧来源直到执行时才要求重选。 */
 export function create_cli_agent_model(config: LocalAgentConfig, town: Town): ModelClient | undefined {
   const model_reference = read_model_reference(config.execution?.model);
-  if (model_reference) return create_bound_cli_model(model_reference, town, read_reasoning_effort(config.execution));
-  const model_id = read_model_id(config.execution);
-  if (!model_id) return undefined;
-  const binding_id = typeof config.execution?.binding_id === "string" ? config.execution.binding_id : undefined;
-  if (!binding_id) return unavailable_cli_model(model_id);
-  try { return create_bound_cli_model(model_id, town, read_reasoning_effort(config.execution), binding_id); }
-  catch { return unavailable_cli_model(model_id, binding_id); }
+  if (!model_reference) return undefined;
+  return create_bound_cli_model(model_reference, town, read_reasoning_effort(config.execution));
 }
 
 /** HTTP/RPC/工作 resolver 透传已确认身份；明确选择模型时捕获当前来源。 */
-export async function resolve_cli_agent_model(model: string | DowntownModelReference, town: Town, reasoning_effort?: string, binding_id?: string): Promise<ModelClient> {
+export async function resolve_cli_agent_model(model: ModelReference, town: Town, reasoning_effort?: string, binding_id?: string): Promise<ModelClient> {
   if (!model) throw new Error("model is required");
   return create_bound_cli_model(model, town, reasoning_effort, binding_id);
 }
 
 /** Town 句柄先捕获身份，执行解析目录只补元数据，绝不追随换号后的身份。 */
-function create_bound_cli_model(model: string | DowntownModelReference, town: Town, reasoning_effort?: string, binding_id?: string): ModelClient {
-  const model_id = typeof model === "string" ? model : downtown_model_id(model.downtown, model.id);
-  const captured = town.models.client(model_id, { binding_id });
+function create_bound_cli_model(model: ModelReference, town: Town, reasoning_effort?: string, binding_id?: string): ModelClient {
+  const model_id = model.id;
+  const captured = town.models.client(model, { binding_id });
   return new CliDeferredModelClient(model_id, async () => {
     const catalog = await town.models.list();
-    const entry = catalog.items.find((item) => item.model_id === model_id);
+    const entry = catalog.items.find((item) => same_model(item.model, model));
     if (!entry) throw new Error("town_model_source_unavailable");
-    const model = town.models.client(model_id, { binding_id: captured.binding_id });
+    const resolved = town.models.client(model, { binding_id: captured.binding_id });
     const reasoning = entry.reasoning;
-    return { ...model, name: entry.name, context_window: entry.context_window,
-      stream: (call, signal) => model.stream(reasoning_effort && reasoning?.efforts.some((effort) => effort.id === reasoning_effort)
+    return { ...resolved, name: entry.name, context_window: entry.context_window,
+      stream: (call, signal) => resolved.stream(reasoning_effort && reasoning?.efforts.some((effort) => effort.id === reasoning_effort)
         ? { ...call, reasoning: call.reasoning ?? { enabled: true, effort: reasoning_effort } } : call, signal) };
-  }, captured.binding_id, typeof model === "string" ? captured.model_reference : model);
-}
-
-/** 明确缺失来源的历史句柄不会借用其他连接；历史浏览只读取 ID。 */
-function unavailable_cli_model(model_id: string, binding_id?: string): ModelClient {
-  return new CliDeferredModelClient(model_id, async () => {
-    throw Object.assign(new Error("Saved model requires explicit source selection"), { code: "session_model_binding_changed" });
-  }, binding_id);
+  }, captured.binding_id, model);
 }
 
 /** 创建 CLI 默认交互 Tool。 */
@@ -186,7 +174,7 @@ class CliDeferredModelClient extends DeferredModelClient {
     model_id: string,
     private readonly resolve_model: () => Promise<ModelClient>,
     binding_id?: string,
-    model_reference?: DowntownModelReference,
+    model_reference?: ModelReference,
   ) {
     super(model_id, resolve_model, binding_id, model_reference);
   }
@@ -200,7 +188,7 @@ class CliDeferredModelClient extends DeferredModelClient {
   /** 覆写 SDK 的永久缓存；每次执行按当前 City 绑定解析完整客户端。 */
   override async resolve(): Promise<ModelClient> {
     const model = await this.resolve_model();
-    if (model.id !== this.id || model.binding_id !== this.binding_id || model === this || typeof model.stream !== "function") {
+    if (model.id !== this.id || !same_model(model.model_reference, this.model_reference) || model.binding_id !== this.binding_id || model === this || typeof model.stream !== "function") {
       throw new Error(`Resolved model does not implement the selected ModelClient: ${this.id}`);
     }
     this.selected_model = model;
@@ -213,15 +201,7 @@ function read_reasoning_effort(execution: LocalAgentConfig["execution"]): string
   return typeof execution?.reasoning_effort === "string" ? execution.reasoning_effort.trim() || undefined : undefined;
 }
 
-/** 从 Agent execution 读取模型 ID。 */
-function read_model_id(execution: LocalAgentConfig["execution"]): string {
-  return typeof execution?.model_id === "string" ? execution.model_id.trim() : "";
-}
-
-/** 从 Agent 执行配置读取结构化模型引用。 */
-function read_model_reference(value: unknown): DowntownModelReference | undefined {
-  if (!value || typeof value !== "object" || Array.isArray(value)) return undefined;
-  const record = value as Record<string, unknown>;
-  if (typeof record.downtown !== "string" || !record.downtown.trim() || typeof record.id !== "string" || !record.id.trim()) return undefined;
-  return { downtown: record.downtown.trim(), id: record.id.trim() };
+/** 读取完整结构化模型选择，不恢复旧编码字符串。 */
+function read_model_reference(value: unknown): ModelReference | undefined {
+  return is_model_reference(value) ? { ...value } : undefined;
 }

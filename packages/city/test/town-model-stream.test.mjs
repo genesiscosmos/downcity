@@ -2,16 +2,17 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { Downtown } from "@downcity/downtown";
-import { Town, downtown_model_id } from "../bin/index.js";
+import { Town } from "../bin/index.js";
 
 const call = { messages: [{ role: "user", content: [{ type: "text", text: "Hello" }] }] };
 
 test("Town routes stream-only language models to their original Downtown model", async () => {
   const { town, downtown, requests } = create_fixture(["stream"]);
   try {
-    const model_id = downtown_model_id("official", "krill-gpt-6.1-sol");
+    const model_id = { downtown: "official", id: "krill-gpt-6.1-sol" };
     const catalog = await town.models.list();
-    assert.equal(catalog.items[0].model_id, model_id);
+    assert.deepEqual(catalog.items[0].model, model_id);
+    assert.equal(catalog.items[0].id, "krill-gpt-6.1-sol");
     assert.deepEqual(catalog.items[0].model, { downtown: "official", id: "krill-gpt-6.1-sol" });
     const client = town.models.client(catalog.items[0].model);
     assert.deepEqual(client.model_reference, catalog.items[0].model);
@@ -33,7 +34,7 @@ for (const modalities of [["image"], ["text"]]) {
   test(`Town refuses a model without stream capability (${modalities.join(",")}) before invoking it`, async () => {
     const { town, downtown, requests } = create_fixture(modalities);
     try {
-      const client = town.models.client(downtown_model_id("official", "krill-gpt-6.1-sol"));
+      const client = town.models.client({ downtown: "official", id: "krill-gpt-6.1-sol" });
       const error = await client.stream(call).then(async (stream) => {
         await stream.cancel();
         return undefined;

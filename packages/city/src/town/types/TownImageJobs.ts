@@ -1,17 +1,19 @@
 /** Town 图片任务来源持久化协议；记录不包含 Token，不允许按页面当前账户反推来源。 */
 
+import type { ModelReference } from "@downcity/type";
+
 /** 请求发送前就写入的来源事实。 */
 export interface TownImageJobOrigin {
   /** Town 本地稳定任务句柄。 */
   job_id: string;
   /** 创建请求实际使用的连接。 */
-  connection_id: string;
+  downtown_id: string;
   /** 创建请求实际使用的授权来源。 */
   auth_scope_id: string;
   /** 创建时的目标地址，连接改地址后禁止查询。 */
   endpoint_url: string;
-  /** 创建时的统一模型 ID。 */
-  model_id: string;
+  /** 创建时的结构化模型引用。 */
+  model: ModelReference;
   /** 原来源返回的任务 ID；pending 或结果未知时可能缺失，不能用于查询。 */
   original_job_id?: string;
   /** pending 表示尚未发出/尚未确认；unknown 表示请求可能已在原服务生效，不可重放。 */

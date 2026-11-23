@@ -4,10 +4,10 @@
  * Transport 只接收远程协议中的模型 ID；具体目录、鉴权和运行时模型创建由宿主实现。
  */
 
-import type { DowntownModelReference, ModelClient } from "@downcity/type";
+import type { ModelReference, ModelClient } from "@downcity/type";
 
 /** 把宿主模型 ID 解析为 Agent 可执行模型实例。 */
 export type AgentSessionModelResolver = (
   /** 远程调用方请求的 Downtown 与原始模型 ID。 */
-  model: DowntownModelReference,
+  model: ModelReference,
 ) => ModelClient | Promise<ModelClient>;

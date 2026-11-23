@@ -7,8 +7,11 @@ import type { ServiceClient } from "../../pact/invoker/invoker.js";
 
 /** DowntownAccount 内部依赖。 */
 export interface DowntownAccountOptions {
-  /** 动态获取当前 Accounts Service 调用器。 */
+  /** 动态获取携带当前凭据的 Accounts Service 调用器，用于退出会话。 */
   accounts: () => ServiceClient;
+
+  /** 获取不读取或携带用户凭据的 Accounts Service 调用器，用于公开登录流程。 */
+  public_accounts: () => ServiceClient;
 
   /** 读取当前 Downtown User Token。 */
   read_user_token: () => string | undefined;

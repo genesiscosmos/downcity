@@ -13,6 +13,7 @@ import type { CityToolAgentSummary } from "@/city/types/CityPowerData.js";
 import { CityAction, CityActionError } from "@/city/power/builtin/CityAction.js";
 import { CityActionGroup } from "@/city/power/builtin/CityActionGroup.js";
 import { z } from "zod";
+import { model_reference_schema } from "../model-reference.js";
 import type { CityCreateAgent } from "@/city/types/CityCreateAgent.js";
 
 /** 把 Agent 投影为模型可读摘要。 */
@@ -24,7 +25,7 @@ function describe_agent(
     agent_id: agent.id,
     name: String(agent.name || agent.id),
     description: agent.description,
-    model_id: agent.model?.id ?? null,
+    model: agent.model?.model_reference ?? null,
     is_current: agent.id === context.agent_id,
   };
 }
@@ -33,7 +34,7 @@ function describe_agent(
 class ListAgentsAction extends CityAction {
   readonly action = "list";
   readonly description = "List every agent visible in this City.";
-  readonly returns = "agents(agent_id, name, description, model_id, is_current)";
+  readonly returns = "agents(agent_id, name, description, model, is_current)";
 
   protected async run(
     _args: Record<string, never>,
@@ -48,14 +49,14 @@ const create_agent_input = z.strictObject({
   name: z.string().trim().min(1).describe("Display name for the new persistent agent."),
   description: z.string().trim().min(1).describe("Short description of the agent's responsibilities, shown in agent.list."),
   instruction: z.string().trim().min(1).describe("Complete persistent instructions defining the agent's role and working principles."),
-  model_id: z.string().trim().min(1).describe("Default model ID, such as a model_id returned by agent.list."),
+  model: model_reference_schema.describe("Structured model reference from the model catalog."),
 });
 
 /** 创建前请求用户审批；宿主拥有持久化、模型装配和注册生命周期。 */
 class CreateAgentAction extends CityAction<z.infer<typeof create_agent_input>> {
   readonly action = "create";
   readonly description = "Create and register a persistent agent with a name, responsibility description, instructions, and default model. Requires user approval.";
-  readonly returns = "agent(agent_id, name, description, model_id, is_current)";
+  readonly returns = "agent(agent_id, name, description, model, is_current)";
   readonly access = "write" as const;
   readonly approval = true;
   readonly args_schema = create_agent_input;

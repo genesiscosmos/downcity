@@ -24,7 +24,7 @@ export interface TownRegistration extends TownRegistrationOptions {
 /** 对宿主和界面公开的非秘密连接投影。 */
 export interface TownSource {
   /** 稳定连接标识，不含冒号，改名不改变此值。 */
-  connection_id: string;
+  downtown_id: string;
   /** 可读名称。 */
   name: string;
   /** 当前目标地址；变更地址必须替换身份 scope。 */
@@ -95,7 +95,7 @@ export interface TownAuthAdapter {
 
 /** Town 实例配置；所有宿主能力都是显式注入。 */
 export interface TownOptions {
-  /** 初始连接集合，键为宿主持久化的 connection_id。 */
+  /** 初始连接集合，键为宿主持久化的 downtown_id。 */
   connections?: Readonly<Record<string, TownRegistration>>;
   /** 交互登录与凭据持久化适配器；无适配器时拒绝交互登录和退出。 */
   auth?: TownAuthAdapter;

@@ -7,9 +7,9 @@
  * - Session 由 AgentSessions 统一持有；Workspace 只在单个 Session 创建或恢复时提供。
  * - Agent 自己那条会话由 `session()` 暴露；它是一条普通 Session。
  */
-
+import { same_model } from "@downcity/type";
 import { safe_error_diagnostic } from "@/utils/logger/SafeErrorDiagnostic.js";
-import type { CityRuntime, DowntownModelReference, ModelClient, AgentTool as Tool, StorageProvider, ToolCallContext, ToolHookSet, WorkspaceRuntime, SessionTurnCommittedHookValue, SessionSystemMessage } from "@downcity/type";
+import type { CityRuntime, ModelReference, ModelClient, AgentTool as Tool, StorageProvider, ToolCallContext, ToolHookSet, WorkspaceRuntime, SessionTurnCommittedHookValue, SessionSystemMessage } from "@downcity/type";
 import { create_instruction_system_blocks, normalize_instruction_input } from "@/agent/AgentInstructions.js";
 import type { AgentOptions, AgentSessionConstructor } from "@/types/agent/AgentOptions.js";
 import type { AgentBehavior } from "@/types/agent/AgentBehavior.js";
@@ -168,8 +168,8 @@ export class Agent {
       get_instruction: () => [...this.get_instructions()],
       get_agent_model: () => this.model,
       resolve_model: async (model, workspace) => {
-        if (this.model?.model_reference?.downtown === model.downtown && this.model.model_reference.id === model.id) return this.model;
-        if (!this.resolve_work_model) throw new Error(`Host cannot restore Session model: ${model.downtown}:${model.id}`);
+        if (this.model && same_model(this.model.model_reference, model)) return this.model;
+        if (!this.resolve_work_model) throw new Error(`Host cannot restore Session model: ${model.id}`);
         return await this.resolve_work_model(model, workspace);
       },
       observe_session: (session) => this.interaction_collection.observe_session(session),
@@ -595,7 +595,7 @@ export class Agent {
     const storage = this.resolve_storage();
     const resolve_workspace = async (workspace_id: string): Promise<WorkspaceRuntime> =>
       await this.resolve_project_workspace(workspace_id);
-    const prepare_session = async (session: AgentSession, model?: DowntownModelReference): Promise<void> => {
+    const prepare_session = async (session: AgentSession, model?: ModelReference): Promise<void> => {
       await this.prepare_work_session?.(session, model);
       if (model) {
         if (!this.resolve_work_model) throw new Error("Session model selection is not configured by the host");

@@ -1,4 +1,5 @@
 /** Memory 内部处理请求、来源边界与暂存结果；Job 不属于用户 Task。 */
+import type { ModelReference } from "@downcity/type";
 import type { MemoryAccessContext, MemoryWriteTarget } from "./MemoryAccess.js";
 import type { MemoryType } from "./Memory.js";
 
@@ -113,8 +114,8 @@ export interface MemoryJob {
   /** 本次允许的有界原始来源。 */
   sources: MemoryJobSource[];
   /** 提交时固定的精确执行模型；历史缺失时必须先配置，重试不得捕获当前模型。 */
-  model_id?: string;
-  /** 提交时确认的非秘密持久授权来源；与 model_id 配对并跨 attempt 保留。 */
+  model?: ModelReference;
+  /** 提交时确认的非秘密持久授权来源；与 model 配对并跨 attempt 保留。 */
   binding_id?: string;
   /** 当前处理状态。 */
   status: "queued" | "running" | "committing" | "retry_wait" | "succeeded" | "skipped" | "failed";
@@ -157,7 +158,7 @@ export interface MemoryJob {
 }
 
 /** 创建请求时由应用服务提供的不可变输入。 */
-export type MemoryJobInput = Pick<MemoryJob, "request_key" | "kind" | "instruction" | "access" | "target" | "mode" | "sources" | "memory_id" | "model_id" | "binding_id">;
+export type MemoryJobInput = Pick<MemoryJob, "request_key" | "kind" | "instruction" | "access" | "target" | "mode" | "sources" | "memory_id" | "model" | "binding_id">;
 
 /** 对调用方公开的最小处理状态，不泄露来源正文。 */
 export interface MemoryJobView {

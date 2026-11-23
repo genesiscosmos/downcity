@@ -6,7 +6,7 @@
  * - 所有公开结果使用稳定 memory_id 与 citation，不暴露物理存储路径。
  * - Provider 提供知识查询与持久化能力；提炼由 Processing 负责，Profile 独立管理。
  */
-
+import type { ModelReference } from "@downcity/type";
 import type { PowerJsonObject, PowerJsonValue } from "@downcity/city/power";
 import type { MemoryCommitProvider } from "./MemoryChangeSet.js";
 import type {
@@ -402,8 +402,8 @@ export interface MemoryPowerOptions {
   /** 可信可重放业务事实接线；自动开关单独按 Agent/Workspace/target 持久化，默认关闭。 */
   dreaming?: import("./MemoryDream.js").MemoryDreamOptions;
   /** 专用 Memory 模型；新 Job 在提交时捕获，已有 Job 不跟随配置变化。 */
-  model_id?: string;
-  /** 配置中明确确认的非秘密持久授权来源；与 model_id 配对，不能在后台补成当前账号。 */
+  model?: ModelReference;
+  /** 配置中明确确认的非秘密持久授权来源；与 model 配对，不能在后台补成当前账号。 */
   binding_id?: string;
   /** 提交时从可信宿主读取默认/专用模型基线；不会用于恢复或重试已有 Job。 */
   resolve_model_binding?: import("./MemoryModelBinding.js").MemoryModelResolver;

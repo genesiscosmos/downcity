@@ -5,13 +5,13 @@
  * - 只描述已保存模型与当前 Downtown 模型目录之间的决策结果。
  * - TTY 选择、配置写回和错误展示由 CLI 运行层负责。
  */
-
+import type { ModelReference } from "@downcity/type";
 /** 模型恢复决策输入。 */
 export interface AgentExecutionModelRecoveryInput {
   /** Agent 配置当前保存的默认模型 ID。 */
-  configured_model_id: string;
+  configured_model: ModelReference | null;
   /** 当前 Downtown 可用于 Agent 对话的模型 ID。 */
-  available_model_ids: string[];
+  available_models: ModelReference[];
 }
 
 /** 已保存模型仍可直接使用。 */
@@ -19,7 +19,7 @@ export interface AgentExecutionModelReadyDecision {
   /** 表示无需修改配置。 */
   kind: "ready";
   /** 当前可继续使用的模型 ID。 */
-  model_id: string;
+  model: ModelReference;
 }
 
 /** 已保存模型失配，需要用户重新选择。 */
@@ -27,7 +27,7 @@ export interface AgentExecutionModelSelectionDecision {
   /** 表示当前 Downtown 有模型，但已保存模型不可用。 */
   kind: "selection_required";
   /** 当前失配的旧模型 ID；未配置时为空字符串。 */
-  previous_model_id: string;
+  previous_model: ModelReference | null;
 }
 
 /** 当前 Downtown 没有可选执行模型。 */
@@ -35,7 +35,7 @@ export interface AgentExecutionModelUnavailableDecision {
   /** 表示当前 Downtown 无法提供任何 Agent 执行模型。 */
   kind: "unavailable";
   /** 当前失配的旧模型 ID；未配置时为空字符串。 */
-  previous_model_id: string;
+  previous_model: ModelReference | null;
 }
 
 /** Agent 启动前的模型恢复决策。 */

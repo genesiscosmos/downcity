@@ -1,16 +1,13 @@
-/** 模型事实读取校验：损坏记录不得回落 Agent 默认值或被解释为旧历史缺省。 */
+/** 模型事实读取校验：损坏记录不得回落默认模型或解释为历史缺省。 */
+import { is_model_reference } from "@downcity/type";
 import type { SessionModelBinding } from "../../types/store/SessionModelBinding.js";
 
-/** 只接受完整的结构化模型引用，排除展示 label、运行时对象与空字符串。 */
+/** 只接受来源明确的模型引用，不接受旧编码字符串或运行时对象。 */
 export function decode_model_binding(text: string): SessionModelBinding {
   const value: unknown = JSON.parse(text);
   if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error("session_model_binding_invalid: model binding must be an object");
   const binding = value as SessionModelBinding;
   if (binding.model === undefined) return {};
-  if (!binding.model || typeof binding.model !== "object" || Array.isArray(binding.model)
-    || typeof binding.model.downtown !== "string" || !binding.model.downtown.trim()
-    || typeof binding.model.id !== "string" || !binding.model.id.trim()) {
-    throw new Error("session_model_binding_invalid: model must contain downtown and id");
-  }
-  return { model: { downtown: binding.model.downtown.trim(), id: binding.model.id.trim() } };
+  if (!is_model_reference(binding.model)) throw new Error("session_model_binding_invalid: structured model reference required");
+  return { model: { ...binding.model } };
 }

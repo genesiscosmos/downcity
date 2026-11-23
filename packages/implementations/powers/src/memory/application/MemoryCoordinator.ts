@@ -1,4 +1,6 @@
 /** Memory 处理编排：持久化请求、受限 Session 计算、幂等提交；模型最终文字不代表记忆已保存。 */
+import { same_model } from "@downcity/type";
+import type { ModelReference } from "@downcity/type";
 import type { PowerLifecycleContext } from "@downcity/city/power";
 import type { MemoryProvider } from "../types/Memory.js";
 import type { MemoryJob, MemoryJobInput } from "../types/MemoryJob.js";
@@ -22,7 +24,7 @@ export interface MemoryCoordinatorOptions {
   /** 本 Power 的内部处理账本。 */
   jobs: MemoryJobStore;
   /** 可选的专用模型选择，创建后由 Session 固定实际身份。 */
-  model_id?: string;
+  model?: ModelReference;
   /** 配置明确确认的授权来源；只用于新 Job，不能更新已保存的 Job。 */
   binding_id?: string;
   /** 提交时读取所属 Agent 默认模型或专用模型；缺省且配置不完整时保持需要配置。 */
@@ -81,16 +83,16 @@ export class MemoryCoordinator {
     if (input.mode === "knowledge") require_memory_transactions(this.options.provider);
     // 幂等重送不重新选择账号；同 request key 的既有 Job 永远保留提交时基线。
     const existing = await this.options.jobs.read(memory_job_identity(input));
-    const configured = input.model_id !== undefined || input.binding_id !== undefined
-      ? input : this.options.model_id && this.options.binding_id
-        ? { model_id: this.options.model_id, binding_id: this.options.binding_id }
-        : !existing ? await this.options.resolve_model_binding?.(input.access, this.options.model_id) : undefined;
-    if (!existing && this.options.model_id !== undefined && input.model_id === undefined
-      && configured?.model_id !== undefined && configured.model_id !== this.options.model_id) {
+    const configured = input.model !== undefined || input.binding_id !== undefined
+      ? input : this.options.model && this.options.binding_id
+        ? { model: this.options.model, binding_id: this.options.binding_id }
+        : !existing ? await this.options.resolve_model_binding?.(input.access, this.options.model) : undefined;
+    if (!existing && this.options.model !== undefined && input.model === undefined
+      && configured?.model !== undefined && !same_model(configured.model, this.options.model)) {
       throw new Error("memory_model_configuration_required: host resolved a different configured model");
     }
-    const baseline = existing ? { model_id: existing.model_id, binding_id: existing.binding_id } : configured;
-    const job = await this.options.jobs.create({ ...input, model_id: baseline?.model_id, binding_id: baseline?.binding_id });
+    const baseline = existing ? { model: existing.model, binding_id: existing.binding_id } : configured;
+    const job = await this.options.jobs.create({ ...input, model: baseline?.model, binding_id: baseline?.binding_id });
     if (["queued", "retry_wait", "running", "committing"].includes(job.status)) this.schedule(job.job_id, job.kind === "dream");
     return job;
   }
@@ -172,15 +174,15 @@ export class MemoryCoordinator {
     const { host } = this.options;
     // 每次执行和跨 attempt 都只校验 Job 自有基线；提交回执修复可在上方无模型完成。
     const baseline = require_memory_model(job);
-    const model = this.options.host.town?.models.client(baseline.model_id, { binding_id: baseline.binding_id });
-    if (!model || model.id !== baseline.model_id || model.binding_id !== baseline.binding_id) {
+    const model = this.options.host.town?.models.client(baseline.model, { binding_id: baseline.binding_id });
+    if (!model || !same_model(model.model_reference, baseline.model) || model.binding_id !== baseline.binding_id) {
       throw Object.assign(new Error("Memory Job model authorization is unavailable or changed"), { code: "memory_model_binding_changed" });
     }
     if (!job.session_id) {
       const attempt = job.attempt + 1;
       const session = await host.system.create_agent_session({
         agent_id: job.access.agent_id, workspace_id: job.access.workspace_id, inherit_workspace: false,
-        execution_profile_id: "memory", execution_profile_version: MEMORY_SESSION_PROFILE_VERSION, model_id: baseline.model_id, binding_id: baseline.binding_id,
+        execution_profile_id: "memory", execution_profile_version: MEMORY_SESSION_PROFILE_VERSION, model_id: baseline.model.id, model_reference: baseline.model, binding_id: baseline.binding_id,
         creation_key: `memory:${job.job_id}:${attempt}`,
         type: "work", kind: MEMORY_SESSION_KIND,
       });
@@ -195,7 +197,7 @@ export class MemoryCoordinator {
     let state = await host.system.read_agent_session({
       agent_id: job.access.agent_id, type: "work", session_id, request_id,
     });
-    if (state.execution_profile?.model_id !== baseline.model_id || state.execution_profile.binding_id !== baseline.binding_id) {
+    if (!same_model(state.execution_profile?.model_reference, baseline.model) || state.execution_profile?.binding_id !== baseline.binding_id) {
       throw Object.assign(new Error("Memory Session identity does not match the persisted Job baseline"), { code: "memory_model_binding_changed" });
     }
     if (state.status === "running") {

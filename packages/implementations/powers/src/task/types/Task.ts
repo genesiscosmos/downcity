@@ -21,7 +21,7 @@
  * 事务保证，拆开会在中途失败时留下「定义已更新、状态没跟上」的窗口。
  * 唯一独立存放的是每次执行的产物（`runs/`），因为它是只追加的历史。
  */
-
+import type { ModelReference } from "@downcity/type";
 import type { PowerJsonValue } from "@downcity/city/power";
 import type { TaskPreparation } from "./TaskPreparation.js";
 import type { TaskProgress, TaskState } from "./TaskWorkflow.js";
@@ -97,8 +97,8 @@ export interface TaskDefinitionV1 {
   /** 创建时捕获的结果交付 Session；未指定时为空。 */
   delivery_session?: TaskDeliverySession;
   /** 显式创建或确认时固定的精确执行模型；缺失的历史任务必须先配置。 */
-  model_id?: string;
-  /** 与 model_id 配对的非秘密授权来源；定时触发不得从当前账号补全。 */
+  model?: ModelReference;
+  /** 与 model 配对的非秘密授权来源；定时触发不得从当前账号补全。 */
   binding_id?: string;
 
   /** 是否多轮复核（仅 `kind=agent` 生效；默认单轮）。 */

@@ -1,6 +1,6 @@
 {
   "name": "@downcity/downtown",
-  "version": "1.6.14",
+  "version": "1.6.15",
   "description": "Unified local and remote Downtown SDK for user and admin access.",
   "type": "module",
   "main": "./bin/index.js",

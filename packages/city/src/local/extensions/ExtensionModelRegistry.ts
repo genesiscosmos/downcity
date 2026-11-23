@@ -19,7 +19,7 @@ export class ExtensionModelRegistry {
   register(id: string, source: ModelClient, gate: ExtensionGate): ModelClient {
     if (this.models.has(id)) throw new ExtensionFailure("duplicate_id", "Model ID is already registered", "load", 2);
     const model: ModelClient = {
-      id, binding_id: source.binding_id, name: source.name ?? source.id, context_window: source.context_window, model_stream_policy: source.model_stream_policy,
+      id: source.id, model_reference: source.model_reference, binding_id: source.binding_id, name: source.name ?? source.id, context_window: source.context_window, model_stream_policy: source.model_stream_policy,
       async stream(call, signal) {
         const release = gate.acquire(`model:${id}`);
         try { return track_extension_stream(await source.stream(call, signal), release, signal); }
@@ -31,7 +31,7 @@ export class ExtensionModelRegistry {
     return model;
   }
 
-  /** 只退登记精确统一 ID，不接管原模型的生命周期。 */
+  /** 只退登记精确客户端来源，不接管原模型的生命周期。 */
   remove(id: string): void { if (this.models.delete(id)) this.generation_value++; }
 
   /** 获取当前实际实例；缺失来源不回退到当前 Downtown 或其他模型。 */
@@ -41,8 +41,8 @@ export class ExtensionModelRegistry {
     return model;
   }
 
-  /** 统一模型 ID 标识直接来源；旧扩展引用只用于明确报缺失，不做别名路由。 */
-  owns(id: string): boolean { return /^model:client:[A-Za-z0-9_-]+$/u.test(id) || /^ext_[a-f\d]{32}_model_/u.test(id); }
+  /** 通过实际登记表查询客户端来源，不从字符串前缀推断归属。 */
+  owns(id: string): boolean { return this.models.has(id); }
 
   /** 当前可选模型列表不包含内部别名。 */
   list(): ModelClient[] { return [...this.models.values()]; }
@@ -52,7 +52,7 @@ export class ExtensionModelRegistry {
     const registry = this;
     const binding_id = this.models.get(id)?.binding_id;
     return {
-      id, binding_id,
+      id: this.models.get(id)?.id ?? id, model_reference: this.models.get(id)?.model_reference, binding_id,
       get name() { return registry.models.get(id)?.name ?? id; },
       get context_window() { return registry.models.get(id)?.context_window; },
       get model_stream_policy() { return registry.models.get(id)?.model_stream_policy; },

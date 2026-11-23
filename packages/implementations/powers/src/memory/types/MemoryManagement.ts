@@ -4,7 +4,7 @@
  * Provider 快照直接报告当前实例状态；范围目录仅提供宿主可用的 Agent 与 Workspace，
  * 两者都不依赖 Agent 执行上下文，也不读取记忆正文或统计知识数量。
  */
-
+import type { ModelReference } from "@downcity/type";
 import type { MemoryStatusResult } from "./Memory.js";
 import type { MemoryJobView } from "./MemoryJob.js";
 export type { MemoryDreamSummary } from "./MemoryDream.js";
@@ -41,7 +41,7 @@ export interface MemoryConfigSnapshot {
   /** Power 自身的处理配置，切换知识后端不改变其归属。 */
   processing: {
     /** 初始化时固定的 Memory Session 模型；省略时跟随执行 Agent 默认模型。 */
-    model_id?: string;
+    model?: ModelReference;
   };
 }
 

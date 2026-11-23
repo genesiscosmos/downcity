@@ -1,125 +1,29 @@
-/**
- * Agent 装配模型恢复。
- *
- * 关键点（中文）
- * - 已保存模型不在当前 Downtown 时，TTY 直接展示当前模型选择器。
- * - 选择完成后更新 Agent 默认模型，并让当前 City 装配流程继续执行。
- * - 非交互模式不做隐式选择，返回包含可用模型和修复命令的 CliError。
- */
-
+/** CLI 装配前校验来源明确的模型选择；不可用时交互重选，不隐式跨来源回退。 */
+import { same_model } from "@downcity/type";
 import prompts from "@/city/tui/Prompts.js";
-import { t } from "@/shared/CliLocale.js";
-import { CliError } from "@/shared/CliError.js";
 import { listPlatformModelChoices } from "@/city/runtime/city-model/ExecutionModelBinding.js";
 import { ResourceClient } from "../resources/ResourceClient.js";
 import type { AgentGetData } from "../resources/ResourceResults.js";
 import type { AgentModelSelectionResponse } from "@/city/types/AgentModel.js";
-import type {
-  AgentExecutionModelRecoveryDecision,
-  AgentExecutionModelRecoveryInput,
-} from "@/city/types/AgentExecutionModelRecovery.js";
+import type { AgentExecutionModelRecoveryDecision, AgentExecutionModelRecoveryInput } from "@/city/types/AgentExecutionModelRecovery.js";
 
-/** 根据已保存模型和当前 Downtown 目录生成恢复决策。 */
-export function resolve_agent_execution_model_recovery(
-  input: AgentExecutionModelRecoveryInput,
-): AgentExecutionModelRecoveryDecision {
-  const configured_model_id = String(input.configured_model_id || "").trim();
-  const available_model_ids = [...new Set(
-    (input.available_model_ids || [])
-      .map((model_id) => String(model_id || "").trim())
-      .filter(Boolean),
-  )];
-  if (available_model_ids.length === 0) {
-    return {
-      kind: "unavailable",
-      previous_model_id: configured_model_id,
-    };
-  }
-  if (configured_model_id && available_model_ids.includes(configured_model_id)) {
-    return {
-      kind: "ready",
-      model_id: configured_model_id,
-    };
-  }
-  return {
-    kind: "selection_required",
-    previous_model_id: configured_model_id,
-  };
+/** 对象按来源与原始模型 ID 比较，持久化前后不依赖对象引用相等。 */
+export function resolve_agent_execution_model_recovery(input: AgentExecutionModelRecoveryInput): AgentExecutionModelRecoveryDecision {
+  if (!input.available_models.length) return { kind: "unavailable", previous_model: input.configured_model };
+  const selected = input.available_models.find((model) => same_model(model, input.configured_model));
+  return selected ? { kind: "ready", model: selected } : { kind: "selection_required", previous_model: input.configured_model };
 }
 
-/** 构建非交互模式下可直接执行的模型修复命令。 */
-function build_model_recovery_command(
-  agent_id: string,
-  model_id: string,
-): string {
-  return `city agent update ${JSON.stringify(agent_id)} --model ${JSON.stringify(model_id)}`;
-}
-
-/** 确保 Agent 配置的默认模型可以在当前 Downtown 中解析。 */
-export async function ensure_agent_execution_model_ready(
-  agent_id_input: string,
-): Promise<void> {
-  const agent_id = String(agent_id_input || "").trim();
+/** 启动前要求明确且仍可用的来源。 */
+export async function ensure_agent_execution_model_ready(agent_id: string): Promise<void> {
   const client = new ResourceClient();
   const config = ((await client.call("agent.get", { id: agent_id })).data as AgentGetData).agent;
-  if (!config) {
-    throw new CliError({
-      title: "Agent config not found",
-      note: `agent: ${agent_id}`,
-      fix: "city agent list",
-    });
-  }
-
-  const configured_model_id = config.model_id ?? "";
   const choices = await listPlatformModelChoices();
-  const decision = resolve_agent_execution_model_recovery({
-    configured_model_id,
-    available_model_ids: choices.map((choice) => choice.value),
-  });
+  const decision = resolve_agent_execution_model_recovery({ configured_model: config.model, available_models: choices.map((choice) => choice.value) });
   if (decision.kind === "ready") return;
-  if (decision.kind === "unavailable") {
-    throw new CliError({
-      title: "No models available in current Downtown",
-      note: decision.previous_model_id
-        ? `Configured model is unavailable: ${decision.previous_model_id}`
-        : "Agent has no execution model and the current Downtown exposes no compatible models.",
-      fix: "city downtown status",
-    });
-  }
-
-  const available_model_ids = choices.map((choice) => choice.value);
-  if (process.stdin.isTTY !== true || process.stdout.isTTY !== true) {
-    throw new CliError({
-      title: "Agent execution model is unavailable in current Downtown",
-      note: [
-        `configured: ${decision.previous_model_id || "(not configured)"}`,
-        `available: ${available_model_ids.join(", ")}`,
-      ].join("\n"),
-      fix: build_model_recovery_command(agent_id, available_model_ids[0]),
-    });
-  }
-
-  const response = (await prompts({
-    type: "select",
-    name: "model_id",
-    message: t({
-      zh: decision.previous_model_id
-        ? `模型 ${decision.previous_model_id} 在当前 Downtown 不可用，请重新选择`
-        : "当前 Agent 没有可用模型，请从当前 Downtown 选择",
-      en: decision.previous_model_id
-        ? `Model ${decision.previous_model_id} is unavailable in the current Downtown. Select another model`
-        : "This Agent has no available model. Select one from the current Downtown",
-    }),
-    choices,
-    initial: 0,
-  })) as AgentModelSelectionResponse;
-  const selected_model_id = String(response.model_id || "").trim();
-  if (!selected_model_id) {
-    throw new CliError({
-      title: "Agent model selection cancelled",
-      note: "City assembly was not changed or continued.",
-    });
-  }
-
-  await client.call("agent.update", { id: config.agent_id, model: selected_model_id });
+  if (decision.kind === "unavailable") throw new Error("No chat models are available; check Downtown settings");
+  if (!process.stdin.isTTY || !process.stdout.isTTY) throw new Error("Saved model is unavailable; select a model with city agent model");
+  const response = await prompts({ type: "select", name: "model", message: "请选择可用的默认模型", choices, initial: 0 }) as AgentModelSelectionResponse;
+  if (!response.model) throw new Error("Model selection cancelled");
+  await client.call("agent.update", { id: config.agent_id, model: response.model });
 }

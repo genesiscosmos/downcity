@@ -15,7 +15,7 @@ import type { TownModelClient } from "./TownModels.js";
 /** Service 目录项保留所属连接与原始 Service ID。 */
 export interface TownServiceEntry extends ServiceCatalogSummary {
   /** 目录来源连接。 */
-  connection_id: string;
+  downtown_id: string;
   /** 该连接可读名称。 */
   source_name: string;
   /** 当前调用所需身份绑定。 */
@@ -33,7 +33,7 @@ export interface TownServiceList {
 /** 由目标连接明确执行 Service Action；不会根据当前连接重路由。 */
 export interface TownServiceCallInput {
   /** 目标连接。 */
-  connection_id: string;
+  downtown_id: string;
   /** 目标连接内的原始 Service ID。 */
   service_id: string;
   /** Service 内原始 Action ID。 */
@@ -60,38 +60,38 @@ export class Town {
     this.connections = new TownConnections(city_id);
     this.models = new TownModels(this.connections, options);
     this.services = new TownServices(this.connections);
-    for (const [connection_id, registration] of Object.entries(options.connections ?? {})) {
-      this.connections.add(connection_id, registration.client, registration);
+    for (const [downtown_id, registration] of Object.entries(options.connections ?? {})) {
+      this.connections.add(downtown_id, registration.client, registration);
     }
   }
 
   /** 添加一条独立连接；稳定 ID 唯一，相同 endpoint 可以有独立来源，不能隐式合并授权。 */
-  add(connection_id: string, downtown: Downtown, options: Omit<TownRegistration, "client"> = {}): TownConnection {
+  add(downtown_id: string, downtown: Downtown, options: Omit<TownRegistration, "client"> = {}): TownConnection {
     this.assert_open();
-    return this.connections.add(connection_id, downtown, options);
+    return this.connections.add(downtown_id, downtown, options);
   }
 
   /** 获取连接级非秘密来源与受控用户视图。 */
-  get(connection_id: string): TownConnection { this.assert_open(); return this.connections.get(connection_id); }
+  get(downtown_id: string): TownConnection { this.assert_open(); return this.connections.get(downtown_id); }
 
   /** 返回连接快照；不包含 Token、数据库或管理员访问器。 */
   list(): TownConnection[] { this.assert_open(); return this.connections.list(); }
 
   /** 替换连接客户端/身份；活跃租约存在时拒绝，不能覆盖在途请求。 */
-  replace(connection_id: string, registration: TownRegistration, expected_revision?: number, persist?: () => Promise<void>): Promise<TownConnection> {
+  replace(downtown_id: string, registration: TownRegistration, expected_revision?: number, persist?: () => Promise<void>): Promise<TownConnection> {
     this.assert_open();
-    return this.connections.replace(connection_id, registration, expected_revision, persist);
+    return this.connections.replace(downtown_id, registration, expected_revision, persist);
   }
 
   /** 移除连接登记并隐藏其新资源；历史仓储由宿主保留。 */
-  remove(connection_id: string): Promise<TownConnection> { this.assert_open(); return this.connections.remove(connection_id); }
+  remove(downtown_id: string): Promise<TownConnection> { this.assert_open(); return this.connections.remove(downtown_id); }
 
   /** 改名只改投影，不改变来源、revision 或本地引用。 */
-  rename(connection_id: string, name: string): TownConnection { this.assert_open(); return this.connections.rename(connection_id, name); }
+  rename(downtown_id: string, name: string): TownConnection { this.assert_open(); return this.connections.rename(downtown_id, name); }
 
   /** 读取指定连接的登录 Provider；无宿主适配器时直接读取公开 Accounts Service。 */
-  async login_providers(connection_id: string): Promise<DowntownAccountProvider[]> {
-    const state = this.connections.require(connection_id);
+  async login_providers(downtown_id: string): Promise<DowntownAccountProvider[]> {
+    const state = this.connections.require(downtown_id);
     const release = this.connections.acquire(state);
     try {
       const providers = this.options.auth?.login_providers
@@ -103,27 +103,27 @@ export class Town {
   }
 
   /** 交互登录由宿主实现；SDK 没有浏览器或凭据持久化能力时明确拒绝。 */
-  async login(connection_id: string, input: TownLoginInput): Promise<TownLoginResult> {
+  async login(downtown_id: string, input: TownLoginInput): Promise<TownLoginResult> {
     this.assert_open();
     const auth = this.options.auth;
     if (!auth) throw new TownError("town_auth_adapter_required");
-    const state = this.connections.require(connection_id);
+    const state = this.connections.require(downtown_id);
     const connection = { ...state.source };
     return auth.login({
       connection,
-      commit: async (registration, persist) => this.connections.replace(connection_id, registration, connection.revision, persist),
+      commit: async (registration, persist) => this.connections.replace(downtown_id, registration, connection.revision, persist),
     }, input);
   }
 
   /** 退出只作用于目标连接；适配器决定远端撤销与本地 guest/无凭据注册。 */
-  async logout(connection_id: string): Promise<void> {
+  async logout(downtown_id: string): Promise<void> {
     this.assert_open();
     const auth = this.options.auth;
     if (!auth) throw new TownError("town_auth_adapter_required");
-    const state = this.connections.require(connection_id);
+    const state = this.connections.require(downtown_id);
     await auth.logout({
       connection: { ...state.source },
-      commit: async (registration, persist) => { await this.connections.replace(connection_id, registration, state.source.revision, persist); return this.connections.get(connection_id); },
+      commit: async (registration, persist) => { await this.connections.replace(downtown_id, registration, state.source.revision, persist); return this.connections.get(downtown_id); },
     });
   }
 
@@ -138,20 +138,20 @@ export class Town {
   private assert_open(): void { if (this.closed) throw new TownError("town_closed"); }
 }
 
-/** Service 聚合器；服务调用显式提供 connection_id，避免计费来源漂移。 */
+/** Service 聚合器；服务调用显式提供 downtown_id，避免计费来源漂移。 */
 export class TownServices {
   constructor(private readonly connections: TownConnections) {}
 
   /** 并行读取各连接 Service 目录并隔离错误。 */
   async list(options: { /** 取消目录读取。 */ signal?: AbortSignal } = {}): Promise<TownServiceList> {
     const results = await Promise.all(this.connections.list().map(async (view) => {
-      const state = this.connections.require(view.connection_id);
+      const state = this.connections.require(view.downtown_id);
       let release: (() => void) | undefined;
       try {
         release = this.connections.acquire(state);
         const items = await state.user.list_services();
         options.signal?.throwIfAborted();
-        return { items: items.map((item) => ({ ...item, connection_id: state.source.connection_id, source_name: state.source.name, binding_id: state.source.auth_scope_id })), source: { ...state.source, status: "available" as const } };
+        return { items: items.map((item) => ({ ...item, downtown_id: state.source.downtown_id, source_name: state.source.name, binding_id: state.source.auth_scope_id })), source: { ...state.source, status: "available" as const } };
       } catch (error) {
         return { items: [], source: { ...state.source, status: "unavailable" as const, error_code: service_error_code(error) } };
       } finally { release?.(); }
@@ -160,19 +160,19 @@ export class TownServices {
   }
 
   /** 读取目标连接 Service 详情。 */
-  async describe(connection_id: string, service_id: string, signal?: AbortSignal): Promise<TownServiceEntry & { detail: ServiceCatalogDetail }> {
-    const state = this.connections.require(connection_id);
+  async describe(downtown_id: string, service_id: string, signal?: AbortSignal): Promise<TownServiceEntry & { detail: ServiceCatalogDetail }> {
+    const state = this.connections.require(downtown_id);
     const release = this.connections.acquire(state);
     try {
       const detail = await state.user.describe_service(service_id);
       this.connections.assert_current(state);
-      return { ...detail, connection_id, source_name: state.source.name, binding_id: state.source.auth_scope_id, detail };
+      return { ...detail, downtown_id, source_name: state.source.name, binding_id: state.source.auth_scope_id, detail };
     } finally { release(); }
   }
 
   /** 调用指定来源的原始 Action；保留 JSON/raw/stream 响应。 */
   async call(input: TownServiceCallInput): Promise<FetchResponseLike> {
-    const state = this.connections.require(input.connection_id);
+    const state = this.connections.require(input.downtown_id);
     if (input.binding_id !== undefined && input.binding_id !== state.source.auth_scope_id) throw new TownError("town_service_identity_confirmation_required");
     const release = this.connections.acquire(state);
     try {

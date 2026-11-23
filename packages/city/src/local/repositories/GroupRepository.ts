@@ -1,5 +1,5 @@
 /** 本地 Group 定义仓储；只管理配置，不创建 Agent 或运行时 Group。 */
-
+import { is_model_reference, same_model, type ModelReference } from "@downcity/type";
 import type { LocalDatabase } from "@/local/database/LocalDatabase.js";
 import type { LocalGroupConfig } from "@/local/types/LocalConfig.js";
 
@@ -27,7 +27,7 @@ export class GroupRepository {
     /** Group 展示名称。 */
     name?: string;
     /** Group 用于群聊投递的模型标识。 */
-    model_id: string;
+    model: ModelReference;
     /** Group 协作目标。 */
     instruction?: string;
     /** Group 成员 Agent ID。 */
@@ -37,12 +37,12 @@ export class GroupRepository {
     if (this.get(group_id)) throw new Error(`Group already exists: ${group_id}`);
     const member_agent_ids = normalize_member_agent_ids(input.member_agent_ids);
     if (member_agent_ids.length === 0) throw new Error("Group requires at least one member Agent");
-    const model_id = normalize_model_id(input.model_id);
+    const model = normalize_model(input.model);
     const current_time = new Date().toISOString();
     const config: LocalGroupConfig = {
       group_id,
       name: String(input.name || group_id).trim() || group_id,
-      model_id,
+      model,
       binding_id: input.binding_id,
       instruction: String(input.instruction || "").trim(),
       member_agent_ids,
@@ -73,7 +73,7 @@ export class GroupRepository {
     /** Group 展示名称。 */
     name?: string;
     /** Group 用于群聊投递的模型标识。 */
-    model_id: string;
+    model?: ModelReference;
     /** Group 协作目标。 */
     instruction?: string;
     /** Group 成员 Agent ID。 */
@@ -83,12 +83,12 @@ export class GroupRepository {
     if (!current) throw new Error(`Group not found: ${group_id_input}`);
     const member_agent_ids = normalize_member_agent_ids(input.member_agent_ids);
     if (member_agent_ids.length === 0) throw new Error("Group requires at least one member Agent");
-    const model_id = normalize_model_id(input.model_id);
+    const model = Object.hasOwn(input, "model") ? input.model === undefined ? undefined : normalize_model(input.model) : current.model;
     const config: LocalGroupConfig = {
       ...current,
       name: String(input.name || current.group_id).trim() || current.group_id,
-      model_id,
-      binding_id: input.binding_id ?? (model_id === current.model_id ? current.binding_id : undefined),
+      model,
+      binding_id: input.binding_id ?? (same_model(model, current.model) ? current.binding_id : undefined),
       instruction: String(input.instruction || "").trim(),
       member_agent_ids,
       updated_at: new Date().toISOString(),
@@ -115,7 +115,7 @@ export class GroupRepository {
     return {
       group_id: row.group_id,
       name: String(raw.name || row.group_id).trim() || row.group_id,
-      model_id: String(raw.model_id || "").trim(),
+      model: is_model_reference(raw.model) ? { ...raw.model } : undefined,
       binding_id: typeof raw.binding_id === "string" && raw.binding_id ? raw.binding_id : undefined,
       instruction: String(raw.instruction || ""),
       member_agent_ids: normalize_member_agent_ids(raw.member_agent_ids || []),
@@ -137,8 +137,7 @@ function normalize_member_agent_ids(input: readonly string[]): string[] {
 }
 
 /** 规范化 Group 的必填模型标识。 */
-function normalize_model_id(input: string): string {
-  const model_id = String(input || "").trim();
-  if (!model_id) throw new Error("Group requires a model_id");
-  return model_id;
+function normalize_model(input: unknown): ModelReference {
+  if (!is_model_reference(input)) throw new Error("Group requires a structured model reference");
+  return { ...input };
 }

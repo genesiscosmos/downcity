@@ -1,6 +1,6 @@
 /** 本机资源用例的装配依赖；CLI 和 Desktop 注入自身模型、Workspace 与展示失效适配。 */
 import type { Agent } from "@downcity/agent";
-import type { DowntownModelReference, ModelClient } from "@downcity/type";
+import type { ModelReference, ModelClient } from "@downcity/type";
 import type { City } from "../../city/runtime/City.js";
 import type { LocalAgentConfig, LocalWorkspaceConfig } from "../types/LocalConfig.js";
 import type { AgentRepository } from "../repositories/AgentRepository.js";
@@ -14,7 +14,7 @@ export interface ResourceHost {
   /** 用宿主自己的产品配置装配 Agent，不恢复 Session。 */
   create_agent: (config: LocalAgentConfig) => Promise<Agent>;
   /** 在保存前解析模型；无模型返回 undefined。 */
-  resolve_model: (model: string | DowntownModelReference | undefined, config?: LocalAgentConfig) => Promise<ModelClient | undefined>;
+  resolve_model: (model: ModelReference | undefined, config?: LocalAgentConfig) => Promise<ModelClient | undefined>;
   /** 获取或懒装配已登记 Workspace；调用方先检查门禁。 */
   resolve_workspace: (config: LocalWorkspaceConfig) => Promise<import("@downcity/type").WorkspaceRuntime>;
   /** 保留宿主已有明确 Session 模型覆盖；只在在线执行准备时应用。 */
@@ -36,7 +36,7 @@ export interface ResourceDependencies {
   /** 宿主已装配的共享扩展用例，离线普通资源浏览可省略。 */
   extensions?: import("../extensions/ExtensionPlatform.js").ExtensionPlatform;
   /** 离线显式模型选择使用的 Town resolver，不装配 Agent 或启动宿主。 */
-  resolve_model?: (model: string | DowntownModelReference) => Promise<ModelClient>;
+  resolve_model?: (model: ModelReference) => Promise<ModelClient>;
   /** 已经规范化并验证身份的 root。 */
   root_path: string;
   /** Agent 唯一配置仓储。 */

@@ -22,7 +22,7 @@ export type { TownOptions, TownRegistration, TownConnection, TownSource, TownLog
 export type { TownModelEntry, TownModelList, TownDirectModelRegistration } from "./town/types/TownModels.js";
 export type { TownModelClient } from "./town/TownModels.js";
 export type { TownImageJobOrigin, TownImageJobStore } from "./town/types/TownImageJobs.js";
-export { TownError, downtown_model_id, client_model_id, parse_model_id } from "./town/index.js";
+export { TownError, create_downtown_id, normalize_downtown_url } from "./town/index.js";
 export type { RemoteAgentOptions } from "./types/remote/RemoteAgentOptions.js";
 export {
   LocalFileSystem,

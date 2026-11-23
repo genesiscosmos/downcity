@@ -92,8 +92,8 @@ export async function initialize_agent_project(
   return {
     project_root,
     id: agent_id,
-    ...(execution?.type === "api" && String(execution.model_id || "").trim()
-      ? { model_id: String(execution.model_id || "").trim() }
+    ...(execution?.type === "api" && execution.model
+      ? { model: execution.model }
       : {}),
     created_files,
     skipped_files,

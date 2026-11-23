@@ -3,7 +3,7 @@
  *
  * 负责把 transport 上可序列化的配置转换为本地 Session 输入；模型目录仍由宿主拥有。
  */
-
+import { is_model_reference } from "@downcity/type";
 import type {
   AgentSessionSetInput,
   RemoteSessionSetInput,
@@ -18,7 +18,7 @@ export async function resolve_remote_session_set_input(input: {
   resolve_session_model?: AgentSessionModelResolver;
 }): Promise<AgentSessionSetInput> {
   const model = input.config.model;
-  if (model !== undefined && (!model || typeof model !== "object" || !model.downtown?.trim() || !model.id?.trim())) throw new Error("remote session.set requires a complete model reference");
+  if (model !== undefined && !is_model_reference(model)) throw new Error("remote session.set requires a complete model reference");
   if (!model && !input.config.security) {
     throw new Error("remote session.set requires model or security");
   }

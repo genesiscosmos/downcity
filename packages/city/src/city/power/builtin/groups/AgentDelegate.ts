@@ -8,17 +8,21 @@ import { z } from "zod";
 import type { PowerAction, PowerJsonObject, PowerJsonValue } from "@/power/index.js";
 import type { CityGroupPowerOptions } from "../CityGroupPower.js";
 import { session_start_input } from "../session/SessionSchemas.js";
+import { model_reference_schema } from "../model-reference.js";
 import { session_delegation_caller } from "../session/SessionCaller.js";
 
 /** 委派输入独立声明目标身份；Session 动作本身不接受该字段。 */
 const delegate_input = session_start_input.extend({
+  model: model_reference_schema.optional().describe(
+    "Structured model reference from the catalog for the target session. Omit to inherit the calling session's model, falling back to the target agent's default model.",
+  ),
   agent_id: z.string().trim().min(1).describe("Another agent's ID from agent.list. The target owns the resulting work session; this does not grant access to its sessions."),
 });
 
 /** 创建跨 Agent 的单次委派入口，复用目标 Agent 的工作服务。 */
 export function create_agent_delegate_action(options: CityGroupPowerOptions): PowerAction {
   return {
-    description: "Delegate a self-contained project task to another agent from agent.list. A Work Main must first understand the complete task and dependencies, then delegate a bounded thread with a specific goal, context, scope, expected output, and completion criteria. Retain substantive execution, integration, and verification; do not forward the entire Main assignment. Requires agent_id, workspace_id and query; optional model_id and title. Returns a delegation receipt immediately; completion returns automatically. Does not grant access to the target agent's sessions. Do not poll.",
+    description: "Delegate a self-contained project task to another agent from agent.list. A Work Main must first understand the complete task and dependencies, then delegate a bounded thread with a specific goal, context, scope, expected output, and completion criteria. Retain substantive execution, integration, and verification; do not forward the entire Main assignment. Requires agent_id, workspace_id and query; optional model and title. Returns a delegation receipt immediately; completion returns automatically. Does not grant access to the target agent's sessions. Do not poll.",
     returns: "agent_id, delegation_id, status=delegated; completion returns automatically to the calling conversation",
     access: "write",
     input_schema: { zod: delegate_input, json_schema: z.toJSONSchema(delegate_input) as PowerJsonObject },

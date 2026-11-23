@@ -154,12 +154,12 @@ test("GroupRepository 持久化并更新 Group 定义", async () => {
   try {
     ensure_local_schema(database);
     const groups = new GroupRepository(database);
-    const created = groups.create({ group_id: "delivery-team", name: "Delivery", model_id: "gpt-5", member_agent_ids: ["architect", "reviewer"] });
-    assert.equal(created.model_id, "gpt-5");
+    const created = groups.create({ group_id: "delivery-team", name: "Delivery", model: { downtown: "test", id: "gpt-5" }, member_agent_ids: ["architect", "reviewer"] });
+    assert.deepEqual(created.model, { downtown: "test", id: "gpt-5" });
     assert.equal(groups.get("delivery-team")?.name, "Delivery");
-    const updated = groups.update("delivery-team", { name: "Release", model_id: "gpt-5-mini", instruction: "Review releases", member_agent_ids: ["reviewer"] });
+    const updated = groups.update("delivery-team", { name: "Release", model: { downtown: "test", id: "gpt-5-mini" }, instruction: "Review releases", member_agent_ids: ["reviewer"] });
     assert.deepEqual(updated.member_agent_ids, ["reviewer"]);
-    assert.equal(updated.model_id, "gpt-5-mini");
+    assert.deepEqual(updated.model, { downtown: "test", id: "gpt-5-mini" });
     assert.equal(groups.list().length, 1);
     assert.equal(groups.remove(created.group_id), true);
     assert.equal(groups.get(created.group_id), null);

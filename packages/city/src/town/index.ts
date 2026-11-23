@@ -5,7 +5,7 @@ export { TownModels } from "./TownModels.js";
 export type { TownModelClient } from "./TownModels.js";
 export { TownConnections } from "./TownConnections.js";
 export { TownError, ExecutionLease } from "./ExecutionLease.js";
-export { downtown_model_id, client_model_id, parse_model_id } from "./ResourceId.js";
+export { create_downtown_id, normalize_downtown_url } from "./DowntownId.js";
 export { TownImageJobs } from "./TownImageJobs.js";
 export type * from "./types/Town.js";
 export type * from "./types/TownImageJobs.js";

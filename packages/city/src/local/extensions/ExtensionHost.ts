@@ -2,6 +2,7 @@
  * 单项目执行、校验及整批发布。City 唯一拥有 Power 生命周期，项目运行唯一拥有
  * 模型、Downtown 与作者资源；失败的清理保留运行记录与门禁，禁止叠加另一套实例。
  */
+import type { ClientModelReference } from "@downcity/type";
 import fs from "node:fs/promises";
 import { randomUUID } from "node:crypto";
 import path from "node:path";
@@ -32,9 +33,9 @@ class ProjectRun {
   readonly agent_ids: string[] = [];
   readonly downtown_ids: string[] = [];
   /** Town 统一目录中的直接模型 ID，和扩展内部别名分开保存。 */
-  readonly town_model_ids: string[] = [];
+  readonly town_model_ids: ClientModelReference[] = [];
   /** Town 统一目录中的扩展连接 ID。 */
-  readonly town_connection_ids: string[] = [];
+  readonly town_downtown_ids: string[] = [];
   readonly cleanup = new Map<object, () => void | Promise<void>>();
   warnings: ExtensionError[] = [];
   readonly powers = new Map<string, ExtensionPowerView>();
@@ -107,7 +108,7 @@ export class ExtensionHost implements ExtensionRuntime {
     run.power_ids.length = 0;
     const town = get_town(this.options.city);
     while (run.town_model_ids.length) { town.models.unregister(run.town_model_ids.at(-1)!); run.town_model_ids.pop(); }
-    while (run.town_connection_ids.length) { await town.remove(run.town_connection_ids.at(-1)!); run.town_connection_ids.pop(); }
+    while (run.town_downtown_ids.length) { await town.remove(run.town_downtown_ids.at(-1)!); run.town_downtown_ids.pop(); }
     for (const id of run.agent_ids) this.options.catalog.agents.delete(id);
     for (const id of run.model_ids) this.options.catalog.models.remove(id);
     for (const id of run.downtown_ids) this.options.catalog.downtowns.delete(id);
@@ -175,11 +176,11 @@ export class ExtensionHost implements ExtensionRuntime {
       const town = get_town(this.options.city);
       for (const downtown of project.downtowns ?? []) {
         await downtown.ready();
-        const connection_id = extension_entry_id(record.extension_id, "downtown", downtown.id);
-        const remove_guard = downtown.guard_requests(() => run.gate.acquire(`downtown:${connection_id}`));
+        const downtown_id = extension_entry_id(record.extension_id, "downtown", downtown.id);
+        const remove_guard = downtown.guard_requests(() => run.gate.acquire(`downtown:${downtown_id}`));
         run.cleanup.set(downtown, async () => { await downtown.dispose(); remove_guard(); });
-        town.add(connection_id, downtown, { name: downtown.name, auth_scope_id: `extension:${randomUUID()}`, durable: false });
-        run.town_connection_ids.push(connection_id);
+        town.add(downtown_id, downtown, { name: downtown.name, auth_scope_id: `extension:${randomUUID()}`, durable: false });
+        run.town_downtown_ids.push(downtown_id);
       }
       await run.gate.lifecycle(async () => await run.power_batch!.initialize());
       const model_references = new Map<ModelClient, ModelClient>();
@@ -196,9 +197,9 @@ export class ExtensionHost implements ExtensionRuntime {
         const model_id = town.models.register({ source_id, client: guarded, name: model.name, durable: false });
         run.town_model_ids.push(model_id);
         const town_model = town.models.client(model_id);
-        const registered = this.options.catalog.models.register(model_id, town_model, run.gate);
+        const registered = this.options.catalog.models.register(source_id, town_model, run.gate);
         model_references.set(model, registered);
-        run.model_ids.push(model_id);
+        run.model_ids.push(source_id);
       }
       for (const power of project.powers ?? []) {
         const id = extension_entry_id(record.extension_id, "power", power.name);

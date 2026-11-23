@@ -3,6 +3,7 @@
  * 只保存非秘密路由事实，不保存 Token；每次 put 在单个 SQLite 事务内提交，
  * 已有句柄的来源不可更改，unknown 记录不能作为新的 pending 请求重放。
  */
+import { is_model_reference, same_model } from "@downcity/type";
 import type { TownImageJobOrigin, TownImageJobStore } from "../../town/types/TownImageJobs.js";
 import type { LocalDatabase } from "../database/LocalDatabase.js";
 import { LocalSettingRepository } from "./LocalSettingRepository.js";
@@ -23,14 +24,14 @@ export class TownImageJobRepository implements TownImageJobStore {
   /** pending 后仅补齐同一来源的原任务 ID；状态改变不会重写历史主体。 */
   async put(origin: TownImageJobOrigin): Promise<void> {
     const key = this.key(origin.job_id);
-    if (!origin.connection_id || !origin.auth_scope_id || !origin.endpoint_url || !origin.model_id
+    if (!origin.downtown_id || !origin.auth_scope_id || !origin.endpoint_url || !is_model_reference(origin.model)
       || !["pending", "submitted", "unknown"].includes(origin.state)
       || !Number.isFinite(Date.parse(origin.created_at))
       || (origin.state === "submitted" && !origin.original_job_id)) throw new TypeError("Invalid Town image job origin");
     this.database.transaction(() => {
       const previous = this.settings.get<TownImageJobOrigin>(key);
-      if (previous && (previous.connection_id !== origin.connection_id || previous.auth_scope_id !== origin.auth_scope_id
-        || previous.endpoint_url !== origin.endpoint_url || previous.model_id !== origin.model_id
+      if (previous && (previous.downtown_id !== origin.downtown_id || previous.auth_scope_id !== origin.auth_scope_id
+        || previous.endpoint_url !== origin.endpoint_url || !same_model(previous.model, origin.model)
         || previous.created_at !== origin.created_at
         || (previous.original_job_id !== undefined && previous.original_job_id !== origin.original_job_id)
         || (previous.state !== "pending" && previous.state !== origin.state))) {

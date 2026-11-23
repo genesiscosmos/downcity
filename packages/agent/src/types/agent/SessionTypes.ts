@@ -6,7 +6,7 @@
  * - session actor 方法接口拆到 `SessionActor.ts`。
  */
 
-import type { DowntownModelReference, ModelClient, SessionApprovalMode, SessionDescriptor } from "@downcity/type";
+import type { ModelReference, ModelClient, SessionApprovalMode, SessionDescriptor } from "@downcity/type";
 import type { SessionSystemBlock, SessionSystemBlockSource } from "@downcity/type/session";
 
 /**
@@ -122,7 +122,7 @@ export interface AgentSessionSecurityConfig {
 /** 远程 Session 可序列化的动态配置输入。 */
 export interface RemoteSessionSetInput {
   /** 当前远程 Session 使用的 Downtown 与原始模型 ID。 */
-  model?: DowntownModelReference;
+  model?: ModelReference;
 
   /** 当前远程 Session 的安全策略。 */
   security?: AgentSessionSecurityConfig;

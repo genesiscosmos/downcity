@@ -11,30 +11,17 @@ import type { ServiceCatalogDetail } from "@downcity/downtown";
 import { with_cli_town } from "../resources/TownClient.js";
 import { format_downtown_service } from "../shared/DowntownAccessOutput.js";
 
-/** 此模块只接收连接 ID，不支持 URL 或全局 target resolver。 */
-interface ServiceOptions {
-  /** 每项服务操作必须显式选择的 Town 连接。 */
-  connection: string;
-  /** 本地数据根，整个响应期间保持不变。 */
-  root?: string;
-  /** 发现结果输出完整 JSON；call 正文始终原样输出。 */
-  json?: boolean;
-  /** 输入文本文件，- 表示标准输入；按目标 Action 声明解释 JSON 或 raw。 */
-  input?: string;
-  /** 输出文件；省略时写 stdout，支持二进制。 */
-  output?: string;
-  /** 识别后明确拒绝，绝不把用户令牌当作管理员凭据。 */
-  admin?: boolean;
-}
+import { create_downtown_id } from "@downcity/city";
+import type { ServiceOptions } from "../types/DowntownCommand.js";
 
 /** 将服务访问加入已有 city downtown 命令组，不建立平行连接管理。 */
 export function register_downtown_service_commands(downtown: Command): void {
-  const options = (command: Command) => command.requiredOption("--connection <id>", "Explicit Town connection ID")
+  const options = (command: Command) => command.requiredOption("--downtown <url>", "Registered Downtown URL")
     .option("--root <path>", "City data root").option("--json", "Complete discovery JSON; call bodies remain exact bytes");
   options(downtown.command("service <service_id>").description("Read public service documentation from one connection"))
     .action((service_id: string, opts: ServiceOptions) => run(opts, async (signal) => {
       await with_cli_town(opts.root, async (call) => {
-        const result = await call("town.service", { connection_id: opts.connection, service_id }, signal) as { /** 远端注册的完整服务说明。 */ detail: ServiceCatalogDetail };
+        const result = await call("town.service", { downtown_id: create_downtown_id(opts.downtown), service_id }, signal) as { /** 远端注册的完整服务说明。 */ detail: ServiceCatalogDetail };
         process.stdout.write(opts.json ? JSON.stringify(result, null, 2) + "\n" : format_downtown_service(result.detail));
       });
     }));
@@ -42,7 +29,7 @@ export function register_downtown_service_commands(downtown: Command): void {
     .option("--output <file>", "Write the OpenAPI JSON document to a file")
     .action((opts: ServiceOptions) => run(opts, async (signal) => {
       await with_cli_town(opts.root, async (call) => {
-        const document = await call("town.openapi", { connection_id: opts.connection }, signal);
+        const document = await call("town.openapi", { downtown_id: create_downtown_id(opts.downtown) }, signal);
         const text = JSON.stringify(document, null, 2) + "\n";
         if (opts.output) await writeFile(opts.output, text, { signal });
         else process.stdout.write(text);
@@ -62,10 +49,10 @@ export function register_downtown_service_commands(downtown: Command): void {
         let completed = false;
         const file = opts.output ? await open(opts.output, "w") : undefined;
         try {
-          response = await call("town.call.open", { request_id, connection_id: opts.connection, service_id, action_id, raw_input }, signal) as TownResponseOpen;
+          response = await call("town.call.open", { request_id, downtown_id: create_downtown_id(opts.downtown), service_id, action_id, raw_input }, signal) as TownResponseOpen;
           while (true) {
             signal.throwIfAborted();
-            const chunk = await call("town.call.next", { request_id, handle: response.handle, connection_id: opts.connection }, signal) as TownResponseChunk;
+            const chunk = await call("town.call.next", { request_id, handle: response.handle, downtown_id: create_downtown_id(opts.downtown) }, signal) as TownResponseChunk;
             if (chunk.done) { completed = true; break; }
             if (chunk.data !== undefined) {
               const bytes = Buffer.from(chunk.data, "base64");
@@ -79,7 +66,7 @@ export function register_downtown_service_commands(downtown: Command): void {
           if (response.status < 200 || response.status >= 300) throw new ResourceError("downtown_http_error", `Downtown request failed (HTTP ${response.status})`, 1, false, { status: response.status });
         } finally {
           // 即使 open 的响应在断开后迟到，也用最初 request_id 取消，不猜测句柄或重放请求。
-          if (!completed) await call("town.call.cancel", { request_id, handle: response?.handle, connection_id: opts.connection }).catch(() => {});
+          if (!completed) await call("town.call.cancel", { request_id, handle: response?.handle, downtown_id: create_downtown_id(opts.downtown) }).catch(() => {});
           await file?.close();
         }
       });

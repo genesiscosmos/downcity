@@ -6,7 +6,7 @@
  * - Message 持久化统一交给 `SessionMessages`，这里仅读取 Message 快照更新 metadata。
  * - 不负责 Turn 编排、Message 创建或 Action 生命周期。
  */
-
+import { same_model } from "@downcity/type";
 import { read_model_context_window, read_model_label, type ModelClient, normalize_session_descriptor } from "@downcity/type";
 import { normalize_session_title, resolve_system_timezone } from "@/session/storage/Metadata.js";
 import { ensure_session_title } from "@/session/loop/SessionTitle.js";
@@ -193,7 +193,7 @@ export class SessionState {
     const next_model_reference = model.model_reference;
     const changed = next_model_label !== this.state.session_config.model_label
       || (next_model_reference
-        ? binding?.model?.downtown !== next_model_reference.downtown || binding.model.id !== next_model_reference.id
+        ? !same_model(binding?.model, next_model_reference)
         : this.state.session_config.model?.id !== model.id);
     const next_config: AgentSessionConfigSnapshot = {
       ...this.state.session_config,

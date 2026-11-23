@@ -5,7 +5,7 @@
  * - 统一承载 CLI 与 control plane 共用的初始化输入/输出结构。
  * - 所有字段都面向"项目骨架创建"语义，不掺杂 runtime 状态。
  */
-
+import type { ModelReference } from "@downcity/type";
 import type { ExecutionBindingConfig } from "@/city/types/config/ExecutionBinding.js";
 
 /**
@@ -53,7 +53,7 @@ export interface AgentProjectInitializationResult {
   /**
    * 最终选择的 City AIService 模型 ID。
    */
-  model_id?: string;
+  model?: ModelReference;
 
   /**
    * 本次实际创建/写入的文件列表。

@@ -4,14 +4,15 @@
  * 浏览和句柄恢复不解析模型；执行输入组装显式等待完整客户端，让 Composer、
  * 请求预算和实际请求共享同一份模型元信息。解析成功复用实例，失败允许后续重试。
  */
-import type { DowntownModelReference, ModelCall, ModelClient, ModelStreamEvent } from "@downcity/type";
+import { same_model } from "@downcity/type";
+import type { ModelReference, ModelCall, ModelClient, ModelStreamEvent } from "@downcity/type";
 
 /** SDK 内部的模型占位句柄；不以当前默认模型的元信息代替已保存模型。 */
 export class DeferredModelClient implements ModelClient {
   /** Session 持久化的稳定模型 ID。 */
   readonly id: string;
   /** 已保存的结构化 Downtown 模型引用。 */
-  readonly model_reference?: DowntownModelReference;
+  readonly model_reference?: ModelReference;
   /** 已保存的非秘密授权来源；缺省也必须精确匹配，不能在解析时补成当前身份。 */
   readonly binding_id?: string;
   /** 宿主提供的模型解析函数，只在执行需要完整客户端时调用。 */
@@ -21,7 +22,7 @@ export class DeferredModelClient implements ModelClient {
   /** 已核实 ID 的客户端，也用于提供恢复后的只读元信息。 */
   private resolved_client?: ModelClient;
 
-  constructor(model_id: string, resolve_client: () => Promise<ModelClient>, binding_id?: string, model_reference?: DowntownModelReference) {
+  constructor(model_id: string, resolve_client: () => Promise<ModelClient>, binding_id?: string, model_reference?: ModelReference) {
     this.id = model_id;
     this.binding_id = binding_id;
     this.model_reference = model_reference;
@@ -37,7 +38,7 @@ export class DeferredModelClient implements ModelClient {
   /** 解析一次并核对宿主没有将保存的 ID 替换为其他默认模型。 */
   async resolve(): Promise<ModelClient> {
     this.pending_client ??= Promise.resolve().then(this.resolve_client).then((client) => {
-      if (client.id !== this.id || client === this) throw new Error(`Host resolved a different Session model: ${this.id}`);
+      if (client.id !== this.id || (this.model_reference && !same_model(client.model_reference, this.model_reference)) || client === this) throw new Error(`Host resolved a different Session model: ${this.id}`);
       if (this.binding_id !== undefined && client.binding_id !== this.binding_id) {
         throw Object.assign(new Error(`Session model authorization requires explicit selection: ${this.id}`), { code: "session_model_binding_changed" });
       }

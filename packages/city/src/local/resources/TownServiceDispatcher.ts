@@ -23,7 +23,7 @@ export interface TownResponseOpen {
   /** 客户端为本次提交生成的唯一随机 ID，取消迟到 open 时也使用此值。 */
   request_id: string;
   /** 固定调用来源。 */
-  connection_id: string;
+  downtown_id: string;
   /** 远端 HTTP 状态。 */
   status: number;
   /** 实际响应的有界内容/缓存头，不包含 set-cookie 等身份资料。 */
@@ -47,7 +47,7 @@ interface ResponseState {
   /** owner 随机分配的读取句柄。 */
   handle: string;
   /** 唯一连接来源。 */
-  connection_id: string;
+  downtown_id: string;
   /** 开始发现时捕获的授权来源。 */
   binding_id: string;
   /** 取消网络请求与响应流。 */
@@ -78,23 +78,23 @@ export class TownServiceDispatcher implements ResourceDispatcher {
 
   async dispatch(method: string, input: Record<string, unknown>): Promise<unknown> {
     require_resource_value(!this.closed, "Town service bridge is closed");
-    const connection_id = required_text(input.connection_id, "connection_id");
+    const downtown_id = required_text(input.downtown_id, "downtown_id");
     try {
-      if (method === "town.service") return bounded_document(await this.town.services.describe(connection_id, required_text(input.service_id, "service_id")));
-      if (method === "town.openapi") return bounded_document(await this.town.get(connection_id).user.openapi());
-      if (method === "town.call.open") return await this.open(connection_id, input);
+      if (method === "town.service") return bounded_document(await this.town.services.describe(downtown_id, required_text(input.service_id, "service_id")));
+      if (method === "town.openapi") return bounded_document(await this.town.get(downtown_id).user.openapi());
+      if (method === "town.call.open") return await this.open(downtown_id, input);
       if (method === "town.call.cancel") {
         const request_id = required_text(input.request_id, "request_id");
         const state = this.states.get(request_id);
         if (!state) return { cancelled: false }; // EOF/timeout/cancel 后幂等。
-        this.assert_owner(state, connection_id, input.handle);
+        this.assert_owner(state, downtown_id, input.handle);
         await this.release(state);
         return { cancelled: true };
       }
       if (method === "town.call.next") {
         const state = this.states.get(required_text(input.request_id, "request_id"));
         if (!state) throw new ResourceError("response_expired", "Response is closed or expired; the action will not be replayed", 4);
-        this.assert_owner(state, connection_id, required_text(input.handle, "handle"));
+        this.assert_owner(state, downtown_id, required_text(input.handle, "handle"));
         return await this.next(state);
       }
       throw new ResourceError("capability_missing", "Unsupported Town service operation", 5);
@@ -113,7 +113,7 @@ export class TownServiceDispatcher implements ResourceDispatcher {
     await Promise.allSettled([...this.states.values()].map((state) => this.release(state)));
   }
 
-  private async open(connection_id: string, input: Record<string, unknown>): Promise<TownResponseOpen> {
+  private async open(downtown_id: string, input: Record<string, unknown>): Promise<TownResponseOpen> {
     require_resource_value(input.admin !== true, "Administrator service calls are not supported by the Town user bridge");
     const request_id = required_text(input.request_id, "request_id");
     require_resource_value(/^[a-f\d-]{36}$/u.test(request_id), "A random request_id is required");
@@ -121,21 +121,21 @@ export class TownServiceDispatcher implements ResourceDispatcher {
     require_resource_value(!this.submitted.has(request_id) && !this.states.has(request_id), "This request_id has already been submitted; actions are never replayed");
     if (this.submitted.size >= 4096) throw new ResourceError("resource_busy", "Service request directory is full; retry later with a new request", 4);
     if (this.states.size >= MAX_HANDLES) throw new ResourceError("resource_busy", "Too many open service responses; finish or cancel an earlier call", 4);
-    const state: ResponseState = { request_id, handle: randomUUID(), connection_id,
-      binding_id: this.town.get(connection_id).auth_scope_id, controller: new AbortController(), reading: false, closed: false };
+    const state: ResponseState = { request_id, handle: randomUUID(), downtown_id,
+      binding_id: this.town.get(downtown_id).auth_scope_id, controller: new AbortController(), reading: false, closed: false };
     this.submitted.set(request_id, Date.now() + 300_000);
     this.states.set(request_id, state);
     this.touch(state);
     try {
       const service_id = required_text(input.service_id, "service_id");
       const action_id = required_text(input.action_id, "action_id");
-      const described = await this.town.services.describe(connection_id, service_id, state.controller.signal);
+      const described = await this.town.services.describe(downtown_id, service_id, state.controller.signal);
       const action = described.detail.actions.find((entry) => entry.id === action_id);
       require_resource_value(action && action.kind === "action", "Action is not registered; native routes cannot be called here");
       const request = action_request(action, input.raw_input, state.controller.signal);
       state.controller.signal.throwIfAborted();
       // describe 与实际发送之间换号时，由原 binding 拒绝；不悄悄接受新身份。
-      const response = await this.town.services.call({ connection_id, service_id, action_id, binding_id: state.binding_id, request });
+      const response = await this.town.services.call({ downtown_id, service_id, action_id, binding_id: state.binding_id, request });
       if (state.closed) { await response.body?.cancel().catch(() => {}); throw new Error("Service response cancelled"); }
       state.reader = (response.body ?? new ReadableStream<Uint8Array>({ start(controller) { controller.close(); } })).getReader();
       const headers: Record<string, string> = {};
@@ -144,7 +144,7 @@ export class TownServiceDispatcher implements ResourceDispatcher {
         if (value && value.length <= 4096) headers[key] = value;
       }
       this.touch(state);
-      return { handle: state.handle, request_id, connection_id, status: response.status, headers };
+      return { handle: state.handle, request_id, downtown_id, status: response.status, headers };
     } catch (error) { await this.release(state); throw error; }
   }
 
@@ -173,9 +173,9 @@ export class TownServiceDispatcher implements ResourceDispatcher {
     return { done: false, data: Buffer.from(value).toString("base64") };
   }
 
-  private assert_owner(state: ResponseState, connection_id: string, handle: unknown): void {
+  private assert_owner(state: ResponseState, downtown_id: string, handle: unknown): void {
     // request_id 可用于取消尚未返回的 open；next 必须同时持有 owner 句柄。
-    if (state.connection_id !== connection_id || handle !== undefined && handle !== state.handle) throw new ResourceError("response_not_found", "Response handle does not belong to this request source", 3);
+    if (state.downtown_id !== downtown_id || handle !== undefined && handle !== state.handle) throw new ResourceError("response_not_found", "Response handle does not belong to this request source", 3);
   }
 
   private touch(state: ResponseState): void {

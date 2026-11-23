@@ -155,7 +155,7 @@ export class CliCityRuntime {
       runtime: {
         assert_resource_access: (agent_id, workspace_id) => coordinator.assert_available(agent_id, workspace_id),
         create_agent: async (input) => {
-          const result = await resources.agents.create({ name: input.name, description: input.description, instruction: input.instruction, model: input.model_id });
+          const result = await resources.agents.create({ name: input.name, description: input.description, instruction: input.instruction, model: input.model });
           return city.agents.get(result.agent.agent_id)!;
         },
         resolve_workspace: async (_agent, workspace_id) => {

@@ -15,13 +15,13 @@ export async function create_cli_persistent_agent(
   city: City,
 ): Promise<Agent> {
   const agent_id = create_agent_id(input.name);
-  const model = input.model_id ? await resolve_cli_agent_model(input.model_id, city.town) : undefined;
+  const model = input.model ? await resolve_cli_agent_model(input.model, city.town) : undefined;
   const config = data.agents.create({
     agent_id,
     name: input.name,
     description: input.description,
     instruction: input.instruction,
-    execution: { type: "api", model_id: input.model_id, ...(model?.binding_id ? { binding_id: model.binding_id } : {}) },
+    execution: { type: "api", ...(model?.model_reference ? { model: { ...model.model_reference } } : {}) },
   });
   let agent: Agent | undefined;
   try {

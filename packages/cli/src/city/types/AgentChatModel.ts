@@ -5,16 +5,16 @@
  */
 
 import type { RemoteAgentSession } from "@downcity/agent";
-import type { DowntownModelReference } from "@downcity/type";
+import type { ModelReference } from "@downcity/type";
 
 /** Chat TUI 可选择的单个模型。 */
 export interface AgentChatModelChoice {
-  /** 提交给远程 Session 的稳定模型 ID。 */
-  model_id: string;
   /** 选择项对应的 Downtown 与原始模型 ID。 */
-  model: DowntownModelReference;
+  model: ModelReference;
   /** 模型目录中的可读名称；为空时回退到模型 ID。 */
   name: string;
+  /** Downtown 或直接客户端的展示名称，用于区分同名模型。 */
+  source_name?: string;
   /** 模型支持的输入输出模态列表。 */
   modalities: string[];
 }
@@ -26,7 +26,7 @@ export interface AgentChatModelPickerOptions {
   /** 当前 Session 的模型可读名称。 */
   current_model_label?: string;
   /** 用户确认模型后的回调。 */
-  on_select: (model_id: string) => void;
+  on_select: (model: ModelReference) => void;
   /** 用户取消选择后的回调。 */
   on_cancel: () => void;
 }

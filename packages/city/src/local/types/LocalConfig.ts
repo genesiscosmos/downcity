@@ -1,6 +1,6 @@
 /** Downcity 本地 Agent 与 Workspace 配置管理视图。 */
 
-import type { JsonObject } from "@downcity/type";
+import type { JsonObject, ModelReference } from "@downcity/type";
 import type { LocalWorkspaceSshAuthorization } from "./WorkspaceSsh.js";
 
 /** 本地 Workspace 的持久化配置。 */
@@ -28,7 +28,7 @@ export interface LocalGroupConfig {
   /** Group 的用户可见名称。 */
   name: string;
   /** Group 用于理解群聊意图并决定消息投递的模型标识。 */
-  model_id: string;
+  model?: ModelReference;
   /** 用户明确选择模型时确认的非秘密授权来源；历史缺省不能自动接受当前账户。 */
   binding_id?: string;
   /** Group 的协作目标指令。 */

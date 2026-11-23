@@ -39,7 +39,7 @@ export class SessionDelegations implements SessionDelegationPort {
     return await this.accept_input(input, caller);
   }
 
-  /** 继续同一工作上下文；每次消息独立记录结果回传与幂等身份。 */
+  /** 继续同一工作上下文；每次输入独立记账，同一结果轮次共用回传身份。 */
   async input(input: SessionDelegationMessage, caller: SessionDelegationCaller): Promise<SessionDelegationReceipt> {
     const session = await this.options.get_work_session(input.session_id);
     if (session.type !== SESSION_TYPE_WORK || !session.workspace_id) {
@@ -357,10 +357,16 @@ export class SessionDelegations implements SessionDelegationPort {
           delivery_state: latest.delivery_state === "cancelled" ? "cancelled" : "saved" }));
         return;
       }
+      // 多条输入可由同一子 Turn 吸收；交付身份属于接收会话和结果，不属于单条委派。
+      const result_id = createHash("sha256").update(JSON.stringify([
+        record.caller.agent_id, record.caller.type, record.caller.session_id,
+        this.options.agent_id, record.work_session_id, record.result.turn_id,
+      ])).digest("hex");
       const receipt = await parent.accept_background_result({
         turn_id: record.caller.turn_id,
         ...(record.caller.type === "work" ? { execution_id: record.caller.execution_id } : {}),
-        request_id: `delegation_result:${delegation_id}`,
+        request_id: `delegation_result:${result_id}`,
+        request_scope: "session",
         // Parent Turn 可先正常结束；Child 结果到达后由后台输入启动后续 Turn。
         resume_after_turn: true,
         allow_stopped_turn: record.caller.type === "chat",

@@ -23,7 +23,7 @@ export async function loadAgentSummaries(): Promise<AgentManagerAgentSummary[]> 
     return {
       id: config.agent_id,
       name: config.name,
-      execution_binding: config.model_id ?? "",
+      execution_binding: config.model?.id ?? "",
     };
   });
 }

@@ -8,7 +8,7 @@
  * - Agent / Workspace 列表由宿主作为只读能力注入，界面不猜测可用范围。
  * - 记忆的可读范围由访问上下文决定；界面只展示 Provider 返回的 Subject。
  */
-
+import type { ModelReference } from "@downcity/type";
 import type {
   PowerJsonObject,
   PowerJsonValue,
@@ -48,14 +48,14 @@ const DEFAULT_LIST_LIMIT = 50;
 export function register_memory_power_host_actions(
   context: PowerLifecycleContext,
   provider: MemoryProvider,
-  model_id?: string,
+  model?: ModelReference,
 ): void {
   context.power.action({
     id: "memory.config.snapshot",
     run: async () => {
       const snapshot: MemoryConfigSnapshot = {
         knowledge: { status: await provider.inspect() },
-        processing: { ...(model_id === undefined ? {} : { model_id }) },
+        processing: { ...(model === undefined ? {} : { model }) },
       };
       return as_json(snapshot);
     },

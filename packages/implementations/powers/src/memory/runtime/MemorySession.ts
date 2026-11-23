@@ -29,14 +29,15 @@ export function register_memory_session_profile(
       const model_id = context.model_id ?? context.default_model?.id;
       const binding_id = context.binding_id;
       // Town 模型必须带 Job/Session 已确认的身份。排队后才读取当前账号不能构成授权基线。
-      const uses_town = model_id?.startsWith("model:downtown:") || model_id?.startsWith("model:client:");
+      const reference = context.model_reference ?? context.default_model?.model_reference;
+      const uses_town = Boolean(reference);
       if (uses_town && !binding_id) {
         throw Object.assign(new Error("Memory Job requires a confirmed model authorization binding before execution"), {
           code: "memory_model_binding_required",
         });
       }
-      const model = uses_town && model_id
-        ? host.town?.models.client(model_id, { binding_id })
+      const model = uses_town && reference
+        ? host.town?.models.client(reference, { binding_id })
         : context.default_model;
       if (!model) throw new Error("Memory Session requires an available model");
       if (model_id && model.id !== model_id) throw new Error("Memory Session model identity changed");

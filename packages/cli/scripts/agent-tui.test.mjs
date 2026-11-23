@@ -1038,8 +1038,8 @@ test("Model Picker 支持搜索、当前模型标识和 model_id 提交", () => 
   let selected_model_id;
   const picker = new ModelPickerComponent({
     choices: [
-      { model_id: "fast", name: "Fast", modalities: ["text"] },
-      { model_id: "quality", name: "Quality", modalities: ["text", "stream"] },
+      { model: { downtown: "test", id: "fast" }, name: "Fast", modalities: ["text"] },
+      { model: { downtown: "test", id: "quality" }, name: "Quality", modalities: ["text", "stream"] },
     ],
     current_model_label: "Fast",
     on_select: (model_id) => {
@@ -1052,7 +1052,7 @@ test("Model Picker 支持搜索、当前模型标识和 model_id 提交", () => 
   for (const character of "quality") picker.handleInput(character);
   assert.match(plain(picker.render(72)).join("\n"), /Search: quality/);
   picker.handleInput("\r");
-  assert.equal(selected_model_id, "quality");
+  assert.deepEqual(selected_model_id, { downtown: "test", id: "quality" });
   assert.ok(picker.render(32).every((line) => visibleWidth(line) <= 32));
 });
 

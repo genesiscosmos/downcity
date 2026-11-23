@@ -1,7 +1,7 @@
 /**
  * 待迁入 city downtown 的 Service 访问命令定义。
  * 当前未注册到公开命令树；保留详情、OpenAPI 和通用 Action 的参数契约供迁移，
- * 接线时必须采用显式 connection_id 和 Town 宿主调用，不能恢复全局当前登录入口。
+ * 接线时必须采用显式 downtown_id 和 Town 宿主调用，不能恢复全局当前登录入口。
  */
 import type { Command } from "commander";
 import { run_downtown_access } from "../shared/DowntownAccess.js";

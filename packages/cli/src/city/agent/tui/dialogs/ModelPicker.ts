@@ -3,7 +3,7 @@
  *
  * 候选项来自 City AIService 模型目录；选择器只提交稳定 model_id，不持有模型实例。
  */
-
+import { same_model } from "@downcity/type";
 import {
   Key,
   matchesKey,
@@ -58,7 +58,7 @@ export class ModelPickerComponent implements Component, Focusable {
     }
     if (matchesKey(data, Key.enter)) {
       const choice = this.filtered_choices[this.selected_index];
-      if (choice) this.on_select(choice.model_id);
+      if (choice) this.on_select(choice.model);
       return;
     }
     if (matchesKey(data, Key.escape) || matchesKey(data, "ctrl+c")) {
@@ -123,7 +123,7 @@ export class ModelPickerComponent implements Component, Focusable {
     const query = this.query.toLowerCase();
     this.filtered_choices = query
       ? this.choices.filter((choice) =>
-          [choice.model_id, choice.name, ...choice.modalities]
+          [choice.model.id, choice.name, choice.source_name ?? "", ...choice.modalities]
             .some((value) => singleLine(value).toLowerCase().includes(query)),
         )
       : [...this.choices];
@@ -163,12 +163,13 @@ export class ModelPickerComponent implements Component, Focusable {
 
   /** 渲染单个模型候选。 */
   private render_choice(choice: AgentChatModelChoice, inner_width: number): string {
-    const selected = this.filtered_choices[this.selected_index]?.model_id === choice.model_id;
+    const selected = same_model(this.filtered_choices[this.selected_index]?.model, choice.model);
     const pointer = selected ? `${SELECT_POINTER} ` : "  ";
     const current = this.is_current(choice) ? ` ${CURRENT_MARK}` : "";
-    const label = choice.name === choice.model_id
-      ? choice.model_id
-      : `${choice.name} · ${choice.model_id}`;
+    const model_label = choice.name === choice.model.id
+      ? choice.model.id
+      : `${choice.name} · ${choice.model.id}`;
+    const label = choice.source_name ? `${model_label} · ${choice.source_name}` : model_label;
     const modalities = choice.modalities.join("/");
     const description = modalities ? current_theme.fg("textDim", modalities) : "";
     const available = Math.max(1, inner_width - visibleWidth(pointer) - visibleWidth(description) - 1);
@@ -182,7 +183,7 @@ export class ModelPickerComponent implements Component, Focusable {
 
   /** 判断目录项是否对应当前 Session 模型。 */
   private is_current(choice: AgentChatModelChoice): boolean {
-    return this.current_model_label === choice.model_id ||
-      this.current_model_label === choice.name;
+    const matches = this.choices.filter((item) => this.current_model_label === item.model.id || this.current_model_label === item.name);
+    return matches.length === 1 && same_model(matches[0]?.model, choice.model);
   }
 }

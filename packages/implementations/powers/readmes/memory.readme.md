@@ -75,10 +75,11 @@ User knowledge is stored once and read by local Agents. Agent knowledge remains 
 ```ts
 const memory_power = new MemoryPower({
   platform_root_path: "/absolute/platform-root",
-  model_id: "configured-text-model",
+  model: selected.model,
+  binding_id: selected.binding_id,
 });
 ```
 
-Power configuration accepts model_id for new Memory Sessions; otherwise the owning Agent's default model is selected and fixed for that Session. Channel authorization remains the host's responsibility. Switching Downtown accounts does not switch User memory.
+Use a confirmed catalog entry for `selected`. Power configuration accepts a structured `model` and its `binding_id` for new Memory Sessions; otherwise the owning Agent's default model is selected and fixed for that Session. Channel authorization remains the host's responsibility. Switching Downtown accounts does not switch User memory.
 
 Knowledge commits publish records, validity and receipts in a single scope manifest. Deleted content leaves normal read/list/search; an exact normalized-content fingerprint prevents identical reconstruction. Semantic paraphrases are not guaranteed to be suppressed. Original Sessions, Job source copies and retained history are not erased by forget. Existing Markdown is retained but requires explicit SDK import with create_memory_import_changeset before it enters the active store.

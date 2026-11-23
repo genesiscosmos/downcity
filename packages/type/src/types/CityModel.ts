@@ -23,12 +23,37 @@ export interface DowntownModelReference {
   id: string;
 }
 
-/** 判断值是否为完整的 Downtown 模型引用。 */
+/** 宿主或扩展直接提供的模型引用，不借用 Downtown 命名空间。 */
+export interface ClientModelReference {
+  /** 宿主登记的直接客户端来源 ID。 */
+  client: string;
+  /** 客户端原始模型 ID。 */
+  id: string;
+}
+
+/** 业务配置只保存结构化来源与原始模型 ID，不保存编码目录键。 */
+export type ModelReference = DowntownModelReference | ClientModelReference;
+
+/** 校验完整的 Downtown 模型引用。 */
 export function is_downtown_model_reference(value: unknown): value is DowntownModelReference {
+  return is_model_reference(value) && "downtown" in value;
+}
+
+/** 校验来源互斥且字段完整的模型引用。 */
+export function is_model_reference(value: unknown): value is ModelReference {
   if (!value || typeof value !== "object" || Array.isArray(value)) return false;
   const record = value as Record<string, unknown>;
-  return typeof record.downtown === "string" && record.downtown.trim().length > 0
-    && typeof record.id === "string" && record.id.trim().length > 0;
+  const text = (item: unknown) => typeof item === "string" && item.length > 0 && item === item.trim();
+  return text(record.id) && ((text(record.downtown) && !("client" in record))
+    || (text(record.client) && !("downtown" in record)));
+}
+
+/** 值比较用于持久化恢复和选择，不依赖对象引用相等。 */
+export function same_model(first: ModelReference | null | undefined, second: ModelReference | null | undefined): boolean {
+  if (!first || !second) return first === second;
+  return first.id === second.id && ("downtown" in first
+    ? "downtown" in second && first.downtown === second.downtown
+    : "client" in second && first.client === second.client);
 }
 
 /** City 模型依赖的环境变量需求。 */

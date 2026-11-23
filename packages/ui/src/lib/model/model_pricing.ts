@@ -21,7 +21,7 @@ export function build_model_pricing(models: readonly ModelSummary[]): ModelPrici
       .filter(Number.isFinite)
       .sort((left, right) => right - left)[0];
     return input !== undefined && output !== undefined
-      ? [{ model_id: model.model_id, model_name: model.name, input_usd_per_1m: input, output_usd_per_1m: output }]
+      ? [{ model_id: JSON.stringify(model.model), model_name: model.name, input_usd_per_1m: input, output_usd_per_1m: output }]
       : [];
   }).sort((left, right) => Math.max(right.input_usd_per_1m, right.output_usd_per_1m) - Math.max(left.input_usd_per_1m, left.output_usd_per_1m));
 }

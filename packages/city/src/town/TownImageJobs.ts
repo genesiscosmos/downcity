@@ -5,6 +5,7 @@
  * 标记 unknown，禁止再次创建。默认仓储只在当前进程有效，宿主通过 TownOptions.image_jobs
  * 注入持久实现；查询始终使用原连接、原 endpoint 与原 auth_scope_id。
  */
+import type { ModelReference } from "@downcity/type";
 import { randomUUID } from "node:crypto";
 import type { AIImageResult, UserImageInput } from "@downcity/downtown";
 import { TownError } from "./ExecutionLease.js";
@@ -42,7 +43,7 @@ export class TownImageJobs {
   /** 创建前写入来源，返回 Town 本地句柄；调用者不能拿原始 job ID 重新创建。 */
   async create(
     state: TownConnectionState,
-    model_id: string,
+    model: ModelReference,
     input: UserImageInput,
     signal?: AbortSignal,
   ): Promise<AIImageResult> {
@@ -50,10 +51,10 @@ export class TownImageJobs {
     const job_id = `town_image_${randomUUID()}`;
     const origin: TownImageJobOrigin = {
       job_id,
-      connection_id: state.source.connection_id,
+      downtown_id: state.source.downtown_id,
       auth_scope_id: state.source.auth_scope_id,
       endpoint_url: state.source.endpoint_url,
-      model_id,
+      model,
       state: "pending",
       created_at: new Date().toISOString(),
     };
@@ -89,7 +90,7 @@ export class TownImageJobs {
     if (!origin.original_job_id) throw new TownError("town_image_job_id_missing");
     signal?.throwIfAborted();
 
-    const current = this.connections.require(origin.connection_id);
+    const current = this.connections.require(origin.downtown_id);
     // 改地址后不能调用原身份恢复器访问其他 endpoint；先恢复原连接再查询。
     if (current.source.endpoint_url !== origin.endpoint_url) throw new TownError("town_image_original_endpoint_required");
     const release = this.connections.acquire(current);

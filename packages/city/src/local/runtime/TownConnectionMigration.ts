@@ -3,34 +3,31 @@
  * 迁移只依据持久配置建立连接与账户，不访问网络、不推断历史模型或任务来源；
  * 原始值完整归档，未知主体保持待核验，不因当前模型目录唯一而补造来源。
  */
+import { migrate_registered_downtowns } from "./TownRegistrationMigration.js";
 import { randomUUID } from "node:crypto";
 import type { StoredTownAccount, TownConnection, TownConnectionState, TownMigrationSettings } from "../types/TownConnection.js";
 
 /** Town 连接的唯一持久设置键。 */
-export const TOWN_CONNECTION_STATE_KEY = "town.connections.v1";
+export const TOWN_CONNECTION_STATE_KEY = "town.connections.v2";
 
-/** 规范 endpoint，同时保留部署前缀路径；不允许 URL 内夹带认证信息。 */
-export function normalize_town_url(value: string): string {
-  const url = new URL(value.trim());
-  if (!["http:", "https:"].includes(url.protocol) || url.username || url.password || url.search || url.hash) {
-    throw new TypeError("Downtown URL must be HTTP(S) without credentials, query or fragment");
-  }
-  return url.toString().replace(/\/+$/u, "");
-}
+export { normalize_downtown_url as normalize_town_url } from "../../town/DowntownId.js";
+import { create_downtown_id, normalize_downtown_url as normalize_town_url } from "../../town/DowntownId.js";
 
 /** 必须由仓储在一个数据库事务内调用。 */
 export function migrate_town_connections(settings: TownMigrationSettings): TownConnectionState {
   const existing = settings.get<TownConnectionState>(TOWN_CONNECTION_STATE_KEY);
   if (existing) {
-    if (existing.version !== 1) throw new Error("Unsupported Town connection storage version");
+    if (existing.version !== 2) throw new Error("Unsupported Town connection storage version");
     return existing;
   }
+  const previous = settings.get<unknown>("town.connections.v1");
+  if (previous) return migrate_registered_downtowns(settings, previous);
   const config_value = settings.get<unknown>("downcity.config");
   const vault_value = settings.get<unknown>("desktop.user-accounts");
   const config = object_value(config_value);
   const vault = object_value(vault_value);
   const now = new Date().toISOString();
-  const state: TownConnectionState = { version: 1, connections: {}, accounts: {} };
+  const state: TownConnectionState = { version: 2, connections: {}, accounts: {} };
   const by_url = new Map<string, TownConnection>();
   const old_accounts = new Map<string, StoredTownAccount>();
 
@@ -41,11 +38,11 @@ export function migrate_town_connections(settings: TownMigrationSettings): TownC
     const known = by_url.get(url);
     if (known) return known;
     const connection: TownConnection = {
-      connection_id: randomUUID(), name: text_value(name) || url, url,
+      downtown_id: create_downtown_id(url), name: text_value(name) || url, url,
       status: "active", revision: 1, source: "remote", created_at: now, updated_at: now,
     };
     by_url.set(url, connection);
-    state.connections[connection.connection_id] = connection;
+    state.connections[connection.downtown_id] = connection;
     return connection;
   };
   const import_account = (connection: TownConnection, item: Record<string, unknown>): StoredTownAccount | undefined => {
@@ -53,12 +50,12 @@ export function migrate_town_connections(settings: TownMigrationSettings): TownC
     const user_id = text_value(item.user_id);
     const session_id = text_value(item.session_id) || undefined;
     // 同一主体或完全相同的未知凭据可以去重，邮箱/昵称不是身份依据。
-    const known = Object.values(state.accounts).find((account) => account.connection_id === connection.connection_id
+    const known = Object.values(state.accounts).find((account) => account.downtown_id === connection.downtown_id
       && (user_id ? account.user_id === user_id : !account.user_id && account.user_token === token && account.session_id === session_id));
     if (known) return known;
     if (!user_id && !token && !session_id) return undefined;
     const account: StoredTownAccount = {
-      account_id: randomUUID(), connection_id: connection.connection_id, url: connection.url, user_id,
+      account_id: randomUUID(), downtown_id: connection.downtown_id, url: connection.url, user_id,
       ...(user_id ? { auth_scope_id: randomUUID() } : {}),
       ...(token ? { user_token: token } : {}),
       session_id, display_name: text_value(item.display_name) || text_value(item.user_label) || undefined,
@@ -105,7 +102,7 @@ export function migrate_town_connections(settings: TownMigrationSettings): TownC
     const original = object_value(object_value(vault.accounts)[active_id]);
     active.user_token = text_value(original.user_token) || undefined;
     active.session_id = text_value(original.session_id) || undefined;
-    select(state.connections[active.connection_id], active);
+    select(state.connections[active.downtown_id], active);
   }
 
   settings.set("town.migration.v1.archive", {

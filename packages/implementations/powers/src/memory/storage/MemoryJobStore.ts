@@ -1,4 +1,5 @@
 /** Memory Job 文件账本：串行读改写、稳定请求键与有界来源，正文不进入普通状态接口。 */
+import { is_model_reference } from "@downcity/type";
 import { createHash } from "node:crypto";
 import path from "node:path";
 import { with_memory_scope_lock } from "./MemoryScopeLock.js";
@@ -46,10 +47,9 @@ export class MemoryJobStore {
         return existing;
       }
       const now = new Date().toISOString();
-      for (const key of ["model_id", "binding_id"] as const) {
-        if (input[key] !== undefined && (typeof input[key] !== "string" || !input[key].trim())) throw new Error(`Invalid Memory Job ${key}`);
-      }
-      const configured = Boolean(input.model_id && input.binding_id);
+      if (input.model !== undefined && !is_model_reference(input.model)) throw new Error("Invalid Memory Job model");
+      if (input.binding_id !== undefined && (typeof input.binding_id !== "string" || !input.binding_id.trim())) throw new Error("Invalid Memory Job binding_id");
+      const configured = Boolean(input.model && input.binding_id);
       const job: MemoryJob = { ...input, job_id, status: configured ? "queued" : "failed", attempt: 0, created_at: now, updated_at: now,
         ...(!configured ? { error: "memory_model_configuration_required: explicitly select a model and durable authorization binding before submitting a new Job" } : {}) };
       await this.storage.write(this.key(job_id), JSON.stringify(job));

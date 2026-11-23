@@ -2,8 +2,8 @@
 
 /** 一条持久化服务连接的非秘密资料。 */
 export interface TownConnection {
-  /** 宿主分配的稳定连接 ID；不随名称、地址或账户变化。 */
-  connection_id: string;
+  /** 规范化地址派生的 Downtown ID；改名不变，改地址产生新身份。 */
+  downtown_id: string;
   /** 用户可改的服务展示名称，不参与执行路由。 */
   name: string;
   /** 当前规范化 HTTP(S) endpoint，不能携带凭据、query 或 fragment。 */
@@ -29,7 +29,7 @@ export interface TownAccount {
   /** 本地账户 ID；主体由连接、原 endpoint 与 user_id 共同界定。 */
   account_id: string;
   /** 所属稳定连接 ID。 */
-  connection_id: string;
+  downtown_id: string;
   /** 此账户认证时的 endpoint，地址变更后禁止把凭据转发到新地址。 */
   url: string;
   /** 远端用户 ID；仅迁移待核验账户允许为空字符串。 */
@@ -71,7 +71,7 @@ export interface TownAccountInput {
 /** 宿主专用凭据视图，不得写日志或经 IPC 返回给 UI。 */
 export interface TownCredentials {
   /** 所属稳定连接。 */
-  connection_id: string;
+  downtown_id: string;
   /** 所属本地账户。 */
   account_id: string;
   /** 经核验主体对应的非秘密授权来源。 */
@@ -95,7 +95,7 @@ export interface StoredTownAccount extends Omit<TownAccount, "selected"> {
 /** platform_settings 内的版本化连接事实源。 */
 export interface TownConnectionState {
   /** 当前存储格式版本，显式迁移后只写此结构。 */
-  version: 1;
+  version: 2;
   /** 包含已移除连接的稳定 ID 索引。 */
   connections: Record<string, TownConnection>;
   /** 各连接的已保存历史账户，退出不删除资料。 */
@@ -122,4 +122,30 @@ export interface TownMigrationSettings {
   get<T>(key: string): T | null;
   /** 把完整原值写入私密迁移档案或当前事实源。 */
   set(key: string, value: unknown): void;
+}
+
+/** 一次性迁移读取的旧版登记，进入新版后不再参与执行。 */
+export interface LegacyTownConnection extends Omit<TownConnection, "downtown_id"> {
+  /** 旧版随机分配的连接键。 */
+  connection_id?: string;
+  /** 已使用新字段名但尚未升级存储版本的内部登记键。 */
+  downtown_id?: string;
+}
+
+/** 旧版账户保留凭据和主体，只转换来源字段。 */
+export interface LegacyTownAccount extends Omit<StoredTownAccount, "downtown_id"> {
+  /** 旧版账户所属的连接键。 */
+  connection_id?: string;
+  /** 尚未升级存储版本的内部来源键。 */
+  downtown_id?: string;
+}
+
+/** 只供存储迁移使用的旧登记快照。 */
+export interface LegacyTownConnectionState {
+  /** 旧版存储格式。 */
+  version: 1;
+  /** 原随机键索引的服务资料。 */
+  connections: Record<string, LegacyTownConnection>;
+  /** 原账户键索引的认证事实。 */
+  accounts: Record<string, LegacyTownAccount>;
 }

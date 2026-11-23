@@ -6,7 +6,7 @@
  * - 绑定 City AIService 暴露的模型 ID。
  * - 该类型是 Agent 全局配置中的执行绑定结构。
  */
-
+import type { ModelReference } from "@downcity/type";
 /**
  * 项目执行绑定配置（api 模式）。
  */
@@ -23,7 +23,7 @@ export interface ExecutionBindingConfig {
    * - 必须能通过 City 的 `/v1/ai/models` 目录查询到。
    * - 例如：`deepseek-v4-flash`、`fast`、`quality`。
    */
-  model_id: string;
+  model: ModelReference;
 
   /** 默认模型的思考强度档位；省略时使用模型默认值，执行时可显式覆盖。 */
   reasoning_effort?: string;

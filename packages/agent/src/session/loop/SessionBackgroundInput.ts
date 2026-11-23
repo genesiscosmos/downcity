@@ -10,8 +10,12 @@ import type { SessionLoop } from "./SessionLoop.js";
 
 /** 同一 Loop 的在途接收共享确认；只保存 Promise，不维护第二份输入队列。 */
 const pending_inputs = new WeakMap<SessionLoop, Map<string, {
-  /** 首次登记的原始执行标识，禁止同键跨执行复用。 */
+  /** 首次登记的原始执行标识，轮次范围的请求不得跨执行复用。 */
   turn_id: string;
+  /** 首次接收对应的父执行代次，拒收不能扩散到其他有效执行。 */
+  execution_id?: string;
+  /** 会话范围的稳定结果允许多个发起轮次共享接收确认。 */
+  request_scope: "turn" | "session";
   /** 同键并发接收共享的持久化确认。 */
   receipt: Promise<SessionBackgroundReceipt>;
 }>>();
@@ -20,14 +24,24 @@ const pending_inputs = new WeakMap<SessionLoop, Map<string, {
 export async function accept_background_input(host: SessionBackgroundHost, input: SessionBackgroundInput): Promise<SessionBackgroundReceipt> {
   let pending = pending_inputs.get(host.loop);
   if (!pending) { pending = new Map(); pending_inputs.set(host.loop, pending); }
+  const request_scope = input.request_scope ?? "turn";
   const existing = pending.get(input.request_id);
   if (existing) {
-    if (existing.turn_id !== input.turn_id) throw new Error("Background request belongs to another Turn");
-    return await existing.receipt;
+    if (existing.request_scope !== request_scope) throw new Error("Background request belongs to another scope");
+    if (request_scope === "turn" && existing.turn_id !== input.turn_id) throw new Error("Background request belongs to another Turn");
+    const receipt = await existing.receipt;
+    // 拒收只适用于首次调用的原执行；其他发起轮次仍需按自己的执行边界判断。
+    if (receipt === "discarded" && (existing.turn_id !== input.turn_id || existing.execution_id !== input.execution_id)) {
+      if (pending.get(input.request_id) === existing) pending.delete(input.request_id);
+      return await accept_background_input(host, input);
+    }
+    return receipt;
   }
   const operation = receive_background_input(host, input);
-  pending.set(input.request_id, { turn_id: input.turn_id, receipt: operation });
-  try { return await operation; } finally { pending.delete(input.request_id); }
+  pending.set(input.request_id, { turn_id: input.turn_id, execution_id: input.execution_id, request_scope, receipt: operation });
+  try { return await operation; } finally {
+    if (pending.get(input.request_id)?.receipt === operation) pending.delete(input.request_id);
+  }
 }
 
 /** 每个稳定请求同时只有一次占用检查与 canonical 接收。 */
@@ -37,7 +51,9 @@ async function receive_background_input(host: SessionBackgroundHost, input: Sess
   const previous = await read_prompt_input(host.messages, identity);
   if (previous) {
     if ("role" in previous.input) throw new Error("Background request identity belongs to another input");
-    if (previous.input.source?.turn_id !== input.turn_id) throw new Error("Background request belongs to another Turn");
+    if (input.request_scope !== "session" && previous.input.source?.turn_id !== input.turn_id) {
+      throw new Error("Background request belongs to another Turn");
+    }
     return "accepted";
   }
   if (!host.is_current()) return "retry";
@@ -67,7 +83,7 @@ async function receive_background_input(host: SessionBackgroundHost, input: Sess
     const active_turn_id = host.loop.current_turn_id();
     if (!active_turn_id) return "retry";
     // 后续 Turn 正在处理其他结果时直接入队，来源仍绑定最初发起委派的 Turn。
-    return await host.loop.accept_delegation_result(active_turn_id, input.request_id, input.query,
+    return await host.loop.accept_delegation_result(active_turn_id, input.request_id, query,
       host.loop.current_execution_id(), input.turn_id) ? "accepted" : "retry";
   }
   try {

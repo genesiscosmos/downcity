@@ -20,7 +20,7 @@
  * 「结构 → 领域对象」并给出可读的校验错误。两件事分开，失败原因才不会混在
  * 「文件不是 TOML」和「字段值不合法」之间。
  */
-
+import { is_model_reference } from "@downcity/type";
 import path from "node:path";
 import cron from "node-cron";
 import { z } from "zod";
@@ -294,12 +294,10 @@ export function parseTaskDefinition(
     return { ok: false, error: `Invalid workflow: ${String(error)}` };
   }
 
-  for (const key of ["model_id", "binding_id"] as const) {
-    if (scalars[key] !== undefined && (typeof scalars[key] !== "string" || !scalars[key].trim())) {
-      return { ok: false, error: `Invalid ${key}: expected an exact non-empty string` };
-    }
-  }
-  if (scalars.binding_id !== undefined && scalars.model_id === undefined) return { ok: false, error: "binding_id requires model_id" };
+  const model = document.tables.model;
+  if (model !== undefined && !is_model_reference(model)) return { ok: false, error: "Invalid model reference" };
+  if (scalars.binding_id !== undefined && (typeof scalars.binding_id !== "string" || !scalars.binding_id.trim())) return { ok: false, error: "Invalid binding_id" };
+  if (scalars.binding_id !== undefined && !model) return { ok: false, error: "binding_id requires model" };
 
   const task_path = path
     .relative(params.data_path, params.task_file_path)
@@ -315,7 +313,7 @@ export function parseTaskDefinition(
       kind,
       agent_id: String(scalars.agent_id ?? "").trim(),
       workspace_id: String(scalars.workspace_id ?? "").trim(),
-      ...(typeof scalars.model_id === "string" ? { model_id: scalars.model_id } : {}),
+      ...(model ? { model: { ...model } } : {}),
       ...(typeof scalars.binding_id === "string" ? { binding_id: scalars.binding_id } : {}),
       ...(delivery_session.value ? { delivery_session: delivery_session.value } : {}),
       ...(kind === "agent" && normalize_boolean(scalars.review) === true ? { review: true } : {}),
@@ -360,7 +358,6 @@ export function buildTaskToml(task: ShipTaskDefinitionV1): string {
       schedule,
       agent_id: String(task.agent_id || "").trim() || undefined,
       workspace_id: String(task.workspace_id || "").trim() || undefined,
-      model_id: kind === "agent" ? task.model_id : undefined,
       binding_id: kind === "agent" ? task.binding_id : undefined,
       review: kind === "agent" ? Boolean(task.review) : undefined,
       submission_id: task.submission_id?.trim() || undefined,
@@ -371,6 +368,7 @@ export function buildTaskToml(task: ShipTaskDefinitionV1): string {
       { key: "source", value: String(task.source ?? "").trim() },
     ],
     tables: [
+      ...(kind === "agent" && task.model ? [{ key: "model", value: { ...task.model } }] : []),
       ...(delivery_session.value
         ? [{ key: "delivery_session", value: { ...delivery_session.value, workspace_id: delivery_session.value.workspace_id ?? "" } }]
         : []),

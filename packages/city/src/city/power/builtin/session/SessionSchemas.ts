@@ -5,7 +5,6 @@
  * - 单一 session 工具通过 action 选择开始、继续、查看、代答或停止当前 Agent 自己的工作会话。
  * - Schema 在模型输入边界完成校验，非法输入不会变成待处理状态。
  */
-
 import { z } from "zod";
 
 /** `session.messages` 读取有界 canonical 历史预览；原文由 Part 动作分段读取。 */
@@ -55,9 +54,6 @@ export const session_start_input = z
     ),
     query: z.string().trim().min(1).describe(
       "Self-contained assignment with a specific goal, necessary context, scope, expected output, and completion criteria; the new session does not inherit the caller's conversation. When a Work Main delegates, describe one bounded work thread after understanding the complete task and dependencies. Do not forward the entire Main assignment unchanged.",
-    ),
-    model_id: z.string().trim().min(1).optional().describe(
-      "Configured model ID for the new session, including its provider identity. Omit to use the current agent's default model.",
     ),
     title: z.string().trim().min(1).optional().describe(
       "Optional short title for this piece of work, used when listing sessions.",

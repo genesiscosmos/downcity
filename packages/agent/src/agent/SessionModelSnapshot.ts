@@ -1,14 +1,15 @@
 /** 创建/恢复 Session 的持久模型解析；历史无证据时不借用当前 Agent 默认模型。 */
-import type { DowntownModelReference, ModelClient, WorkspaceRuntime } from "@downcity/type";
+import { same_model } from "@downcity/type";
+import type { ModelReference, ModelClient, WorkspaceRuntime } from "@downcity/type";
 import type { SessionStorage } from "../types/store/SessionStorage.js";
 import { DeferredModelClient } from "../model/DeferredModelClient.js";
 import type { SessionModelResolver } from "../types/model/SessionModelResolver.js";
 
 /** 已保存 ID 的惰性模型，浏览/恢复句柄不进行网络请求，执行时才解析宿主模型。 */
-export function snapshot_model(model: DowntownModelReference, current: ModelClient | undefined, resolve_model?: SessionModelResolver, get_workspace?: () => WorkspaceRuntime | undefined): ModelClient {
-  if (current?.model_reference?.downtown === model.downtown && current.model_reference.id === model.id) return current;
+export function snapshot_model(model: ModelReference, current: ModelClient | undefined, resolve_model?: SessionModelResolver, get_workspace?: () => WorkspaceRuntime | undefined): ModelClient {
+  if (current && same_model(current.model_reference, model)) return current;
   return new DeferredModelClient(model.id, async () => {
-    if (!resolve_model) throw Object.assign(new Error(`Host cannot restore Session model: ${model.downtown}:${model.id}`), { code: "session_model_required" });
+    if (!resolve_model) throw Object.assign(new Error(`Host cannot restore Session model: ${model.id}`), { code: "session_model_required" });
     return await resolve_model(model, get_workspace?.());
   }, undefined, model);
 }

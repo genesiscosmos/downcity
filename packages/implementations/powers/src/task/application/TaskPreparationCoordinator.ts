@@ -133,8 +133,8 @@ export class TaskPreparationCoordinator {
         const same_target = current.kind === analysis.kind && current.agent_id === analysis.agent_id && current.workspace_id === analysis.workspace_id;
         const baseline = analysis.kind === "agent" && capture_model && !same_target
           ? await this.definitions.capture_model({ agent_id: analysis.agent_id, workspace_id: analysis.workspace_id, delivery_session: current.delivery_session })
-          : analysis.kind === "agent" && same_target ? { model_id: current.model_id, binding_id: current.binding_id } : {};
-        current.model_id = baseline.model_id;
+          : analysis.kind === "agent" && same_target ? { model: current.model, binding_id: current.binding_id } : {};
+        current.model = baseline.model;
         current.binding_id = baseline.binding_id;
         current.title = analysis.title;
         current.kind = analysis.kind;

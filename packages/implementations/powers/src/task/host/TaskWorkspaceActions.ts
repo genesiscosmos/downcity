@@ -147,7 +147,7 @@ export function register_task_workspace_actions(
       const target_changed = !previous || previous.kind !== value.kind || previous.agent_id !== value.agent_id || previous.workspace_id !== value.workspace_id;
       const model_binding = value.kind === "agent" && (target_changed || value.confirm_model === true)
         ? await runtime.definitions.capture_model({ agent_id: value.agent_id, workspace_id: value.workspace_id, delivery_session: previous?.delivery_session })
-        : value.kind === "agent" ? { model_id: previous?.model_id, binding_id: previous?.binding_id } : {};
+        : value.kind === "agent" ? { model: previous?.model, binding_id: previous?.binding_id } : {};
       const preparation = previous?.preparing;
       validate_task_schedule(normalized_when.value, previous && (!preparation || preparation.status === "ready") ? previous.when : undefined);
       if (value.expected_revision !== undefined && preparation?.revision !== value.expected_revision)
@@ -179,7 +179,7 @@ export function register_task_workspace_actions(
         task: {
           ...(previous ?? { taskId: task_id, source: undefined, submission_id: undefined, source_agent_id: undefined }),
           title: value.title,
-          model_id: undefined, binding_id: undefined,
+          model: undefined, binding_id: undefined,
           ...model_binding,
           kind: value.kind,
           agent_id: value.kind === "user" ? "" : value.agent_id,

@@ -1,4 +1,5 @@
 /** Agent 身份配置用例；创建独立于项目，更新仅作用于新 Session，删除受执行/引用门禁保护。 */
+import { is_model_reference } from "@downcity/type";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
@@ -8,7 +9,7 @@ import type { LocalAgentConfig } from "../types/LocalConfig.js";
 import type { ResourceDependencies } from "./types.js";
 import { assert_resource_revision, resource_revision } from "./ResourceCoordinator.js";
 import { require_agent_id, require_resource_value, ResourceError } from "./ResourceError.js";
-import type { DowntownModelReference, JsonObject } from "@downcity/type";
+import type { ModelReference, JsonObject } from "@downcity/type";
 
 /** CLI、TUI 与 Desktop 共用的 Agent 业务实现。 */
 export class AgentResources {
@@ -80,11 +81,11 @@ export class AgentResources {
         else delete execution.reasoning_effort;
       }
       const next = { ...current, ...(name !== undefined ? { name: name.trim() } : {}), ...(input.description !== undefined ? { description: optional_text(input.description)! } : {}), ...(input.instruction !== undefined ? { instruction: optional_text(input.instruction)! } : {}), execution };
-      const model_id = typeof execution.model_id === "string" ? execution.model_id : undefined;
+
       const saved_model = read_model_reference(execution.model);
       const model = input.model !== undefined
         ? await this.resolve_selected_model(selected_model_id)
-        : await this.dependencies.host?.resolve_model(saved_model ?? model_id, next);
+        : await this.dependencies.host?.resolve_model(saved_model, next);
       if (input.model !== undefined) {
         if (!model?.model_reference) throw new ResourceError("validation_error", "Selected model has no Downtown reference", 2);
         execution.model = { ...model.model_reference } as JsonObject;
@@ -106,7 +107,7 @@ export class AgentResources {
   }
 
   /** 显式模型选择捕获实际来源；离线由持有 root 租约的 CLI 注入同一目录解析。 */
-  private async resolve_selected_model(model_id?: string) {
+  private async resolve_selected_model(model_id?: ModelReference) {
     if (!model_id) return undefined;
     if (this.dependencies.host) return await this.dependencies.host.resolve_model(model_id);
     return await this.dependencies.resolve_model?.(model_id);
@@ -150,7 +151,7 @@ export class AgentResources {
   private project(agent_id: string, config?: LocalAgentConfig) {
     const runtime = this.dependencies.host?.city.agents.get(agent_id);
     const runtime_state: "loaded" | "unloaded" | "unknown" = this.dependencies.host ? runtime ? "loaded" : "unloaded" : "unknown";
-    return { agent_id, name: config?.name ?? runtime?.name ?? agent_id, description: config?.description ?? runtime?.description ?? "", version: config?.version ?? null, model_id: typeof config?.execution?.model_id === "string" ? config.execution.model_id : null, definition_id: typeof config?.execution?.definition_id === "string" ? config.execution.definition_id : null, registered: !!config, runtime_state, revision: config ? resource_revision(config) : null, created_at: config?.created_at ?? null, updated_at: config?.updated_at ?? null };
+    return { agent_id, name: config?.name ?? runtime?.name ?? agent_id, description: config?.description ?? runtime?.description ?? "", version: config?.version ?? null, model: read_model_reference(config?.execution?.model) ?? null, definition_id: typeof config?.execution?.definition_id === "string" ? config.execution.definition_id : null, registered: !!config, runtime_state, revision: config ? resource_revision(config) : null, created_at: config?.created_at ?? null, updated_at: config?.updated_at ?? null };
   }
 
   private require_registered(agent_id: string): LocalAgentConfig {
@@ -171,11 +172,8 @@ export class AgentResources {
 }
 
 /** 从 Agent 执行配置读取结构化模型引用。 */
-function read_model_reference(value: unknown): DowntownModelReference | undefined {
-  if (!value || typeof value !== "object" || Array.isArray(value)) return undefined;
-  const record = value as Record<string, unknown>;
-  if (typeof record.downtown !== "string" || !record.downtown.trim() || typeof record.id !== "string" || !record.id.trim()) return undefined;
-  return { downtown: record.downtown.trim(), id: record.id.trim() };
+function read_model_reference(value: unknown): ModelReference | undefined {
+  return is_model_reference(value) ? { ...value } : undefined;
 }
 
 /** 严格区分缺省和清空，避免 String(object) 成为配置。 */
@@ -186,8 +184,8 @@ function optional_text(value: unknown): string | undefined {
 }
 
 /** 模型清空只接受独立 unset_model 标志。 */
-function optional_model(value: unknown): string | undefined {
-  const model_id = optional_text(value);
-  if (model_id !== undefined) require_resource_value(model_id.trim(), "model must not be empty; use unset_model to clear it");
-  return model_id?.trim();
+function optional_model(value: unknown): ModelReference | undefined {
+  if (value === undefined) return undefined;
+  require_resource_value(is_model_reference(value), "model requires a structured source and original id");
+  return { ...value };
 }

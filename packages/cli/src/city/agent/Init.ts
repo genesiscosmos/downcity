@@ -9,7 +9,7 @@
  * - Power 由 City 统一持有，Agent 创建流程不识别具体 Power
  * - 避免写入无意义的默认值：能省则省，保持配置简洁
  */
-
+import type { ModelReference } from "@downcity/type";
 import path from "path";
 import prompts from "@/city/tui/Prompts.js";
 import {
@@ -33,7 +33,7 @@ import { create_workspace } from "@/city/process/registry/WorkspaceRepository.js
 
 type InitPromptResponse = {
   id?: string;
-  primaryModelId?: string;
+  primaryModelId?: ModelReference;
 };
 
 
@@ -99,10 +99,10 @@ export async function initCommand(
   const agent_id =
     String(response.id || "").trim() || default_agent_id;
   const primaryModelId =
-    String(response.primaryModelId || "").trim() || modelChoiceIds[0];
+    response.primaryModelId ?? modelChoiceIds[0];
   const execution: ExecutionBindingConfig = {
     type: "api",
-    model_id: primaryModelId,
+    model: primaryModelId,
   };
   await assertPlatformModelReady(primaryModelId);
   const existing_agent = get_agent_config(agent_id);
@@ -177,7 +177,7 @@ export async function initCommand(
       facts: [
         {
           label: "Model ID",
-          value: primaryModelId,
+          value: primaryModelId.id,
         },
         {
           label: "Source",

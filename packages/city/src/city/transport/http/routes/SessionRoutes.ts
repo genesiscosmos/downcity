@@ -6,7 +6,7 @@
  * - 当前公开输入收口到 `prompt()`，公开输出收口到 `events` 长连接。
  * - 不复用 control API 的控制台语义，避免 transport 面混入非 SDK 约束。
  */
-
+import { is_model_reference } from "@downcity/type";
 import { SESSION_TYPE_WORK } from "@downcity/type";
 import type { Hono } from "hono";
 import type {
@@ -383,7 +383,7 @@ export function register_sdk_session_routes(
         c.req.query("type"),
       );
       const body = await c.req.json().catch(() => null) as {
-        model_id?: unknown;
+        model?: unknown;
         security?: { approval_mode?: unknown };
         options?: {
           persist_action?: unknown;
@@ -399,14 +399,9 @@ export function register_sdk_session_routes(
           error: "security.approval_mode must be ask or always-allow",
         }, 400);
       }
-      const model_id = body?.model_id === undefined
-        ? undefined
-        : String(body.model_id || "").trim();
-      if (body?.model_id !== undefined && !model_id) {
-        return c.json({
-          success: false,
-          error: "model_id must be a non-empty string",
-        }, 400);
+      const model = body?.model;
+      if (model !== undefined && !is_model_reference(model)) {
+        return c.json({ success: false, error: "model must contain a source and original id" }, 400);
       }
       const persist_action = body?.options?.persist_action;
       const publish_mutation = body?.options?.publish_mutation;
@@ -423,7 +418,7 @@ export function register_sdk_session_routes(
         }, 400);
       }
       const remote_input: RemoteSessionSetInput = {
-        ...(model_id ? { model_id } : {}),
+        ...(model ? { model } : {}),
         ...(mode ? { security: { approval_mode: mode } } : {}),
       };
       const input = await resolve_remote_session_set_input({

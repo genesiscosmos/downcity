@@ -10,7 +10,7 @@ import type { Agent } from "@downcity/agent";
 import type { AgentPowerRuntime } from "@/power/types/PowerExecutionRuntime.js";
 import type { WorkspaceRuntime } from "@/workspace/index.js";
 import type { Hono } from "hono";
-import type { DowntownModelReference } from "@downcity/type";
+import type { ModelReference } from "@downcity/type";
 
 /** 宿主为一个 Agent 提供的 HTTP 扩展。 */
 export interface CityAgentHttpExtension {
@@ -48,7 +48,7 @@ export interface CityHttpRuntimeOptions {
     /** 当前请求已经进入的 Workspace 实例。 */
     readonly workspace: WorkspaceRuntime;
     /** 远程 Session 请求指定的结构化模型引用。 */
-    readonly model: DowntownModelReference;
+    readonly model: ModelReference;
   }) => ReturnType<AgentSessionModelResolver>;
 
   /** 为一个 Agent 组合 Auth、控制台和应用专属路由。 */

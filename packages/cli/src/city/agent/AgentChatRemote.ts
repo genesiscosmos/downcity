@@ -118,9 +118,9 @@ export async function createAgentSessionReader(params: {
 export async function listAgentChatModelChoices(): Promise<AgentChatModelChoice[]> {
   const choices = await listPlatformModelChoices();
   return choices.map((choice) => ({
-    model_id: choice.value,
     model: choice.model.model,
-    name: String(choice.model.name || choice.value).trim() || choice.value,
+    name: choice.model.name || choice.model.id,
+    source_name: choice.model.source_name,
     modalities: choice.model.modalities.map((modality) => String(modality)),
   }));
 }

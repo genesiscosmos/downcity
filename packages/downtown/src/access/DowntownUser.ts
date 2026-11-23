@@ -44,6 +44,7 @@ export class DowntownUser {
     this.city_id = normalize_city_source(options.city_id);
     this.account = new DowntownAccount({
       accounts: () => this.service("accounts"),
+      public_accounts: () => this.create_user_access(false).service("accounts"),
       read_user_token: () => this.credentials.user_token,
       update_user_token: (user_token) => this.set_token(user_token),
     });
@@ -128,8 +129,9 @@ export class DowntownUser {
     this.credentials.resolve_user_token = resolve_user_token;
   }
 
-  private create_user_access(): UserPactAccess {
-    const credentials = { ...this.credentials };
+  /** 公开登录使用无凭据快照，来源标签与传输方式仍沿用当前视图。 */
+  private create_user_access(with_credentials = true): UserPactAccess {
+    const credentials = with_credentials ? { ...this.credentials } : {};
     const resolve_user_token = credentials.resolve_user_token;
     return new UserPactAccess({
       base_url: this.url,

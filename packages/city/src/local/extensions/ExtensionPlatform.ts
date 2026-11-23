@@ -2,6 +2,7 @@
  * 本地产品宿主的扩展组合根。数据库、City 和数据根均借用既有宿主所有权；
  * CLI 与 Desktop 使用相同目录、恢复顺序、模型解析与管理操作。
  */
+import { is_model_reference, type ModelReference } from "@downcity/type";
 import type { AgentOptions } from "@downcity/agent";
 import type { ModelClient } from "@downcity/type";
 import type { City } from "../../city/runtime/City.js";
@@ -79,8 +80,10 @@ export class ExtensionPlatform {
   }
 
   /** 扩展模型永不回退到 Downtown。句柄每次执行解析当前目录代次。 */
-  model(model_id: string): ModelClient | undefined {
-    return this.catalog.models.owns(model_id) ? this.catalog.models.handle(model_id) : undefined;
+  model(model: ModelReference): ModelClient | undefined {
+    if (!("client" in model) || !this.catalog.models.owns(model.client)) return undefined;
+    const client = this.catalog.models.handle(model.client);
+    return client.id === model.id ? client : undefined;
   }
 
   /** 创建新 Agent 前解析定义并只返回行为，不接管身份或存储。 */
@@ -101,7 +104,7 @@ export class ExtensionPlatform {
   agent_behavior(config: LocalAgentConfig, defaults: Partial<AgentOptions>): Partial<AgentOptions> {
     this.agent_defaults.set(config.agent_id, defaults);
     const behavior = this.behavior(config);
-    return { ...defaults, ...behavior, instruction: config.instruction || behavior.instruction || defaults.instruction, tools: { ...defaults.tools, ...behavior.tools }, model: typeof config.execution?.model_id === "string" ? this.model(config.execution.model_id) ?? defaults.model : behavior.model ?? defaults.model };
+    return { ...defaults, ...behavior, instruction: config.instruction || behavior.instruction || defaults.instruction, tools: { ...defaults.tools, ...behavior.tools }, model: is_model_reference(config.execution?.model) ? this.model(config.execution.model) ?? defaults.model : behavior.model ?? defaults.model };
   }
 
   /** 同步发布点更新行为；Session ID/存储不变，旧运行引用不得复用。 */

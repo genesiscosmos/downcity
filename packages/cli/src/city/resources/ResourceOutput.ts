@@ -1,4 +1,5 @@
 /** 新资源命令的单对象 JSON/退出码协议；不复用面向展示的 CliOutput envelope。 */
+import { resolve_platform_model_selection } from "../runtime/city-model/ExecutionModelBinding.js";
 import { inspect } from "node:util";
 import { randomUUID } from "node:crypto";
 import type { Command } from "commander";
@@ -47,6 +48,9 @@ export async function execute_resource_command(command: string, options: Record<
   try {
     if (normalized.timeout !== undefined && !(Number.isFinite(Number(normalized.timeout)) && Number(normalized.timeout) > 0)) throw new ResourceError("usage_error", "timeout must be a positive finite number", 2);
     const parameters = await prepare_resource_input({ ...normalized, ...input });
+    if (["agent.create", "agent.update"].includes(command) && typeof parameters.model === "string") {
+      parameters.model = await resolve_platform_model_selection(parameters.model, client.root_path);
+    }
     if (["agent.delete", "workspace.remove"].includes(command) && parameters.yes !== true) {
       if (json || !process.stdin.isTTY || !process.stdout.isTTY) throw new ResourceError("usage_error", "Non-interactive deletion/removal requires --yes", 2);
       const { default: prompts } = await import("../tui/Prompts.js");

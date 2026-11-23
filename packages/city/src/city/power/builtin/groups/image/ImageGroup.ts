@@ -6,7 +6,8 @@
  * - 图片 AI 通过 Town 统一模型 ID 路由；本地图片读取以当前 Workspace 为根。
  * - `result` 把远端图片落到动作组私有目录，只返回本地路径，不注入 Agent 消息。
  */
-
+import { downtown_model_schema } from "../../model-reference.js";
+import { same_model } from "@downcity/type";
 import { z } from "zod";
 import { setTimeout as wait_for_poll } from "node:timers/promises";
 import type { PowerJsonValue } from "@/power/index.js";
@@ -119,12 +120,12 @@ class ImageModelsAction extends CityAction {
     context: CityPowerContext,
   ): Promise<ReturnType<typeof normalize_image_models>> {
     const catalog = await require_image_models(context).list({ modality: "image", signal: context.abort_signal });
-    const models = catalog.items.map((entry) => ({ ...entry, id: entry.model_id })) as ImageModel[];
+    const models = catalog.items as ImageModel[];
     const normalized = normalize_image_models(models);
     return {
       items: normalized.items.map((item) => {
-        const entry = catalog.items.find((entry) => entry.model_id === item.id)!;
-        return { ...item, source_id: entry.source_id, source_name: entry.source_name, binding_id: entry.binding_id };
+        const entry = catalog.items.find((entry) => entry.id === item.id)!;
+        return { ...item, model: entry.model, source_id: entry.source_id, source_name: entry.source_name, binding_id: entry.binding_id };
       }),
       sources: catalog.sources,
     };
@@ -134,7 +135,7 @@ class ImageModelsAction extends CityAction {
 /** `image.create` 的输入。 */
 const image_create_input = z.strictObject({
   /** Image model id, as returned by the models action. */
-  model: z.string().trim().min(1).describe("Image model id, as returned by the models action."),
+  model: downtown_model_schema,
   /** Text-only generation prompt. */
   prompt: z.string().optional().describe("Text-only generation prompt."),
   /** Multimodal content for edits or reference images. */
@@ -173,14 +174,14 @@ class ImageCreateAction extends CityAction<z.infer<typeof image_create_input>> {
     const models = require_image_models(context);
     // 本地文件解析可能异步；先捕获用户选定模型的身份，发送时由 Town 再次核验。
     const binding_id = models.client(args.model).binding_id;
-    const payload = normalize_image_payload(args as PowerJsonValue);
+    const payload = normalize_image_payload({ ...args, model: args.model.id } as PowerJsonValue);
     const resolved = await normalize_image_create_input({
       workspace_path: context.workspace_path,
       payload: payload as ImageCreateInput,
     });
     const { model: _model, ...input } = resolved;
     const created = await models.image_create({
-      model_id: args.model, binding_id, input, signal: context.abort_signal,
+      model: args.model, binding_id, input, signal: context.abort_signal,
     }) as ImageJobCreateResult;
     validate_created_job(created);
     return created;

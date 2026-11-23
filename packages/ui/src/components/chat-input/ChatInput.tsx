@@ -316,11 +316,13 @@ const ChatInputEditor = memo(function ChatInputEditor(props: ChatInputProps) {
     set_submitting(true);
     submitting_ref.current = true;
     try {
+      // 发送前校验需要保留原输入；先保存尚未防抖落盘的内容。
+      if (submitted_props.clear_on_submit === "success") flush_pending_draft();
       discard_pending_draft();
       if (submitted_props.clear_on_submit === false) {
         // 草稿生成保留完整原文；交给所属场景呈现错误，不清空或依赖防抖回灌。
         await submitted_props.send_message(input, mode).catch(() => undefined);
-      } else if (submitted_props.task_inline) {
+      } else if (submitted_props.task_inline || submitted_props.clear_on_submit === "success") {
         // 成功后只清空本次提交的原文；等待期间继续编辑的内容必须保留。
         try {
           await submitted_props.send_message(input, mode);
@@ -328,7 +330,7 @@ const ChatInputEditor = memo(function ChatInputEditor(props: ChatInputProps) {
             clear_editor_after_submit(target.editor);
           }
         } catch {
-          // 任务面板负责显示业务错误，编辑器保留输入和光标。
+          // 宿主负责展示校验或业务错误，编辑器保留输入和光标。
         }
       } else {
         clear_editor_after_submit(target.editor);
@@ -359,7 +361,7 @@ const ChatInputEditor = memo(function ChatInputEditor(props: ChatInputProps) {
         set_submitting(false);
       }
     }
-  }, [capture_async_target, clear_editor_after_submit, discard_pending_draft, renew_async_target, target_is_current, update_queries]);
+  }, [capture_async_target, clear_editor_after_submit, discard_pending_draft, flush_pending_draft, renew_async_target, target_is_current, update_queries]);
 
   const editor = useEditor({
     immediatelyRender: false,

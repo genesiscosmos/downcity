@@ -4,7 +4,7 @@
  * 并通过 Session.set 保存执行模型。不会从裸模型 ID 捕获当前账号，也不读取凭据。
  */
 import type { City } from "@downcity/city";
-import type { ModelClient } from "@downcity/type";
+import { same_model, type ModelClient } from "@downcity/type";
 import type { TaskModelBinding, TaskModelHost, TaskModelTarget } from "../task/types/TaskModelBinding.js";
 import type { MemoryModelResolver } from "../memory/types/MemoryModelBinding.js";
 
@@ -25,17 +25,17 @@ export function create_background_model_host(get_city: () => City): BackgroundMo
   };
 
   /** 必须已有 binding；目录只核对持久性与可用性，不能为未知历史提供新身份。 */
-  const validate_model = async (model: Pick<ModelClient, "id" | "binding_id"> | undefined): Promise<TaskModelBinding> => {
-    if (!model?.id || !model.binding_id) throw new Error("background_model_configuration_required: saved model and authorization binding are required");
+  const validate_model = async (model: Pick<ModelClient, "id" | "model_reference" | "binding_id"> | undefined): Promise<TaskModelBinding> => {
+    if (!model?.model_reference || !model.binding_id) throw new Error("background_model_configuration_required: saved model and authorization binding are required");
     const city = get_city();
-    city.town.models.client(model.id, { binding_id: model.binding_id });
+    city.town.models.client(model.model_reference, { binding_id: model.binding_id });
     const catalog = await city.town.models.list({ modality: "text" });
-    const entry = catalog.items.find((item) => item.model_id === model.id && item.binding_id === model.binding_id);
+    const entry = catalog.items.find((item) => same_model(item.model, model.model_reference) && item.binding_id === model.binding_id);
     if (!entry?.durable) throw new Error("background_model_configuration_required: model requires an available durable Town source");
     // 目录读取期间账号可能变化；再次核对后才允许将该基线返回给调用方。
-    const client = city.town.models.client(model.id, { binding_id: model.binding_id });
+    const client = city.town.models.client(model.model_reference, { binding_id: model.binding_id });
     if (client.binding_id !== model.binding_id) throw new Error("background_model_binding_changed");
-    return { model_id: model.id, binding_id: model.binding_id };
+    return { model: model.model_reference, binding_id: model.binding_id };
   };
 
   const read_task_model = async (target: TaskModelTarget): Promise<TaskModelBinding> => {
@@ -55,18 +55,18 @@ export function create_background_model_host(get_city: () => City): BackgroundMo
         const agent = require_agent(target.agent_id);
         const session = await agent.sessions.get(session_id, "work");
         if (session.workspace_id !== target.workspace_id) throw new Error("Task execution Session is outside its Workspace");
-        await validate_model({ id: binding.model_id, binding_id: binding.binding_id });
+        await validate_model({ id: binding.model.id, model_reference: binding.model, binding_id: binding.binding_id });
         const current = await read_task_model(target);
-        if (current.model_id !== binding.model_id || current.binding_id !== binding.binding_id) throw new Error("task_model_binding_changed: explicit confirmation is required");
-        const model = get_city().town.models.client(binding.model_id, { binding_id: binding.binding_id });
+        if (!same_model(current.model, binding.model) || current.binding_id !== binding.binding_id) throw new Error("task_model_binding_changed: explicit confirmation is required");
+        const model = get_city().town.models.client(binding.model, { binding_id: binding.binding_id });
         await session.set({ model }, { persist_action: false, publish_mutation: false });
       },
     },
-    memory: async (access, model_id) => {
+    memory: async (access, reference) => {
       // 专用配置 pair 由 Coordinator 直接使用。只有 model_id 时，必须能证明它就是
       // Agent 已确认的默认模型；不能按配置裸 ID 去捕获此刻 Town 的计费账号。
       const model = require_agent(access.agent_id).model;
-      if (model_id !== undefined && model?.id !== model_id) throw new Error("memory_model_configuration_required: configured model needs an explicitly saved binding");
+      if (reference !== undefined && !same_model(model?.model_reference, reference)) throw new Error("memory_model_configuration_required: configured model needs an explicitly saved binding");
       return await validate_model(model);
     },
   };

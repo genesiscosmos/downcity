@@ -341,14 +341,14 @@ export async function updateTaskDefinition(params: {
       const target_changed = kind !== current.kind || agent_id !== current.agent_id || workspace_id !== current.workspace_id;
       const model_binding = kind === "agent" && (target_changed || req.confirm_model === true)
         ? await params.definitions.capture_model({ agent_id, workspace_id, delivery_session: current.delivery_session })
-        : kind === "agent" ? { model_id: current.model_id, binding_id: current.binding_id } : {};
+        : kind === "agent" ? { model: current.model, binding_id: current.binding_id } : {};
       const written = await writeTask({
         storage,
         taskId: task_id,
         overwrite: true,
         task: {
           ...current,
-          model_id: undefined, binding_id: undefined,
+          model: undefined, binding_id: undefined,
           ...model_binding,
           title: nextTitle,
           when: whenNormalized.value,

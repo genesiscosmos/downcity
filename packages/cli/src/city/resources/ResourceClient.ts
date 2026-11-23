@@ -2,6 +2,7 @@
  * CLI/TUI 共用资源客户端。先发现并握手当前 City，无宿主时只允许配置与纯历史浏览。
  * 不自动启动宿主、装配 Agent、使用默认端口或按 daemon 启动快照推断 loaded。
  */
+import { is_model_reference } from "@downcity/type";
 import { Town, read_city_host_state, type CityHostState } from "@downcity/city";
 import { validate_resource_input, ResourceService, ResourceStore, ResourceCoordinator, RootLease, resolve_resource_root, LocalHostClient, ResourceError, TownConnectionRepository } from "@downcity/city/local";
 import { read_power_agent_references } from "@downcity/powers";
@@ -76,7 +77,7 @@ export class ResourceClient {
       if (await read_city_host_state(this.root_path)) throw new ResourceError("host_unreachable", "City became active; retry against its management channel", 5, true);
       store = new ResourceStore(this.root_path, !readonly, readonly);
       const current_store = store;
-      if (typeof input.model === "string" && method.startsWith("agent.") && store.database) {
+      if (is_model_reference(input.model) && method.startsWith("agent.") && store.database) {
         const town_connections = new TownConnectionRepository(store.database);
         town_connections.migrate();
         town_host = new CliTownHost({ database: store.database, town_connections });

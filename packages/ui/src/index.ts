@@ -27,7 +27,7 @@ export { SubSessionList } from "./components/status-panel/SubSessionList";
 export { SubSessionStatusIcon } from "./components/status-panel/SubSessionStatusIcon";
 export { PillSwitcher } from "./components/pill-switcher";
 export type { ChatControlTranslate, ChatControlMessages } from "./types/chat-controls";
-export type { ModelSummary, ModelDetailsProps, ModelConfiguration, ModelPricingPoint, LLMModelIconProps, ModelSelectorProps, ChatModelSelectorProps, ModelOptionsProps, ReasoningOptionsProps, SelectorSubmenuProps, ChatApprovalModeSelectorProps, ModelPricingChartProps } from "./types/model-controls";
+export type { ModelSummary, ModelDisplayPreferences, ModelDetailsProps, ModelConfiguration, ModelPricingPoint, LLMModelIconProps, ModelSelectorProps, ChatModelSelectorProps, ModelOptionsProps, ReasoningOptionsProps, SelectorSubmenuProps, ChatApprovalModeSelectorProps, ModelPricingChartProps } from "./types/model-controls";
 export type { StatusPanelProps, QueuedMessageResourcesProps, StatusPanelHeaderProps, MessageQueueProps, QueuedChatMessage, PendingInteractionItem, PendingInteractionAreaProps, SubSessionItem, SubSessionListProps, SubSessionStatus, SubSessionStatusIconProps } from "./types/status-panel";
 export type { AgentInteractionProps, InteractionPresentation, QuestionFieldProps } from "./types/agent-interaction";
 export type { PillSwitcherOption, PillSwitcherProps } from "./types/pill-switcher";

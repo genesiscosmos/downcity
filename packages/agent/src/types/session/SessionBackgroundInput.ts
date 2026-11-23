@@ -9,6 +9,8 @@ export interface SessionBackgroundInput {
   execution_id?: string;
   /** 稳定业务输入标识；重复投递共用同一 canonical 消息。 */
   request_id: string;
+  /** 去重范围，默认绑定原 Turn；session 用于跨发起轮次共享的同一后台结果，标识须包含完整来源身份。 */
+  request_scope?: "turn" | "session";
   /** 后台事实和继续处理的说明；内容作为参考数据，不作为用户授权。 */
   query: AgentSessionPromptInput["query"];
   /** 原 Turn 正常完成后是否允许启动后续 Turn；Child 默认只返回所属执行。 */

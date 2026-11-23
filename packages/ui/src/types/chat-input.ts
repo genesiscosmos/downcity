@@ -140,8 +140,8 @@ export interface ChatInputProps {
   read_only?: boolean;
   /** 场景尚未满足提交条件；按钮与键盘提交共用此状态，不阻止继续编辑。 */
   submit_disabled?: boolean;
-  /** 提交时是否清空文档，默认清空；草稿生成等需要保留原文的场景设为 false。 */
-  clear_on_submit?: boolean;
+  /** 默认提交时清空；false 保留原文；success 等待提交成功后清空，失败保留原文与光标。 */
+  clear_on_submit?: boolean | "success";
   /** 是否提供聊天斜杠命令，默认开启；独立文本生成入口可关闭。 */
   slash_commands_enabled?: boolean;
   /** 轻量输入表面，隐藏聊天菜单与工具栏，保留共用 Tiptap 编辑能力。 */

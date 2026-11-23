@@ -1,4 +1,5 @@
 /** Session 管理用例；地址固定为 Agent/type/完整 ID，纯浏览不恢复 executor 或改目录。 */
+import { same_model } from "@downcity/type";
 import path from "node:path";
 import fs from "node:fs/promises";
 import { randomUUID } from "node:crypto";
@@ -92,7 +93,7 @@ export class SessionResources {
       await host.prepare_session?.(agent_id, session);
       const model_binding = await this.browser(agent_id).model_binding(session_id, type);
       const saved_model_id = !model_binding?.model ? read_saved_session_model(this.dependencies.root_path, agent_id, { ...view.metadata, id: view.session_id }, false) : undefined;
-      if (saved_model_id && session.get("model")?.id !== saved_model_id) {
+      if (saved_model_id && !same_model(session.get("model")?.model_reference, saved_model_id)) {
         const model = await host.resolve_model(saved_model_id);
         if (model) await session.set({ model }, { persist_action: false });
       }

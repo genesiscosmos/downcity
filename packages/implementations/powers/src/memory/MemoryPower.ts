@@ -11,7 +11,7 @@
  * - 不依赖 Workspace FileSystem；具体文件布局仍封装在 Provider/Adapter 内。
  * - Provider 生命周期跟随 City 持有的 MemoryPower 唯一实例。
  */
-
+import { is_model_reference } from "@downcity/type";
 import type { Command } from "commander";
 import path from "node:path";
 import { Power, create_action } from "@downcity/city/power";
@@ -201,9 +201,9 @@ export class MemoryPower extends Power {
     await this.provider.initialize();
     context.abort_signal.throwIfAborted();
     const config = context.config.get();
-    const model_id = this.options.model_id ?? (typeof config.model_id === "string" ? config.model_id : undefined);
+    const model = this.options.model ?? (is_model_reference(config.model) ? config.model : undefined);
     const binding_id = this.options.binding_id ?? (typeof config.binding_id === "string" ? config.binding_id : undefined);
-    register_memory_power_host_actions(context, this.provider, model_id);
+    register_memory_power_host_actions(context, this.provider, model);
     register_memory_user_knowledge_host_actions(context, this.provider);
     this.profile_runtime = new MemoryProfile(context, platform_root, this.options.on_changed);
     const jobs = new MemoryJobStore(path.join(context.storage.path, "processing"));
@@ -212,7 +212,7 @@ export class MemoryPower extends Power {
     this.coordinator = new MemoryCoordinator({ host: context, provider: this.provider,
       profile: this.profile_runtime, jobs,
       can_run_background: async (job) => await can_run_memory_background(signals, maintenance_owner_id, job),
-      model_id, binding_id,
+      model, binding_id,
       resolve_model_binding: this.options.resolve_model_binding,
     });
     this.delivery = new MemoryDelivery(jobs, new MemoryDeliveryStore(path.join(context.storage.path, "delivery")),

@@ -103,7 +103,7 @@ Agent 持有身份、默认模型、静态 instruction、自有工具与唯一 S
 | `prompt.abort_signal` | `AbortSignal?` | 无 | 宿主 | 本地公开 | 取消接收，不替代 stop；AgentSessionPrompt.ts:45 |
 | `prompt.powers` | `readonly PromptPower[]?` | 无 | 调用方 | 扩展端口 | 新 Turn 装配，追加输入不能替换；AgentSessionPrompt.ts:47 |
 | `session.start.workspace_id / query` | 各为非空 `string` | — | 调用方；宿主解析 | Power 公开 | 必须显式指定项目；[SessionDelegations.ts:63](../packages/agent/src/agent/SessionDelegations.ts#L63) |
-| `session.start.model_id / title` | `string? / string?` | 无显式选择 / 无 | 调用方；宿主解析模型 | Power 公开 | 显式 model_id 需 resolver；SessionDelegations.ts:72、:87 |
+| `session.start.title` | `string?` | 无 | 调用方 | Power 公开 | 工作短标题；模型继承发起会话，缺省使用 Agent 默认模型 |
 
 ### 3. 来源分区与身份规则权威表
 

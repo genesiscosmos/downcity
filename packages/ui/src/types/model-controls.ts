@@ -1,41 +1,50 @@
 /** 模型控件展示协议；价格、推理与能力字段复用共享 City 目录类型。 */
+import type { ModelReference } from "@downcity/type";
 import type { CityModelDescriptor, SessionApprovalMode } from "@downcity/type";
 import type { ReactNode } from "react";
 import type { ChatControlMessages } from "./chat-controls";
 
-/** 宿主模型目录的轻量投影；可从 CityModelDescriptor 的 id 映射 model_id。 */
+/** 宿主模型目录的轻量投影；保留目录中的结构化 model 与原始 id。 */
 export interface ModelSummary extends Pick<CityModelDescriptor, "name" | "description" | "modalities" | "context_window" | "tags" | "reasoning"> {
-  /** 宿主执行模型请求时使用的稳定 ID。 */ model_id: string;
+  /** 宿主执行模型请求时使用的结构化引用。 */ model: ModelReference;
   /** 一个或多个共享协议价格方案。 */ pricing?: CityModelDescriptor["pricing"];
+  /** 稳定来源 ID；同名不同来源永不合并。 */ source_id?: string;
+  /** 服务端原始模型 ID，仅用于搜索和展示，不用于提交选择。 */ id: string;
+  /** 来源展示名，不写入模型名称。 */ source_name?: string;
 }
 /** 模型与推理设置，只包含菜单真正需要的配置。 */
 export interface ModelConfiguration {
-  /** 当前模型 ID，空串表示尚未选择。 */ model_id: string;
+  /** 当前模型引用，缺省或 null 表示尚未选择。 */ model?: ModelReference | null;
   /** 当前显式推理档位；省略时由模型使用默认值。 */ reasoning_effort?: string;
 }
 /** 单个模型每百万 token 的美元单价。 */
 export interface ModelPricingPoint {
-  /** 稳定模型标识。 */ model_id: string;
+  /** 图表内部条目键。 */ model_id: string;
   /** 面向用户的模型名称。 */ model_name: string;
   /** 每百万输入 token 的美元价格。 */ input_usd_per_1m: number;
   /** 每百万输出 token 的美元价格。 */ output_usd_per_1m: number;
 }
 /** 品牌识别图标。 */
 export interface LLMModelIconProps {
-  /** 稳定模型标识，支持 provider/model 与 provider:model。 */ model_id: string;
+  /** 原始模型 ID，用于品牌识别。 */ model_id: string;
   /** 名称补充品牌识别。 */ model_name?: string;
   /** 标签补充品牌识别。 */ tags?: readonly string[];
   /** 图标尺寸类名。 */ size_class?: string;
 }
+/** 宿主提供的显示偏好，控件不访问持久仓储或改变执行绑定。 */
+export interface ModelDisplayPreferences {
+  /** 用户显式加入常用的模型引用。 */ favorite_models?: readonly ModelReference[];
+  /** 按最近成功执行时间排列的模型引用，控件最多展示五个。 */ recent_models?: readonly ModelReference[];
+}
 /** 表单模型选择器。 */
-export interface ModelSelectorProps extends ChatControlMessages {
-  /** 当前模型 ID。 */ current_model_id: string;
+export interface ModelSelectorProps extends ChatControlMessages, ModelDisplayPreferences {
+  /** 当前模型 ID。 */ selected_model?: ModelReference | null;
   /** 当前显式推理档位 ID；省略时使用模型默认值，仅展示当前模型声明支持的档位。 */ reasoning_effort?: string;
   /** 宿主提供的模型目录，表单不限制模型能力。 */ models: readonly ModelSummary[];
   /** 目录是否正在加载。 */ loading?: boolean;
   /** 空目录提示。 */ empty_text?: string;
   /** 尚未选择时的触发器文字。 */ trigger_label?: string;
-  /** 提交选择，由宿主保存并处理异常。 */ on_select_model(model_id: string): void | Promise<void>;
+  /** 提交选择，由宿主保存并处理异常。 */ on_select_model(model: ModelReference): void | Promise<void>;
   /** 可选推理保存回调，支持同步或异步；提供后仅在当前模型声明可用档位时显示强度子菜单。参数为档位 ID，undefined 表示使用模型默认值；宿主负责保存、异常处理及切换模型后的档位重置。 */ on_select_reasoning_effort?(reasoning_effort?: string): void | Promise<void>;
   /** 浮层对齐方向。 */ align?: "start" | "center" | "end";
   /** 浮层优先方向。 */ side?: "top" | "right" | "bottom" | "left";
@@ -43,19 +52,19 @@ export interface ModelSelectorProps extends ChatControlMessages {
   /** 单行高度分别为 24、32、40px。 */ control_size?: "compact" | "default" | "large";
 }
 /** 聊天模型与推理菜单。 */
-export interface ChatModelSelectorProps extends ChatControlMessages {
+export interface ChatModelSelectorProps extends ChatControlMessages, ModelDisplayPreferences {
   /** 当前实际模型与推理配置。 */ configuration: ModelConfiguration;
   /** 模型目录，聊天自动筛选文字模型。 */ models: readonly ModelSummary[];
   /** 目录加载状态。 */ models_loading: boolean;
-  /** 保存模型选择，由宿主处理异常。 */ set_model(model_id: string): Promise<void>;
+  /** 保存模型选择，由宿主处理异常。 */ set_model(model: ModelReference): Promise<void>;
   /** 可选推理保存能力；没有提供时不显示推理菜单。 */ set_reasoning_effort?(reasoning_effort?: string): Promise<void>;
 }
 /** 可独用的目录搜索与选择列表。 */
-export interface ModelOptionsProps extends ChatControlMessages {
+export interface ModelOptionsProps extends ChatControlMessages, ModelDisplayPreferences {
   /** 展示候选，不改变宿主数组。 */ models: readonly ModelSummary[];
-  /** 当前选中 ID。 */ current_model_id: string;
+  /** 当前选中 ID。 */ selected_model?: ModelReference | null;
   /** 目录是否加载中。 */ loading: boolean;
-  /** 选择候选。 */ on_select(model_id: string): void | Promise<void>;
+  /** 选择候选。 */ on_select(model: ModelReference): void | Promise<void>;
   /** 自定义空结果文案。 */ empty_text?: string;
   /** menu 使用聊天目录行；field 使用表单紧凑行，搜索与详情能力保持一致。 */ variant?: "menu" | "field";
 }

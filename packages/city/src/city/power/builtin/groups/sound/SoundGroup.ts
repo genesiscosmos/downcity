@@ -8,7 +8,8 @@
  * - `asr` 同时服务模型调用与其它 power 的程序化调用（例如 chat 入站音频自动转写），
  *   因此不再需要单独的非模型侧动作或 `invoke` 入口。
  */
-
+import { downtown_model_schema } from "../../model-reference.js";
+import { is_model_reference, same_model } from "@downcity/type";
 import { z } from "zod";
 import type { PowerJsonValue } from "@/power/index.js";
 import type { PowerTown } from "@/power/types/PowerTown.js";
@@ -58,10 +59,10 @@ function resolve_model(
   input_model: unknown,
   catalog: TownModelList,
 ): TownModelEntry {
-  const explicit = typeof input_model === "string" ? input_model.trim() : "";
+  const explicit = is_model_reference(input_model) ? input_model : undefined;
   const candidates = catalog.items.filter((entry) => entry.modalities.includes(capability));
   if (explicit) {
-    const selected = candidates.find((entry) => entry.model_id === explicit);
+    const selected = candidates.find((entry) => same_model(entry.model, explicit));
     if (selected) return selected;
     throw new CityActionError({ code: "unsupported_action", message: `the selected ${capability} model is unavailable; select a model from sound.models.` });
   }
@@ -83,16 +84,17 @@ async function transcribe_audio(
   context: CityPowerContext,
   payload: PowerJsonValue | undefined,
 ): Promise<SoundAsrResult> {
-  const input = normalize_asr_input(payload);
-  const selected = resolve_model("asr", input.model, await list_models(context));
+  const reference = payload && typeof payload === "object" && !Array.isArray(payload) ? payload.model : undefined;
+  const selected = resolve_model("asr", reference, await list_models(context));
+  const input = normalize_asr_input({ ...(payload as object), model: selected.id });
   const resolved = await resolve_asr_input({
     workspace_path: context.workspace_path,
-    payload: { ...input, model: selected.model_id },
+    payload: { ...input, model: selected.id },
   });
   const { model: _model, ...business_input } = resolved;
   return normalize_asr_result(
     await require_sound_models(context).asr({
-      model_id: selected.model_id, binding_id: selected.binding_id,
+      model: selected.model, binding_id: selected.binding_id,
       input: business_input, signal: context.abort_signal,
     }),
   );
@@ -103,11 +105,12 @@ async function synthesize_speech(
   context: CityPowerContext,
   payload: PowerJsonValue | undefined,
 ): Promise<SoundTtsOutput> {
-  const input = normalize_tts_input(payload);
-  const selected = resolve_model("tts", input.model, await list_models(context));
+  const reference = payload && typeof payload === "object" && !Array.isArray(payload) ? payload.model : undefined;
+  const selected = resolve_model("tts", reference, await list_models(context));
+  const input = normalize_tts_input({ ...(payload as object), model: selected.id });
   const { model: _model, ...business_input } = input;
   const result = await require_sound_models(context).tts({
-    model_id: selected.model_id, binding_id: selected.binding_id,
+    model: selected.model, binding_id: selected.binding_id,
     input: business_input, signal: context.abort_signal,
   });
   return localize_sound_result(context, normalize_tts_result(result));
@@ -135,11 +138,11 @@ class SoundModelsAction extends CityAction<z.infer<typeof sound_models_input>> {
   ): Promise<ReturnType<typeof normalize_sound_models>> {
     const capability = normalize_models_input(args as PowerJsonValue);
     const catalog = await list_models(context);
-    const normalized = normalize_sound_models(catalog.items.map((entry) => ({ ...entry, id: entry.model_id })) as SoundModel[], capability);
+    const normalized = normalize_sound_models(catalog.items as SoundModel[], capability);
     return {
       items: normalized.items.map((item) => {
-        const entry = catalog.items.find((entry) => entry.model_id === item.id)!;
-        return { ...item, source_id: entry.source_id, source_name: entry.source_name, binding_id: entry.binding_id };
+        const entry = catalog.items.find((entry) => entry.id === item.id)!;
+        return { ...item, model: entry.model, source_id: entry.source_id, source_name: entry.source_name, binding_id: entry.binding_id };
       }),
       sources: catalog.sources,
     };
@@ -149,7 +152,7 @@ class SoundModelsAction extends CityAction<z.infer<typeof sound_models_input>> {
 /** `sound.asr` 的输入。 */
 const sound_asr_input = z.strictObject({
   /** Model id supporting asr. */
-  model: z.string().optional().describe("Model id supporting asr."),
+  model: downtown_model_schema.optional(),
   /** Absolute or Workspace-relative local audio path. */
   audio_path: z
     .string()
@@ -190,7 +193,7 @@ const sound_tts_input = z.strictObject({
   /** Text to synthesize. */
   text: z.string().trim().min(1).describe("Text to synthesize."),
   /** Model id supporting tts. */
-  model: z.string().optional().describe("Model id supporting tts."),
+  model: downtown_model_schema.optional(),
   /** Optional language hint. */
   language: z.string().optional().describe("Optional language hint."),
   /** Optional voice id. */

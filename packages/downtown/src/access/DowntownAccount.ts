@@ -2,7 +2,7 @@
  * Downtown 用户账户访问器。
  *
  * 该模块封装现有 Accounts Service 登录原语，并把成功返回的 User Token
- * 写回当前 Downtown 实例。宿主仍负责交互和持久化。
+ * 写回当前 Downtown 实例。公开登录不依赖旧会话；宿主仍负责交互和持久化。
  */
 
 import type {
@@ -32,7 +32,7 @@ export class DowntownAccount {
 
   /** 读取 Downtown 动态发布的登录 Provider。 */
   async providers(): Promise<DowntownAccountProvider[]> {
-    const result = await this.options.accounts()
+    const result = await this.options.public_accounts()
       .get<{ items?: DowntownAccountProvider[] }>("providers");
     return result.items ?? [];
   }
@@ -41,7 +41,7 @@ export class DowntownAccount {
   async login_start(
     input: DowntownAccountLoginStartInput,
   ): Promise<DowntownAccountLoginResult> {
-    const result = await this.options.accounts()
+    const result = await this.options.public_accounts()
       .action("login/start")
       .invoke<DowntownAccountLoginResult>(input);
     this.login_id = read_login_id(result);
@@ -61,7 +61,7 @@ export class DowntownAccount {
       this.login_secret = input.login_secret;
     }
     if (login_id !== this.login_id) throw new Error("login proof for this flow is required");
-    const result = await this.options.accounts()
+    const result = await this.options.public_accounts()
       .action("login/continue")
       .invoke<DowntownAccountLoginResult>({
         ...input,
@@ -81,7 +81,7 @@ export class DowntownAccount {
       this.login_secret = login_secret;
     }
     if (current_login_id !== this.login_id) throw new Error("login proof for this flow is required");
-    return await this.options.accounts().action("login/result").invoke<DowntownAccountLoginResult>({
+    return await this.options.public_accounts().action("login/result").invoke<DowntownAccountLoginResult>({
       login_id: current_login_id,
       login_secret: read_required_login_id(this.login_secret),
     });
@@ -96,7 +96,7 @@ export class DowntownAccount {
       throw new Error("reuse the original exchange_id for login retries");
     }
     this.exchange_id ??= exchange_id ?? crypto.randomUUID();
-    const result = await this.options.accounts().action("login/exchange").invoke<DowntownAccountDoneResult>({
+    const result = await this.options.public_accounts().action("login/exchange").invoke<DowntownAccountDoneResult>({
       ...input, login_id, login_secret, exchange_id: this.exchange_id,
     });
     if (!result.user_token) throw new Error("login exchange returned no token");
