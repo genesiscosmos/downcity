@@ -25,7 +25,7 @@ export const usage_documentation: Record<string, ApiDocumentation> = {
   "/me/recent": {
     description: "Read own recent individual AI usage by completed_at and usage_id descending. Reuse the returned opaque next_cursor; null means no more records. Token values are null when metering is unavailable.",
     request_schema: obj({ limit: { type: "integer", minimum: 1, maximum: 50, default: 20 }, cursor: { type: "string", maxLength: 2048, description: "Opaque server-issued pagination cursor" } }, []),
-    response_schema: obj({ items: arr(obj({ usage_id: text("Usage ID"), completed_at: time_schema, model_id: text("Federation model ID"), action_id: text("AI action ID"), outcome: enum_schema("succeeded", "failed", "cancelled"), metering_status: enum_schema("settled", "unavailable"), ...Object.fromEntries(Object.keys(tokens).map(key => [key, nullable(num)])) })), next_cursor: nullable(text("Next-page cursor")) }),
+    response_schema: obj({ items: arr(obj({ usage_id: text("Usage ID"), completed_at: time_schema, model_id: text("Downtown model ID"), action_id: text("AI action ID"), outcome: enum_schema("succeeded", "failed", "cancelled"), metering_status: enum_schema("settled", "unavailable"), ...Object.fromEntries(Object.keys(tokens).map(key => [key, nullable(num)])) })), next_cursor: nullable(text("Next-page cursor")) }),
     errors: [{ status: 400, description: "Invalid limit or cursor" }, ...errors.filter(error => error.status !== 400)], examples: [{ name: "First page", request: { limit: 20 }, response: { items: [], next_cursor: null } }],
   },
   "/admin/overview": {

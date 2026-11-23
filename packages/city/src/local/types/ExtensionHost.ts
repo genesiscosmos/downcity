@@ -1,6 +1,6 @@
 /** 扩展执行宿主的显式依赖及运行目录类型；持久仓储不接触真实能力实例。 */
 import type { City } from "../../city/runtime/City.js";
-import type { ExtensionAgentDefinition, ExtensionFederation } from "./ExtensionProject.js";
+import type { ExtensionAgentDefinition, ExtensionDowntown } from "./ExtensionProject.js";
 import type { ExtensionModelRegistry } from "../extensions/ExtensionModelRegistry.js";
 
 /** 全部能力发布前经过相同目录；仅宿主装配可写。 */
@@ -8,7 +8,7 @@ export interface ExtensionCatalog {
   /** 可创建的行为定义，以宿主稳定 ID 查询。 */
   agents: Map<string, ExtensionAgentDefinition>;
   /** 连接目录，当前绑定由宿主原有账户流程管理。 */
-  federations: Map<string, ExtensionFederation>;
+  downtowns: Map<string, ExtensionDowntown>;
   /** 与所有执行入口共享的模型目录。 */
   models: ExtensionModelRegistry;
 }

@@ -17,16 +17,16 @@ test("CreditsService manages primary and ephemeral cards atomically", async () =
   try {
     process.chdir(temp_dir)
     const db = createSqliteDb(path.join(temp_dir, "test.sqlite"))
-    const federation = new Downtown({ database: db })
+    const downtown = new Downtown({ database: db })
     const credits = new CreditsService()
-    federation.use(credits)
-    await federation.health()
+    downtown.use(credits)
+    await downtown.health()
 
     for (const route_path of [
       "/v1/credits/me",
       "/v1/credits/transactions/me",
     ]) {
-      const response = await federation.fetch(new Request(`http://localhost${route_path}`, {
+      const response = await downtown.fetch(new Request(`http://localhost${route_path}`, {
         headers: {
           authorization: "Bearer invalid-token",
         },
@@ -171,10 +171,10 @@ test("CreditsService enforces expiration, active card, safe total, and full idem
   try {
     process.chdir(temp_dir)
     const db = createSqliteDb(path.join(temp_dir, "test.sqlite"))
-    const federation = new Downtown({ database: db })
+    const downtown = new Downtown({ database: db })
     const credits = new CreditsService()
-    federation.use(credits)
-    await federation.health()
+    downtown.use(credits)
+    await downtown.health()
 
     await assert.rejects(
       credits.cards.create_ephemeral({

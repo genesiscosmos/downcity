@@ -10,7 +10,7 @@
 import {
   InstallableService,
   httpError,
-  type FederationTableApi,
+  type DowntownTableApi,
   type ServiceInstallContext,
 } from "@downcity/downtown";
 import { register_feedback_routes } from "./routes.js";
@@ -48,12 +48,12 @@ export class FeedbackService extends InstallableService {
   readonly version = "0.1.0";
   readonly database_schemas = feedback_database_schemas;
 
-  private messages_table?: FederationTableApi<FeedbackMessage>;
+  private messages_table?: DowntownTableApi<FeedbackMessage>;
 
   constructor() {
     super(undefined, {
       description: "Persist user feedback and official replies with user isolation and admin processing.",
-      requirements: ["Prepared Federation database with feedback schema", "User authentication for submission/history; admin session for processing"],
+      requirements: ["Prepared Downtown database with feedback schema", "User authentication for submission/history; admin session for processing"],
       availability: () => this.messages_table && this._authenticator
         ? { status: "ready", reason: "Local feedback table and authentication dependencies are installed; database connectivity is not probed." }
         : { status: "unavailable", reason: "Feedback table or authentication runtime is not installed." },
@@ -210,7 +210,7 @@ export class FeedbackService extends InstallableService {
   /**
    * 读取反馈消息表。
    */
-  private messages(): FederationTableApi<FeedbackMessage> {
+  private messages(): DowntownTableApi<FeedbackMessage> {
     if (!this.messages_table) throw new Error("FeedbackService messages table is not ready");
     return this.messages_table;
   }

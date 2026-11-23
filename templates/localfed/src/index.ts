@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 /**
- * 完整但克制的本地 Federation 模板。
+ * 完整但克制的本地 Downtown 模板。
  *
  * 只装配一条可直接体验的主链路：SQLite 持久化、Local Account 登录、
  * AIService 文本模型与本机 HTTP 服务。
@@ -25,12 +25,12 @@ if (!Number.isInteger(port) || port < 1 || port > 65_535) {
   throw new Error("PORT 必须是有效端口");
 }
 
-const federation = new Downtown({
+const downtown = new Downtown({
   database: new Database({ filename: database_path }),
 });
 
-federation.use(new EnvService());
-federation.use(new AccountsService({ local_login }));
+downtown.use(new EnvService());
+downtown.use(new AccountsService({ local_login }));
 
 const deepseek = new DeepSeekChannel();
 const ai = new AIService();
@@ -39,14 +39,14 @@ ai.use(deepseek.model({
   upstream_model: "deepseek-chat",
   name: "DeepSeek Chat",
 }));
-federation.use(ai);
+downtown.use(ai);
 
-await federation.health();
+await downtown.health();
 serve({
-  fetch: (request) => federation.fetch(request),
+  fetch: (request) => downtown.fetch(request),
   hostname: host,
   port,
 });
 
-console.log(`Local Federation: http://${host}:${port}`);
+console.log(`Local Downtown: http://${host}:${port}`);
 console.log(`SQLite: ${database_path}`);

@@ -151,13 +151,13 @@ routes/resources.use-cases.tsx              useTranslation() 的 t
 `/product/index.tsx` 用 `` to={`${base_path}/${card.id}`} `` 拼卡片链接，卡片 id 为 `cli / sdk / agent-sdk / ui-sdk`。其中：
 
 - `/product/cli` 与 `/zh/product/cli` 线上 **404**（仓库里根本没有这个路由文件）
-- `/product/sdk` 指向的是 Federation 页面（见 P0-3）
+- `/product/sdk` 指向的是 Downtown 页面（见 P0-3）
 
 **已修**：卡片改为显式 `href`，CLI 卡片指向真实存在的 `/en/docs/cli/overview/`、`/zh/docs/cli/overview/`。
 
 ### P0-3：文档中心页 6 条死链（已修）
 
-`content/docs/{en,zh}/index.mdx` 的「Start Here / 从这里开始」手写了 `/en/docs/agent`、`/plugin`、`/city`、`/federation`、`/security`、`/cli`，但 `content/docs/{en,zh}/<section>/` 下**没有 `index.mdx`**（只有 `overview.mdx` 等），这些目录 URL 全部 404。
+`content/docs/{en,zh}/index.mdx` 的「Start Here / 从这里开始」手写了 `/en/docs/agent`、`/plugin`、`/city`、`/downtown`、`/security`、`/cli`，但 `content/docs/{en,zh}/<section>/` 下**没有 `index.mdx`**（只有 `overview.mdx` 等），这些目录 URL 全部 404。
 
 注意：文档页内部侧边栏把 section 渲染成折叠组（不含 `<a href>`），所以死链只出现在文档中心页——恰是文档层级里最重要的一页。
 
@@ -193,29 +193,29 @@ routes/resources.use-cases.tsx              useTranslation() 的 t
 ```
 /product/                Agent Infrastructure Product Matrix — Downcity
 /product/city-sdk/       City SDK: Local Agent Host and Service Boundary — Downcity
-/product/federation-sdk/ Federation SDK: Reusable Agent Product Backend — Downcity
+/product/downtown-sdk/ Downtown SDK: Reusable Agent Product Backend — Downcity
 /product/agent-sdk/      Agent SDK: Embed Local and Remote Agents — Downcity
 /product/ui-sdk/         UI SDK: Reusable Components for Agent Workspaces — Downcity
 ```
 
-### P1-4：`/product/sdk/` 内容叫 Federation SDK、导航叫 City SDK（已按「两个都要」拆分）
+### P1-4：`/product/sdk/` 内容叫 Downtown SDK、导航叫 City SDK（已按「两个都要」拆分）
 
-页面自身写的是 `Product · Federation SDK`（事实区：`@downcity/federation`、`packages/federation/`、`fed / downfed`），但 navbar 与页脚都把它标成「City SDK」，而 City SDK 的文档在 `/en/city-sdk-docs/`。仓库里 `packages/city` 与 `packages/federation` 也确实是两个包。
+页面自身写的是 `Product · Downtown SDK`（事实区：`@downcity/downtown`、`packages/downtown/`、`fed / downfed`），但 navbar 与页脚都把它标成「City SDK」，而 City SDK 的文档在 `/en/city-sdk-docs/`。仓库里 `packages/city` 与 `packages/downtown` 也确实是两个包。
 
 **已修**（按你的选择）：
 
 | 页面 | 包名 | 文档入口 |
 |---|---|---|
 | `/product/city-sdk/`（新增） | `@downcity/city` | `/en/city-sdk-docs/` |
-| `/product/federation-sdk/`（新增） | `@downcity/federation` | `/en/docs/federation/overview/` |
+| `/product/downtown-sdk/`（新增） | `@downcity/downtown` | `/en/docs/downtown/overview/` |
 
 - 两个页面各自独立 H1、title、description、canonical、hreflang，且正文语言已修复。
-- City SDK 文案严格依据 `content/docs/en/city/overview.mdx`（City owns Agent collection / HTTP+RPC forwarding / host lifecycle；模型目录、身份、用量、计费属于 Federation 与 Embassy），未杜撰事实。
-- navbar 与页脚的「City SDK」改指向 `/product/city-sdk/`，并新增「Federation SDK」入口。
-- 旧 URL 由 `public/_redirects` 301 到 `/product/federation-sdk/`。
+- City SDK 文案严格依据 `content/docs/en/city/overview.mdx`（City owns Agent collection / HTTP+RPC forwarding / host lifecycle；模型目录、身份、用量、计费属于 Downtown 与 Embassy），未杜撰事实。
+- navbar 与页脚的「City SDK」改指向 `/product/city-sdk/`，并新增「Downtown SDK」入口。
+- 旧 URL 由 `public/_redirects` 301 到 `/product/downtown-sdk/`。
 - `app/routes/product/sdk.tsx` 已改为带 `@deprecated` 说明的转发 shim（未注册、不参与构建），确认无引用后可直接删除。
 
-**遗留一个需要你定的设计项**：产品总览页的卡片是 2×2 网格（`sm:grid-cols-2`）。加第 5 张卡片会留出空洞，所以我保留了 4 张卡片（CLI / City SDK / Agent SDK / UI SDK），Federation SDK 通过 navbar、页脚、以及总览页事实区（已加入 `Federation SDK … packages/federation/` 一条）暴露。若要在总览页也给它一张卡片，需要先把网格改成 6 宫格并补第 6 个条目。
+**遗留一个需要你定的设计项**：产品总览页的卡片是 2×2 网格（`sm:grid-cols-2`）。加第 5 张卡片会留出空洞，所以我保留了 4 张卡片（CLI / City SDK / Agent SDK / UI SDK），Downtown SDK 通过 navbar、页脚、以及总览页事实区（已加入 `Downtown SDK … packages/downtown/` 一条）暴露。若要在总览页也给它一张卡片，需要先把网格改成 6 宫格并补第 6 个条目。
 
 ### P1-5：`/resources/` 是客户端空跳页面却进了 sitemap（已修）
 
@@ -295,7 +295,7 @@ https://downcity.ai/docs/             → 200，但内容是
 | agent harness | 信息型（了解品类） | `/`、`/zh/` | ✅ H1 已命中 | 保持 |
 | agent productization | 信息型 | `/`、`/zh/` | ✅ H1 已命中 | 保持 |
 | city sdk | 选型 | `/product/city-sdk/` | ✅ 新建且正文/文档口径一致 | 高 |
-| federation sdk | 选型 | `/product/federation-sdk/` | ✅ 新建 | 高 |
+| downtown sdk | 选型 | `/product/downtown-sdk/` | ✅ 新建 | 高 |
 | agent sdk | 选型 + 采购 | `/product/agent-sdk/` | ✅ meta 已差异化 | 高 |
 | agent workspace ui / agent ui kit | 选型 | `/product/ui-sdk/` | ✅ meta 已差异化 | 中 |
 | open source agent runtime | 信息型 + 选型 | `/`、`/features/` | 文案有，语义标签可再强化 | 中 |
@@ -323,7 +323,7 @@ https://downcity.ai/docs/             → 200，但内容是
 
 **第 2 周**：P2-3 接入 GSC / Bing / 百度站长并提交 sitemap；P2-1 www 301；给 `seo-ready.test.mjs` 补「中文页不得预渲染成英文」断言。
 
-**第 3–4 周**：P2-2 `lastmod`；文档 title 模板优化（`{主题} · {栏目} — Downcity Docs`）；P2-5 薄内容页补写；产品总览页 6 宫格改版（含 Federation SDK 卡片）。
+**第 3–4 周**：P2-2 `lastmod`；文档 title 模板优化（`{主题} · {栏目} — Downcity Docs`）；P2-5 薄内容页补写；产品总览页 6 宫格改版（含 Downtown SDK 卡片）。
 
 **第 2 个月起**：按第 6.2 节产出信息型内容 + 外链分发，用 GSC 数据滚动修正。
 
@@ -348,7 +348,7 @@ https://downcity.ai/docs/             → 200，但内容是
 
 改为 URL 派生语言：翻译型组件用 `i18n.getFixedT(use_interface_locale())`；本地 COPY 型组件直接用 `use_interface_locale()`。
 
-`CTASection` `CodePreviewSection` `WhitepaperSection` `StartGuideSection` `CommunitySection` `FeaturesSection` `product/index` `product/city-sdk`(新) `product/federation-sdk`(新) `product/agent-sdk` `product/ui-sdk` `community.roadmap` `community.showcase` `resources.skills` `resources.hosting` `resources.examples`
+`CTASection` `CodePreviewSection` `WhitepaperSection` `StartGuideSection` `CommunitySection` `FeaturesSection` `product/index` `product/city-sdk`(新) `product/downtown-sdk`(新) `product/agent-sdk` `product/ui-sdk` `community.roadmap` `community.showcase` `resources.skills` `resources.hosting` `resources.examples`
 
 产物复验：`/zh/whitepaper/` 中文占比 0.02 → **0.85**；`/zh/features/` 0.03 → 0.51；`/zh/start/` 0.06 → 0.42（完整对照见第二节）。
 
@@ -366,7 +366,7 @@ https://downcity.ai/docs/             → 200，但内容是
 |---|---|---|---|
 | 首页 H1 无品类词 | `locales/{en,zh}/home.json` | H1 改为方案 A | `/` H1=`Agent Harness + Agent Productization Kits`；`/zh/` H1=`Agent Harness 与 Agent 产品化 Kit` |
 | `/features/` 无 H1 | `FeaturesSection.tsx` | 页面标题 `<h2>` → `<h1>` | `features/index.html`、`zh/features/index.html` h1=1 |
-| 4 个产品页重复 meta | `product/{index,city-sdk,federation-sdk,agent-sdk,ui-sdk}.tsx` | 各写独立 `meta()`，关键词先行 | 五页 title 互不相同，h1=1、hreflang=3、canonical=self |
+| 4 个产品页重复 meta | `product/{index,city-sdk,downtown-sdk,agent-sdk,ui-sdk}.tsx` | 各写独立 `meta()`，关键词先行 | 五页 title 互不相同，h1=1、hreflang=3、canonical=self |
 | `/resources/` 空壳页入 sitemap | `sitemap.xml.ts` | 从 sitemap 移除（附注释） | sitemap 无 `https://downcity.ai/resources/` |
 
 ### 9.4 SDK 命名拆分（P1-4）
@@ -374,18 +374,18 @@ https://downcity.ai/docs/             → 200，但内容是
 | 动作 | 文件 |
 |---|---|
 | 新增 City SDK 页 | `app/routes/product/city-sdk.tsx` |
-| 新增 Federation SDK 页 | `app/routes/product/federation-sdk.tsx` |
+| 新增 Downtown SDK 页 | `app/routes/product/downtown-sdk.tsx` |
 | 旧页转 shim（未注册） | `app/routes/product/sdk.tsx` → `@deprecated` 转发说明 |
 | 注册中英路由 | `app/routes.ts` |
 | 预渲染 + sitemap | `react-router.config.ts`、`sitemap.xml.ts`（新增 2 个 URL、移除 1 个） |
-| 导航与页脚 | `navbar.tsx`、`Footer.tsx`（City SDK 改指向新页 + 新增 Federation SDK 入口） |
+| 导航与页脚 | `navbar.tsx`、`Footer.tsx`（City SDK 改指向新页 + 新增 Downtown SDK 入口） |
 | 旧 URL 301 | `public/_redirects`（新建） |
 
-产物验证：四个新页面（中英）h1=1、hreflang=3、canonical=self；sitemap 含 `city-sdk` / `federation-sdk`、不含 `/product/sdk/`；`build/client/_redirects` 已生成。
+产物验证：四个新页面（中英）h1=1、hreflang=3、canonical=self；sitemap 含 `city-sdk` / `downtown-sdk`、不含 `/product/sdk/`；`build/client/_redirects` 已生成。
 
 ### 9.5 量化变化
 
-- sitemap URL 数：543（第一轮后）→ **545**（移除 `/resources/` 与 `/product/sdk/` 三条空壳/旧路径，新增 `/resources/examples/`、`/product/city-sdk/`、`/product/federation-sdk/`）
+- sitemap URL 数：543（第一轮后）→ **545**（移除 `/resources/` 与 `/product/sdk/` 三条空壳/旧路径，新增 `/resources/examples/`、`/product/city-sdk/`、`/product/downtown-sdk/`）
 - 预渲染 HTML：551 → **553**
 - 全站 `hrefLang` 驼峰残留：**0 条**
 
@@ -397,7 +397,7 @@ https://downcity.ai/docs/             → 200，但内容是
 | # | 事项 | 修改 | 产物验证 |
 |---|---|---|---|
 | 1 | 旧文档路径 301（原 P1-8） | `public/_redirects` 补齐 6 个文档空间的裸路径与通配规则（共 12 条） | 产物 `_redirects` 含 16 条规则；`/docs/*` 类路径不再落到 404 或 `.data` 兜底页 |
-| 2 | 产品总览页 6 宫格（原待定设计项） | `product/index.tsx` 网格改 `lg:grid-cols-3`；新增 Federation SDK 卡片与第 6 张 Services & Payment 卡片（`packages/implementations/services/`，包名 `@downcity/services` 已核对）；中英副标题同步 | 两页各渲染 **6 张卡片**，链接分别为 CLI 文档 / city-sdk / federation-sdk / agent-sdk / ui-sdk / payments |
+| 2 | 产品总览页 6 宫格（原待定设计项） | `product/index.tsx` 网格改 `lg:grid-cols-3`；新增 Downtown SDK 卡片与第 6 张 Services & Payment 卡片（`packages/implementations/services/`，包名 `@downcity/services` 已核对）；中英副标题同步 | 两页各渲染 **6 张卡片**，链接分别为 CLI 文档 / city-sdk / downtown-sdk / agent-sdk / ui-sdk / payments |
 | 3 | 删除 `product/sdk.tsx` shim | 已确认无任何代码引用后删除 | `ls` 确认不存在，`tsc` 通过 |
 | 4 | 关键词优化：7 个薄 title 页 × 中英 | `features` `start` `whitepaper` `community.faq` `resources.skills` `resources.hosting` `community.roadmap` 改为关键词先行、品牌收尾；顺带清理 6 个文件的未使用 `product` 导入 | 14 个页面 title 长度 35–57 字符、互不重复，均 `h1=1`、`hreflang=3` |
 

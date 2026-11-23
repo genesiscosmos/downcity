@@ -1,22 +1,22 @@
-/** Cloudflare D1 Federation Database Adapter。 */
+/** Cloudflare D1 Downtown Database Adapter。 */
 
 import { drizzle } from "drizzle-orm/d1";
 import { getTableColumns, getTableName } from "drizzle-orm";
 import {
   Database as CityDatabase,
   TableApi,
-  type FederationTableApi,
+  type DowntownTableApi,
   type DatabaseMutationResult,
   type DatabaseQueryResult,
   type DatabaseStatement,
   type DatabaseTransaction,
   type DrizzleDatabase,
-  type FederationTableSchema,
+  type DowntownTableSchema,
 } from "@downcity/downtown";
 import { run_transaction } from "./D1Transaction.js";
 import type { DatabaseOptions } from "./types/DatabaseOptions.js";
 
-/** 使用 Cloudflare D1 binding 的 Federation Database。 */
+/** 使用 Cloudflare D1 binding 的 Downtown Database。 */
 export class Database extends CityDatabase {
   private readonly binding: D1Database;
   private readonly max_transaction_attempts: number;
@@ -34,12 +34,12 @@ export class Database extends CityDatabase {
   }
 
   protected on_table<TRow extends Record<string, unknown>>(
-    schema: FederationTableSchema,
-  ): FederationTableApi<TRow> {
-    return new TableApi(this.drizzle, schema) as unknown as FederationTableApi<TRow>;
+    schema: DowntownTableSchema,
+  ): DowntownTableApi<TRow> {
+    return new TableApi(this.drizzle, schema) as unknown as DowntownTableApi<TRow>;
   }
 
-  protected async on_ensure_table(schema: FederationTableSchema): Promise<void> {
+  protected async on_ensure_table(schema: DowntownTableSchema): Promise<void> {
     const ddl = build_create_table_sql(schema);
     if (ddl) await this.binding.prepare(ddl).run();
   }
@@ -86,7 +86,7 @@ export class Database extends CityDatabase {
 }
 
 /** 根据 SQLite Drizzle Schema 生成 D1 建表语句。 */
-function build_create_table_sql(schema: FederationTableSchema): string {
+function build_create_table_sql(schema: DowntownTableSchema): string {
   const columns = Object.values(getTableColumns(schema));
   if (columns.length === 0) return "";
   const definitions = columns.map((column) => {

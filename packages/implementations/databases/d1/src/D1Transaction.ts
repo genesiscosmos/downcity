@@ -3,10 +3,10 @@
 import { and, eq, getTableColumns, getTableName, type SQL } from "drizzle-orm";
 import {
   DatabaseTransactionConflictError,
-  type FederationTableApi,
+  type DowntownTableApi,
   type DatabaseTransaction,
   type DrizzleDatabase,
-  type FederationTableSchema,
+  type DowntownTableSchema,
 } from "@downcity/downtown";
 import type {
   CompiledQuery,
@@ -31,8 +31,8 @@ class TransactionUnit {
 
   /** 创建 D1 事务绑定的 Table API。 */
   table<TRow extends Record<string, unknown>>(
-    schema: FederationTableSchema,
-  ): FederationTableApi<TRow> {
+    schema: DowntownTableSchema,
+  ): DowntownTableApi<TRow> {
     return new TransactionTableApi<TRow>(this, this.database, schema);
   }
 
@@ -105,14 +105,14 @@ class TransactionUnit {
 }
 
 /** D1 事务 Table API。 */
-class TransactionTableApi<TRow extends Record<string, unknown>> implements FederationTableApi<TRow> {
+class TransactionTableApi<TRow extends Record<string, unknown>> implements DowntownTableApi<TRow> {
   readonly name: string;
-  readonly schema: FederationTableSchema;
+  readonly schema: DowntownTableSchema;
 
   constructor(
     private readonly unit: TransactionUnit,
     private readonly database: DrizzleDatabase,
-    schema: FederationTableSchema,
+    schema: DowntownTableSchema,
   ) {
     this.schema = schema;
     this.name = getTableName(schema);
@@ -218,7 +218,7 @@ export async function run_transaction<TResult>(input: {
   for (let attempt = 1; attempt <= input.max_attempts; attempt += 1) {
     const unit = new TransactionUnit(input.database, input.binding);
     const result = await input.handler({
-      table: <TRow extends Record<string, unknown>>(schema: FederationTableSchema) =>
+      table: <TRow extends Record<string, unknown>>(schema: DowntownTableSchema) =>
         unit.table<TRow>(schema),
     });
     try {
@@ -262,7 +262,7 @@ function build_equal_sql(values: Record<string, unknown>): string {
 
 /** 构造 Drizzle 等值条件。 */
 function build_condition(
-  schema: FederationTableSchema,
+  schema: DowntownTableSchema,
   where: Record<string, unknown>,
 ): SQL | undefined {
   const entries = Object.entries(where);

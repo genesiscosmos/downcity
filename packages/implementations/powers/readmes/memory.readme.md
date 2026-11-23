@@ -1,6 +1,6 @@
 # Memory
 
-MemoryPower owns User/Agent Core Memory and searchable knowledge. One platform data root has one local user (`local`), independent of Federation login accounts. City UserRepository owns user/user.json. MemoryPower handles requests, scope checks and durable commits; dedicated work/memory Sessions perform extraction, revision and Profile consolidation.
+MemoryPower owns User/Agent Core Memory and searchable knowledge. One platform data root has one local user (`local`), independent of Downtown login accounts. City UserRepository owns user/user.json. MemoryPower handles requests, scope checks and durable commits; dedicated work/memory Sessions perform extraction, revision and Profile consolidation.
 
 ## Flow
 
@@ -79,6 +79,6 @@ const memory_power = new MemoryPower({
 });
 ```
 
-Power configuration accepts model_id for new Memory Sessions; otherwise the owning Agent's default model is selected and fixed for that Session. Channel authorization remains the host's responsibility. Switching Federation accounts does not switch User memory.
+Power configuration accepts model_id for new Memory Sessions; otherwise the owning Agent's default model is selected and fixed for that Session. Channel authorization remains the host's responsibility. Switching Downtown accounts does not switch User memory.
 
 Knowledge commits publish records, validity and receipts in a single scope manifest. Deleted content leaves normal read/list/search; an exact normalized-content fingerprint prevents identical reconstruction. Semantic paraphrases are not guaranteed to be suppressed. Original Sessions, Job source copies and retained history are not erased by forget. Existing Markdown is retained but requires explicit SDK import with create_memory_import_changeset before it enters the active store.

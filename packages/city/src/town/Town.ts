@@ -4,7 +4,7 @@
  * Town 管理多条独立 Downtown 连接、模型与 Service 聚合；不存在全局当前连接。
  * 宿主负责客户端创建、凭据交互与持久化，Town 只保存非秘密来源事实并提供受控路由。
  */
-import type { Downtown, ServiceCatalogDetail, ServiceCatalogSummary, FederationAccountProvider, FetchResponseLike, ServiceRequestOptions } from "@downcity/downtown";
+import type { Downtown, ServiceCatalogDetail, ServiceCatalogSummary, DowntownAccountProvider, FetchResponseLike, ServiceRequestOptions } from "@downcity/downtown";
 import { TownConnections } from "./TownConnections.js";
 import { TownModels } from "./TownModels.js";
 import { TownError, lease_response } from "./ExecutionLease.js";
@@ -90,7 +90,7 @@ export class Town {
   rename(connection_id: string, name: string): TownConnection { this.assert_open(); return this.connections.rename(connection_id, name); }
 
   /** 读取指定连接的登录 Provider；无宿主适配器时直接读取公开 Accounts Service。 */
-  async login_providers(connection_id: string): Promise<FederationAccountProvider[]> {
+  async login_providers(connection_id: string): Promise<DowntownAccountProvider[]> {
     const state = this.connections.require(connection_id);
     const release = this.connections.acquire(state);
     try {

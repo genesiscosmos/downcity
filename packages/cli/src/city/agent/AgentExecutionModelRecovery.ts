@@ -2,7 +2,7 @@
  * Agent 装配模型恢复。
  *
  * 关键点（中文）
- * - 已保存模型不在当前 Federation 时，TTY 直接展示当前模型选择器。
+ * - 已保存模型不在当前 Downtown 时，TTY 直接展示当前模型选择器。
  * - 选择完成后更新 Agent 默认模型，并让当前 City 装配流程继续执行。
  * - 非交互模式不做隐式选择，返回包含可用模型和修复命令的 CliError。
  */
@@ -19,7 +19,7 @@ import type {
   AgentExecutionModelRecoveryInput,
 } from "@/city/types/AgentExecutionModelRecovery.js";
 
-/** 根据已保存模型和当前 Federation 目录生成恢复决策。 */
+/** 根据已保存模型和当前 Downtown 目录生成恢复决策。 */
 export function resolve_agent_execution_model_recovery(
   input: AgentExecutionModelRecoveryInput,
 ): AgentExecutionModelRecoveryDecision {
@@ -55,7 +55,7 @@ function build_model_recovery_command(
   return `city agent update ${JSON.stringify(agent_id)} --model ${JSON.stringify(model_id)}`;
 }
 
-/** 确保 Agent 配置的默认模型可以在当前 Federation 中解析。 */
+/** 确保 Agent 配置的默认模型可以在当前 Downtown 中解析。 */
 export async function ensure_agent_execution_model_ready(
   agent_id_input: string,
 ): Promise<void> {
@@ -79,18 +79,18 @@ export async function ensure_agent_execution_model_ready(
   if (decision.kind === "ready") return;
   if (decision.kind === "unavailable") {
     throw new CliError({
-      title: "No models available in current Federation",
+      title: "No models available in current Downtown",
       note: decision.previous_model_id
         ? `Configured model is unavailable: ${decision.previous_model_id}`
-        : "Agent has no execution model and the current Federation exposes no compatible models.",
-      fix: "city federation status",
+        : "Agent has no execution model and the current Downtown exposes no compatible models.",
+      fix: "city downtown status",
     });
   }
 
   const available_model_ids = choices.map((choice) => choice.value);
   if (process.stdin.isTTY !== true || process.stdout.isTTY !== true) {
     throw new CliError({
-      title: "Agent execution model is unavailable in current Federation",
+      title: "Agent execution model is unavailable in current Downtown",
       note: [
         `configured: ${decision.previous_model_id || "(not configured)"}`,
         `available: ${available_model_ids.join(", ")}`,
@@ -104,11 +104,11 @@ export async function ensure_agent_execution_model_ready(
     name: "model_id",
     message: t({
       zh: decision.previous_model_id
-        ? `模型 ${decision.previous_model_id} 在当前 Federation 不可用，请重新选择`
-        : "当前 Agent 没有可用模型，请从当前 Federation 选择",
+        ? `模型 ${decision.previous_model_id} 在当前 Downtown 不可用，请重新选择`
+        : "当前 Agent 没有可用模型，请从当前 Downtown 选择",
       en: decision.previous_model_id
-        ? `Model ${decision.previous_model_id} is unavailable in the current Federation. Select another model`
-        : "This Agent has no available model. Select one from the current Federation",
+        ? `Model ${decision.previous_model_id} is unavailable in the current Downtown. Select another model`
+        : "This Agent has no available model. Select one from the current Downtown",
     }),
     choices,
     initial: 0,

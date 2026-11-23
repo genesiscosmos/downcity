@@ -11,7 +11,7 @@ import { AIChannel } from "@downcity/downtown"
  * 创建输出固定文本的标准 AIChannel 模型定义。
  *
  * @param {object} options 测试模型配置。
- * @param {string} options.id Federation 对外模型 ID。
+ * @param {string} options.id Downtown 对外模型 ID。
  * @param {string} [options.name] 模型展示名称。
  * @param {string} [options.text] 模型输出文本。
  * @param {Function} [options.bill] 模型账单函数。

@@ -75,20 +75,20 @@ export function migrate_town_connections(settings: TownMigrationSettings): TownC
 
   for (const profile of Array.isArray(config.profiles) ? config.profiles : []) {
     const item = object_value(profile);
-    connection_for(item.federation_url, item.name);
+    connection_for(item.downtown_url, item.name);
   }
-  connection_for(config.selected_federation_url);
+  connection_for(config.selected_downtown_url);
   // 先保留 Desktop 的全部历史账户，再用显式共享 session 确定每地址的运行候选。
   for (const [old_id, value] of Object.entries(object_value(vault.accounts))) {
     const item = object_value(value);
-    const connection = connection_for(item.federation_url);
+    const connection = connection_for(item.downtown_url);
     if (!connection) continue;
     const account = import_account(connection, item);
     if (account) old_accounts.set(old_id, account);
   }
   for (const [key, value] of Object.entries(object_value(config.sessions))) {
     const item = object_value(value);
-    const connection = connection_for(text_value(item.federation_url) || key);
+    const connection = connection_for(text_value(item.downtown_url) || key);
     if (!connection) continue;
     const account = import_account(connection, item);
     if (account) {

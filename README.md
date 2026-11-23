@@ -25,7 +25,7 @@ Downcity provides a reusable runtime for Agents, models, tools, tasks, memory, a
 | `downcity` | CLI bundle: `downcity` / `city` manages local Agents, Workspaces, and the City host; `downtown` manages Downtown servers. |
 | `@downcity/city` | City composition, Agent registry, Town connections, Workspace/Shell resources, Powers, storage, RemoteAgent, and HTTP/RPC transport. |
 | `@downcity/agent` | Agent and Group execution, Sessions, model/tool loops, and host extension interfaces. |
-| `@downcity/downtown` | Downtown server and SDK for models, services, authentication, and user/admin access. Source: `packages/federation`. |
+| `@downcity/downtown` | Downtown server and SDK for models, services, authentication, and user/admin access. Source: `packages/downtown`. |
 | `@downcity/type` | Shared protocols for models, Workspaces, Shell, Sessions, and host integrations. |
 | `@downcity/powers` | Reusable capabilities including tasks, memory, skills, web, messaging, and presentation. |
 | `@downcity/services` | Services for accounts, credits, usage, organizations, feedback, and payments. |
@@ -204,7 +204,7 @@ downcity/
 │   ├── agent/
 │   ├── city/
 │   ├── cli/
-│   ├── federation/             # @downcity/downtown
+│   ├── downtown/             # @downcity/downtown
 │   ├── implementations/
 │   │   ├── databases/
 │   │   ├── powers/
@@ -232,7 +232,7 @@ The `templates/*` projects are convenient developer starters and showcases. The 
 - Agent SDK docs: [downcity.ai/agent-sdk-docs](https://downcity.ai/agent-sdk-docs)
 - UI SDK docs: [downcity.ai/ui-sdk-docs](https://downcity.ai/ui-sdk-docs)
 - Chinese overview: [README.zh-CN.md](./README.zh-CN.md)
-- Package docs: [Agent](./packages/agent/README.md), [City](./packages/city/README.md), [Downtown](./packages/federation/README.md), [Types](./packages/type/README.md), [Services](./packages/implementations/services/README.md), [CLI](./packages/cli/README.md), [UI](./packages/ui/README.md)
+- Package docs: [Agent](./packages/agent/README.md), [City](./packages/city/README.md), [Downtown](./packages/downtown/README.md), [Types](./packages/type/README.md), [Services](./packages/implementations/services/README.md), [CLI](./packages/cli/README.md), [UI](./packages/ui/README.md)
 
 ## Local Development
 

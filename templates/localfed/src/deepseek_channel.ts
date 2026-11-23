@@ -1,8 +1,8 @@
 /**
- * Local Federation 的 DeepSeek 文本模型通道。
+ * Local Downtown 的 DeepSeek 文本模型通道。
  *
  * 本地模板直接从进程环境读取密钥，让复制 `.env.example` 后即可运行；
- * 正式部署应通过 Federation Env 管理运行时密钥。
+ * 正式部署应通过 Downtown Env 管理运行时密钥。
  */
 
 import {
@@ -12,7 +12,7 @@ import {
   stream_openai_compatible_model,
 } from "@downcity/downtown";
 
-/** 将 DeepSeek 的 OpenAI-compatible API 接入 Federation 标准流。 */
+/** 将 DeepSeek 的 OpenAI-compatible API 接入 Downtown 标准流。 */
 export class DeepSeekChannel extends AIChannel {
   constructor() {
     super({

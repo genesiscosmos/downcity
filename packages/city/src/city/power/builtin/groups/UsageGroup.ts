@@ -2,8 +2,8 @@
  * city power `usage` 动作组。
  *
  * 关键点（中文）
- * - 口径是 user 级 token 用量，属于 Federation 用户业务能力；city power 只做只读展示。
- * - 当前 Power 尚未接入 Federation 用户用量接口，因此统一返回 unsupported_action，不伪造数据。
+ * - 口径是 user 级 token 用量，属于 Downtown 用户业务能力；city power 只做只读展示。
+ * - 当前 Power 尚未接入 Downtown 用户用量接口，因此统一返回 unsupported_action，不伪造数据。
  * - 只返回 token，不做额度与费用换算：那需要计价规则和账本，口径会随定价变化失效。
  */
 

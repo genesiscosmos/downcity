@@ -1,0 +1,52 @@
+/**
+ * Downtown 本地 Web 控制面类型。
+ *
+ * 这些类型只描述 `fed web` 进程拥有的本地 HTTP 边界，不属于 Downtown
+ * Server 的公开协议。
+ */
+
+import type { DowntownTargetOptions } from "@/downtown/server/DowntownTarget.js";
+
+/** 启动 Downtown 本地 Web UI 的命令参数，目标仅用于本次运行。 */
+export interface DowntownWebOptions extends DowntownTargetOptions {
+  /** 本地 HTTP Server 监听地址；当前只允许 loopback。 */
+  host: string;
+  /** 本地 HTTP Server 监听端口，传入 0 时由操作系统分配。 */
+  port: number;
+  /** 启动成功后是否尝试打开系统默认浏览器。 */
+  open: boolean;
+}
+
+/** 已解析的 Downtown Web UI 运行上下文。 */
+export interface DowntownWebContext {
+  /** Downtown 在本地配置中的展示名称。 */
+  downtown_name: string;
+  /** Downtown Server 基础 URL。 */
+  downtown_url: string;
+  /** registry 中保存的非敏感管理员 ID，用于登录页预填。 */
+  admin_id?: string;
+}
+
+/** 本地 Web Server 启动后的绑定信息。 */
+export interface DowntownWebBinding {
+  /** 浏览器访问本地控制面的完整 URL。 */
+  url: string;
+  /** 关闭 HTTP Server 并释放监听端口。 */
+  close: () => Promise<void>;
+}
+
+/** 浏览器提交给本地控制面的受限管理动作。 */
+export interface DowntownWebActionRequest {
+  /** 动作 ID；本地 BFF 只接受显式登记的动作。 */
+  action: string;
+  /** 动作输入；由每个动作独立校验。 */
+  payload?: Record<string, unknown>;
+}
+
+/** 浏览器提交给本地 BFF 的管理员登录输入。 */
+export interface DowntownWebLoginRequest {
+  /** 管理员登录 ID。 */
+  admin_id: string;
+  /** 管理员密码，仅在本次请求内存中使用。 */
+  password: string;
+}

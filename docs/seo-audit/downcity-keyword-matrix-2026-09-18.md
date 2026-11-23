@@ -60,12 +60,12 @@ what is a process agent
 - ✅ 保留在 H1、title、结构化数据、`llms.txt` 里 —— 用于定义品类、被 AI 引用
 - ❌ 不要为它做页面、不要把它当成流量目标、不要为它写内容
 
-### 结论 3：「City SDK」「Federation SDK」是被污染的通用词，只做品牌导航
+### 结论 3：「City SDK」「Downtown SDK」是被污染的通用词，只做品牌导航
 
 | 种子词 | Bing 返回的扩展 | 判断 |
 |---|---|---|
 | `city sdk` | `citysdk`、`city skylines 3`、`city skyline png`、`city skyline 2 free play`… | 被《城市天际线》游戏 + US Census CitySDK 完全污染，**与 Downcity 的 City 无关** |
-| `federation sdk` | `federations dlc`、`federation square`、`federation square melbourne` | 指向墨尔本联邦广场等，**完全无关** |
+| `downtown sdk` | `downtowns dlc`、`downtown square`、`downtown square melbourne` | 指向墨尔本联邦广场等，**完全无关** |
 
 **这两个词不具备可争夺的自然搜索流量。** 它们只应承担品牌导航（用户已经听说过 Downcity，来搜它）。
 
@@ -102,7 +102,7 @@ what is a process agent
 |---|---|---|---|---|
 | agent sdk python | 实施型 | `/product/agent-sdk/`、`/en/agent-sdk-docs/` | ⚠️ 长尾，未优化 | 高 |
 | agent sdk documentation | 实施型 | `/en/agent-sdk-docs/` | ✅ 文档区已存在 | 中 |
-| agent orchestration framework | 商业调研 | `/en/city-sdk-docs/`、`/en/docs/federation/overview/` | ⚠️ 有内容无对应词 | 中 |
+| agent orchestration framework | 商业调研 | `/en/city-sdk-docs/`、`/en/docs/downtown/overview/` | ⚠️ 有内容无对应词 | 中 |
 | agent memory management | 信息型 + 实施型 | `/en/plugins-docs/`（memory plugin） | ⚠️ 有内容无对应词 | 中 |
 | agent sandbox | 实施型 | `/en/docs/security/overview/`、`/en/docs/agent/overview/` | ⚠️ 有内容无对应词 | 中 |
 | agent deployment / agent hosting | 商业调研 | `/resources/hosting/` | ✅ 本轮已写入 title | 中 |
@@ -123,7 +123,7 @@ agent sdk     → agent sdk claude / openai / anthropic / microsoft / google
 |---|---|
 | agent productization | 无检索行为（结论 2），仅作品牌定位 |
 | city sdk | 被游戏与 US Census 污染（结论 3） |
-| federation sdk | 指向墨尔本联邦广场等无关结果 |
+| downtown sdk | 指向墨尔本联邦广场等无关结果 |
 | agent billing | 返回企业财务软件（business central、billing agent id 等） |
 | agent permissions | 返回 SQL Server Agent / Cloud Run service agent 等无关结果 |
 | agent marketplace | 无联想词返回，需求不明 |
@@ -144,8 +144,8 @@ agent sdk     → agent sdk claude / openai / anthropic / microsoft / google
 | AI Agent 开发框架 | 商业调研 | `/zh/product/` | ❌ 未出现 | 高 |
 | AI Agent 架构 | 信息型 | `/zh/whitepaper/` | ⚠️ 本轮 title 用了「生产级 Agent 架构」 | 高 |
 | AI Agent 架构图 | 信息型 | 无 | ❌ 缺口（配图长文） | 中 |
-| 多智能体 / 多智能体协作 | 信息型 | `/zh/docs/federation/`、`/zh/city-sdk-docs/` | ⚠️ 有内容无对应词 | 中 |
-| 智能体编排 | 信息型 + 商业调研 | `/zh/docs/federation/` | ❌ 未出现 | 中 |
+| 多智能体 / 多智能体协作 | 信息型 | `/zh/docs/downtown/`、`/zh/city-sdk-docs/` | ⚠️ 有内容无对应词 | 中 |
+| 智能体编排 | 信息型 + 商业调研 | `/zh/docs/downtown/` | ❌ 未出现 | 中 |
 | 智能体记忆 | 信息型 | `/zh/plugins-docs/`（memory plugin） | ⚠️ 有内容无对应词 | 中 |
 | AI Agent 工具 / AI Agent 平台 | 商业调研 | `/zh/resources/` | ❌ 未出现 | 中 |
 | ~~Agent 运行时~~ | — | — | ❌ **伪词，放弃** | 不投入 |
@@ -176,7 +176,7 @@ agent sdk     → agent sdk claude / openai / anthropic / microsoft / google
 | `/community/roadmap/` | `Downcity — Roadmap` (18) | `Agent Harness Roadmap: What We Ship Next — Downcity` (51) |
 | `/zh/community/roadmap/` | `Downcity — 路线图` | `Agent Harness 路线图：下一步在做什么 — Downcity` (36) |
 
-同时本轮已完成（详见审计报告第九节）：首页 H1 品类化、产品总览页 6 宫格（新增 Federation SDK 与 Services 卡片）、`/product/city-sdk/` 与 `/product/federation-sdk/` 拆分、`/resources/examples/` 与 4 条 404 修复、18 个中文页预渲染语言修复。
+同时本轮已完成（详见审计报告第九节）：首页 H1 品类化、产品总览页 6 宫格（新增 Downtown SDK 与 Services 卡片）、`/product/city-sdk/` 与 `/product/downtown-sdk/` 拆分、`/resources/examples/` 与 4 条 404 修复、18 个中文页预渲染语言修复。
 
 ---
 
@@ -193,7 +193,7 @@ Downcity 目前**只有产品页 + 文档，没有一篇信息型内容**。而�
 | 3 | Agent Harness vs MCP: Different Layers, Not Rivals | 对比页 | `agent harness vs mcp` | 联想词里已有明确对比意图，且能顺势解释 Downcity 与 MCP 的关系 |
 | 4 | 智能体框架怎么选：选型清单 | 对比/选型页 | `智能体框架选型`、`AI Agent 开发框架对比` | 中文侧唯一的高意图词，直接导向产品矩阵页 |
 | 5 | Agent Memory vs RAG: When You Need Both | 对比页 | `agent memory vs rag` | 复用 `/en/plugins-docs/` 已有的 memory 内容 |
-| 6 | Agent Orchestration Patterns | 长文 | `agent orchestration patterns` | 复用 Federation / Service / Group 的现有文档 |
+| 6 | Agent Orchestration Patterns | 长文 | `agent orchestration patterns` | 复用 Downtown / Service / Group 的现有文档 |
 | 7 | How to Charge for an AI Agent Product | 长文 | `agent billing`（长尾） | 唯一能承接 Services & Payment 的信息型内容 |
 
 **内容形态建议**：先做 1–3（英文，术语页 + 长文 + 对比页），它们是 Hub，后续 spokes 都往它们内链；中文侧从第 4 条起步。
@@ -212,7 +212,7 @@ Downcity 目前**只有产品页 + 文档，没有一篇信息型内容**。而�
 | `/whitepaper/` `/zh/whitepaper/` | agent harness architecture（AI Agent 架构） | production agents、human-agent collaboration |
 | `/product/` `/zh/product/` | AI Agent 开发框架、agent infrastructure products | product matrix |
 | `/product/city-sdk/` | agent host / 本地 Agent 宿主 | City runtime |
-| `/product/federation-sdk/` | agent backend reuse / Service 路由 | model catalog、usage、payment |
+| `/product/downtown-sdk/` | agent backend reuse / Service 路由 | model catalog、usage、payment |
 | `/product/agent-sdk/` | agent sdk python、agent sdk documentation | session、plugin |
 | `/product/ui-sdk/` | agent workspace ui | agent console components |
 | `/resources/skills/` `/zh/resources/skills/` | agent skills directory | 智能体技能 |
@@ -221,7 +221,7 @@ Downcity 目前**只有产品页 + 文档，没有一篇信息型内容**。而�
 | `/community/roadmap/` | agent harness roadmap | — |
 | `/en/plugins-docs/` | agent memory management、智能体记忆 | memory plugin、agent tools |
 | `/en/docs/security/*` | agent sandbox、agent permissions | sandbox 边界、权限模型 |
-| `/en/docs/federation/*` | agent orchestration framework、智能体编排、多智能体协作 | service routing |
+| `/en/docs/downtown/*` | agent orchestration framework、智能体编排、多智能体协作 | service routing |
 | `/en/payments/` | agent billing（长尾）、AI agent 计费 | credits、usage metering |
 | 新建：术语页 | what is an agent harness | Agent Harness 是什么 |
 | 新建：架构长文 | the anatomy of an agent harness | agent harness components |
@@ -457,9 +457,9 @@ npx wrangler pages deploy build/client --project-name downcity --commit-dirty=tr
 | `/resources/` 空壳页在 sitemap | 在 | **不在** |
 | `/product/sdk/` 旧路径在 sitemap | 在 | **不在** |
 
-**4 处 404 修复全部生效**：`/resources/examples/`、`/product/city-sdk/`、`/product/federation-sdk/`、`/en/docs/agent/overview/`、`/en/docs/cli/overview/` 均 200。
+**4 处 404 修复全部生效**：`/resources/examples/`、`/product/city-sdk/`、`/product/downtown-sdk/`、`/en/docs/agent/overview/`、`/en/docs/cli/overview/` 均 200。
 
-**`_redirects` 生效**（旧路径 301）：`/docs` → `/en/docs/`；`/docs/quickstart` → `/en/docs/quickstart`；`/product/sdk` → `/product/federation-sdk/`；`/blog` → `/en/blog/`。
+**`_redirects` 生效**（旧路径 301）：`/docs` → `/en/docs/`；`/docs/quickstart` → `/en/docs/quickstart`；`/product/sdk` → `/product/downtown-sdk/`；`/blog` → `/en/blog/`。
 
 **全站冒烟测试**：41 条关键路径（含 9 个 blog 页面、6 个文档空间、全部营销页）**全部 200**，无回归；不存在的路径正确返回 404。
 

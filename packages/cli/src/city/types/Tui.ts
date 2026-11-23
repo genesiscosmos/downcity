@@ -1,8 +1,8 @@
 /**
- * City Federation TUI 列表类型。
+ * City Downtown TUI 列表类型。
  *
  * 关键说明（中文）
- * - 只定义 Federation 管理页使用的列表投影。
+ * - 只定义 Downtown 管理页使用的列表投影。
  * - Agents 首页及其设置分组使用共享 TUI prompt 类型。
  */
 

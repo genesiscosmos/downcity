@@ -1,4 +1,4 @@
-/** PostgreSQL Federation Database Adapter。 */
+/** PostgreSQL Downtown Database Adapter。 */
 
 import postgres from "postgres";
 import { drizzle } from "drizzle-orm/postgres-js";
@@ -6,18 +6,18 @@ import { getTableColumns, getTableName } from "drizzle-orm";
 import {
   Database as CityDatabase,
   TableApi,
-  type FederationTableApi,
+  type DowntownTableApi,
   type DatabaseMutationResult,
   type DatabaseQueryResult,
   type DatabaseStatement,
   type DatabaseTransaction,
   type DrizzleDatabase,
-  type FederationTableSchema,
+  type DowntownTableSchema,
 } from "@downcity/downtown";
 import type { DatabaseOptions } from "./types/DatabaseOptions.js";
 import { prepared_client } from "./prepared-client.js";
 
-/** 使用 postgres-js 的 PostgreSQL Federation Database。 */
+/** 使用 postgres-js 的 PostgreSQL Downtown Database。 */
 export class Database extends CityDatabase {
   private readonly client: ReturnType<typeof postgres>;
 
@@ -45,12 +45,12 @@ export class Database extends CityDatabase {
   }
 
   protected on_table<TRow extends Record<string, unknown>>(
-    schema: FederationTableSchema,
-  ): FederationTableApi<TRow> {
-    return new TableApi(this.drizzle, schema) as unknown as FederationTableApi<TRow>;
+    schema: DowntownTableSchema,
+  ): DowntownTableApi<TRow> {
+    return new TableApi(this.drizzle, schema) as unknown as DowntownTableApi<TRow>;
   }
 
-  protected async on_ensure_table(schema: FederationTableSchema): Promise<void> {
+  protected async on_ensure_table(schema: DowntownTableSchema): Promise<void> {
     const ddl = build_create_table_sql(schema);
     if (ddl) await this.client.unsafe(ddl);
   }
@@ -90,8 +90,8 @@ export class Database extends CityDatabase {
     }
     return await this.drizzle.transaction(async (transaction_database) =>
       await handler({
-        table: <TRow extends Record<string, unknown>>(schema: FederationTableSchema) =>
-          new TableApi(transaction_database, schema) as unknown as FederationTableApi<TRow>,
+        table: <TRow extends Record<string, unknown>>(schema: DowntownTableSchema) =>
+          new TableApi(transaction_database, schema) as unknown as DowntownTableApi<TRow>,
       }));
   }
 
@@ -101,7 +101,7 @@ export class Database extends CityDatabase {
 }
 
 /** 根据 PostgreSQL Drizzle Schema 生成建表语句。 */
-function build_create_table_sql(schema: FederationTableSchema): string {
+function build_create_table_sql(schema: DowntownTableSchema): string {
   const columns = Object.values(getTableColumns(schema));
   if (columns.length === 0) return "";
   const definitions = columns.map((column) => {

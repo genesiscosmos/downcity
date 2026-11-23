@@ -2,7 +2,7 @@
  * Town 的连接、身份、宿主登录与持久任务契约。
  * City 不持有账户数据库或秘密；宿主核验身份后以稳定 scope 提交连接。
  */
-import type { Downtown, FederationUser, FederationAccountProvider } from "@downcity/downtown";
+import type { Downtown, DowntownUser, DowntownAccountProvider } from "@downcity/downtown";
 import type { TownImageJobStore, TownImageJobOrigin } from "./TownImageJobs.js";
 
 /** 注册关系的非秘密身份事实。 */
@@ -38,9 +38,9 @@ export interface TownSource {
 }
 
 /** 受控用户视图，不提供本地凭据修改或管理员能力。 */
-export type TownUser = Pick<FederationUser, "ai" | "payment" | "relay" | "current" | "service" | "list_services" | "describe_service" | "openapi"> & {
+export type TownUser = Pick<DowntownUser, "ai" | "payment" | "relay" | "current" | "service" | "list_services" | "describe_service" | "openapi"> & {
   /** 只公开登录方式发现；交互、设备会话与凭据提交由宿主适配器处理。 */
-  readonly account: Pick<FederationUser["account"], "providers">;
+  readonly account: Pick<DowntownUser["account"], "providers">;
 };
 
 /** 持有旧视图不延长身份有效期；每个请求都经过连接级门禁。 */
@@ -86,7 +86,7 @@ export interface TownLoginResult {
 /** 按连接编排登录，不创建 City 账户体系。 */
 export interface TownAuthAdapter {
   /** 可选宿主自定义发现；省略时直接读取目标 Accounts Service 的公开 providers。 */
-  login_providers?(connection: TownSource): Promise<FederationAccountProvider[]>;
+  login_providers?(connection: TownSource): Promise<DowntownAccountProvider[]>;
   /** 完成交互与主体核验，并通过 context.commit 原子提交凭据与注册。 */
   login(context: TownAuthContext, input: TownLoginInput): Promise<TownLoginResult>;
   /** 撤销目标设备会话，并通过 context.commit 提交新的 guest/已退出身份。 */
@@ -104,7 +104,7 @@ export interface TownOptions {
   /** 恢复原任务授权，仅用于查询；宿主必须核验 endpoint 与原 scope，不得激活历史身份。 */
   resolve_image_user?: (origin: TownImageJobOrigin, signal?: AbortSignal) => Promise<{
     /** 只允许查询原任务，不提供历史账户的新建或其他计费能力。 */
-    ai: Pick<FederationUser["ai"], "image_result">;
+    ai: Pick<DowntownUser["ai"], "image_result">;
   }>;
 }
 

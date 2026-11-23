@@ -3,7 +3,7 @@
 # 关键说明（中文）
 # - Dokploy 使用 Compose 模式时，Compose 文件路径填写 ./docker-compose.yml。
 # - 镜像构建逻辑内联在 Compose 里，部署入口只保留这一个文件。
-# - /data 必须持久化，否则 SQLite 数据库、用户和 Federation env 会在重建后丢失。
+# - /data 必须持久化，否则 SQLite 数据库、用户和 Downtown env 会在重建后丢失。
 services:
   downcity-city:
     build:

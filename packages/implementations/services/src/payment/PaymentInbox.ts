@@ -2,7 +2,7 @@
  * 可信支付事件执行器。数据库记录是恢复事实源，Queue 仅唤醒；周期扫描接管丢失消息和过期租约。
  * 永久金额校验失败进入 review，临时故障指数退避。所有重放仍经过同一订单校验和幂等发放。
  */
-import { httpError, type FederationTableApi, type ServiceDatabaseContext } from "@downcity/downtown";
+import { httpError, type DowntownTableApi, type ServiceDatabaseContext } from "@downcity/downtown";
 import type { PaymentProviderWebhookEvent } from "./types.js";
 import { service_sql_database } from "../shared/database-sql.js";
 import type { PaymentInboxRecord } from "./inbox-schema.js";
@@ -25,7 +25,7 @@ export interface PaymentInboxQueue {
 /** 持久化接收与可重入处理，不持有 HTTP 请求或签名密钥。 */
 export class PaymentInbox {
   constructor(
-    private readonly table: FederationTableApi<PaymentInboxRecord>,
+    private readonly table: DowntownTableApi<PaymentInboxRecord>,
     private readonly queue: PaymentInboxQueue,
     private readonly synchronize: (provider: string, event: PaymentProviderWebhookEvent) => Promise<string>,
     database: ServiceDatabaseContext,

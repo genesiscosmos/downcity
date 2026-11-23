@@ -1,6 +1,6 @@
 /** Town 统一模型目录、直接客户端和多模态执行契约。 */
 import type { CityModelDescriptor, DowntownModelReference, ModelClient } from "@downcity/type";
-import type { FederationUser } from "@downcity/downtown";
+import type { DowntownUser } from "@downcity/downtown";
 import type { TownExecutionOptions, TownSourceStatus } from "./Town.js";
 
 /** City 的可读目录项；model_id 是可持久化的不透明引用。 */
@@ -54,10 +54,10 @@ export interface TownModelRequest<T> extends TownExecutionOptions {
 }
 
 /** 删除路由字段，并恢复 TS 索引签名会掩盖的必要语义由运行时再次检查。 */
-export type TownDecisionInput = Omit<Parameters<FederationUser["ai"]["decision"]>[0], "model">;
+export type TownDecisionInput = Omit<Parameters<DowntownUser["ai"]["decision"]>[0], "model">;
 /** 图片业务输入，目标模型来自外层 model_id。 */
-export type TownImageInput = Omit<Parameters<FederationUser["ai"]["image_create"]>[0], "model">;
+export type TownImageInput = Omit<Parameters<DowntownUser["ai"]["image_create"]>[0], "model">;
 /** 语音合成业务输入。 */
-export type TownTtsInput = Omit<Parameters<FederationUser["ai"]["tts"]>[0], "model">;
+export type TownTtsInput = Omit<Parameters<DowntownUser["ai"]["tts"]>[0], "model">;
 /** 语音识别业务输入。 */
-export type TownAsrInput = Omit<Parameters<FederationUser["ai"]["asr"]>[0], "model">;
+export type TownAsrInput = Omit<Parameters<DowntownUser["ai"]["asr"]>[0], "model">;

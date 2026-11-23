@@ -56,7 +56,7 @@ export async function aggregate_user_daily_charges(
   };
 }
 
-/** 按日期范围聚合 Federation 全部用户的已入账 Credits 消费。 */
+/** 按日期范围聚合 Downtown 全部用户的已入账 Credits 消费。 */
 export async function aggregate_admin_charges(
   database: ServiceDatabaseContext,
   input: AdminUsageQuery,

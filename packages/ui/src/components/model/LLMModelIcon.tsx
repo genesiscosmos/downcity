@@ -1,4 +1,4 @@
-/** 按 Duobox 品牌规则展示 Federation 模型图标。 */
+/** 按 Duobox 品牌规则展示 Downtown 模型图标。 */
 
 import { SiDeepseek, SiGooglegemini, SiQwen } from "react-icons/si";
 import { TbBrandOpenai, TbSparkles } from "react-icons/tb";

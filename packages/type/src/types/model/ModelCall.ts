@@ -1,7 +1,7 @@
 /**
  * Downcity 模型调用协议模块。
  *
- * ModelCall 与模型目录身份分离，同一调用可以由 Federation 路由到不同最终模型。
+ * ModelCall 与模型目录身份分离，同一调用可以由 Downtown 路由到不同最终模型。
  */
 
 import type { ModelMessage } from "./ModelMessage.js";
@@ -62,11 +62,11 @@ export type ModelResponseFormat =
 /** 当前 Downcity Model Protocol 的固定版本。 */
 export const MODEL_PROTOCOL_VERSION = 1 as const;
 
-/** Agent 或客户端发给 Federation 的流式模型请求。 */
+/** Agent 或客户端发给 Downtown 的流式模型请求。 */
 export interface ModelStreamRequest {
   /** Downcity Model Protocol 版本。 */
   protocol_version: typeof MODEL_PROTOCOL_VERSION;
-  /** 用户选择的 Federation 模型 ID。 */
+  /** 用户选择的 Downtown 模型 ID。 */
   model_id: string;
   /** 标准模型调用。 */
   call: ModelCall;

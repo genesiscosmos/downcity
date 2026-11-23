@@ -62,7 +62,7 @@ importers:
         version: link:../agent
       '@downcity/downtown':
         specifier: workspace:^
-        version: link:../federation
+        version: link:../downtown
       '@downcity/type':
         specifier: workspace:*
         version: link:../type
@@ -147,7 +147,7 @@ importers:
         version: link:../city
       '@downcity/downtown':
         specifier: workspace:^
-        version: link:../federation
+        version: link:../downtown
       '@downcity/powers':
         specifier: workspace:^
         version: link:../implementations/powers
@@ -243,7 +243,7 @@ importers:
         specifier: ^6.0.3
         version: 6.0.3
 
-  packages/federation:
+  packages/downtown:
     dependencies:
       '@downcity/type':
         specifier: workspace:*
@@ -285,7 +285,7 @@ importers:
         version: 4.20260530.1
       '@downcity/downtown':
         specifier: workspace:*
-        version: link:../../../federation
+        version: link:../../../downtown
       miniflare:
         specifier: ^4.20260526.0
         version: 4.20260526.0
@@ -304,7 +304,7 @@ importers:
     devDependencies:
       '@downcity/downtown':
         specifier: workspace:*
-        version: link:../../../federation
+        version: link:../../../downtown
       typescript:
         specifier: ^6.0.3
         version: 6.0.3
@@ -320,7 +320,7 @@ importers:
     devDependencies:
       '@downcity/downtown':
         specifier: workspace:*
-        version: link:../../../federation
+        version: link:../../../downtown
       '@types/better-sqlite3':
         specifier: ^7.6.13
         version: 7.6.13
@@ -483,7 +483,7 @@ importers:
         version: link:../databases/sqlite
       '@downcity/downtown':
         specifier: workspace:*
-        version: link:../../federation
+        version: link:../../downtown
       '@types/better-sqlite3':
         specifier: ^7.6.13
         version: 7.6.13
@@ -741,7 +741,7 @@ importers:
         version: link:../../../packages/city
       '@downcity/downtown':
         specifier: workspace:*
-        version: link:../../../packages/federation
+        version: link:../../../packages/downtown
       '@hono/node-server':
         specifier: 2.1.6
         version: 2.1.6(hono@4.13.13)
@@ -800,7 +800,7 @@ importers:
         version: link:../../packages/implementations/databases/d1
       '@downcity/downtown':
         specifier: workspace:*
-        version: link:../../packages/federation
+        version: link:../../packages/downtown
     devDependencies:
       '@cloudflare/workers-types':
         specifier: ^4.20260530.1
@@ -819,7 +819,7 @@ importers:
         version: link:../../packages/implementations/databases/sqlite
       '@downcity/downtown':
         specifier: workspace:*
-        version: link:../../packages/federation
+        version: link:../../packages/downtown
       '@downcity/services':
         specifier: workspace:*
         version: link:../../packages/implementations/services

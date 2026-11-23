@@ -1,6 +1,6 @@
 /** Organizations Service 的数据库 Repository。 */
 
-import { httpError, type FederationTableApi, type ServiceTransactionContext } from "@downcity/downtown";
+import { httpError, type DowntownTableApi, type ServiceTransactionContext } from "@downcity/downtown";
 import type {
   OrganizationJoinRequestRecord,
   OrganizationMembershipRecord,
@@ -11,7 +11,7 @@ import type {
 /** Repository 可使用的表解析入口。 */
 export interface OrganizationTableSource {
   /** 根据 Service 内部表名返回 Table API。 */
-  table<TRow extends Record<string, unknown>>(name: string): FederationTableApi<TRow>;
+  table<TRow extends Record<string, unknown>>(name: string): DowntownTableApi<TRow>;
 }
 
 /** Organizations 多表数据访问入口。 */
@@ -130,19 +130,19 @@ export class OrganizationRepository {
     return this.join_requests().update({ where: { request_id }, values });
   }
 
-  private organizations(): FederationTableApi<OrganizationRecord> {
+  private organizations(): DowntownTableApi<OrganizationRecord> {
     return this.source.table<OrganizationRecord>("organizations");
   }
 
-  private memberships(): FederationTableApi<OrganizationMembershipRecord> {
+  private memberships(): DowntownTableApi<OrganizationMembershipRecord> {
     return this.source.table<OrganizationMembershipRecord>("memberships");
   }
 
-  private owner_slots(): FederationTableApi<OrganizationOwnerSlotRecord> {
+  private owner_slots(): DowntownTableApi<OrganizationOwnerSlotRecord> {
     return this.source.table<OrganizationOwnerSlotRecord>("owner_slots");
   }
 
-  private join_requests(): FederationTableApi<OrganizationJoinRequestRecord> {
+  private join_requests(): DowntownTableApi<OrganizationJoinRequestRecord> {
     return this.source.table<OrganizationJoinRequestRecord>("join_requests");
   }
 

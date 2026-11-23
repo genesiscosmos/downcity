@@ -73,7 +73,7 @@ test("UsageService merges applied Credits and final AI usage by local day", asyn
   try {
     process.chdir(temp_dir)
     const database = createSqliteDb(path.join(temp_dir, "test.sqlite"))
-    const federation = new Downtown({ database })
+    const downtown = new Downtown({ database })
     const credits_service = new CreditsService()
     const ai_service = new AIService({ credits: credits_service })
     ai_service.use(create_test_text_model({
@@ -86,9 +86,9 @@ test("UsageService merges applied Credits and final AI usage by local day", asyn
       name: "GPT Failed",
       fail: true,
     }))
-    federation.use(credits_service)
-    federation.use(ai_service)
-    federation.use(new UsageService({
+    downtown.use(credits_service)
+    downtown.use(ai_service)
+    downtown.use(new UsageService({
       ai_usage_reader: ai_service,
       credits_usage_reader: credits_service,
       account_usage_reader: {
@@ -99,12 +99,12 @@ test("UsageService merges applied Credits and final AI usage by local day", asyn
       },
     }))
 
-    await federation.health()
-    const admin_secret = await create_test_admin_session(federation)
-    const token = await (await federation.runtime.get_authenticator()).createToken({
+    await downtown.health()
+    const admin_secret = await create_test_admin_session(downtown)
+    const token = await (await downtown.runtime.get_authenticator()).createToken({
       user_id: "user_1",
     })
-    const other_user_token = await (await federation.runtime.get_authenticator()).createToken({
+    const other_user_token = await (await downtown.runtime.get_authenticator()).createToken({
       user_id: "user_2",
     })
     await credits_service.topup({
@@ -120,7 +120,7 @@ test("UsageService merges applied Credits and final AI usage by local day", asyn
       idempotency_key: "test:topup:user_2",
     })
 
-    const invoke_response = await federation.fetch(new Request("http://localhost/v1/ai/stream", {
+    const invoke_response = await downtown.fetch(new Request("http://localhost/v1/ai/stream", {
       method: "POST",
       headers: {
         "content-type": "application/json",
@@ -132,7 +132,7 @@ test("UsageService merges applied Credits and final AI usage by local day", asyn
     await invoke_response.text()
 
     const today = new Date().toISOString().slice(0, 10)
-    const usage_response = await federation.fetch(new Request(
+    const usage_response = await downtown.fetch(new Request(
       `http://localhost/v1/usage/me?from=${today}&to=${today}&timezone=UTC`,
       { headers: { authorization: `Bearer ${token.user_token}` } },
     ))
@@ -150,12 +150,12 @@ test("UsageService merges applied Credits and final AI usage by local day", asyn
     assert.equal(usage.days[0].date, today)
 
     for (const model of ["gpt-5.4", "gpt-5.4"]) {
-      assert.equal(await invoke_ai(federation, token.user_token, model), 200, model)
+      assert.equal(await invoke_ai(downtown, token.user_token, model), 200, model)
     }
-    assert.equal(await invoke_ai(federation, token.user_token, "gpt-failed"), 500)
-    assert.equal(await invoke_ai(federation, other_user_token.user_token, "gpt-5.4"), 200)
+    assert.equal(await invoke_ai(downtown, token.user_token, "gpt-failed"), 500)
+    assert.equal(await invoke_ai(downtown, other_user_token.user_token, "gpt-5.4"), 200)
 
-    const recent_response = await get_recent_usage(federation, token.user_token, "limit=20")
+    const recent_response = await get_recent_usage(downtown, token.user_token, "limit=20")
     assert.equal(recent_response.status, 200)
     const recent = await recent_response.json()
     assert.equal(recent.items.length, 4)
@@ -195,13 +195,13 @@ test("UsageService merges applied Credits and final AI usage by local day", asyn
     assert.equal(settled.reasoning_tokens, 0)
     assert.equal(settled.total_tokens, 2)
 
-    const first_page_response = await get_recent_usage(federation, token.user_token, "limit=2")
+    const first_page_response = await get_recent_usage(downtown, token.user_token, "limit=2")
     assert.equal(first_page_response.status, 200)
     const first_page = await first_page_response.json()
     assert.equal(first_page.items.length, 2)
     assert.equal(typeof first_page.next_cursor, "string")
     const second_page_response = await get_recent_usage(
-      federation,
+      downtown,
       token.user_token,
       `limit=2&cursor=${encodeURIComponent(first_page.next_cursor)}`,
     )
@@ -214,14 +214,14 @@ test("UsageService merges applied Credits and final AI usage by local day", asyn
       recent.items.map((item) => item.usage_id),
     )
 
-    const other_user_response = await get_recent_usage(federation, other_user_token.user_token, "")
+    const other_user_response = await get_recent_usage(downtown, other_user_token.user_token, "")
     assert.equal(other_user_response.status, 200)
     const other_user_recent = await other_user_response.json()
     assert.equal(other_user_recent.items.length, 1)
     assert.ok(!recent.items.some((item) => item.usage_id === other_user_recent.items[0].usage_id))
 
     const admin_query = `from=${today}&to=${today}&timezone=UTC`
-    const admin_overview_response = await federation.fetch(admin_request(admin_secret, {
+    const admin_overview_response = await downtown.fetch(admin_request(admin_secret, {
       path: `/v1/usage/admin/overview?${admin_query}`,
       method: "GET",
     }))
@@ -249,7 +249,7 @@ test("UsageService merges applied Credits and final AI usage by local day", asyn
     assert.ok(admin_overview.performance.sample_count > 0)
     assert.equal(typeof admin_overview.performance.p95_duration_ms, "number")
 
-    const admin_users_response = await federation.fetch(admin_request(admin_secret, {
+    const admin_users_response = await downtown.fetch(admin_request(admin_secret, {
       path: `/v1/usage/admin/users?${admin_query}`,
       method: "GET",
     }))
@@ -266,7 +266,7 @@ test("UsageService merges applied Credits and final AI usage by local day", asyn
     assert.equal(admin_user_1.success_rate, 0.75)
     assert.ok(!Object.hasOwn(admin_user_1, "active_dates"))
 
-    const retention_response = await federation.fetch(admin_request(admin_secret, {
+    const retention_response = await downtown.fetch(admin_request(admin_secret, {
       path: `/v1/usage/admin/retention?${admin_query}`,
       method: "GET",
     }))
@@ -277,16 +277,16 @@ test("UsageService merges applied Credits and final AI usage by local day", asyn
     assert.equal(retention.cohorts[0].new_user_count, 2)
     assert.equal(retention.cohorts[0].rates.day_1, null)
 
-    const unauthorized_admin_response = await federation.fetch(new Request(
+    const unauthorized_admin_response = await downtown.fetch(new Request(
       `http://localhost/v1/usage/admin/overview?${admin_query}`,
     ))
     assert.equal(unauthorized_admin_response.status, 401)
 
     for (const query of ["limit=0", "limit=51", "limit=1.5", "cursor=invalid"]) {
-      const invalid_recent_response = await get_recent_usage(federation, token.user_token, query)
+      const invalid_recent_response = await get_recent_usage(downtown, token.user_token, query)
       assert.equal(invalid_recent_response.status, 400)
     }
-    const unauthorized_recent_response = await federation.fetch(
+    const unauthorized_recent_response = await downtown.fetch(
       new Request("http://localhost/v1/usage/me/recent"),
     )
     assert.equal(unauthorized_recent_response.status, 401)
@@ -298,14 +298,14 @@ test("UsageService merges applied Credits and final AI usage by local day", asyn
       "from=2026-03-01&to=2026-03-01&timezone=Invalid%2FZone",
       "from=2026-03-01&to=2026-03-01",
     ]) {
-      const invalid_response = await federation.fetch(new Request(
+      const invalid_response = await downtown.fetch(new Request(
         `http://localhost/v1/usage/me?${query}`,
         { headers: { authorization: `Bearer ${token.user_token}` } },
       ))
       assert.equal(invalid_response.status, 400)
     }
 
-    const removed_events = await federation.fetch(admin_request(admin_secret, {
+    const removed_events = await downtown.fetch(admin_request(admin_secret, {
       path: "/v1/usage/events",
       method: "GET",
     }))
@@ -372,8 +372,8 @@ function admin_request(admin_secret, { path: pathname, method = "POST", body }) 
   })
 }
 
-async function invoke_ai(federation, user_token, model) {
-  const response = await federation.fetch(new Request("http://localhost/v1/ai/stream", {
+async function invoke_ai(downtown, user_token, model) {
+  const response = await downtown.fetch(new Request("http://localhost/v1/ai/stream", {
     method: "POST",
     headers: {
       "content-type": "application/json",
@@ -399,9 +399,9 @@ function create_model_request(model_id) {
   }
 }
 
-async function get_recent_usage(federation, user_token, query) {
+async function get_recent_usage(downtown, user_token, query) {
   const suffix = query ? `?${query}` : ""
-  return await federation.fetch(new Request(`http://localhost/v1/usage/me/recent${suffix}`, {
+  return await downtown.fetch(new Request(`http://localhost/v1/usage/me/recent${suffix}`, {
     headers: { authorization: `Bearer ${user_token}` },
   }))
 }

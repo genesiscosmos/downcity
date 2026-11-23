@@ -4,7 +4,7 @@ import type { ServiceDatabaseSchemas } from "@downcity/downtown";
 import { pg_organization_tables, pg_organizations_ddl } from "./postgres.js";
 import { sqlite_organization_tables, sqlite_organizations_ddl } from "./sqlite.js";
 
-/** Federation 根据当前方言选择的 Organizations Service 数据库声明。 */
+/** Downtown 根据当前方言选择的 Organizations Service 数据库声明。 */
 export const organization_database_schemas: ServiceDatabaseSchemas = {
   sqlite: {
     tables: sqlite_organization_tables,

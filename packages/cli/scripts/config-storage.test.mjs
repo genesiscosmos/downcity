@@ -138,27 +138,27 @@ test("Agent 文件定义与 Workspace 数据库索引独立管理", async () => 
   }
 });
 
-test("Federation 只接受新的 Federation 身份环境变量", async () => {
+test("Downtown 只接受新的 Downtown 身份环境变量", async () => {
   const platform_root = create_temp_root();
   process.env.DC_PLATFORM_ROOT = platform_root;
   try {
-    const { FederationSessionResolver } = await import("../bin/city/shared/FederationSessionResolver.js");
-    const resolver = new FederationSessionResolver();
+    const { DowntownSessionResolver } = await import("../bin/city/shared/DowntownSessionResolver.js");
+    const resolver = new DowntownSessionResolver();
     const current = await resolver.resolve_current_user({
       env: {
-        DOWNCITY_FEDERATION_URL: "https://federation.example.com/",
+        DOWNCITY_DOWNTOWN_URL: "https://downtown.example.com/",
         DOWNCITY_USER_TOKEN: "current-user-token",
       },
       verify_user: false,
     });
-    assert.equal(current.federation_url, "https://federation.example.com");
+    assert.equal(current.downtown_url, "https://downtown.example.com");
     assert.equal(current.user_token, "current-user-token");
     const legacy = await resolver.resolve_current_user({
       env: { CITY_URL: "https://legacy.example.com", CITY_USER_TOKEN: "legacy-token" },
       require_user_token: false,
       verify_user: false,
     });
-    assert.equal(legacy.federation_url, "https://base.downcity.ai");
+    assert.equal(legacy.downtown_url, "https://base.downcity.ai");
     assert.equal(legacy.user_token, "");
   } finally {
     delete process.env.DC_PLATFORM_ROOT;
@@ -170,7 +170,7 @@ test("平台身份凭证不会向 Workspace 泄漏", async () => {
   const { strip_platform_session_env } = await import("../bin/city/env/ProcessEnv.js");
   assert.deepEqual(strip_platform_session_env({
     SAFE_VALUE: "kept",
-    DOWNCITY_FEDERATION_URL: "https://federation.example.com",
+    DOWNCITY_DOWNTOWN_URL: "https://downtown.example.com",
     DOWNCITY_USER_TOKEN: "token",
     CITY_URL: "https://legacy.example.com",
   }), { SAFE_VALUE: "kept" });

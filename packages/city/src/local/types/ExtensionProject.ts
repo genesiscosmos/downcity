@@ -26,8 +26,8 @@ export interface ExtensionAgentDefinition {
   behavior: Pick<AgentOptions, "instruction" | "tools" | "hooks" | "session_class" | "session_composer" | "model">;
 }
 
-/** 标准 Federation 的稳定条目身份由作者实例提供。 */
-export type ExtensionFederation = Downtown;
+/** 标准 Downtown 的稳定条目身份由作者实例提供。 */
+export type ExtensionDowntown = Downtown;
 
 /** Power 与其浏览器源码的唯一绑定，不需要额外清单或独立资源注册。 */
 export interface ExtensionPowerDefinition extends PowerDefinition {
@@ -53,7 +53,7 @@ export interface ExtensionProject {
   /** 标准文本模型实例；必须声明有效上下文容量。 */
   models?: readonly ModelClient[];
   /** 标准连接实例；不自动切换登录或对外监听。 */
-  federations?: readonly ExtensionFederation[];
+  downtowns?: readonly ExtensionDowntown[];
 }
 
 /** 项目执行能获取的最小上下文，不暴露账户库或宿主数据库。 */

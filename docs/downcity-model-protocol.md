@@ -2,20 +2,20 @@
 
 > 状态：已实施
 >
-> 适用范围：`@downcity/type`、`@downcity/federation`、`@downcity/agent`、Provider Adapter 与相关 HTTP 客户端
+> 适用范围：`@downcity/type`、`@downcity/downtown`、`@downcity/agent`、Provider Adapter 与相关 HTTP 客户端
 >
 > 目标：使用 Downcity 自有模型协议与推理运行时，一次性替换 AI SDK 在核心领域、网络传输和 Provider 执行边界中的协议所有权
 
 ## 1. 结论
 
-Downcity 应拥有从 Agent 推理到 Federation Provider 执行的完整模型协议。AI SDK、pi-ai 和厂商 SDK 只作为设计参考或可选边界 Adapter，不再定义 Downcity 的消息、工具、模型、流、usage、错误或 transport。
+Downcity 应拥有从 Agent 推理到 Downtown Provider 执行的完整模型协议。AI SDK、pi-ai 和厂商 SDK 只作为设计参考或可选边界 Adapter，不再定义 Downcity 的消息、工具、模型、流、usage、错误或 transport。
 
 最终依赖方向：
 
 ```text
 @downcity/type（Model Protocol）
         ↑
-@downcity/federation（Model Client + Transport + AIService + Provider Adapter）
+@downcity/downtown（Model Client + Transport + AIService + Provider Adapter）
         ↑
 @downcity/agent（Session + Model Runner + Tool Loop）
 ```
@@ -28,7 +28,7 @@ SessionUserContent
   → SessionModelMessages
   → ModelCall
   → ModelClient.stream()
-  → Federation /v1/ai/stream
+  → Downtown /v1/ai/stream
   → Model Router / Fallback / Reasoning
   → AIChannel
   → Provider Adapter
@@ -38,7 +38,7 @@ SessionUserContent
   └→ SessionAssistantOutput → canonical SessionMessage + SessionMutation
 ```
 
-本次不提供旧 `LanguageModelV3` transport 的双栈兼容，不保留 AI SDK 作为核心执行后端，也不先对现有 Federation fallback 做局部修复。
+本次不提供旧 `LanguageModelV3` transport 的双栈兼容，不保留 AI SDK 作为核心执行后端，也不先对现有 Downtown fallback 做局部修复。
 
 ## 2. 产品意图与领域职责
 
@@ -59,7 +59,7 @@ Model Protocol 回答：一次模型调用包含什么，以及模型执行如�
 
 - Session 持久化与 UI 时间线。
 - Agent 的工具实现与工具执行生命周期。
-- Federation 的模型目录、fallback、计费与鉴权。
+- Downtown 的模型目录、fallback、计费与鉴权。
 - Provider 的私有请求字段。
 
 ### 2.2 Agent
@@ -78,15 +78,15 @@ Agent 负责：
 
 Agent 不负责：
 
-- 根据媒体能力切换 Federation 模型。
+- 根据媒体能力切换 Downtown 模型。
 - 解析 Provider 私有字段。
 - 计费和服务端模型可用性判断。
 
-### 2.3 Federation
+### 2.3 Downtown
 
-Federation 拥有模型目录、模型选择、执行策略、服务端配置、计量与计费。
+Downtown 拥有模型目录、模型选择、执行策略、服务端配置、计量与计费。
 
-Federation 负责：
+Downtown 负责：
 
 - 校验和解码 `ModelCall`。
 - 解析初始模型。
@@ -97,7 +97,7 @@ Federation 负责：
 - 记录 metering、usage、fallback metadata 和账单。
 - 将 `ModelStreamEvent` 编码为 SSE。
 
-Federation 不执行调用方工具，不维护 Agent step 循环。
+Downtown 不执行调用方工具，不维护 Agent step 循环。
 
 ### 2.4 Provider Adapter
 
@@ -222,7 +222,7 @@ export interface ModelFileBase64Source {
 - `url` 仅允许 `http:` 和 `https:`。
 - Base64 不包含 `data:<mime>;base64,` 前缀，MIME 类型只存在于 `media_type`。
 - 一个文件只能有一个 source，不能同时携带 URL 和内联数据。
-- 本地文件读取与 Base64 化由 Agent 的附件映射器完成，不由 Federation 访问 Agent 文件系统。
+- 本地文件读取与 Base64 化由 Agent 的附件映射器完成，不由 Downtown 访问 Agent 文件系统。
 
 ### 4.4 推理内容
 
@@ -239,7 +239,7 @@ export interface ModelReasoningContent {
 }
 ```
 
-`signature` 仅用于同一 Provider 的后续上下文恢复。其它 Provider 可以忽略无法理解的签名；Federation 不解析签名内容。
+`signature` 仅用于同一 Provider 的后续上下文恢复。其它 Provider 可以忽略无法理解的签名；Downtown 不解析签名内容。
 
 ### 4.5 工具调用内容
 
@@ -370,7 +370,7 @@ export interface ModelReasoningRequest {
 }
 ```
 
-`model_id` 不属于领域 `ModelCall`，而属于一次对 Federation 模型目录的执行请求。这样同一调用可以由路由层选择不同模型，而不会修改消息协议。
+`model_id` 不属于领域 `ModelCall`，而属于一次对 Downtown 模型目录的执行请求。这样同一调用可以由路由层选择不同模型，而不会修改消息协议。
 
 ### 6.2 HTTP 请求
 
@@ -381,7 +381,7 @@ export interface ModelStreamRequest {
   /** Downcity Model Protocol 版本。 */
   protocol_version: typeof MODEL_PROTOCOL_VERSION;
 
-  /** 用户选择的 Federation 模型 ID。 */
+  /** 用户选择的 Downtown 模型 ID。 */
   model_id: string;
 
   /** 标准模型调用。 */
@@ -399,18 +399,18 @@ POST /v1/ai/stream
 
 ### 6.3 取消信号
 
-`AbortSignal` 不进入 JSON 协议。Agent 取消 HTTP 请求后，Federation 将请求 signal 绑定到 Provider Adapter；Provider Adapter 必须尽力取消上游请求。
+`AbortSignal` 不进入 JSON 协议。Agent 取消 HTTP 请求后，Downtown 将请求 signal 绑定到 Provider Adapter；Provider Adapter 必须尽力取消上游请求。
 
 ## 7. Fallback
 
-Fallback 是 Federation Model Router 的内部策略，输入是 `ModelCall` 和初始模型。
+Fallback 是 Downtown Model Router 的内部策略，输入是 `ModelCall` 和初始模型。
 
 ```ts
 export interface AIModelFallbackRule {
   /** 判断最新用户消息中的单个文件是否需要切换模型。 */
   match: (file: ModelFileContent) => boolean;
 
-  /** fallback 目标 Federation 模型 ID。 */
+  /** fallback 目标 Downtown 模型 ID。 */
   model_id: string;
 }
 ```
@@ -474,7 +474,7 @@ export interface ModelStartEvent {
   /** 事件判别字段。 */
   type: "model_start";
 
-  /** Federation 生成的稳定请求 ID。 */
+  /** Downtown 生成的稳定请求 ID。 */
   request_id: string;
 
   /** 实际执行的最终模型 ID。 */
@@ -737,11 +737,11 @@ streaming
 不变量：
 
 - 一次 Provider 调用只对应一个 model step。
-- Federation 不执行 Agent 工具。
+- Downtown 不执行 Agent 工具。
 - 工具调用先作为 assistant message 写入上下文，工具结果随后作为 tool message 写入。
 - 工具执行顺序沿用当前产品语义；如支持并发，必须由 ToolLoop 显式声明并保持确定性落盘顺序。
 - `model_finish: tool_call` 但没有完整工具调用属于协议错误。
-- 收到工具调用但工具未注册时，Agent 生成失败的 `tool_result`，由下一 step 交给模型处理；不由 Federation 判定业务工具是否存在。
+- 收到工具调用但工具未注册时，Agent 生成失败的 `tool_result`，由下一 step 交给模型处理；不由 Downtown 判定业务工具是否存在。
 - 达到最大 step 数时 Agent 不能无限循环，也不能静默成功收口：先写入一条 internal 收尾提示并禁用工具强制执行一次收尾 Step；收尾仍无正文时以明确错误结束，并保留 `tool_loop_max_steps` 错误码语义。
 
 ### 11.3 Session 与 Model 消息分离
@@ -763,7 +763,7 @@ streaming
 
 这两个消费者共享标准事件，但不互相转换。`ModelMessage` 不会先投影成 UI chunk 再回写 Session，Session Message 也不会从最终文本猜测 identity。
 
-## 12. Federation 执行状态机
+## 12. Downtown 执行状态机
 
 ```text
 authenticate
@@ -794,7 +794,7 @@ export interface AIChannelStreamInput {
   /** AIService 已解析的最终模型身份。 */
   readonly model: AIChannelModel;
 
-  /** Federation 服务端环境变量读取器。 */
+  /** Downtown 服务端环境变量读取器。 */
   readonly env: (key: string) => string | undefined;
 
   /** 最终模型已校验的推理设置。 */
@@ -873,7 +873,7 @@ OpenAI 类型不得进入 Model Router、AIChannel 或 Agent。
 - 将 `CityModel` 目录描述与可执行模型接口分离。
 - 删除对 AI SDK `LanguageModel` 形状的隐式要求。
 
-### 16.2 `@downcity/federation`
+### 16.2 `@downcity/downtown`
 
 - 用 Downcity `ModelClient` 替换实现 `LanguageModelV3` 的 `CityModel`。
 - 重写 `/v1/ai/stream` request/SSE codec。
@@ -912,10 +912,10 @@ OpenAI 类型不得进入 Model Router、AIChannel 或 Agent。
 - `streamText()` / `generateText()`（Agent 核心执行）
 - `convertToModelMessages()`
 - AI SDK `Tool` / `ToolSet` / `StepResult`
-- `providerOptions` 作为 Federation 核心配置结构
+- `providerOptions` 作为 Downtown 核心配置结构
 - `CityLanguageModelCodec` 中针对 AI SDK URL、二进制类型的 transport marker
 
-UI 层若仍使用第三方 UI 类型，必须限制在 desktop/UI Adapter，不能重新进入 Agent Model Runner 或 Federation。
+UI 层若仍使用第三方 UI 类型，必须限制在 desktop/UI Adapter，不能重新进入 Agent Model Runner 或 Downtown。
 
 ## 18. 测试策略
 
@@ -938,7 +938,7 @@ UI 层若仍使用第三方 UI 类型，必须限制在 desktop/UI Adapter，不
 - usage、finish reason、Session 输出与持久化一致。
 - 标题、压缩和 Dispatch 使用相同 Model Runner。
 
-### 18.3 Federation
+### 18.3 Downtown
 
 - 请求校验、鉴权和取消传播。
 - fallback 只读取最新 user。
@@ -957,7 +957,7 @@ UI 层若仍使用第三方 UI 类型，必须限制在 desktop/UI Adapter，不
 
 ### 18.5 集成验收
 
-- Agent → Federation → Provider 完整文本轮次。
+- Agent → Downtown → Provider 完整文本轮次。
 - 最新图片触发 fallback。
 - 历史图片、最新纯文本不触发 fallback。
 - 工具调用跨两个以上 step 完成。
@@ -969,10 +969,10 @@ UI 层若仍使用第三方 UI 类型，必须限制在 desktop/UI Adapter，不
 一次性替换指不保留长期双协议，但实现仍按可验证的依赖顺序推进：
 
 1. 新增 `@downcity/type` Model Protocol 和协议测试。
-2. 新增 Federation 内部 Model stream codec 与状态机测试。
+2. 新增 Downtown 内部 Model stream codec 与状态机测试。
 3. 改造 `AIChannel` 和 Provider Adapter 契约。
 4. 改造 AIService、fallback、reasoning、metering 与 billing。
-5. 改造 Federation Model Client 和 OpenAI Adapter。
+5. 改造 Downtown Model Client 和 OpenAI Adapter。
 6. 在 Agent 新增 Model Runner、Collector、Tool Loop。
 7. 替换 Agent CoreEngine 主执行链。
 8. 替换标题、压缩、Dispatch 等旁路。
@@ -986,13 +986,13 @@ UI 层若仍使用第三方 UI 类型，必须限制在 desktop/UI Adapter，不
 ## 20. 验收标准
 
 - Agent 核心推理不导入 `ai` 或 `@ai-sdk/*`。
-- Federation 核心协议、transport、路由和 AIChannel 不导入 `ai` 或 `@ai-sdk/*`。
-- Agent 到 Federation 的请求只使用 Downcity Model Protocol。
-- Federation 到 Provider Adapter 的输入输出只使用 Downcity Model Protocol。
+- Downtown 核心协议、transport、路由和 AIChannel 不导入 `ai` 或 `@ai-sdk/*`。
+- Agent 到 Downtown 的请求只使用 Downcity Model Protocol。
+- Downtown 到 Provider Adapter 的输入输出只使用 Downcity Model Protocol。
 - OpenAI 和其它第三方格式只存在于 Adapter 边界。
 - fallback 只依据最新 user 的 `ModelFileContent`。
 - 历史上下文完整传给最终模型。
 - 工具循环由 Agent 明确拥有并通过完整测试。
 - usage、finish reason、错误、取消、metering 和 billing 语义可解释且一致。
 - 不存在旧 V3 transport 双栈或旁路补丁。
-- federation、agent、cli、desktop、模板、edge-worker 和 local-node 的受影响测试全部通过。
+- downtown、agent、cli、desktop、模板、edge-worker 和 local-node 的受影响测试全部通过。

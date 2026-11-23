@@ -4,7 +4,7 @@
  */
 import { randomUUID } from "node:crypto";
 import type { ModelClient, ModelCall, ModelStreamEvent, CityModelDescriptor, DowntownModelReference } from "@downcity/type";
-import type { FederationUser } from "@downcity/downtown";
+import type { DowntownUser } from "@downcity/downtown";
 import { TownConnections, type TownConnectionState } from "./TownConnections.js";
 import { client_model_id, downtown_model_id, parse_model_id } from "./ResourceId.js";
 import { ExecutionLease, TownError, lease_stream } from "./ExecutionLease.js";
@@ -95,7 +95,7 @@ export class TownModels {
           try { return lease_stream(await entry.registration.client.stream(call, execution_signal), release, execution_signal); }
           catch (error) { release(); throw error; }
         }
-        // Federation 目录以 stream 声明原生语言模型能力，执行校验必须与 /ai/stream 入口一致。
+        // Downtown 目录以 stream 声明原生语言模型能力，执行校验必须与 /ai/stream 入口一致。
         return this.execute(model_id, binding_id, "stream", async (state, original_model_id, release) => {
           const stream = await state.user.ai.model(original_model_id).stream(call, execution_signal);
           return lease_stream(stream, release, execution_signal);
@@ -124,14 +124,14 @@ export class TownModels {
   /** 结构化决策仍由模型所属服务计费。 */
   decision(request: TownModelRequest<TownDecisionInput>) {
     assert_business_input(request.input);
-    return this.execute(require_request_model_id(request), request.binding_id, "decision", (state, model) => state.user.ai.decision({ ...request.input, model } as Parameters<FederationUser["ai"]["decision"]>[0], request.signal), false, request.signal);
+    return this.execute(require_request_model_id(request), request.binding_id, "decision", (state, model) => state.user.ai.decision({ ...request.input, model } as Parameters<DowntownUser["ai"]["decision"]>[0], request.signal), false, request.signal);
   }
 
   /** 创建前写入 pending，返回本地稳定句柄；失败结果未知时不会自动再次创建。 */
   image_create(request: TownModelRequest<TownImageInput>) {
     assert_business_input(request.input);
     const model_id = require_request_model_id(request);
-    return this.execute(model_id, request.binding_id, "image", (state, model) => this.jobs.create(state, model_id, { ...request.input, model } as Parameters<FederationUser["ai"]["image_create"]>[0], request.signal), false, request.signal);
+    return this.execute(model_id, request.binding_id, "image", (state, model) => this.jobs.create(state, model_id, { ...request.input, model } as Parameters<DowntownUser["ai"]["image_create"]>[0], request.signal), false, request.signal);
   }
 
   /** 查询只解析本地来源记录，不接受当前页面或当前模型覆盖来源。 */
@@ -142,13 +142,13 @@ export class TownModels {
   /** 语音合成保留原请求契约，加入正确的取消与来源门禁。 */
   tts(request: TownModelRequest<TownTtsInput>) {
     assert_business_input(request.input);
-    return this.execute(require_request_model_id(request), request.binding_id, "tts", (state, model) => ai_json<Awaited<ReturnType<FederationUser["ai"]["tts"]>>>(state.user, "tts", { ...request.input, model }, request.signal), false, request.signal);
+    return this.execute(require_request_model_id(request), request.binding_id, "tts", (state, model) => ai_json<Awaited<ReturnType<DowntownUser["ai"]["tts"]>>>(state.user, "tts", { ...request.input, model }, request.signal), false, request.signal);
   }
 
   /** 语音识别同样固定模型来源。 */
   asr(request: TownModelRequest<TownAsrInput>) {
     assert_business_input(request.input);
-    return this.execute(require_request_model_id(request), request.binding_id, "asr", (state, model) => ai_json<Awaited<ReturnType<FederationUser["ai"]["asr"]>>>(state.user, "asr", { ...request.input, model }, request.signal), false, request.signal);
+    return this.execute(require_request_model_id(request), request.binding_id, "asr", (state, model) => ai_json<Awaited<ReturnType<DowntownUser["ai"]["asr"]>>>(state.user, "asr", { ...request.input, model }, request.signal), false, request.signal);
   }
 
   /** 关闭前先统一检查直接模型，避免只退掉部分来源。 */
@@ -250,7 +250,7 @@ function combine_signals(first?: AbortSignal, second?: AbortSignal): AbortSignal
 }
 
 /** 普通 AI JSON 动作使用 SDK ServiceClient 保留鉴权与标准错误。 */
-export async function ai_json<T>(user: Pick<FederationUser, "service">, action: string, input: object, signal?: AbortSignal): Promise<T> {
+export async function ai_json<T>(user: Pick<DowntownUser, "service">, action: string, input: object, signal?: AbortSignal): Promise<T> {
   const response = await user.service("ai").request(action, { method: "POST", body: JSON.stringify(input), headers: { "content-type": "application/json" }, signal });
   return await response.json() as T;
 }

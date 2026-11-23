@@ -3,4 +3,4 @@
  * 管理器与持久仓储属于 local 宿主面，不暴露给项目执行上下文。
  */
 export { ExtensionConfigurationRequest } from "./local/extensions/ExtensionConfiguration.js";
-export type { ExtensionProject, ExtensionEntry, ExtensionContext, ExtensionAgentDefinition, ExtensionFederation, ExtensionConfigurationField, ExtensionPowerDefinition } from "./local/types/ExtensionProject.js";
+export type { ExtensionProject, ExtensionEntry, ExtensionContext, ExtensionAgentDefinition, ExtensionDowntown, ExtensionConfigurationField, ExtensionPowerDefinition } from "./local/types/ExtensionProject.js";

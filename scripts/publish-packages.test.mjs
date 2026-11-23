@@ -17,7 +17,7 @@ import {
   verify_publish_plan,
 } from "./publish-packages.mjs";
 
-const federation_extension_manifests = [
+const downtown_extension_manifests = [
   "packages/implementations/services/package.json",
   "packages/implementations/databases/d1/package.json",
   "packages/implementations/databases/postgresql/package.json",
@@ -29,23 +29,23 @@ function read_manifest(manifest_path) {
   return JSON.parse(readFileSync(manifest_path, "utf8"));
 }
 
-test("Federation 扩展包只声明宿主持有的 peer 运行时", () => {
-  for (const manifest_path of federation_extension_manifests) {
+test("Downtown 扩展包只声明宿主持有的 peer 运行时", () => {
+  for (const manifest_path of downtown_extension_manifests) {
     const manifest = read_manifest(manifest_path);
     assert.equal(
       manifest.dependencies?.["@downcity/downtown"],
       undefined,
-      `${manifest.name} 不得拥有 Federation 运行时`,
+      `${manifest.name} 不得拥有 Downtown 运行时`,
     );
     assert.equal(
       manifest.peerDependencies?.["@downcity/downtown"],
       "workspace:^",
-      `${manifest.name} 必须声明 Federation 兼容范围`,
+      `${manifest.name} 必须声明 Downtown 兼容范围`,
     );
     assert.equal(
       manifest.devDependencies?.["@downcity/downtown"],
       "workspace:*",
-      `${manifest.name} 必须使用 workspace Federation 完成本地构建`,
+      `${manifest.name} 必须使用 workspace Downtown 完成本地构建`,
     );
   }
 });

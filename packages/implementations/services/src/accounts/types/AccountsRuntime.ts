@@ -17,9 +17,9 @@ export interface AccountsRuntimeOptions {
   database: ServiceDatabaseContext;
   /** 延迟读取安装上下文，供安装后的 Token 签发使用；数据库准备阶段不读取。 */
   read_install_context: () => ServiceInstallContext;
-  /** 读取 Federation 运行时环境变量。 */
+  /** 读取 Downtown 运行时环境变量。 */
   read_env: (key: string) => string | undefined;
-  /** 读取 Federation 对外基础 URL。 */
+  /** 读取 Downtown 对外基础 URL。 */
   read_base_url: () => string | undefined;
 }
 

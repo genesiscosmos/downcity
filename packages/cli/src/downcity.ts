@@ -5,7 +5,7 @@
  *
  * 关键点（中文）
  * - npm、pnpm、yarn 生成的 bin shim 可能会把 `process.argv[1]` 指向真实 JS 文件。
- * - 因此 City 与 Federation 使用独立入口文件，不再依赖 shim 名称做运行时分发。
+ * - 因此 City 与 Downtown 使用独立入口文件，不再依赖 shim 名称做运行时分发。
  * - `-v/--version` 保持轻量路径，避免版本查询加载本地 SQLite 等运行时依赖。
  */
 

@@ -14,7 +14,7 @@
 
 - 定位依据：downcity-builder-value.md。
 - README.md：声明面向构建多个 Agent 产品与工作流的 builders，列出 runtime、工具、任务、记忆、权限、用量、支付与控制界面。
-- packages/federation/README.md：给出 Federation 的接口用法；区分用户与管理员身份，说明服务、认证、发现与路由职责。
+- packages/downtown/README.md：给出 Downtown 的接口用法；区分用户与管理员身份，说明服务、认证、发现与路由职责。
 
 以上属于产品资料与接口文档证据，不是功能集成测试或客户结果证据。尤其不能据此宣称跨产品权限隔离已经验证，或能够直接复用全部数据与业务逻辑。
 
@@ -47,7 +47,7 @@ Builder 不再只有两个独立 demo，而是有办法组织两个用途不同�
 | Agent runtime | 共用执行组件与接口 | 各 Agent 指令、模型选择与工具策略 |
 | 工具接口 | 复用检索等适用能力 | 服务凭证、数据访问和调用权限 |
 | UI SDK | 复用交互组件 | 应用页面、流程、结果呈现 |
-| Federation 服务 | 接入共同服务来源 | 用户与管理员身份、资源授权范围、账本归属 |
+| Downtown 服务 | 接入共同服务来源 | 用户与管理员身份、资源授权范围、账本归属 |
 | Workspace | 复用工作空间机制 | 应用数据分离、读写边界与清理策略 |
 | Session / memory | 复用机制或 provider | 内容可见性与作用域，不默认共享记忆 |
 | 业务逻辑 | 可复用通用模块 | 研究与审查流程、质量标准、人工检查 |
@@ -94,7 +94,7 @@ Builder 不再只有两个独立 demo，而是有办法组织两个用途不同�
 |---|---|---|
 | templates/agent/server/src/index.ts | new Agent、new Workspace、sessions.create、messages、prompt、turn.finished；Hono 提供 /api/chat | Agent 模板 server / web typecheck 通过；未调用模型 |
 | templates/localfed/src/index.ts | SQLite、AccountsService、AIService、DeepSeekChannel 与本机 HTTP 装配 | localfed typecheck 通过；未启动服务 |
-| agent-sdk-docs/zh/integration-patterns/agent-with-city-ai-service.mdx | 说明 Federation 模型目录、CityModel 与集成链路 | 文档证据，尚未核对全部运行行为；个别 City / Federation 称谓混用，上线案例需以代码校准 |
+| agent-sdk-docs/zh/integration-patterns/agent-with-city-ai-service.mdx | 说明 Downtown 模型目录、CityModel 与集成链路 | 文档证据，尚未核对全部运行行为；个别 City / Downtown 称谓混用，上线案例需以代码校准 |
 
 运行命令：`pnpm -C templates/agent typecheck`、`pnpm -C templates/localfed typecheck`，均退出码 0。类型检查仅证明当前模板类型可通过，不证明共享服务、权限隔离或运行结果。
 
@@ -108,12 +108,12 @@ Agent Web 模板直接通过 create_openai_compatible_model 连接模型供应�
 
 1. 先沿用 Agent 模板的服务端/浏览器职责划分，验证两个独立用途的会话应用；分别指定 Agent 身份与 Workspace，不能让两个应用误用同一个进程级 Session。
 2. 共享运行组件与前端交互代码；业务指令、工作空间、结果格式分别配置。此阶段只能证明组件复用。
-3. 然后将模型访问改为经 Federation 目录提供的 ModelClient 链路，核对当前公开接口后才编写集成代码。共享目录与独立身份须分别测试，不能直接复制文档假定成立。
+3. 然后将模型访问改为经 Downtown 目录提供的 ModelClient 链路，核对当前公开接口后才编写集成代码。共享目录与独立身份须分别测试，不能直接复制文档假定成立。
 4. 研究场景另接检索工具与来源输出，审查场景另接稿件与规范输入。缺少这些功能时只称为对话原型。
 
 ### 当前可用于品牌内容的结论
 
-已具备 Agent Web 应用与本地 Federation 的独立模板，并通过类型检查；产品组合路径有具体代码基础。但“两个应用共享同一底座”的端到端运行证据尚未完成。
+已具备 Agent Web 应用与本地 Downtown 的独立模板，并通过类型检查；产品组合路径有具体代码基础。但“两个应用共享同一底座”的端到端运行证据尚未完成。
 
 因此暂不承诺“开箱即用应用体系”。价值表达可保持为帮助 Builder 构建与组织 Agent 应用，具体复用效果留给案例验证。
 
@@ -126,16 +126,16 @@ Agent Web 模板直接通过 create_openai_compatible_model 连接模型供应�
 ### 当前代码可确认的链路
 
 - `public/templates/agent/server/src/index.ts` 仍直接创建 OpenAI-compatible 模型，使用 `template-agent`、`default` Workspace 与单一进程级 Session。前轮记录的限制仍存在。
-- `public/packages/cli/src/city/runtime/city-model/CityAiServiceBinding.ts` 的 `create_city_ai_model_client` 已展示实际 Federation 接入：通过 `embassy_session_resolver.create_user_client` 获得用户客户端，调用 `embassy_user.ai.catalog()`，再用 `catalog.get(modelId)` 获取可交给 Agent 的模型。
-- 上述函数是 CLI 内部实现证据，不应把它当作模板可直接导入的公开 SDK API。后续应核对 Federation 公共导出及客户端创建参数，再实现模板集成。
+- `public/packages/cli/src/city/runtime/city-model/CityAiServiceBinding.ts` 的 `create_city_ai_model_client` 已展示实际 Downtown 接入：通过 `embassy_session_resolver.create_user_client` 获得用户客户端，调用 `embassy_user.ai.catalog()`，再用 `catalog.get(modelId)` 获取可交给 Agent 的模型。
+- 上述函数是 CLI 内部实现证据，不应把它当作模板可直接导入的公开 SDK API。后续应核对 Downtown 公共导出及客户端创建参数，再实现模板集成。
 - 这条链路证明仓库存在目录取模实现，不证明两个应用已共享服务，也不证明分别使用不同身份时授权、账本或数据边界成立。
 
 ### 将案例拆成两个可验收阶段
 
 | 阶段 | 交付与验收 | 不能据此宣传 |
 |---|---|---|
-| A：双应用组件复用 | 两个独立应用配置、各自 Agent / Workspace / Session；记录共用代码与业务差异；检查输入不会误投到另一个 Session | 多用户安全隔离、共享 Federation 已完成、研究助手已经具备检索 |
-| B：共同模型服务 | 两个应用经同一 Federation 目录调用模型；保存目录发现、请求成功/失败与身份配置记录；验证授权拒绝行为 | 未测试的跨租户隔离、全部数据可共享、量化提效 |
+| A：双应用组件复用 | 两个独立应用配置、各自 Agent / Workspace / Session；记录共用代码与业务差异；检查输入不会误投到另一个 Session | 多用户安全隔离、共享 Downtown 已完成、研究助手已经具备检索 |
+| B：共同模型服务 | 两个应用经同一 Downtown 目录调用模型；保存目录发现、请求成功/失败与身份配置记录；验证授权拒绝行为 | 未测试的跨租户隔离、全部数据可共享、量化提效 |
 
 阶段 A 可以先使用模拟模型做执行与接口测试；这只能证明接线，不代表真实模型的质量或服务表现。阶段 B 需要明确测试服务、身份、允许调用的模型及费用边界后再运行，不在聊天中索取密钥。
 
@@ -153,7 +153,7 @@ Agent Web 模板直接通过 create_openai_compatible_model 连接模型供应�
 
 ## Changelog
 
-- v3 (2026-10-12) — 续接旧会话，核对当前 public/ 仓库入口与 CLI 的 Federation 目录取模链路；区分内部实现与公开 API，将案例收敛为组件复用、共享服务两个验收阶段，并明确内容的搜索意图与证据边界。本轮未运行测试。
+- v3 (2026-10-12) — 续接旧会话，核对当前 public/ 仓库入口与 CLI 的 Downtown 目录取模链路；区分内部实现与公开 API，将案例收敛为组件复用、共享服务两个验收阶段，并明确内容的搜索意图与证据边界。本轮未运行测试。
 
 - v2 (2026-10-10) — 核查 Agent Web 与 localfed 源码并运行两项类型检查；记录直接模型接入、单 Session 和缺少检索工具等实际限制，明确双应用共享服务案例仍需集成验证。
 

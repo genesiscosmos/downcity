@@ -2,8 +2,8 @@
  * 共享 pi-tui 组件。
  *
  * 关键点（中文）
- * - 用同一套组件承载 Federation dashboard、admin runtime 与后续 city 管理界面。
- * - 组件只关心渲染与输入，不包含 Federation 业务逻辑。
+ * - 用同一套组件承载 Downtown dashboard、admin runtime 与后续 city 管理界面。
+ * - 组件只关心渲染与输入，不包含 Downtown 业务逻辑。
  */
 
 import {

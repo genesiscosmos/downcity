@@ -1,7 +1,7 @@
 /**
  * Downcity 官方 Accounts 服务。
  *
- * AccountsService 是 Federation 集成边界：声明 Schema 与环境需求，创建登录
+ * AccountsService 是 Downtown 集成边界：声明 Schema 与环境需求，创建登录
  * 运行时并注册路由。数据库准备、定期维护和实例认证初始化使用独立生命周期，
  * Provider 选择、认证流程和持久化分别由内部模块负责。
  */
@@ -34,7 +34,7 @@ const accounts_env: EnvRequirement[] = [
 
 export type { AccountsServiceOptions, AccountsUsageRegistration } from "./types.js";
 
-/** Accounts 服务的 Federation 组合根。 */
+/** Accounts 服务的 Downtown 组合根。 */
 export class AccountsService extends InstallableService {
   readonly id = "accounts";
   readonly name = "Accounts";
@@ -57,7 +57,7 @@ export class AccountsService extends InstallableService {
       ...providers.flatMap((provider) => provider.env),
     ]), {
       description: "Unified account identity, email/OAuth/local login, token issuance and rotating device sessions.",
-      requirements: ["Prepared Accounts schema and Federation signing/authentication runtime", "BETTER_AUTH_SECRET", "Explicit login providers or local_login", "OAuth web callbacks must exactly match trusted_web_callbacks; CLI/Desktop require loopback callback and S256 PKCE"],
+      requirements: ["Prepared Accounts schema and Downtown signing/authentication runtime", "BETTER_AUTH_SECRET", "Explicit login providers or local_login", "OAuth web callbacks must exactly match trusted_web_callbacks; CLI/Desktop require loopback callback and S256 PKCE"],
       availability: () => this.read_local_availability(),
     });
     this.providers = providers;
@@ -65,7 +65,7 @@ export class AccountsService extends InstallableService {
       "提供 Downcity 的统一账号服务容器，具体登录方式由 email / phone / OAuth 等 provider 决定。",
       "provider 满足 required env 或 runtime 配置后，才会出现在 /providers 中供客户端使用。",
       "登录开始传 client_type。OAuth 必须绑定产品 redirect_uri、随机 state 与 S256 PKCE；网站回调必须精确匹配 trusted_web_callbacks，CLI/Desktop 使用本机 loopback。Provider 认证后自动回到产品，使用 authorization_code、code_verifier、login_secret 与 exchange_id 一次性交换 Token。状态查询不能交付 Token。",
-      "OAuth 回调地址固定为 /v1/accounts/oauth/callback，服务会根据 Federation 公网地址生成完整回调 URL。",
+      "OAuth 回调地址固定为 /v1/accounts/oauth/callback，服务会根据 Downtown 公网地址生成完整回调 URL。",
       `当前暴露 ${actions.length} 个动作，常用流程由 /providers 返回的 provider 决定。`,
       "配置：准备数据库，设置 BETTER_AUTH_SECRET，并为已选 Provider 提供配置；Email 需要 send_email，OAuth 需要 client ID/secret 与正确公网回调地址。",
       "鉴权：providers/login/register/verify-email 是公开入口；me 要求 User Token；tokens/issue/users/sessions 要求 Admin Session。公开登录仍校验私密 proof、Origin/Cookie 或 OAuth code/PKCE。",

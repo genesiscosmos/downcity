@@ -2,13 +2,13 @@
  * 显式部署迁移：删除 Bureau 运行依赖，保留旧来源事实与全部业务记录。
  *
  * 本模块没有命令行入口，也不被服务启动导入。部署者必须在维护窗口备份数据库、
- * 停止旧版本写入后，显式传入 Federation Database Adapter 调用迁移。仅支持 SQLite
+ * 停止旧版本写入后，显式传入 Downtown Database Adapter 调用迁移。仅支持 SQLite
  * 与 PostgreSQL；所有 DDL、归档和完成标记通过 Adapter.atomic 在同一事务提交。
  * 失败自动回滚，修正原因后可重试；已提交迁移再次执行返回 false。
  *
  * 用户、密钥、余额、流水、组织成员、申请、任务及正在完成的登录事务原样保留。
  * 旧 bureau_id 从不推断成 city_id：来源映射存到迁移事实表，现有任务和用量的
- * city_id 保持 NULL。旧 Bureau 私有组织关闭新申请，Federation 范围保留审核申请。
+ * city_id 保持 NULL。旧 Bureau 私有组织关闭新申请，Downtown 范围保留审核申请。
  */
 
 const migration_id = "20261111_city_sources_without_bureau";
@@ -71,13 +71,13 @@ export async function plan_city_source_migration(database) {
         created_by TEXT NOT NULL, created_at TEXT NOT NULL, updated_at TEXT NOT NULL, archived_at TEXT NOT NULL
       )`);
       add(`INSERT INTO service_organizations_city_source SELECT organization_id, name,
-        CASE WHEN scope_type = 'federation' THEN 'approval' ELSE 'closed' END,
+        CASE WHEN scope_type = 'downtown' THEN 'approval' ELSE 'closed' END,
         state, created_by, created_at, updated_at, archived_at FROM service_organizations`);
       add("DROP TABLE service_organizations");
       add("ALTER TABLE service_organizations_city_source RENAME TO service_organizations");
     } else {
       if (!organization_fields.has("join_policy")) add("ALTER TABLE service_organizations ADD COLUMN join_policy TEXT NOT NULL DEFAULT 'closed'");
-      add("UPDATE service_organizations SET join_policy = CASE WHEN scope_type = 'federation' THEN 'approval' ELSE 'closed' END");
+      add("UPDATE service_organizations SET join_policy = CASE WHEN scope_type = 'downtown' THEN 'approval' ELSE 'closed' END");
       add("ALTER TABLE service_organizations DROP COLUMN scope_bureau_id");
       add("ALTER TABLE service_organizations DROP COLUMN scope_type");
       add("ALTER TABLE service_organizations ADD CONSTRAINT service_organizations_join_policy_check CHECK (join_policy IN ('closed', 'approval'))");
@@ -90,7 +90,7 @@ export async function plan_city_source_migration(database) {
     add(`ALTER TABLE ${login_table} DROP COLUMN bureau_id`);
   }
   // 机器凭据与产品注册数据不再进入运行 schema，原始数据单独保留供迁移审计。
-  for (const table of ["federation_bureaus", "federation_bureau_servers", "federation_bureau_tokens"]) {
+  for (const table of ["downtown_bureaus", "downtown_bureau_servers", "downtown_bureau_tokens"]) {
     if (!(await columns(table)).size) continue;
     const archived_table = `archived_20261111_${table}`;
     if ((await columns(archived_table)).size) throw new Error(`Migration archive already exists: ${archived_table}`);
@@ -105,7 +105,7 @@ export async function plan_city_source_migration(database) {
   return plan;
 }
 
-/** 维护窗口显式执行；Adapter 负责事务回滚，不触及 Federation ID、签名密钥或用户撤销状态。 */
+/** 维护窗口显式执行；Adapter 负责事务回滚，不触及 Downtown ID、签名密钥或用户撤销状态。 */
 export async function migrate_city_sources(database) {
   const plan = await plan_city_source_migration(database);
   if (!plan.length) return false;

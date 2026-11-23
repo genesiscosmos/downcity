@@ -3,9 +3,9 @@
 /** Organization 生命周期状态。 */
 export type OrganizationState = "active" | "archived";
 
-/** Federation 中的 Organization 记录。 */
+/** Downtown 中的 Organization 记录。 */
 export interface OrganizationRecord extends Record<string, unknown> {
-  /** Federation 生成的 Organization 稳定主键。 */
+  /** Downtown 生成的 Organization 稳定主键。 */
   organization_id: string;
   /** 面向用户展示的 Organization 名称。 */
   name: string;

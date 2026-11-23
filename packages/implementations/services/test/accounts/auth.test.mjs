@@ -16,7 +16,7 @@ import {
   wechatAccountsProvider,
 } from "../../bin/index.js"
 
-test("accountsService registers users, logs in, and issues Federation tokens", async () => {
+test("accountsService registers users, logs in, and issues Downtown tokens", async () => {
   const cwd = process.cwd()
   const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "downcity-accounts-service-"))
 
@@ -96,7 +96,7 @@ test("accountsService registers users, logs in, and issues Federation tokens", a
       method: "POST", headers: { authorization: `Bearer ${authResult.user_token}` }, body: "{}",
     }))
     assert.equal(logout.status, 200)
-    const revoked = await base.fetch(new Request("http://localhost/v1/federation/token", {
+    const revoked = await base.fetch(new Request("http://localhost/v1/downtown/token", {
       headers: { authorization: `Bearer ${authResult.user_token}` },
     }))
     assert.equal(revoked.status, 401)
@@ -569,11 +569,11 @@ function user_request(user_token) {
 }
 
 function create_admin(base, admin_secret_key) {
-  return create_federation(base, { admin_token: admin_secret_key }).admin
+  return create_downtown(base, { admin_token: admin_secret_key }).admin
 }
 
 
-function create_federation(base, credentials = {}) {
+function create_downtown(base, credentials = {}) {
   return new Downtown({
     url: "http://localhost",
     ...credentials,

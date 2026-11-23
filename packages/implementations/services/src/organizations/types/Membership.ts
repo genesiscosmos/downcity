@@ -12,7 +12,7 @@ export interface OrganizationMembershipRecord extends Record<string, unknown> {
   membership_id: string;
   /** Membership 所属 Organization。 */
   organization_id: string;
-  /** Membership 所属 Federation User。 */
+  /** Membership 所属 Downtown User。 */
   user_id: string;
   /** 当前 Organization 治理角色。 */
   role: OrganizationRole;

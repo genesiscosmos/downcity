@@ -21,7 +21,7 @@ import { ExtensionFailure } from "./ExtensionError.js";
 
 /** 每个宿主一份，构造不导入项目入口；attach 后才允许 restore 执行。 */
 export class ExtensionPlatform {
-  readonly catalog: ExtensionCatalog = { agents: new Map(), federations: new Map(), models: new ExtensionModelRegistry() };
+  readonly catalog: ExtensionCatalog = { agents: new Map(), downtowns: new Map(), models: new ExtensionModelRegistry() };
   readonly repository: ExtensionRepository;
   readonly service: ExtensionService;
   readonly manager: ExtensionManager;
@@ -47,7 +47,7 @@ export class ExtensionPlatform {
     this.city = city;
     this.runtime = new ExtensionHost({ city, catalog: this.catalog, host_modules: resolve_extension_host_modules(), invalidate, refresh_agents: (extension_id) => this.refresh_agents(extension_id), secret: async (extension_id, version, name) => (await new ExtensionSecrets(this.root_path).read(extension_id, version))[name], assert_idle: async (extension_id) => {
       const prefix = `ext_${extension_id.replaceAll("-", "")}_`;
-      // Federation 连接由 City Town 独立登记；扩展卸载只检查自身执行租约，不读取全局当前连接。
+      // Downtown 连接由 City Town 独立登记；扩展卸载只检查自身执行租约，不读取全局当前连接。
       for (const config of this.agents.list()) {
         if (typeof config.execution?.definition_id !== "string" || !config.execution.definition_id.startsWith(prefix)) continue;
         const agent = city.agents.get(config.agent_id);
@@ -70,15 +70,15 @@ export class ExtensionPlatform {
 
   /** 返回扩展来源目录；没有 selected 字段，避免形成全局连接绑定。 */
   connections() {
-    return { items: [...this.catalog.federations].map(([entry_id, federation]) => ({ entry_id, name: federation.name, url: federation.url, source: "extension" as const })), unavailable: false };
+    return { items: [...this.catalog.downtowns].map(([entry_id, downtown]) => ({ entry_id, name: downtown.name, url: downtown.url, source: "extension" as const })), unavailable: false };
   }
 
-  /** 扩展连接不能被切换为全局当前 Federation；调用者应直接选择 Town 来源。 */
+  /** 扩展连接不能被切换为全局当前 Downtown；调用者应直接选择 Town 来源。 */
   select_connection(_entry_id: string | null): never {
     throw new ExtensionFailure("connection_selection_removed", "Extension connections are selected by Town model or service source", "source", 2);
   }
 
-  /** 扩展模型永不回退到 Federation。句柄每次执行解析当前目录代次。 */
+  /** 扩展模型永不回退到 Downtown。句柄每次执行解析当前目录代次。 */
   model(model_id: string): ModelClient | undefined {
     return this.catalog.models.owns(model_id) ? this.catalog.models.handle(model_id) : undefined;
   }

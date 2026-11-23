@@ -4,12 +4,12 @@
  * 关键点（中文）
  * - 只面向当前 City 已登录的 City user，不提供 admin 加款入口。
  * - 余额读取来自 CreditsService；充值订单由 PaymentService 直接创建。
- * - 交互菜单只调用这里的高层函数，避免 FederationConnection 模块继续膨胀。
+ * - 交互菜单只调用这里的高层函数，避免 DowntownConnection 模块继续膨胀。
  */
 
 import { emitCliBlock } from "@/shared/CliReporter.js";
 import { open_system_browser } from "@/shared/SystemBrowser.js";
-import { FederationSessionResolver } from "@/city/shared/FederationSessionResolver.js";
+import { DowntownSessionResolver } from "@/city/shared/DowntownSessionResolver.js";
 import type { CreditsAccount } from "@downcity/downtown";
 import type {
   CityBalanceAccount,
@@ -19,14 +19,14 @@ import type {
 } from "@/city/types/CityBalance.js";
 
 const DEFAULT_PAYMENT_METHOD_ID = "stripe";
-const federation_session_resolver = new FederationSessionResolver();
+const downtown_session_resolver = new DowntownSessionResolver();
 
 /**
  * 读取当前 City user 的余额。
  */
 export async function readCurrentCityBalance(): Promise<CityBalanceAccount> {
-  const { user, federation_user } = await federation_session_resolver.create_user_client();
-  const account_view = await federation_user.service("credits").get<CreditsAccount>("me");
+  const { user, downtown_user } = await downtown_session_resolver.create_user_client();
+  const account_view = await downtown_user.service("credits").get<CreditsAccount>("me");
   const account: CityBalanceAccount = {
     user_id: account_view.user_id,
     credits: account_view.available_credits,
@@ -44,10 +44,10 @@ export async function readCurrentCityBalance(): Promise<CityBalanceAccount> {
 export async function rechargeCurrentCityUser(
   input: CityRechargeInput,
 ): Promise<CityRechargeResult> {
-  const { federation_user } = await federation_session_resolver.create_user_client();
+  const { downtown_user } = await downtown_session_resolver.create_user_client();
   const topup_amount_minor = normalizePositiveInteger(input.topup_amount_minor, "topup_amount_minor");
   const method_id = normalizeText(input.method_id) || DEFAULT_PAYMENT_METHOD_ID;
-  const checkout = await federation_user.payment.method(method_id).invoke<CityCheckoutResult>({
+  const checkout = await downtown_user.payment.method(method_id).invoke<CityCheckoutResult>({
     topup_amount_minor,
     idempotency_key: normalizeText(input.ref) || `city_cli:${crypto.randomUUID()}`,
     note: normalizeText(input.note) || "City user recharge",

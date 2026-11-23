@@ -1,6 +1,6 @@
 /**
  * 单项目执行、校验及整批发布。City 唯一拥有 Power 生命周期，项目运行唯一拥有
- * 模型、Federation 与作者资源；失败的清理保留运行记录与门禁，禁止叠加另一套实例。
+ * 模型、Downtown 与作者资源；失败的清理保留运行记录与门禁，禁止叠加另一套实例。
  */
 import fs from "node:fs/promises";
 import { randomUUID } from "node:crypto";
@@ -30,7 +30,7 @@ class ProjectRun {
   readonly power_ids: string[] = [];
   readonly model_ids: string[] = [];
   readonly agent_ids: string[] = [];
-  readonly federation_ids: string[] = [];
+  readonly downtown_ids: string[] = [];
   /** Town 统一目录中的直接模型 ID，和扩展内部别名分开保存。 */
   readonly town_model_ids: string[] = [];
   /** Town 统一目录中的扩展连接 ID。 */
@@ -110,7 +110,7 @@ export class ExtensionHost implements ExtensionRuntime {
     while (run.town_connection_ids.length) { await town.remove(run.town_connection_ids.at(-1)!); run.town_connection_ids.pop(); }
     for (const id of run.agent_ids) this.options.catalog.agents.delete(id);
     for (const id of run.model_ids) this.options.catalog.models.remove(id);
-    for (const id of run.federation_ids) this.options.catalog.federations.delete(id);
+    for (const id of run.downtown_ids) this.options.catalog.downtowns.delete(id);
     for (const [resource, callback] of [...run.cleanup].reverse()) {
       try { await run.gate.lifecycle(callback); run.cleanup.delete(resource); }
       catch { throw new ExtensionFailure("cleanup_failed", "Extension resource cleanup failed; another runtime cannot be created", "dispose"); }
@@ -143,7 +143,7 @@ export class ExtensionHost implements ExtensionRuntime {
       const raw = typeof loaded.default === "function" ? await loaded.default(context) : loaded.default;
       // 在整个协议校验前接管可识别资源，即使另一个条目无效也不会丢失清理责任。
       const candidate = raw && typeof raw === "object" ? raw as ExtensionProject : {};
-      for (const entries of [candidate.models, candidate.federations]) {
+      for (const entries of [candidate.models, candidate.downtowns]) {
         if (!Array.isArray(entries)) continue;
         for (const resource of entries) {
           if (resource && typeof resource === "object" && typeof resource.dispose === "function") run.cleanup.set(resource, async () => await resource.dispose());
@@ -173,12 +173,12 @@ export class ExtensionHost implements ExtensionRuntime {
       }
       // ready 可能有数据库副作用，但此时所有资源已接管、执行门禁关闭且目录不可见。
       const town = get_town(this.options.city);
-      for (const federation of project.federations ?? []) {
-        await federation.ready();
-        const connection_id = extension_entry_id(record.extension_id, "federation", federation.id);
-        const remove_guard = federation.guard_requests(() => run.gate.acquire(`federation:${connection_id}`));
-        run.cleanup.set(federation, async () => { await federation.dispose(); remove_guard(); });
-        town.add(connection_id, federation, { name: federation.name, auth_scope_id: `extension:${randomUUID()}`, durable: false });
+      for (const downtown of project.downtowns ?? []) {
+        await downtown.ready();
+        const connection_id = extension_entry_id(record.extension_id, "downtown", downtown.id);
+        const remove_guard = downtown.guard_requests(() => run.gate.acquire(`downtown:${connection_id}`));
+        run.cleanup.set(downtown, async () => { await downtown.dispose(); remove_guard(); });
+        town.add(connection_id, downtown, { name: downtown.name, auth_scope_id: `extension:${randomUUID()}`, durable: false });
         run.town_connection_ids.push(connection_id);
       }
       await run.gate.lifecycle(async () => await run.power_batch!.initialize());
@@ -211,17 +211,17 @@ export class ExtensionHost implements ExtensionRuntime {
         this.options.catalog.agents.set(id, { ...agent, id, behavior: { ...agent.behavior, ...(model && model_references.has(model) ? { model: model_references.get(model)! } : {}) } });
         run.agent_ids.push(id);
       }
-      for (const federation of project.federations ?? []) {
-        const id = extension_entry_id(record.extension_id, "federation", federation.id);
-        this.options.catalog.federations.set(id, federation);
-        run.federation_ids.push(id);
+      for (const downtown of project.downtowns ?? []) {
+        const id = extension_entry_id(record.extension_id, "downtown", downtown.id);
+        this.options.catalog.downtowns.set(id, downtown);
+        run.downtown_ids.push(id);
       }
       run.power_batch.publish();
       this.options.refresh_agents?.(record.extension_id);
       run.published = true;
       run.gate.open();
       this.options.invalidate();
-      return { powers: run.power_ids.length, agents: run.agent_ids.length, models: run.model_ids.length, federations: run.federation_ids.length };
+      return { powers: run.power_ids.length, agents: run.agent_ids.length, models: run.model_ids.length, downtowns: run.downtown_ids.length };
     } catch (error) {
       controller.abort();
       // 新运行未曾发布，不存在合法在途调用；失败清理仍需按唯一 owner 释放。
@@ -238,9 +238,9 @@ function get_town(city: import("../../city/runtime/City.js").City) { return city
 function validate_project(value: unknown): ExtensionProject {
   if (!value || typeof value !== "object" || Array.isArray(value)) throw new ExtensionFailure("exports_invalid", "Entry must default export a project object or one configuration function", "load", 2);
   const project = value as ExtensionProject;
-  if (Object.keys(value).some((key) => !["powers", "agents", "models", "federations"].includes(key))) throw new ExtensionFailure("exports_invalid", "Project contains unknown export fields", "load", 2);
+  if (Object.keys(value).some((key) => !["powers", "agents", "models", "downtowns"].includes(key))) throw new ExtensionFailure("exports_invalid", "Project contains unknown export fields", "load", 2);
   let total = 0;
-  for (const kind of ["powers", "agents", "models", "federations"] as const) {
+  for (const kind of ["powers", "agents", "models", "downtowns"] as const) {
     const entries = project[kind];
     if (entries === undefined) continue;
     if (!Array.isArray(entries)) throw new ExtensionFailure("exports_invalid", `${kind} must be an array`, "load", 2);
@@ -251,7 +251,7 @@ function validate_project(value: unknown): ExtensionProject {
       ids.add(id);
       if (kind === "powers" && (typeof entry.compile_tool !== "function" || typeof entry.compile_hooks !== "function")) throw new ExtensionFailure("exports_invalid", "Power must implement the SDK Power protocol", "load", 2);
       if (kind === "models" && (typeof entry.stream !== "function" || !Number.isSafeInteger(entry.context_window) || Number(entry.context_window) <= 0)) throw new ExtensionFailure("exports_invalid", "Text models require stream() and a positive context_window", "load", 2);
-      if (kind === "federations" && !(entry instanceof Downtown)) throw new ExtensionFailure("sdk_incompatible", "Federation must use the host SDK instance", "load", 2);
+      if (kind === "downtowns" && !(entry instanceof Downtown)) throw new ExtensionFailure("sdk_incompatible", "Downtown must use the host SDK instance", "load", 2);
       if (kind === "agents") {
         const behavior = entry.behavior;
         if (!behavior || typeof behavior !== "object" || Object.keys(behavior).some((key) => !["instruction", "tools", "hooks", "session_class", "session_composer", "model"].includes(key))) throw new ExtensionFailure("exports_invalid", "Agent definition must provide only supported behavior fields", "load", 2);

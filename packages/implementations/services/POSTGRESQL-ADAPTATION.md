@@ -1,6 +1,6 @@
 # Services PostgreSQL 适配交付
 
-本次仅修改 `public/packages/implementations/services`。核心 Federation、数据库 Adapter、CLI 和私有 Worker 由并行工作负责。本次未访问线上或部署，也未执行生产数据迁移。
+本次仅修改 `public/packages/implementations/services`。核心 Downtown、数据库 Adapter、CLI 和私有 Worker 由并行工作负责。本次未访问线上或部署，也未执行生产数据迁移。
 
 ## 实现
 
@@ -19,12 +19,12 @@
 - `pnpm --dir public/packages/implementations/services typecheck`：通过。
 - `pnpm --dir public/packages/implementations/services test`：37 项通过，0 失败，包含 SQLite、D1 模拟、认证、账务、支付 Provider、Organizations 与 Usage。
 - `git -C public diff --check -- packages/implementations/services`：通过。
-- 使用用户提供的临时本机 PostgreSQL 16；所有验证创建独立数据库，未修改 downcity_check 或 federation_all_check 的表。
+- 使用用户提供的临时本机 PostgreSQL 16；所有验证创建独立数据库，未修改 downcity_check 或 downtown_all_check 的表。
 - 复用现有 Accounts 8 项、Payment 1 项、Feedback 1 项到真实 PostgreSQL：10 项全部通过。覆盖注册、登录、Token、Google/WeChat 浏览器授权流程、支付订单与 webhook 幂等履约、反馈管理。只更换测试驱动，网络 Provider 使用现有模拟。
 - 复用现有 Credits 两项完整流程到 PostgreSQL：2 项全部通过，覆盖主卡/限时卡、过期、活动卡数量、安全总额、幂等边界。测试内直接执行的 SQLite 参数与预期约束报错按 PG 方言调整；仓库未新增测试文件。
 - PostgreSQL 专项并发检查：主卡 100 + 限时卡 50，两笔不同幂等键并发扣款 100，仅一笔成功，另一笔返回 insufficient credits；最终主卡 50、限时卡 0，无 pending 交易，无负余额。验证了锁前 allocation 在过时后，事务内条件写入及补偿仍保持正确。
 - 直接 SQL 写负余额被 PG CHECK 拒绝；PG 目录确认 Accounts email/Session Token 唯一索引存在。
-- 两个独立新 Federation 实例分别对同一隔离 PG 数据库执行 prepare_database + health：均通过，验证准备 DDL 可重复执行。核心要求 prepare_database 使用新实例，不能在已经初始化的同一个 Federation 实例重复调用。
+- 两个独立新 Downtown 实例分别对同一隔离 PG 数据库执行 prepare_database + health：均通过，验证准备 DDL 可重复执行。核心要求 prepare_database 使用新实例，不能在已经初始化的同一个 Downtown 实例重复调用。
 
 ## 迁移映射
 

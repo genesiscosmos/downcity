@@ -26,7 +26,7 @@ export interface UsageServiceOptions {
 
 /** Usage 分析所需的最小注册用户事实。 */
 export interface UsageAccountRegistration {
-  /** Federation 内全局用户 ID。 */
+  /** Downtown 内全局用户 ID。 */
   user_id: string;
   /** 用户首次注册时间，UTC ISO 字符串。 */
   created_at: string;
@@ -130,7 +130,7 @@ export interface AdminUsageActivityMetrics {
 
 /** Admin 单用户 Usage 聚合。 */
 export interface AdminUserUsageItem {
-  /** Federation 内全局用户 ID。 */
+  /** Downtown 内全局用户 ID。 */
   user_id: string;
   /** 查询范围内最后一次 AI Usage 完成时间。 */
   last_active_at: string;
@@ -284,7 +284,7 @@ export interface AdminUsageRetentionResponse {
   from: string;
   /** 查询范围结束当地自然日，包含。 */
   to: string;
-  /** 当前 Federation 注册用户总量。 */
+  /** 当前 Downtown 注册用户总量。 */
   total_registered_users: number;
   /** 查询范围内每日新增注册用户趋势。 */
   registration_days: AdminRegistrationDay[];

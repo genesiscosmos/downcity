@@ -41,14 +41,14 @@ class D1RollbackService extends InstallableService {
 test("D1 transaction rolls back every buffered write when one statement fails", async () => {
   const runtime = await create_d1_db()
   try {
-    const federation = new Downtown({ database: runtime.database })
-    federation.use(new D1RollbackService())
-    await federation.health()
-    const secret = await create_test_admin_session(federation)
-    const response = await federation.fetch(admin_request(secret, "/v1/d1-rollback/run", {}))
+    const downtown = new Downtown({ database: runtime.database })
+    downtown.use(new D1RollbackService())
+    await downtown.health()
+    const secret = await create_test_admin_session(downtown)
+    const response = await downtown.fetch(admin_request(secret, "/v1/d1-rollback/run", {}))
     assert.equal(response.status, 500)
-    assert.deepEqual(await (await federation.table("d1-rollback.first")).select(), [])
-    assert.deepEqual(await (await federation.table("d1-rollback.second")).select(), [])
+    assert.deepEqual(await (await downtown.table("d1-rollback.first")).select(), [])
+    assert.deepEqual(await (await downtown.table("d1-rollback.second")).select(), [])
   } finally {
     await runtime.dispose()
   }
@@ -57,17 +57,17 @@ test("D1 transaction rolls back every buffered write when one statement fails", 
 test("Organizations initializes on D1 and concurrent create cannot exceed owner quota", async () => {
   const runtime = await create_d1_db()
   try {
-    const federation = new Downtown({ database: runtime.database })
-    federation.use(new OrganizationsService({ max_organizations_per_user: 1 }))
-    await federation.health()
-    const secret = await create_test_admin_session(federation)
-    const token = await issue_user_token(federation, secret, "d1_owner")
+    const downtown = new Downtown({ database: runtime.database })
+    downtown.use(new OrganizationsService({ max_organizations_per_user: 1 }))
+    await downtown.health()
+    const secret = await create_test_admin_session(downtown)
+    const token = await issue_user_token(downtown, secret, "d1_owner")
     const responses = await Promise.all([
-      federation.fetch(user_request(token, "/v1/organizations/create", {
+      downtown.fetch(user_request(token, "/v1/organizations/create", {
         name: "First",
         join_policy: "approval",
       })),
-      federation.fetch(user_request(token, "/v1/organizations/create", {
+      downtown.fetch(user_request(token, "/v1/organizations/create", {
         name: "Second",
         join_policy: "approval",
       })),
@@ -80,31 +80,31 @@ test("Organizations initializes on D1 and concurrent create cannot exceed owner 
     )
     const created = response_bodies.map((body) => JSON.parse(body)).find((body) => body.organization)
     assert.equal(created.organization.join_policy, "approval")
-    const member_token = await issue_user_token(federation, secret, "d1_member")
-    const pending = await json_request(federation, user_request(
+    const member_token = await issue_user_token(downtown, secret, "d1_member")
+    const pending = await json_request(downtown, user_request(
       member_token,
       "/v1/organizations/join-requests/create",
       { organization_id: created.organization.organization_id },
     ))
     const decisions = await Promise.all([
-      federation.fetch(user_request(token, "/v1/organizations/join-requests/decide", {
+      downtown.fetch(user_request(token, "/v1/organizations/join-requests/decide", {
         request_id: pending.request_id,
         decision: "approved",
       })),
-      federation.fetch(user_request(token, "/v1/organizations/join-requests/decide", {
+      downtown.fetch(user_request(token, "/v1/organizations/join-requests/decide", {
         request_id: pending.request_id,
         decision: "approved",
       })),
     ])
     assert.deepEqual(decisions.map((response) => response.status).sort(), [200, 404])
-    const memberships = await (await federation.table("organizations.memberships")).select({
+    const memberships = await (await downtown.table("organizations.memberships")).select({
       organization_id: created.organization.organization_id,
       user_id: "d1_member",
       state: "active",
     })
     assert.equal(memberships.length, 1)
     const organizations = await json_request(
-      federation,
+      downtown,
       user_request(token, "/v1/organizations/my", undefined, "GET"),
     )
     assert.equal(organizations.items.filter((item) => item.state === "active").length, 1)
@@ -129,15 +129,15 @@ function admin_request(secret, pathname, body) {
   })
 }
 
-async function json_request(federation, request) {
-  const response = await federation.fetch(request)
+async function json_request(downtown, request) {
+  const response = await downtown.fetch(request)
   const body = await response.json()
   assert.equal(response.status, 200, JSON.stringify(body))
   return body
 }
 
-async function issue_user_token(federation, secret, user_id) {
+async function issue_user_token(downtown, secret, user_id) {
   void secret
-  const result = await (await federation.runtime.get_authenticator()).createToken({ user_id })
+  const result = await (await downtown.runtime.get_authenticator()).createToken({ user_id })
   return result.user_token
 }

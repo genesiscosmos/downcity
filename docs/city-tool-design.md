@@ -80,7 +80,7 @@ Workspace 没有 Shell 时（例如远程 Workspace）不报错，而是明确�
 
 `workspaces.list|get` 返回 `workspace_id`、`name`、`path`、`is_current`。数据来源是当前 City 已登记的 Workspace 资源，不读本地数据文件。
 
-`usage.get` 的口径是 **user 级 token 用量**，属于 Federation 用户业务能力。当前 Power 尚未接入用户用量接口，因此统一返回 `unsupported_action`，不伪造数据。只返回 token，不做额度与费用换算：那需要计价规则和账本，塞进来会让 harness 多背一份随定价失效的口径。
+`usage.get` 的口径是 **user 级 token 用量**，属于 Downtown 用户业务能力。当前 Power 尚未接入用户用量接口，因此统一返回 `unsupported_action`，不伪造数据。只返回 token，不做额度与费用换算：那需要计价规则和账本，塞进来会让 harness 多背一份随定价失效的口径。
 
 ### `ai`
 

@@ -7,7 +7,7 @@
  *   因此领域拆分不会改变模型侧已有的动作 id。
  * - 动作组私有文件按 Agent + 组隔离（`files_for` 以组名为键），
  *   所以组在 power 之间搬迁不会改变落盘路径。
- * - City 内部事实源（Agent / Workspace 快照）与 Federation 由构造期注入，
+ * - City 内部事实源（Agent / Workspace 快照）与 Downtown 由构造期注入，
  *   不进入通用 `PowerContext`，因此外部 power 拿不到这些能力。
  * - 动作 id 在构造期一次性展开，注册后不再变化。
  */

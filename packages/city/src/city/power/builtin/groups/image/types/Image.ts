@@ -3,7 +3,7 @@
  *
  * 关键点（中文）
  * - 这里只定义图片能力对模型与 City 图片服务的最低层协议，不绑定任意上游 provider。
- * - 图片成功结果使用 Federation AI Action 消息协议，由动作本地化后返回文件路径。
+ * - 图片成功结果使用 Downtown AI Action 消息协议，由动作本地化后返回文件路径。
  * - 字段保持 JSON 可序列化，便于通过工具输入与 ActionResult 传递。
  */
 
@@ -120,7 +120,7 @@ export interface ImageResolvedCreateInput {
   [key: string]: PowerJsonValue | ImageResolvedMessage[] | undefined;
 }
 
-/** 图片成功结果：Federation 返回的非语言 AI Action 消息。 */
+/** 图片成功结果：Downtown 返回的非语言 AI Action 消息。 */
 export type ImageResult = AIActionMessage;
 
 /**
@@ -152,7 +152,7 @@ export interface ImageResultStorageInput {
   };
   /** 当前图片任务 ID，用于划分稳定的本地结果目录。 */
   job_id: string;
-  /** Federation 返回的原始 AI Action 消息。 */
+  /** Downtown 返回的原始 AI Action 消息。 */
   result: ImageResult;
 }
 
@@ -183,7 +183,7 @@ export interface ImageJobResult {
   job_id: string;
   /** 当前任务状态。 */
   status: ImageJobStatus;
-  /** 成功时返回的 Federation AI Action 消息。 */
+  /** 成功时返回的 Downtown AI Action 消息。 */
   result?: ImageResult;
   /** 失败时返回的错误消息。 */
   error?: string;

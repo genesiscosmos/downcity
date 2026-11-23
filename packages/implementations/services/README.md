@@ -6,7 +6,7 @@ Downcity 官方服务聚合包。
 
 Accounts、Credits、Payment、Feedback 与 Organizations 通过 `database_schemas` 支持 SQLite/D1 和 PostgreSQL。数据库适配器需要提供 `schema_id`，并将每次 `atomic()` 的全部命令按顺序绑定到同一个物理事务连接。PostgreSQL 的认证集成使用 better-auth `pg` provider。
 
-PostgreSQL 部署必须执行 Federation `prepare_database()`：Accounts 显式建立邮箱、Session Token、Provider 身份唯一索引和查询索引；Credits 显式建立 CHECK 约束与账务索引。历史数据违反约束时准备失败，不自动删除或合并数据。
+PostgreSQL 部署必须执行 Downtown `prepare_database()`：Accounts 显式建立邮箱、Session Token、Provider 身份唯一索引和查询索引；Credits 显式建立 CHECK 约束与账务索引。历史数据违反约束时准备失败，不自动删除或合并数据。
 
 认证日期从 SQLite 毫秒整数迁移到 PostgreSQL `timestamptz`，需要显式按 epoch milliseconds 转换；Credits 流水新增 PostgreSQL `ledger_sequence`，导入时按原 SQLite `rowid` 升序插入，由数据库生成该列。迁移字段与验证结果见 [PostgreSQL 适配交付记录](./POSTGRESQL-ADAPTATION.md)。
 
@@ -38,18 +38,18 @@ import {
 } from "@downcity/services";
 ```
 
-Federation 可以安装通用 Organization 服务：
+Downtown 可以安装通用 Organization 服务：
 
 ```ts
-const federation = new Federation({ database });
+const downtown = new Downtown({ database });
 
-federation.use(new OrganizationsService({
+downtown.use(new OrganizationsService({
   max_organizations_per_user: 3,
 }));
 ```
 
 Organization 私有内容只向活动成员开放，管理按 owner/admin 角色授权。新建默认关闭申请；owner/admin 可显式设置 `join_policy: "approval"`，关闭后仍保留已有申请。Service 只管理成员关系与治理，不保存产品后端地址。
-客户端使用当前 `user_token` 请求 Federation 业务 Service，并按活动成员查询
+客户端使用当前 `user_token` 请求 Downtown 业务 Service，并按活动成员查询
 Membership 并执行自己的产品资源权限。Organizations Service 支持 SQLite、PostgreSQL
 与 Cloudflare D1，三种数据库统一使用 `context.transaction()`。
 
@@ -88,7 +88,7 @@ Payment 的 `paid` 与 wallet 履约状态独立；自由充值发放 Primary Ca
 
 这些规则不提供通用税费、折扣或换汇自动核算；无法确认金额口径的交易须人工核对。
 
-Webhook 验签、规范化后先持久化 inbox，再入队，成功返回 HTTP 200 只代表接收。Queue 执行 `events/process`；宿主须周期调用 `payment.recover_events()` 或管理员 `POST /v1/payment/events/recover`，恢复到期 pending 与过期 processing。当前 Edge 每五分钟扫描，部署计划由 `federation.toml` 的 `deployment.crons` 声明。临时失败从 15 秒指数退避至最多一小时，20 次后进入 `review`；金额校验失败（422）直接进入 `review`。管理员通过 `GET /v1/payment/events/inbox` 查看诊断，使用 `POST /v1/payment/events/replay` 携带 `{ "event_id": "provider:event_id" }` 重放；重放仍执行校验与幂等履约。
+Webhook 验签、规范化后先持久化 inbox，再入队，成功返回 HTTP 200 只代表接收。Queue 执行 `events/process`；宿主须周期调用 `payment.recover_events()` 或管理员 `POST /v1/payment/events/recover`，恢复到期 pending 与过期 processing。当前 Edge 每五分钟扫描，部署计划由 `downtown.toml` 的 `deployment.crons` 声明。临时失败从 15 秒指数退避至最多一小时，20 次后进入 `review`；金额校验失败（422）直接进入 `review`。管理员通过 `GET /v1/payment/events/inbox` 查看诊断，使用 `POST /v1/payment/events/replay` 携带 `{ "event_id": "provider:event_id" }` 重放；重放仍执行校验与幂等履约。
 
 ## 包含的服务
 
@@ -97,11 +97,11 @@ Webhook 验签、规范化后先持久化 inbox，再入队，成功返回 HTTP 
 - `CreditsService`：永久 Primary Card、限时 Ephemeral Card、Transaction 与不可变 Entries
 - `PaymentService`：拥有支付订单、wallet 权益快照和独立履约状态，统一暴露支付方式、checkout、webhook 与 payments；通过 `on_paid(record, fulfillment)` 幂等接入 Credits
 - `UsageService`：通过 `AIService` 与 `CreditsService` Reader 聚合当前用户的每日 Credits 消费和 AI 技术用量
-- `OrganizationsService`：管理 Federation 全局或 City 作用域的 Organization、Membership、加入申请与治理角色
+- `OrganizationsService`：管理 Downtown 全局或 City 作用域的 Organization、Membership、加入申请与治理角色
 - `stripePaymentProvider()` / `creemPaymentProvider()` / `dodoPaymentProvider()` / `waffoPaymentProvider()`：作为 provider 挂到统一 `PaymentService`
 
 `AccountsService` 启用只代表账号服务、表和 better-auth runtime 已安装；具体登录方式由 provider 决定。`/v1/accounts/providers` 只返回 required env 或 runtime 配置已经满足的 provider。产品侧使用 `POST /v1/accounts/login/start`，显式指定 `client_type`，保存返回的 `login_id` 与仅供发起端保管的 `login_secret`。OAuth 返回授权 URL，input provider 通过 `POST login/continue` 提交输入及领取凭据。`POST login/result` 携带 `login_id`、`login_secret`，只返回状态；完成后通过 `POST login/exchange` 携带相同凭据与稳定的随机 `exchange_id` 领取 `user_token`。网络失败重试必须复用原 `exchange_id`。不要将 `login_secret` 放入 URL、页面或日志。
 
 OAuth 使用 `web`、`cli` 或 `desktop`，均在开始时绑定 `redirect_uri`、随机 `state` 与 S256 PKCE。网站回调精确匹配 AccountsService `trusted_web_callbacks` 精确白名单，BFF 验证发起浏览器交易；CLI/Desktop 用本机系统浏览器和独占的 `127.0.0.1` 临时端口回调。Provider 认证后自动返回产品，交换 Token 还需浏览器交付的 `authorization_code` 与发起产品保管的 `code_verifier`，状态查询不能交付 Token。CLI OAuth 不支持远程或无图形会话。Email 登录要求邮箱验证，OAuth 身份不会按相同邮箱静默合并。
 
-`await federation.user.account.logout()` 先撤销当前 User Token，再清理本地凭证；撤销失败保留凭证以便重试。Federation 为新的受保护请求检查 Token，有效性检查不可用时拒绝访问；已开始的流式请求不会被强制中断。
+`await downtown.user.account.logout()` 先撤销当前 User Token，再清理本地凭证；撤销失败保留凭证以便重试。Downtown 为新的受保护请求检查 Token，有效性检查不可用时拒绝访问；已开始的流式请求不会被强制中断。

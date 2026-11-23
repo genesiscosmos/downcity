@@ -82,7 +82,7 @@ export interface DispatchStrategy {
   decide_dispatch(input: DispatchInput): Promise<DispatchDecision> | DispatchDecision;
 }
 
-/** Group 使用的决策模型输入，与 Federation 的 boolean decision 协议一致。 */
+/** Group 使用的决策模型输入，与 Downtown 的 boolean decision 协议一致。 */
 export interface GroupDecisionInput {
   /** JSON 序列化的群聊上下文；不包含成员工具或执行权限。 */
   readonly state: { /** 状态载荷类型。 */ type: "text"; /** 完整判定上下文。 */ text: string };

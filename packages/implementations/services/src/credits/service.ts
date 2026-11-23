@@ -1,5 +1,5 @@
 /**
- * Federation Credits 服务。
+ * Downtown Credits 服务。
  *
  * 服务以 Primary Card 和 Ephemeral Card 持有当前余额，以 Transaction 和 Entry
  * 记录不可变账务事实。所有多表变更都在当前数据库的原子事务中提交。
@@ -427,7 +427,7 @@ export class CreditsService extends InstallableService {
     return await aggregate_user_daily_charges(this.resolve_raw(), input);
   }
 
-  /** 按日期范围聚合 Federation 全部用户的已入账 Credits 消费。 */
+  /** 按日期范围聚合 Downtown 全部用户的已入账 Credits 消费。 */
   async aggregate_admin_charges(input: AdminUsageQuery): Promise<AdminCreditsUsageResult> {
     return await aggregate_admin_charges(this.resolve_raw(), input);
   }

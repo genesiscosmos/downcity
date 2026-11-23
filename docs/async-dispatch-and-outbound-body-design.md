@@ -2,11 +2,11 @@
 
 > 状态：P0 全部完成；P1-1 / P1-2 完成，并已按奥卡姆剃刀收敛掉隐式兜底与自动恢复；P1-4 / P1-5 待做
 >
-> 适用范围：`@downcity/federation`、`@downcity/plugins`、`templates/edgefed`、`templates/localfed`、`packages/cli` 的 Federation 模板生成器、homepage 文档
+> 适用范围：`@downcity/downtown`、`@downcity/plugins`、`templates/edgefed`、`templates/localfed`、`packages/cli` 的 Downtown 模板生成器、homepage 文档
 >
-> 关联输入：`image-generation-federation-queue-prd.md`、`telegram-document-attachment-failure-prd.md`
+> 关联输入：`image-generation-downtown-queue-prd.md`、`telegram-document-attachment-failure-prd.md`
 >
-> 结论：两份 PRD 描述的故障都成立；根因不在业务 payload，而在两处**边界契约缺失**：Federation 的异步调度能力被当作"可选配置"实现、出站 HTTP 层混用了两套 Web Body 实现。
+> 结论：两份 PRD 描述的故障都成立；根因不在业务 payload，而在两处**边界契约缺失**：Downtown 的异步调度能力被当作"可选配置"实现、出站 HTTP 层混用了两套 Web Body 实现。
 
 ---
 
@@ -16,7 +16,7 @@
 
 | 现象 | 触发动作 | 实际返回 | 代码位置 |
 | --- | --- | --- | --- |
-| 图像生成失败 | `image.image_create` | `502 {"error":{"message":"Federation queue adapter is not configured","type":"server_error"}}` | `packages/federation/src/federation/queue.ts:69` |
+| 图像生成失败 | `image.image_create` | `502 {"error":{"message":"Downtown queue adapter is not configured","type":"server_error"}}` | `packages/downtown/src/downtown/queue.ts:69` |
 | 附件发送失败 | `chat.send` / 直接输出 `<file>` | 用户收到 `❌ Failed to send document: ... there is no document in the request`，调用方拿到 `delivery_id` | `packages/implementations/plugins/src/chat/channels/telegram/ApiClient.ts:290`、`:429` |
 | `files` 字段被拒 | `chat.send` payload 带 `files` | `unrecognized_keys` | `packages/implementations/plugins/src/chat/runtime/ChatAgentActions.ts:60` |
 
@@ -34,13 +34,13 @@ ImagePlugin.image_create
           3. enqueue_image_fetch(ctx)     → ctx.queue.send(...) 抛错
 ```
 
-`FederationQueue.send()` 在未注册 adapter 时抛 `Federation queue adapter is not configured`；该错误经 `imageActionError()`（`packages/federation/src/service/ai/ai-service-values.ts:131`，把非 HTTP 错误统一包成 **502**）与 `build_error_response()`（`federation-router.ts:375`）后，输出与 PRD 记录完全一致。`models` 走 catalog、不经过队列，因此正常。
+`DowntownQueue.send()` 在未注册 adapter 时抛 `Downtown queue adapter is not configured`；该错误经 `imageActionError()`（`packages/downtown/src/service/ai/ai-service-values.ts:131`，把非 HTTP 错误统一包成 **502**）与 `build_error_response()`（`downtown-router.ts:375`）后，输出与 PRD 记录完全一致。`models` 走 catalog、不经过队列，因此正常。
 
 由此暴露三个真实缺陷：
 
 1. **副作用先于能力校验**：上游任务与 `async_jobs` 记录都已产生，入队才失败。调用方拿不到 `job_id`，该任务在 DB 中保持非终态，直到 2 小时 pending 超时（`AIImageJobRuntime.ts:48`、`:192`）才被标记 failed。
-2. **保护是死代码**：`if (!ctx.queue) return;`（`AIImageJobRuntime.ts:215`、`AISettlementRuntime.ts:290`）不会生效——`federation-init.ts:172` 给每个 service 注入 `_queue`，`federation-router.ts:218` 原样放进 `ctx.queue`。实际语义是"有队列就发，发不出去就抛"。
-3. **模板能力不齐**：adapter 注册与消费端只存在于 `CloudflareWorkersTemplate.ts:133` 与 `:181`；`templates/localfed`、`templates/edgefed` 既无 adapter 也无 consumer。用这两个模板起的 Federation，图像生成与结算重试在结构上不可能成功，且没有任何启动期提示。
+2. **保护是死代码**：`if (!ctx.queue) return;`（`AIImageJobRuntime.ts:215`、`AISettlementRuntime.ts:290`）不会生效——`downtown-init.ts:172` 给每个 service 注入 `_queue`，`downtown-router.ts:218` 原样放进 `ctx.queue`。实际语义是"有队列就发，发不出去就抛"。
+3. **模板能力不齐**：adapter 注册与消费端只存在于 `CloudflareWorkersTemplate.ts:133` 与 `:181`；`templates/localfed`、`templates/edgefed` 既无 adapter 也无 consumer。用这两个模板起的 Downtown，图像生成与结算重试在结构上不可能成功，且没有任何启动期提示。
 
 ### 1.3 根因 B：出站层混用两套 Web Body 实现
 
@@ -86,13 +86,13 @@ Telegram 收到没有 `document` 字段的纯文本请求，返回 `400 Bad Requ
 
 | 对象 | 一句话职责 |
 | --- | --- |
-| `FederationQueue` | Federation 的异步调度能力：**由宿主显式注册**，**缺失时必须前置失败**。 |
+| `DowntownQueue` | Downtown 的异步调度能力：**由宿主显式注册**，**缺失时必须前置失败**。 |
 | `plugin_http_fetch` | 插件唯一出站层：**body 语义透传**，代理、超时、脱敏统一在这里收口。 |
 | Chat Outbox | **投递事实的唯一回执点**：成功与失败都写在这里，并由发起方可读。 |
 
 ---
 
-## 4. 设计：Federation 异步调度
+## 4. 设计：Downtown 异步调度
 
 ### 4.1 队列能力只有一个来源：宿主显式注册
 
@@ -100,10 +100,10 @@ Telegram 收到没有 `document` 字段的纯文本请求，返回 `400 Bad Requ
 
 | | 机制 |
 | --- | --- |
-| 具备能力 | 宿主显式 `federation.queue.use(adapter)`（如 Cloudflare Queue） |
+| 具备能力 | 宿主显式 `downtown.queue.use(adapter)`（如 Cloudflare Queue） |
 | 不具备能力 | `is_available()` 为 `false`；`send()` 与 `require_available()` 抛出带 `code` 的可定位错误 |
 
-**不做的事**：Federation 不判断宿主平台，不提供隐式兜底适配器，不存在 `in_process` 状态。
+**不做的事**：Downtown 不判断宿主平台，不提供隐式兜底适配器，不存在 `in_process` 状态。
 
 理由（重要）：识别宿主平台（嗅探 Cloudflare userAgent、`EdgeRuntime` 等）等于把**部署知识塞进核心**，
 而且不可靠——userAgent 会变、未覆盖的平台会漏网；一旦判断错，进程内定时器会在响应结束后
@@ -120,12 +120,12 @@ Telegram 收到没有 `document` 字段的纯文本请求，返回 `400 Bad Requ
 
 ### 4.2.1 能力可探测
 
-`Federation.health()` 的 `queue` 字段是**布尔值**（是否已注册 adapter），
+`Downtown.health()` 的 `queue` 字段是**布尔值**（是否已注册 adapter），
 使部署期就能发现「有异步任务但没有队列」，而不必等到第一次任务入队失败。
 
 ### 4.3 调度前置校验与失败语义
 
-> 状态：已实现（commit `76700ca7b`，`@downcity/federation` 0.1.20）
+> 状态：已实现（commit `76700ca7b`，`@downcity/downtown` 0.1.20）
 
 在 `AIImageJobRuntime.create_job()` 的**上游调用与落库之前**插入能力断言
 （`require_async_dispatch(ctx)`）：
@@ -274,12 +274,12 @@ npm undici 只导出 `FormData`，**不导出 `Blob` / `File`**（`typeof u.File
 
 | 文件 | 变化 | 依赖方向 |
 | --- | --- | --- |
-| `packages/federation/src/federation/queue.ts` | 带 `code` 的错误；`is_available()` / `require_available()` 预检 | 不变（Federation 内部） |
-| `packages/federation/src/federation/federation.ts` | `health()` 上报 queue 是否可用（布尔） | 不变 |
-| `packages/federation/src/federation/types.ts` | `FederationHealthStatus.queue` 改为布尔值 | 不变 |
-| `packages/federation/src/service/ai/ai-service-values.ts` | 新增 `require_async_dispatch` 能力断言（映射 503 + code） | Service → Federation 能力，方向不变 |
-| `packages/federation/src/service/ai/AIImageJobRuntime.ts` | 前置能力校验；投递降级保留事实；删除死分支 | Service → Federation 能力，方向不变 |
-| `packages/federation/src/service/ai/AISettlementRuntime.ts` | 同上（结算保持降级不抛错，改为可观察） | 不变 |
+| `packages/downtown/src/downtown/queue.ts` | 带 `code` 的错误；`is_available()` / `require_available()` 预检 | 不变（Downtown 内部） |
+| `packages/downtown/src/downtown/downtown.ts` | `health()` 上报 queue 是否可用（布尔） | 不变 |
+| `packages/downtown/src/downtown/types.ts` | `DowntownHealthStatus.queue` 改为布尔值 | 不变 |
+| `packages/downtown/src/service/ai/ai-service-values.ts` | 新增 `require_async_dispatch` 能力断言（映射 503 + code） | Service → Downtown 能力，方向不变 |
+| `packages/downtown/src/service/ai/AIImageJobRuntime.ts` | 前置能力校验；投递降级保留事实；删除死分支 | Service → Downtown 能力，方向不变 |
+| `packages/downtown/src/service/ai/AISettlementRuntime.ts` | 同上（结算保持降级不抛错，改为可观察） | 不变 |
 | `packages/implementations/plugins/src/http/PluginHttp.ts` | 出站边界归一化全局 `FormData` | Plugin → 出站层，方向不变 |
 | `packages/implementations/plugins/src/chat/channels/telegram/ApiClient.ts` | 附件失败上抛 | 不变 |
 | `packages/implementations/plugins/src/chat/channels/feishu/Feishu.ts` | 附件失败上抛 | 不变 |
@@ -295,9 +295,9 @@ npm undici 只导出 `FormData`，**不导出 `Blob` / `File`**（`typeof u.File
 
 | 类型 | 内容 |
 | --- | --- |
-| 新增 | `chat.delivery` plugin action（P1-5，尚未实现）；`FederationQueueUnavailableError`；`FederationQueue.is_available()` / `require_available()` |
-| 修改 | `FederationQueue.send()` 错误改为带 `code`；`Federation.health()` 的 `queue` 字段为布尔值；`chat.send` / `chat.react` 返回体新增 `status` |
-| 删除 | `AIImageJobRuntime` / `AISettlementRuntime` 中永不生效的 `!ctx.queue` 分支；`ApiClient` 的吞错降级路径；以及已收敛的 `FederationQueue.state` / `CityQueueState` / `FederationQueue.dispose()` / `InProcessQueueAdapter` / `AIServiceOptions.reconcile_interval_ms` |
+| 新增 | `chat.delivery` plugin action（P1-5，尚未实现）；`DowntownQueueUnavailableError`；`DowntownQueue.is_available()` / `require_available()` |
+| 修改 | `DowntownQueue.send()` 错误改为带 `code`；`Downtown.health()` 的 `queue` 字段为布尔值；`chat.send` / `chat.react` 返回体新增 `status` |
+| 删除 | `AIImageJobRuntime` / `AISettlementRuntime` 中永不生效的 `!ctx.queue` 分支；`ApiClient` 的吞错降级路径；以及已收敛的 `DowntownQueue.state` / `CityQueueState` / `DowntownQueue.dispose()` / `InProcessQueueAdapter` / `AIServiceOptions.reconcile_interval_ms` |
 | 不引入 | 不新增“队列可用性探测”公开 API（改用抛错的 `require_available()` 断言）；不新增 `files` 字段；不引入运行时 flag 开关；**不引入平台嗅探、不提供隐式兜底适配器、不内置自动恢复循环** |
 
 ---
@@ -319,13 +319,13 @@ npm undici 只导出 `FormData`，**不导出 `Blob` / `File`**（`typeof u.File
 | 层级 | 用例 |
 | --- | --- |
 | `@downcity/plugins` | multipart 回归（5.3）；附件失败必须上抛且不发 ❌ 文本；纯文本不受影响；`chat.send` / `chat.react` 返回含 `status`。`chat.delivery` 用例待 P1-5 |
-| `@downcity/federation` | 注册 adapter 后 `send()` 委托投递、未注册则前置失败且带 `code`；`health()` 上报能力布尔值；adapter 发送失败向上冒泡。**已实现：`test/queue-dispatch.test.mjs` 5/5 通过，全套 84/84 通过** |
+| `@downcity/downtown` | 注册 adapter 后 `send()` 委托投递、未注册则前置失败且带 `code`；`health()` 上报能力布尔值；adapter 发送失败向上冒泡。**已实现：`test/queue-dispatch.test.mjs` 5/5 通过，全套 84/84 通过** |
 | templates | localfed 端到端图像生成；edgefed 缺 binding 时 `health()` 报错 |
-| 验证顺序 | 定向 typecheck → 定向测试 → 消费 package typecheck → patch build（`@downcity/federation`、`@downcity/plugins`）→ homepage build（文档变化时） |
+| 验证顺序 | 定向 typecheck → 定向测试 → 消费 package typecheck → patch build（`@downcity/downtown`、`@downcity/plugins`）→ homepage build（文档变化时） |
 
 无法在当前系统验证的部分：Telegram / 飞书真实上传与 Cloudflare Queue 行为必须由对应环境验证，本机只能验证到"请求体编码正确"与"能力装配正确"。
 
-另需注意：`@downcity/federation` 的测试依赖 `better-sqlite3` 原生模块，在 Linux 沙箱中会报 `invalid ELF header`（该模块在宿主机 macOS 编译）。federation 测试必须在宿主机运行，沙箱只能做 typecheck 与构建。
+另需注意：`@downcity/downtown` 的测试依赖 `better-sqlite3` 原生模块，在 Linux 沙箱中会报 `invalid ELF header`（该模块在宿主机 macOS 编译）。downtown 测试必须在宿主机运行，沙箱只能做 typecheck 与构建。
 
 ---
 
@@ -346,7 +346,7 @@ npm undici 只导出 `FormData`，**不导出 `Blob` / `File`**（`typeof u.File
 2. ✅ **P0-2 失败语义**：Telegram / 飞书附件失败上抛；`chat.send` / `chat.react` 返回受理回执（含 `status`）（commit `f2321b50e`、`97b9935a2`，`plugins` 1.0.314）。
 3. ✅ **P1-1 调度能力预检**：能力缺失前置失败（带 `code` 的错误 + `require_available()`）。初版曾引入进程内适配器与平台嗅探，**已按奥卡姆剃刀移除**（见 4.1）。
 4. ✅ **P1-2 服务侧校验**：`create_job` 前置能力断言、投递失败保留 `job_id` 与
-   `downcity_dispatch_error`、删除死分支（commit `76700ca7b`，`@downcity/federation` 0.1.20）。
+   `downcity_dispatch_error`、删除死分支（commit `76700ca7b`，`@downcity/downtown` 0.1.20）。
 5. ❌ **P1-3 恢复：不做**。原 SDK 内恢复协调器已移除，恢复职责交还队列（见 4.4）。
 6. **P1-4 模板与文档**：localfed / edgefed / Cloudflare 生成器、homepage 文档。
 7. **P1-5 回执**：`chat.delivery` 查询入口与 `ChatRuntime` 的 attachment 分支收口。

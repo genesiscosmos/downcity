@@ -105,7 +105,7 @@ while [[ $# -gt 0 ]]; do
     --agent) add_package "agent" ;;
     --city) add_package "city" ;;
     --workspace-cloudflare-computer) add_package "workspace-cloudflare-computer" ;;
-    --federation|--downtown) add_package "downtown" ;;
+    --downtown|--downtown) add_package "downtown" ;;
     --database-d1) add_package "database-d1" ;;
     --database-sqlite) add_package "database-sqlite" ;;
     --database-postgresql) add_package "database-postgresql" ;;

@@ -47,7 +47,7 @@ export type ModelStreamEvent =
   | { type: "model_finish"; finish_reason: ModelFinishReason }
   | { type: "model_error"; error: ModelError };
 
-/** Federation SSE 中单个模型流事件的版本化信封。 */
+/** Downtown SSE 中单个模型流事件的版本化信封。 */
 export interface ModelStreamEnvelope {
   /** Downcity Model Protocol 版本。 */
   protocol_version: typeof MODEL_PROTOCOL_VERSION;

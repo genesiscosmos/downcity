@@ -8,7 +8,7 @@
 
 /** `downcity agent model` 命令选项。 */
 export interface AgentModelCommandOptions {
-  /** 直接设置的 Federation model id；省略时进入交互选择。 */
+  /** 直接设置的 Downtown model id；省略时进入交互选择。 */
   set?: string;
 }
 
@@ -20,16 +20,16 @@ export interface AgentModelConfigurationResult {
   /** 修改前的 model id；未配置时为空字符串。 */
   previous_model_id: string;
 
-  /** 修改后的 Federation model id。 */
+  /** 修改后的 Downtown model id。 */
   current_model_id: string;
 
   /** 本次操作是否实际修改了模型。 */
   changed: boolean;
 }
 
-/** Federation 模型选择器响应。 */
+/** Downtown 模型选择器响应。 */
 export interface AgentModelSelectionResponse {
-  /** 用户选择的 Federation model id；取消选择时不存在。 */
+  /** 用户选择的 Downtown model id；取消选择时不存在。 */
   model_id?: string;
 }
 

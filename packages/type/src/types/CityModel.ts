@@ -88,7 +88,7 @@ export interface CityModelDescriptor {
   /**
    * 模型类别，决定该模型可执行的能力入口。
    *
-   * 由 Federation 从模型的可执行能力推导，与 `modalities` 同源；
+   * 由 Downtown 从模型的可执行能力推导，与 `modalities` 同源；
    * 它只用于展示与分组，判断可执行能力应读取 `modalities`。
    */
   model_type: CityModelType;

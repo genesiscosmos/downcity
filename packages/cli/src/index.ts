@@ -31,7 +31,7 @@ if (argv.length === 1 && (argv[0] === "-v" || argv[0] === "--version")) {
 const invoked = process.argv[1] ? process.argv[1].replace(/\\/g, "/").split("/").pop() : "downcity";
 
 if (invoked === "downtown") {
-  const { run_downtown_cli } = await import("@/federation/index.js");
+  const { run_downtown_cli } = await import("@/downtown/index.js");
   await run_downtown_cli();
 } else {
   const { runDowncityCli } = await import("@/city/index.js");

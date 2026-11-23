@@ -8,7 +8,7 @@
 
 City 的 UserRepository 管理唯一使用者，稳定 user_id 为 local。基础资料位于 user/user.json，包含 display_name、created_at、updated_at。Desktop 启动和 MemoryPower 初始化都可确保该记录存在；同平台根共享一个文件。
 
-本地 User 独立于 Federation 账户：退出、切换模型服务账号不会改变记忆，也不要求在线登录。外部渠道沿用宿主授权；本设计不提供多租户隔离，获准使用本地 Agent 的渠道具有同一本地使用者的 Memory 范围。
+本地 User 独立于 Downtown 账户：退出、切换模型服务账号不会改变记忆，也不要求在线登录。外部渠道沿用宿主授权；本设计不提供多租户隔离，获准使用本地 Agent 的渠道具有同一本地使用者的 Memory 范围。
 
 全局用户中心由基础资料仓储与 Memory 服务组合，不把账号凭据保存进 Memory。基础资料管理接口委托 City 仓储，记忆正文由 MemoryPower 维护。
 
@@ -21,7 +21,7 @@ flowchart TD
     A --> AP[各自 Agent Profile]
     A --> AK[各自 Agent Knowledge]
     W[Workspace Knowledge] --> A
-    F[Federation 账户] -.服务登录，不改变 local User.-> U
+    F[Downtown 账户] -.服务登录，不改变 local User.-> U
 ```
 
 ## 2. Session system 快照与消息处理

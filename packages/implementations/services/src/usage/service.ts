@@ -2,7 +2,7 @@
  * Downcity 用户用量聚合服务。
  *
  * UsageService 不拥有事实表。它并行读取 AIService 的技术用量和 CreditsService
- * 的账务消费，合并为当前 Federation 用户的每日用量响应。
+ * 的账务消费，合并为当前 Downtown 用户的每日用量响应。
  */
 
 import { InstallableService, httpError, type ServiceInstallContext } from "@downcity/downtown";
@@ -54,7 +54,7 @@ export class UsageService extends InstallableService {
       "Credits 与 AI Usage 是独立事实，不能互相反推。",
       "用户通过 me 查询最长 400 个当地自然日的每日数据。",
       "用户通过 me/recent 分页查询最近的单次 AI Token 用量。",
-      "持有有效 Admin Session 的 Federation 管理员通过 admin/overview、admin/users 和 admin/retention 查询跨用户分析。",
+      "持有有效 Admin Session 的 Downtown 管理员通过 admin/overview、admin/users 和 admin/retention 查询跨用户分析。",
       "配置：构造时显式注入 AI、Credits、Accounts 三个 Reader；本服务不建事实表，也不调用模型。",
       "鉴权：me 与 me/recent 要求 User Token，并强制使用认证用户；管理端入口仅接受 Admin Session。",
       "流程：提供 from/to 当地日期和 IANA timezone 查询每日用量；recent 按返回的 next_cursor 连续分页。",

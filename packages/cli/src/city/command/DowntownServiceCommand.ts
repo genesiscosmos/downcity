@@ -9,7 +9,7 @@ import type { Command } from "commander";
 import { ResourceError, type TownResponseOpen, type TownResponseChunk } from "@downcity/city/local";
 import type { ServiceCatalogDetail } from "@downcity/downtown";
 import { with_cli_town } from "../resources/TownClient.js";
-import { format_federation_service } from "../shared/FederationAccessOutput.js";
+import { format_downtown_service } from "../shared/DowntownAccessOutput.js";
 
 /** 此模块只接收连接 ID，不支持 URL 或全局 target resolver。 */
 interface ServiceOptions {
@@ -35,7 +35,7 @@ export function register_downtown_service_commands(downtown: Command): void {
     .action((service_id: string, opts: ServiceOptions) => run(opts, async (signal) => {
       await with_cli_town(opts.root, async (call) => {
         const result = await call("town.service", { connection_id: opts.connection, service_id }, signal) as { /** 远端注册的完整服务说明。 */ detail: ServiceCatalogDetail };
-        process.stdout.write(opts.json ? JSON.stringify(result, null, 2) + "\n" : format_federation_service(result.detail));
+        process.stdout.write(opts.json ? JSON.stringify(result, null, 2) + "\n" : format_downtown_service(result.detail));
       });
     }));
   options(downtown.command("openapi").description("Read or export the selected connection's public OpenAPI"))

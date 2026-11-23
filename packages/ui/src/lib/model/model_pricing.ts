@@ -1,4 +1,4 @@
-/** 将 Federation 结构化价格转换为价格对比图数据。 */
+/** 将 Downtown 结构化价格转换为价格对比图数据。 */
 
 import type { ModelSummary } from "../../types/model-controls";
 import type { ModelPricingPoint } from "../../types/model-controls";

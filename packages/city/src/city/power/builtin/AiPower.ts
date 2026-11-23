@@ -5,7 +5,7 @@
  * - 模型侧工具名是 `ai`；动作 id 由组名拼成，与拆分前完全一致：
  *   `image.*`、`sound.*`。
  * - 这些动作会消耗额度或写文件，各自动作自行声明 `access` 与 `approval`。
- * - 能力来自 City 持有的 Federation；未配置时动作返回 `unsupported_action`，不伪造结果。
+ * - 能力来自 City 持有的 Downtown；未配置时动作返回 `unsupported_action`，不伪造结果。
  */
 
 import type { CityActionGroup } from "@/city/power/builtin/CityActionGroup.js";

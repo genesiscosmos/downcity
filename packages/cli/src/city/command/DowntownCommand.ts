@@ -4,7 +4,7 @@ import type { TownConnection } from "@downcity/city/local";
 import type { UserSessionCredentials } from "@downcity/downtown";
 import { call_cli_town } from "../resources/TownClient.js";
 import { register_downtown_service_commands } from "./DowntownServiceCommand.js";
-import { perform_federation_user_login } from "../shared/FederationUserLogin.js";
+import { perform_downtown_user_login } from "../shared/DowntownUserLogin.js";
 
 /** 命令通用输出和数据根选择。 */
 interface DowntownOptions {
@@ -37,7 +37,7 @@ export function register_downtown_command(program: Command): void {
       const connection = await call_cli_town("town.connection.get", { connection_id }, options.root) as TownConnection;
       if (connection.status !== "active") throw new Error("Restore this connection before signing in");
       let credentials: UserSessionCredentials | undefined;
-      const session = await perform_federation_user_login({ federation_url: connection.url, accept_credentials: (value) => { credentials = value; } });
+      const session = await perform_downtown_user_login({ downtown_url: connection.url, accept_credentials: (value) => { credentials = value; } });
       if (!session || !credentials) return { status: "cancelled", connection_id };
       return await call_cli_town("town.connection.login", { connection_id, url: connection.url, revision: connection.revision, credentials }, options.root);
     }));

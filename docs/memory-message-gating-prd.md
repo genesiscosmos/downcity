@@ -4,7 +4,7 @@
 >
 > 本文定义本次已确认的 Memory 触发方案，涉及模型调用的参数、预算和阈值是建议初始值，需通过实际运行数据校准。
 >
-> 范围：MemoryPower、Session 通用入口检查点、City 生命周期、Federation 模型访问、长期记忆存储与管理。
+> 范围：MemoryPower、Session 通用入口检查点、City 生命周期、Downtown 模型访问、长期记忆存储与管理。
 >
 > 本次实施以本文为准；`memory-plugin-design.md` 保留为历史设计参考，其中每轮回复后采集、全局用户信息混存等方案不作为本次实施要求。
 
@@ -135,7 +135,7 @@ UI、Messenger、API 等渠道使用同一条 Session 入口路径，不能分�
 
 ### 5.2 Jev 输入
 
-使用 Federation 的 decision 能力，优先解析已配置的 Jev 模型，不硬编码上游 URL 或读取密钥明文。
+使用 Downtown 的 decision 能力，优先解析已配置的 Jev 模型，不硬编码上游 URL 或读取密钥明文。
 
 输入 state 包含：
 
@@ -417,14 +417,14 @@ source_refs 记录 session_id、message_id、可选 turn_id。读取原始来源
 - `BuiltinMemoryProvider.ts`：支持短条目、来源引用、幂等写入。
 - `remember/revise/forget` 与后台形成共用校验和写入规则。
 
-Session 核心仅提供通用数据访问和 hook，不加入 Jev 或 Memory 专用逻辑。City 宿主需提供 Federation decision/text 调用能力、模型选择和可信身份，Memory 模块不依赖 Desktop task 模块。
+Session 核心仅提供通用数据访问和 hook，不加入 Jev 或 Memory 专用逻辑。City 宿主需提供 Downtown decision/text 调用能力、模型选择和可信身份，Memory 模块不依赖 Desktop task 模块。
 
 ## 12. 配置与模型依赖
 
 | 配置 | 建议初始值 |
 | --- | --- |
 | enabled | 显式启用自动记忆 |
-| decision_model_id | Federation 可用的 Jev decision 模型 |
+| decision_model_id | Downtown 可用的 Jev decision 模型 |
 | formation_model_id | 宿主配置的文本模型，不盲目沿用昂贵聊天模型 |
 | formation_interval_ms | 1,800,000（30 分钟） |
 | decision_timeout_ms | 3,000 |
@@ -498,4 +498,4 @@ Jev 成本会随消息数量增长，但单次输入有上限。不能宣称总�
 4. 接通显式 actions、基础管理状态和成本指标。
 5. 运行代表性场景验证，更新 homepage 中英文 Memory docs 与 Power readme。
 
-本 PRD 只提交设计文档，不代表上述能力已经实现。实施前还需核实 Federation 在 City 宿主中的可用调用入口、用户身份映射和 Session 稳定序列接口；缺失时使用最小宿主依赖注入与通用数据接口补齐，不在 Memory 内建立另一套身份或模型平台。
+本 PRD 只提交设计文档，不代表上述能力已经实现。实施前还需核实 Downtown 在 City 宿主中的可用调用入口、用户身份映射和 Session 稳定序列接口；缺失时使用最小宿主依赖注入与通用数据接口补齐，不在 Memory 内建立另一套身份或模型平台。

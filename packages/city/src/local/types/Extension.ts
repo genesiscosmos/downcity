@@ -61,8 +61,8 @@ export interface ExtensionCapabilityCounts {
   agents: number;
   /** 文本模型数量。 */
   models: number;
-  /** Federation 数量。 */
-  federations: number;
+  /** Downtown 数量。 */
+  downtowns: number;
 }
 
 /** 两端统一操作结果；活动字段由当前宿主实时投影。 */

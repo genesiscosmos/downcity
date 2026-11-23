@@ -2,7 +2,7 @@
 
 ## 1. 文档目的
 
-本文档定义 `@downcity/federation` 中 AI 模型体系的下一版统一架构。
+本文档定义 `@downcity/downtown` 中 AI 模型体系的下一版统一架构。
 
 本次设计解决以下问题：
 
@@ -36,12 +36,12 @@ AIChannel.stream(input)
 | 名称 | 所在层 | 定义 |
 |---|---|---|
 | `LanguageModelV3` | AI SDK | 语言模型标准执行协议 |
-| `AIChannel` | Federation 服务端 | 连接并执行一个上游 AI 渠道 |
-| `AIModelSpec` | Federation 注册输入 | 开发者声明模型时传入的数据 |
-| `AIModelDefinition` | Federation 服务端 | AIService 中已注册、可路由、可执行的模型定义 |
+| `AIChannel` | Downtown 服务端 | 连接并执行一个上游 AI 渠道 |
+| `AIModelSpec` | Downtown 注册输入 | 开发者声明模型时传入的数据 |
+| `AIModelDefinition` | Downtown 服务端 | AIService 中已注册、可路由、可执行的模型定义 |
 | `CityModelDescriptor` | 公开协议 | 可序列化的模型目录信息 |
-| `CityModel` | City 客户端 | 通过 Federation transport 实现的远程 `LanguageModelV3` |
-| `AIService` | Federation 服务端 | 模型注册、路由、fallback、reasoning、计费和协议适配 |
+| `CityModel` | City 客户端 | 通过 Downtown transport 实现的远程 `LanguageModelV3` |
+| `AIService` | Downtown 服务端 | 模型注册、路由、fallback、reasoning、计费和协议适配 |
 
 ### 2.2 核心关系
 
@@ -82,7 +82,7 @@ const model = openai.responses("gpt-5.6-luna");
 
 当前 City `Provider` 则同时负责：
 
-- 保存 Federation env key 和 base URL。
+- 保存 Downtown env key 和 base URL。
 - 保存多个模型共享的默认配置。
 - 注册模型。
 - 执行语言模型流。
@@ -96,7 +96,7 @@ const model = openai.responses("gpt-5.6-luna");
 `ModelConfig` 实际包含：
 
 - 公开目录信息。
-- Federation 私有连接信息。
+- Downtown 私有连接信息。
 - 运行时 action。
 - `runtime.stream`。
 - fallback。
@@ -138,7 +138,7 @@ baseURL + envKey 自动透传
 系统中存在两类完全不同的 `providerOptions`：
 
 1. 客户端使用 `CityModel` 时传入的 `providerOptions.downcity`。
-2. Federation 调用真实 AI SDK model 时传入的 `openai`、`anthropic`、`google` 等上游选项。
+2. Downtown 调用真实 AI SDK model 时传入的 `openai`、`anthropic`、`google` 等上游选项。
 
 如果不明确边界，客户端可能误以为可以控制服务端 `store`、service tier 或数据保留策略。
 
@@ -178,7 +178,7 @@ Channel 必须同时支持：
 
 ### 4.4 服务端拥有上游策略
 
-以下配置只能由 Federation 服务端决定：
+以下配置只能由 Downtown 服务端决定：
 
 - API Key。
 - base URL。
@@ -215,7 +215,7 @@ Channel 必须同时支持：
 
 | 当前名称 | 新名称 | 说明 |
 |---|---|---|
-| `Provider` | `AIChannel` | Federation AI 执行渠道 |
+| `Provider` | `AIChannel` | Downtown AI 执行渠道 |
 | `ProviderOptions` | `AIChannelOptions` | Channel 构造参数 |
 | `ProviderModelSpec` | `AIModelSpec` | Channel 模型声明参数 |
 | `ModelConfig` | `AIModelDefinition` | AIService 内部完整模型定义 |
@@ -231,7 +231,7 @@ Channel 必须同时支持：
 `AIChannel` 明确表示：
 
 - 该对象属于 AIService。
-- 该对象只存在于 Federation 服务端。
+- 该对象只存在于 Downtown 服务端。
 - 该对象不是 AI SDK Provider。
 - 该对象代表一条可执行的上游 AI 渠道。
 
@@ -246,7 +246,7 @@ flowchart TD
     AISDKClient["AI SDK generateText / streamText"]
   end
 
-  subgraph Federation["Federation 服务端"]
+  subgraph Downtown["Downtown 服务端"]
     AIService["AIService"]
     Definition["AIModelDefinition"]
     Channel["AIChannel"]
@@ -305,7 +305,7 @@ export type AISDKProviderOptions = NonNullable<
 
 ```ts
 export interface AIChannelOptions {
-  /** Federation 中的 Channel 唯一 ID。 */
+  /** Downtown 中的 Channel 唯一 ID。 */
   id: string;
 
   /** Channel 所需的环境变量及其管理员说明。 */
@@ -314,7 +314,7 @@ export interface AIChannelOptions {
   /** 上游 API 根地址；只供 Channel 子类使用。 */
   base_url?: string;
 
-  /** Channel 默认 API Key 的 Federation env key。 */
+  /** Channel 默认 API Key 的 Downtown env key。 */
   env_key?: string;
 
   /** reasoning 映射使用的 AI SDK providerOptions 命名空间。 */
@@ -332,11 +332,11 @@ export interface AIChannelOptions {
 - Channel 是否支持语言模型，只由是否实现 `stream()` 决定。
 - 自定义 Channel 需要多个 key 时使用 `env`，并在子类中显式读取。
 
-Channel 执行不接收通用 Federation `Context`，而是使用明确的领域输入：
+Channel 执行不接收通用 Downtown `Context`，而是使用明确的领域输入：
 
 ```ts
 export interface AIChannelModel {
-  /** Federation 对外模型 ID。 */
+  /** Downtown 对外模型 ID。 */
   id: string;
   /** 真实上游模型 ID。 */
   upstream_model: string;
@@ -347,7 +347,7 @@ export interface AIChannelStreamInput {
   call: LanguageModelV3CallOptions;
   /** AIService 已解析完成的最终模型。 */
   model: AIChannelModel;
-  /** 读取 Federation 服务端环境变量。 */
+  /** 读取 Downtown 服务端环境变量。 */
   env(key: string): string | undefined;
   /** AIService 已校验的 reasoning。 */
   reasoning?: AIResolvedReasoning;
@@ -358,7 +358,7 @@ export interface AIChannelActionInput {
   input: Record<string, unknown>;
   /** AIService 已解析完成的最终模型。 */
   model: AIChannelModel;
-  /** 读取 Federation 服务端环境变量。 */
+  /** 读取 Downtown 服务端环境变量。 */
   env(key: string): string | undefined;
   /** 当前请求的可选用户 ID。 */
   user_id?: string;
@@ -373,7 +373,7 @@ export interface AIChannelActionInput {
 
 ```ts
 export interface AIModelSpec {
-  /** Federation 模型目录中的唯一 ID。 */
+  /** Downtown 模型目录中的唯一 ID。 */
   id: string;
 
   /** 真实上游模型 ID，不向普通客户端公开。 */
@@ -437,7 +437,7 @@ export interface AIModelFallbackRule {
   /** 判断当前媒体是否需要切换模型。 */
   match: (media: AIModelFallbackMedia) => boolean;
 
-  /** fallback 目标 Federation 模型 ID。 */
+  /** fallback 目标 Downtown 模型 ID。 */
   model_id: string;
 }
 ```
@@ -461,8 +461,8 @@ interface AIModelRuntime {
 }
 ```
 
-`AIModelStream`、`AIModelActions` 和 `AIModelRuntime` 是 Federation 内部类型，
-不从 `@downcity/federation` 根入口导出。语言执行和其它 modality 统一收在一个
+`AIModelStream`、`AIModelActions` 和 `AIModelRuntime` 是 Downtown 内部类型，
+不从 `@downcity/downtown` 根入口导出。语言执行和其它 modality 统一收在一个
 `runtime` 字段中，避免 Definition 同时出现两套运行时入口。
 
 ### 8.7 AIModelDefinition
@@ -474,7 +474,7 @@ export interface AIModelDefinition
   /** 当前模型所属 AIChannel ID。 */
   channel_id: string;
 
-  /** 当前模型所需的 Federation 环境变量。 */
+  /** 当前模型所需的 Downtown 环境变量。 */
   env?: Record<string, string>;
 
   /** AIService 执行该模型所需的统一内部运行时。 */
@@ -482,12 +482,12 @@ export interface AIModelDefinition
 }
 ```
 
-`AIModelDefinition` 只存在于 Federation，不通过 HTTP 返回。`base_url`、`env_key`
+`AIModelDefinition` 只存在于 Downtown，不通过 HTTP 返回。`base_url`、`env_key`
 只属于 Channel；Definition 只保留注册后真正参与模型路由和执行的数据。
 
 ### 8.8 公共类型收敛结果
 
-`@downcity/federation` 根入口只导出以下 AI 类型：
+`@downcity/downtown` 根入口只导出以下 AI 类型：
 
 ```text
 AIChannel
@@ -515,7 +515,7 @@ AIImageResult
 
 `AIModelStream`、`AIModelActions`、`AIModelRuntime`、路由计划、图片任务 claim、
 `LanguageModelV3StreamPart`、`LanguageModelV3GenerateResult` 以及 OpenAI Chat
-细粒度协议类型只属于 Federation 内部实现，集中放在 `AI.ts` 或 `AITransport.ts`
+细粒度协议类型只属于 Downtown 内部实现，集中放在 `AI.ts` 或 `AITransport.ts`
 但不从公共入口导出。Channel 实现者只接触明确的 Channel 输入、模型声明、标准
 LanguageModelV3 边界和统一结果类型，不会接触 AIService 的 Action Context。
 
@@ -565,7 +565,7 @@ export type CityModel = CityModelDescriptor & LanguageModelV3 & {
 ```text
 CityModel
 = CityModelDescriptor
-+ Federation transport-backed LanguageModelV3 implementation
++ Downtown transport-backed LanguageModelV3 implementation
 ```
 
 ## 9. AIChannel 类设计
@@ -583,7 +583,7 @@ export abstract class AIChannel {
   /** 上游 API 根地址。 */
   protected readonly base_url?: string;
 
-  /** 默认 API Key 的 Federation env key。 */
+  /** 默认 API Key 的 Downtown env key。 */
   protected readonly env_key?: string;
 
   /** reasoning 映射使用的 providerOptions 命名空间。 */
@@ -653,7 +653,7 @@ import {
   AIService,
   read_required_env,
   type AIChannelStreamInput,
-} from "@downcity/federation";
+} from "@downcity/downtown";
 import type {
   LanguageModelV3StreamResult,
 } from "@ai-sdk/provider";
@@ -833,11 +833,11 @@ V1 只允许：
 
 其它客户端 providerOptions：
 
-- 不进入 Federation Channel。
+- 不进入 Downtown Channel。
 - 不转换成 `openai`、`anthropic` 或 `google` 选项。
 - 在 CityModel transport 边界丢弃。
 
-#### Federation 上游选项
+#### Downtown 上游选项
 
 Channel 和模型配置中的：
 
@@ -849,7 +849,7 @@ ai_sdk_provider_options: {
 }
 ```
 
-只存在于 Federation 服务端，最终传给真实 AI SDK model：
+只存在于 Downtown 服务端，最终传给真实 AI SDK model：
 
 ```ts
 model.doStream({
@@ -970,7 +970,7 @@ interface PrivateChannelOptions extends AIChannelOptions {
   doStream() -> 直接请求上游
 
 CityModel
-  doStream() -> 请求 Federation -> AIChannel -> 上游
+  doStream() -> 请求 Downtown -> AIChannel -> 上游
 ```
 
 CityModel 自己不知道：
@@ -1040,9 +1040,9 @@ const output = await turn.finished;
 适用场景：
 
 - Agent 不应持有上游 API Key。
-- 多个 Agent 共享 Federation 模型目录。
+- 多个 Agent 共享 Downtown 模型目录。
 - 需要服务端统一 fallback、reasoning、usage 和 billing。
-- 需要运行时切换 Federation 中的模型。
+- 需要运行时切换 Downtown 中的模型。
 - 宿主已经使用 AI SDK，希望把远程 City 模型当成本地模型使用。
 
 ### 12.6 使用 city.ai.text
@@ -1060,7 +1060,7 @@ const message = await city.ai.text({
 
 - 产品只需要一次完整 `UIMessage`。
 - 不需要消费增量流。
-- 希望由 Federation 聚合标准模型流。
+- 希望由 Downtown 聚合标准模型流。
 
 ### 12.7 使用 city.ai.stream
 
@@ -1084,7 +1084,7 @@ const stream = await city.ai.stream({
 以下情况直接使用真实 AI SDK model：
 
 - 单机应用明确自行持有 API Key。
-- 不需要 Federation 模型目录。
+- 不需要 Downtown 模型目录。
 - 不需要服务端 fallback 和 billing。
 - 不需要 City user/city_id 鉴权。
 - 只在本地 Agent SDK 中执行模型。
@@ -1278,11 +1278,11 @@ AIService 不负责：
 - 正常结束一定包含 `finish`。
 - `finish` 一定包含 `finishReason` 和 `usage`。
 - 异常通过 `error` part 或流异常表达。
-- Federation transport 不泄露 API Key、请求 header 或服务端 providerOptions。
+- Downtown transport 不泄露 API Key、请求 header 或服务端 providerOptions。
 
 ## 17. 安全边界
 
-- API Key 只存在于 Federation env。
+- API Key 只存在于 Downtown env。
 - `AIModelDefinition` 不通过 HTTP 返回。
 - `upstream_model` 默认不公开。
 - Channel/Model `ai_sdk_provider_options` 不进入模型目录。
@@ -1457,7 +1457,7 @@ AI SDK Provider factory
   -> 创建真实上游 LanguageModelV3
 
 AIChannel
-  -> Federation 服务端执行渠道
+  -> Downtown 服务端执行渠道
   -> 持有服务端连接配置
   -> 调用真实上游 LanguageModelV3
 
@@ -1469,7 +1469,7 @@ CityModelDescriptor
 
 CityModel
   -> CityModelDescriptor
-  + Federation transport-backed LanguageModelV3
+  + Downtown transport-backed LanguageModelV3
 ```
 
 完整调用关系：
@@ -1477,7 +1477,7 @@ CityModel
 ```text
 产品 / Agent / AI SDK
   -> CityModel
-  -> Federation AIService
+  -> Downtown AIService
   -> AIModelDefinition
   -> AIChannel.stream()
   -> 真实 AI SDK LanguageModelV3

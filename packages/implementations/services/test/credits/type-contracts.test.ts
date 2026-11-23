@@ -6,9 +6,9 @@ import { Downtown } from "@downcity/downtown";
 import { CreditsService } from "../../src/index.js";
 
 async function verify_credits_service_contract(): Promise<void> {
-  const federation = new Downtown({ database: {} as never });
+  const downtown = new Downtown({ database: {} as never });
   const credits = new CreditsService();
-  federation.use(credits);
+  downtown.use(credits);
 
   await credits.read_account("user_1");
   const card = await credits.cards.create_ephemeral({

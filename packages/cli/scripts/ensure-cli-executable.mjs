@@ -2,7 +2,7 @@
  * downcity CLI 构建后入口权限修复脚本。
  *
  * 关键点（中文）
- * - CLI 包暴露 City 与 Federation 两类 bin 入口。
+ * - CLI 包暴露 City 与 Downtown 两类 bin 入口。
  * - 构建阶段显式补齐可执行权限，避免发布或全局安装后入口不可运行。
  */
 import fs from "node:fs/promises";

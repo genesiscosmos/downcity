@@ -297,7 +297,7 @@ test("平台身份凭证不会从全局 Env 泄漏到 Agent Workspace", async ()
         "SAFE_VALUE=kept",
         "DC_AUTH_TOKEN=auth-token",
         "DC_AGENT_TOKEN=agent-token",
-        "DOWNCITY_FEDERATION_URL=https://federation.example.com",
+        "DOWNCITY_DOWNTOWN_URL=https://downtown.example.com",
         "DOWNCITY_USER_TOKEN=user-token",
         "DOWNCITY_CITY_URL=https://legacy.example.com",
         "DOWNCITY_CITY_USER_TOKEN=legacy-user-token",

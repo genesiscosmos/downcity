@@ -1,23 +1,23 @@
-/** SQLite Federation Database Adapter。 */
+/** SQLite Downtown Database Adapter。 */
 
 import BetterSqlite3 from "better-sqlite3";
 import { drizzle } from "drizzle-orm/better-sqlite3";
 import {
   Database as CityDatabase,
   TableApi,
-  type FederationTableApi,
+  type DowntownTableApi,
   type DatabaseMutationResult,
   type DatabaseQueryResult,
   type DatabaseStatement,
   type DatabaseTransaction,
   type DrizzleDatabase,
-  type FederationTableSchema,
+  type DowntownTableSchema,
 } from "@downcity/downtown";
 import { getTableColumns, getTableName } from "drizzle-orm";
 import { SQLiteCoordinator } from "./SQLiteCoordinator.js";
 import type { DatabaseOptions } from "./types/DatabaseOptions.js";
 
-/** 使用 better-sqlite3 的本地 Federation Database。 */
+/** 使用 better-sqlite3 的本地 Downtown Database。 */
 export class Database extends CityDatabase {
   private readonly client: BetterSqlite3.Database;
   private readonly coordinator = new SQLiteCoordinator();
@@ -33,14 +33,14 @@ export class Database extends CityDatabase {
   }
 
   protected on_table<TRow extends Record<string, unknown>>(
-    schema: FederationTableSchema,
-  ): FederationTableApi<TRow> {
+    schema: DowntownTableSchema,
+  ): DowntownTableApi<TRow> {
     return new TableApi(this.drizzle, schema, {
       execute: (handler) => this.coordinator.run(handler),
-    }) as unknown as FederationTableApi<TRow>;
+    }) as unknown as DowntownTableApi<TRow>;
   }
 
-  protected async on_ensure_table(schema: FederationTableSchema): Promise<void> {
+  protected async on_ensure_table(schema: DowntownTableSchema): Promise<void> {
     const ddl = build_create_table_sql(schema);
     if (ddl) this.client.exec(ddl);
   }
@@ -83,8 +83,8 @@ export class Database extends CityDatabase {
       this.client.exec("BEGIN IMMEDIATE");
       try {
         const result = await handler({
-          table: <TRow extends Record<string, unknown>>(schema: FederationTableSchema) =>
-            new TableApi(this.drizzle, schema) as unknown as FederationTableApi<TRow>,
+          table: <TRow extends Record<string, unknown>>(schema: DowntownTableSchema) =>
+            new TableApi(this.drizzle, schema) as unknown as DowntownTableApi<TRow>,
         });
         this.client.exec("COMMIT");
         return result;
@@ -102,7 +102,7 @@ export class Database extends CityDatabase {
 }
 
 /** 根据 SQLite Drizzle Schema 生成建表语句。 */
-function build_create_table_sql(schema: FederationTableSchema): string {
+function build_create_table_sql(schema: DowntownTableSchema): string {
   const columns = Object.values(getTableColumns(schema));
   if (columns.length === 0) return "";
   const definitions = columns.map((column) => {

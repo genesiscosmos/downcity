@@ -4,15 +4,15 @@
  * 关键点（中文）
  * - City 不拥有模型池，也不解析 provider / apiKey / baseURL。
  * - 模型目录唯一来源是 City 的 AIService：`/v1/ai/models`。
- * - 运行时模型只消费宿主显式传入的当前 City Federation 绑定。
+ * - 运行时模型只消费宿主显式传入的当前 City Downtown 绑定。
  */
 
 import { Downtown } from "@downcity/downtown";
 import { resolve_local_city_id, resolve_resource_root } from "@downcity/city/local";
 import type { CityModelDescriptor, ModelClient } from "@downcity/type";
-import { FederationSessionResolver } from "@/city/shared/FederationSessionResolver.js";
+import { DowntownSessionResolver } from "@/city/shared/DowntownSessionResolver.js";
 
-const federation_session_resolver = new FederationSessionResolver();
+const downtown_session_resolver = new DowntownSessionResolver();
 const agent_execution_modalities = new Set(["text", "stream", "openai"]);
 
 /**
@@ -41,19 +41,19 @@ export interface CityAiModelChoice {
 export async function listCityAiServiceModelsForAdmin(
   env: NodeJS.ProcessEnv = process.env,
 ): Promise<CityModelDescriptor[]> {
-  const user = await federation_session_resolver.resolve_current_user({
+  const user = await downtown_session_resolver.resolve_current_user({
     env,
     require_user_token: false,
     verify_user: false,
   });
-  const admin_session_token = federation_session_resolver.read_admin_session(user.federation_url);
+  const admin_session_token = downtown_session_resolver.read_admin_session(user.downtown_url);
   if (!admin_session_token) {
     throw new Error(
-      "A valid Federation administrator session is required to list admin models. Log in with `fed manage`.",
+      "A valid Downtown administrator session is required to list admin models. Log in with `fed manage`.",
     );
   }
   const admin = new Downtown({
-    url: user.federation_url,
+    url: user.downtown_url,
     admin_token: admin_session_token,
   }).admin;
   return await admin.list_models();
@@ -65,10 +65,10 @@ export async function listCityAiServiceModelsForAdmin(
 export async function listCityAiServiceModelsForUser(
   env: NodeJS.ProcessEnv = process.env,
 ): Promise<CityModelDescriptor[]> {
-  const { federation_user } = await federation_session_resolver.create_user_client({
+  const { downtown_user } = await downtown_session_resolver.create_user_client({
     env,
   });
-  const catalog = await federation_user.with_city(resolve_local_city_id(resolve_resource_root())).ai.catalog();
+  const catalog = await downtown_user.with_city(resolve_local_city_id(resolve_resource_root())).ai.catalog();
   return catalog.all();
 }
 
@@ -87,7 +87,7 @@ export function toCityAiModelChoices(models: CityModelDescriptor[]): CityAiModel
   }));
 }
 
-/** 判断 Federation 模型是否能作为 Agent 的对话执行模型。 */
+/** 判断 Downtown 模型是否能作为 Agent 的对话执行模型。 */
 export function is_city_ai_execution_model(model: CityModelDescriptor): boolean {
   return model.modalities.some((modality) =>
     agent_execution_modalities.has(String(modality || "").trim()),
@@ -115,7 +115,7 @@ export async function assertCityAiModelReady(
   if (!id) throw new Error("execution.modelId is required");
   const models = await listCityAiServiceModelsForUser(env);
   if (!models.some((model) => model.id === id && is_city_ai_execution_model(model))) {
-    throw new Error(`Agent execution model not found in Federation: ${id}`);
+    throw new Error(`Agent execution model not found in Downtown: ${id}`);
   }
 }
 
@@ -123,20 +123,20 @@ export async function assertCityAiModelReady(
  * 创建 Agent 可直接使用的 City 模型。
  */
 export async function create_city_ai_model_client(input: {
-  /** 目标 Federation 模型 ID。 */
+  /** 目标 Downtown 模型 ID。 */
   model_id: string;
   /** 请求开始时读取的 City 当前绑定；缺少绑定时明确失败。 */
-  federation: Downtown | undefined;
+  downtown: Downtown | undefined;
 }): Promise<ModelClient> {
   const model_id = String(input.model_id || "").trim();
   if (!model_id) throw new Error("model_id cannot be empty");
-  if (!input.federation) {
-    throw new Error("City has no Federation binding. Log in and bind a Federation before using models.");
+  if (!input.downtown) {
+    throw new Error("City has no Downtown binding. Log in and bind a Downtown before using models.");
   }
-  const catalog = await input.federation.user.with_city(resolve_local_city_id(resolve_resource_root())).ai.catalog();
+  const catalog = await input.downtown.user.with_city(resolve_local_city_id(resolve_resource_root())).ai.catalog();
   const model = catalog.get(model_id);
   if (!model || !is_city_ai_execution_model(model)) {
-    throw new Error(`Agent execution model not found in Federation: ${model_id}`);
+    throw new Error(`Agent execution model not found in Downtown: ${model_id}`);
   }
   return model;
 }

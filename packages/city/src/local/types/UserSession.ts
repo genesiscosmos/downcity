@@ -3,8 +3,8 @@ import type { UserSessionCredentials } from "@downcity/downtown";
 
 /** 单条本地会话；每个 session_id 只有一个事实源。 */
 export interface StoredUserSession extends UserSessionCredentials {
-  /** 精确绑定的 Federation 地址，禁止向其他地址发送凭证。 */
-  federation_url: string;
+  /** 精确绑定的 Downtown 地址，禁止向其他地址发送凭证。 */
+  downtown_url: string;
   /** 已明确失效或本机已退出，旧运行时不能恢复此记录。 */
   invalidated?: boolean;
   /** 已持久化的刷新请求 ID；网络失败重试沿用。 */

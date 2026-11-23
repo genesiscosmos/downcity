@@ -96,7 +96,7 @@ export class ExtensionManager {
     const record = this.require_record(extension_id);
     return await this.mutate(record, "remove", operation_id, extension_id, async () => {
       if (record.status === "removed") return;
-      // 扩展 Federation 已登记到 Town，卸载由运行时连接租约检查，不读取全局 selected 绑定。
+      // 扩展 Downtown 已登记到 Town，卸载由运行时连接租约检查，不读取全局 selected 绑定。
       await this.options.runtime?.close_gate(extension_id);
       await this.options.runtime?.release(extension_id);
       record.status = "removed";

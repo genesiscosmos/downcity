@@ -2,7 +2,7 @@
  * Agent 默认模型配置服务。
  *
  * 关键点（中文）
- * - 模型候选项唯一来源是当前 Federation User City 的 `ai.catalog()`。
+ * - 模型候选项唯一来源是当前 Downtown User City 的 `ai.catalog()`。
  * - 通过共用资源客户端更新 `execution.model_id`，不改已有 Session 覆盖。
  * - 在线由当前宿主解析/应用，离线只保存配置。
  */
@@ -19,11 +19,11 @@ import type {
   AgentModelSelectionResponse,
 } from "@/city/types/AgentModel.js";
 
-/** 从 Federation 目录选择或校验 Agent 默认模型。 */
+/** 从 Downtown 目录选择或校验 Agent 默认模型。 */
 async function resolve_model_id(params: {
   /** 当前 Agent 默认模型 ID。 */
   current_model_id: string;
-  /** 命令显式传入的 Federation 模型 ID。 */
+  /** 命令显式传入的 Downtown 模型 ID。 */
   requested_model_id?: string;
   /** 目标 Agent ID。 */
   agent_id: string;
@@ -31,9 +31,9 @@ async function resolve_model_id(params: {
   const choices = await listPlatformModelChoices();
   if (choices.length === 0) {
     throw new CliError({
-      title: "No models available in Federation",
-      note: "请确认当前 Federation 已发布可用于对话的 AI models，且登录用户有权调用。",
-      fix: "downcity federation status",
+      title: "No models available in Downtown",
+      note: "请确认当前 Downtown 已发布可用于对话的 AI models，且登录用户有权调用。",
+      fix: "downcity downtown status",
     });
   }
 
@@ -42,7 +42,7 @@ async function resolve_model_id(params: {
     if (!choices.some((choice) => choice.value === requested_model_id)) {
       throw new CliError({
         title: `Model not available: ${requested_model_id}`,
-        note: "目标模型不在当前 Federation User City 返回的对话模型中。",
+        note: "目标模型不在当前 Downtown User City 返回的对话模型中。",
         fix: `city agent update ${params.agent_id} --model <model-id>`,
       });
     }

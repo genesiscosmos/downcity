@@ -194,7 +194,7 @@ class CliDeferredModelClient extends DeferredModelClient {
   /** 浏览不联网；执行 resolve 完成后提供真实名称。 */
   override get name(): string | undefined { return this.selected_model?.name; }
 
-  /** 执行输入组装时更新真实窗口，不能沿用其他 Federation 同 ID 模型的容量。 */
+  /** 执行输入组装时更新真实窗口，不能沿用其他 Downtown 同 ID 模型的容量。 */
   override get context_window(): number | undefined { return this.selected_model?.context_window; }
 
   /** 覆写 SDK 的永久缓存；每次执行按当前 City 绑定解析完整客户端。 */

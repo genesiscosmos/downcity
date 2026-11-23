@@ -15,9 +15,9 @@
 
 ## 2. 仓库与现有接口证据
 
-本地实际结构是 `public/packages/{agent,city,cli,federation,type}`，Sandbox 实现在 `public/packages/implementations/sandboxes/{native,microsandbox}`，远程 Workspace 有 SSH 与 Cloudflare Computer。根目录与 public 均已有其他未提交修改，不能视为干净版本。
+本地实际结构是 `public/packages/{agent,city,cli,downtown,type}`，Sandbox 实现在 `public/packages/implementations/sandboxes/{native,microsandbox}`，远程 Workspace 有 SSH 与 Cloudflare Computer。根目录与 public 均已有其他未提交修改，不能视为干净版本。
 
-本次观察到 public HEAD：`dfdf54d171bf1873eb350d1cbbc417ff58220a3d`。本地 manifest 的版本为 Agent `1.5.27`、City `1.5.26`、CLI `1.6.6`、Federation `1.6.6`；这不证明现有 bin 与源码一致，也不代表 npm 已发布状态。
+本次观察到 public HEAD：`dfdf54d171bf1873eb350d1cbbc417ff58220a3d`。本地 manifest 的版本为 Agent `1.5.27`、City `1.5.26`、CLI `1.6.6`、Downtown `1.6.6`；这不证明现有 bin 与源码一致，也不代表 npm 已发布状态。
 
 | 能力 | 已验证结论 | 源码证据（行号按本次工作树） |
 | --- | --- | --- |
@@ -123,7 +123,7 @@ FrontierHarness 参考 commit `e837a70bd6beb4e72eeeda62dd06e3bd34f6cb63` 的同�
 
 辅助文件包括 `container_command.sh`（容器 Bash/coreutils 输出限制与进程组清理）、`types/bridge.ts`（JSONL 契约）、`build.mjs` / `tsconfig.json`（本地公开 SDK 构建）、`registry.json` / `sources.json`（单题固定来源）。核心 `agent/city/cli` 未修改，没有新增测试用例，不触发 package bump 或 homepage 功能文档更新。
 
-已完成 Node 26.11.1 / Python 3.13.16 下的共享类型、Agent、Federation 无 bump 构建，以及适配器 TypeScript 类型检查/构建、Python 编译、Harbor 0.22.0 公共工厂 import/参数验证、registry 单题解析、CLI help 和 Bash 语法检查。真实运行已覆盖 SDK prompt、5 次模型请求、4 次容器终端调用、原始 verifier 和正常收口；故意取消/超时路径尚未实测。
+已完成 Node 26.11.1 / Python 3.13.16 下的共享类型、Agent、Downtown 无 bump 构建，以及适配器 TypeScript 类型检查/构建、Python 编译、Harbor 0.22.0 公共工厂 import/参数验证、registry 单题解析、CLI help 和 Bash 语法检查。真实运行已覆盖 SDK prompt、5 次模型请求、4 次容器终端调用、原始 verifier 和正常收口；故意取消/超时路径尚未实测。
 
 真实运行产物位于 `evals/frontierharness/artifacts/smoke-20261118T024622Z/`，包括：
 
@@ -188,7 +188,7 @@ SDK/模型调用留在宿主，本轮已通过公开 local login/exchange 获取
 已通过 Node 26.11.1 / Python 3.13.16 下的以下非运行检查：
 
 - Pier 独立 uv 锁解析、frozen 安装及实际版本校验：datacurve-pier 0.3.1、Harbor 0.22.0；原 Harbor 环境仍为 0.22.0。
-- 共享类型、Agent、Federation 无 bump 构建；eval TypeScript typecheck/构建、Node 语法检查、三个 Python 模块编译与 Bash 语法检查。
+- 共享类型、Agent、Downtown 无 bump 构建；eval TypeScript typecheck/构建、Node 语法检查、三个 Python 模块编译与 Bash 语法检查。
 - 两个固定版公开 `AgentFactory.create_agent_from_config()` 的真实 import/构造，context 用量与对应 task 来源回填；未启动 Node 或 task。
 - Pier `install_spec() is None`、空 `NetworkAllowlist.domains`，extra_env/load_trajectory 显式处理；suite、task、未知参数、越界时限等错误配置拒绝。
 - 固定源码 archive 下载、只解包 Anko 一题，全部 10 个任务文件哈希由 build 核对；Pier 公开 Task 解析保留 separate/no-network/5,400 秒/1,800 秒/2 CPU/8 GiB 配置。

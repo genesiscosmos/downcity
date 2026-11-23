@@ -44,7 +44,7 @@ Google 不把 meta keywords 作为排名依据；无需围绕该标签继续优�
 - 品类说明：Open-source agent infrastructure
 - 主标题方向：Build your own system of agent applications.
 - 描述：Downcity gives independent builders and small teams the runtime, tools, and interfaces to build and manage agent applications — with a reusable foundation for what comes next.
-- 产品机制补充：Start with an Agent Harness. Add City, Federation, SDKs, and UI kits as your application needs them.
+- 产品机制补充：Start with an Agent Harness. Add City, Downtown, SDKs, and UI kits as your application needs them.
 - 主 CTA：Get started
 - 次 CTA：View on GitHub
 
@@ -53,7 +53,7 @@ Google 不把 meta keywords 作为排名依据；无需围绕该标签继续优�
 - 品类说明：开源 Agent 基础设施
 - 主标题方向：构建你自己的 Agent 应用体系。
 - 描述：Downcity 为独立 Builder 和小团队提供运行时、工具与界面基础，帮助你构建和管理 Agent 应用，并为下一次构建积累可复用的能力。
-- 产品机制补充：从 Agent Harness 开始，按应用需要接入 City、Federation、SDK 与 UI。
+- 产品机制补充：从 Agent Harness 开始，按应用需要接入 City、Downtown、SDK 与 UI。
 - 主 CTA：开始构建
 - 次 CTA：查看 GitHub
 
@@ -75,10 +75,10 @@ Title 和 Description 以准确、可读及实际搜索展示宽度为准，不�
 
 不需要先重做交互设计，优先在现有区块内重排信息与替换文案。
 
-1. **Hero：**品类、用户价值、开始入口；避免先要求理解 City / Federation。
+1. **Hero：**品类、用户价值、开始入口；避免先要求理解 City / Downtown。
 2. **Quick Start / SDK：**解释第一个可做的事情，提供准确安装与文档路径；移动端避免交互演示挡住开始入口。
 3. **用户收益：**三个短项——构建自己的应用；组织运行与资源；让适合共享的能力进入下一次构建。不要把“持续运行”当成最终收益。
-4. **产品机制：**Harness 负责执行基础；City 组织运行资源；Federation 连接共享服务；SDK / UI 接入应用。各项链接到实际文档，边界以实现为准。
+4. **产品机制：**Harness 负责执行基础；City 组织运行资源；Downtown 连接共享服务；SDK / UI 接入应用。各项链接到实际文档，边界以实现为准。
 5. **使用场景：**项目助手、材料整理、稿件审查等须标注为场景方向或真实示例；没有运行证据不称成功案例，不添加虚构客户。
 6. **品类定义与 Learn：**短答什么是 Agent Harness，链接定义、架构与比较文章；避免首页和文章竞争完整信息意图。
 7. **最终 CTA：**再次给出开始构建与文档入口，不把所有路径导向抽象白皮书。

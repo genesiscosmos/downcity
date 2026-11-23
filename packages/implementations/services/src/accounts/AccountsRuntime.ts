@@ -449,7 +449,7 @@ export class AccountsRuntime {
     return provider.config(this.get_provider_context());
   }
 
-  /** 读取当前 Federation 的 OAuth Callback URL。 */
+  /** 读取当前 Downtown 的 OAuth Callback URL。 */
   private get_oauth_callback_url(): string {
     return `${this.options.read_base_url()}/v1/accounts/oauth/callback`;
   }

@@ -13,7 +13,7 @@ import {
 
 const workspace_root = path.resolve(import.meta.dirname, "..");
 
-test("City 构建会自动补齐 Type、Federation、Agent 与 SSH Workspace", () => {
+test("City 构建会自动补齐 Type、Downtown、Agent 与 SSH Workspace", () => {
   assert.deepEqual(
     resolve_package_build_order(workspace_root, ["city"]),
     ["type", "agent", "downtown", "workspace-ssh", "city"],

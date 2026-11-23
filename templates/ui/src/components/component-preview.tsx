@@ -21,7 +21,7 @@ import {
   CardHeader,
   CardTitle,
   Checkbox,
-  ChatInputEditor,
+  ChatComposer,
   ChatMessageList,
   CodeBlock,
   Command,
@@ -272,7 +272,7 @@ function ChatPreviewDemo() {
       <div className="dc-chat-panel">
         <header className="dc-chat-header"><button type="button" title="历史会话">◷</button><div className="dc-chat-header-title"><span>Agent SDK 对比</span></div><div className="dc-chat-header-drag" /><button type="button" title="新建会话">+</button></header>
         <div className="dc-chat-conversation" role="log"><ChatMessageList messages={messages} /></div>
-        <ChatInputEditor
+        <ChatComposer
           status={status}
           model_options={[{ id: "default", label: "Default model" }]}
           model_id="default"

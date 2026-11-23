@@ -1,7 +1,7 @@
 /**
  * Service 用户身份读取边界。
  *
- * Federation 已完成 Token 验证，本模块只把已验证的 user 身份投影给业务服务。
+ * Downtown 已完成 Token 验证，本模块只把已验证的 user 身份投影给业务服务。
  */
 
 import {

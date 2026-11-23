@@ -1,7 +1,7 @@
 /**
  * Detached 进程信号工具。
  *
- * CLI City daemon 与本地 Federation 进程使用相同的跨平台进程组停止语义。
+ * CLI City daemon 与本地 Downtown 进程使用相同的跨平台进程组停止语义。
  */
 
 import { execFileSync } from "node:child_process";

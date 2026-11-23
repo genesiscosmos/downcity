@@ -2,7 +2,7 @@
  * 本地 Agent 环境解析。
  *
  * 平台全局 `.env`、Workspace `.env` 与调用方显式环境在这里按固定优先级合并。
- * Federation 身份和 Agent 会话变量不会从平台 `.env` 注入 Workspace。
+ * Downtown 身份和 Agent 会话变量不会从平台 `.env` 注入 Workspace。
  * `HOME` 由这里自动补上：它是 OS 事实，工具链（npm、git、shell）依赖它定位用户目录，
  * 而沙箱子进程拿不到父进程的 `HOME`。
  */
@@ -17,7 +17,7 @@ import { get_local_env_path } from "@/local/runtime/LocalPaths.js";
 const protected_env_keys = new Set([
   "DC_AUTH_TOKEN",
   "DC_AGENT_TOKEN",
-  "DOWNCITY_FEDERATION_URL",
+  "DOWNCITY_DOWNTOWN_URL",
   "DOWNCITY_USER_TOKEN",
   "DOWNCITY_CITY_URL",
   "DOWNCITY_CITY_USER_TOKEN",

@@ -16,7 +16,7 @@
 
 | 时间 | 提交 | 改名内容 | Registry 残留 |
 | --- | --- | --- | --- |
-| 2026-08-12 | `e126c68ab` 之前 | City runtime 拆入 `@downcity/agent`，federation 拆出 `@downcity/federation` | `@downcity/city@0.2.270` 变成兼容转发壳 |
+| 2026-08-12 | `e126c68ab` 之前 | City runtime 拆入 `@downcity/agent`，downtown 拆出 `@downcity/downtown` | `@downcity/city@0.2.270` 变成兼容转发壳 |
 | 2026-09-04 | `269c30b8` | 从零重建 `packages/city`，版本号写 `0.1.1` | 旧 0.2.x 线（126 个版本）成为孤儿 |
 | 2026-09-16 | `fecc2be10`、`963fc922d` | `image`、`sound` 从 plugin 收进 City capability | `@downcity/plugins` 的 `/image`、`/sound` 子路径失效 |
 | 2026-09-18 | `388a1337f` | `packages/implementations/plugins/` → `powers/`（`R078` 明确重命名） | 旧名 `@downcity/plugins` 仍在 npm 上，且**未标 deprecated** |
@@ -34,7 +34,7 @@
 | --- | --- | --- |
 | `@downcity/type` | 0.1.220 | `packages/type` |
 | `@downcity/agent` | 1.1.446 | `packages/agent` |
-| `@downcity/federation` | 0.1.24 | `packages/federation` |
+| `@downcity/downtown` | 0.1.24 | `packages/downtown` |
 | `@downcity/city` | 0.1.33 | `packages/city` |
 | `@downcity/services` | 0.1.265 | `packages/implementations/services` |
 | `@downcity/powers` | 1.0.318 | `packages/implementations/powers` |
@@ -119,7 +119,7 @@
 | 方案 | 效果 | 代价 |
 | --- | --- | --- |
 | 维持各包独立编号（现状） | 内部 `workspace:` 协议保证正确性；`latest` tag 正确 | 下游需各自跟随；跨包版本号不可比 |
-| 家族统一 `2.0.0` | `*` / `>=0` 自动指向新版，废弃的 `1.1.47` 不再胜出；major 明确表达 Plugin→Power 这类破坏性改名 | 需一次性全家族同步发布（含 agent、powers、type、services、ui、federation、database-*、sandbox-*） |
+| 家族统一 `2.0.0` | `*` / `>=0` 自动指向新版，废弃的 `1.1.47` 不再胜出；major 明确表达 Plugin→Power 这类破坏性改名 | 需一次性全家族同步发布（含 agent、powers、type、services、ui、downtown、database-*、sandbox-*） |
 
 不建议的中间态是"只把 city 抬到 1.2.0"：它能让 `*` 指向新版，但 agent（1.1.446）、powers（1.0.318）、type（0.1.220）等仍是各自的线，"统一"目标没达成，反而多出一个与其他包无对应关系的版本号。
 
@@ -218,18 +218,18 @@
 
 当前 [package.json](/Users/wangenius/Documents/github/downcity/private/services/edge-worker/package.json:19) 写的是精确版本 `"@downcity/city": "0.2.268"`，锁文件里同时存在 `@downcity/city@0.2.268` 与 `@downcity/city@0.2.270`。
 
-**改前必须先用类型检查确认**，因为这 12 处根导入依赖的是 0.2.x 根导出里的 City access SDK 类型，而那部分能力现在归 `@downcity/federation` 和 `@downcity/services`：
+**改前必须先用类型检查确认**，因为这 12 处根导入依赖的是 0.2.x 根导出里的 City access SDK 类型，而那部分能力现在归 `@downcity/downtown` 和 `@downcity/services`：
 
 ```text
 src/platform/cloudflare/queue.ts   CityQueueAdapter, CityQueueMessage
-src/http/middleware.ts             FederationMiddleware
+src/http/middleware.ts             DowntownMiddleware
 src/ai/catalog/models.ts           AIModelDefinition, AIModelFallbackRule
 src/ai/catalog/metadata.ts         AIModelSpec
 src/ai/billing/text.ts             AIBillInput, AICharge
 src/ai/channels/**                 多个类型
 ```
 
-它已经依赖 `@downcity/federation@0.1.24`，但上面这些类型当前解析到的是 city 0.2.x。先跑 `pnpm -C edge-worker typecheck`，把每个类型指向正确的包之后再改版本号，避免把一次版本升级变成无边界的迁移。
+它已经依赖 `@downcity/downtown@0.1.24`，但上面这些类型当前解析到的是 city 0.2.x。先跑 `pnpm -C edge-worker typecheck`，把每个类型指向正确的包之后再改版本号，避免把一次版本升级变成无边界的迁移。
 
 另外 `downcity` CLI 自身已经完成了这条迁移（`1.1.428 → ^0.2.268`、`1.1.481 → ^0.1.17`、`1.1.487 → ^0.1.33`），可以作为参照。
 
@@ -278,7 +278,7 @@ city 的 `1.1.x` / `0.2.x` 已经全部标过 deprecated，无需重复处理。
 
 ### 5.1 SDK 文档与 Workboard 组件
 
-组织接口示例统一使用 `@downcity/federation` 的 `Federation`，通过 `federation.user.service("organizations").action(...).invoke(...)` 调用。业务调用只发往当前 Federation。
+组织接口示例统一使用 `@downcity/downtown` 的 `Downtown`，通过 `downtown.user.service("organizations").action(...).invoke(...)` 调用。业务调用只发往当前 Downtown。
 
 **Workboard 组件（8 处，已修）** —— `ui-sdk-docs/{en,zh}/components/` 下 `workboard-game.mdx`、`workboard-stage.mdx`、`workboard-stage-map.mdx` 文档的 7 个组件里，只有 `Workboard` 是真实导出。`@downcity/ui` 实际只导出两个 workboard 值：`Workboard` 与 `buildWorkboardGameMapConfig`；`WorkboardGameAtlas`/`GameInspector`/`GameRoom`/`PixelAgent`/`RoomField`/`Stage`/`StageMap` 全部是内部 renderer，从未在 `index.ts` 中导出（git 历史确认：只有 `DowncityWorkboard*Props` 类型被导出过，组件值从未导出）。已重写这四页：说明这些是组合式 `Workboard` 的内部层，公开面是 `Workboard` 与地图构造函数，示例只使用真实存在的导出。
 

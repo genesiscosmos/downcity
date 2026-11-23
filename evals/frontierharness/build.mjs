@@ -24,7 +24,7 @@ function link_dependency(target, destination) {
   symlinkSync(target, destination, "dir");
 }
 
-for (const name of ["agent", "type", "federation"]) {
+for (const name of ["agent", "type", "downtown"]) {
   const target = join(package_dir, name);
   if (!existsSync(join(target, "bin/index.js"))) throw new Error(`Build @downcity/${name} first (no bump)`);
   link_dependency(target, join(local_modules, "@downcity", name));
@@ -55,7 +55,7 @@ function hash_tree(root, excluded = new Set()) {
 if (!process.argv.includes("--typecheck")) {
   const git = (...args) => execFileSync("git", ["-C", public_dir, ...args], { maxBuffer: 32 * 1024 * 1024 });
   const packages = {};
-  for (const name of ["type", "agent", "federation"]) {
+  for (const name of ["type", "agent", "downtown"]) {
     const root = join(package_dir, name);
     packages[name] = {
       version: JSON.parse(readFileSync(join(root, "package.json"), "utf8")).version,
@@ -85,7 +85,7 @@ if (!process.argv.includes("--typecheck")) {
     registry: JSON.parse(readFileSync(join(eval_dir, "registry.json"), "utf8")),
     public_head: git("rev-parse", "HEAD").toString().trim(),
     public_status: git("status", "--short").toString(),
-    tracked_diff_sha256: createHash("sha256").update(git("diff", "HEAD", "--", "packages/type", "packages/agent", "packages/federation", "pnpm-lock.yaml")).digest("hex"),
+    tracked_diff_sha256: createHash("sha256").update(git("diff", "HEAD", "--", "packages/type", "packages/agent", "packages/downtown", "pnpm-lock.yaml")).digest("hex"),
     public_lock_sha256: createHash("sha256").update(readFileSync(join(public_dir, "pnpm-lock.yaml"))).digest("hex"),
     workspace_lock_sha256: existsSync(resolve(public_dir, "../pnpm-lock.yaml"))
       ? createHash("sha256").update(readFileSync(resolve(public_dir, "../pnpm-lock.yaml"))).digest("hex") : null,

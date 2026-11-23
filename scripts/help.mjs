@@ -41,9 +41,9 @@ const HELP_ITEMS = [
     detail: "从 manifest 自动补齐 Plugins 的运行时依赖，不修改 package version。",
   },
   {
-    name: "build:federation",
+    name: "build:downtown",
     summary: "只构建 @downcity/downtown 包。",
-    detail: "先构建 @downcity/type，再构建 Federation runtime 与 Federation SDK。",
+    detail: "先构建 @downcity/type，再构建 Downtown runtime 与 Downtown SDK。",
   },
   {
     name: "build:city",
@@ -82,9 +82,9 @@ const HELP_ITEMS = [
     detail: "等价于 `npm run patch:build -- --powers`，依赖闭包和顺序从 package manifests 自动推导。",
   },
   {
-    name: "federation:patch:build",
+    name: "downtown:patch:build",
     summary: "只对 @downcity/downtown 执行 patch bump + build。",
-    detail: "等价于 `npm run patch:build -- --federation`。",
+    detail: "等价于 `npm run patch:build -- --downtown`。",
   },
   {
     name: "cli:patch:build",

@@ -1,7 +1,7 @@
 /**
  * Downcity 模型流状态机校验模块。
  *
- * 该状态机属于 Model Protocol 本身，Federation、Agent 与其它客户端共享同一组
+ * 该状态机属于 Model Protocol 本身，Downtown、Agent 与其它客户端共享同一组
  * content 生命周期和终态不变量，避免各执行边界分别猜测合法事件顺序。
  */
 

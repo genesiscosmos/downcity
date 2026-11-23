@@ -2,19 +2,19 @@
  * Downcity 本地配置类型。
  *
  * 关键点（中文）
- * - 只描述 Downcity 保存的 Federation 与 Federation Session 索引。
- * - Federation 管理员配置只作为弱发现来源读取。
+ * - 只描述 Downcity 保存的 Downtown 与 Downtown Session 索引。
+ * - Downtown 管理员配置只作为弱发现来源读取。
  */
 
-import type { FederationUserSession } from "@/city/types/FederationSession.js";
+import type { DowntownUserSession } from "@/city/types/DowntownSession.js";
 import type { CliLocale } from "@/shared/types/CliLocale.js";
 
 /**
- * Federation 管理员配置结构。
+ * Downtown 管理员配置结构。
  */
-export interface FederationAdminConfig {
+export interface DowntownAdminConfig {
   /**
-   * `downtown` admin 保存的 Federation 列表。
+   * `downtown` admin 保存的 Downtown 列表。
    */
   servers?: Array<{
     /**
@@ -23,7 +23,7 @@ export interface FederationAdminConfig {
     name?: unknown;
 
     /**
-     * `downtown` 当前结构中的 Federation URL 字段。
+     * `downtown` 当前结构中的 Downtown URL 字段。
      */
     base_url?: unknown;
 
@@ -35,18 +35,18 @@ export interface FederationAdminConfig {
 }
 
 /**
- * Downcity 本地保存的 Federation。
+ * Downcity 本地保存的 Downtown。
  */
-export interface DowncityFederationProfile {
+export interface DowncityDowntownProfile {
   /**
    * base 展示名称。
    */
   name: string;
 
   /**
-   * Federation URL。
+   * Downtown URL。
    */
-  federation_url: string;
+  downtown_url: string;
 }
 
 /**
@@ -54,9 +54,9 @@ export interface DowncityFederationProfile {
  */
 export interface DowncityConfig {
   /**
-   * 当前选择的 Federation URL。
+   * 当前选择的 Downtown URL。
    */
-  selected_federation_url?: string;
+  selected_downtown_url?: string;
 
   /**
    * 当前持久化的 CLI 语言。
@@ -64,12 +64,12 @@ export interface DowncityConfig {
   cli_locale?: CliLocale;
 
   /**
-   * Downcity 本地保存的 Federation 列表。
+   * Downcity 本地保存的 Downtown 列表。
    */
-  profiles?: DowncityFederationProfile[];
+  profiles?: DowncityDowntownProfile[];
 
   /**
-   * 按 Federation URL 索引的 Federation User Session。
+   * 按 Downtown URL 索引的 Downtown User Session。
    */
-  sessions?: Record<string, FederationUserSession>;
+  sessions?: Record<string, DowntownUserSession>;
 }

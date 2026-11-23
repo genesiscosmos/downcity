@@ -26,7 +26,7 @@ export interface CreditsDailyUsageResult {
 
 /** Admin 视角下单个用户的 Credits 消费聚合。 */
 export interface AdminCreditsUsageUserBucket {
-  /** Federation 内全局用户 ID。 */
+  /** Downtown 内全局用户 ID。 */
   user_id: string;
   /** 查询范围内已入账 Charge 的 Credits 总量。 */
   credits_used: number;
@@ -46,6 +46,6 @@ export interface AdminCreditsUsageResult {
 export interface CreditsUsageReader {
   /** 按用户、当地日期范围与 IANA 时区聚合已入账消费。 */
   aggregate_user_daily_charges(input: UserDailyUsageQuery): Promise<CreditsDailyUsageResult>;
-  /** 按日期范围聚合 Federation 全部用户的已入账 Credits 消费。 */
+  /** 按日期范围聚合 Downtown 全部用户的已入账 Credits 消费。 */
   aggregate_admin_charges(input: AdminUsageQuery): Promise<AdminCreditsUsageResult>;
 }

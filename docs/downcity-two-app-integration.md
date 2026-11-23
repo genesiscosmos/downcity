@@ -13,17 +13,17 @@
 
 已核对以下源码：
 
-- `public/packages/federation/src/index.ts`：公开导出 `Embassy` 与 `EmbassyOptions`。
-- `public/packages/federation/src/embassy/Embassy.ts`：构造 `user` 客户端。
-- `public/packages/federation/src/embassy/types/EmbassyOptions.ts`：接受 `federation_url`、`user_token` 和可选 `fetch`；不负责凭证持久化。
-- `public/packages/federation/src/embassy/EmbassyUser.ts`：`user.ai` 暴露 AI 访问器。
-- `public/packages/federation/src/pact/invoker/ai/index.ts`：`catalog()` 获取目录，`get()` 或 `require()` 返回可执行模型；缺失模型时 `require()` 抛错。
+- `public/packages/downtown/src/index.ts`：公开导出 `Embassy` 与 `EmbassyOptions`。
+- `public/packages/downtown/src/embassy/Embassy.ts`：构造 `user` 客户端。
+- `public/packages/downtown/src/embassy/types/EmbassyOptions.ts`：接受 `downtown_url`、`user_token` 和可选 `fetch`；不负责凭证持久化。
+- `public/packages/downtown/src/embassy/EmbassyUser.ts`：`user.ai` 暴露 AI 访问器。
+- `public/packages/downtown/src/pact/invoker/ai/index.ts`：`catalog()` 获取目录，`get()` 或 `require()` 返回可执行模型；缺失模型时 `require()` 抛错。
 - `public/templates/agent/server/src/index.ts`：Agent 接受模型，服务端持有 Workspace 与 Session。
 
 以下为源码核对后的接入片段，尚未单独编译或运行：
 
 ```ts
-import { Embassy } from "@downcity/federation";
+import { Embassy } from "@downcity/downtown";
 import { Agent } from "@downcity/agent";
 import { Workspace } from "@downcity/city";
 
@@ -31,12 +31,12 @@ async function create_app(input: {
   id: string;
   instruction: string;
   workspace_path: string;
-  federation_url: string;
+  downtown_url: string;
   user_token: string;
   model_id: string;
 }) {
   const embassy = new Embassy({
-    federation_url: input.federation_url,
+    downtown_url: input.downtown_url,
     user_token: input.user_token,
   });
   const catalog = await embassy.user.ai.catalog();
@@ -65,7 +65,7 @@ async function create_app(input: {
 
 本片段不引用 CLI 内部函数，不创建登录流程，不读取本机凭证。模型目录发现会访问网络，实际运行须先确认测试服务。凭证只在服务端配置，不能发给浏览器或写入公开记录。应用关闭时需要调用各自 `agent.dispose()`。
 
-两个应用可以使用同一个 Federation URL，但各自的身份与授权必须明确配置。共享 URL、同一模型 ID 或同一份 token 都不能证明应用之间存在安全隔离。目录发现成功也不等于模型请求成功。
+两个应用可以使用同一个 Downtown URL，但各自的身份与授权必须明确配置。共享 URL、同一模型 ID 或同一份 token 都不能证明应用之间存在安全隔离。目录发现成功也不等于模型请求成功。
 
 ## 3. 共享与独立资源
 
@@ -95,7 +95,7 @@ async function create_app(input: {
 
 ## 5. 阶段 B：共享服务运行验证
 
-前置条件：明确可信 Federation URL、测试身份配置、模型 ID、调用次数与费用上限。由用户在 Global / Env 或所属配置界面维护凭证，不在聊天提供秘密值。
+前置条件：明确可信 Downtown URL、测试身份配置、模型 ID、调用次数与费用上限。由用户在 Global / Env 或所属配置界面维护凭证，不在聊天提供秘密值。
 
 1. 分别获取目录，记录模型 ID 和可用能力，不记录 token。
 2. 每个应用各执行一个固定输入，记录成功或失败、输出、可用用量记录。
@@ -117,7 +117,7 @@ async function create_app(input: {
 
 | 项目 | 状态 |
 |---|---|
-| Federation 公共入口与参数核查 | 已完成源码核对 |
+| Downtown 公共入口与参数核查 | 已完成源码核对 |
 | 目录返回可执行模型链路 | 已完成源码核对 |
 | 文中片段独立类型检查 | 未执行 |
 | 双应用模拟运行与消息断言 | 未执行 |

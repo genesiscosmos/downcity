@@ -3,7 +3,7 @@
  * 退登记释放 Town 的长期借用，不 dispose 宿主实例，也不操作其他连接。
  */
 import { randomUUID } from "node:crypto";
-import type { Downtown, FederationUser } from "@downcity/downtown";
+import type { Downtown, DowntownUser } from "@downcity/downtown";
 import { assert_connection_id } from "./ResourceId.js";
 import { ExecutionLease, TownError, guarded_user } from "./ExecutionLease.js";
 import type { TownConnection, TownRegistrationOptions, TownRegistration, TownSource, TownUser } from "./types/Town.js";
@@ -13,7 +13,7 @@ export interface TownConnectionState {
   /** 对外的不可变非秘密事实。 */
   source: TownSource;
   /** 带 City 标签但没有公开出去的用户视图。 */
-  user: FederationUser;
+  user: DowntownUser;
   /** 按目标连接计数的门禁。 */
   gate: ExecutionLease;
   /** 公开用户能力经过额外门禁。 */

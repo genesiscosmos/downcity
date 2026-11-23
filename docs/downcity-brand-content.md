@@ -39,7 +39,7 @@ Brand content 不是关键词包装或首页 slogan 集合，而是对「我们�
 |---|---|---|
 | Genesis Cosmos | 公司愿景与研究母体 | 让创作者把意图变成可运行系统，并保有对其经济的所有权 |
 | Downcity | Agent 运行与产品化的基础设施品牌 | 让 Agent 从一次演示走向可持续运行的产品 |
-| Agent / City / Federation / UI | 实现路径 | 执行运行时、产品组合边界、共享服务与用户界面 |
+| Agent / City / Downtown / UI | 实现路径 | 执行运行时、产品组合边界、共享服务与用户界面 |
 
 Downcity 服务于母品牌愿景，但不等于 Genesis Cosmos 的全部愿景。不要把所有世界引擎、市场、结算与创作者经济目标都宣称为 Downcity 当前已完成的产品。
 
@@ -65,14 +65,14 @@ Downcity 服务于母品牌愿景，但不等于 Genesis Cosmos 的全部愿景�
 
 English: **Downcity is open-source agent infrastructure for builders turning agents into products that keep running.**
 
-技术补充：Agent Harness 提供执行运行时，City、Federation、SDK 与 UI 组合产品边界、共享服务和交互界面。
+技术补充：Agent Harness 提供执行运行时，City、Downtown、SDK 与 UI 组合产品边界、共享服务和交互界面。
 
 ### 叙事顺序
 
 1. 用户成果：把 Agent 做成真实产品。
 2. 痛点：不要为每个产品重复搭建运行、状态、工具和共享服务。
 3. 品类：open-source agent infrastructure / agent harness。
-4. 实现：Agent、City、Federation、SDK、UI。
+4. 实现：Agent、City、Downtown、SDK、UI。
 5. 远景：让更多创作者拥有能够持续创造价值的系统。
 
 不要让新用户先记住一套世界观术语，才能知道产品有什么用。
@@ -93,9 +93,9 @@ English: **Downcity is open-source agent infrastructure for builders turning age
 | 支柱 | 用户价值 | 资料支撑 | 对外表达边界 |
 |---|---|---|---|
 | 持续运行 | 工作不止于一次对话 | Agent runtime、Session、任务、记忆等实现与文档 | 不承诺永不失败或无限上下文 |
-| 可复用基础设施 | 每个新产品少重复一层基础建设 | README 包划分、City、Federation、服务与 SDK | 无基准数据时不说节省 X% 成本 |
+| 可复用基础设施 | 每个新产品少重复一层基础建设 | README 包划分、City、Downtown、服务与 SDK | 无基准数据时不说节省 X% 成本 |
 | 人的控制 | 工具执行有边界，工作可检查 | Workspace、权限、状态、历史、控制界面 | 不把开源等同于绝对安全 |
-| 产品化交付 | Agent 有运行边界和用户界面 | City、Federation、UI SDK、CLI | 不把 demo 等同于成熟商业运营 |
+| 产品化交付 | Agent 有运行边界和用户界面 | City、Downtown、UI SDK、CLI | 不把 demo 等同于成熟商业运营 |
 | 开放与所有权方向 | 让构建者保有选择和扩展空间 | Apache 2.0 开源与明确扩展接口 | 数据迁移、支付结算与用户所有权须按具体实现说明 |
 
 ## 6. 品牌文案库（候选，未批准上线）
@@ -142,7 +142,7 @@ Downcity is open-source agent infrastructure by Genesis Cosmos, built for indepe
 
 但让 Agent 跑通一次，与让产品持续运行，是两件不同的事。构建者需要组织状态、权限、工作空间、服务与界面；如果每个项目都从零拼接，创造的注意力就会被基础设施消耗。
 
-Downcity 希望把这层重复工作沉淀下来。Agent 拥有执行工作的运行时，City 组织产品边界，Federation 提供共享服务，SDK 与 UI 把这些能力接入真实产品。
+Downcity 希望把这层重复工作沉淀下来。Agent 拥有执行工作的运行时，City 组织产品边界，Downtown 提供共享服务，SDK 与 UI 把这些能力接入真实产品。
 
 这是 Genesis Cosmos 愿景中的一条具体路径：帮助创作者把意图变成可运行系统。更长远的开放创作者经济仍需要产品、市场与所有权机制共同发展；Downcity 先把运行与产品化这一层做好。
 
@@ -151,7 +151,7 @@ Downcity 希望把这层重复工作沉淀下来。Agent 拥有执行工作的�
 - 品牌名称建议统一为 Downcity；Genesis Cosmos 官网当前有 DownCity 写法，需负责人确认统一规范。
 - Agent 首次可解释为智能体；Harness 解释为执行运行时，不机械翻译成“马具”。
 - City 是产品组合与运行边界，不等于现实城市或天然多租户承诺。
-- Federation 是共享服务与连接层，不默认等同于去中心化自治、区块链或支付网络。
+- Downtown 是共享服务与连接层，不默认等同于去中心化自治、区块链或支付网络。
 - “世界”是叙事隐喻，必须由工作空间、角色、工具、服务等具体概念落地。
 - Productization Kits 是机制表达，不必让每位用户先理解术语；优先说“把 Agent 做成产品”。
 
@@ -200,9 +200,9 @@ English:
 
 ### 架构说明
 
-**从一个 Agent，到一个产品。** Agent Harness 承接执行；City 组织 Agent 与运行资源；Federation 连接共享服务；SDK 与 UI 把这些能力带到用户面前。按你的产品需要组合，不必先接受整套世界观。
+**从一个 Agent，到一个产品。** Agent Harness 承接执行；City 组织 Agent 与运行资源；Downtown 连接共享服务；SDK 与 UI 把这些能力带到用户面前。按你的产品需要组合，不必先接受整套世界观。
 
-**From an agent to a product.** The harness handles execution. City organizes agents and runtime resources. Federation connects shared services. SDKs and UI bring those capabilities into your product.
+**From an agent to a product.** The harness handles execution. City organizes agents and runtime resources. Downtown connects shared services. SDKs and UI bring those capabilities into your product.
 
 ### 母品牌连接
 

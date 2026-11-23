@@ -1,0 +1,198 @@
+/**
+ * Local Node.js Downtown 内置模板。
+ *
+ * 关键说明（中文）
+ * - 使用独立 SQLite Database Adapter 保存本地数据。
+ * - 监听地址和端口由 `fed deploy` 通过 HOST / PORT 注入。
+ * - 只装配本地账号、余额和 usage，保持模板最小且可直接扩展。
+ */
+
+import { stringify as stringify_toml } from "smol-toml";
+import { DOWNTOWN_CONFIG_FILE_NAME } from "@/downtown/deploy/config/DowntownProjectConfigReader.js";
+import type {
+  DowntownTemplateFile,
+  DowntownTemplateInput,
+} from "@/downtown/types/DowntownTemplate.js";
+
+/** 创建 Local Node.js 模板文件。 */
+export function create_local_node_template_files(
+  input: DowntownTemplateInput,
+): DowntownTemplateFile[] {
+  const package_name = normalize_package_name(input.name);
+  return [
+    {
+      path: DOWNTOWN_CONFIG_FILE_NAME,
+      content: stringify_toml({
+        schema: 1,
+        type: "downtown",
+        id: input.fed_id,
+        name: input.name,
+        entry: "src/index.ts",
+        deployment: {
+          target: "local",
+          process: {
+            auto_start: false,
+            restart_on_failure: true,
+          },
+        },
+      }),
+    },
+    {
+      path: "package.json",
+      content: json_file({
+        name: package_name,
+        version: "0.0.1",
+        private: true,
+        type: "module",
+        scripts: {
+          dev: "node --env-file-if-exists=.env --import tsx src/index.ts",
+          start: "node --env-file-if-exists=.env --import tsx src/index.ts",
+          typecheck: "tsc -p tsconfig.json --noEmit",
+        },
+        dependencies: {
+          "@downcity/downtown": "latest",
+          "@downcity/database-sqlite": "latest",
+          "@downcity/services": "latest",
+          "@hono/node-server": "latest",
+        },
+        devDependencies: {
+          "@types/node": "latest",
+          tsx: "latest",
+          typescript: "latest",
+        },
+      }),
+    },
+    {
+      path: "tsconfig.json",
+      content: json_file({
+        compilerOptions: {
+          target: "ES2022",
+          module: "NodeNext",
+          moduleResolution: "NodeNext",
+          lib: ["ES2022"],
+          strict: true,
+          noEmit: true,
+          skipLibCheck: true,
+          types: ["node"],
+        },
+        include: ["src/**/*.ts"],
+      }),
+    },
+    {
+      path: ".env.example",
+      content: [
+        "# Local Downtown runtime settings.",
+        "DOWNCITY_DOWNTOWN_DATABASE_URL=file:./data.sqlite",
+        "HOST=127.0.0.1",
+        "# fed deploy uses deployment.port, defaulting to 12314.",
+        "",
+      ].join("\n"),
+    },
+    {
+      path: ".gitignore",
+      content: ["node_modules/", ".env", "data.sqlite", "data.sqlite-*", ""].join("\n"),
+    },
+    {
+      path: "src/index.ts",
+      content: create_local_entrypoint(),
+    },
+  ];
+}
+
+/** 创建最小本地 Downtown 入口。 */
+function create_local_entrypoint(): string {
+  return `/**
+ * Local Node.js Downtown entry.
+ *
+ * 关键说明（中文）
+ * - 独立发布优先使用 CLI 提供的数据库绝对路径，开发默认使用 ./data.sqlite。
+ * - HOST / PORT 由 fed deploy 注入，也可以在 .env 中显式配置。
+ * - local_login 仅适用于本机监听地址，不应直接暴露到公网。
+ */
+
+import { join } from "node:path";
+import { serve } from "@hono/node-server";
+import { AIService, EnvService, Downtown } from "@downcity/downtown";
+import { Database } from "@downcity/database-sqlite";
+import {
+  AccountsService,
+  CreditsService,
+  UsageService,
+} from "@downcity/services";
+
+/** 解析本地 SQLite 文件路径。 */
+function resolve_sqlite_path(): string {
+  const database_url = process.env.DOWNCITY_DOWNTOWN_DATABASE_URL?.trim();
+  if (!database_url) {
+    return process.env.DATABASE_PATH?.trim().replace(/^file:/u, "")
+      || (process.env.DOWNCITY_DATA_DIR ? join(process.env.DOWNCITY_DATA_DIR, "data.sqlite") : "./data.sqlite");
+  }
+  if (!database_url.startsWith("file:")) {
+    throw new Error("DOWNCITY_DOWNTOWN_DATABASE_URL must use a file: SQLite URL.");
+  }
+  const sqlite_path = database_url.slice("file:".length).trim();
+  if (!sqlite_path) throw new Error("SQLite file path is required.");
+  return sqlite_path;
+}
+
+/** 健康响应仅在 CLI 注入身份时追加对应字段。 */
+function read_runtime_identity(): Record<string, string> {
+  return Object.fromEntries([
+    ["fed_id", process.env.DOWNCITY_FED_ID],
+    ["release_id", process.env.DOWNCITY_RELEASE_ID],
+    ["instance_id", process.env.DOWNCITY_FED_INSTANCE_ID],
+  ].flatMap(([key, value]) => value?.trim() ? [[key, value.trim()]] : []));
+}
+
+const host = process.env.HOST?.trim() || "127.0.0.1";
+const port = Number.parseInt(process.env.PORT || "12314", 10);
+if (!Number.isInteger(port) || port < 1 || port > 65535) {
+  throw new Error("PORT must be an integer between 1 and 65535.");
+}
+
+const database = new Database({
+  filename: resolve_sqlite_path(),
+});
+const downtown = new Downtown({ database });
+
+downtown.use(new EnvService());
+const accounts_service = new AccountsService({ local_login: true });
+downtown.use(accounts_service);
+const credits_service = new CreditsService();
+const ai_service = new AIService({ credits: credits_service });
+downtown.use(credits_service);
+downtown.use(ai_service);
+downtown.use(new UsageService({
+  ai_usage_reader: ai_service,
+  credits_usage_reader: credits_service,
+  account_usage_reader: accounts_service,
+}));
+
+await downtown.health();
+serve({
+  hostname: host,
+  port,
+  fetch: async (request) => {
+    if (request.method === "GET" && new URL(request.url).pathname === "/health") {
+      return Response.json({ ...await downtown.health(), ...read_runtime_identity() });
+    }
+    return downtown.fetch(request);
+  },
+});
+
+console.log(\`Downtown ready at http://\${host}:\${port}\`);
+`;
+}
+
+/** 生成带末尾换行的 JSON 文件。 */
+function json_file(value: unknown): string {
+  return `${JSON.stringify(value, null, 2)}\n`;
+}
+
+/** 将用户名称规范化为 npm package name。 */
+function normalize_package_name(value: string): string {
+  return value.trim().toLowerCase()
+    .replace(/[^a-z0-9-]+/gu, "-")
+    .replace(/^-+|-+$/gu, "")
+    .replace(/-{2,}/gu, "-") || "downtown";
+}

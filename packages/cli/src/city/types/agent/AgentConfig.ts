@@ -20,7 +20,7 @@ export interface AgentConfig {
   /** Agent 配置结构版本。 */
   version: string;
 
-  /** Federation AI 模型绑定。 */
+  /** Downtown AI 模型绑定。 */
   execution?: DowncityConfig["execution"];
 
   /** CLI 宿主侧 LLM 行为配置。 */

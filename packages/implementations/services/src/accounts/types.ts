@@ -138,14 +138,14 @@ export interface AccountsServiceOptions {
    *
    * 关键说明（中文）
    * - 开启后 `/providers` 只返回 `local` 登录方式。
-   * - 仅建议在监听 `127.0.0.1` / `localhost` 的本机 Federation HTTP 服务中开启。
+   * - 仅建议在监听 `127.0.0.1` / `localhost` 的本机 Downtown HTTP 服务中开启。
    */
   local_login?: boolean;
 }
 
 /** Usage 分析可读取的注册用户最小事实。 */
 export interface AccountsUsageRegistration {
-  /** Federation 内全局用户 ID。 */
+  /** Downtown 内全局用户 ID。 */
   user_id: string;
   /** 用户首次注册时间，UTC ISO 字符串。 */
   created_at: string;

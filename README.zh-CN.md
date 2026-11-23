@@ -24,7 +24,7 @@ Downcity 为 Agent、模型、工具、任务、记忆和权限提供一套可�
 | `downcity` | CLI 聚合包：`downcity` / `city` 管理本机 Agent、Workspace 和 City 宿主；`downtown` 管理 Downtown 服务端。 |
 | `@downcity/city` | City 组装、Agent 注册、Town 连接、Workspace/Shell 资源、Power、存储、RemoteAgent 和 HTTP/RPC 传输。 |
 | `@downcity/agent` | Agent 与 Group 执行、Session、模型/工具循环及宿主扩展接口。 |
-| `@downcity/downtown` | Downtown 服务端与 SDK，提供模型、服务、鉴权和用户/管理员访问。源码位于 `packages/federation`。 |
+| `@downcity/downtown` | Downtown 服务端与 SDK，提供模型、服务、鉴权和用户/管理员访问。源码位于 `packages/downtown`。 |
 | `@downcity/type` | 模型、Workspace、Shell、Session 与宿主集成的共享协议。 |
 | `@downcity/powers` | 任务、记忆、技能、网页、消息和界面呈现等可复用能力。 |
 | `@downcity/services` | 账户、额度、用量、组织、反馈与支付服务。 |
@@ -203,7 +203,7 @@ downcity/
 │   ├── agent/
 │   ├── city/
 │   ├── cli/
-│   ├── federation/             # @downcity/downtown
+│   ├── downtown/             # @downcity/downtown
 │   ├── implementations/
 │   │   ├── databases/
 │   │   ├── powers/
@@ -230,7 +230,7 @@ downcity/
 - City SDK 文档：[downcity.ai/city-sdk-docs](https://downcity.ai/city-sdk-docs)
 - Agent SDK 文档：[downcity.ai/agent-sdk-docs](https://downcity.ai/agent-sdk-docs)
 - UI SDK 文档：[downcity.ai/ui-sdk-docs](https://downcity.ai/ui-sdk-docs)
-- 包文档：[Agent](./packages/agent/README.md)、[City](./packages/city/README.md)、[Downtown](./packages/federation/README.md)、[Types](./packages/type/README.md)、[Services](./packages/implementations/services/README.md)、[CLI](./packages/cli/README.md)、[UI](./packages/ui/README.md)
+- 包文档：[Agent](./packages/agent/README.md)、[City](./packages/city/README.md)、[Downtown](./packages/downtown/README.md)、[Types](./packages/type/README.md)、[Services](./packages/implementations/services/README.md)、[CLI](./packages/cli/README.md)、[UI](./packages/ui/README.md)
 
 ## 本地开发
 

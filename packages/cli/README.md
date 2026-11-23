@@ -10,7 +10,7 @@ downcity -v
 安装后会得到 `city` / `downcity` 与 `downtown` 两个相互独立的工具：
 
 - `city` 是本机 Agent 宿主。CLI 通过数据库 Adapter 和 Repository 读取配置，显式创建 Agent，再由 City 按 ID 统一转发 HTTP/RPC。
-- `downtown` 是 Downtown Server Manager；TUI 用于注册和管理 Server，项目命令读取当前目录的 `federation.toml`，项目配置只支持 TOML，不兼容 JSON 配置。Local Node.js 和 Cloudflare Workers 都通过 `downtown deploy` 部署。
+- `downtown` 是 Downtown Server Manager；TUI 用于注册和管理 Server，项目命令读取当前目录的 `downtown.toml`，项目配置只支持 TOML，不兼容 JSON 配置。Local Node.js 和 Cloudflare Workers 都通过 `downtown deploy` 部署。
 - `downtown web --id fed_x` 在 `127.0.0.1:43128` 启动本次指定 Downtown 的本地 Web 管理 UI；管理员登录后的 Session 只保留在 CLI 本地 BFF 内存中。
 
 ```bash
@@ -53,7 +53,7 @@ downtown restore --id fed_x --path /absolute/path/to/backup_id
 downtown restore --name my-fed --path /absolute/path/to/backup_id --yes
 ```
 
-仅支持已登记独立 release 的本地 SQLite 数据库，路径来自持久运行配置的绝对 `DATABASE_PATH`。在线备份使用 SQLite backup API，包含 WAL，完成后校验完整性、大小和 SHA-256；备份目录位于 `~/.downcity/federation/backups/<fed_id>/<backup_id>/`，包含 `database.sqlite` 和完成标记 `backup.json`，权限分别为目录 `0700`、文件 `0600`。
+仅支持已登记独立 release 的本地 SQLite 数据库，路径来自持久运行配置的绝对 `DATABASE_PATH`。在线备份使用 SQLite backup API，包含 WAL，完成后校验完整性、大小和 SHA-256；备份目录位于 `~/.downcity/downtown/backups/<fed_id>/<backup_id>/`，包含 `database.sqlite` 和完成标记 `backup.json`，权限分别为目录 `0700`、文件 `0600`。
 
 恢复必须先显式 `downtown stop`，并核对系统服务已停止、无法自动恢复及自启关联已关闭。先为当前数据库创建安全备份，再预览确认；取消不替换数据库，`--dry-run` 不生成安全备份或改库。确认后再次校验输入和当前库变化，在同目录准备文件、收敛 WAL，再原子替换；服务保持停止，不切换 release、运行配置或 City 连接。同 Fed 锁排除并发部署与启停，不控制绕过 Fed 的外部数据库连接。
 
@@ -72,7 +72,7 @@ downtown restore --name my-fed --path /absolute/path/to/backup_id --yes
 
 writer 的当前日志和归档路径必须是普通文件；符号链接、目录等非法目标会被拒绝，不跟随链接。已存在且超过对应单份上限的文件会报错，不会截断；用户需先明确归档或清理。应用主动输出不保证自动脱敏，应用开发者不得记录 Token、API key 或完整请求/响应正文。这些规则描述包含该功能的 CLI，文档更新不代表运行实例已经应用。
 
-本地独立 Node 发布模型将编译后的入口、完整生产依赖及项目资源安装到 `~/.downcity/federation/deployments/<fed_id>/releases/<release_id>`，同级 `current.json` 是成功激活指针，不代表该 release 当前正在运行。项目资源通过 `package.json.files` 显式声明；生产依赖及其运行资源完整纳入产物，`.env` 不进入产物。`deployment.scripts.build` 保留用于构建，本地目标拒绝 `deployment.scripts.deploy`，Node 直接运行编译后的入口。默认使用系统 Node，运行时必须与构建时的 Node 版本、平台和架构一致，尤其是含原生模块的依赖。
+本地独立 Node 发布模型将编译后的入口、完整生产依赖及项目资源安装到 `~/.downcity/downtown/deployments/<fed_id>/releases/<release_id>`，同级 `current.json` 是成功激活指针，不代表该 release 当前正在运行。项目资源通过 `package.json.files` 显式声明；生产依赖及其运行资源完整纳入产物，`.env` 不进入产物。`deployment.scripts.build` 保留用于构建，本地目标拒绝 `deployment.scripts.deploy`，Node 直接运行编译后的入口。默认使用系统 Node，运行时必须与构建时的 Node 版本、平台和架构一致，尤其是含原生模块的依赖。
 
 本地 Node 发布按阶段处理失败，不自动回滚代码或数据库，也没有 `rollback` 命令。以下规则仅适用于 `local` Node，不适用于 Cloudflare Workers：
 
@@ -83,7 +83,7 @@ writer 的当前日志和归档路径必须是普通文件；符号链接、目�
 | prepare | 旧服务停止后才提交配置、初始化数据库及迁移；失败不启动候选，不自动回滚代码或数据库。 |
 | start / ready | 停止候选并移除自动启动关联；清理确认成功记为 `stopped`，异常记为 `unknown`。原始发布错误和清理错误都会报告；`unknown` 要求人工检查服务、自启关联和健康端点，不能宣称服务已停止。 |
 
-发布摘要保存在 `~/.downcity/federation/deployments/<fed_id>/deployment.json`。`status` 展示最后成功 release、最近失败 release 和失败阶段，以及 `latest` 的 release、outcome、phase、cutover、candidate、cleanup 与 `recovery required`。未形成候选 release 时显示 `not produced`；没有历史时单独显示未记录。`last_success` 不被失败覆盖，`last_failure` 与 `latest` 分别显示；`cleanup` 是该次尝试的清理结果，不是实时服务状态。记录缺失或损坏也不替代 manager 与健康检查。
+发布摘要保存在 `~/.downcity/downtown/deployments/<fed_id>/deployment.json`。`status` 展示最后成功 release、最近失败 release 和失败阶段，以及 `latest` 的 release、outcome、phase、cutover、candidate、cleanup 与 `recovery required`。未形成候选 release 时显示 `not produced`；没有历史时单独显示未记录。`last_success` 不被失败覆盖，`last_failure` 与 `latest` 分别显示；`cleanup` 是该次尝试的清理结果，不是实时服务状态。记录缺失或损坏也不替代 manager 与健康检查。
 
 `downtown clean` 仅清理本地已登记 Fed 的 release。使用互斥且精确匹配的 `--id <id>` 或 `--name <name>`；省略时，TTY 从列表选择一个 Fed，选择仅用于本次操作，非 TTY 直接报错。名称重名时，TTY 继续选择，非 TTY 报错。它不清理远程连接或未登记目录。
 
@@ -103,13 +103,13 @@ downtown clean --id fed_x --yes              # 显式确认，适用于非交互
 
 运行器不可验证或其他保护信息检查出错时，直接拒绝清理。同一 Fed 的操作锁在目标选择后覆盖预览、确认与删除全过程，阻止并发切换改变引用。
 
-发布尝试保存在 `~/.downcity/federation/deployments/<fed_id>/attempts/<operation_id>.json`，用于识别成功与失败历史。失败产物仅由用户手动执行 `downtown clean` 删除，仍须通过上述保护检查。CLI 不自动清理 release；`clean` 不删除 data、config、logs、staging 或部署历史，release 删除后发布尝试记录和发布摘要仍保留。
+发布尝试保存在 `~/.downcity/downtown/deployments/<fed_id>/attempts/<operation_id>.json`，用于识别成功与失败历史。失败产物仅由用户手动执行 `downtown clean` 删除，仍须通过上述保护检查。CLI 不自动清理 release；`clean` 不删除 data、config、logs、staging 或部署历史，release 删除后发布尝试记录和发布摘要仍保留。
 
-运行配置单独保存在 `~/.downcity/federation/config/<fed_id>/runtime.env.json`，文件权限为 `0600`。默认 SQLite 位于 `~/.downcity/federation/data/<fed_id>/data.sqlite`。显式指定的数据库保持其绝对路径；删除源码前需确认数据库不在准备删除的目录内。已登记的数据库文件缺失时直接报错，拒绝创建空库替代；没有显式路径但源码目录中存在 `data.sqlite` 或 `data/local.db` 时，要求在项目 `.env` 中显式声明数据库路径，不猜测或迁移。`downtown deploy --dry-run` 在临时目录构建和校验产物并清理，不安装 release、不修改持久运行配置、不启停实例；构建脚本仍可能向项目写入构建输出。
+运行配置单独保存在 `~/.downcity/downtown/config/<fed_id>/runtime.env.json`，文件权限为 `0600`。默认 SQLite 位于 `~/.downcity/downtown/data/<fed_id>/data.sqlite`。显式指定的数据库保持其绝对路径；删除源码前需确认数据库不在准备删除的目录内。已登记的数据库文件缺失时直接报错，拒绝创建空库替代；没有显式路径但源码目录中存在 `data.sqlite` 或 `data/local.db` 时，要求在项目 `.env` 中显式声明数据库路径，不猜测或迁移。`downtown deploy --dry-run` 在临时目录构建和校验产物并清理，不安装 release、不修改持久运行配置、不启停实例；构建脚本仍可能向项目写入构建输出。
 
 操作锁的 owner 已失效或没有 owner 时，CLI 只报告锁路径并要求人工核对，不自动回收锁。
 
-本地部署使用 macOS 用户级 launchd 或 Linux 用户级 systemd。进程策略在 `federation.toml` 中配置，Local 模板显式生成以下默认值：
+本地部署使用 macOS 用户级 launchd 或 Linux 用户级 systemd。进程策略在 `downtown.toml` 中配置，Local 模板显式生成以下默认值：
 
 ```toml
 [deployment.process]
@@ -123,7 +123,7 @@ restart_on_failure = true
 
 系统服务定义只引用启动入口及运行配置路径，不包含 secret；运行配置独立保存于上述 `runtime.env.json`。部署目标为 `local` 或 `cloudflare-workers`；远程主机需在目标机器运行本地部署命令。
 
-本地部署未设置 `deployment.port` 时固定使用默认端口 `12314`；在 `federation.toml` 的 `[deployment]` 中显式设置 `port` 可覆盖默认值。选定端口被占用时，交互终端会展示占用进程的 PID、启动时间、命令和工作目录，并标明是否属于当前项目，询问是否停止后继续部署（默认否）。确认后 CLI 重新核对进程身份，发送 `SIGTERM` 并最多等待 5 秒释放端口，不自动强制终止。非交互终端、无法核实进程身份或端口未释放时部署失败；`--yes` 不跳过停止进程的确认。进程检查需要系统提供 `lsof` 和 `ps`。CLI 不扫描其他端口，也不从部署历史推断端口。
+本地部署未设置 `deployment.port` 时固定使用默认端口 `12314`；在 `downtown.toml` 的 `[deployment]` 中显式设置 `port` 可覆盖默认值。选定端口被占用时，交互终端会展示占用进程的 PID、启动时间、命令和工作目录，并标明是否属于当前项目，询问是否停止后继续部署（默认否）。确认后 CLI 重新核对进程身份，发送 `SIGTERM` 并最多等待 5 秒释放端口，不自动强制终止。非交互终端、无法核实进程身份或端口未释放时部署失败；`--yes` 不跳过停止进程的确认。进程检查需要系统提供 `lsof` 和 `ps`。CLI 不扫描其他端口，也不从部署历史推断端口。
 
 `downtown create` 默认生成 Local Node.js + SQLite 项目。首次 `downtown deploy` 或 `downtown deploy --admin-reset` 会交互式要求输入管理员 ID、密码和确认密码；密码至少 12 个字符，CLI 只在内存中使用明文并将摘要写入数据库。遗失密码时，只有拥有目标基础设施部署权限的人可以运行 `downtown deploy --admin-reset`，非交互环境还必须显式传入 `--yes`（该参数只确认重置，不跳过凭证输入）。重置会撤销全部现有管理员 Session。CLI 通过本地 SQLite 事务或 Wrangler 远程 D1 权限直接完成管理员恢复，不要求 Worker 读取恢复环境变量；普通 deploy 永远不会修改管理员。部署期间会持续显示当前构建、资源准备、Worker 发布、健康检查与管理员验证阶段。无参数执行 `downtown` 会进入系统级 Downtown 管理面板，已部署实例不依赖当前工作目录。
 

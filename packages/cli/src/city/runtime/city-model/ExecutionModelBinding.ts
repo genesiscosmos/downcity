@@ -2,7 +2,7 @@
 import type { TownModelEntry, TownModelList } from "@downcity/city";
 import { call_cli_town } from "../../resources/TownClient.js";
 
-/** CLI 选择项保留 Town 目录元数据，不构造当前 Federation。 */
+/** CLI 选择项保留 Town 目录元数据，不构造当前 Downtown。 */
 export interface PlatformModelChoice {
   /** 显示模型名称与来源，帮助区分同名模型。 */
   title: string;

@@ -2,7 +2,7 @@
  * Downcity Organizations Service 领域实现。
  *
  * 设计边界：
- * - Federation 是 Organization 与 Membership 的唯一权威事实源；
+ * - Downtown 是 Organization 与 Membership 的唯一权威事实源；
  * - Organization 私有资料按活动成员开放，新加入申请由 owner/admin 显式开放；
  * - 产品后端、部署路由、项目资源和产品权限不属于本 Service。
  */
@@ -66,7 +66,7 @@ export class OrganizationsService extends InstallableService {
   constructor(options: OrganizationsServiceOptions) {
     super(undefined, {
       description: "Manage private organizations, memberships, ownership and user-initiated join requests.",
-      requirements: ["Positive max_organizations_per_user option", "Prepared Federation organization schema and transaction support", "Authenticated Federation user"],
+      requirements: ["Positive max_organizations_per_user option", "Prepared Downtown organization schema and transaction support", "Authenticated Downtown user"],
       availability: () => this.repository && this.transaction_runner && this._authenticator
         ? { status: "ready", reason: "Local repository, transaction and authentication dependencies are installed; database connectivity is not probed." }
         : { status: "unavailable", reason: "Organization repository, transaction or authentication runtime is not installed." },
@@ -81,7 +81,7 @@ export class OrganizationsService extends InstallableService {
       "Organization 只表达组织身份、成员关系和治理角色。",
       "产品资源由对应业务 Service 管理，并按认证用户和活动成员权限授权。",
       "配置：注册时必须设置正安全整数 max_organizations_per_user，并显式准备数据库 schema。",
-      "鉴权：全部入口要求 User Token；组织治理角色 owner/admin/member 来自活动 Membership，Federation Admin Session 不代替组织角色。",
+      "鉴权：全部入口要求 User Token；组织治理角色 owner/admin/member 来自活动 Membership，Downtown Admin Session 不代替组织角色。",
       "流程：create 创建组织和 Owner → my/get 读取；Owner/Admin update 开启 approval → 用户申请 → Owner/Admin 审批成为 Member。",
       "Owner 才能设置角色、转移所有权或 archive；Admin 只能移除 Member；Owner 退出前必须转移所有权。",
       "限制：名称最长 120 字符；每位 Owner 的 active 组织受配置额度约束；归档为不可恢复终态并释放额度。",

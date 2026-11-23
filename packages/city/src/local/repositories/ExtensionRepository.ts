@@ -34,15 +34,15 @@ export class ExtensionRepository {
     return row ? JSON.parse(String(row.record_json)) as ExtensionRecord : null;
   }
 
-  /** 持久化的是稳定连接引用，绝不保存 Federation 实例或凭证。 */
-  selected_federation(): string | null {
+  /** 持久化的是稳定连接引用，绝不保存 Downtown 实例或凭证。 */
+  selected_downtown(): string | null {
     const exists = this.database.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name='extension_binding'").get();
     if (!exists) return null;
     return this.database.prepare("SELECT entry_id FROM extension_binding WHERE singleton=1").get()?.entry_id as string | null ?? null;
   }
 
   /** 用户显式选择或解除连接；普通移除不得自动调用。 */
-  select_federation(entry_id: string | null): void {
+  select_downtown(entry_id: string | null): void {
     this.database.prepare("INSERT INTO extension_binding VALUES(1, ?) ON CONFLICT(singleton) DO UPDATE SET entry_id=excluded.entry_id").run(entry_id);
   }
 

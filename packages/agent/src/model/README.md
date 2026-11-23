@@ -43,7 +43,7 @@ Session.prompt()
   -> SessionComposer.compose()
   -> SessionModelMessages: SessionMessage -> ModelMessage
   -> SessionExecutor.execute()
-  -> Federation / Provider 返回 ModelStreamEvent
+  -> Downtown / Provider 返回 ModelStreamEvent
   -> SessionAssistantOutput 直接更新 canonical Assistant Message
   -> SessionMessages 持久化并发布 Mutation
 ```

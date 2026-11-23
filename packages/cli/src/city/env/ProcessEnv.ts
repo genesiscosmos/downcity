@@ -16,7 +16,7 @@ import { read_env_file_sync } from "@/city/env/EnvFileStore.js";
 const PLATFORM_SESSION_ENV_KEYS = new Set([
   "DC_AUTH_TOKEN",
   "DC_AGENT_TOKEN",
-  "DOWNCITY_FEDERATION_URL",
+  "DOWNCITY_DOWNTOWN_URL",
   "DOWNCITY_USER_TOKEN",
   // 旧身份变量不属于 Workspace 环境，但仍禁止从全局 `.env` 泄漏。
   "DOWNCITY_CITY_URL",

@@ -191,7 +191,7 @@ FAQ 页有机会获得富结果展示；文档页搜索结果展示面包屑路�
 
 **预期效果**
 
-长尾词（如 "agent runtime concepts"、"city sdk federation"）的覆盖面显著扩大；508 页逐页生效。
+长尾词（如 "agent runtime concepts"、"city sdk downtown"）的覆盖面显著扩大；508 页逐页生效。
 
 ---
 

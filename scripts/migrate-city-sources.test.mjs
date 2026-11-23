@@ -17,7 +17,7 @@ test("迁移失败全部回滚；重试成功保留业务事实和外键，重�
   try {
     for (const sql of read_previous_organizations_ddl()) await database.execute_ddl(sql);
     await query("INSERT INTO service_organizations VALUES ('private', 'Private', 'bureau', 'product', 'active', 'owner', 't', 't', '')");
-    await query("INSERT INTO service_organizations VALUES ('global', 'Global', 'federation', '', 'active', 'owner', 't', 't', '')");
+    await query("INSERT INTO service_organizations VALUES ('global', 'Global', 'downtown', '', 'active', 'owner', 't', 't', '')");
     await query("INSERT INTO service_organization_memberships VALUES ('member', 'private', 'owner', 'owner', 'active', 't', 't', '', '')");
     await query("INSERT INTO service_organization_join_requests VALUES ('request', 'private', 'applicant', 'pending', 't', '', '')");
     await query("CREATE TABLE async_jobs (job_id TEXT PRIMARY KEY, bureau_id TEXT, user_id TEXT, result_json TEXT)");
@@ -26,8 +26,8 @@ test("迁移失败全部回滚；重试成功保留业务事实和外键，重�
     await query("INSERT INTO service_feedback_messages VALUES ('feedback', 'product', 'owner')");
     await query("CREATE TABLE service_accounts_login_flows_v4 (login_id TEXT PRIMARY KEY, bureau_id TEXT NOT NULL, phase TEXT, code_challenge TEXT)");
     await query("INSERT INTO service_accounts_login_flows_v4 VALUES ('flow', 'product', 'authorizing', 'challenge')");
-    await query("CREATE TABLE federation_bureaus (bureau_id TEXT PRIMARY KEY)");
-    await query("INSERT INTO federation_bureaus VALUES ('product')");
+    await query("CREATE TABLE downtown_bureaus (bureau_id TEXT PRIMARY KEY)");
+    await query("INSERT INTO downtown_bureaus VALUES ('product')");
     await query("CREATE TABLE credits_probe (user_id TEXT PRIMARY KEY, balance INTEGER, key_fact TEXT)");
     await query("INSERT INTO credits_probe VALUES ('owner', 123, 'unchanged')");
     await query("CREATE TABLE service_ai_settlement_jobs (usage_id TEXT PRIMARY KEY, payload_json TEXT, lease_token TEXT)");
@@ -45,7 +45,7 @@ test("迁移失败全部回滚；重试成功保留业务事实和外键，重�
     assert.deepEqual((await query("SELECT * FROM async_jobs")).rows, [{ job_id: "job", user_id: "owner", result_json: '{"ok":true}', city_id: null }]);
     assert.equal((await query("SELECT city_id FROM service_feedback_messages")).rows[0].city_id, null);
     assert.deepEqual((await query("SELECT * FROM service_accounts_login_flows_v4")).rows, [{ login_id: "flow", phase: "authorizing", code_challenge: "challenge" }]);
-    assert.equal((await query("SELECT * FROM archived_20261111_federation_bureaus")).rows[0].bureau_id, "product");
+    assert.equal((await query("SELECT * FROM archived_20261111_downtown_bureaus")).rows[0].bureau_id, "product");
     assert.equal((await query("SELECT * FROM downcity_legacy_source_facts WHERE table_name='async_jobs'")).rows[0].bureau_id, "product");
     assert.deepEqual((await query("SELECT * FROM credits_probe")).rows, [{ user_id: "owner", balance: 123, key_fact: "unchanged" }]);
     const pending = (await query("SELECT * FROM service_ai_settlement_jobs")).rows[0];

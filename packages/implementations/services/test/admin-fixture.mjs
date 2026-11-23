@@ -1,5 +1,5 @@
 /**
- * Services 集成测试共用的 Federation 管理员会话 fixture。
+ * Services 集成测试共用的 Downtown 管理员会话 fixture。
  *
  * 管理接口使用短期 Session Token，不再使用历史环境变量中的管理员密钥。
  */
@@ -10,9 +10,9 @@ const test_admin_id = "admin_test"
 const test_admin_password = "test-admin-password"
 const test_admin_password_hash = "pbkdf2_sha256$210000$m-wik-AJwXBqFD5AAqctMWDFqQioRh2_$tM1r37AT7NvKTiQyFePgpR7K9EC5tZ487xCV_MZQEtE"
 
-/** 为测试 Federation 初始化固定管理员，并返回登录后的 Session Token。 */
-export async function create_test_admin_session(federation) {
-  const administrator_table = await federation.table("federation_administrators")
+/** 为测试 Downtown 初始化固定管理员，并返回登录后的 Session Token。 */
+export async function create_test_admin_session(downtown) {
+  const administrator_table = await downtown.table("downtown_administrators")
   const existing = await administrator_table.select({ owner_slot: "owner" })
   if (existing.length === 0) {
     const now = new Date().toISOString()
@@ -29,7 +29,7 @@ export async function create_test_admin_session(federation) {
     })
   }
 
-  const response = await federation.fetch(new Request("http://localhost/v1/admin/login", {
+  const response = await downtown.fetch(new Request("http://localhost/v1/admin/login", {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify({ admin_id: test_admin_id, password: test_admin_password }),

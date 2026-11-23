@@ -57,7 +57,7 @@ export class PaymentService extends InstallableService {
       ...providers.flatMap((provider) => provider.env),
     ]), {
       description: "Hosted payment checkout, verified webhook inbox, versioned card plans and idempotent fulfillment.",
-      requirements: ["Prepared Payment schema", "Provider checkout credentials and webhook verification keys", "Host resolve_topup and idempotent on_paid callbacks", "Federation durable queue adapter and periodic recover_events invocation", "Public HTTP(S) callback/redirect origin"],
+      requirements: ["Prepared Payment schema", "Provider checkout credentials and webhook verification keys", "Host resolve_topup and idempotent on_paid callbacks", "Downtown durable queue adapter and periodic recover_events invocation", "Public HTTP(S) callback/redirect origin"],
       availability: () => this.read_local_availability(),
     });
     this.options = options;
@@ -179,7 +179,7 @@ export class PaymentService extends InstallableService {
     return this.options.topup_policy ? { ...this.options.topup_policy } : null;
   }
 
-  /** 使用 Federation 服务端策略把自由充值金额结算为 Credits。 */
+  /** 使用 Downtown 服务端策略把自由充值金额结算为 Credits。 */
   async resolve_topup(input: PaymentTopupResolutionInput): Promise<PaymentTopupResolution> {
     return await this.options.resolve_topup(input);
   }

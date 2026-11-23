@@ -66,7 +66,7 @@ export class ExtensionModelRegistry {
 }
 
 /** 工具名满足模型工具协议，编码本地 ID 避免拼接歧义。 */
-export function extension_entry_id(extension_id: string, kind: "power" | "model" | "agent" | "federation", local_id: string): string {
+export function extension_entry_id(extension_id: string, kind: "power" | "model" | "agent" | "downtown", local_id: string): string {
   const namespace = extension_id.replaceAll("-", "");
   if (!/^[a-f\d]{32}$/u.test(namespace)) throw new ExtensionFailure("project_id_invalid", "Extension identity is invalid", "load", 2);
   return `ext_${namespace}_${kind}_${createHash("sha256").update(local_id).digest("hex").slice(0, 16)}`;

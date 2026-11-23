@@ -2,7 +2,7 @@
 import type { ApiDocumentation, ApiSchema } from "@downcity/downtown";
 import { object_schema as obj, array_schema as arr, items_schema, text_schema as text, enum_schema, number_schema as num, time_schema, metadata_schema, nullable_schema } from "../shared/documentation.js";
 
-const user_id = text("Federation user ID");
+const user_id = text("Downtown user ID");
 const card_id = text("Ephemeral card ID; primary card uses user_id");
 const transaction_id = text("Transaction ID");
 const kind = enum_schema("topup", "charge");

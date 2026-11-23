@@ -44,7 +44,7 @@ FrontierHarness 参考 commit 为 `e837a70bd6beb4e72eeeda62dd06e3bd34f6cb63`，�
 
 ```bash
 # 首次缺少仓库依赖时，在仓库根目录按项目规范执行 pnpm install。
-pnpm -C public patch:build -- --no-bump --type --agent --federation --no-global-install
+pnpm -C public patch:build -- --no-bump --type --agent --downtown --no-global-install
 node public/evals/frontierharness/build.mjs
 
 cd public/evals/frontierharness
@@ -91,7 +91,7 @@ Harbor 默认使用 `~/.cache/harbor` 任务下载缓存；沙箱禁止写入该
 
 目前只接入 SDK 已公开的 `create_openai_compatible_model()`，不提供 Anthropic 或 OpenAI Responses 协议转换。base URL 必须为 HTTP(S)，禁止 URL 用户信息、query、fragment 和 HTTP redirect。模型参数中的 provider 前缀不会自动剥离。
 
-localnode Federation 的兼容端点使用 `http://127.0.0.1:<实际端口>/v1/ai` 作为 base URL。HTTP 模型接口需要普通用户 token；可信本机客户端可通过公开 `Federation.user.account.login_start({ provider: "local", client_type: "cli" })` 与 `exchange()` 获取本轮新 token，将返回的 `user_token` 仅通过进程环境传入 `DOWNCITY_EVAL_API_KEY`。不要读取已有凭据、使用占位 key 或把 token 打印到终端。模型目录使用同一 token 读取 `GET /v1/ai/models`，确认具体 ID、通道与 `context_window`；本机 Krill GPT-6.1 Sol 的接口 ID 为 `gpt-6.1-sol`，窗口为 `1000000`。
+localnode Downtown 的兼容端点使用 `http://127.0.0.1:<实际端口>/v1/ai` 作为 base URL。HTTP 模型接口需要普通用户 token；可信本机客户端可通过公开 `Downtown.user.account.login_start({ provider: "local", client_type: "cli" })` 与 `exchange()` 获取本轮新 token，将返回的 `user_token` 仅通过进程环境传入 `DOWNCITY_EVAL_API_KEY`。不要读取已有凭据、使用占位 key 或把 token 打印到终端。模型目录使用同一 token 读取 `GET /v1/ai/models`，确认具体 ID、通道与 `context_window`；本机 Krill GPT-6.1 Sol 的接口 ID 为 `gpt-6.1-sol`，窗口为 `1000000`。
 
 Node 只继承基本 PATH、独立 HOME、语言/时区和上述三项专用模型变量。运行证据会记录任务文本、命令、模型输出与错误；专用 API key 在 Node 输出边界脱敏，产物应留在本地。
 
@@ -182,7 +182,7 @@ Node 收到取消时调用公开 `session.stop()` 并中止模型流、发出逐
 
 ## 非运行验证
 
-已使用本机 Node 26.11.1、Python 3.13.16 完成 SDK/共享类型/Federation 无 bump 构建，以及适配器 TypeScript 类型检查/构建、三个 Python 模块编译、Harbor 0.22.0 与 Pier 0.3.1 公开工厂 import/构造、AgentConfig 和 context 回填、suite/task/时限非法参数拒绝、固定任务配置与文件哈希校验、CLI `run --help` 和完整命令参数解析、Bash 语法检查。完整 CLI 通过 Click/Typer `make_context` 解析，未调用执行 callback 或 Docker preflight。没有新增测试用例；实际 regex-log 与 Anko 的运行证据见上方报告；Anko 原始分数及构建/判题续接限制须同时阅读。
+已使用本机 Node 26.11.1、Python 3.13.16 完成 SDK/共享类型/Downtown 无 bump 构建，以及适配器 TypeScript 类型检查/构建、三个 Python 模块编译、Harbor 0.22.0 与 Pier 0.3.1 公开工厂 import/构造、AgentConfig 和 context 回填、suite/task/时限非法参数拒绝、固定任务配置与文件哈希校验、CLI `run --help` 和完整命令参数解析、Bash 语法检查。完整 CLI 通过 Click/Typer `make_context` 解析，未调用执行 callback 或 Docker preflight。没有新增测试用例；实际 regex-log 与 Anko 的运行证据见上方报告；Anko 原始分数及构建/判题续接限制须同时阅读。
 
 可重复的静态检查：
 
