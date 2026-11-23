@@ -3,7 +3,7 @@
 
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import type { RespondSessionInteractionInput, SessionAgentInteraction, SessionInteractionQuestion } from "@downcity/type";
-import { TbChevronLeft, TbChevronRight, TbLoader2 } from "react-icons/tb";
+import { TbCheck, TbChevronLeft, TbChevronRight, TbLoader2, TbX } from "react-icons/tb";
 import { StatusPanelButton } from "./status-panel-button";
 import { Input } from "../input";
 import { Textarea } from "../textarea";
@@ -72,18 +72,18 @@ function ApprovalCard({ part, respond, presentation, external_heading }: AgentIn
   const operation = typeof payload.operation === "string" ? payload.operation : undefined;
   const detail = operation === "tool" ? format_value(payload.validated_input) : string_value(payload.command);
   const description = operation === "tool" ? string_value(payload.model_explanation) || string_value(payload.tool_description) : request.description || string_value(payload.reason);
-  const heading_id = presentation === "inbox" ? external_heading?.title_id : undefined;
+  const heading_id = presentation === "input" ? external_heading?.title_id : undefined;
   return <section className="interaction-card approval-interaction" data-presentation={presentation} aria-labelledby={heading_id ?? `${part.interaction_id}-title`} aria-busy={Boolean(submitting)}>
     {!heading_id || description ? <header className="interaction-card-header">
       <div className="interaction-heading">{!heading_id ? <span id={`${part.interaction_id}-title`} className="interaction-card-title">{request.title || translate("chat:activity.confirmation")}</span> : null}{description ? <p className="approval-card-message">{description}</p> : null}</div>
     </header> : null}
-    {detail ? presentation === "inbox"
+    {detail ? presentation === "input"
       ? <pre className="interaction-command interaction-command-standalone">{detail}</pre>
       : <details className="interaction-command"><summary aria-label={translate("chat:attachment.show_details")}><code>{detail}</code></summary><pre>{detail}</pre></details> : null}
     <Input className="approval-note-input" aria-label={translate("chat:activity.additional_note")} placeholder={translate("chat:activity.additional_note_placeholder")} disabled={Boolean(submitting)} value={note} onChange={(event) => set_note(event.target.value)} />
-    <footer className={presentation === "inbox" ? "interaction-card-actions interaction-approval-actions" : "interaction-navigation"}>
-      <StatusPanelButton variant="primary" size={presentation === "inbox" ? "action" : "chat-action"} disabled={Boolean(submitting)} onClick={() => void submit("approved")}>{submitting === "approve" ? <TbLoader2 className="animate-spin" /> : null}{translate("chat:activity.allow")}</StatusPanelButton>
-      <StatusPanelButton size={presentation === "inbox" ? "action" : "chat-action"} disabled={Boolean(submitting)} onClick={() => void submit("denied")}>{submitting === "deny" ? <TbLoader2 className="animate-spin" /> : null}{translate("chat:activity.deny")}</StatusPanelButton>
+    <footer className={presentation === "input" ? "interaction-card-actions interaction-approval-actions" : "interaction-navigation"}>
+      <StatusPanelButton variant="primary" size={presentation === "input" ? "action" : "chat-action"} className="min-w-24 justify-start px-2.5" disabled={Boolean(submitting)} onClick={() => void submit("approved")}>{submitting === "approve" ? <TbLoader2 aria-hidden="true" className="animate-spin" /> : <TbCheck aria-hidden="true" />}{translate("chat:activity.allow")}</StatusPanelButton>
+      <StatusPanelButton size={presentation === "input" ? "action" : "chat-action"} className="min-w-24 justify-start px-2.5" disabled={Boolean(submitting)} onClick={() => void submit("denied")}>{submitting === "deny" ? <TbLoader2 aria-hidden="true" className="animate-spin" /> : <TbX aria-hidden="true" />}{translate("chat:activity.deny")}</StatusPanelButton>
     </footer>
     {submit_error ? <p role="alert" className="text-2xs text-destructive">{submit_error}</p> : null}
   </section>;
@@ -129,7 +129,7 @@ function QuestionCard({ part, respond, answer_placeholder, presentation, externa
       set_submitting(false);
     }
   };
-  const shared_heading = presentation === "inbox" && external_heading?.title.trim() === question.question.trim();
+  const shared_heading = presentation === "input" && external_heading?.title.trim() === question.question.trim();
   const prompt_id = shared_heading ? external_heading.title_id : `${part.interaction_id}-${question.question_id}-prompt`;
   return <form className="interaction-card question-interaction" data-presentation={presentation} aria-labelledby={prompt_id} aria-busy={submitting} onSubmit={(event) => void submit(event)}>
     {!shared_heading || questions.length > 1 ? <header className="interaction-card-header">
@@ -144,7 +144,7 @@ function QuestionCard({ part, respond, answer_placeholder, presentation, externa
     {submit_error ? <p role="alert" className="text-2xs text-destructive">{submit_error}</p> : null}
     <footer className="interaction-card-actions">
       {!private_question ? <InteractionNote value={note} disabled={submitting} set_value={set_note} /> : null}
-      <StatusPanelButton variant="primary" size={presentation === "inbox" ? "action" : "chat-action"} type="submit" disabled={!current_complete || submitting}>{submitting ? <TbLoader2 className="animate-spin" /> : null}{translate(submitting ? "chat:activity.submitting" : last ? "chat:activity.submit" : "chat:activity.next")}</StatusPanelButton>
+      <StatusPanelButton variant="primary" size={presentation === "input" ? "action" : "chat-action"} type="submit" disabled={!current_complete || submitting}>{submitting ? <TbLoader2 className="animate-spin" /> : null}{translate(submitting ? "chat:activity.submitting" : last ? "chat:activity.submit" : "chat:activity.next")}</StatusPanelButton>
     </footer>
   </form>;
 }

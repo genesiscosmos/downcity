@@ -23,8 +23,17 @@ export type { MessageIdentity } from "../types/chat-message";
 // Agent 消息
 // ---------------------------------------------------------------------------
 
-/** Agent 消息根容器：完整文稿宽度，上下各留 16px 区分相邻发言。 */
-export const agent_message_root_class_name = "group group/agent-message is-agent flex w-full flex-col py-4";
+/** Agent 消息根容器：完整消息列宽度，上下各留 16px 区分相邻发言。 */
+export const agent_message_root_class_name = "group group/agent-message is-agent w-full py-4";
+
+/** Chat 左列固定为 36px 头像，右列以 8px 间距收纳名称、状态、正文与操作；省略身份时仍保留左列。 */
+export const agent_message_chat_class_name = "grid grid-cols-[2.25rem_minmax(0,1fr)] items-start gap-x-2";
+
+/** Work 使用全宽纵向文稿，不预留头像列。 */
+export const agent_message_work_class_name = "flex flex-col py-2";
+
+/** 头像独立成列，始终与当前消息顶部对齐。 */
+export const agent_message_avatar_column_class_name = "flex size-9 items-center justify-center";
 
 /** 连续回复的后续消息仅留 4px 上间距，仍保留独立 article 与操作边界。 */
 export const agent_message_continuation_class_name = "pt-1";
@@ -32,30 +41,17 @@ export const agent_message_continuation_class_name = "pt-1";
 /** 连续回复尚有后续消息时去掉下留白；组尾恢复原有外边距。 */
 export const agent_message_continues_class_name = "pb-0";
 
-/** 署名行与主体纵向排列，保留 10px 间隔使身份自然衔接回答。 */
-export const agent_message_stack_class_name = "flex min-w-0 w-full flex-col gap-2.5";
+/** 名称、消息气泡与底部信息以 2px 间距紧密相连，共用右列左缘。 */
+export const agent_message_stack_class_name = "flex min-w-0 w-full flex-col gap-0.5";
 
-/**
- * 身份行容器：头像 + 名称 + 右侧附加控件，滚动时吸顶。
- *
- * ## 为什么吸顶
- *
- * 一条消息可以很长（长过程、长结论），滚到下半段时已经看不到这条消息是谁说的。
- * 身份行吸顶后，「当前在谁的消息里」始终可见。
- *
- * 吸顶范围由**包含块**（也就是这条消息本身）决定：它只在本条消息占用的区间内吸住，
- * 消息读完就被下一条顶走，不会跨消息悬浮。这是 `position: sticky` 的默认语义，不需要额外状态。
- *
- * ## 两个必须同时给的属性
- *
- * - `bg-background`：消息列的底色（`MainView` 的 `bg-background`）。不写背景时正文会从
- *   身份行**背后**透出来，看起来像文字叠在一起；这是吸顶最容易漏的一步。
- * - `z-10`：吸顶元素在 DOM 里排在正文之前，没有层级时后出现的正文会盖在它上面。
- *
- * `top-0` 相对滚动视口顶边，不相对正文列的 `p-2`：吸住时向上对齐到视口边缘，
- * 与“吸顶”的字面意思一致。
- */
-export const agent_message_identity_header_class_name = "sticky top-0 z-10 flex min-h-6 min-w-0 items-center gap-2 bg-background";
+/** 名称与弱化元信息使用紧凑的 20px 行高，让正文靠近头像顶部并随消息正常滚动。 */
+export const agent_message_identity_header_class_name = "flex min-h-5 min-w-0 items-center gap-2";
+
+/** Chat 运行状态位于气泡内部顶部、正文之前；空正文时复用同一位置。 */
+export const agent_message_status_class_name = "flex min-h-5 min-w-0 items-center gap-2";
+
+/** 默认时间在悬停或键盘焦点进入消息时显示，避免干扰正文。 */
+export const agent_message_timestamp_class_name = "shrink-0 text-2xs text-muted-foreground opacity-0 transition-opacity group-hover/agent-message:opacity-100 group-focus-within/agent-message:opacity-100";
 
 /**
  * 完整消息内容与其下方动作栏（复制 / 引用 / 分支）的分组。
@@ -76,11 +72,11 @@ export const agent_message_actions_group_class_name = "flex min-w-0 flex-col gap
  */
 export const agent_message_actions_class_name = "message-action-toolbar pointer-events-none flex h-6 items-center gap-0.5 opacity-0 transition-opacity group-hover:pointer-events-auto group-hover:opacity-100 focus-within:pointer-events-auto focus-within:opacity-100";
 
-/** 署名的头像与名称间隔 10px，头像上下各留 2px，保持名称垂直居中。 */
-export const agent_identity_row_class_name = "flex min-w-0 items-center gap-2.5 py-0.5";
+/** 名称身份操作使用正文行高，头像独立使用左列，避免额外留白推低气泡。 */
+export const agent_identity_row_class_name = "flex min-w-0 items-center gap-2";
 
-/** 消息署名头像为 28px，圆形轮廓由 AgentAvatar 统一提供，不叠加外圈或背景。 */
-export const agent_identity_avatar_class_name = "size-7";
+/** 消息署名头像为 36px，圆形轮廓由 AgentAvatar 统一提供，不叠加外圈或背景。 */
+export const agent_identity_avatar_class_name = "size-9";
 
 /** 名称使用 13px 常规字重与次要文字灰色，弱化署名并保留可读性。 */
 export const agent_identity_name_class_name = "min-w-0 truncate text-sm font-normal text-muted-foreground";
@@ -93,12 +89,12 @@ export const agent_identity_name_class_name = "min-w-0 truncate text-sm font-nor
  * Markdown 首尾外边距清零，内部段落、列表与代码块继续使用文档自身的排版节奏。
  *
  * `text-base` 为附属内容提供默认字号；Markdown 正文的字号和行高由 MarkdownView 管理。
- * 不添加 `pl-*` / `ml-*`，避免正文与身份行的左缘错开。
+ * 正文与名称共用右列左缘，连续回复仍保持该起点。
  */
 export const agent_message_body_class_name = "flex min-w-0 w-full flex-col gap-1 text-base text-foreground";
 
-/** Chat 正文使用左对齐浅底气泡；宽度随内容收缩，长内容最多占满消息列。 */
-export const agent_message_bubble_class_name = "mr-auto w-fit min-w-0 max-w-full rounded-message bg-surface-subtle px-3.5 py-2.5 text-foreground";
+/** Chat 正文使用左对齐浅底气泡；短内容收缩，长内容不超过右列或 42rem。 */
+export const agent_message_bubble_class_name = "mr-auto w-fit min-w-0 max-w-[min(100%,42rem)] rounded-message bg-surface-subtle px-3.5 py-2.5 text-foreground";
 
 /** Work 正文占满消息列，使用文稿布局并保留内部活动与正文的原始顺序。 */
 export const agent_message_work_content_class_name = "min-w-0 w-full text-foreground";
@@ -121,7 +117,7 @@ export const agent_message_process_class_name = "flex min-w-0 w-full flex-col ga
 export const agent_message_content_class_name = "flex min-w-0 w-full flex-col gap-[calc(var(--chat-text-size,0.875rem)*var(--markdown-flow-ratio))] text-base text-foreground";
 
 /**
- * Footer：运行状态、实时文件改动与消息操作栏的共用行。
+ * Footer：Chat 的实时文件改动等补充信息；Work 的运行状态与消息操作。
  *
  * 起点与正文相同（不要加 `pl-1`），高度固定，避免悬停出现操作栏时整行跳动。
  */

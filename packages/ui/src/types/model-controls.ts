@@ -30,11 +30,13 @@ export interface LLMModelIconProps {
 /** 表单模型选择器。 */
 export interface ModelSelectorProps extends ChatControlMessages {
   /** 当前模型 ID。 */ current_model_id: string;
+  /** 当前显式推理档位 ID；省略时使用模型默认值，仅展示当前模型声明支持的档位。 */ reasoning_effort?: string;
   /** 宿主提供的模型目录，表单不限制模型能力。 */ models: readonly ModelSummary[];
   /** 目录是否正在加载。 */ loading?: boolean;
   /** 空目录提示。 */ empty_text?: string;
   /** 尚未选择时的触发器文字。 */ trigger_label?: string;
   /** 提交选择，由宿主保存并处理异常。 */ on_select_model(model_id: string): void | Promise<void>;
+  /** 可选推理保存回调，支持同步或异步；提供后仅在当前模型声明可用档位时显示强度子菜单。参数为档位 ID，undefined 表示使用模型默认值；宿主负责保存、异常处理及切换模型后的档位重置。 */ on_select_reasoning_effort?(reasoning_effort?: string): void | Promise<void>;
   /** 浮层对齐方向。 */ align?: "start" | "center" | "end";
   /** 浮层优先方向。 */ side?: "top" | "right" | "bottom" | "left";
   /** 触发按钮附加类名。 */ class_name?: string;

@@ -17,18 +17,20 @@ import type {
   FederationAdminDeploymentCredentials,
 } from "@/federation/types/FederationAdminDeployment.js";
 
+const min_admin_password_length = 8;
+
 /** 交互式收集首次初始化或显式恢复使用的管理员凭证。 */
 export async function create_admin_deployment_credentials(
   mode: FederationAdminDatabaseMode,
 ): Promise<FederationAdminDeploymentCredentials> {
   const admin_id_result = await text({
     message: "管理员 ID",
-    placeholder: "admin_owner",
+    initialValue: "admin",
     validate: validate_admin_id,
   });
   const admin_id = read_prompt_value(admin_id_result, "管理员 ID");
   const password_result = await password({
-    message: "管理员密码（至少 12 个字符）",
+    message: `管理员密码（至少 ${min_admin_password_length} 个字符）`,
     validate: validate_admin_password,
   });
   const plain_password = read_prompt_value(password_result, "管理员密码");
@@ -128,7 +130,10 @@ function validate_admin_id(value: string): string | true {
 
 /** 校验管理员密码长度与基本格式。 */
 function validate_admin_password(value: string): string | true {
-  if (value.length < 12) return "管理员密码至少需要 12 个字符。";
-  if (value.length > 1024) return "管理员密码不能超过 1024 个字符。";
+  const password_length = value.trim().length;
+  if (password_length < min_admin_password_length) {
+    return `管理员密码至少需要 ${min_admin_password_length} 个字符。`;
+  }
+  if (password_length > 1024) return "管理员密码不能超过 1024 个字符。";
   return true;
 }

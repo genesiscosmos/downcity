@@ -6,6 +6,7 @@
  */
 
 import type { AgentSessionModelResolver } from "@/city/transport/types/AgentSessionModelResolver.js";
+import type { DowntownModelReference } from "@downcity/type";
 import type { Agent } from "@downcity/agent";
 import type { WorkspaceRuntime } from "@/workspace/index.js";
 
@@ -22,10 +23,8 @@ export interface CityRpcRuntimeOptions {
     readonly agent: Agent;
     /** 当前请求已经进入的 Workspace 实例。 */
     readonly workspace: WorkspaceRuntime;
-    /** 远程 Session 请求指定的模型标识。 */
-    readonly model_id: string;
-    /** 已确认的非秘密授权来源；宿主须转交模型目录核对。 */
-    readonly binding_id?: string;
+    /** 远程 Session 请求指定的结构化模型引用。 */
+    readonly model: DowntownModelReference;
   }) => ReturnType<AgentSessionModelResolver>;
 
   /** 从事实源重新加载指定 Agent 的 Workspace Env。 */

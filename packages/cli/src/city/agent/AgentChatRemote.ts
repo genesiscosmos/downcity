@@ -119,6 +119,7 @@ export async function listAgentChatModelChoices(): Promise<AgentChatModelChoice[
   const choices = await listPlatformModelChoices();
   return choices.map((choice) => ({
     model_id: choice.value,
+    model: choice.model.model,
     name: String(choice.model.name || choice.value).trim() || choice.value,
     modalities: choice.model.modalities.map((modality) => String(modality)),
   }));

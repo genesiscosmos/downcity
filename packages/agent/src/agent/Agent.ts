@@ -9,7 +9,7 @@
  */
 
 import { safe_error_diagnostic } from "@/utils/logger/SafeErrorDiagnostic.js";
-import type { CityRuntime, ModelClient, AgentTool as Tool, StorageProvider, ToolCallContext, ToolHookSet, WorkspaceRuntime, SessionTurnCommittedHookValue, SessionSystemMessage } from "@downcity/type";
+import type { CityRuntime, DowntownModelReference, ModelClient, AgentTool as Tool, StorageProvider, ToolCallContext, ToolHookSet, WorkspaceRuntime, SessionTurnCommittedHookValue, SessionSystemMessage } from "@downcity/type";
 import { create_instruction_system_blocks, normalize_instruction_input } from "@/agent/AgentInstructions.js";
 import type { AgentOptions, AgentSessionConstructor } from "@/types/agent/AgentOptions.js";
 import type { AgentBehavior } from "@/types/agent/AgentBehavior.js";
@@ -26,7 +26,7 @@ import { compile_session_callbacks } from "@/agent/SessionCallbacks.js";
 import { SessionCompletions } from "@/agent/SessionCompletions.js";
 import type { AgentStorage } from "@/types/agent/AgentStorage.js";
 import type { SessionComposer } from "@/types/session/SessionComposer.js";
-import type { SessionChildWorkInput } from "@/types/session/SessionChildWork.js";
+import type { SessionChildWorkInput, SessionChildWorkTarget } from "@/types/session/SessionChildWork.js";
 import { build_session_system_blocks, resolve_session_power_system_blocks } from "@/session/input/SessionSystem.js";
 import type { AgentSessionSystemBlock } from "@/types/agent/SessionTypes.js";
 import { resolve_system_timezone } from "@/session/storage/Metadata.js";
@@ -167,10 +167,10 @@ export class Agent {
       logger: this.logger,
       get_instruction: () => [...this.get_instructions()],
       get_agent_model: () => this.model,
-      resolve_model: async (model_id, workspace, binding_id) => {
-        if (this.model?.id === model_id && this.model.binding_id === binding_id) return this.model;
-        if (!this.resolve_work_model) throw new Error(`Host cannot restore Session model: ${model_id}`);
-        return await this.resolve_work_model(model_id, workspace, binding_id);
+      resolve_model: async (model, workspace) => {
+        if (this.model?.model_reference?.downtown === model.downtown && this.model.model_reference.id === model.id) return this.model;
+        if (!this.resolve_work_model) throw new Error(`Host cannot restore Session model: ${model.downtown}:${model.id}`);
+        return await this.resolve_work_model(model, workspace);
       },
       observe_session: (session) => this.interaction_collection.observe_session(session),
       session_class: this.session_class,
@@ -178,11 +178,12 @@ export class Agent {
       resolve_session_context: (input) => {
         const storage = this.resolve_storage();
         const child_work = {
-          // 委派由执行主体持有；等待与取消必须覆盖同容器中接单的其他主体。
-          wait: async (parent: SessionChildWorkInput) => {
-            await Promise.all((this.work_host?.list_agents() ?? [this])
-              .map(async (agent) => await agent.resolve_delegations().wait_for_children(parent, this.id)));
+          stop: async (parent: SessionChildWorkTarget) => {
+            const results = await Promise.all((this.work_host?.list_agents() ?? [this])
+              .map(async (agent) => await agent.resolve_delegations().stop_children(parent, this.id)));
+            return results.some(Boolean);
           },
+          // 委派由执行主体持有；取消必须覆盖同容器中接单的其他主体。
           cancel: async (parent: SessionChildWorkInput) => {
             await Promise.all((this.work_host?.list_agents() ?? [this])
               .map(async (agent) => await agent.resolve_delegations().cancel_children(parent, this.id)));
@@ -594,12 +595,12 @@ export class Agent {
     const storage = this.resolve_storage();
     const resolve_workspace = async (workspace_id: string): Promise<WorkspaceRuntime> =>
       await this.resolve_project_workspace(workspace_id);
-    const prepare_session = async (session: AgentSession, model_id?: string): Promise<void> => {
-      await this.prepare_work_session?.(session, model_id);
-      if (model_id) {
+    const prepare_session = async (session: AgentSession, model?: DowntownModelReference): Promise<void> => {
+      await this.prepare_work_session?.(session, model);
+      if (model) {
         if (!this.resolve_work_model) throw new Error("Session model selection is not configured by the host");
         const workspace = session.workspace_id ? await this.resolve_project_workspace(session.workspace_id) : undefined;
-        await session.set({ model: await this.resolve_work_model(model_id, workspace) });
+        await session.set({ model: await this.resolve_work_model(model, workspace) });
       }
     };
     this.delegations = new SessionDelegations({
@@ -609,9 +610,9 @@ export class Agent {
       ensure_work_session: async (session_id, workspace, delegation_depth, child_descriptor) =>
         await this.session_manager.ensure_work_session(session_id, workspace, delegation_depth, child_descriptor),
       prepare_session,
-      validate_model: async (model_id, workspace) => {
+      validate_model: async (model, workspace) => {
         if (!this.resolve_work_model) throw new Error("Session model selection is not configured by the host");
-        await this.resolve_work_model(model_id, workspace);
+        await this.resolve_work_model(model, workspace);
       },
       get_work_session: async (session_id) => await this.restore_work_session(session_id, SESSION_TYPE_WORK),
       get_parent_session: async (caller) => {

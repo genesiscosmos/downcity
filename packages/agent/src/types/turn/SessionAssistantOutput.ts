@@ -19,7 +19,9 @@ export interface SessionAssistantResultBatch {
 
 /** Executor 写入当前 Turn Assistant Message 的稳定能力。 */
 export interface SessionAssistantOutput {
-  /** 开始一个模型 Step 的独立 Part 作用域。 */
+  /** 当前已开始模型请求的连续回复；不由内容事件或 Input 创建推断。 */
+  readonly reply_message_id?: string;
+  /** 在请求模型前建立回复消息及独立 Step 作用域。 */
   begin_step(step_id?: string): Promise<void>;
   /** 直接写入单个标准模型流事件。 */
   write_model_event(event: ModelStreamEvent): Promise<void>;

@@ -138,11 +138,10 @@ export class CityRPC {
                 await agent.resolve_system_messages(workspace, input),
             }),
             resolve_session_model: resolve_session_model
-              ? async (model_id, binding_id) => await resolve_session_model({
+              ? async (model) => await resolve_session_model({
                   agent,
                   workspace,
-                  model_id,
-                  binding_id,
+                  model,
                 })
               : undefined,
             reload_workspace_env: reload_workspace_env

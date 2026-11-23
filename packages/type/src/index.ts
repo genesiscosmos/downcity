@@ -9,6 +9,7 @@ export type { SessionPromptActor } from "./types/session/SessionPromptActor.js";
 
 export {
   CITY_MODEL_KIND,
+  is_downtown_model_reference,
   isCityModel,
 } from "./types/CityModel.js";
 
@@ -19,6 +20,7 @@ export type {
   CityModelReasoning,
   CityModelReasoningEffort,
   CityModelType,
+  DowntownModelReference,
   ModelPricing,
 } from "./types/CityModel.js";
 

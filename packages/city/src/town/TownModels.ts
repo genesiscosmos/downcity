@@ -3,7 +3,7 @@
  * 每次执行校验绑定并取得实际来源租约，不跨来源回退或重放计费调用。
  */
 import { randomUUID } from "node:crypto";
-import type { ModelClient, ModelCall, ModelStreamEvent, CityModelDescriptor } from "@downcity/type";
+import type { ModelClient, ModelCall, ModelStreamEvent, CityModelDescriptor, DowntownModelReference } from "@downcity/type";
 import type { FederationUser } from "@downcity/downtown";
 import { TownConnections, type TownConnectionState } from "./TownConnections.js";
 import { client_model_id, downtown_model_id, parse_model_id } from "./ResourceId.js";
@@ -24,6 +24,8 @@ interface DirectModelState {
 
 /** 包装器向 Agent 暴露身份快照，但不让 Agent 理解 Downtown。 */
 export interface TownModelClient extends ModelClient {
+  /** 此客户端所属 Downtown 与服务端模型的结构化引用。 */
+  readonly model_reference: DowntownModelReference;
   /** 宿主可持久化的不透明身份绑定；恢复时必须传回 resolver。 */
   readonly binding_id: string;
 }
@@ -59,15 +61,28 @@ export class TownModels {
   }
 
   /** 返回捕获当时身份的惰性客户端；同名裸 ID 不会被尝试或自动迁移。 */
-  client(model_id: string, options: TownExecutionOptions = {}): TownModelClient {
-    const origin = parse_model_id(model_id);
+  client(model: DowntownModelReference | string, options: TownExecutionOptions = {}): TownModelClient {
+    const model_id = typeof model === "string"
+      ? model
+      : model.downtown.startsWith("client:")
+        ? client_model_id(model.downtown.slice("client:".length))
+        : downtown_model_id(model.downtown, model.id);
+    const public_model_id = typeof model === "string" ? model : model.id;
+    const origin = typeof model === "string"
+      ? parse_model_id(model)
+      : model.downtown.startsWith("client:")
+        ? { kind: "client" as const, source_id: model.downtown.slice("client:".length) }
+        : { kind: "downtown" as const, connection_id: model.downtown, original_model_id: model.id };
     const source_binding = origin.kind === "client" ? this.require_direct(model_id).binding_id : this.connections.require(origin.connection_id).source.auth_scope_id;
     const binding_id = options.binding_id ?? source_binding;
     if (binding_id !== source_binding) throw new TownError("town_model_identity_confirmation_required");
     const metadata = this.metadata.get(model_id);
     const direct_client = origin.kind === "client" ? this.require_direct(model_id).registration.client : undefined;
+    const model_reference = origin.kind === "downtown"
+      ? { downtown: origin.connection_id, id: origin.original_model_id }
+      : { downtown: `client:${origin.source_id}`, id: direct_client!.id };
     return Object.freeze({
-      id: model_id, binding_id, name: metadata?.name ?? direct_client?.name,
+      id: public_model_id, model_reference, binding_id, name: metadata?.name ?? direct_client?.name,
       context_window: metadata?.context_window ?? direct_client?.context_window,
       model_stream_policy: direct_client?.model_stream_policy,
       stream: async (call: ModelCall, signal?: AbortSignal): Promise<ReadableStream<ModelStreamEvent>> => {
@@ -109,13 +124,14 @@ export class TownModels {
   /** 结构化决策仍由模型所属服务计费。 */
   decision(request: TownModelRequest<TownDecisionInput>) {
     assert_business_input(request.input);
-    return this.execute(request.model_id, request.binding_id, "decision", (state, model) => state.user.ai.decision({ ...request.input, model } as Parameters<FederationUser["ai"]["decision"]>[0], request.signal), false, request.signal);
+    return this.execute(require_request_model_id(request), request.binding_id, "decision", (state, model) => state.user.ai.decision({ ...request.input, model } as Parameters<FederationUser["ai"]["decision"]>[0], request.signal), false, request.signal);
   }
 
   /** 创建前写入 pending，返回本地稳定句柄；失败结果未知时不会自动再次创建。 */
   image_create(request: TownModelRequest<TownImageInput>) {
     assert_business_input(request.input);
-    return this.execute(request.model_id, request.binding_id, "image", (state, model) => this.jobs.create(state, request.model_id, { ...request.input, model } as Parameters<FederationUser["ai"]["image_create"]>[0], request.signal), false, request.signal);
+    const model_id = require_request_model_id(request);
+    return this.execute(model_id, request.binding_id, "image", (state, model) => this.jobs.create(state, model_id, { ...request.input, model } as Parameters<FederationUser["ai"]["image_create"]>[0], request.signal), false, request.signal);
   }
 
   /** 查询只解析本地来源记录，不接受当前页面或当前模型覆盖来源。 */
@@ -126,13 +142,13 @@ export class TownModels {
   /** 语音合成保留原请求契约，加入正确的取消与来源门禁。 */
   tts(request: TownModelRequest<TownTtsInput>) {
     assert_business_input(request.input);
-    return this.execute(request.model_id, request.binding_id, "tts", (state, model) => ai_json<Awaited<ReturnType<FederationUser["ai"]["tts"]>>>(state.user, "tts", { ...request.input, model }, request.signal), false, request.signal);
+    return this.execute(require_request_model_id(request), request.binding_id, "tts", (state, model) => ai_json<Awaited<ReturnType<FederationUser["ai"]["tts"]>>>(state.user, "tts", { ...request.input, model }, request.signal), false, request.signal);
   }
 
   /** 语音识别同样固定模型来源。 */
   asr(request: TownModelRequest<TownAsrInput>) {
     assert_business_input(request.input);
-    return this.execute(request.model_id, request.binding_id, "asr", (state, model) => ai_json<Awaited<ReturnType<FederationUser["ai"]["asr"]>>>(state.user, "asr", { ...request.input, model }, request.signal), false, request.signal);
+    return this.execute(require_request_model_id(request), request.binding_id, "asr", (state, model) => ai_json<Awaited<ReturnType<FederationUser["ai"]["asr"]>>>(state.user, "asr", { ...request.input, model }, request.signal), false, request.signal);
   }
 
   /** 关闭前先统一检查直接模型，避免只退掉部分来源。 */
@@ -181,7 +197,7 @@ export class TownModels {
       seen.add(model_id);
       const { id: original_model_id, ...metadata } = descriptor;
       const entry: TownModelEntry = {
-        ...metadata, model_id, original_model_id, source_kind: "downtown", source_id: state.source.connection_id,
+        ...metadata, model: { downtown: state.source.connection_id, id: original_model_id }, model_id, original_model_id, source_kind: "downtown", source_id: state.source.connection_id,
         source_name: state.source.name, binding_id: state.source.auth_scope_id, durable: state.source.durable,
       };
       return entry;
@@ -199,7 +215,7 @@ export class TownModels {
 
   private direct_entry(model_id: string, state: DirectModelState): TownModelEntry {
     const { registration, binding_id } = state;
-    return { model_id, original_model_id: registration.client.id, source_kind: "client", source_id: registration.source_id,
+    return { model: { downtown: `client:${registration.source_id}`, id: registration.client.id }, model_id, original_model_id: registration.client.id, source_kind: "client", source_id: registration.source_id,
       source_name: registration.name ?? registration.source_id, name: registration.client.name ?? registration.client.id,
       model_type: "language", description: "", modalities: ["text", "stream"], tags: [], meta: {},
       context_window: registration.client.context_window, binding_id, durable: registration.durable === true,
@@ -210,6 +226,13 @@ export class TownModels {
 /** 仅 Town 可注入路由字段，调用者不能在业务 input 中覆盖来源。 */
 function assert_business_input(input: object): void {
   if (!input || typeof input !== "object" || Array.isArray(input) || "model" in input || "model_id" in input) throw new TypeError("town_model_routing_field_in_input");
+}
+
+/** 新协议使用结构化引用，旧目录键只保留给 Town 内部暂存任务。 */
+function require_request_model_id<T>(request: TownModelRequest<T>): string {
+  if (request.model) return downtown_model_id(request.model.downtown, request.model.id);
+  if (request.model_id?.trim()) return request.model_id.trim();
+  throw new TownError("town_model_required");
 }
 
 /** 不重写 SDK/远端错误，目录只投影有界状态码。 */

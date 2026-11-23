@@ -1,10 +1,12 @@
 /** Town 统一模型目录、直接客户端和多模态执行契约。 */
-import type { CityModelDescriptor, ModelClient } from "@downcity/type";
+import type { CityModelDescriptor, DowntownModelReference, ModelClient } from "@downcity/type";
 import type { FederationUser } from "@downcity/downtown";
 import type { TownExecutionOptions, TownSourceStatus } from "./Town.js";
 
 /** City 的可读目录项；model_id 是可持久化的不透明引用。 */
 export interface TownModelEntry extends Omit<CityModelDescriptor, "id"> {
+  /** 不需要解析的来源与模型原始 ID。 */
+  model: DowntownModelReference;
   /** City 来源明确的统一模型字符串 ID。 */
   model_id: string;
   /** 原始 SDK/远端模型 ID；只发给原来源，不用于跨来源查找。 */
@@ -43,8 +45,10 @@ export interface TownDirectModelRegistration {
 
 /** 多模态调用固定模型路由，input 中不能再提供 model 或 model_id。 */
 export interface TownModelRequest<T> extends TownExecutionOptions {
-  /** Town 统一目录模型 ID。 */
-  model_id: string;
+  /** 结构化的 Downtown 与原始模型 ID。 */
+  model?: DowntownModelReference;
+  /** 旧的内部目录键；新的 Agent/Session 路径使用 model。 */
+  model_id?: string;
   /** 原模态请求的业务字段；model 由 Town 唯一注入。 */
   input: T;
 }

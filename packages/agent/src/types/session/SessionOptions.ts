@@ -66,7 +66,7 @@ export interface SessionOptions extends SessionDescriptor {
   assert_execution_profile?: () => void;
   /** Agent 的完成事件写前日志；在 canonical Turn 终态之前必须提交成功。 */
   completions?: SessionCompletionPort;
-  /** 父 Turn 收尾前等待或取消子工作，跟随 Agent 持有的委派运行时。 */
+  /** 父 Turn 失败或显式停止时取消子工作，跟随 Agent 持有的委派运行时。 */
   child_work?: SessionChildWork;
   /** 由拥有者归档 Session，并负责集合索引和存储清理。 */
   archive_session?: (session_id: string) => Promise<import("@/types/agent/SessionTypes.js").AgentArchiveSessionResult>;

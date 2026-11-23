@@ -1,57 +1,56 @@
 # Downcity
 
-[![Publish packages](https://github.com/genesiscosmos/downcity/actions/workflows/publish-packages.yml/badge.svg)](https://github.com/genesiscosmos/downcity/actions/workflows/publish-packages.yml)
-[![Publish CLI](https://github.com/genesiscosmos/downcity/actions/workflows/publish-downcity.yml/badge.svg)](https://github.com/genesiscosmos/downcity/actions/workflows/publish-downcity.yml)
 [![npm version](https://img.shields.io/npm/v/downcity.svg)](https://www.npmjs.com/package/downcity)
 [![License](https://img.shields.io/github/license/genesiscosmos/downcity.svg)](./LICENSE)
 
 [English](./README.md) | [简体中文](./README.zh-CN.md)
 
-> 给 AI builders 的 Agent 基础设施，用一套可复用运行层承载多个 Agent 产品和工作流。
+> 用于构建和运行 Agent 产品与工作流的基础设施。
 
-Downcity 给 creators、indie builders 和团队提供一套可复用的 Agent 运行基础设施，把 Agent、模型、工具、任务、记忆、插件、City、权限、usage、计费和控制台收束到同一层。你不需要为每个新的 AI 产品重复搭一遍 Agent 后端，而是可以让多个 Agent、产品和工作流复用同一套 runtime。
+Downcity 为 Agent、模型、工具、任务、记忆和权限提供一套可复用的运行时。在一个 City 中托管多个 Agent，为每个 Session 指定项目 Workspace，并通过 Downtown 连接模型与服务。
 
 ## 为什么是 Downcity
 
-- 面向 AI builders：下一个 Agent 产品不应该再重复搭模型路由、工具、记忆、任务、权限、usage、计费和运维面。
-- 可复用运行层：repo 或 folder 可以成为 Agent 的运行边界，Downcity 负责更完整的长期运行基础设施。
-- Downtown 能力：集中管理模型目录、运行时 env、Service routing、accounts、balance、usage 和 payment。
-- 可运营 Agent：支持 daemon 化运行、状态检查、历史追踪，并通过 CLI、Console、浏览器扩展或 SDK 操作。
-- 可扩展架构：plugins、services、SDK API 和 UI 组件都作为明确边界对产品和团队开放。
+- 多个 Agent、产品和工作流复用同一套运行时。
+- Agent 身份、项目 Workspace 与 Session 历史各自独立管理。
+- 模型与服务有明确的来源身份，每条连接独立登录。
+- 通过 City 托管 Agent，通过 CLI、SDK 或自定义界面交互。
+- 通过 Power、服务、Workspace 实现和可复用 UI 组件扩展应用。
 
 ## 仓库组成
 
 | 包 / 目录 | 作用 |
 | --- | --- |
-| `downcity` | 公共 CLI 聚合包：`city`/`downcity` 是管理 Agent、运行时与控制台的本机 City 容器；`fed`/`downfed` 是 Downtown Server Manager。 |
-| `@downcity/city` | 应用组合根，负责 Agent registry、Workspace/Shell 资源、Plugin SDK 与生命周期、RemoteAgent、Storage 和 HTTP/RPC transport。 |
-| `@downcity/agent` | 单 Agent 执行运行时，负责 Agent、Group、AgentSessions、Session、模型/工具循环与中立宿主扩展端口。 |
-| `@downcity/downtown` | 统一的本地与远端 Downtown SDK，负责 Service、鉴权、Env、User 与 Admin 访问。 |
-| `@downcity/type` | 跨 package 的中立协议，包含 Workspace、Shell、Session Extension 与 City 模型类型。 |
-| `@downcity/services` | 公共服务集合，负责 accounts、balance、usage、payment 与 Stripe 支付闭环。 |
-| `@downcity/ui` | React + Tailwind UI SDK，提供 Console 与宿主应用可复用的界面组件。 |
-| `templates/*` | 面向开发者的 City 快捷示例，用于组装 Node 或 Edge 运行形态；官方私有部署实现不放在这个仓库。 |
-| `homepage` | 官网与面向用户的文档站点。 |
+| `downcity` | CLI 聚合包：`downcity` / `city` 管理本机 Agent、Workspace 和 City 宿主；`downtown` 管理 Downtown 服务端。 |
+| `@downcity/city` | City 组装、Agent 注册、Town 连接、Workspace/Shell 资源、Power、存储、RemoteAgent 和 HTTP/RPC 传输。 |
+| `@downcity/agent` | Agent 与 Group 执行、Session、模型/工具循环及宿主扩展接口。 |
+| `@downcity/downtown` | Downtown 服务端与 SDK，提供模型、服务、鉴权和用户/管理员访问。源码位于 `packages/federation`。 |
+| `@downcity/type` | 模型、Workspace、Shell、Session 与宿主集成的共享协议。 |
+| `@downcity/powers` | 任务、记忆、技能、网页、消息和界面呈现等可复用能力。 |
+| `@downcity/services` | 账户、额度、用量、组织、反馈与支付服务。 |
+| `@downcity/sandbox-native` | Workspace Shell 使用的操作系统原生 Sandbox 实现。 |
+| `@downcity/ui` | Console 与宿主应用可复用的 React + Tailwind 组件。 |
+| `templates/*` | Agent、本地/边缘 Downtown 和 React UI 入门示例。 |
 
 ## 核心能力
 
-- 全局 Agent 管理：Agent 身份与配置保存在用户级 Downcity 数据目录，执行时再进入指定 Workspace。
-- 本机 City 托管：通过 `downcity on`、`downcity status`、`downcity off` 托管全部本机 Agent。
-- Agent 管理：创建、查看、配置和对话；Agent 没有独立 started/stopped 状态。
-- Downtown 连接：通过 `downcity federation` 让本机 Agent 连接当前 Downtown。
-- Downtown 后端能力：让多个 Agent 和产品复用 accounts、balance、usage、payment、env、auth 和 Service routing。
-- 内建 Agent 能力：`chat`、`task`、`memory`、`shell`、`contact`、`skill`、`web`、`sound`、`workboard`。
-- 产品表层：Downcity CLI、Agent SDK、City SDK 和 UI SDK。
+- 在用户级 Downcity 数据目录中独立管理 Agent 身份与已登记的 Workspace。
+- 通过 `downcity on`、`downcity status`、`downcity off` 管理 CLI City 宿主，Agent 共享宿主生命周期。
+- 通过 CLI 或 SDK 创建 Session、发送消息和查看历史。
+- 通过 `downcity downtown` 管理独立的 Downtown 连接，发现模型与服务。
+- 将 Workspace 的文件/Shell 工具与内建、自定义 Power 组合使用。
 
 ## 平台支持
 
-| 平台 | 本机 Agent 与隔离 Sandbox |
-| --- | --- |
-| macOS（Apple Silicon） | 使用 microsandbox microVM，正式支持 |
-| Linux（x64 / ARM64） | 使用 microsandbox microVM，正式支持 |
-| Windows（x64 / ARM64） | 使用 microsandbox microVM，Preview |
+CLI 为本地 Workspace 的 Shell 命令使用 `NativeSandboxProvider`。
 
-每个 Workspace 都有独立、持久的 Sandbox，项目固定挂载到 `/workspace`。本地执行 Shell 前需要运行一次 `npx microsandbox setup`。Sandbox 失败时不会降级为宿主执行。
+| 平台 | 默认本地 Shell Sandbox |
+| --- | --- |
+| macOS | 通过 `/usr/bin/sandbox-exec` 使用 Seatbelt |
+| Linux | 通过 `/usr/bin/bwrap` 使用 Bubblewrap；需要安装 bubblewrap 并启用用户命名空间 |
+| Windows | Native Provider 暂不支持 |
+
+原生 Sandbox 使用项目的真实绝对路径。文件访问遵循 Workspace、运行目录和工具链策略，网络默认开放。Shell 执行前会检查隔离是否可用，不可用时执行失败。宿主执行需要明确审批。
 
 ## 快速开始
 
@@ -63,167 +62,167 @@ npm install -g downcity
 pnpm add -g downcity
 ```
 
-安装完成后会得到 `downcity` 命令（别名 `city`）：
+请先安装 Node.js 和 npm（或 pnpm）。安装包提供 `downcity`（别名 `city`）和 Downtown 服务端管理命令 `downtown`：
 
 ```bash
 downcity --version
 ```
 
-`downcity` 是基于 `City()` 与 Agent SDK 管理和运行 Agent 的本机 City 容器。更新使用 `npm i -g downcity@latest`。同一安装包还提供 `fed`/`downfed`，用于管理 Downtown Server。
+通过 `npm install -g downcity@latest` 更新。使用 `downtown --help` 查看服务端管理命令，使用 `downcity --help` 查看本机 City 命令。
 
-### 2. 连接 Downtown
+### 2. 连接模型与服务
 
-```bash
-downcity federation use
-downcity federation status
-```
-
-`downcity` 负责模型和 Service 资源管理。`downcity federation` 负责把当前 City 连接导入本机 Agent runtime。
-
-### 3. 创建 Agent
-
-在目标仓库中执行：
+你需要一个可访问的 Downtown 服务端，且账户有可用模型。将示例 URL 替换成你的服务地址：
 
 ```bash
-downcity agent create .
+downcity downtown add https://your-downtown.example.com --name primary
+downcity downtown list
 ```
 
-初始化后会登记 Workspace 路径，并在用户级 Downcity 目录创建 Agent 定义：
-
-```text
-~/.downcity/
-├── agents/
-│   └── <agent_id>/
-│       ├── agent.json
-│       └── SOUL.md
-└── plugins/
-    └── <plugin_id>/
-```
-
-### 4. 启动 CLI City
+将下面的 `CONNECTION_ID` 替换成上一步返回的连接 ID。登录通过交互完成，仅作用于该连接：
 
 ```bash
+downcity downtown login CONNECTION_ID
+downcity downtown models
+downcity downtown services
+```
+
+### 3. 登记 Workspace 并创建 Agent
+
+在项目目录执行，将 `MODEL_ID` 替换成 `downcity downtown models` 返回的完整 `model_id`：
+
+```bash
+downcity workspace register .
+downcity agent create --id repo-helper --name "Repo Helper" --model MODEL_ID
 downcity agent list
+```
+
+Workspace 登记保存项目路径。Agent 创建在用户级 Downcity 数据目录（默认 `~/.downcity`）中保存独立身份和模型选择。更换模型使用 `downcity agent update repo-helper --model MODEL_ID`。
+
+### 4. 启动 City 并发送消息
+
+```bash
 downcity on
 downcity status
-downcity agent token create <agent_id> --name local
+downcity agent chat repo-helper --workspace-path . --message "总结一下当前仓库结构"
 ```
 
-Plugin 能力统一通过 `city plugin action <plugin> <action> [agent_id]` 调用。
+省略 `--message` 可进入交互式对话。聊天与 Session 执行需要正在运行的 CLI 或 Desktop City 宿主。无宿主时仍可使用配置与历史查看命令。
 
-如果希望在当前终端前台运行：
+使用 `downcity on --foreground` 可在当前终端前台运行，使用 `downcity off` 停止 CLI 宿主。
+
+### 5. 授权 SDK 访问（可选）
 
 ```bash
-downcity on --foreground
+downcity token create --name local-sdk --agents repo-helper
 ```
 
-### 5. 查看和使用 Agent
-
-```bash
-downcity agent list
-```
-
-CLI City 停止时仍可聊天，CLI 会创建并释放临时本地 City：
-
-```bash
-downcity agent list
-downcity agent chat <agent_id>
-```
+命令会交互询问有效期等剩余配置。签发时请保存 Bearer Token，明文只显示一次。默认 HTTP Agent URL 为 `http://127.0.0.1:5314/agents/repo-helper`；如已修改 HTTP 地址或端口，请使用实际配置。`15314` 是独立的本机 RPC 端口。
 
 ## SDK 示例
 
 ### 本地 Agent
 
+在 Node.js ESM/TypeScript 应用中安装 `@downcity/city`、`@downcity/downtown` 和 `@downcity/sandbox-native`。设置 `OPENAI_API_KEY`，选择服务商支持的模型，并将下面的两个绝对路径替换成项目目录和可写的运行目录。此独立 SDK 示例自行提供模型，无需启动 CLI City 宿主。
+
 ```ts
 import { Agent, Shell, Workspace } from "@downcity/city";
 import { create_openai_compatible_model } from "@downcity/downtown";
-import { MicrosandboxProvider } from "@downcity/sandbox-microsandbox";
+import { NativeSandboxProvider } from "@downcity/sandbox-native";
+
+const api_key = process.env.OPENAI_API_KEY;
+if (!api_key) throw new Error("Set OPENAI_API_KEY before running this example");
 
 const model = create_openai_compatible_model({
   id: "gpt-5",
   upstream_model: "gpt-5",
   base_url: "https://api.openai.com/v1",
-  api_key: process.env.OPENAI_API_KEY!,
+  api_key,
 });
 
 const workspace = new Workspace({
   id: "project",
   path: "/path/to/project",
   shell: new Shell({
-    sandbox_provider: new MicrosandboxProvider(),
+    sandbox_provider: new NativeSandboxProvider(),
   }),
   runtime_path: "/path/to/downcity-runtime/project",
 });
-const agent = new Agent({ id: "repo-helper", tools: {} });
+const agent = new Agent({ id: "sdk-repo-helper", model, workspace });
 
-const session = await agent.sessions.create({ workspace });
-await session.set({
-  model,
-});
-
-const turn = await session.prompt({
-  query: "总结一下当前仓库结构",
-});
-const result = await turn.finished;
-
-console.log(result.text);
+try {
+  const session = await agent.sessions.create();
+  const turn = await session.prompt({
+    query: "总结一下当前仓库结构",
+  });
+  const result = await turn.finished;
+  if (!result.success) throw new Error(result.error || "Agent turn failed");
+  console.log(result.text);
+} finally {
+  try {
+    await agent.dispose();
+  } finally {
+    await workspace.dispose();
+  }
+}
 ```
 
-在 SDK 模式下，模型由宿主应用自己创建，再注入到 session。`@downcity/agent` 不负责 provider / modelId 的解析。
+在 SDK 模式下，模型由宿主应用创建，再作为 Agent 默认模型或 Session 覆盖模型传入。`@downcity/agent` 不负责解析服务商或模型 ID。
 
 ### 远程 Agent
+
+安装 `@downcity/city`。将 `DOWNCITY_AGENT_URL` 设置为快速开始中的完整 HTTP Agent URL，将 `DOWNCITY_TOKEN` 设置为有权访问该 Agent 的 City Token。City 必须正在运行，Agent 必须有可用模型。此示例创建的 Session 不包含项目上下文。
 
 ```ts
 import { RemoteAgent } from "@downcity/city";
 
-const agent = new RemoteAgent({
-  baseUrl: "http://127.0.0.1:15314",
-});
+const agent_url = process.env.DOWNCITY_AGENT_URL;
+const city_token = process.env.DOWNCITY_TOKEN;
+if (!agent_url || !city_token) {
+  throw new Error("Set DOWNCITY_AGENT_URL and DOWNCITY_TOKEN");
+}
 
-const session = await agent.session();
-const turn = await session.prompt({
-  query: "检查最近一次任务执行状态",
-});
-const result = await turn.finished;
+const agent = new RemoteAgent({ url: agent_url, token: city_token });
 
-console.log(result.text);
+try {
+  const session = await agent.sessions.create();
+  const turn = await session.prompt({ query: "你好，你能帮助我做什么？" });
+  const result = await turn.finished;
+  if (!result.success) throw new Error(result.error || "Agent turn failed");
+  console.log(result.text);
+} finally {
+  await agent.close();
+}
 ```
 
 ## 仓库结构
 
 ```text
 downcity/
-├── app/
-│   ├── cli/
-│   ├── desktop/
-│   ├── fedman/
-│   └── ios/
 ├── packages/
 │   ├── agent/
 │   ├── city/
-│   ├── federation/
+│   ├── cli/
+│   ├── federation/             # @downcity/downtown
 │   ├── implementations/
 │   │   ├── databases/
-│   │   ├── plugins/
+│   │   ├── powers/
 │   │   ├── sandboxes/
 │   │   ├── services/
 │   │   └── workspaces/
-│   ├── plugin/
 │   ├── type/
-│   ├── ui/
-│   └── workspace/
+│   └── ui/
 ├── templates/
 │   ├── agent/
 │   ├── edgefed/
 │   ├── localfed/
 │   └── ui/
-├── private/apps/homepage/
 ├── scripts/
 ├── package.json
 └── pnpm-workspace.yaml
 ```
 
-`templates/*` 保留为开发者快捷示例，不代表官方私有生产部署实现。
+`templates/*` 提供开发者入门示例和演示项目。`ui` 模板是独立的 React + Vite 应用，用于预览公共 `@downcity/ui` 组件。
 
 ## 文档入口
 
@@ -231,23 +230,29 @@ downcity/
 - City SDK 文档：[downcity.ai/city-sdk-docs](https://downcity.ai/city-sdk-docs)
 - Agent SDK 文档：[downcity.ai/agent-sdk-docs](https://downcity.ai/agent-sdk-docs)
 - UI SDK 文档：[downcity.ai/ui-sdk-docs](https://downcity.ai/ui-sdk-docs)
-- 包文档：[packages/agent/README.md](./packages/agent/README.md)、[packages/type/README.md](./packages/type/README.md)、[packages/implementations/services/README.md](./packages/implementations/services/README.md)、[packages/cli/README.md](./packages/cli/README.md)、[packages/ui/README.md](./packages/ui/README.md)
+- 包文档：[Agent](./packages/agent/README.md)、[City](./packages/city/README.md)、[Downtown](./packages/federation/README.md)、[Types](./packages/type/README.md)、[Services](./packages/implementations/services/README.md)、[CLI](./packages/cli/README.md)、[UI](./packages/ui/README.md)
 
 ## 本地开发
 
-安装依赖：
+独立克隆本公开仓库时，使用 Node.js 和 `package.json` 声明的 pnpm `10.22.0`，在仓库根目录安装依赖：
 
 ```bash
 pnpm install
 ```
 
-构建：
+若本仓库位于完整 Downcity 工作区的 `public/` 目录中，请在父级工作区根目录安装依赖。下面的公开脚本在 `public/` 中执行。
+
+构建全部包，不修改版本号，也不将 CLI 安装到全局：
 
 ```bash
-pnpm build
+pnpm build -- --no-global-install
+```
+
+单独构建 SDK 包：
+
+```bash
 pnpm build:agent
 pnpm build:city
-pnpm build:homepage
 ```
 
 类型检查：
@@ -255,23 +260,23 @@ pnpm build:homepage
 ```bash
 pnpm typecheck
 pnpm -C packages/ui typecheck
-pnpm --dir private/apps/homepage typecheck
 ```
 
-开发模式：
+开发入口（按需选择）：
 
 ```bash
-pnpm dev:city
+pnpm dev:cli
 pnpm dev:agent
+pnpm dev:powers
 pnpm dev:ui-sdk
-pnpm dev:homepage
+pnpm dev:ui-template
 ```
 
 ## 运行与安全建议
 
 - Downcity 会执行 shell、读写项目文件、启动本地 daemon，并可能通过聊天渠道接收外部消息。
-- 本地 shell 与 script 命令默认经过 agent sandbox 执行：项目目录可写，网络默认开放，sandbox HOME/cache 位于 `.downcity/sandbox`。
+- 本地 Workspace 的 shell 与 script 命令默认经过原生 Sandbox 执行。项目目录可写，命令会修改真实文件；授权额外路径前请检查当前 Sandbox 策略。
 - 建议在干净 Git 分支上使用，并通过 `git status`、`git diff` 审计改动。
 - 不要把真实密钥提交到仓库；优先使用本地环境变量或 `downcity env`。
 - 通过 token 和 auth 边界保护 Console、HTTP 访问和聊天渠道接入。
-- `sudo`、`brew install`、Xcode 工具安装以及写系统目录这类宿主级操作不属于 sandbox 可执行边界。
+- 宿主级安装和系统配置需要通过明确审批的宿主操作执行。

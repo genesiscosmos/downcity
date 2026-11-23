@@ -12,7 +12,9 @@ test("Town routes stream-only language models to their original Downtown model",
     const model_id = downtown_model_id("official", "krill-gpt-6.1-sol");
     const catalog = await town.models.list();
     assert.equal(catalog.items[0].model_id, model_id);
-    const client = town.models.client(model_id, { binding_id: catalog.items[0].binding_id });
+    assert.deepEqual(catalog.items[0].model, { downtown: "official", id: "krill-gpt-6.1-sol" });
+    const client = town.models.client(catalog.items[0].model);
+    assert.deepEqual(client.model_reference, catalog.items[0].model);
     const stream = await client.stream(call);
     const events = [];
     for await (const event of stream) events.push(event);

@@ -34,7 +34,6 @@ export function resource_chat_sessions(client: ResourceClient, agent_id: string,
       if (session.archived) throw new ResourceError("dependency_conflict", "Archived history cannot execute", 4);
       if (workspace_id && session.workspace_id !== workspace_id) throw new ResourceError("dependency_conflict", "Persisted Session Workspace differs from this chat context", 4);
       const remote = await sdk.get(session_id, type);
-      if (!session.model_binding?.override_model_id && session.saved_model_override) await remote.set({ model_id: session.saved_model_override }, { persist_action: false });
       return recoverable_chat_session(remote, client, agent_id);
     },
     list: async (input) => await list(input, false),

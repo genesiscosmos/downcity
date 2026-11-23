@@ -35,7 +35,6 @@ export interface SessionArchiveToolOutput extends AgentArchiveSessionResult {
 export type SessionToolState =
   | "running"
   | "waiting_for_user"
-  | "waiting_child"
   | "failed"
   | "idle";
 

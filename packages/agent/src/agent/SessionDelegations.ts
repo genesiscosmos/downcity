@@ -15,7 +15,7 @@ import { SESSION_TYPE_WORK, read_session_delegation_depth } from "@downcity/type
 import { create_work_descriptor, require_direct_work_child, require_work_creator } from "./SessionWorkPolicy.js";
 import type { SessionDelegationCaller, SessionDelegationInput, SessionDelegationMessage, SessionDelegationOptions, SessionDelegationPort, SessionDelegationReceipt, SessionDelegationRecord } from "@/types/agent/SessionDelegation.js";
 import type { AgentSession } from "@/types/agent/SessionActor.js";
-import type { SessionChildWorkInput } from "@/types/session/SessionChildWork.js";
+import type { SessionChildWorkInput, SessionChildWorkTarget } from "@/types/session/SessionChildWork.js";
 
 /** 一次委派一个后台观察任务；同一进程的重复启动复用已有操作。 */
 export class SessionDelegations implements SessionDelegationPort {
@@ -65,9 +65,9 @@ export class SessionDelegations implements SessionDelegationPort {
     }
     // 先校验项目，非法派发不能留下等待恢复的记录。
     const workspace = await this.options.resolve_workspace(workspace_id);
-    if (input.model_id) {
+    if (input.model) {
       if (!this.options.validate_model) throw new Error("Session model selection is not configured by the host");
-      await this.options.validate_model(input.model_id, workspace);
+      await this.options.validate_model(input.model, workspace);
     }
     const delegation_id = createHash("sha256")
       .update(JSON.stringify([caller.agent_id, caller.type, caller.session_id, caller.turn_id, caller.execution_id, caller.tool_call_id]))
@@ -79,7 +79,7 @@ export class SessionDelegations implements SessionDelegationPort {
       followup,
       workspace_id,
       query,
-      ...(input.model_id ? { model_id: input.model_id } : {}),
+      ...(input.model ? { model: input.model } : {}),
       ...(input.title?.trim() ? { title: input.title.trim() } : {}),
       execution_state: "pending",
       delivery_state: "pending",
@@ -117,29 +117,17 @@ export class SessionDelegations implements SessionDelegationPort {
     await Promise.allSettled([...this.active.values(), ...this.preparations.values(), ...(this.scanning ? [this.scanning] : [])]);
   }
 
-  /** 等待本 Turn 子执行与投递；Loop 同时监听输入入队，避免投递接收死锁。 */
-  async wait_for_children(parent: SessionChildWorkInput, caller_agent_id = this.options.agent_id): Promise<void> {
-    if (parent.abort_signal.aborted) return;
-    const records = await this.pending_children(parent, caller_agent_id);
-    if (!records.length || parent.abort_signal.aborted) return;
-    const operations = records.map((record) => {
-      this.launch(record.delegation_id);
-      return this.active.get(record.delegation_id);
-    });
-    let on_abort: (() => void) | undefined;
-    const aborted = new Promise<void>((resolve) => {
-      on_abort = resolve;
-      parent.abort_signal.addEventListener("abort", on_abort, { once: true });
-      if (parent.abort_signal.aborted) resolve();
-    });
-    try {
-      await Promise.race([Promise.all(operations), aborted]);
-      if (!parent.abort_signal.aborted && (await this.pending_children(parent, caller_agent_id)).length) {
-        throw new Error("Child work could not complete; delegation records retained for recovery");
-      }
-    } finally {
-      if (on_abort) parent.abort_signal.removeEventListener("abort", on_abort);
-    }
+  /** 显式停止父 Session 的所有未完成委派，包括已正常结束的父 Turn。 */
+  async stop_children(parent: SessionChildWorkTarget, caller_agent_id = this.options.agent_id): Promise<boolean> {
+    const records = (await this.options.store.pending()).filter((record) => record.caller.agent_id === caller_agent_id
+      && record.caller.type === parent.type && record.caller.session_id === parent.session_id);
+    // 先批量封闭投递，避免停止某个 Child 期间另一个 Child 唤起父会话。
+    await Promise.all(records.map(async (record) => await this.cancel(record.work_session_id)));
+    await Promise.all(records.map(async (record) => {
+      const session = this.executing_sessions.get(record.delegation_id);
+      if (session) await session.stop();
+    }));
+    return records.length > 0;
   }
 
   /** 父失败或停止时先撤销投递，再停止未完成的直接子执行。 */
@@ -249,7 +237,9 @@ export class SessionDelegations implements SessionDelegationPort {
       const session = record.followup
         ? await this.options.get_work_session(record.work_session_id)
         : await this.options.ensure_work_session(record.work_session_id, workspace, child_depth, create_work_descriptor(record.caller));
-      await this.options.prepare_session(session, record.model_id);
+      const parent = record.model ? undefined : await this.options.get_parent_session(record.caller);
+      if (parent?.get("model")) await session.set({ model: parent.get("model") }, { persist_action: false });
+      await this.options.prepare_session(session, record.model);
       if (record.title && record.execution_state === "pending") await session.rename(record.title);
       return session;
     })();
@@ -371,7 +361,8 @@ export class SessionDelegations implements SessionDelegationPort {
         turn_id: record.caller.turn_id,
         ...(record.caller.type === "work" ? { execution_id: record.caller.execution_id } : {}),
         request_id: `delegation_result:${delegation_id}`,
-        resume_after_turn: record.caller.type === "chat",
+        // Parent Turn 可先正常结束；Child 结果到达后由后台输入启动后续 Turn。
+        resume_after_turn: true,
         allow_stopped_turn: record.caller.type === "chat",
         query: [
           {

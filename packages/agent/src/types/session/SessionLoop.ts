@@ -79,7 +79,7 @@ export interface SessionLoopOptions extends SessionCallContext {
   acquire_execution?: () => () => void;
   /** Turn 终态前的可靠写前日志；省略时只提供普通 Session Hook。 */
   completions?: SessionCompletionPort;
-  /** Agent 提供的子工作等待与取消能力，不由 Loop 管理委派存储。 */
+  /** Agent 提供的子工作停止与取消能力，不由 Loop 管理委派存储。 */
   child_work?: SessionChildWork;
   /** 当前 Session 的稳定标识。 */
   session_id: string;

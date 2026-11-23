@@ -3,8 +3,8 @@ import type { RespondSessionInteractionInput, SessionAgentInteraction, SessionIn
 import type { ChatControlMessages } from "./chat-controls";
 /** 表单的展示上下文；只影响排版和重复标题，不改变 canonical 交互行为。 */
 export interface InteractionPresentation {
-  /** chat 保留紧凑聊天表单；inbox 使用独立页面的间距和字号。 */
-  presentation?: "chat" | "inbox";
+  /** chat 保留紧凑聊天表单；input 使用独立页面的间距和字号。 */
+  presentation?: "chat" | "input";
   /** 宿主已经展示的标题；表单省略相同标题时仍关联该标题供辅助技术读取。 */
   external_heading?: {
     /** 宿主标题元素的稳定 DOM 标识。 */

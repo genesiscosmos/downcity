@@ -66,7 +66,7 @@ export class SessionLoop {
   /** 由 Agent 提供的写前日志，失败不能通过普通 Hook 吞掉。 */
   private readonly completions: SessionLoopOptions["completions"];
   private readonly session_descriptor: import("@downcity/type").SessionDescriptor;
-  /** 子工作等待与取消由独立模块管理，输入消费仍归本 Loop。 */
+  /** 子工作取消由独立模块管理，输入消费仍归本 Loop。 */
   private readonly child_work: SessionChildWorkLifecycle;
   /** 当前 Session 的目录解析器。 */
   private readonly get_workspace_path: SessionLoopOptions["get_workspace_path"];
@@ -149,7 +149,7 @@ export class SessionLoop {
       replay => this.enqueue_model_retry(replay), () => this.execution.publish());
     this.execution = new SessionExecutionState({
       read: () => ({ live_execution: this.has_live_execution(), active_turn_id: this.current_turn_id(),
-        model_retry: this.model_retry.current(), processing: this.processing,
+        model_retry: this.model_retry.current(), reply_message_id: this.active_turn?.turn_context?.output.assistant?.reply_message_id, processing: this.processing,
         interaction: this.messages.list_pending_interactions().length > 0 }),
       publish: snapshot => this.events.publish({ mutation_id: nanoid(), variant: "session", type: "runtime",
         session_id: this.session_id, ...snapshot, created_at: Date.now() }),
@@ -158,7 +158,6 @@ export class SessionLoop {
     });
     this.queue.on_enqueue(command => {
       if (command.kind !== "retry" && command.interrupt !== "defer") this.model_retry.notify_input();
-      if (command.kind === "prompt" || command.interrupt === "replace") this.child_work.notify_prompt();
       this.ensure_processing();
     });
     this.events.subscribe(mutation => {
@@ -355,17 +354,17 @@ export class SessionLoop {
       is_current: () => !this.stopping && generation === this.stop_generation }, input);
   }
 
-  /** 可信委派结果仅可注入原活动 Turn；调用方必须先验证持久化委派记录。 */
-  async accept_delegation_result(turn_id: string, request_id: string, query: AgentSessionPromptInput["query"], execution_id?: string): Promise<boolean> {
+  /** 可信结果注入指定活动 Turn，并保留原调用 Turn 来源；调用方先验证持久化委派记录。 */
+  async accept_delegation_result(turn_id: string, request_id: string, query: AgentSessionPromptInput["query"], execution_id?: string, source_turn_id = turn_id): Promise<boolean> {
     const generation = this.stop_generation;
-    return await this.result_acceptance.accept(turn_id, request_id, query, async (identity, parts) => {
+    return await this.result_acceptance.accept(source_turn_id, request_id, query, async (identity, parts) => {
       const actor = this.occupation.occupied_by;
       if (execution_id && this.current_execution_id() !== execution_id) return false;
       if (!actor || this.stopping || generation !== this.stop_generation || this.closing || this.active_turn?.turn_id !== turn_id) return false;
       // 检查目标后同步入队，不允许迟到结果漂移到下一 Turn。
       const content = typeof parts === "string" ? [{ type: "text" as const, text: parts }] : parts;
       await this.enqueue_prompt({ actor, request_id, query: [
-        { type: "context", tag: "background_source", context: JSON.stringify({ caller_turn_id: turn_id }) }, ...content,
+        { type: "context", tag: "background_source", context: JSON.stringify({ caller_turn_id: source_turn_id }) }, ...content,
       ], input_kind: "input" }, identity);
       return true;
     });
@@ -526,6 +525,10 @@ export class SessionLoop {
       await this.initialize_occupation();
       if (this.unknown_turn_id) throw completion_unavailable(this.unknown_turn_id);
       if (expected_turn_id && expected_turn_id !== this.current_turn_id() && expected_turn_id !== observed_turn?.turn_id) throw turn_changed();
+      // 先封闭当前代次的新委派，再取消历史 Turn 留下的独立子工作。
+      const stopping_context = observed_turn?.turn_context ?? this.active_turn?.turn_context;
+      if (stopping_context) await this.child_work.cancel(stopping_context);
+      const stopped_children = await this.child_work.stop({ session_id: this.session_id, ...this.session_descriptor });
       if (!this.active_turn && this.recovered_turn_id) {
         const recovered = create_active_session_turn_state(this.recovered_turn_id);
         if (this.recovered_execution_id) recovered.execution_id = this.recovered_execution_id;
@@ -551,7 +554,7 @@ export class SessionLoop {
         active_turn?.turn_context ? this.child_work.cancel(active_turn.turn_context) : Promise.resolve(),
       ]);
       if (active_turn) await active_turn.deferred_finished.promise;
-      const stopped = Boolean(active_turn || cancelled_queued_prompts > 0);
+      const stopped = Boolean(active_turn || cancelled_queued_prompts > 0 || stopped_children);
       return { stopped, ...(active_turn ? { turn_id: active_turn.turn_id } : {}),
         cancelled_queued_prompts, reason: stopped ? "stopped" : "idle" };
     } finally {
@@ -814,19 +817,16 @@ export class SessionLoop {
     }
 
     try {
-      // 子工作等待可被同步入队唤醒；先消费输入，投递方的 accept 才能兑现。
+      // 当前 Turn 结束后直接收口；Child 结果会作为新的后台输入在后续 Turn 处理。
       while (result.success && !turn_context.lifecycle.abort_signal.aborted
-        && (this.has_pending_prompt()
-          || await this.child_work.wait(turn_context, () => this.has_pending_prompt(), active => this.execution.set_waiting_child(active))
-          || this.has_pending_prompt())
-        && !turn_context.lifecycle.abort_signal.aborted) {
+        && this.has_pending_prompt()) {
         await turn_context.input.checkpoint();
         if (turn_context.lifecycle.abort_signal.aborted) break;
         const compact_required = result.compact_required;
         result = await this.run_turn_with_context_advance(turn_context);
         if (compact_required) result.compact_required = true;
       }
-      // await 返回后已同步复查队列；从最后检查到关闭窗口之间没有 await。
+      // 从最后检查输入队列到关闭接收窗口之间没有 await。
       this.closing = true;
       if (!result.success || turn_context.lifecycle.abort_signal.aborted) {
         if (turn_context.lifecycle.abort_signal.aborted) this.cancel_queued_prompts();
@@ -895,7 +895,7 @@ export class SessionLoop {
     const assistant_output = new SessionAssistantOutputAdapter({
       turn_id: active_turn.turn_id,
       execution_id: active_turn.execution_id,
-      messages: this.messages,
+      messages: this.messages, on_reply_change: () => this.execution.publish(),
       ...(active_turn.replay ? { resume: { message_id: active_turn.replay.binding.message_id,
         revision: active_turn.replay.message_revision!, error_part_id: active_turn.replay.binding.error_part_id } } : {}),
       assert_resumable: () => { active_turn.turn_context?.lifecycle.abort_signal.throwIfAborted(); },

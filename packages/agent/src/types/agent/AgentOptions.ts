@@ -7,7 +7,7 @@
  */
 
 import type { SessionCallbacks } from "./SessionCallback.js";
-import type { ModelClient, AgentTool as Tool, ToolHookSet, WorkspaceRuntime } from "@downcity/type";
+import type { DowntownModelReference, ModelClient, AgentTool as Tool, ToolHookSet, WorkspaceRuntime } from "@downcity/type";
 
 import type {
   AgentManagedSession,
@@ -116,10 +116,10 @@ export interface AgentOptions {
   /**
    * 委派执行或结果回传前的宿主装配入口。
    * Workspace 已恢复；宿主可恢复 Session 模型并建立消息订阅。
-   * model_id 为派发记录中的显式模型选择；宿主应保存该选择供后续恢复使用。
+   * model 为派发记录中的显式模型选择；宿主应保存该选择供后续恢复使用。
    * 必须幂等且不得再次调用 resume_work 或派发模型输入。
    */
-  prepare_work_session?: (session: AgentSession, model_id?: string) => Promise<void>;
+  prepare_work_session?: (session: AgentSession, model?: DowntownModelReference) => Promise<void>;
 
   /** 按精确模型与已保存授权来源恢复；必须拒绝来源变化，并使用目标 Workspace 环境。 */
   resolve_work_model?: import("../model/SessionModelResolver.js").SessionModelResolver;

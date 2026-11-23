@@ -59,7 +59,7 @@ export class SessionResources {
     const configuration = await this.browser(agent_id).configuration(view.session_id);
     const model_binding = configuration.model_binding ? JSON.parse(configuration.model_binding) as import("@downcity/agent").SessionModelBinding : undefined;
     const saved_model_id = !view.archived && this.dependencies.workspaces ? read_saved_session_model(this.dependencies.root_path, agent_id, metadata, this.dependencies.immutable) : undefined;
-    return { session: { ...project_session(metadata, view.archived, agent_id), model_binding: model_binding ?? null, saved_model_override: saved_model_id ?? null, model_selection_required: !(model_binding?.override_model_id ?? saved_model_id ?? model_binding?.default_model_id) }, runtime: await this.observe(cached), pending_interaction_count: (await view.interactions()).length };
+    return { session: { ...project_session(metadata, view.archived, agent_id), model_binding: model_binding ?? null, saved_model_override: saved_model_id ?? null, model_selection_required: !(model_binding?.model ?? saved_model_id) }, runtime: await this.observe(cached), pending_interaction_count: (await view.interactions()).length };
   }
 
   /** canonical Message 页；直接贯通 SDK 解码，不展开附件。 */
@@ -91,7 +91,7 @@ export class SessionResources {
       const session = await agent.sessions.get(session_id, type, { workspace });
       await host.prepare_session?.(agent_id, session);
       const model_binding = await this.browser(agent_id).model_binding(session_id, type);
-      const saved_model_id = !model_binding?.override_model_id ? read_saved_session_model(this.dependencies.root_path, agent_id, { ...view.metadata, id: view.session_id }, false) : undefined;
+      const saved_model_id = !model_binding?.model ? read_saved_session_model(this.dependencies.root_path, agent_id, { ...view.metadata, id: view.session_id }, false) : undefined;
       if (saved_model_id && session.get("model")?.id !== saved_model_id) {
         const model = await host.resolve_model(saved_model_id);
         if (model) await session.set({ model }, { persist_action: false });

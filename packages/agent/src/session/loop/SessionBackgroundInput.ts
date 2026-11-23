@@ -41,12 +41,13 @@ async function receive_background_input(host: SessionBackgroundHost, input: Sess
     return "accepted";
   }
   if (!host.is_current()) return "retry";
-  if (input.execution_id && host.loop.current_execution_id() !== input.execution_id) return "discarded";
   const query = [
     { type: "context" as const, tag: "background_source", context: JSON.stringify({ caller_turn_id: input.turn_id }) },
     ...(typeof input.query === "string" ? [{ type: "text" as const, text: input.query }] : input.query),
   ];
   if (host.loop.current_turn_id() === input.turn_id) {
+    // 同一 Turn 仍在运行时必须校验执行代次，避免旧 Child 结果注入新的执行。
+    if (input.execution_id && host.loop.current_execution_id() !== input.execution_id) return "discarded";
     const actor = host.loop.occupied_by();
     if (!host.loop.is_active() && actor) {
       // 重启恢复的占用仍属于原执行；沿已有恢复入口续行，不重放外部命令。
@@ -62,7 +63,13 @@ async function receive_background_input(host: SessionBackgroundHost, input: Sess
   if (!host.is_current()) return "retry";
   if (!completed) return host.loop.has_live_execution() ? "retry" : "discarded";
   if (completed.status !== "completed" && !input.allow_stopped_turn) return "discarded";
-  if (host.loop.has_live_execution()) return "retry";
+  if (host.loop.has_live_execution()) {
+    const active_turn_id = host.loop.current_turn_id();
+    if (!active_turn_id) return "retry";
+    // 后续 Turn 正在处理其他结果时直接入队，来源仍绑定最初发起委派的 Turn。
+    return await host.loop.accept_delegation_result(active_turn_id, input.request_id, input.query,
+      host.loop.current_execution_id(), input.turn_id) ? "accepted" : "retry";
+  }
   try {
     await host.loop.prompt_input({
       actor: { kind: "runtime", namespace: "session_background", object_id: input.request_id },

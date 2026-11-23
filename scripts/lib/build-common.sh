@@ -110,7 +110,7 @@ install_downcity_cli_globally() {
   source_dir="$workspace_root/packages/cli"
   legacy_command="stu""dio"
 
-  if [[ ! -f "$source_dir/bin/downcity.js" || ! -f "$source_dir/bin/downfed.js" ]]; then
+  if [[ ! -f "$source_dir/bin/downcity.js" || ! -f "$source_dir/bin/downtown.js" ]]; then
     echo "Missing Downcity CLI build output. Run packages/cli build first." >&2
     return 1
   fi
@@ -124,12 +124,11 @@ install_downcity_cli_globally() {
     resolved_package_dir="$(cd "$package_dir" && pwd -P)"
     resolved_source_dir="$(cd "$source_dir" && pwd -P)"
     if [[ "$resolved_package_dir" == "$resolved_source_dir" ]]; then
-      chmod +x "$source_dir/bin/downcity.js" "$source_dir/bin/downfed.js"
-      rm -f "$global_bin/$legacy_command" "$global_bin/city" "$global_bin/downcity" "$global_bin/downfed" "$global_bin/fed" 2>/dev/null || true
+      chmod +x "$source_dir/bin/downcity.js" "$source_dir/bin/downtown.js"
+      rm -f "$global_bin/$legacy_command" "$global_bin/city" "$global_bin/downcity" "$global_bin/downtown" "$global_bin/downfed" "$global_bin/fed" 2>/dev/null || true
       ln -s "../lib/node_modules/downcity/bin/downcity.js" "$global_bin/city"
       ln -s "../lib/node_modules/downcity/bin/downcity.js" "$global_bin/downcity"
-      ln -s "../lib/node_modules/downcity/bin/downfed.js" "$global_bin/downfed"
-      ln -s "../lib/node_modules/downcity/bin/downfed.js" "$global_bin/fed"
+      ln -s "../lib/node_modules/downcity/bin/downtown.js" "$global_bin/downtown"
       return 0
     fi
   fi
@@ -163,11 +162,10 @@ install_downcity_cli_globally() {
     deploy_downcity_cli_package "$package_dir" "$deploy_dir"
   fi
 
-  chmod +x "$package_dir/bin/downcity.js" "$package_dir/bin/downfed.js"
+  chmod +x "$package_dir/bin/downcity.js" "$package_dir/bin/downtown.js"
 
-  rm -f "$global_bin/$legacy_command" "$global_bin/city" "$global_bin/downcity" "$global_bin/downfed" "$global_bin/fed" 2>/dev/null || true
+  rm -f "$global_bin/$legacy_command" "$global_bin/city" "$global_bin/downcity" "$global_bin/downtown" "$global_bin/downfed" "$global_bin/fed" 2>/dev/null || true
   ln -s "../lib/node_modules/downcity/bin/downcity.js" "$global_bin/city"
   ln -s "../lib/node_modules/downcity/bin/downcity.js" "$global_bin/downcity"
-  ln -s "../lib/node_modules/downcity/bin/downfed.js" "$global_bin/downfed"
-  ln -s "../lib/node_modules/downcity/bin/downfed.js" "$global_bin/fed"
+  ln -s "../lib/node_modules/downcity/bin/downtown.js" "$global_bin/downtown"
 }

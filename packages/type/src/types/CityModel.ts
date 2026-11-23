@@ -2,13 +2,34 @@
  * City 模型公共协议模块。
  *
  * 该模块定义跨 package 共享的模型目录与可执行 Downcity Model Protocol。
- * 具体 HTTP transport 由 @downcity/federation 客户端实现。
+ * 具体 HTTP transport 由 @downcity/downtown 客户端实现。
  */
 
 import type { ModelClient } from "./model/ModelClient.js";
 
 /** City model 的公开协议标识。 */
 export const CITY_MODEL_KIND = "downcity.city-model" as const;
+
+/**
+ * 由 Town 管理的 Downtown 模型引用。
+ *
+ * Agent、Session 和委派只保存这两个字段；模型服务内的模型 ID 不再和
+ * 来源 ID 拼成一个需要解析的字符串。
+ */
+export interface DowntownModelReference {
+  /** Town 中登记的 Downtown 稳定标识。 */
+  downtown: string;
+  /** 目标 Downtown 服务声明的原始模型 ID。 */
+  id: string;
+}
+
+/** 判断值是否为完整的 Downtown 模型引用。 */
+export function is_downtown_model_reference(value: unknown): value is DowntownModelReference {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+  const record = value as Record<string, unknown>;
+  return typeof record.downtown === "string" && record.downtown.trim().length > 0
+    && typeof record.id === "string" && record.id.trim().length > 0;
+}
 
 /** City 模型依赖的环境变量需求。 */
 export interface CityModelEnvRequirement {

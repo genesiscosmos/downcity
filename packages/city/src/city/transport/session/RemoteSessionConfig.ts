@@ -17,25 +17,19 @@ export async function resolve_remote_session_set_input(input: {
   /** 宿主提供的模型解析能力。 */
   resolve_session_model?: AgentSessionModelResolver;
 }): Promise<AgentSessionSetInput> {
-  const model_id = input.config.model_id;
-  const binding_id = input.config.binding_id;
-  if (model_id !== undefined && (typeof model_id !== "string" || !model_id.trim())) throw new Error("remote session.set requires an exact non-empty model_id");
-  if (binding_id !== undefined && (!model_id || typeof binding_id !== "string" || !binding_id.trim())) throw new Error("remote session.set binding_id requires a model_id and non-empty binding");
-  if (!model_id && !input.config.security) {
-    throw new Error("remote session.set requires model_id or security");
+  const model = input.config.model;
+  if (model !== undefined && (!model || typeof model !== "object" || !model.downtown?.trim() || !model.id?.trim())) throw new Error("remote session.set requires a complete model reference");
+  if (!model && !input.config.security) {
+    throw new Error("remote session.set requires model or security");
   }
-  if (model_id && !input.resolve_session_model) {
+  if (model && !input.resolve_session_model) {
     throw new Error("Remote Session model switching is not configured by the host");
   }
-  const model = model_id
-    ? await input.resolve_session_model?.(model_id, binding_id)
+  const resolved_model = model
+    ? await input.resolve_session_model?.(model)
     : undefined;
-  if (model_id && (!model || model.id !== model_id)) throw new Error("Remote Session host resolved a different model");
-  if (binding_id !== undefined && model?.binding_id !== binding_id) {
-    throw Object.assign(new Error("Remote Session model authorization changed"), { code: "session_model_binding_changed" });
-  }
   return {
-    ...(model ? { model } : {}),
+    ...(resolved_model ? { model: resolved_model } : {}),
     ...(input.config.security ? { security: input.config.security } : {}),
   };
 }

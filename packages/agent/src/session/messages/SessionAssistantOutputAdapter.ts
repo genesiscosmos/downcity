@@ -1,7 +1,7 @@
 /**
  * Downcity 模型事件到 canonical Assistant Message 的输出 Adapter。
  *
- * Adapter 只负责惰性打开当前连续回复的唯一 Writer，并把标准模型事件、Tool 结果与
+ * Adapter 在模型请求开始时建立连续回复的唯一 Writer，并把标准模型事件、Tool 结果与
  * Action 内容转交给 Writer；`SessionMessages` 始终是唯一事实源。
  */
 
@@ -23,6 +23,10 @@ export class SessionAssistantOutputAdapter implements SessionAssistantOutput {
   private writer_task: Promise<SessionAgentMessageWriter> | null = null;
   /** 已 begin 但尚未绑定 Writer 的 Step，消息边界不能丢弃它。 */
   private step_pending = false;
+  /** 模型请求已开始的回复身份；Input 和维护内容不会设置它。 */
+  private current_reply_message_id?: string;
+  /** 运行态通知不持有额外消息或 Turn。 */
+  private readonly on_reply_change?: () => void;
   /** 显式模型步骤身份隔离当前步骤的草稿作用域。 */
   private pending_step_id?: string;
 
@@ -37,6 +41,7 @@ export class SessionAssistantOutputAdapter implements SessionAssistantOutput {
     this.turn_id = String(options.turn_id || "").trim();
     this.execution_id = options.execution_id;
     this.messages = options.messages;
+    this.on_reply_change = options.on_reply_change;
     this.resume = options.resume;
     this.assert_current = options.assert_current ?? (() => {});
     this.assert_resumable = () => { this.assert_current(); options.assert_resumable?.(); };
@@ -48,15 +53,16 @@ export class SessionAssistantOutputAdapter implements SessionAssistantOutput {
   /** 接收后先撤销错误并恢复消息，模型开始前已经是普通 streaming 状态。 */
   async resume_message(): Promise<void> { if (this.resume) await this.ensure_writer(); }
 
-  /** 开始当前模型 Step。 */
+  /** 已请求模型的连续回复，不依赖首个 token 到达。 */
+  get reply_message_id(): string | undefined { return this.current_reply_message_id; }
+
+  /** 模型请求开始前建立消息及 Step，再发布运行态中的稳定回复身份。 */
   async begin_step(step_id?: string): Promise<void> {
     if (this.writer_task) await this.writer_task;
-    if (this.writer) {
-      await this.writer.begin_step(step_id);
-      return;
-    }
     this.step_pending = true;
     this.pending_step_id = step_id;
+    const writer = await this.ensure_writer();
+    this.set_reply_message_id(writer.message_id);
   }
 
   /** 直接写入单个标准模型事件。 */
@@ -101,13 +107,14 @@ export class SessionAssistantOutputAdapter implements SessionAssistantOutput {
     if (!this.writer) return;
     await this.writer.complete();
     this.writer = null;
+    this.set_reply_message_id(undefined);
   }
 
   /** 将运行时输入追加到当前 Agent Message，保持 Writer 与回复边界连续。 */
   async append_input(input: SessionInputContent, assert_receivable?: () => void): Promise<SessionAgentInputPart> {
     const existing = await this.messages.read_input(input.input_id);
     if (existing) {
-      if (existing.message.turn_id !== this.turn_id) throw new Error("Input belongs to another Turn");
+      if (existing.message.turn_id !== this.turn_id) throw new Error("Input input belongs to another Turn");
       return existing.part;
     }
     assert_receivable?.();
@@ -152,6 +159,14 @@ export class SessionAssistantOutputAdapter implements SessionAssistantOutput {
     else await writer.fail(input.error);
     this.writer = null;
     this.step_pending = false;
+    this.set_reply_message_id(undefined);
+  }
+
+  /** 消息身份仅在模型请求开始或消息关闭时改变。 */
+  private set_reply_message_id(message_id: string | undefined): void {
+    if (this.current_reply_message_id === message_id) return;
+    this.current_reply_message_id = message_id;
+    this.on_reply_change?.();
   }
 
   /** 惰性打开当前连续 Assistant 回复的唯一 Writer。 */

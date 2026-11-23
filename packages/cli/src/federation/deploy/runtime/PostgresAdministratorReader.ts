@@ -1,4 +1,4 @@
-/** Read the migrated active owner through the project's postgres-js dependency without changing credentials or sessions. */
+/** 通过项目适配器的 postgres-js 依赖只读检查活动 owner，不修改管理员凭据或会话。 */
 
 import { createRequire } from "node:module";
 import { join } from "node:path";
@@ -20,8 +20,8 @@ interface PostgresClient extends PostgresQuery {
 
 /** Resolve postgres-js from the installed adapter and read the active owner on the preparation connection URL. */
 export async function read_postgres_administrator(project_dir: string, database_url: string): Promise<string> {
-  const project_require = createRequire(join(project_dir, "package.json"));
-  const adapter_require = createRequire(project_require.resolve("@downcity/database-postgresql"));
+  // 从适配器安装目录解析依赖，避免要求仅提供 ESM 入口的适配器导出 CommonJS 入口。
+  const adapter_require = createRequire(join(project_dir, "node_modules", "@downcity/database-postgresql", "package.json"));
   const { default: postgres } = await import(pathToFileURL(adapter_require.resolve("postgres")).href);
   const client = postgres(database_url, { max: 1, prepare: false, connect_timeout: 10, onnotice: () => {} }) as PostgresClient;
   try {

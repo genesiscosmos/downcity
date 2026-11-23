@@ -25,7 +25,8 @@ export interface AgentMessageProps {
   /** 身份名称后的状态说明。 */ suffix?: ReactNode;
   /** 标题行末端的操作。 */ header_action?: ReactNode;
   /** 正文下方操作；null 显式隐藏默认复制操作。 */ actions?: ReactNode;
-  /** 正文与动作栏之后的运行信息。 */ footer?: ReactNode;
+  /** 运行状态；Chat 位于气泡内部正文上方，空正文时也创建气泡；Work 位于紧凑底栏。 */ status?: ReactNode;
+  /** 正文与动作栏之后的补充信息，例如实时文件改动。 */ footer?: ReactNode;
   /** 流式生成状态。 */ busy?: boolean;
   /** 用于宿主位置测量。 */ row_ref?: Ref<HTMLElement>;
   /** 正式消息 article 或瞬时状态 div。 */ semantic?: "message" | "status";

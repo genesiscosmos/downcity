@@ -24,7 +24,8 @@ import {
   DeferredModelClient,
   type AgentOptions,
 } from "@downcity/agent";
-import type { ModelClient } from "@downcity/type";
+import type { DowntownModelReference, ModelClient } from "@downcity/type";
+import { downtown_model_id } from "@downcity/city";
 import { AskQuestionsTool } from "@downcity/agent/tools";
 import { Shell, Workspace } from "@downcity/city";
 import {
@@ -82,9 +83,7 @@ export async function create_cli_agent(input: {
     instruction: input.config.instruction || behavior.instruction,
     model: model ?? behavior.model,
     tools: { ...tools, ...behavior.tools },
-    resolve_work_model: async (model_id, _workspace, binding_id) =>
-      binding_id === undefined ? unavailable_cli_model(model_id) : await resolve_cli_agent_model(model_id, input.town,
-        model_id === input.config.execution?.model_id ? read_reasoning_effort(input.config.execution) : undefined, binding_id),
+    resolve_work_model: async (model) => await resolve_cli_agent_model(model, input.town),
   });
 }
 
@@ -115,6 +114,8 @@ export async function create_cli_workspace(
 
 /** 恢复默认模型时保留历史浏览；不明确的旧来源直到执行时才要求重选。 */
 export function create_cli_agent_model(config: LocalAgentConfig, town: Town): ModelClient | undefined {
+  const model_reference = read_model_reference(config.execution?.model);
+  if (model_reference) return create_bound_cli_model(model_reference, town, read_reasoning_effort(config.execution));
   const model_id = read_model_id(config.execution);
   if (!model_id) return undefined;
   const binding_id = typeof config.execution?.binding_id === "string" ? config.execution.binding_id : undefined;
@@ -124,13 +125,14 @@ export function create_cli_agent_model(config: LocalAgentConfig, town: Town): Mo
 }
 
 /** HTTP/RPC/工作 resolver 透传已确认身份；明确选择模型时捕获当前来源。 */
-export async function resolve_cli_agent_model(model_id: string, town: Town, reasoning_effort?: string, binding_id?: string): Promise<ModelClient> {
-  if (!model_id) throw new Error("model_id is required");
-  return create_bound_cli_model(model_id, town, reasoning_effort, binding_id);
+export async function resolve_cli_agent_model(model: string | DowntownModelReference, town: Town, reasoning_effort?: string, binding_id?: string): Promise<ModelClient> {
+  if (!model) throw new Error("model is required");
+  return create_bound_cli_model(model, town, reasoning_effort, binding_id);
 }
 
 /** Town 句柄先捕获身份，执行解析目录只补元数据，绝不追随换号后的身份。 */
-function create_bound_cli_model(model_id: string, town: Town, reasoning_effort?: string, binding_id?: string): ModelClient {
+function create_bound_cli_model(model: string | DowntownModelReference, town: Town, reasoning_effort?: string, binding_id?: string): ModelClient {
+  const model_id = typeof model === "string" ? model : downtown_model_id(model.downtown, model.id);
   const captured = town.models.client(model_id, { binding_id });
   return new CliDeferredModelClient(model_id, async () => {
     const catalog = await town.models.list();
@@ -141,7 +143,7 @@ function create_bound_cli_model(model_id: string, town: Town, reasoning_effort?:
     return { ...model, name: entry.name, context_window: entry.context_window,
       stream: (call, signal) => model.stream(reasoning_effort && reasoning?.efforts.some((effort) => effort.id === reasoning_effort)
         ? { ...call, reasoning: call.reasoning ?? { enabled: true, effort: reasoning_effort } } : call, signal) };
-  }, captured.binding_id);
+  }, captured.binding_id, typeof model === "string" ? captured.model_reference : model);
 }
 
 /** 明确缺失来源的历史句柄不会借用其他连接；历史浏览只读取 ID。 */
@@ -184,8 +186,9 @@ class CliDeferredModelClient extends DeferredModelClient {
     model_id: string,
     private readonly resolve_model: () => Promise<ModelClient>,
     binding_id?: string,
+    model_reference?: DowntownModelReference,
   ) {
-    super(model_id, resolve_model, binding_id);
+    super(model_id, resolve_model, binding_id, model_reference);
   }
 
   /** 浏览不联网；执行 resolve 完成后提供真实名称。 */
@@ -213,4 +216,12 @@ function read_reasoning_effort(execution: LocalAgentConfig["execution"]): string
 /** 从 Agent execution 读取模型 ID。 */
 function read_model_id(execution: LocalAgentConfig["execution"]): string {
   return typeof execution?.model_id === "string" ? execution.model_id.trim() : "";
+}
+
+/** 从 Agent 执行配置读取结构化模型引用。 */
+function read_model_reference(value: unknown): DowntownModelReference | undefined {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return undefined;
+  const record = value as Record<string, unknown>;
+  if (typeof record.downtown !== "string" || !record.downtown.trim() || typeof record.id !== "string" || !record.id.trim()) return undefined;
+  return { downtown: record.downtown.trim(), id: record.id.trim() };
 }

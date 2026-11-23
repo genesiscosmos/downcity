@@ -8,6 +8,7 @@ import type { LocalAgentConfig } from "../types/LocalConfig.js";
 import type { ResourceDependencies } from "./types.js";
 import { assert_resource_revision, resource_revision } from "./ResourceCoordinator.js";
 import { require_agent_id, require_resource_value, ResourceError } from "./ResourceError.js";
+import type { DowntownModelReference, JsonObject } from "@downcity/type";
 
 /** CLI、TUI 与 Desktop 共用的 Agent 业务实现。 */
 export class AgentResources {
@@ -50,7 +51,7 @@ export class AgentResources {
       const reasoning_effort = optional_text(input.reasoning_effort);
       if (definition_id && !this.dependencies.extensions?.catalog.agents.has(definition_id)) throw new ResourceError("definition_unavailable", "The selected Agent definition is unavailable", 2);
       const model = await this.resolve_selected_model(model_id);
-      const config = this.dependencies.agents.create({ agent_id, name: input.name as string, description: optional_text(input.description) ?? "", instruction: optional_text(input.instruction) ?? "", ...((model_id || definition_id || reasoning_effort) ? { execution: { ...(model_id ? { model_id, ...(model?.binding_id ? { binding_id: model.binding_id } : {}) } : {}), ...(definition_id ? { definition_id } : {}), ...(reasoning_effort ? { reasoning_effort } : {}) } } : {}) });
+      const config = this.dependencies.agents.create({ agent_id, name: input.name as string, description: optional_text(input.description) ?? "", instruction: optional_text(input.instruction) ?? "", ...((model_id || definition_id || reasoning_effort) ? { execution: { ...(model?.model_reference ? { model: { ...model.model_reference } } : {}), ...(definition_id ? { definition_id } : {}), ...(reasoning_effort ? { reasoning_effort } : {}) } as JsonObject } : {}) });
       try {
         if (this.dependencies.host) this.dependencies.host.city.agents.add(await this.dependencies.host.create_agent(config));
       } catch (error) { this.application_failed(config, error); }
@@ -70,8 +71,9 @@ export class AgentResources {
       const name = optional_text(input.name);
       if (name !== undefined) require_resource_value(name.trim(), "name must not be empty");
       const execution = { ...current.execution };
-      if (input.unset_model) { delete execution.model_id; delete execution.binding_id; }
-      else if (input.model !== undefined) { execution.model_id = optional_model(input.model)!; delete execution.binding_id; }
+      const selected_model_id = input.model !== undefined ? optional_model(input.model) : undefined;
+      if (input.unset_model) { delete execution.model; delete execution.model_id; delete execution.binding_id; }
+      else if (input.model !== undefined) { delete execution.model_id; delete execution.binding_id; }
       if (input.reasoning_effort !== undefined) {
         const effort = optional_text(input.reasoning_effort)!;
         if (effort) execution.reasoning_effort = effort;
@@ -79,8 +81,14 @@ export class AgentResources {
       }
       const next = { ...current, ...(name !== undefined ? { name: name.trim() } : {}), ...(input.description !== undefined ? { description: optional_text(input.description)! } : {}), ...(input.instruction !== undefined ? { instruction: optional_text(input.instruction)! } : {}), execution };
       const model_id = typeof execution.model_id === "string" ? execution.model_id : undefined;
-      const model = input.model !== undefined ? await this.resolve_selected_model(model_id) : await this.dependencies.host?.resolve_model(model_id, next);
-      if (input.model !== undefined && model?.binding_id) execution.binding_id = model.binding_id;
+      const saved_model = read_model_reference(execution.model);
+      const model = input.model !== undefined
+        ? await this.resolve_selected_model(selected_model_id)
+        : await this.dependencies.host?.resolve_model(saved_model ?? model_id, next);
+      if (input.model !== undefined) {
+        if (!model?.model_reference) throw new ResourceError("validation_error", "Selected model has no Downtown reference", 2);
+        execution.model = { ...model.model_reference } as JsonObject;
+      }
       const changed = resource_revision(next) !== resource_revision(current);
       const config = changed ? this.dependencies.agents.save(next) : current;
       try {
@@ -160,6 +168,14 @@ export class AgentResources {
     this.dependencies.coordinator.blocked_agents.add(config.agent_id);
     throw new ResourceError("partial_failure", error instanceof Error ? error.message : "Agent runtime application failed", 9, false, { committed: true, saved_revision: resource_revision(config), applied_revision: null, effective_scope: "new_sessions" });
   }
+}
+
+/** 从 Agent 执行配置读取结构化模型引用。 */
+function read_model_reference(value: unknown): DowntownModelReference | undefined {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return undefined;
+  const record = value as Record<string, unknown>;
+  if (typeof record.downtown !== "string" || !record.downtown.trim() || typeof record.id !== "string" || !record.id.trim()) return undefined;
+  return { downtown: record.downtown.trim(), id: record.id.trim() };
 }
 
 /** 严格区分缺省和清空，避免 String(object) 成为配置。 */

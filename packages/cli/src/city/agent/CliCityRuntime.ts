@@ -175,8 +175,8 @@ export class CliCityRuntime {
           } catch { return false; }
           finally { auth.close(); }
         },
-        resolve_session_model: async ({ model_id, binding_id }) =>
-          await resolve_cli_agent_model(model_id, city.town, undefined, binding_id),
+        resolve_session_model: async ({ model }) =>
+          await resolve_cli_agent_model(model, city.town),
         create_agent_extension: ({ agent, workspace, powers, sdk_router }) => {
           const auth_service = new AuthService({
             agent_id: agent.id,
@@ -213,8 +213,8 @@ export class CliCityRuntime {
       rpc: {
         instance_id: host_instance_id,
         shutdown: () => { process.kill(process.pid, "SIGTERM"); },
-        resolve_session_model: async ({ model_id, binding_id }) =>
-          await resolve_cli_agent_model(model_id, city.town, undefined, binding_id),
+        resolve_session_model: async ({ model }) =>
+          await resolve_cli_agent_model(model, city.town),
         reload_workspace_env: async ({ workspace }) => {
           const env = reload_cli_workspace_env(workspace.path, data.root_path);
           workspace.set_env(env);

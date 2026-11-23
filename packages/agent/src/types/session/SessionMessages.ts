@@ -121,5 +121,6 @@ export interface SessionAssistantOutputAdapterOptions {
   /** 当前调用的对象所有权检查，旧流不能写新调用。 */ assert_current?: () => void;
   /** 恢复事务提交前确认本次 signal 未停止；不约束已接收事实的失败收口。 */ assert_resumable?: () => void;
   /** 原消息恢复检查点；只消费一次。 */ resume?: SessionMessageResume;
+  /** 回复开始或关闭时通知宿主重新发布运行快照；不承担模型与持久化逻辑。 */ on_reply_change?: () => void;
   /** canonical 消息唯一写入入口。 */ messages: import("@/session/messages/SessionMessages.js").SessionMessages;
 }

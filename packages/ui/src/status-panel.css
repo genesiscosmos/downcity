@@ -213,8 +213,8 @@
 .interaction-answer-list dt { color: var(--muted-foreground); }
 .interaction-answer-list dd { margin: 0.15rem 0 0; white-space: pre-wrap; overflow-wrap: anywhere; }
 
-/* 独立 Inbox 表单明确声明页面展示参数；默认聊天表单沿用自身紧凑尺寸。 */
-.interaction-card[data-presentation="inbox"] {
+/* 独立 Input 表单明确声明页面展示参数；默认聊天表单沿用自身紧凑尺寸。 */
+.interaction-card[data-presentation="input"] {
   --interaction-gap: 18px;
   --interaction-option-gap: 4px;
   --interaction-option-content-gap: 10px;
@@ -222,16 +222,16 @@
   font-size: 13px;
   line-height: 1.8;
 }
-.interaction-card[data-presentation="inbox"] .interaction-card-header,
-.interaction-card[data-presentation="inbox"] .interaction-card-actions { align-items: center; }
-.interaction-card[data-presentation="inbox"] .question-prompt { font-size: 13px; line-height: 1.8; }
-.interaction-card[data-presentation="inbox"] .question-option-description { margin-top: 3px; font-size: 12px; line-height: 1.7; }
-.interaction-card[data-presentation="inbox"] .question-option > .interaction-choice { margin-top: 0.25rem; }
-.interaction-card[data-presentation="inbox"] .approval-card-message { margin: 0; font-size: 13px; line-height: 1.9; }
-.interaction-card[data-presentation="inbox"] .interaction-command { padding: 14px 16px; background: var(--surface-subtle); border-radius: var(--radius-control, 0.375rem); font-size: 12px; line-height: 1.8; }
-.interaction-card[data-presentation="inbox"] .interaction-approval-actions { justify-content: flex-end; gap: 8px; }
-.interaction-card[data-presentation="inbox"] .interaction-card-actions { flex-wrap: wrap; }
-.interaction-card[data-presentation="inbox"] .interaction-card-actions > label { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.interaction-card[data-presentation="input"] .interaction-card-header,
+.interaction-card[data-presentation="input"] .interaction-card-actions { align-items: center; }
+.interaction-card[data-presentation="input"] .question-prompt { font-size: 13px; line-height: 1.8; }
+.interaction-card[data-presentation="input"] .question-option-description { margin-top: 3px; font-size: 12px; line-height: 1.7; }
+.interaction-card[data-presentation="input"] .question-option > .interaction-choice { margin-top: 0.25rem; }
+.interaction-card[data-presentation="input"] .approval-card-message { margin: 0; font-size: 13px; line-height: 1.9; }
+.interaction-card[data-presentation="input"] .interaction-command { padding: 14px 16px; background: var(--surface-subtle); border-radius: var(--radius-control, 0.375rem); font-size: 12px; line-height: 1.8; }
+.interaction-card[data-presentation="input"] .interaction-approval-actions { justify-content: flex-end; gap: 8px; }
+.interaction-card[data-presentation="input"] .interaction-card-actions { flex-wrap: wrap; }
+.interaction-card[data-presentation="input"] .interaction-card-actions > label { flex: 1; min-width: 0; overflow-wrap: anywhere; }
 .interaction-command-standalone { margin: 0; max-height: 320px; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; }
 
 /** StatusPanel 的交互表单：6px 外侧留白与列表一致，表单保留滚动及独立内容排版。 */

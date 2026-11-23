@@ -4,8 +4,8 @@
  * 底部分类与内容共用底色和圆角，按实测宽高过渡；内容保持完整宽度，避免文字随外壳挤压。
  * 内容高度由 ResizeObserver 跟随，分类切换、表单变化与队列增减均从当前高度平滑过渡。
  *
- * 展开状态属于当前会话，默认收起；宿主可启用首次待处理交互自动展开，支持异步加载。
- * 自动展开只执行一次，手动收起或切换即取消；当前分类清空后立即收起。
+ * 展开状态属于当前会话，默认收起；宿主可启用待处理交互自动展开，支持异步加载。
+ * 按完整交互身份去重，每个新交互展开一次；同一交互刷新保留手动选择，分类清空后收起。
  * 收起和切换保留未提交表单，隐藏区域
  * 退出焦点与辅助技术访问；不同交互之间仍由交互卡片的 key 释放临时输入。
  * 这里只保存已提交交互的身份，不保存答案或私密值。
@@ -32,7 +32,7 @@ function StatusPanelContent<Address>({ queue, interactions, auto_expand_interact
   const [available_width, set_available_width] = useState(0);
   const [pill_width, set_pill_width] = useState(0);
   const [selected_tab, set_selected_tab] = useState<StatusTab>("");
-  const auto_expand_pending = useRef(true);
+  const seen_interaction_keys = useRef(new Set<string>());
   // 收起时保留最后一个内容的布局，使高度能够完整过渡到零。
   const [display_tab, set_display_tab] = useState<StatusTab>("queue");
   const [submitted_keys, set_submitted_keys] = useState<ReadonlySet<string>>(() => new Set());
@@ -40,13 +40,20 @@ function StatusPanelContent<Address>({ queue, interactions, auto_expand_interact
     && !submitted_keys.has(item.key ?? item.part.interaction_id)) ?? [];
   const queue_count = queue?.queued_messages.length ?? 0;
   const interaction_count = pending.length;
-  // 首次有待处理交互时展开；绘制前完成，异步通知解析也走同一入口。
+  // 按身份而非数量检测新交互，覆盖等量替换；已见身份保留到当前会话卸载。
   useLayoutEffect(() => {
-    if (!auto_expand_interactions || !auto_expand_pending.current || !interaction_count) return;
-    auto_expand_pending.current = false;
+    if (!auto_expand_interactions) return;
+    let has_new_interaction = false;
+    for (const item of pending) {
+      const key = item.key ?? item.part.interaction_id;
+      if (seen_interaction_keys.current.has(key)) continue;
+      seen_interaction_keys.current.add(key);
+      has_new_interaction = true;
+    }
+    if (!has_new_interaction) return;
     set_display_tab("interaction");
     set_selected_tab("interaction");
-  }, [auto_expand_interactions, interaction_count]);
+  }, [auto_expand_interactions, pending]);
   const sub_session_count = sub_sessions?.items.length ?? 0;
   const has_running_sub_session = sub_sessions?.items.some((item) => item.status === "working") ?? false;
   const counts = { queue: queue_count, interaction: interaction_count, sub_sessions: sub_session_count };
@@ -114,8 +121,6 @@ function StatusPanelContent<Address>({ queue, interactions, auto_expand_interact
         <PillSwitcher<StatusTab> value={active_tab} options={options} controlled_panel_id={panel_id}
           class_name="h-auto min-h-8 flex-wrap bg-transparent [&_[data-pill-option]]:max-w-full [&_[data-pill-option]]:overflow-hidden"
           aria_label={translate("status_panel.label")} on_value_change={(tab) => {
-            // 用户选择优先，之后到达的交互不再改变本次进入的展开状态。
-            auto_expand_pending.current = false;
             set_display_tab(tab);
             set_selected_tab((current) => current === tab ? "" : tab);
           }} />

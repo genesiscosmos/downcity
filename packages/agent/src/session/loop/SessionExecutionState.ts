@@ -9,9 +9,8 @@ import type { SessionRuntimeSnapshot } from "@downcity/type";
 import type { SessionExecutionStateOptions } from "@/types/session/SessionExecutionState.js";
 import { run_effect_point } from "@/session/input/SessionHookRunner.js";
 
-/** 不拥有 Turn；仅记录 Loop 已进入的子工作等待边界，并统一派生所有外部活动。 */
+/** 不拥有 Turn；从 Loop 的当前执行事实统一派生所有外部活动。 */
 export class SessionExecutionState {
-  private waiting_child = false;
   private last_snapshot = "";
   private last_effect = "";
   private effect_context?: ReturnType<SessionExecutionStateOptions["context"]>;
@@ -23,13 +22,7 @@ export class SessionExecutionState {
   snapshot(): SessionRuntimeSnapshot {
     const { processing, interaction, ...runtime } = this.options.read();
     return { ...runtime, state: runtime.model_retry ? "failed" : interaction && runtime.live_execution ? "waiting_input"
-      : this.waiting_child && runtime.live_execution ? "waiting_child" : runtime.live_execution ? "running" : "idle" };
-  }
-
-  /** 子工作等待只是原 Loop 的执行边界；不会完成父 Turn 或交付结果。 */
-  set_waiting_child(active: boolean): void {
-    this.waiting_child = active;
-    this.publish();
+      : runtime.live_execution ? "running" : "idle" };
   }
 
   /** status、runtime 与 typing 使用同一快照；临时 Hook 串行且不承担完成责任。 */

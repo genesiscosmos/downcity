@@ -60,7 +60,7 @@ export interface StatusPanelHeaderProps {
 export interface StatusPanelProps<Address = unknown> extends ChatControlMessages {
   /** 当前会话的本地队列。 */ queue?: MessageQueueProps;
   /** 已解析来源的交互与响应动作。 */ interactions?: PendingInteractionAreaProps;
-  /** 当前会话首次出现待处理交互时自动展开一次；支持异步加载，手动操作后取消，默认关闭。 */ auto_expand_interactions?: boolean;
+  /** 每个新待处理交互出现时自动展开；按 key 或 interaction_id 去重，同一交互刷新保留手动选择，默认关闭。 */ auto_expand_interactions?: boolean;
   /** 已加载子会话与导航动作。 */ sub_sessions?: SubSessionListProps<Address>;
   /** 来源解析或详情操作错误。 */ error?: string;
   /** 完整会话身份；变化时释放所有临时状态，包括尚未提交的私密值。 */ session_key: string;

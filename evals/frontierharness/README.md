@@ -6,6 +6,8 @@
 
 DeepSWE 当前状态：2026-11-18 已完成固定镜像拉取、禁网预检和 **Anko 单次 Krill 模型运行**。模型自行提交 `f9c2742`，原 collect 成功。原 CLI 在 verifier Compose build 阶段发生 buildx/沙箱权限异常，保留该失败 trial；随后仅对同一 patch 续接原始判题，结果 **reward=0，partial=0.2621359223300971，F2P 0/9、P2P 27/94**。VM 测试包构建失败，大量测试没有实际运行，完整编译诊断未被原脚本保留，不能将全部失败直接归因于模型实现。模型 18 次请求、17 次终端调用，Agent 472.977 秒；没有再次调用模型或重跑有效评分。详见 [本轮完整报告](artifacts/anko-execution-20261118T081707Z/local-run-report.md)。Colima 保持 4 CPU / 12 GiB，最终根盘余量约 7.08 GiB，原 5 个容器/现存卷状态均保留；本题容器全部销毁，100 GiB 数据盘故障未处理。
 
+2026-11-19 清理状态：Colima 已停止；本目录的两套 Python 虚拟环境、uv 缓存、下载语料及压缩包、临时下载源码和本地构建产物已删除。适配源码、依赖锁与运行证据保留。再次使用前需按下文重新准备依赖及语料。评测 Docker 镜像尚保留在已停止的 Colima 中，未为清理镜像重新启动服务。
+
 ## 执行边界
 
 Harbor/Pier 持有任务环境及 verifier 生命周期。Python `DowncityAgent` / `DowncityPierAgent` 组合 `EvalRuntime`，启动一次性 Node 进程；Node 使用公开 `Agent`、`ModelClient`、`sessions.create()`、`session.prompt()`、`stop()`、`messages()` 和 `dispose()`。stdio 使用带请求 id 的有界 JSONL，没有监听端口或服务。

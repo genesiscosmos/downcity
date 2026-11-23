@@ -45,7 +45,7 @@ export class SessionResultAcceptance {
     const receipt = (async () => {
       const existing = await read_prompt_input(this.messages, identity);
       if (existing) {
-        if ("role" in existing.input || existing.message.turn_id !== turn_id || existing.input.source?.turn_id !== turn_id) {
+        if ("role" in existing.input || existing.input.source?.turn_id !== turn_id) {
           throw new Error("Delegation result belongs to another Turn");
         }
         return true;

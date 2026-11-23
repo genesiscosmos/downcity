@@ -3,7 +3,7 @@
  * 运行时只依赖存储与 Session 端口，不依赖 Agent、City 或 Desktop。
  */
 import type { SessionFailurePhase } from "@/types/session/SessionFailure.js";
-import type { SessionDescriptor, WorkspaceRuntime } from "@downcity/type";
+import type { DowntownModelReference, SessionDescriptor, WorkspaceRuntime } from "@downcity/type";
 import type { AgentSession } from "./SessionActor.js";
 import type { AgentSessionTurnResult } from "../sdk/AgentSessionTurn.js";
 
@@ -38,8 +38,8 @@ export interface SessionDelegationRecord {
   workspace_id: string;
   /** 子会话唯一收到的完整执行指令。 */
   query: string;
-  /** 显式选择的模型标识；重启恢复后仍按此模型准备会话。 */
-  model_id?: string;
+  /** 显式选择的模型引用；重启恢复后仍按此模型准备会话。 */
+  model?: DowntownModelReference;
   /** 子会话的用户可见标题。 */
   title?: string;
   /** 子执行的实际 Turn 标识，提交成功后写入。 */
@@ -95,9 +95,9 @@ export interface SessionDelegationOptions {
   /** 恢复父会话及宿主装配；目标已删除或归档返回空，临时故障抛错以便重试。 */
   get_parent_session: (caller: SessionDelegationCaller) => Promise<AgentSession | undefined>;
   /** 为恢复的子会话完成宿主模型及消息订阅装配。 */
-  prepare_session: (session: AgentSession, model_id?: string) => Promise<void>;
+  prepare_session: (session: AgentSession, model?: DowntownModelReference) => Promise<void>;
   /** 保存委派前验证目标模型；未提供此端口时拒绝显式选择模型。 */
-  validate_model?: (model_id: string, workspace: WorkspaceRuntime) => Promise<void>;
+  validate_model?: (model: DowntownModelReference, workspace: WorkspaceRuntime) => Promise<void>;
   /** 报告后台执行或投递失败；记录保留以便恢复重试。 */
   report_error: (delegation_id: string, error: unknown, context?: SessionDelegationFailureContext) => void;
 }
@@ -124,8 +124,8 @@ export interface SessionDelegationInput {
   query: string;
   /** 显式指定的已登记项目 Workspace 标识。 */
   workspace_id: string;
-  /** 新工作会话使用的已登记模型标识；省略时采用目标 Agent 默认模型。 */
-  model_id?: string;
+  /** 新工作会话使用的已登记模型引用；省略时继承父 Session 模型。 */
+  model?: DowntownModelReference;
   /** 工作短标题。 */
   title?: string;
 }

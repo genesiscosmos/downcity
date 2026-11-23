@@ -279,7 +279,7 @@ function resolve_session_state(input: {
   /** 当前待用户响应的 Interaction 数量。 */
   pending_interaction_count: number;
 }): SessionToolState {
-  if (input.state === "failed" || input.state === "waiting_child") return input.state;
+  if (input.state === "failed") return input.state;
   if (input.state === "waiting_input" || input.pending_interaction_count > 0) return "waiting_for_user";
   if (input.state ? input.state === "running" : input.executing) return "running";
   return "idle";

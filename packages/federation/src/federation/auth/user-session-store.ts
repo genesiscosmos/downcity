@@ -93,8 +93,13 @@ export class UserSessionStore {
   private async read(session_id: string): Promise<UserSessionRecord> {
     const rows = await this.query(`SELECT * FROM federation_user_sessions WHERE session_id = ?`, [session_id]);
     const row = rows[0];
-    if (!row || row.revoked || row.expires_at <= Date.now()) throw httpError(401, "User session expired or revoked");
-    return row;
+    if (!row) throw httpError(401, "User session expired or revoked");
+    // postgres-js 将 BIGINT 返回为字符串；在领域边界归一化，避免把 "0" 判为已撤销。
+    const session = { ...row, revoked: Number(row.revoked), expires_at: Number(row.expires_at) };
+    if (session.revoked !== 0 || !Number.isSafeInteger(session.expires_at) || session.expires_at <= Date.now()) {
+      throw httpError(401, "User session expired or revoked");
+    }
+    return session;
   }
 
   private session_id(token: string): string {

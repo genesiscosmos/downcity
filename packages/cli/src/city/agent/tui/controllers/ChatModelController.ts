@@ -55,7 +55,7 @@ export class ChatModelController {
     }
     const session = this.options.get_session();
     if (!session) throw new Error("Active Session is not available.");
-    await session.set({ model_id: choice.model_id });
+    await session.set({ model: choice.model });
     this.options.on_status(`Session model updated · ${choice.name}`);
   }
 
