@@ -14,6 +14,7 @@ import { MemoryPower, type MemoryChangeHandler } from "@/memory.js";
 import { SkillPower } from "@/skill.js";
 import { TaskPower, type TaskAnalyzer, type TaskNotificationChannel } from "@/task.js";
 import { WebPower } from "@/web.js";
+import { EmailPower } from "@/email.js";
 import { PresentationPower } from "@/presentation/Power.js";
 import { NotificationPower } from "@/notification.js";
 import { memory_task_signal } from "@/memory/application/MemoryTaskFacts.js";
@@ -96,6 +97,13 @@ export function create_builtin_power_registrations(input: {
       has_sidebar: true,
       has_mainview: true,
       power: new WebPower(),
+    },
+    {
+      readme: builtin_readme_path("email"),
+      has_config: false,
+      has_sidebar: true,
+      has_mainview: true,
+      power: new EmailPower(),
     },
   ];
 }

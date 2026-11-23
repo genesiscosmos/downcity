@@ -18,6 +18,7 @@ const power_entries = [
   ["skill", "SkillPower"],
   ["task", "TaskPower"],
   ["web", "WebPower"],
+  ["email", "EmailPower"],
 ];
 
 test("所有内建 power 子路径均可独立导入", async () => {
@@ -80,11 +81,13 @@ test("Renderer 子路径统一导出 React Surface registry", async () => {
   const renderers = await import("@downcity/powers/renderers");
   assert.equal(typeof power_react.define_power_renderer, "function");
   assert.deepEqual(Object.keys(renderers.BUILTIN_POWER_RENDERERS).sort(), [
+    "email",
     "memory",
     "messenger",
     "notification",
     "presentation",
     "skill",
+    "task",
     "web",
   ]);
   for (const renderer of Object.values(renderers.BUILTIN_POWER_RENDERERS)) {
@@ -92,7 +95,8 @@ test("Renderer 子路径统一导出 React Surface registry", async () => {
     assert.equal(
       (typeof renderer.sidebar === "function" && typeof renderer.mainview === "function")
         || typeof renderer.config === "function"
-        || typeof renderer.message === "function",
+        || typeof renderer.view === "function"
+        || typeof renderer.activity?.describe === "function",
       true,
     );
   }
