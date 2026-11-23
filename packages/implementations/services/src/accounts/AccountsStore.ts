@@ -5,7 +5,7 @@
  * 的数据库读写。登录流程与 HTTP 协议只通过这些显式方法访问认证事实。
  */
 
-import type { ServiceDatabaseContext } from "@downcity/federation";
+import type { ServiceDatabaseContext } from "@downcity/downtown";
 import { service_sql_database } from "../shared/database-sql.js";
 import { listAccountUsageRegistrations } from "./admin-queries.js";
 import { readPreparedFirst, runPrepared } from "./db.js";

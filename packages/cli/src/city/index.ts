@@ -3,7 +3,7 @@
  *
  * 关键点（中文）
  * - `downcity`（别名 `city`）是本机 Agent 与全局配置命令入口。
- * - Federation 运维能力（create / deploy / manage / env）统一进入 `downfed` 命令。
+ * - Downtown 运维能力（create / deploy / manage / env）统一进入 `downtown` 命令。
  * - 无参数时进入交互式 City 管理 TUI。
  * - 本模块承载 City commander 根命令，`src/index.ts` 只负责进程入口分发。
  */
@@ -133,8 +133,8 @@ export async function runDowncityCli(): Promise<void> {
   program
     .name(invoked_name)
     .description(t({
-      zh: "管理本机 Agent、全局配置与 Federation 连接",
-      en: "manage local agents, global config, and Federation connections",
+      zh: "管理本机 Agent、全局配置与 Downtown 连接",
+      en: "manage local agents, global config, and Downtown connections",
     }))
     .version(packageJson.version, "-v, --version");
 

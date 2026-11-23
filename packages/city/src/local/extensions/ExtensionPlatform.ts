@@ -47,7 +47,7 @@ export class ExtensionPlatform {
     this.city = city;
     this.runtime = new ExtensionHost({ city, catalog: this.catalog, host_modules: resolve_extension_host_modules(), invalidate, refresh_agents: (extension_id) => this.refresh_agents(extension_id), secret: async (extension_id, version, name) => (await new ExtensionSecrets(this.root_path).read(extension_id, version))[name], assert_idle: async (extension_id) => {
       const prefix = `ext_${extension_id.replaceAll("-", "")}_`;
-      if ([...this.catalog.federations].some(([id, federation]) => id.startsWith(prefix) && city.federation.current === federation)) throw new ExtensionFailure("project_busy", "Switch the current Federation before changing its extension", "dispose", 4);
+      // Federation 连接由 City Town 独立登记；扩展卸载只检查自身执行租约，不读取全局当前连接。
       for (const config of this.agents.list()) {
         if (typeof config.execution?.definition_id !== "string" || !config.execution.definition_id.startsWith(prefix)) continue;
         const agent = city.agents.get(config.agent_id);
@@ -65,33 +65,17 @@ export class ExtensionPlatform {
   /** UI 动作必须携带该页面的原运行代次，不允许旧页面调用新实例。 */
   async invoke_renderer(power_id: string, generation: string, surface: "mainview" | "config", action: string, input?: import("../../power/index.js").PowerJsonValue) { return await this.require_runtime().invoke_renderer(power_id, generation, surface, action, input); }
 
-  /** 项目恢复后再恢复明确选择；来源失败时解除运行绑定，保留失效引用供用户修复。 */
-  async restore(): Promise<void> { await this.manager.restore(); this.restore_binding(); }
+  /** 项目恢复只发布每个扩展自己的 Town 来源，不恢复全局当前连接。 */
+  async restore(): Promise<void> { await this.manager.restore(); }
 
-  restore_binding(): void {
-    const selected = this.repository.selected_federation();
-    if (selected && this.city) this.city.federation.set(this.catalog.federations.get(selected));
-  }
-
-  /** 真实目录与失效持久选择分开呈现，不隐式选择替代连接。 */
+  /** 返回扩展来源目录；没有 selected 字段，避免形成全局连接绑定。 */
   connections() {
-    const selected = this.repository.selected_federation();
-    return { selected, items: [...this.catalog.federations].map(([entry_id, federation]) => ({ entry_id, name: federation.name, url: federation.url, selected: selected === entry_id })), unavailable: Boolean(selected && !this.catalog.federations.has(selected)) };
+    return { items: [...this.catalog.federations].map(([entry_id, federation]) => ({ entry_id, name: federation.name, url: federation.url, source: "extension" as const })), unavailable: false };
   }
 
-  /** 用户明确切换；同步关闭所有 Agent 输入后检查，不打断现有工作。 */
-  select_connection(entry_id: string | null): void {
-    if (!this.city) throw new ExtensionFailure("host_required", "Selecting an extension connection requires a running host", "host", 5);
-    const next = entry_id ? this.catalog.federations.get(entry_id) : undefined;
-    if (entry_id && !next) throw new ExtensionFailure("federation_unavailable", "Selected extension connection is unavailable", "load", 2);
-    const guards: (() => void)[] = [];
-    try {
-      for (const agent of this.city.agents.list()) guards.push(agent.sessions.guard_idle());
-      const previous = this.city.federation.current;
-      this.city.federation.set(next);
-      try { this.repository.select_federation(entry_id); }
-      catch (error) { this.city.federation.set(previous); throw error; }
-    } finally { for (const release of guards.reverse()) release(); }
+  /** 扩展连接不能被切换为全局当前 Federation；调用者应直接选择 Town 来源。 */
+  select_connection(_entry_id: string | null): never {
+    throw new ExtensionFailure("connection_selection_removed", "Extension connections are selected by Town model or service source", "source", 2);
   }
 
   /** 扩展模型永不回退到 Federation。句柄每次执行解析当前目录代次。 */
@@ -144,7 +128,6 @@ export class ExtensionPlatform {
   /** 宿主退出时只释放运行，不改变持久启动目标。City 必须仍可执行 Power 清理。 */
   async dispose(): Promise<void> {
     if (!this.runtime) return;
-    if (this.repository.selected_federation()) this.city?.federation.set(undefined);
     for (const record of this.repository.list().reverse()) {
       if (this.runtime.active_snapshot(record.extension_id)) await this.runtime.close_gate(record.extension_id);
       await this.runtime.release(record.extension_id);

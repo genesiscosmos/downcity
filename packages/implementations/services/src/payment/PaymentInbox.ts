@@ -2,7 +2,7 @@
  * 可信支付事件执行器。数据库记录是恢复事实源，Queue 仅唤醒；周期扫描接管丢失消息和过期租约。
  * 永久金额校验失败进入 review，临时故障指数退避。所有重放仍经过同一订单校验和幂等发放。
  */
-import { httpError, type FederationTableApi, type ServiceDatabaseContext } from "@downcity/federation";
+import { httpError, type FederationTableApi, type ServiceDatabaseContext } from "@downcity/downtown";
 import type { PaymentProviderWebhookEvent } from "./types.js";
 import { service_sql_database } from "../shared/database-sql.js";
 import type { PaymentInboxRecord } from "./inbox-schema.js";

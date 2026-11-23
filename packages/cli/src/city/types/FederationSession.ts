@@ -51,5 +51,6 @@ export interface FederationLoginInput {
    * Federation 地址。
    */
   federation_url: string;
-
+  /** 新 Town 登录由 owner 原子保存凭据；提供时旧登录流程不打开本地数据库。 */
+  accept_credentials?: (credentials: import("@downcity/downtown").UserSessionCredentials) => void;
 }

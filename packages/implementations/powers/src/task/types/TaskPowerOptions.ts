@@ -14,6 +14,8 @@ import type { TaskAnalyzer } from "./TaskPreparation.js";
  * TaskPower 构造参数。
  */
 export interface TaskPowerOptions {
+  /** 可信宿主的模型身份读取与 Session 绑定端口；缺失时 Agent Task 要求配置后才能执行。 */
+  readonly model_host?: import("./TaskModelBinding.js").TaskModelHost;
   /** 宿主可选通知渠道；省略时仍发布已有应用内通知。 */
   readonly notification_channel?: TaskNotificationChannel;
   /** 定义提交或执行状态改变后调用；无历史重放，异步回调不阻塞任务。 */

@@ -1,6 +1,6 @@
 /** Organizations Service 的数据库 Repository。 */
 
-import { httpError, type FederationTableApi, type ServiceTransactionContext } from "@downcity/federation";
+import { httpError, type FederationTableApi, type ServiceTransactionContext } from "@downcity/downtown";
 import type {
   OrganizationJoinRequestRecord,
   OrganizationMembershipRecord,

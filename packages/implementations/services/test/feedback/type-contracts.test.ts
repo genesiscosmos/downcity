@@ -2,7 +2,7 @@
  * Feedback 服务类型契约测试。
  */
 
-import { Federation } from "@downcity/federation";
+import { Downtown } from "@downcity/downtown";
 import {
   FeedbackService,
   feedbackMessages,
@@ -11,7 +11,7 @@ import {
   type FeedbackStatus,
 } from "../../src/index.js";
 
-const base = new Federation({
+const base = new Downtown({
   database: {} as never,
 });
 

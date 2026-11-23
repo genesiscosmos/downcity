@@ -12,7 +12,7 @@
 import assert from "node:assert/strict"
 import test from "node:test"
 
-import { Federation, FederationQueueUnavailableError } from "../bin/index.js"
+import { Downtown, FederationQueueUnavailableError } from "../bin/index.js"
 import { createSqliteDb } from "./sqlite-db.mjs"
 
 /** 注册一个把调用输入记录到数组里的异步 action。 */
@@ -36,7 +36,7 @@ function register_recorder(federation, calls) {
 
 /** 在内存数据库上搭建一个 Federation，并在结束时释放。 */
 async function with_federation(run) {
-  const federation = new Federation({ database: createSqliteDb(":memory:") })
+  const federation = new Downtown({ database: createSqliteDb(":memory:") })
   try {
     await federation.health()
     return await run(federation)
@@ -109,7 +109,7 @@ test("health() 报告调度能力可用性", async () => {
 
 test("queue.call 复用现有 Action 执行模型", async () => {
   const calls = []
-  const federation = new Federation({ database: createSqliteDb(":memory:") })
+  const federation = new Downtown({ database: createSqliteDb(":memory:") })
   try {
     // 关键点（中文）：InstallableService 的 route 在初始化阶段注册，
     // 因此必须在 health() 之前完成 use，否则 queue.call 找不到对应 action。

@@ -6,6 +6,8 @@
  */
 
 import { fileURLToPath } from "node:url";
+import type { City } from "@downcity/city";
+import { create_background_model_host } from "./BackgroundModelHost.js";
 import type { CityPowerRegistration } from "@downcity/city/power";
 import { MessengerPower } from "@/messenger.js";
 import { MemoryPower, type MemoryChangeHandler } from "@/memory.js";
@@ -26,6 +28,8 @@ export type BuiltinPowerRegistration = CityPowerRegistration;
 export function create_builtin_power_registrations(input: {
   /** 平台数据根目录；Agent 私有记忆位于其 `agents/<agent_id>/memory` 下。 */
   platform_root_path: string;
+  /** 运行宿主的真实 City；目录展示可省略，Desktop/CLI 执行装配必须提供。 */
+  get_city?: () => City;
   /** 宿主提供的可选任务分析端口。 */
   analyze_task?: TaskAnalyzer;
   /** 宿主可选注入的 Task 通知展示渠道。 */
@@ -38,7 +42,8 @@ export function create_builtin_power_registrations(input: {
   on_notification_changed?: () => void | Promise<void>;
 }): BuiltinPowerRegistration[] {
   // Task 持有可靠事实，Memory 低频重放；组合根只接线，不承载做梦业务。
-  const task_power = new TaskPower({ analyze_task: input.analyze_task, on_changed: input.on_task_changed, notification_channel: input.task_notification_channel });
+  const model_host = input.get_city ? create_background_model_host(input.get_city) : undefined;
+  const task_power = new TaskPower({ model_host: model_host?.task, analyze_task: input.analyze_task, on_changed: input.on_task_changed, notification_channel: input.task_notification_channel });
   return [
     {
       readme: builtin_readme_path("notification"),
@@ -81,6 +86,7 @@ export function create_builtin_power_registrations(input: {
       has_sidebar: true,
       has_mainview: true,
       power: new MemoryPower({ platform_root_path: input.platform_root_path, on_changed: input.on_memory_changed,
+        resolve_model_binding: model_host?.memory,
         dreaming: { read_signals: async () => (await task_power.read_facts()).map(memory_task_signal) },
       }),
     },

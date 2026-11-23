@@ -64,6 +64,7 @@ const TASK_CREATE_SCHEMA = z.object({
 
 const TASK_UPDATE_SCHEMA = z.object({
   title: z.string(),
+  confirm_model: z.boolean().optional(),
   titleNext: z.string().optional(),
   when: z.string().optional(),
   clearWhen: z.boolean().optional(),
@@ -355,6 +356,7 @@ export function createTaskPowerActions(params: {
             schedule: { type: "string", enum: ["enabled", "paused"] },
             body: { type: "string", description: "New execution instructions." },
             clearBody: { type: "boolean", description: "Whether to clear the body." },
+            confirm_model: { type: "boolean", description: "Set only when the user explicitly confirms using the current execution model and billing identity for future runs." },
           },
         },
       },

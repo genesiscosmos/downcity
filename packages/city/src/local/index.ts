@@ -5,6 +5,10 @@
  * 数据库、路径、配置 Repository、环境装配与 Power Loader 由同一入口提供。
  */
 
+export { TownConnectionRepository, TownConnectionConflictError } from "./repositories/TownConnectionRepository.js";
+export { TownImageJobRepository } from "./repositories/TownImageJobRepository.js";
+export { normalize_town_url } from "./runtime/TownConnectionMigration.js";
+export type { TownConnection, TownAccount, TownAccountInput, TownCredentials, TownConnectionInput, TownConnectionListOptions } from "./types/TownConnection.js";
 export { UserSessionRepository, UserSessionExpiredError } from "./repositories/UserSessionRepository.js";
 export type { StoredUserSession } from "./types/UserSession.js";
 export { UserRepository, LOCAL_USER_ID } from "./repositories/UserRepository.js";
@@ -61,3 +65,6 @@ export { ResourceCoordinator } from "./resources/ResourceCoordinator.js";
 export { LocalHostClient, select_local_host } from "./resources/LocalHostClient.js";
 export type { LocalHostClientOptions, LocalHostCallOptions, LocalHostTransport, LocalHostSelection } from "./types/LocalHostClient.js";
 export type { ResourceDependencies, ResourceHost } from "./resources/types.js";
+
+export { TownServiceDispatcher, TOWN_SERVICE_CAPABILITIES } from "./resources/TownServiceDispatcher.js";
+export type { TownResponseOpen, TownResponseChunk } from "./resources/TownServiceDispatcher.js";

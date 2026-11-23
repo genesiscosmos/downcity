@@ -46,7 +46,12 @@ export class MemoryJobStore {
         return existing;
       }
       const now = new Date().toISOString();
-      const job: MemoryJob = { ...input, job_id, status: "queued", attempt: 0, created_at: now, updated_at: now };
+      for (const key of ["model_id", "binding_id"] as const) {
+        if (input[key] !== undefined && (typeof input[key] !== "string" || !input[key].trim())) throw new Error(`Invalid Memory Job ${key}`);
+      }
+      const configured = Boolean(input.model_id && input.binding_id);
+      const job: MemoryJob = { ...input, job_id, status: configured ? "queued" : "failed", attempt: 0, created_at: now, updated_at: now,
+        ...(!configured ? { error: "memory_model_configuration_required: explicitly select a model and durable authorization binding before submitting a new Job" } : {}) };
       await this.storage.write(this.key(job_id), JSON.stringify(job));
       return job;
     });

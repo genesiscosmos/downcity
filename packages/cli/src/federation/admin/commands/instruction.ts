@@ -2,7 +2,7 @@
  * Admin City 说明文档查看命令。
  */
 
-import { FederationAdmin } from "@downcity/federation";
+import { FederationAdmin } from "@downcity/downtown";
 import { t } from "@/shared/CliLocale.js";
 import type { admin_tui_runtime } from "@/federation/types/AdminTui.js";
 

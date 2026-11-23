@@ -1,9 +1,9 @@
 /**
- * 扩展文本模型注册及稳定惰性句柄。目录代次独立于 Federation 登录代次，
+ * 扩展文本模型注册及稳定惰性句柄。目录代次独立于 Town 来源，
  * 删除后保留 ID 解析失败，不隐式回退到其他模型。
  */
-import { createHash } from "node:crypto";
 import type { ModelClient, ModelCall, ModelStreamEvent } from "@downcity/type";
+import { createHash } from "node:crypto";
 import { ExtensionGate, track_extension_stream } from "./ExtensionGate.js";
 import { ExtensionFailure } from "./ExtensionError.js";
 
@@ -12,14 +12,14 @@ export class ExtensionModelRegistry {
   private readonly models = new Map<string, ModelClient>();
   private generation_value = 0;
 
-  /** 模型装卸的独立代次，不受全局 Federation 影响。 */
+  /** 模型装卸的独立代次，不受 Downtown 登录代次影响。 */
   get generation(): number { return this.generation_value; }
 
   /** 注册薄适配，保持 source.id 只读且不被改写。 */
   register(id: string, source: ModelClient, gate: ExtensionGate): ModelClient {
     if (this.models.has(id)) throw new ExtensionFailure("duplicate_id", "Model ID is already registered", "load", 2);
     const model: ModelClient = {
-      id, name: source.name ?? source.id, context_window: source.context_window, model_stream_policy: source.model_stream_policy,
+      id, binding_id: source.binding_id, name: source.name ?? source.id, context_window: source.context_window, model_stream_policy: source.model_stream_policy,
       async stream(call, signal) {
         const release = gate.acquire(`model:${id}`);
         try { return track_extension_stream(await source.stream(call, signal), release, signal); }
@@ -31,31 +31,36 @@ export class ExtensionModelRegistry {
     return model;
   }
 
-  /** 原子发布前由运行层处理校验，本操作不释放项目拥有的原始实例。 */
+  /** 只退登记精确统一 ID，不接管原模型的生命周期。 */
   remove(id: string): void { if (this.models.delete(id)) this.generation_value++; }
 
-  /** 获取当前实际实例，来源不存在时明确失败。 */
+  /** 获取当前实际实例；缺失来源不回退到当前 Downtown 或其他模型。 */
   resolve(id: string): ModelClient {
     const model = this.models.get(id);
     if (!model) throw new ExtensionFailure("model_unavailable", "The model's extension is unavailable", "load");
     return model;
   }
 
-  /** 标识符自身包含来源身份；不依靠当前目录识别历史引用。 */
-  owns(id: string): boolean { return /^ext_[a-f\d]{32}_model_/u.test(id); }
+  /** 统一模型 ID 标识直接来源；旧扩展引用只用于明确报缺失，不做别名路由。 */
+  owns(id: string): boolean { return /^model:client:[A-Za-z0-9_-]+$/u.test(id) || /^ext_[a-f\d]{32}_model_/u.test(id); }
 
-  /** 当前可选模型列表。 */
+  /** 当前可选模型列表不包含内部别名。 */
   list(): ModelClient[] { return [...this.models.values()]; }
 
   /** 惰性句柄每次调用解析当前代次，移除后禁止保留旧函数闭包。 */
   handle(id: string): ModelClient {
     const registry = this;
+    const binding_id = this.models.get(id)?.binding_id;
     return {
-      id,
+      id, binding_id,
       get name() { return registry.models.get(id)?.name ?? id; },
       get context_window() { return registry.models.get(id)?.context_window; },
       get model_stream_policy() { return registry.models.get(id)?.model_stream_policy; },
-      async stream(call: ModelCall, signal?: AbortSignal): Promise<ReadableStream<ModelStreamEvent>> { return await registry.resolve(id).stream(call, signal); },
+      async stream(call: ModelCall, signal?: AbortSignal): Promise<ReadableStream<ModelStreamEvent>> {
+        const current = registry.resolve(id);
+        if (current.binding_id !== binding_id) throw new ExtensionFailure("model_identity_changed", "Extension model identity requires explicit selection", "load");
+        return await current.stream(call, signal);
+      },
     };
   }
 }

@@ -192,8 +192,8 @@ function build_city_context(
     files: options.files_for(power_context.agent.id, input.group_id),
     tool_call_id: power_context.call.tool_call_id ?? null,
     interactions: power_context.call.interactions,
-    // 领域动作沿用本次 Power 调用解析的身份，不捕获注册时的客户端。
-    ...(power_context.city.federation ? { federation: power_context.city.federation } : {}),
+    // 领域动作只使用 Town 受限路由，来源由每个资源 ID 决定。
+    ...(power_context.city.town ? { town: power_context.city.town } : {}),
     ...(abort_signal ? { abort_signal } : {}),
   };
 }

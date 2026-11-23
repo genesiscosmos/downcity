@@ -11,7 +11,9 @@
 import type { PowerContext, PowerSessionHandle, PowerStorage } from "@downcity/city/power";
 import { SESSION_KIND_TASK, SESSION_TYPE_WORK } from "@downcity/type";
 import type { TaskSessionRuntimePort } from "@/task/types/TaskRunner.js";
-import type { TaskDeliverySession } from "@/task/types/Task.js";
+import type { TaskDefinitionV1, TaskDeliverySession } from "@/task/types/Task.js";
+import { task_model_target, validate_task_model } from "./TaskModelBinding.js";
+import type { TaskModelHost } from "../types/TaskModelBinding.js";
 
 /**
  * 构建 task 专用 Session 运行时。
@@ -22,6 +24,10 @@ import type { TaskDeliverySession } from "@/task/types/Task.js";
  * - run 目录仍保留 task 专用调试消息，宿主 Session 保存实际执行历史。
  */
 export async function createTaskSessionRuntimePort(params: {
+  /** 受理时固定的完整任务模型基线。 */
+  task: TaskDefinitionV1;
+  /** 宿主必须持久绑定每条新 Session 的精确模型来源。 */
+  model_host?: TaskModelHost;
   context: PowerContext;
   /** Task 运行记录所属的 TaskPower 生命周期级存储。 */
   storage: PowerStorage;
@@ -31,6 +37,8 @@ export async function createTaskSessionRuntimePort(params: {
   delivery_session?: TaskDeliverySession;
 }): Promise<TaskSessionRuntimePort> {
   const { context, runSessionId, userSimulatorSessionId } = params;
+  const binding = await validate_task_model(params.task, params.model_host);
+  if (!binding || !params.model_host) throw new Error("task_model_configuration_required");
   // 交付 Session 可能属于另一个 Agent；只有同 Agent Session 才能继承模型配置。
   const inherit_model_from = params.delivery_session?.agent_id === context.agent.id
     && params.delivery_session.workspace_id === (context.workspace?.id ?? null)
@@ -50,6 +58,11 @@ export async function createTaskSessionRuntimePort(params: {
     // 独立评审会话仍使用 task 用途，执行器和评审器均禁止继续分派。
     ...(inherit_model_from ? { inherit_model_from } : {}),
   });
+  // 继承只复制来源，最终仍用 Task 的持久模型对绑定执行器和评审器；任何一条失败均不发 prompt。
+  const target = task_model_target(params.task);
+  await params.model_host.bind(target, task_session.id, binding);
+  await params.model_host.bind(target, user_simulator_session.id, binding);
+  await validate_task_model(params.task, params.model_host);
   const sessions_by_alias = new Map<string, PowerSessionHandle>([
     [runSessionId, context.agent.sessions.runtime(task_session.id, SESSION_TYPE_WORK)],
     [userSimulatorSessionId, context.agent.sessions.runtime(user_simulator_session.id, SESSION_TYPE_WORK)],

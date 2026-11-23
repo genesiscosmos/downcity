@@ -2,7 +2,7 @@
  * Accounts 注册文档：显式描述私密登录证明、设备凭证轮换和浏览器 OAuth 协议。
  * 示例全部使用公开占位值，不能作为真实密码、Token 或 PKCE 证明使用。
  */
-import type { ApiDocumentation } from "@downcity/federation";
+import type { ApiDocumentation } from "@downcity/downtown";
 import { object_schema as obj, array_schema as arr, items_schema, text_schema as text, enum_schema, time_schema, metadata_schema, nullable_schema as nullable } from "../shared/documentation.js";
 
 const login_id = text("Short-lived login transaction ID");

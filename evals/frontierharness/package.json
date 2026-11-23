@@ -11,6 +11,6 @@
   "dependencies": {
     "@downcity/agent": "file:../../packages/agent",
     "@downcity/type": "file:../../packages/type",
-    "@downcity/federation": "file:../../packages/federation"
+    "@downcity/downtown": "file:../../packages/federation"
   }
 }

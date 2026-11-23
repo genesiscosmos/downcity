@@ -1,6 +1,6 @@
 /** Federation 管理员测试 fixture。 */
 
-import { EnvService, Federation } from "../bin/index.js"
+import { EnvService, Downtown } from "../bin/index.js"
 
 const TEST_ADMIN_ID = "admin_test"
 const TEST_ADMIN_PASSWORD = "test-admin-password"
@@ -8,7 +8,7 @@ const TEST_ADMIN_PASSWORD_HASH = "pbkdf2_sha256$210000$m-wik-AJwXBqFD5AAqctMWDFq
 
 /** 创建由测试部署器直接写入固定管理员记录的 Federation。 */
 export function create_test_federation(options) {
-  const federation = new Federation(options)
+  const federation = new Downtown(options)
   federation.use(new EnvService())
   const original_health = federation.health.bind(federation)
   let administrator_ready = false

@@ -157,6 +157,7 @@ async function update_task(
     request: {
       title: input.current_title,
       titleNext: input.title,
+      confirm_model: input.confirm_model,
       agent_id: input.agent_id,
       workspace_id: input.workspace_id,
       when: input.when,
@@ -357,7 +358,7 @@ function read_create_input(input: PowerJsonValue | undefined): TaskMainviewCreat
 /** 读取更新 Task 输入。 */
 function read_update_input(input: PowerJsonValue | undefined): TaskMainviewUpdateInput {
   const value = read_input_object(input);
-  return { ...read_create_input(input), current_title: read_required_string(value.current_title, "current_title") };
+  return { ...read_create_input(input), current_title: read_required_string(value.current_title, "current_title"), confirm_model: value.confirm_model === true };
 }
 
 /** 读取 Task 状态修改输入。 */

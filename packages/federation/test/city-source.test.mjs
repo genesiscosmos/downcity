@@ -1,12 +1,12 @@
 /** City 来源视图回归：共享 Federation 并发隔离、直接用户无来源、协议一致且不授予权限。 */
 import assert from "node:assert/strict";
 import test from "node:test";
-import { Federation, Service } from "../bin/index.js";
+import { Downtown, Service } from "../bin/index.js";
 import { createSqliteDb } from "./sqlite-db.mjs";
 
 /** 使用真实 Federation 路由，不访问网络或上游模型。 */
 function create_source_federation() {
-  const federation = new Federation({ database: createSqliteDb(":memory:") });
+  const federation = new Downtown({ database: createSqliteDb(":memory:") });
   const service = new Service({ id: "source_probe", name: "来源协议验证" });
   service.action("read", async (ctx) => {
     await new Promise(setImmediate);
@@ -20,7 +20,7 @@ function create_source_federation() {
 for (const mode of ["local", "remote"]) {
   test(`${mode}: City 来源按视图隔离，直接调用允许无来源`, async () => {
     const local = create_source_federation();
-    const client = mode === "local" ? local : new Federation({
+    const client = mode === "local" ? local : new Downtown({
       url: "https://federation.invalid",
       fetch: (url, init) => local.fetch(new Request(url, init)),
     });
@@ -55,7 +55,7 @@ for (const mode of ["local", "remote"]) {
 
 test("来源视图共用凭据更新，每次调用保留自己的身份快照", async () => {
   const requests = [];
-  const federation = new Federation({ url: "https://example.invalid", user_token: "first", fetch: async (url, init) => {
+  const federation = new Downtown({ url: "https://example.invalid", user_token: "first", fetch: async (url, init) => {
     requests.push(init.headers);
     return new Response("{}", { headers: { "content-type": "application/json" } });
   } });

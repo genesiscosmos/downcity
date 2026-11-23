@@ -1,5 +1,5 @@
 /** payment 服务按数据库 schema_id 选择表声明。 */
-import type { ServiceDatabaseSchemas } from "@downcity/federation";
+import type { ServiceDatabaseSchemas } from "@downcity/downtown";
 import { paymentPayments, paymentCardPlans, paymentFulfillments, paymentEvents } from "./schema.js";
 import { paymentInbox } from "./inbox-schema.js";
 import { pg_payment_payments, pg_payment_card_plans, pg_payment_fulfillments, pg_payment_events } from "./postgres-schema.js";

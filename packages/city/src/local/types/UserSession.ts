@@ -1,5 +1,5 @@
 /** 本地设备登录凭证和跨进程刷新租约。 */
-import type { UserSessionCredentials } from "@downcity/federation";
+import type { UserSessionCredentials } from "@downcity/downtown";
 
 /** 单条本地会话；每个 session_id 只有一个事实源。 */
 export interface StoredUserSession extends UserSessionCredentials {

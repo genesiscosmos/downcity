@@ -6,7 +6,7 @@
  * - 每个 endpoint 独立容错，方便 Dashboard 在 service 缺失时仍可展示。
  */
 
-import { FederationAdmin } from "@downcity/federation";
+import { FederationAdmin } from "@downcity/downtown";
 import type {
   dashboard_raw_data,
   dashboard_range,

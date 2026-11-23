@@ -24,6 +24,8 @@ export interface ResourceDispatcher {
   capabilities: readonly string[];
   /** 执行已验证身份的用例；input 由各用例继续校验。 */
   dispatch: (method: string, input: Record<string, unknown>) => Promise<unknown>;
+  /** 宿主关闭时取消本 dispatcher 自有的响应句柄；不得关闭借用的 City 或数据库。 */
+  dispose?: () => Promise<void>;
 }
 
 /** 客户端提交的单次管理请求。 */

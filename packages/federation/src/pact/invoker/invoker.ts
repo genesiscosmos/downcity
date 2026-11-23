@@ -8,7 +8,8 @@
  * GET Action 支持通过第二个参数传 query。
  */
 
-import type { RequestInitLike } from "../http.js";
+import type { RequestInitLike, FetchResponseLike } from "../http.js";
+import type { ServiceRequestOptions } from "../../types/ServiceRequest.js";
 
 type Requester = <T>(path: string, init: RequestInitLike) => Promise<T>;
 
@@ -38,6 +39,7 @@ export class ServiceClient {
     private readonly req: Requester,
     private readonly prefix: string,
     private readonly serviceId: string,
+    private readonly request_raw: (path: string, init: RequestInitLike) => Promise<FetchResponseLike>,
   ) {}
 
   /** 获取 Action 调用器 */
@@ -45,6 +47,20 @@ export class ServiceClient {
     const id = normalizeName(name);
     const url = `${this.prefix}/${encodeURIComponent(this.serviceId)}/${id}`;
     return new ActionClient(this.req, url);
+  }
+
+  /** 调用已知方法的 action 并返回原始响应；调用者负责消费或取消正文。 */
+  request(name: string, options: ServiceRequestOptions = {}): Promise<FetchResponseLike> {
+    const action_path = normalizeName(name).split("/").map((part) => {
+      if (!part || part === "." || part === "..") throw new TypeError("Invalid action path");
+      return encodeURIComponent(part);
+    }).join("/");
+    const method = options.method ?? "POST";
+    const url = withQuery(`${this.prefix}/${encodeURIComponent(this.serviceId)}/${action_path}`, method === "GET" ? options.query : undefined);
+    return this.request_raw(url, {
+      method, headers: options.headers, signal: options.signal,
+      ...(method === "POST" ? { body: options.body } : {}),
+    });
   }
 
   /** GET 调用 Action（用于 method="GET" 的 action） */

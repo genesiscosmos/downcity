@@ -2,11 +2,11 @@
  * Credits Service 公开类型契约测试。
  */
 
-import { Federation } from "@downcity/federation";
+import { Downtown } from "@downcity/downtown";
 import { CreditsService } from "../../src/index.js";
 
 async function verify_credits_service_contract(): Promise<void> {
-  const federation = new Federation({ database: {} as never });
+  const federation = new Downtown({ database: {} as never });
   const credits = new CreditsService();
   federation.use(credits);
 

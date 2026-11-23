@@ -1,34 +1,25 @@
-/**
- * ExecutionModelBinding：City 宿主侧 City AIService 模型绑定辅助。
- *
- * 职责说明（中文）
- * - 统一读取 City AIService 模型目录。
- * - 校验 Agent 全局 DB 配置中的 `execution.modelId` 是否能在 City AIService 中找到。
- * - City 只保存 model id，不保存 provider、key 或 endpoint。
- */
+/** CLI 模型选择统一读取 Town 目录；同名模型保留各自来源和身份绑定。 */
+import type { TownModelEntry, TownModelList } from "@downcity/city";
+import { call_cli_town } from "../../resources/TownClient.js";
 
-import {
-  assertCityAiModelReady,
-  listCityAiModelChoices,
-  type CityAiModelChoice,
-} from "@/city/runtime/city-model/CityAiServiceBinding.js";
-import { merge_process_env_with_platform_global_env } from "@/city/env/ProcessEnv.js";
-
-/**
- * City AIService 模型下拉候选项。
- */
-export type PlatformModelChoice = CityAiModelChoice;
-
-/**
- * 读取 City AIService 模型候选列表。
- */
-export async function listPlatformModelChoices(): Promise<PlatformModelChoice[]> {
-  return await listCityAiModelChoices(merge_process_env_with_platform_global_env());
+/** CLI 选择项保留 Town 目录元数据，不构造当前 Federation。 */
+export interface PlatformModelChoice {
+  /** 显示模型名称与来源，帮助区分同名模型。 */
+  title: string;
+  /** Town 统一模型 ID，作为不透明字符串持久化。 */
+  value: string;
+  /** 来自 Town 的精确目录条目和非秘密身份绑定。 */
+  model: TownModelEntry;
 }
 
-/**
- * 断言指定模型可用于 agent execution。
- */
-export async function assertPlatformModelReady(modelId: string): Promise<void> {
-  await assertCityAiModelReady(modelId, merge_process_env_with_platform_global_env());
+/** 通过运行中 owner 或独占离线 Town 获取所有文本模型。 */
+export async function listPlatformModelChoices(): Promise<PlatformModelChoice[]> {
+  const result = await call_cli_town("town.models") as TownModelList;
+  return result.items.filter((model) => model.modalities.some((modality) => ["text", "stream", "openai"].includes(modality)))
+    .map((model) => ({ title: `${model.name || model.original_model_id} · ${model.source_name}`, value: model.model_id, model }));
+}
+
+/** 裸 ID 和缺失来源要求用户显式选择目录条目，不猜测某一 Downtown。 */
+export async function assertPlatformModelReady(model_id: string): Promise<void> {
+  if (!(await listPlatformModelChoices()).some((choice) => choice.value === model_id)) throw new Error("Model requires explicit selection from city downtown models");
 }

@@ -5,7 +5,7 @@ import fs from "node:fs/promises"
 import os from "node:os"
 import path from "node:path"
 import test from "node:test"
-import { Federation } from "@downcity/federation"
+import { Downtown } from "@downcity/downtown"
 import { createSqliteDb } from "../usage/sqlite-db.mjs"
 import { OrganizationsService } from "../../bin/index.js"
 import { create_test_admin_session } from "../admin-fixture.mjs"
@@ -13,7 +13,7 @@ import { create_test_admin_session } from "../admin-fixture.mjs"
 test("organizations service manages membership, governance and federation owner quota", async () => {
   const temp_dir = await fs.mkdtemp(path.join(os.tmpdir(), "downcity-organizations-"))
   try {
-    const federation = new Federation({ database: createSqliteDb(path.join(temp_dir, "test.sqlite")) })
+    const federation = new Downtown({ database: createSqliteDb(path.join(temp_dir, "test.sqlite")) })
     federation.use(new OrganizationsService({ max_organizations_per_user: 1 }))
     await federation.health()
     const admin_secret = await create_test_admin_session(federation)
@@ -139,7 +139,7 @@ test("organizations service manages membership, governance and federation owner 
 test("concurrent organization creation cannot exceed the owner quota", async () => {
   const temp_dir = await fs.mkdtemp(path.join(os.tmpdir(), "downcity-organizations-quota-"))
   try {
-    const federation = new Federation({ database: createSqliteDb(path.join(temp_dir, "test.sqlite")) })
+    const federation = new Downtown({ database: createSqliteDb(path.join(temp_dir, "test.sqlite")) })
     federation.use(new OrganizationsService({ max_organizations_per_user: 1 }))
     await federation.health()
     const admin_secret = await create_test_admin_session(federation)
@@ -168,7 +168,7 @@ test("concurrent organization creation cannot exceed the owner quota", async () 
 })
 
 test("私有组织默认关闭申请，只有 owner/admin 可开放；City 来源不能绕过成员检查", async () => {
-  const federation = new Federation({ database: createSqliteDb(":memory:") })
+  const federation = new Downtown({ database: createSqliteDb(":memory:") })
   federation.use(new OrganizationsService({ max_organizations_per_user: 2 }))
   try {
     await federation.ready()

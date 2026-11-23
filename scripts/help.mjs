@@ -42,7 +42,7 @@ const HELP_ITEMS = [
   },
   {
     name: "build:federation",
-    summary: "只构建 @downcity/federation 包。",
+    summary: "只构建 @downcity/downtown 包。",
     detail: "先构建 @downcity/type，再构建 Federation runtime 与 Federation SDK。",
   },
   {
@@ -83,7 +83,7 @@ const HELP_ITEMS = [
   },
   {
     name: "federation:patch:build",
-    summary: "只对 @downcity/federation 执行 patch bump + build。",
+    summary: "只对 @downcity/downtown 执行 patch bump + build。",
     detail: "等价于 `npm run patch:build -- --federation`。",
   },
   {

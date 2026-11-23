@@ -2,7 +2,7 @@
  * Federation 管理端配置持久化模块。
  *
  * 关键说明（中文）
- * - downfed 的 server profile、管理员会话、Cloudflare account 与语言写入 `downcity.db`。
+ * - downtown 的 server profile、管理员会话、Cloudflare account 与语言写入 `downcity.db`。
  * - 配置通过共享 LocalSettingRepository 保存，避免配置读写散落在业务模块。
  * - user session 由 `city` 维护，本模块只负责 Federation admin 管理态。
  * - registry 不保存当前操作目标，每次操作由调用方显式指定或交互选择。

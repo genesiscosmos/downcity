@@ -10,7 +10,7 @@ import {
   type AIChannelStreamInput,
   type AIChannelStreamResult,
   stream_openai_compatible_model,
-} from "@downcity/federation";
+} from "@downcity/downtown";
 
 /** 将 DeepSeek 的 OpenAI-compatible API 接入 Federation 标准流。 */
 export class DeepSeekChannel extends AIChannel {

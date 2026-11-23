@@ -2,7 +2,7 @@
  * 已部署 Federation admin 工作区入口。
  *
  * 关键说明（中文）
- * - 用户从 downfed 选择一个已部署 Federation 后，直接进入 adminLoop。
+ * - 用户从 downtown 选择一个已部署 Federation 后，直接进入 adminLoop。
  * - 如果本地记录缺少有效管理员 Session，则要求管理员 ID 与密码登录。
  * - 编辑、移除、更新 admin 访问等低频动作挂在 adminLoop 的“更多”里。
  * - 所选对象仅在本工作区内有效；移除连接只删除记录，不停止实例进程。
@@ -228,8 +228,8 @@ async function open_federation_admin_more_actions(
         label: t({ zh: "退出", en: "Exit" }),
         value: "quit",
         hint: t({
-          zh: "退出 downfed",
-          en: "Exit downfed",
+          zh: "退出 downtown",
+          en: "Exit downtown",
         }),
       },
     ],

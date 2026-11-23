@@ -15,7 +15,7 @@ Downcity 给 creators、indie builders 和团队提供一套可复用的 Agent �
 
 - 面向 AI builders：下一个 Agent 产品不应该再重复搭模型路由、工具、记忆、任务、权限、usage、计费和运维面。
 - 可复用运行层：repo 或 folder 可以成为 Agent 的运行边界，Downcity 负责更完整的长期运行基础设施。
-- Federation 能力：集中管理模型目录、运行时 env、Service routing、accounts、balance、usage 和 payment。
+- Downtown 能力：集中管理模型目录、运行时 env、Service routing、accounts、balance、usage 和 payment。
 - 可运营 Agent：支持 daemon 化运行、状态检查、历史追踪，并通过 CLI、Console、浏览器扩展或 SDK 操作。
 - 可扩展架构：plugins、services、SDK API 和 UI 组件都作为明确边界对产品和团队开放。
 
@@ -23,10 +23,10 @@ Downcity 给 creators、indie builders 和团队提供一套可复用的 Agent �
 
 | 包 / 目录 | 作用 |
 | --- | --- |
-| `downcity` | 公共 CLI 聚合包：`city`/`downcity` 是管理 Agent、运行时与控制台的本机 City 容器；`fed`/`downfed` 是 Federation Server Manager。 |
+| `downcity` | 公共 CLI 聚合包：`city`/`downcity` 是管理 Agent、运行时与控制台的本机 City 容器；`fed`/`downfed` 是 Downtown Server Manager。 |
 | `@downcity/city` | 应用组合根，负责 Agent registry、Workspace/Shell 资源、Plugin SDK 与生命周期、RemoteAgent、Storage 和 HTTP/RPC transport。 |
 | `@downcity/agent` | 单 Agent 执行运行时，负责 Agent、Group、AgentSessions、Session、模型/工具循环与中立宿主扩展端口。 |
-| `@downcity/federation` | 统一的本地与远端 Federation SDK，负责 Service、鉴权、Env、User 与 Admin 访问。 |
+| `@downcity/downtown` | 统一的本地与远端 Downtown SDK，负责 Service、鉴权、Env、User 与 Admin 访问。 |
 | `@downcity/type` | 跨 package 的中立协议，包含 Workspace、Shell、Session Extension 与 City 模型类型。 |
 | `@downcity/services` | 公共服务集合，负责 accounts、balance、usage、payment 与 Stripe 支付闭环。 |
 | `@downcity/ui` | React + Tailwind UI SDK，提供 Console 与宿主应用可复用的界面组件。 |
@@ -38,8 +38,8 @@ Downcity 给 creators、indie builders 和团队提供一套可复用的 Agent �
 - 全局 Agent 管理：Agent 身份与配置保存在用户级 Downcity 数据目录，执行时再进入指定 Workspace。
 - 本机 City 托管：通过 `downcity on`、`downcity status`、`downcity off` 托管全部本机 Agent。
 - Agent 管理：创建、查看、配置和对话；Agent 没有独立 started/stopped 状态。
-- Federation 连接：通过 `downcity federation` 让本机 Agent 连接当前 Federation。
-- Federation 后端能力：让多个 Agent 和产品复用 accounts、balance、usage、payment、env、auth 和 Service routing。
+- Downtown 连接：通过 `downcity federation` 让本机 Agent 连接当前 Downtown。
+- Downtown 后端能力：让多个 Agent 和产品复用 accounts、balance、usage、payment、env、auth 和 Service routing。
 - 内建 Agent 能力：`chat`、`task`、`memory`、`shell`、`contact`、`skill`、`web`、`sound`、`workboard`。
 - 产品表层：Downcity CLI、Agent SDK、City SDK 和 UI SDK。
 
@@ -69,9 +69,9 @@ pnpm add -g downcity
 downcity --version
 ```
 
-`downcity` 是基于 `City()` 与 Agent SDK 管理和运行 Agent 的本机 City 容器。更新使用 `npm i -g downcity@latest`。同一安装包还提供 `fed`/`downfed`，用于管理 Federation Server。
+`downcity` 是基于 `City()` 与 Agent SDK 管理和运行 Agent 的本机 City 容器。更新使用 `npm i -g downcity@latest`。同一安装包还提供 `fed`/`downfed`，用于管理 Downtown Server。
 
-### 2. 连接 Federation
+### 2. 连接 Downtown
 
 ```bash
 downcity federation use
@@ -136,7 +136,7 @@ downcity agent chat <agent_id>
 
 ```ts
 import { Agent, Shell, Workspace } from "@downcity/city";
-import { create_openai_compatible_model } from "@downcity/federation";
+import { create_openai_compatible_model } from "@downcity/downtown";
 import { MicrosandboxProvider } from "@downcity/sandbox-microsandbox";
 
 const model = create_openai_compatible_model({

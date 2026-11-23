@@ -1,5 +1,5 @@
 /**
- * Federation 统一入口：本地通过标准 Request/Response 调用内核，远端通过 HTTP。
+ * Downtown 统一入口：本地通过标准 Request/Response 调用内核，远端通过 HTTP。
  * user 与 admin 共享传输但各自持有身份。公开 fetch 是本地服务端入口，
  * 只采用请求自己的凭证或宿主显式传入的可信身份，绝不继承客户端凭证。
  * 宿主创建并最终 dispose；注入 City 不转移所有权。
@@ -19,7 +19,7 @@ import type { FederationOptions } from "./types/FederationOptions.js";
 import type { ServiceCatalogSummary, ServiceCatalogDetail } from "../types/ServiceCatalog.js";
 
 /** 账户、AI、业务服务与本地运行资源的唯一公开入口。 */
-export class Federation {
+export class Downtown {
   /** 连接目录使用的稳定本地 ID；与登录态及展示名无关。 */
   readonly id: string;
   /** 用户可见连接名称。 */
@@ -43,7 +43,7 @@ export class Federation {
 
   /** 绑定宿主执行门禁；返回只撤销本次绑定的释放函数。 */
   guard_requests(acquire: () => () => void): () => void {
-    if (this.request_guard) throw new Error("Federation request guard is already installed");
+    if (this.request_guard) throw new Error("Downtown request guard is already installed");
     this.request_guard = acquire;
     this.runtime?.guard_execution(acquire);
     return () => { if (this.request_guard === acquire) { this.request_guard = undefined; this.runtime?.guard_execution(undefined); } };
@@ -53,22 +53,22 @@ export class Federation {
 
   constructor(options: FederationOptions) {
     if (!options || typeof options !== "object" || (options.database !== undefined) === (options.url !== undefined)) {
-      throw new TypeError("Federation requires exactly one of database or url");
+      throw new TypeError("Downtown requires exactly one of database or url");
     }
     if (options.database !== undefined && (!options.database || typeof options.database !== "object")) {
-      throw new TypeError("Federation database must be a Database Adapter");
+      throw new TypeError("Downtown database must be a Database Adapter");
     }
     this.mode = options.database ? "local" : "remote";
     if (this.mode === "remote" && typeof options.url !== "string") {
-      throw new TypeError("Federation url must be an HTTP(S) address");
+      throw new TypeError("Downtown url must be an HTTP(S) address");
     }
     this.url = normalize_federation_url(options.url ?? "https://federation.invalid");
-    if (options.id !== undefined && (typeof options.id !== "string" || !options.id.trim())) throw new TypeError("Federation id must be a nonempty string");
-    if (options.name !== undefined && typeof options.name !== "string") throw new TypeError("Federation name must be a string");
+    if (options.id !== undefined && (typeof options.id !== "string" || !options.id.trim())) throw new TypeError("Downtown id must be a nonempty string");
+    if (options.name !== undefined && typeof options.name !== "string") throw new TypeError("Downtown name must be a string");
     this.id = options.id?.trim() ?? (this.mode === "local" ? "local" : this.url);
     this.name = options.name?.trim() || this.id;
     if (options.database) {
-      if (options.fetch !== undefined) throw new TypeError("Local Federation does not accept fetch");
+      if (options.fetch !== undefined) throw new TypeError("Local Downtown does not accept fetch");
       this.runtime = new FederationRuntime(options);
     }
     const network_fetch = this.runtime ? undefined : options.fetch ?? defaultFetch();
@@ -77,7 +77,7 @@ export class Federation {
       if (this.runtime) {
         const target = new URL(url);
         if (target.origin !== new URL(this.url).origin) {
-          throw new TypeError("Local Federation cannot dispatch to an external origin");
+          throw new TypeError("Local Downtown cannot dispatch to an external origin");
         }
         return this.fetch(new Request(url, init));
       }
@@ -186,7 +186,7 @@ export class Federation {
   dispose(): Promise<void> {
     if (!this.dispose_promise) {
       this.disposed = true;
-      for (const request of this.requests) request.abort(new Error("Federation is disposed"));
+      for (const request of this.requests) request.abort(new Error("Downtown is disposed"));
       this.requests.clear();
       this.user.clear_credentials();
       this.admin.clear_credentials();

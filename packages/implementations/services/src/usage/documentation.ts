@@ -1,5 +1,5 @@
 /** Usage API 文档：Credits 与技术计量独立，日期以请求的 IANA 时区计算。 */
-import type { ApiDocumentation } from "@downcity/federation";
+import type { ApiDocumentation } from "@downcity/downtown";
 import { object_schema as obj, array_schema as arr, text_schema as text, number_schema as num, nullable_schema as nullable, enum_schema, time_schema } from "../shared/documentation.js";
 
 const date = { type: "string", format: "date" };

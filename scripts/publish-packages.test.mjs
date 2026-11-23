@@ -33,17 +33,17 @@ test("Federation 扩展包只声明宿主持有的 peer 运行时", () => {
   for (const manifest_path of federation_extension_manifests) {
     const manifest = read_manifest(manifest_path);
     assert.equal(
-      manifest.dependencies?.["@downcity/federation"],
+      manifest.dependencies?.["@downcity/downtown"],
       undefined,
       `${manifest.name} 不得拥有 Federation 运行时`,
     );
     assert.equal(
-      manifest.peerDependencies?.["@downcity/federation"],
+      manifest.peerDependencies?.["@downcity/downtown"],
       "workspace:^",
       `${manifest.name} 必须声明 Federation 兼容范围`,
     );
     assert.equal(
-      manifest.devDependencies?.["@downcity/federation"],
+      manifest.devDependencies?.["@downcity/downtown"],
       "workspace:*",
       `${manifest.name} 必须使用 workspace Federation 完成本地构建`,
     );
@@ -93,7 +93,7 @@ test("指定 package 会自动补齐 scoped 运行时依赖并保持拓扑顺序
   assert.deepEqual(plan.map((item) => item.name), [
     "@downcity/type",
     "@downcity/agent",
-    "@downcity/federation",
+    "@downcity/downtown",
     "@downcity/workspace-ssh",
     "@downcity/city",
     "@downcity/powers",

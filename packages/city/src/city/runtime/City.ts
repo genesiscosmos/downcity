@@ -1,15 +1,15 @@
 /**
- * City：Workspace、Federation 与统一 transport 的资源容器。
+ * City：Workspace、Town 与统一 transport 的资源容器。
  *
  * City 不创建 Agent 或 Session。应用创建 Agent 后通过 `city.agents.add(agent)` 加入
  * 当前容器；City 持有 Power 唯一实例、配置投影与生命周期，并管理 Agent 集合、
- * Workspace/Federation 资源和统一 transport。
+ * Workspace/Town 资源和统一 transport。
  */
 
 import { Agent, Group } from "@downcity/agent";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
-import { CityFederation } from "./CityFederation.js";
+import { Town } from "@/town/Town.js";
 import { create_shell_completion_handler } from "./ShellCompletionBridge.js";
 import { CityPowerRuntime } from "@/city/power/CityPowerRuntime.js";
 import { AiPower } from "@/city/power/builtin/AiPower.js";
@@ -74,8 +74,8 @@ export class City implements CityRuntime {
   /** 同一 Workspace 的切换队列，不阻塞其他 Workspace。 */
   private readonly workspace_transitions = new Map<string, Promise<WorkspaceRuntime>>();
 
-  /** City 的当前 Federation 内存绑定；宿主通过 set 更新身份。 */
-  readonly federation: CityFederation;
+  /** City 的多 Downtown 连接与统一资源路由入口。 */
+  readonly town: Town;
 
   /** 宿主提供的按需 Workspace 创建能力。 */
   private readonly resolve_workspace?: CityRuntimeOptions["resolve_workspace"];
@@ -104,9 +104,7 @@ export class City implements CityRuntime {
     this.city_id = options.city_id ?? `city_${randomUUID()}`;
     if (!/^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/u.test(this.city_id)) throw new TypeError("Invalid city_id");
     this.storage = options.storage || new MemoryStorageProvider();
-    this.federation = new CityFederation(this.city_id);
-    this.federation.set(options.federation);
-    const federation = this.federation;
+    this.town = new Town(this.city_id, options.town);
     this.runtime_access = Object.freeze({
       get_agent: (agent_id) => this.get_agent(agent_id),
       list_agents: () => this.list_agents(),
@@ -134,7 +132,7 @@ export class City implements CityRuntime {
     });
     this.power_runtime = new CityPowerRuntime({
       storage: this.storage,
-      get federation() { return federation.user ? { user: federation.user } : undefined; },
+      town: this.town,
       runtime_access: this.runtime_access,
       ...(options.power_host ? { host: options.power_host } : {}),
     });
@@ -487,6 +485,9 @@ export class City implements CityRuntime {
         assert_settled();
         // Session 停止后再清理 Power；失败实例依然可能需要 Workspace 和 Storage。
         results.push(...await Promise.allSettled([this.power_runtime.dispose()]));
+        assert_settled();
+        // Town 只释放 City 自己的注册视图，Downtown 客户端仍由宿主最终 dispose。
+        results.push(...await Promise.allSettled([this.town.close()]));
         assert_settled();
         results.push(...await Promise.allSettled([...this.workspaces_by_id.values()].map(async (workspace) => {
           await workspace.dispose();

@@ -12,7 +12,7 @@ import {
   type DatabaseTransaction,
   type DrizzleDatabase,
   type FederationTableSchema,
-} from "@downcity/federation";
+} from "@downcity/downtown";
 import { run_transaction } from "./D1Transaction.js";
 import type { DatabaseOptions } from "./types/DatabaseOptions.js";
 

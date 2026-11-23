@@ -6,7 +6,7 @@ import test from "node:test"
 import { sqliteTable, text } from "drizzle-orm/sqlite-core"
 
 import {
-  Federation,
+  Downtown,
   AIService,
   AIChannel,
   InstallableService,

@@ -2,8 +2,8 @@
  * OAuth 授权码交付状态机：发起端私密证明、Provider 浏览器绑定、产品回调与 PKCE，
  * 以及有界幂等交换。状态查询只返回进度，永远不能交付授权码或 Token。
  */
-import { httpError } from "@downcity/federation";
-import type { ServiceDatabaseContext } from "@downcity/federation";
+import { httpError } from "@downcity/downtown";
+import type { ServiceDatabaseContext } from "@downcity/downtown";
 import { service_sql_database } from "../shared/database-sql.js";
 import { LOGIN_FLOW_TABLE, type LoginFlowRow } from "./login-schema.js";
 import { randomToken } from "./utils.js";

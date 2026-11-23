@@ -10,7 +10,7 @@ import test from "node:test"
 import { decodeJwt, importJWK, SignJWT } from "jose"
 
 import {
-  Federation,
+  Downtown,
   base64UrlDecode,
   base64UrlEncode,
 } from "../bin/index.js"

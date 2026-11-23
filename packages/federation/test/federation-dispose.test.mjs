@@ -1,7 +1,7 @@
 /** Federation 关闭竞争回归：后台 Action / Hook 和维护结束前不得释放数据库。 */
 import assert from "node:assert/strict";
 import test from "node:test";
-import { Federation, Service } from "../bin/index.js";
+import { Downtown, Service } from "../bin/index.js";
 import { createSqliteDb } from "./sqlite-db.mjs";
 
 for (const operation of ["queue_action", "queue_after", "maintenance"]) {
@@ -28,7 +28,7 @@ for (const operation of ["queue_action", "queue_after", "maintenance"]) {
       }
       async on_maintenance() { await wait_and_query(); }
     }
-    const federation = new Federation({ database });
+    const federation = new Downtown({ database });
     federation.use(new ProbeService());
     await federation.ready();
     const queue = federation.queue;
@@ -69,7 +69,7 @@ test("dispose drains a failing queue execution before closing its database", asy
     await database.query({ sql: "SELECT 1", params: [] });
     throw new Error("expected_action_failure");
   });
-  const federation = new Federation({ database });
+  const federation = new Downtown({ database });
   federation.use(service);
   await federation.ready();
   const running = assert.rejects(federation.queue.call({ service: service.id, action: "fail" }), /expected_action_failure/u);

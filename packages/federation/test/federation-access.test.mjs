@@ -5,10 +5,10 @@
 import assert from "node:assert/strict"
 import test from "node:test"
 
-import { Federation } from "../bin/index.js"
+import { Downtown } from "../bin/index.js"
 
 test("Federation 只公开 user 和 admin 身份子域", () => {
-  const federation = new Federation({
+  const federation = new Downtown({
     url: "https://fed.example.com",
   })
 
@@ -20,7 +20,7 @@ test("Federation 只公开 user 和 admin 身份子域", () => {
 
 test("Federation account 查询状态不交付 Token，显式交换后更新当前 User Token", async () => {
   const requests = []
-  const federation = new Federation({
+  const federation = new Downtown({
     url: "https://fed.example.com",
     fetch: async (url, init) => {
       requests.push({ url, init })
@@ -69,7 +69,7 @@ test("Federation account 查询状态不交付 Token，显式交换后更新当�
 
 test("Federation OAuth 通过宿主回调交换 Token 后供 user current 使用，不轮询领取", async () => {
   const requests = []
-  const federation = new Federation({
+  const federation = new Downtown({
     url: "https://fed.example.com",
     fetch: async (url, init) => {
       requests.push({ url, init })
@@ -116,7 +116,7 @@ test("Federation OAuth 通过宿主回调交换 Token 后供 user current 使用
 
 test("Federation admin 登录后立即提供管理能力", async () => {
   const requests = []
-  const federation = new Federation({
+  const federation = new Downtown({
     url: "https://fed.example.com",
     fetch: async (url, init) => {
       requests.push({ url, init })
@@ -142,7 +142,7 @@ test("Federation admin 登录后立即提供管理能力", async () => {
 
 test("Federation 业务只请求当前 origin，不发现或转发其他服务地址", async () => {
   const requests = []
-  const federation = new Federation({
+  const federation = new Downtown({
     url: "https://fed.example.com",
     user_token: "user_token_1",
     fetch: async (url) => { requests.push(url); return json({}) },
@@ -158,7 +158,7 @@ test("Federation 业务只请求当前 origin，不发现或转发其他服务�
 })
 
 test("Federation 管理员入口不提供 identify", () => {
-  const federation = new Federation({
+  const federation = new Downtown({
     url: "https://fed.example.com",
     admin_token: "admin_session_1",
   })

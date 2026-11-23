@@ -13,7 +13,7 @@ import {
   type DatabaseTransaction,
   type DrizzleDatabase,
   type FederationTableSchema,
-} from "@downcity/federation";
+} from "@downcity/downtown";
 import type { DatabaseOptions } from "./types/DatabaseOptions.js";
 import { prepared_client } from "./prepared-client.js";
 

@@ -1,5 +1,5 @@
 /** Organizations API 文档；组织角色权限、终态和联合响应均按领域实现声明。 */
-import type { ApiDocumentation, ApiSchema } from "@downcity/federation";
+import type { ApiDocumentation, ApiSchema } from "@downcity/downtown";
 import { object_schema as obj, items_schema, text_schema as text, enum_schema, time_schema } from "../shared/documentation.js";
 
 const organization_id = { type: "string", pattern: "^org_[0-9A-HJKMNP-TV-Z]{26}$" };

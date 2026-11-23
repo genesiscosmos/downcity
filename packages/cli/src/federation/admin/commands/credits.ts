@@ -5,7 +5,7 @@
  * 支付订单、奖励活动或模型计费策略。
  */
 
-import { FederationAdmin } from "@downcity/federation";
+import { FederationAdmin } from "@downcity/downtown";
 import { t } from "@/shared/CliLocale.js";
 import { adminErrorMessage, rethrowAdminAuthError } from "@/federation/admin/auth-error.js";
 import type { admin_tui_runtime } from "@/federation/types/AdminTui.js";

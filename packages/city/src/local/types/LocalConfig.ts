@@ -29,6 +29,8 @@ export interface LocalGroupConfig {
   name: string;
   /** Group 用于理解群聊意图并决定消息投递的模型标识。 */
   model_id: string;
+  /** 用户明确选择模型时确认的非秘密授权来源；历史缺省不能自动接受当前账户。 */
+  binding_id?: string;
   /** Group 的协作目标指令。 */
   instruction: string;
   /** Group 成员 Agent 的稳定 ID 列表。 */

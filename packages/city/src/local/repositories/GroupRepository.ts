@@ -22,6 +22,8 @@ export class GroupRepository {
   create(input: {
     /** Group 稳定 ID。 */
     group_id: string;
+    /** 显式选模时确认的非秘密来源；不从当前登录推断。 */
+    binding_id?: string;
     /** Group 展示名称。 */
     name?: string;
     /** Group 用于群聊投递的模型标识。 */
@@ -41,6 +43,7 @@ export class GroupRepository {
       group_id,
       name: String(input.name || group_id).trim() || group_id,
       model_id,
+      binding_id: input.binding_id,
       instruction: String(input.instruction || "").trim(),
       member_agent_ids,
       created_at: current_time,
@@ -65,6 +68,8 @@ export class GroupRepository {
 
   /** 更新 Group 定义；Group ID 不可修改。 */
   update(group_id_input: string, input: {
+    /** 本次明确选模确认的来源；不提供时仅同模型保留已有来源。 */
+    binding_id?: string;
     /** Group 展示名称。 */
     name?: string;
     /** Group 用于群聊投递的模型标识。 */
@@ -83,6 +88,7 @@ export class GroupRepository {
       ...current,
       name: String(input.name || current.group_id).trim() || current.group_id,
       model_id,
+      binding_id: input.binding_id ?? (model_id === current.model_id ? current.binding_id : undefined),
       instruction: String(input.instruction || "").trim(),
       member_agent_ids,
       updated_at: new Date().toISOString(),
@@ -110,6 +116,7 @@ export class GroupRepository {
       group_id: row.group_id,
       name: String(raw.name || row.group_id).trim() || row.group_id,
       model_id: String(raw.model_id || "").trim(),
+      binding_id: typeof raw.binding_id === "string" && raw.binding_id ? raw.binding_id : undefined,
       instruction: String(raw.instruction || ""),
       member_agent_ids: normalize_member_agent_ids(raw.member_agent_ids || []),
       created_at: String(raw.created_at || row.created_at),

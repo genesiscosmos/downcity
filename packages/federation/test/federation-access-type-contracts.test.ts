@@ -3,14 +3,14 @@
  */
 
 import type {
-  Federation,
+  Downtown,
   FederationOptions,
   FederationAccountProvider,
   FederationAdminSession,
   FederationCurrentUser,
 } from "../src/index.js";
 
-declare const federation: Federation;
+declare const federation: Downtown;
 
 const providers: Promise<FederationAccountProvider[]> = federation.user.account.providers();
 const current_user: Promise<FederationCurrentUser> = federation.user.current();

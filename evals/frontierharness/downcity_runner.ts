@@ -4,7 +4,7 @@
  * 不创建 City、Workspace、宿主文件工具或宿主命令执行工具。
  */
 import { Agent } from "@downcity/agent";
-import { create_openai_compatible_model } from "@downcity/federation";
+import { create_openai_compatible_model } from "@downcity/downtown";
 import type { AgentSession } from "@downcity/agent";
 import type { ModelClient, ModelUsage, ModelStreamEvent } from "@downcity/type";
 import { appendFileSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";

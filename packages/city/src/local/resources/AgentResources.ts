@@ -49,8 +49,8 @@ export class AgentResources {
       const definition_id = optional_text(input.definition_id);
       const reasoning_effort = optional_text(input.reasoning_effort);
       if (definition_id && !this.dependencies.extensions?.catalog.agents.has(definition_id)) throw new ResourceError("definition_unavailable", "The selected Agent definition is unavailable", 2);
-      await this.dependencies.host?.resolve_model(model_id);
-      const config = this.dependencies.agents.create({ agent_id, name: input.name as string, description: optional_text(input.description) ?? "", instruction: optional_text(input.instruction) ?? "", ...((model_id || definition_id || reasoning_effort) ? { execution: { ...(model_id ? { model_id } : {}), ...(definition_id ? { definition_id } : {}), ...(reasoning_effort ? { reasoning_effort } : {}) } } : {}) });
+      const model = await this.resolve_selected_model(model_id);
+      const config = this.dependencies.agents.create({ agent_id, name: input.name as string, description: optional_text(input.description) ?? "", instruction: optional_text(input.instruction) ?? "", ...((model_id || definition_id || reasoning_effort) ? { execution: { ...(model_id ? { model_id, ...(model?.binding_id ? { binding_id: model.binding_id } : {}) } : {}), ...(definition_id ? { definition_id } : {}), ...(reasoning_effort ? { reasoning_effort } : {}) } } : {}) });
       try {
         if (this.dependencies.host) this.dependencies.host.city.agents.add(await this.dependencies.host.create_agent(config));
       } catch (error) { this.application_failed(config, error); }
@@ -70,15 +70,17 @@ export class AgentResources {
       const name = optional_text(input.name);
       if (name !== undefined) require_resource_value(name.trim(), "name must not be empty");
       const execution = { ...current.execution };
-      if (input.unset_model) delete execution.model_id;
-      else if (input.model !== undefined) execution.model_id = optional_model(input.model)!;
+      if (input.unset_model) { delete execution.model_id; delete execution.binding_id; }
+      else if (input.model !== undefined) { execution.model_id = optional_model(input.model)!; delete execution.binding_id; }
       if (input.reasoning_effort !== undefined) {
         const effort = optional_text(input.reasoning_effort)!;
         if (effort) execution.reasoning_effort = effort;
         else delete execution.reasoning_effort;
       }
       const next = { ...current, ...(name !== undefined ? { name: name.trim() } : {}), ...(input.description !== undefined ? { description: optional_text(input.description)! } : {}), ...(input.instruction !== undefined ? { instruction: optional_text(input.instruction)! } : {}), execution };
-      const model = await this.dependencies.host?.resolve_model(typeof execution.model_id === "string" ? execution.model_id : undefined, next);
+      const model_id = typeof execution.model_id === "string" ? execution.model_id : undefined;
+      const model = input.model !== undefined ? await this.resolve_selected_model(model_id) : await this.dependencies.host?.resolve_model(model_id, next);
+      if (input.model !== undefined && model?.binding_id) execution.binding_id = model.binding_id;
       const changed = resource_revision(next) !== resource_revision(current);
       const config = changed ? this.dependencies.agents.save(next) : current;
       try {
@@ -93,6 +95,13 @@ export class AgentResources {
       } catch (error) { this.application_failed(config, error); }
       return this.saved_result(config, changed);
     });
+  }
+
+  /** 显式模型选择捕获实际来源；离线由持有 root 租约的 CLI 注入同一目录解析。 */
+  private async resolve_selected_model(model_id?: string) {
+    if (!model_id) return undefined;
+    if (this.dependencies.host) return await this.dependencies.host.resolve_model(model_id);
+    return await this.dependencies.resolve_model?.(model_id);
   }
 
   /** 永久删除自有 scope；只释放空闲运行资源，绝不隐式 stop 或级联删除外部资源。 */

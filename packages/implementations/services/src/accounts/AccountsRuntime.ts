@@ -6,7 +6,7 @@
  * 认证配置。数据库事实统一通过 AccountsStore 访问，HTTP 路由由 routes 模块注册。
  */
 
-import { httpError, type ServiceInstallContext } from "@downcity/federation";
+import { httpError, type ServiceInstallContext } from "@downcity/downtown";
 import { betterAuth } from "better-auth/minimal";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { listAccountSessions, listAccountUsers } from "./admin-queries.js";

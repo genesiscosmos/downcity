@@ -8,17 +8,17 @@
 
 import { UserSessionRepository } from "@downcity/city/local";
 import { with_cli_local_data } from "@/city/runtime/LocalData.js";
-import type { UserSessionCredentials } from "@downcity/federation";
+import type { UserSessionCredentials } from "@downcity/downtown";
 import prompts from "@/city/tui/Prompts.js";
 import {
-  Federation,
+  Downtown,
   type FederationAccountDoneResult,
   type FederationAccountLoginResult,
   type FederationAccountProvider,
-} from "@downcity/federation";
+} from "@downcity/downtown";
 import { emitCliBlock } from "@/shared/CliReporter.js";
 import { can_open_system_browser, open_system_browser } from "@/shared/SystemBrowser.js";
-import { create_loopback_login_callback } from "@downcity/federation/node";
+import { create_loopback_login_callback } from "@downcity/downtown/node";
 import type {
   FederationLoginInput,
   FederationUserSession,
@@ -77,7 +77,7 @@ function map_providers_to_options(items: FederationAccountProvider[]): AuthOptio
 }
 
 async function load_auth_options(federation_url: string): Promise<AuthOption[]> {
-  const federation = new Federation({ url: federation_url });
+  const federation = new Downtown({ url: federation_url });
   return map_providers_to_options(await federation.user.account.providers());
 }
 
@@ -121,7 +121,7 @@ async function email_login(input: FederationLoginInput): Promise<FederationUserS
   const password = String(response.password || "");
   if (!email || !email.includes("@") || !password) return null;
 
-  const federation = new Federation({ url: input.federation_url });
+  const federation = new Downtown({ url: input.federation_url });
   const result = await federation.user.account.login({
     provider: "email",
     client_type: "cli",
@@ -154,7 +154,7 @@ async function email_register(input: FederationLoginInput): Promise<FederationUs
   if (!email || !email.includes("@")) throw new Error("invalid email");
   if (password.length < 8) throw new Error("password must be at least 8 characters");
 
-  const federation = new Federation({ url: input.federation_url });
+  const federation = new Downtown({ url: input.federation_url });
   const accounts = federation.user.service("accounts");
   const registered = await accounts.action("register").invoke<RegisterResult>({
     email,
@@ -196,7 +196,7 @@ async function oauth_auth(
   provider: string,
 ): Promise<FederationUserSession | null> {
   if (!can_open_system_browser()) throw new Error("OAuth sign-in requires a local system browser. Remote or headless CLI sessions are not supported.");
-  const federation = new Federation({ url: input.federation_url });
+  const federation = new Downtown({ url: input.federation_url });
   const callback = await create_loopback_login_callback(180_000);
   let cancelled = false;
   const cancel = () => { cancelled = true; callback.close(); };
@@ -238,7 +238,7 @@ async function input_auth(
   input: FederationLoginInput,
   provider: string,
 ): Promise<FederationUserSession | null> {
-  const federation = new Federation({ url: input.federation_url });
+  const federation = new Downtown({ url: input.federation_url });
   const result = await federation.user.account.login({
     provider,
     client_type: "cli",
@@ -288,7 +288,8 @@ async function build_verified_user_session(input: FederationLoginInput & {
   user_label?: string;
 }): Promise<FederationUserSession> {
   const verified = await read_user_session_from_token(input);
-  with_cli_local_data((data) => new UserSessionRepository(data.database).save(input.federation_url, input.credentials));
+  if (input.accept_credentials) input.accept_credentials(input.credentials);
+  else with_cli_local_data((data) => new UserSessionRepository(data.database).save(input.federation_url, input.credentials));
   return build_user_session({
     ...input,
     user_id: verified.user_id || input.user_id,
@@ -302,7 +303,7 @@ async function read_user_session_from_token(input: FederationLoginInput & {
   user_id?: string;
   user_label?: string;
 }> {
-  const federation = new Federation({
+  const federation = new Downtown({
     url: input.federation_url,
     user_token: input.user_token,
   });

@@ -7,7 +7,7 @@
  * - 运行时模型只消费宿主显式传入的当前 City Federation 绑定。
  */
 
-import { Federation } from "@downcity/federation";
+import { Downtown } from "@downcity/downtown";
 import { resolve_local_city_id, resolve_resource_root } from "@downcity/city/local";
 import type { CityModelDescriptor, ModelClient } from "@downcity/type";
 import { FederationSessionResolver } from "@/city/shared/FederationSessionResolver.js";
@@ -52,7 +52,7 @@ export async function listCityAiServiceModelsForAdmin(
       "A valid Federation administrator session is required to list admin models. Log in with `fed manage`.",
     );
   }
-  const admin = new Federation({
+  const admin = new Downtown({
     url: user.federation_url,
     admin_token: admin_session_token,
   }).admin;
@@ -126,7 +126,7 @@ export async function create_city_ai_model_client(input: {
   /** 目标 Federation 模型 ID。 */
   model_id: string;
   /** 请求开始时读取的 City 当前绑定；缺少绑定时明确失败。 */
-  federation: Federation | undefined;
+  federation: Downtown | undefined;
 }): Promise<ModelClient> {
   const model_id = String(input.model_id || "").trim();
   if (!model_id) throw new Error("model_id cannot be empty");

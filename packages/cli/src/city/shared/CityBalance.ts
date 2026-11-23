@@ -10,7 +10,7 @@
 import { emitCliBlock } from "@/shared/CliReporter.js";
 import { open_system_browser } from "@/shared/SystemBrowser.js";
 import { FederationSessionResolver } from "@/city/shared/FederationSessionResolver.js";
-import type { CreditsAccount } from "@downcity/federation";
+import type { CreditsAccount } from "@downcity/downtown";
 import type {
   CityBalanceAccount,
   CityCheckoutResult,

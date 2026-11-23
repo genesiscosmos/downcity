@@ -2,14 +2,14 @@
  * Usage 服务类型契约测试。
  */
 
-import { AIService, Federation } from "@downcity/federation";
+import { AIService, Downtown } from "@downcity/downtown";
 import {
   CreditsService,
   UsageService,
   type UserRecentTokenUsageResponse,
 } from "../../src/index.js";
 
-const base = new Federation({
+const base = new Downtown({
   database: {} as never,
 });
 

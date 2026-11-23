@@ -51,6 +51,8 @@ export type TaskCreateResponse = {
 };
 
 export type TaskUpdateRequest = {
+  /** 用户明确确认采用当前执行模型/账号，仅此操作可刷新同目标模型基线。 */
+  confirm_model?: boolean;
   /** 当前任务名称。 */
   title: string;
   /** 新任务名称。 */

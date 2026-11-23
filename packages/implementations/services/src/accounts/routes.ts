@@ -5,7 +5,7 @@
  * 认证和持久化规则均由运行时负责。
  */
 
-import type { ApiDocumentation, ServiceInstallContext } from "@downcity/federation";
+import type { ApiDocumentation, ServiceInstallContext } from "@downcity/downtown";
 import type { AccountsRefreshRequest, AccountsLogoutRequest } from "./types/AccountsSession.js";
 import type { AccountsRuntime } from "./AccountsRuntime.js";
 import { register_login_routes } from "./login-routes.js";

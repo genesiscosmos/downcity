@@ -7,10 +7,10 @@ import path from "node:path"
 import test from "node:test"
 import {
   AIService,
-  Federation,
+  Downtown,
   create_usage_date_formatter,
   format_usage_local_date,
-} from "@downcity/federation"
+} from "@downcity/downtown"
 import { create_test_text_model } from "../fixtures/ai-channel.mjs"
 import { createSqliteDb } from "./sqlite-db.mjs"
 import { CreditsService, UsageService } from "../../bin/index.js"
@@ -73,7 +73,7 @@ test("UsageService merges applied Credits and final AI usage by local day", asyn
   try {
     process.chdir(temp_dir)
     const database = createSqliteDb(path.join(temp_dir, "test.sqlite"))
-    const federation = new Federation({ database })
+    const federation = new Downtown({ database })
     const credits_service = new CreditsService()
     const ai_service = new AIService({ credits: credits_service })
     ai_service.use(create_test_text_model({

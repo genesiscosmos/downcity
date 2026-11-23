@@ -48,6 +48,8 @@ export interface CityHttpRuntimeOptions {
     readonly workspace: WorkspaceRuntime;
     /** 远程 Session 请求指定的模型标识。 */
     readonly model_id: string;
+    /** 已确认的非秘密授权来源；宿主须转交模型目录核对。 */
+    readonly binding_id?: string;
   }) => ReturnType<AgentSessionModelResolver>;
 
   /** 为一个 Agent 组合 Auth、控制台和应用专属路由。 */

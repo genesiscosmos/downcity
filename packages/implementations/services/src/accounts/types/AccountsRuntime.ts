@@ -4,7 +4,7 @@
  * 类型用于装配 AccountsService、登录运行时与路由，不构成 package 对外 API。
  */
 
-import type { ServiceDatabaseContext, ServiceInstallContext } from "@downcity/federation";
+import type { ServiceDatabaseContext, ServiceInstallContext } from "@downcity/downtown";
 import type { AccountsProvider, AccountsServiceOptions } from "../types.js";
 
 /** Accounts 登录运行时构造参数。 */

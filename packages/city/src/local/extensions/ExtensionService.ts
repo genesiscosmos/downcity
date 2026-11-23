@@ -6,7 +6,7 @@ import { ExtensionFailure } from "./ExtensionError.js";
 
 /** 项目业务输入统一在共享入口校验。 */
 export class ExtensionService implements ResourceDispatcher {
-  readonly capabilities = ["extension.list", "extension.show", "extension.add", "extension.reload", "extension.configure", "extension.configuration", "extension.remove", "extension.operation", "extension.definitions", "extension.connections", "extension.select_connection", "extension.powers"] as const;
+  readonly capabilities = ["extension.list", "extension.show", "extension.add", "extension.reload", "extension.configure", "extension.configuration", "extension.remove", "extension.operation", "extension.definitions", "extension.connections", "extension.powers"] as const;
 
   constructor(private readonly manager: ExtensionManager, private readonly platform?: ExtensionPlatform) {}
 
@@ -21,13 +21,7 @@ export class ExtensionService implements ResourceDispatcher {
       case "extension.list": return this.manager.list();
       case "extension.powers": return this.platform?.power_catalog() ?? [];
       case "extension.definitions": return this.platform?.definitions().map((definition) => ({ id: definition.id, name: definition.name, description: definition.description ?? "", model_id: definition.behavior.model?.id ?? null })) ?? [];
-      case "extension.connections": return this.platform?.connections() ?? { selected: null, items: [], unavailable: false };
-      case "extension.select_connection": {
-        if (!this.platform) throw new ExtensionFailure("host_required", "Selecting a connection requires a running host", "host", 5);
-        if (input.entry_id !== null && typeof input.entry_id !== "string") throw new ExtensionFailure("input_invalid", "Use a complete entry_id or null to disconnect", "source", 2);
-        this.platform.select_connection(input.entry_id as string | null);
-        return this.platform.connections();
-      }
+      case "extension.connections": return this.platform?.connections() ?? { items: [], unavailable: false };
       case "extension.show": return this.manager.show(id());
       case "extension.configuration": return await this.manager.configuration(id());
       case "extension.operation": {

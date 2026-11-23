@@ -2,7 +2,7 @@
 
 import assert from "node:assert/strict"
 import test from "node:test"
-import { Federation, InstallableService } from "@downcity/federation"
+import { Downtown, InstallableService } from "@downcity/downtown"
 import { sqliteTable, text } from "drizzle-orm/sqlite-core"
 import { OrganizationsService } from "../../bin/index.js"
 import { create_test_admin_session } from "../admin-fixture.mjs"
@@ -41,7 +41,7 @@ class D1RollbackService extends InstallableService {
 test("D1 transaction rolls back every buffered write when one statement fails", async () => {
   const runtime = await create_d1_db()
   try {
-    const federation = new Federation({ database: runtime.database })
+    const federation = new Downtown({ database: runtime.database })
     federation.use(new D1RollbackService())
     await federation.health()
     const secret = await create_test_admin_session(federation)
@@ -57,7 +57,7 @@ test("D1 transaction rolls back every buffered write when one statement fails", 
 test("Organizations initializes on D1 and concurrent create cannot exceed owner quota", async () => {
   const runtime = await create_d1_db()
   try {
-    const federation = new Federation({ database: runtime.database })
+    const federation = new Downtown({ database: runtime.database })
     federation.use(new OrganizationsService({ max_organizations_per_user: 1 }))
     await federation.health()
     const secret = await create_test_admin_session(federation)

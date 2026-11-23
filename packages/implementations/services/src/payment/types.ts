@@ -8,7 +8,7 @@
  */
 
 import type { PaymentFulfillmentContext } from "./types/Wallet.js";
-import type { EnvRequirement } from "@downcity/federation";
+import type { EnvRequirement } from "@downcity/downtown";
 
 /**
  * 支付方式展示模式。

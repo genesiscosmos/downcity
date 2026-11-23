@@ -36,6 +36,7 @@ export { AGENT_SESSION_SCHEMA_VERSION, assert_agent_session_schema } from "./ses
 export type { AgentSessionPreparationInput } from "./types/store/AgentSessionPreparation.js";
 export type { AgentSessionBrowserOptions, AgentArchivedSessionAddress } from "./types/store/AgentSessionBrowser.js";
 export type { SessionModelBinding } from "./types/store/SessionModelBinding.js";
+export type { SessionModelResolver } from "./types/model/SessionModelResolver.js";
 export type { SessionReadView } from "./types/store/SessionReadView.js";
 export type { SessionReadConfiguration } from "./types/store/SessionReadConfiguration.js";
 export type { SessionArchivedSnapshot } from "./types/store/SessionArchivedSnapshot.js";

@@ -4,7 +4,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
-import { AIService, Federation } from "@downcity/federation";
+import { AIService, Downtown } from "@downcity/downtown";
 import { Database } from "../../implementations/databases/sqlite/bin/index.js";
 import { resolve_local_city_id } from "@downcity/city/local";
 import { create_city_ai_model_client } from "../bin/city/runtime/city-model/CityAiServiceBinding.js";
@@ -15,7 +15,7 @@ test("模型仅消费注入的 Federation，模型和用户视图使用宿主稳
   const previous_fetch = globalThis.fetch;
   process.env.DC_PLATFORM_ROOT = root;
   globalThis.fetch = async () => { throw new Error("Unexpected network request in model verification"); };
-  const federation = new Federation({ database: new Database({ filename: ":memory:" }) });
+  const federation = new Downtown({ database: new Database({ filename: ":memory:" }) });
   const ai = new AIService();
   ai.use({ id: "test-model", name: "Test", runtime: { actions: {}, stream: async () => ({ stream: new ReadableStream({ start(controller) { controller.close(); } }) }) } });
   federation.use(ai);

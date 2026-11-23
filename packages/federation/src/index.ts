@@ -1,10 +1,11 @@
 /**
- * @downcity/federation 公共入口。
- * Federation 统一提供本地运行与远端业务访问。
+ * @downcity/downtown 公共入口。
+ * Downtown 统一提供本地运行与远端业务访问。
  * 平台数据库 Adapter 由宿主注入，包根入口不加载 Node 原生数据库。
  */
 
 export type { UserSessionCredentials } from "./types/UserSession.js";
+export type { ServiceRequestOptions } from "./types/ServiceRequest.js";
 export type {
   ApiSchema, ApiExample, ApiError, ApiDocumentation,
   ServiceAvailability, ServiceAvailabilityCheck, ServiceDiscoveryOptions,
@@ -13,7 +14,7 @@ export type {
   PublicApiDocumentation, ServiceEndpointSummary, ServiceEndpointDetail,
   ServiceCatalogSummary, ServiceCatalogDetail,
 } from "./types/ServiceCatalog.js";
-export { Federation } from "./access/Federation.js";
+export { Downtown } from "./access/Downtown.js";
 export { FederationUser } from "./access/FederationUser.js";
 export { FederationAdmin } from "./access/FederationAdmin.js";
 export { FederationAccount } from "./access/FederationAccount.js";
@@ -51,7 +52,7 @@ export type {
 } from "./access/types/FederationAdmin.js";
 
 // ===========================================================================
-// 场景 1：创建 Federation 实例
+// 场景 1：创建 Downtown 实例
 // ===========================================================================
 
 

@@ -10,4 +10,6 @@ import type { ModelClient } from "@downcity/type";
 export type AgentSessionModelResolver = (
   /** 远程调用方请求的宿主模型 ID。 */
   model_id: string,
+  /** 调用方指定的非秘密授权来源；宿主必须核对并传入模型目录，不能忽略身份变化。 */
+  binding_id?: string,
 ) => ModelClient | Promise<ModelClient>;

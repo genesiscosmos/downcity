@@ -8,7 +8,7 @@
 
 import { Command } from "commander";
 import { registerEnvCommand } from "@/city/command/EnvCommand.js";
-import { register_federation_command } from "@/city/command/FederationCommand.js";
+import { register_downtown_command } from "@/city/command/DowntownCommand.js";
 import { city_reset } from "@/city/command/CityResetCommand.js";
 import { city_off, city_on, city_restart } from "@/city/agent/CityLifecycle.js";
 import { parseBoolean, parsePort } from "@/shared/IndexSupport.js";
@@ -30,7 +30,7 @@ export interface GatewayCommandRegistrationContext {
  * 注册 top-level city 全局命令。
  *
  * 语义说明（中文）
- * - `city ...` 管 CLI City 生命周期、全局配置与 Federation 连接。
+ * - `city ...` 管 CLI City 生命周期、全局配置与 Downtown 连接。
  */
 export function registerGatewayCommands(
   program: Command,
@@ -70,7 +70,7 @@ export function registerGatewayCommands(
       await city_reset(options);
     }));
   registerEnvCommand(program);
-  register_federation_command(program);
+  register_downtown_command(program);
 }
 
 /** 把 Commander 选项转换为 City daemon 类型。 */

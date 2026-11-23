@@ -14,7 +14,7 @@ import type { CliLocale } from "@/shared/types/CliLocale.js";
  */
 export interface FederationAdminConfig {
   /**
-   * `downfed` admin 保存的 Federation 列表。
+   * `downtown` admin 保存的 Federation 列表。
    */
   servers?: Array<{
     /**
@@ -23,7 +23,7 @@ export interface FederationAdminConfig {
     name?: unknown;
 
     /**
-     * `downfed` 当前结构中的 Federation URL 字段。
+     * `downtown` 当前结构中的 Federation URL 字段。
      */
     base_url?: unknown;
 

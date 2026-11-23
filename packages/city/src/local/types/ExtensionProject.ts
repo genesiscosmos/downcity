@@ -1,7 +1,7 @@
 /** 扩展作者的单入口协议；Agent 定义只提供行为，身份和存储始终由宿主分配。 */
 import type { AgentOptions } from "@downcity/agent";
 import type { ModelClient } from "@downcity/type";
-import type { Federation } from "@downcity/federation";
+import type { Downtown } from "@downcity/downtown";
 import type { PowerDefinition } from "../../power/index.js";
 
 /** 请求宿主补齐配置的字段，秘密值不进入普通配置记录。 */
@@ -27,7 +27,7 @@ export interface ExtensionAgentDefinition {
 }
 
 /** 标准 Federation 的稳定条目身份由作者实例提供。 */
-export type ExtensionFederation = Federation;
+export type ExtensionFederation = Downtown;
 
 /** Power 与其浏览器源码的唯一绑定，不需要额外清单或独立资源注册。 */
 export interface ExtensionPowerDefinition extends PowerDefinition {

@@ -96,8 +96,7 @@ export class ExtensionManager {
     const record = this.require_record(extension_id);
     return await this.mutate(record, "remove", operation_id, extension_id, async () => {
       if (record.status === "removed") return;
-      const selected = this.repository.selected_federation();
-      if (selected?.startsWith(`ext_${extension_id.replaceAll("-", "")}_`)) throw new ExtensionFailure("project_busy", "Explicitly disconnect or switch the selected Federation before removing this project", "dispose", 4);
+      // 扩展 Federation 已登记到 Town，卸载由运行时连接租约检查，不读取全局 selected 绑定。
       await this.options.runtime?.close_gate(extension_id);
       await this.options.runtime?.release(extension_id);
       record.status = "removed";
@@ -128,7 +127,6 @@ export class ExtensionManager {
   private async prepare(record: ExtensionRecord): Promise<void> {
     const snapshot = await prepare_extension_snapshot(record.source, { ...this.options, extension_id: record.extension_id, configuration_version: record.configuration_version, previous_snapshot: record.target_snapshot });
     // 门禁实现必须原子暂停入口并检查所有使用者，busy 不能改变持久目标。
-    if (!this.options.runtime && this.repository.selected_federation()?.startsWith(`ext_${record.extension_id.replaceAll("-", "")}_`)) throw new ExtensionFailure("project_busy", "Disconnect the selected Federation before replacing its project offline", "dispose", 4);
     await this.options.runtime?.close_gate(record.extension_id);
     record.target_snapshot = snapshot;
     record.pending_snapshot = snapshot;

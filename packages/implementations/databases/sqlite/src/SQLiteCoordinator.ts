@@ -3,7 +3,7 @@
  * 普通操作、跨 Promise 事务与最终关闭共用一个串行边界；关闭后拒绝新操作，
  * 已接受的操作和事务先结束，随后才释放原生连接。
  */
-import { DatabaseClosedError } from "@downcity/federation";
+import { DatabaseClosedError } from "@downcity/downtown";
 
 /** 串行执行普通操作和跨 Promise 检查点的显式事务。 */
 export class SQLiteCoordinator {

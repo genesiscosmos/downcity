@@ -112,6 +112,7 @@ export type {
   PowerHostSessionState,
   PowerHostSessionMessagePage,
 } from "./types/PowerExecutionProfile.js";
+export type { PowerTown } from "./types/PowerTown.js";
 
 
 export type {

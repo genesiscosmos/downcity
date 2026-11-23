@@ -17,6 +17,12 @@ export type {
   GroupOptions,
 } from "@downcity/agent";
 export type { CityRuntime } from "@downcity/type";
+export { Town, TownServices } from "./town/Town.js";
+export type { TownOptions, TownRegistration, TownConnection, TownSource, TownLoginInput, TownLoginResult, TownAuthAdapter } from "./town/types/Town.js";
+export type { TownModelEntry, TownModelList, TownDirectModelRegistration } from "./town/types/TownModels.js";
+export type { TownModelClient } from "./town/TownModels.js";
+export type { TownImageJobOrigin, TownImageJobStore } from "./town/types/TownImageJobs.js";
+export { TownError, downtown_model_id, client_model_id, parse_model_id } from "./town/index.js";
 export type { RemoteAgentOptions } from "./types/remote/RemoteAgentOptions.js";
 export {
   LocalFileSystem,

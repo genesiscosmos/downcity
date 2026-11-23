@@ -1,6 +1,6 @@
 /** Organizations Service 的 HTTP Action 装配模块。 */
 
-import type { ServiceInstallContext } from "@downcity/federation";
+import type { ServiceInstallContext } from "@downcity/downtown";
 import { organization_documentation } from "./documentation.js";
 import { require_service_user_identity } from "../shared/service-identity.js";
 import type { OrganizationsService } from "./service.js";

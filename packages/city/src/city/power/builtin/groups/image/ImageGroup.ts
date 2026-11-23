@@ -3,15 +3,16 @@
  *
  * 关键点（中文）
  * - 三个动作：`image.models`、`image.create`、`image.result`；写文件或消耗额度的动作声明为 write。
- * - 图片 AI 来自 City 持有的 Federation；本地图片读取以当前 Workspace 为根。
+ * - 图片 AI 通过 Town 统一模型 ID 路由；本地图片读取以当前 Workspace 为根。
  * - `result` 把远端图片落到动作组私有目录，只返回本地路径，不注入 Agent 消息。
  */
 
 import { z } from "zod";
-import type { PowerJsonObject, PowerJsonValue } from "@/power/index.js";
+import { setTimeout as wait_for_poll } from "node:timers/promises";
+import type { PowerJsonValue } from "@/power/index.js";
+import type { PowerTown } from "@/power/types/PowerTown.js";
 import type { CityPowerContext } from "@/city/types/CityPowerContext.js";
 import type {
-  ImageAiService,
   ImageCreateInput,
   ImageJobCreateResult,
   ImageJobResult,
@@ -39,20 +40,12 @@ const DEFAULT_WAIT_MS = 60_000;
 const DEFAULT_POLL_MS = 1_500;
 const MAX_WAIT_MS = 10 * 60_000;
 
-/** 从 City 注入的 Federation 获取图片 AI 服务。 */
-function require_image_ai(context: CityPowerContext): ImageAiService {
-  const service = context.federation?.user.ai;
-  if (!service) {
-    throw new CityActionError({
-      code: "unsupported_action",
-      message: "image actions require a City Federation user AI service, and none is configured.",
-    });
+/** 图片仅使用受限 Town 路由；无路由时明确失败，不回退到单连接。 */
+function require_image_models(context: CityPowerContext): PowerTown["models"] {
+  if (!context.town) {
+    throw new CityActionError({ code: "unsupported_action", message: "image actions require City Town model routing." });
   }
-  return {
-    catalog: async () => await service.catalog(),
-    image_create: async (input) => await service.image_create(input as never),
-    image_result: async (input) => await service.image_result(input as never),
-  };
+  return context.town.models;
 }
 
 /** 判断任务状态是否为终态。 */
@@ -60,9 +53,9 @@ function is_terminal_status(status: string | undefined): boolean {
   return status === "succeeded" || status === "failed";
 }
 
-/** sleep 工具。 */
-function delay_ms(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, Math.max(0, ms)));
+/** 等待下一次查询时也接受 Turn 取消，避免停止后继续轮询。 */
+function delay_ms(ms: number, signal?: AbortSignal): Promise<void> {
+  return wait_for_poll(Math.max(0, ms), undefined, { signal });
 }
 
 /** 把等待参数夹到合法区间。 */
@@ -77,8 +70,8 @@ async function fetch_job_once(
   context: CityPowerContext,
   job_id: string,
 ): Promise<ImageJobResult> {
-  const current = await require_image_ai(context)
-    .image_result({ job_id }) as unknown as ImageJobResult;
+  const current = await require_image_models(context)
+    .image_result({ job_id, signal: context.abort_signal }) as ImageJobResult;
   validate_job_result(current);
   if (current.status === "succeeded" && current.result) {
     normalize_image_result(current.result);
@@ -107,7 +100,7 @@ async function read_job_result(
     const remaining = Math.max(0, deadline - Date.now());
     const sleep_ms = Math.min(wait_ms, remaining);
     if (sleep_ms === 0) break;
-    await delay_ms(sleep_ms);
+    await delay_ms(sleep_ms, context.abort_signal);
     current = await fetch_job_once(context, input.job_id);
     if (is_terminal_status(current.status)) return current;
   }
@@ -125,10 +118,16 @@ class ImageModelsAction extends CityAction {
     _args: Record<string, never>,
     context: CityPowerContext,
   ): Promise<ReturnType<typeof normalize_image_models>> {
-    const models = await require_image_ai(context)
-      .catalog()
-      .then((catalog) => catalog.all()) as unknown as ImageModel[];
-    return normalize_image_models(models);
+    const catalog = await require_image_models(context).list({ modality: "image", signal: context.abort_signal });
+    const models = catalog.items.map((entry) => ({ ...entry, id: entry.model_id })) as ImageModel[];
+    const normalized = normalize_image_models(models);
+    return {
+      items: normalized.items.map((item) => {
+        const entry = catalog.items.find((entry) => entry.model_id === item.id)!;
+        return { ...item, source_id: entry.source_id, source_name: entry.source_name, binding_id: entry.binding_id };
+      }),
+      sources: catalog.sources,
+    };
   }
 }
 
@@ -171,13 +170,18 @@ class ImageCreateAction extends CityAction<z.infer<typeof image_create_input>> {
     args: z.infer<typeof image_create_input>,
     context: CityPowerContext,
   ): Promise<ImageJobCreateResult> {
+    const models = require_image_models(context);
+    // 本地文件解析可能异步；先捕获用户选定模型的身份，发送时由 Town 再次核验。
+    const binding_id = models.client(args.model).binding_id;
     const payload = normalize_image_payload(args as PowerJsonValue);
     const resolved = await normalize_image_create_input({
       workspace_path: context.workspace_path,
       payload: payload as ImageCreateInput,
     });
-    const created = await require_image_ai(context)
-      .image_create(resolved as unknown as PowerJsonObject) as unknown as ImageJobCreateResult;
+    const { model: _model, ...input } = resolved;
+    const created = await models.image_create({
+      model_id: args.model, binding_id, input, signal: context.abort_signal,
+    }) as ImageJobCreateResult;
     validate_created_job(created);
     return created;
   }

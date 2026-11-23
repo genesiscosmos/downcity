@@ -2,7 +2,7 @@
  * 已部署 Federation 本地连接管理模块。
  *
  * 关键说明（中文）
- * - downfed 需要管理已经部署好的 Federation，而不只是 create / deploy。
+ * - downtown 需要管理已经部署好的 Federation，而不只是 create / deploy。
  * - 本模块负责添加、选择、编辑、移除本地保存的 Federation 连接。
  * - 管理员密码只用于登录，registry 仅保存有期限 Session Token。
  */

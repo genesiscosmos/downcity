@@ -8,5 +8,19 @@ export function decode_model_binding(text: string): SessionModelBinding {
   const binding = value as SessionModelBinding;
   if (!(binding.default_model_id === null || typeof binding.default_model_id === "string" && binding.default_model_id.trim()) ||
       !(binding.override_model_id === undefined || typeof binding.override_model_id === "string" && binding.override_model_id.trim())) throw new Error("session_model_binding_invalid: stable model IDs are required");
-  return { default_model_id: binding.default_model_id, ...(binding.override_model_id ? { override_model_id: binding.override_model_id } : {}) };
+  for (const field of ["default_binding_id", "override_binding_id"] as const) {
+    if (binding[field] !== undefined && (typeof binding[field] !== "string" || !binding[field].trim())) {
+      throw new Error(`session_model_binding_invalid: ${field} must be a non-empty opaque string`);
+    }
+  }
+  if ((binding.default_binding_id !== undefined && binding.default_model_id === null)
+    || (binding.override_binding_id !== undefined && binding.override_model_id === undefined)) {
+    throw new Error("session_model_binding_invalid: authorization binding requires its paired model ID");
+  }
+  return {
+    default_model_id: binding.default_model_id,
+    ...(binding.default_binding_id !== undefined ? { default_binding_id: binding.default_binding_id } : {}),
+    ...(binding.override_model_id !== undefined ? { override_model_id: binding.override_model_id } : {}),
+    ...(binding.override_binding_id !== undefined ? { override_binding_id: binding.override_binding_id } : {}),
+  };
 }

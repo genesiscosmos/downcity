@@ -121,8 +121,8 @@ export interface AgentOptions {
    */
   prepare_work_session?: (session: AgentSession, model_id?: string) => Promise<void>;
 
-  /** 解析用户登记的工作会话模型；必须拒绝未知模型，并使用目标 Workspace 的环境。 */
-  resolve_work_model?: (model_id: string, workspace?: WorkspaceRuntime) => Promise<ModelClient>;
+  /** 按精确模型与已保存授权来源恢复；必须拒绝来源变化，并使用目标 Workspace 环境。 */
+  resolve_work_model?: import("../model/SessionModelResolver.js").SessionModelResolver;
 
   /**
    * 当前 agent 使用的本地 Session 类。

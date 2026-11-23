@@ -1,31 +1,31 @@
-# @downcity/federation
+# @downcity/downtown
 
-@downcity/federation 提供 Downcity Federation 服务端运行时、Federation 用户与管理员客户端。
+@downcity/downtown 提供 Downcity Downtown 服务端运行时、Downtown 用户与管理员客户端。
 
 ## 安装
 
 ~~~bash
-pnpm add @downcity/federation
+pnpm add @downcity/downtown
 ~~~
 
 ## 远端访问
 
 ~~~ts
-import { Federation } from "@downcity/federation";
+import { Downtown } from "@downcity/downtown";
 
-const federation = new Federation({
+const federation = new Downtown({
   url: "https://fed.example.com",
 });
 
 const providers = await federation.user.account.providers();
 ~~~
 
-Federation 只有两个身份子域：
+Downtown 只有两个身份子域：
 
 - federation.user：用户登录、AI、Payment、Service 业务请求。
-- federation.admin：管理员 Session 和 Federation 管理。
+- federation.admin：管理员 Session 和 Downtown 管理。
 
-用户登录成功后，当前 Federation 实例会立即使用新 User Token：
+用户登录成功后，当前 Downtown 实例会立即使用新 User Token：
 
 ~~~ts
 await federation.user.account.login({
@@ -56,33 +56,34 @@ const models = await federation.admin.list_models();
 ## 进程内运行与 City 装配
 
 ~~~ts
-import { Federation, AIService } from "@downcity/federation";
+import { Downtown, AIService } from "@downcity/downtown";
 import { Database } from "@downcity/database-sqlite";
 import { AccountsService } from "@downcity/services";
 import { City } from "@downcity/city";
 
-const federation = new Federation({
+const federation = new Downtown({
   database: new Database({ filename: "/absolute/data/federation.sqlite" }),
 });
 federation.use(new AccountsService({ local_login: true }));
 federation.use(new AIService()); // 在 ready 前注册模型渠道。
 await federation.ready();
 // 完成账户登录后即可通过 user 访问业务。
-const city = new City({ federation });
+const city = new City();
+city.town.add("local", federation);
 await city.close();
 await federation.dispose();
 ~~~
 
-`database` 与 `url` 互斥，无需额外的 mode 参数。本地请求直接进入运行时，不监听端口、不回落到网络。不默认注册 Service；EnvService、账户、AI、队列和媒体存储由宿主显式装配。数据库通过 Federation 持有并释放；City 只借用，关闭 City 不会释放 Federation。
+`database` 与 `url` 互斥，无需额外的 mode 参数。本地请求直接进入运行时，不监听端口、不回落到网络。不默认注册 Service；EnvService、账户、AI、队列和媒体存储由宿主显式装配。数据库通过 Downtown 持有并释放；City 只借用，关闭 City 不会释放 Downtown。
 
 本地 `fetch(request, options?)` 是服务端入口，使用请求自己的身份，不继承 `user` 或 `admin` 的 Token。可信宿主初始化可通过第二参数传入 `trusted_identity`。普通用户和管理员凭证相互独立。
 
 以下配置可调整本地 HTTP 边界；同样适用于进程内业务请求。
 
 ~~~ts
-import { Federation } from "@downcity/federation";
+import { Downtown } from "@downcity/downtown";
 
-const fed = new Federation({
+const fed = new Downtown({
   database,
   http: {
     ordinary: {
@@ -97,11 +98,11 @@ const fed = new Federation({
 });
 ~~~
 
-Federation 负责账户、Token、Admin Session、Service、discovery 和 JWKS。
+Downtown 负责账户、Token、Admin Session、Service、discovery 和 JWKS。
 
 ## HTTP 边界与期限
 
-`Federation.fetch()` 默认在 middleware 和 Router 之前启用 HTTP 边界，有界读取原始正文后再进入业务。`LocalFederationOptions.http` 可部分覆盖 `ordinary`、`webhook`、`media`、`model_stream` 的 `max_body_bytes`、`body_timeout_ms`、`execution_timeout_ms`；省略字段使用所属类别的默认值。
+`Downtown.fetch()` 默认在 middleware 和 Router 之前启用 HTTP 边界，有界读取原始正文后再进入业务。`LocalFederationOptions.http` 可部分覆盖 `ordinary`、`webhook`、`media`、`model_stream` 的 `max_body_bytes`、`body_timeout_ms`、`execution_timeout_ms`；省略字段使用所属类别的默认值。
 
 | 类别 | 精确路径 | 正文上限 | 正文读取总期限 | 执行期限 / 等待响应头 |
 | --- | --- | --- | --- | --- |
@@ -126,7 +127,7 @@ Edge / local-node 通过 workspace 链接 SDK，开发构建会使用该默认�
 
 ~~~ts
 /** 配置语言模型执行期限，单位为毫秒。 */
-import { AIService } from "@downcity/federation";
+import { AIService } from "@downcity/downtown";
 
 const ai = new AIService({
   model_stream: {
@@ -157,7 +158,7 @@ Provider open 未返回时抛出 504，如 `MODEL_FIRST_OUTPUT_TIMEOUT` 或 `MOD
 
 ## HTTP 请求 ID 与错误
 
-每个进入 `Federation.fetch()` HTTP 边界的请求，在 middleware 前由服务端生成 `req_<UUID>`，忽略调用者提供的请求 ID。普通 HTTP 协议范围内的边界响应覆盖 `x-request-id`，包括 middleware 短路、413、408、504、成功、业务错误、native Response、流式响应和路由 404。Router、Action `Context.request_id`、`Context.locals.request_id` 与 AI relay 使用相同 ID。宿主在 Federation HTTP 边界之外直接处理的响应不属于此范围；HTTP 101 upgrade 不重新包装或托管，也不保证 `x-request-id` 响应头。
+每个进入 `Downtown.fetch()` HTTP 边界的请求，在 middleware 前由服务端生成 `req_<UUID>`，忽略调用者提供的请求 ID。普通 HTTP 协议范围内的边界响应覆盖 `x-request-id`，包括 middleware 短路、413、408、504、成功、业务错误、native Response、流式响应和路由 404。Router、Action `Context.request_id`、`Context.locals.request_id` 与 AI relay 使用相同 ID。宿主在 Downtown HTTP 边界之外直接处理的响应不属于此范围；HTTP 101 upgrade 不重新包装或托管，也不保证 `x-request-id` 响应头。
 
 框架捕获的抛错统一返回：
 

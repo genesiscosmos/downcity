@@ -13,7 +13,7 @@ import {
   type AdminUsageQuery,
   type ServiceDatabaseContext,
   type UserDailyUsageQuery,
-} from "@downcity/federation";
+} from "@downcity/downtown";
 import { raw_all, raw_first } from "./raw.js";
 import { TRANSACTION_TABLE } from "./schema.js";
 import type {

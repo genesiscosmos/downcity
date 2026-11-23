@@ -1,13 +1,17 @@
 /** CLI 宿主资源服务装配，复用当前 City/Repository；不拥有宿主启动或停止权限。 */
 import { ResourceService, ResourceCoordinator, ResourceError, GroupRepository } from "@downcity/city/local";
+import type { CliTownHost } from "../runtime/CliTownHost.js";
+import { CLI_TOWN_CAPABILITIES } from "../runtime/CliTownHost.js";
 import { read_power_agent_references } from "@downcity/powers";
 import type { City } from "@downcity/city";
 import type { CliLocalData } from "../runtime/LocalData.js";
-import { create_cli_agent, create_cli_workspace, resolve_cli_agent_model, reload_cli_workspace_env } from "../runtime/AgentAssembly.js";
+import { create_cli_agent, create_cli_agent_model, create_cli_workspace, resolve_cli_agent_model, reload_cli_workspace_env } from "../runtime/AgentAssembly.js";
 
 /** 将产品装配能力注入共用用例，门禁由宿主懒解析同时使用。 */
-export function create_cli_resources(data: CliLocalData, city: City, coordinator: ResourceCoordinator): ResourceService {
-  return new ResourceService({ extensions: data.extensions, root_path: data.root_path, agents: data.agents, workspaces: data.workspaces, coordinator, immutable: false,
+export function create_cli_resources(data: CliLocalData, city: City, coordinator: ResourceCoordinator, town_host: CliTownHost): ResourceService {
+  return new ResourceService({ extensions: data.extensions, root_path: data.root_path, agents: data.agents,
+    town: { capabilities: CLI_TOWN_CAPABILITIES, dispatch: (method, input) => town_host.dispatch(method, input) },
+    workspaces: data.workspaces, coordinator, immutable: false,
     agent_references: async (agent_id) => [
       ...new GroupRepository(data.database).list().filter((group) => group.member_agent_ids.includes(agent_id)).map((group) => ({ kind: "group", group_id: group.group_id })),
       ...data.city_tokens.list().filter((token) => token.agent_ids.includes(agent_id)).map((token) => ({ kind: "city_token", token_id: token.token_id })),
@@ -15,8 +19,8 @@ export function create_cli_resources(data: CliLocalData, city: City, coordinator
     ],
     host: {
       city,
-      create_agent: async (config) => await create_cli_agent({ config, extensions: data.extensions, root_path: data.root_path, resolve_federation: () => city.federation.current }),
-      resolve_model: async (model_id) => model_id ? await resolve_cli_agent_model(model_id, () => city.federation.current, undefined, data.extensions) : undefined,
+      create_agent: async (config) => await create_cli_agent({ config, extensions: data.extensions, root_path: data.root_path, town: city.town }),
+      resolve_model: async (model_id, config) => config ? create_cli_agent_model(config, city.town) : model_id ? await resolve_cli_agent_model(model_id, city.town) : undefined,
       resolve_workspace: async (config) => {
         coordinator.assert_available(undefined, config.workspace_id);
         const existing = city.workspaces.get(config.workspace_id);

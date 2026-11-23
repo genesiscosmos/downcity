@@ -3,32 +3,28 @@
  *
  * 关键点（中文）
  * - 这里只定义语音能力对模型与 City 语音服务的最低层协议。
- * - ASR 返回文本与可选时间轴；TTS 返回可直接写入会话的 Agent Session 消息。
+ * - ASR 返回文本与可选时间轴；TTS 使用标准媒体消息并将音频落到动作私有目录。
  * - 字段保持 JSON 可序列化，便于通过工具输入与 ActionResult 传递。
  */
 
-import type { ActionResultMessage } from "@downcity/type";
+import type { AIActionMessage } from "@downcity/downtown";
+import type { TownSourceStatus } from "@/town/types/Town.js";
 import type { PowerJsonObject, PowerJsonValue } from "@/power/index.js";
 
-/** Sound capability 使用的最小语音 AI 服务协议。 */
-export interface SoundAiService {
-  /** 读取当前可用的语音模型目录。 */
-  catalog(): Promise<{ all(): readonly unknown[] }>;
-
-  /** 执行一次语音识别。 */
-  asr(input: PowerJsonObject): Promise<unknown>;
-
-  /** 执行一次语音合成。 */
-  tts(input: PowerJsonObject): Promise<unknown>;
-}
 
 /** 语音能力分类。 */
 export type SoundCapabilityKind = "asr" | "tts";
 
 /** 语音模型信息。 */
 export interface SoundModel {
-  /** 模型唯一 ID。 */
+  /** Town 统一模型 ID；不能用裸模型名替代。 */
   id: string;
+  /** Downtown 来源连接 ID。 */
+  source_id?: string;
+  /** 来源连接的可读名称。 */
+  source_name?: string;
+  /** 本次目录捕获的授权来源；创建执行时由 Town 再次核验。 */
+  binding_id?: string;
   /** 模型展示名称。 */
   name: string;
   /** 模型说明文本。 */
@@ -45,6 +41,8 @@ export interface SoundModel {
 export interface SoundModelsResult {
   /** 满足筛选条件的模型列表。 */
   items: SoundModel[];
+  /** 各来源目录的成功或失败状态。 */
+  sources?: TownSourceStatus[];
 }
 
 /** `asr` 的模型输入。 */
@@ -111,8 +109,8 @@ export interface SoundTtsInput {
   provider_options?: PowerJsonObject;
 }
 
-/** TTS 提供方返回的 Session 消息，校验后只取其中的本地音频路径。 */
-export type SoundTtsResult = Extract<ActionResultMessage, { role: "agent" }>;
+/** Town 返回的标准媒体消息，落盘后只返回本地音频路径。 */
+export type SoundTtsResult = AIActionMessage;
 
 /**
  * `tts` 动作返回给模型的数据。

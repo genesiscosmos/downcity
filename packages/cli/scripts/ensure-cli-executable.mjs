@@ -14,7 +14,7 @@ const __dirname = path.dirname(__filename);
 const package_root = path.resolve(__dirname, "..");
 const cli_entry_paths = [
   path.join(package_root, "bin/downcity.js"),
-  path.join(package_root, "bin/downfed.js"),
+  path.join(package_root, "bin/downtown.js"),
 ];
 
 for (const cli_entry_path of cli_entry_paths) {

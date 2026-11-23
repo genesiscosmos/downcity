@@ -6,8 +6,8 @@
  * Provider 选择、认证流程和持久化分别由内部模块负责。
  */
 
-import { InstallableService } from "@downcity/federation";
-import type { EnvRequirement, ServiceInstallContext, ServiceAvailability } from "@downcity/federation";
+import { InstallableService } from "@downcity/downtown";
+import type { EnvRequirement, ServiceInstallContext, ServiceAvailability } from "@downcity/downtown";
 import { accounts_documentation } from "./documentation.js";
 import { AccountsRuntime } from "./AccountsRuntime.js";
 import { accounts_database_schemas } from "./database-schemas.js";

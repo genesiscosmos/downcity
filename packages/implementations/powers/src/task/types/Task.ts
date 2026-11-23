@@ -96,6 +96,10 @@ export interface TaskDefinitionV1 {
 
   /** 创建时捕获的结果交付 Session；未指定时为空。 */
   delivery_session?: TaskDeliverySession;
+  /** 显式创建或确认时固定的精确执行模型；缺失的历史任务必须先配置。 */
+  model_id?: string;
+  /** 与 model_id 配对的非秘密授权来源；定时触发不得从当前账号补全。 */
+  binding_id?: string;
 
   /** 是否多轮复核（仅 `kind=agent` 生效；默认单轮）。 */
   review?: boolean;

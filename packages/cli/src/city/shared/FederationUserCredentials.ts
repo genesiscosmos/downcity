@@ -1,6 +1,6 @@
 /** CLI 与运行中 City 的共享凭证读取器；数据库连接覆盖完整异步续期生命周期。 */
 import { UserSessionRepository } from "@downcity/city/local";
-import { Federation, type FetchLike } from "@downcity/federation";
+import { Downtown, type FetchLike } from "@downcity/downtown";
 import { create_cli_local_data } from "@/city/runtime/LocalData.js";
 
 /** 固定绑定登录 session_id，账户切换后已创建的请求不会借用其他用户凭证。 */
@@ -18,7 +18,7 @@ export async function revoke_saved_user_session(federation_url: string, session_
   const data = create_cli_local_data();
   const row = session_id ? new UserSessionRepository(data.database).invalidate(federation_url, session_id) : null;
   data.database.close();
-  const federation = new Federation({ url: federation_url, user_token });
+  const federation = new Downtown({ url: federation_url, user_token });
   try { await federation.user.account.logout(row?.refresh_token); return true; }
   catch { return false; }
   finally { await federation.dispose(); }

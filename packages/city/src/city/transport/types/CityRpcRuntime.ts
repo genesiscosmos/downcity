@@ -24,6 +24,8 @@ export interface CityRpcRuntimeOptions {
     readonly workspace: WorkspaceRuntime;
     /** 远程 Session 请求指定的模型标识。 */
     readonly model_id: string;
+    /** 已确认的非秘密授权来源；宿主须转交模型目录核对。 */
+    readonly binding_id?: string;
   }) => ReturnType<AgentSessionModelResolver>;
 
   /** 从事实源重新加载指定 Agent 的 Workspace Env。 */

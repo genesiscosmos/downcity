@@ -2,7 +2,7 @@
  * CLI Federation 用户鉴权交互类型。
  *
  * 关键点（中文）
- * - 登录 Provider 与状态机协议由 `@downcity/federation` 的 Federation 类型唯一拥有。
+ * - 登录 Provider 与状态机协议由 `@downcity/downtown` 的 Federation 类型唯一拥有。
  * - 本模块只描述 CLI 自己的菜单选项，以及邮箱注册专用响应。
  */
 

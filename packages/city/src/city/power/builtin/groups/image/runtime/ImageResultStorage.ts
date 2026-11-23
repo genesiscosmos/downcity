@@ -11,7 +11,7 @@
 
 import path from "node:path";
 import { outbound_http_fetch } from "@/http/OutboundHttp.js";
-import type { AIActionFilePart, AIActionMessagePart } from "@downcity/federation";
+import type { AIActionFilePart, AIActionMessagePart } from "@downcity/downtown";
 import type {
   ImageResultStorageInput,
   ImageResultStorageResult,

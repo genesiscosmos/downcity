@@ -7,7 +7,7 @@
  * - 命令层只负责 TUI 交互，数据读取、指标计算和展示格式分别放在 dashboard 模块中。
  */
 
-import { FederationAdmin } from "@downcity/federation";
+import { FederationAdmin } from "@downcity/downtown";
 import { fetch_dashboard_raw_data } from "@/federation/admin/dashboard/dashboard-data.js";
 import { dashboard_rows, dashboard_view_title, range_label } from "@/federation/admin/dashboard/dashboard-format.js";
 import { build_dashboard_snapshot } from "@/federation/admin/dashboard/dashboard-metrics.js";

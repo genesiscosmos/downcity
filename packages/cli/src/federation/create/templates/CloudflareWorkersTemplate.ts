@@ -1,5 +1,5 @@
 /**
- * Cloudflare Workers Federation 内置模板。
+ * Cloudflare Workers Downtown 内置模板。
  *
  * 模板声明 D1、Queue 和可选 R2，由 `fed deploy` 的 Cloudflare 内置部署器准备资源。
  */
@@ -51,7 +51,7 @@ export function create_cloudflare_workers_template_files(
           typecheck: "tsc -p tsconfig.json --noEmit",
         },
         dependencies: {
-          "@downcity/federation": "latest",
+          "@downcity/downtown": "latest",
           "@downcity/database-d1": "latest",
           "@downcity/services": "latest",
         },
@@ -92,7 +92,7 @@ export function create_cloudflare_workers_template_files(
 /** 创建 Cloudflare Worker 入口。 */
 function create_worker_entrypoint(): string {
   return `/**
- * Cloudflare Workers Federation entry.
+ * Cloudflare Workers Downtown entry.
  *
  * 关键说明（中文）
  * - D1、Queue 与 R2 binding 由 fed deploy 根据 federation.toml 生成。
@@ -101,11 +101,11 @@ function create_worker_entrypoint(): string {
 
 import {
   AIService,
-  Federation,
+  Downtown,
   EnvService,
   R2Storage,
   type FederationQueueMessage,
-} from "@downcity/federation";
+} from "@downcity/downtown";
 import { Database } from "@downcity/database-d1";
 import {
   AccountsService,
@@ -117,22 +117,22 @@ import {
 } from "@downcity/services";
 
 export interface Env {
-  /** Federation D1 数据库。 */
+  /** Downtown D1 数据库。 */
   DB: D1Database;
-  /** Federation 默认 R2 存储。 */
+  /** Downtown 默认 R2 存储。 */
   DOWNCITY_STORAGE: R2Bucket;
-  /** Federation 异步任务 Queue。 */
+  /** Downtown 异步任务 Queue。 */
   DOWNCITY_QUEUE: Queue<FederationQueueMessage>;
   /** R2 文件公开 URL 前缀。 */
   DOWNCITY_STORAGE_PUBLIC_URL_PREFIX?: string;
 }
 
-let federation_instance: Federation | undefined;
+let federation_instance: Downtown | undefined;
 
 /** 为请求或部署准备创建独立实例，共享相同服务声明。 */
-function create_federation(env: Env): Federation {
+function create_federation(env: Env): Downtown {
   const database = new Database({ binding: env.DB });
-  const federation = new Federation({ database, database_initialization: "prepared" });
+  const federation = new Downtown({ database, database_initialization: "prepared" });
   federation.queue.use({
     send: (message) => env.DOWNCITY_QUEUE.send(message, message.delay_ms
       ? { delaySeconds: Math.ceil(message.delay_ms / 1000) }
@@ -172,8 +172,8 @@ export async function prepare_database(env: Env): Promise<void> {
   await federation.prepare_database();
 }
 
-/** 读取当前 Worker isolate 的 Federation。 */
-function get_federation(env: Env): Federation {
+/** 读取当前 Worker isolate 的 Downtown。 */
+function get_federation(env: Env): Downtown {
   federation_instance ??= create_federation(env);
   return federation_instance;
 }

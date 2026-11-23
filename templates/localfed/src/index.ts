@@ -8,7 +8,7 @@
  */
 
 import { serve } from "@hono/node-server";
-import { AIService, EnvService, Federation } from "@downcity/federation";
+import { AIService, EnvService, Downtown } from "@downcity/downtown";
 import { Database } from "@downcity/database-sqlite";
 import { AccountsService } from "@downcity/services";
 import { DeepSeekChannel } from "./deepseek_channel.js";
@@ -25,7 +25,7 @@ if (!Number.isInteger(port) || port < 1 || port > 65_535) {
   throw new Error("PORT 必须是有效端口");
 }
 
-const federation = new Federation({
+const federation = new Downtown({
   database: new Database({ filename: database_path }),
 });
 

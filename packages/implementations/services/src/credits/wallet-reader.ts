@@ -2,7 +2,7 @@
  * 本人钱包历史投影：过期卡当前记录可被清理，历史始终从不可变创建交易和流水恢复。
  * 不透传 request_json、metadata 或来源凭据；所有查询强制 user_id 与 card_id 联合约束。
  */
-import { httpError, type ServiceDatabaseContext } from "@downcity/federation";
+import { httpError, type ServiceDatabaseContext } from "@downcity/downtown";
 import { raw_all } from "./raw.js";
 import { EPHEMERAL_CARD_TABLE, TRANSACTION_TABLE, TRANSACTION_ENTRY_TABLE } from "./schema.js";
 import type { CreditsEphemeralCard } from "./types/Card.js";

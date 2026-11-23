@@ -1,5 +1,5 @@
 /**
- * Local Node.js Federation 内置模板。
+ * Local Node.js Downtown 内置模板。
  *
  * 关键说明（中文）
  * - 使用独立 SQLite Database Adapter 保存本地数据。
@@ -50,7 +50,7 @@ export function create_local_node_template_files(
           typecheck: "tsc -p tsconfig.json --noEmit",
         },
         dependencies: {
-          "@downcity/federation": "latest",
+          "@downcity/downtown": "latest",
           "@downcity/database-sqlite": "latest",
           "@downcity/services": "latest",
           "@hono/node-server": "latest",
@@ -81,7 +81,7 @@ export function create_local_node_template_files(
     {
       path: ".env.example",
       content: [
-        "# Local Federation runtime settings.",
+        "# Local Downtown runtime settings.",
         "DOWNCITY_FEDERATION_DATABASE_URL=file:./data.sqlite",
         "HOST=127.0.0.1",
         "# fed deploy uses deployment.port, defaulting to 12314.",
@@ -99,10 +99,10 @@ export function create_local_node_template_files(
   ];
 }
 
-/** 创建最小本地 Federation 入口。 */
+/** 创建最小本地 Downtown 入口。 */
 function create_local_entrypoint(): string {
   return `/**
- * Local Node.js Federation entry.
+ * Local Node.js Downtown entry.
  *
  * 关键说明（中文）
  * - 独立发布优先使用 CLI 提供的数据库绝对路径，开发默认使用 ./data.sqlite。
@@ -112,7 +112,7 @@ function create_local_entrypoint(): string {
 
 import { join } from "node:path";
 import { serve } from "@hono/node-server";
-import { AIService, EnvService, Federation } from "@downcity/federation";
+import { AIService, EnvService, Downtown } from "@downcity/downtown";
 import { Database } from "@downcity/database-sqlite";
 import {
   AccountsService,
@@ -153,7 +153,7 @@ if (!Number.isInteger(port) || port < 1 || port > 65535) {
 const database = new Database({
   filename: resolve_sqlite_path(),
 });
-const federation = new Federation({ database });
+const federation = new Downtown({ database });
 
 federation.use(new EnvService());
 const accounts_service = new AccountsService({ local_login: true });
@@ -180,7 +180,7 @@ serve({
   },
 });
 
-console.log(\`Federation ready at http://\${host}:\${port}\`);
+console.log(\`Downtown ready at http://\${host}:\${port}\`);
 `;
 }
 

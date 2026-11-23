@@ -4,15 +4,15 @@
  * Worker 只拥有平台入口和 D1 binding，领域能力仍由 Federation 负责。
  */
 
-import { Federation } from "@downcity/federation";
+import { Downtown } from "@downcity/downtown";
 import { Database } from "@downcity/database-d1";
 import type { Env } from "./types/env.js";
 
-let federation: Federation | undefined;
+let federation: Downtown | undefined;
 
 /** 共享服务装配；准备实例和请求实例各自拥有独立生命周期。 */
-function create_federation(env: Env): Federation {
-  return new Federation({
+function create_federation(env: Env): Downtown {
+  return new Downtown({
     database: new Database({ binding: env.DB }),
     database_initialization: "prepared",
   });
@@ -25,7 +25,7 @@ export async function prepare_database(env: Env): Promise<void> {
 }
 
 /** 为当前 Worker isolate 创建并复用 Federation。 */
-function get_federation(env: Env): Federation {
+function get_federation(env: Env): Downtown {
   federation ??= create_federation(env);
   return federation;
 }

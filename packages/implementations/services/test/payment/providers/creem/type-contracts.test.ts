@@ -6,14 +6,14 @@
  * - 覆盖统一 PaymentService、provider 和主要返回类型
  */
 
-import { Federation } from "@downcity/federation";
+import { Downtown } from "@downcity/downtown";
 import {
   creemPaymentProvider,
   PaymentService,
   type PaymentCheckoutCreateResult,
 } from "../../../../src/index.js";
 
-const base = new Federation({ database: {} as any });
+const base = new Downtown({ database: {} as any });
 
 base.use(new PaymentService({
   resolve_topup: ({ topup_amount_minor }) => ({ credits: topup_amount_minor * 10_000 }),

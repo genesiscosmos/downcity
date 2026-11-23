@@ -13,6 +13,8 @@ export interface SessionExecutionProfileReference {
   version: number;
   /** 实际模型身份；恢复时禁止静默替换。 */
   model_id: string;
+  /** 实际模型捕获的非秘密授权来源；缺省也须精确恢复，不能补成当前账户。 */
+  binding_id?: string;
   /** 宿主业务创建键；存在时用于崩溃后的幂等创建。 */
   creation_key?: string;
 }
@@ -30,6 +32,8 @@ export interface SessionExecutionProfileContext extends SessionDescriptor {
   workspace_id?: string;
   /** 创建时请求或恢复时固定的模型身份。 */
   model_id?: string;
+  /** 恢复时必须转交模型解析器的已保存授权来源；创建时可由实际模型捕获。 */
+  binding_id?: string;
   /** 当前 Agent 默认模型；仅首次创建可作为默认选择。 */
   default_model?: ModelClient;
 }
@@ -66,6 +70,8 @@ export interface SessionExecutionProfileSelection {
   execution_profile_version: number;
   /** 可选模型选择；最终记录实际模型身份。 */
   model_id?: string;
+  /** 宿主已确认的模型授权来源；提供时创建也必须匹配，不得静默捕获其他账户。 */
+  binding_id?: string;
   /** 可选稳定业务创建键。 */
   creation_key?: string;
 }

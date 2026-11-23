@@ -16,7 +16,7 @@ ALL_PACKAGES=(
   "sandbox-microsandbox"
   "sandbox-native"
   "workspace-cloudflare-computer"
-  "federation"
+  "downtown"
   "agent"
   "city"
   "database-d1"
@@ -35,7 +35,7 @@ usage() {
   echo ""
   echo "Package options:"
   echo "  --type --sandbox-microsandbox --sandbox-native"
-  echo "  --agent --city --workspace-cloudflare-computer --federation"
+  echo "  --agent --city --workspace-cloudflare-computer --downtown"
   echo "  --database-d1 --database-sqlite --database-postgresql"
   echo "  --services --powers --ui --cli --all"
   echo ""
@@ -105,7 +105,7 @@ while [[ $# -gt 0 ]]; do
     --agent) add_package "agent" ;;
     --city) add_package "city" ;;
     --workspace-cloudflare-computer) add_package "workspace-cloudflare-computer" ;;
-    --federation) add_package "federation" ;;
+    --federation|--downtown) add_package "downtown" ;;
     --database-d1) add_package "database-d1" ;;
     --database-sqlite) add_package "database-sqlite" ;;
     --database-postgresql) add_package "database-postgresql" ;;

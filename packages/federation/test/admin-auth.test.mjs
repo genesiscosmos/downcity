@@ -3,7 +3,7 @@
 import assert from "node:assert/strict"
 import test from "node:test"
 import {
-  Federation,
+  Downtown,
   create_federation_admin_password_hash,
 } from "../bin/index.js"
 import { createSqliteDb } from "./sqlite-db.mjs"
@@ -22,7 +22,7 @@ test("Federation administrator password hash uses Worker-compatible PBKDF2 itera
 
 /** 管理员密码只保存摘要，登录返回的 Session 可访问管理接口并支持退出。 */
 test("Federation administrator login stores no plaintext credential and issues revocable sessions", async () => {
-  const federation = new Federation({ database: createSqliteDb(":memory:") })
+  const federation = new Downtown({ database: createSqliteDb(":memory:") })
   await federation.health()
   await write_administrator(federation, INITIAL_ADMIN)
 
@@ -59,7 +59,7 @@ test("Federation administrator login stores no plaintext credential and issues r
 /** 部署控制面直接更新管理员数据库并撤销全部旧会话。 */
 test("Federation administrator database reset revokes previous sessions", async () => {
   const database = createSqliteDb(":memory:")
-  const first = new Federation({ database })
+  const first = new Downtown({ database })
   await first.health()
   await write_administrator(first, INITIAL_ADMIN)
   const old_login = await login(first, "admin_initial", "test-admin-password")
@@ -83,7 +83,7 @@ test("Federation administrator database reset revokes previous sessions", async 
       values: { status: "revoked", revoked_at: now },
     })
   }
-  const recovered = new Federation({ database })
+  const recovered = new Downtown({ database })
   await recovered.health()
 
   const old_session = await recovered.fetch(new Request("http://localhost/v1/federation/instruction", {
@@ -93,7 +93,7 @@ test("Federation administrator database reset revokes previous sessions", async 
   assert.equal((await login(recovered, "admin_initial", "test-admin-password")).response.status, 401)
   assert.equal((await login(recovered, "admin_recovered", "recovered-password")).response.status, 200)
 
-  const idempotent = new Federation({ database })
+  const idempotent = new Downtown({ database })
   await idempotent.health()
   assert.equal((await login(idempotent, "admin_recovered", "recovered-password")).response.status, 200)
 })

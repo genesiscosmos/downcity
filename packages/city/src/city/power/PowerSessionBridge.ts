@@ -41,7 +41,7 @@ export function create_power_session_collection(input: {
 }): PowerSessionCollection {
   const read_sessions = (): AgentSessionCollection => input.get_sessions();
 
-  /** 按来源 Session 复制模型选择；来源未配置模型时保持默认。 */
+  /** 复制来源 Session 捕获的模型与授权 binding；没有历史模型时要求显式选择。 */
   const inherit_model = async (
     session: AgentSession,
     source?: { readonly session_id: string; readonly type?: string },
@@ -53,7 +53,7 @@ export function create_power_session_collection(input: {
       { workspace: input.workspace },
     );
     const source_model = source_session.get("model");
-    if (!source_model) return;
+    if (!source_model) throw Object.assign(new Error("Source Session requires an explicit model selection before inheritance"), { code: "session_model_required" });
     await session.set(
       { model: source_model },
       { persist_action: false, publish_mutation: false },

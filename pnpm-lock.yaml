@@ -60,7 +60,7 @@ importers:
       '@downcity/agent':
         specifier: workspace:^
         version: link:../agent
-      '@downcity/federation':
+      '@downcity/downtown':
         specifier: workspace:^
         version: link:../federation
       '@downcity/type':
@@ -145,7 +145,7 @@ importers:
       '@downcity/city':
         specifier: workspace:^
         version: link:../city
-      '@downcity/federation':
+      '@downcity/downtown':
         specifier: workspace:^
         version: link:../federation
       '@downcity/powers':
@@ -283,7 +283,7 @@ importers:
       '@cloudflare/workers-types':
         specifier: ^4.20260530.1
         version: 4.20260530.1
-      '@downcity/federation':
+      '@downcity/downtown':
         specifier: workspace:*
         version: link:../../../federation
       miniflare:
@@ -302,7 +302,7 @@ importers:
         specifier: ^3.4.9
         version: 3.4.9
     devDependencies:
-      '@downcity/federation':
+      '@downcity/downtown':
         specifier: workspace:*
         version: link:../../../federation
       typescript:
@@ -318,7 +318,7 @@ importers:
         specifier: ^0.45.2
         version: 0.45.2(@cloudflare/workers-types@4.20260530.1)(@opentelemetry/api@1.9.1)(@types/better-sqlite3@7.6.13)(better-sqlite3@13.0.3)(bun-types@1.4.4)(kysely@0.29.2)(postgres@3.4.9)(sql.js@1.14.1)
     devDependencies:
-      '@downcity/federation':
+      '@downcity/downtown':
         specifier: workspace:*
         version: link:../../../federation
       '@types/better-sqlite3':
@@ -466,7 +466,7 @@ importers:
       '@downcity/database-sqlite':
         specifier: workspace:*
         version: link:../databases/sqlite
-      '@downcity/federation':
+      '@downcity/downtown':
         specifier: workspace:*
         version: link:../../federation
       '@types/better-sqlite3':
@@ -724,7 +724,7 @@ importers:
       '@downcity/city':
         specifier: workspace:*
         version: link:../../../packages/city
-      '@downcity/federation':
+      '@downcity/downtown':
         specifier: workspace:*
         version: link:../../../packages/federation
       '@hono/node-server':
@@ -783,7 +783,7 @@ importers:
       '@downcity/database-d1':
         specifier: workspace:*
         version: link:../../packages/implementations/databases/d1
-      '@downcity/federation':
+      '@downcity/downtown':
         specifier: workspace:*
         version: link:../../packages/federation
     devDependencies:
@@ -802,7 +802,7 @@ importers:
       '@downcity/database-sqlite':
         specifier: workspace:*
         version: link:../../packages/implementations/databases/sqlite
-      '@downcity/federation':
+      '@downcity/downtown':
         specifier: workspace:*
         version: link:../../packages/federation
       '@downcity/services':

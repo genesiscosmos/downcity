@@ -21,7 +21,7 @@ import { manage_resources_tui } from "../resources/ResourceTui.js";
 import type { tui_prompt_option } from "@/shared/types/TuiPrompt.js";
 
 /** Agents 首页中的 City 级动作。 */
-export type agent_list_city_action = "federation" | "powers" | "language" | "help";
+export type agent_list_city_action = "powers" | "language" | "help";
 
 /** Agent 列表页面的 City 级导航扩展。 */
 export interface interactive_agent_manager_options {
@@ -117,14 +117,6 @@ async function build_agent_options(
             disabled: true,
           },
           {
-            label: "Federation",
-            value: "federation",
-            hint: t({
-              zh: "配置 Federation 登录、当前 Federation 与账户",
-              en: "Configure Federation login, the current Federation, and account",
-            }),
-          },
-          {
             label: "Powers",
             value: "powers",
             hint: t({
@@ -149,8 +141,7 @@ async function build_agent_options(
 }
 
 function is_city_action(value: string): value is agent_list_city_action {
-  return value === "federation"
-    || value === "powers"
+  return value === "powers"
     || value === "language"
     || value === "help";
 }

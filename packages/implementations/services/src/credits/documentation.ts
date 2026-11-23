@@ -1,5 +1,5 @@
 /** Credits 的 Card、Transaction 与钱包投影文档；不把记账写入暴露为用户权限。 */
-import type { ApiDocumentation, ApiSchema } from "@downcity/federation";
+import type { ApiDocumentation, ApiSchema } from "@downcity/downtown";
 import { object_schema as obj, array_schema as arr, items_schema, text_schema as text, enum_schema, number_schema as num, time_schema, metadata_schema, nullable_schema } from "../shared/documentation.js";
 
 const user_id = text("Federation user ID");

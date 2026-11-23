@@ -7,7 +7,7 @@
  * - 如果模型缺少 provider key，会在这里直接显示缺失项。
  */
 
-import { FederationAdmin } from "@downcity/federation";
+import { FederationAdmin } from "@downcity/downtown";
 import { adminErrorMessage, isAdminNotFoundError, rethrowAdminAuthError } from "@/federation/admin/auth-error.js";
 import { t } from "@/shared/CliLocale.js";
 import type { admin_tui_runtime } from "@/federation/types/AdminTui.js";

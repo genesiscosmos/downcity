@@ -8,7 +8,7 @@
  */
 
 import { shared_user_token_resolver } from "./FederationUserCredentials.js";
-import { Federation, type FederationUser } from "@downcity/federation";
+import { Downtown, type FederationUser } from "@downcity/downtown";
 import {
   DEFAULT_FEDERATION_URL,
   normalize_federation_url,
@@ -99,7 +99,7 @@ export class FederationSessionResolver {
     federation_user: FederationUser;
 
     /** 绑定当前用户身份的完整 Federation 客户端。 */
-    federation: Federation;
+    federation: Downtown;
   }> {
     const user = await this.resolve_current_user({
       ...input,
@@ -109,7 +109,7 @@ export class FederationSessionResolver {
     if (!user.user_token) {
       throw new Error("Federation user token is required. Run `city federation login` first.");
     }
-    const federation = new Federation({ url: user.federation_url, user_token: user.user_token, resolve_user_token: shared_user_token_resolver(user.federation_url, user.session_id) });
+    const federation = new Downtown({ url: user.federation_url, user_token: user.user_token, resolve_user_token: shared_user_token_resolver(user.federation_url, user.session_id) });
     const verified_user = input.verify_user === false ? user : await this.verify_current_user(user, user.user_id, federation);
     return {
       user: verified_user,
@@ -119,10 +119,10 @@ export class FederationSessionResolver {
   }
 
   /** 宿主启动时仅从已存身份离线构建绑定；未登录时保持本地运行。 */
-  async create_runtime_client(): Promise<Federation | undefined> {
+  async create_runtime_client(): Promise<Downtown | undefined> {
     const user = await this.resolve_current_user({ require_user_token: false, verify_user: false });
     return user.user_token
-      ? new Federation({ url: user.federation_url, user_token: user.user_token, resolve_user_token: shared_user_token_resolver(user.federation_url, user.session_id) })
+      ? new Downtown({ url: user.federation_url, user_token: user.user_token, resolve_user_token: shared_user_token_resolver(user.federation_url, user.session_id) })
       : undefined;
   }
 
@@ -134,9 +134,9 @@ export class FederationSessionResolver {
   private async verify_current_user(
     user: ResolvedFederationUser,
     session_user_id?: string,
-    current?: Federation,
+    current?: Downtown,
   ): Promise<ResolvedFederationUser> {
-    const federation = current ?? new Federation({
+    const federation = current ?? new Downtown({
       url: user.federation_url,
       user_token: user.user_token,
       resolve_user_token: shared_user_token_resolver(user.federation_url, user.session_id),

@@ -339,6 +339,7 @@ export class TaskPower extends Power {
       context.storage,
       this.executions,
       () => this.notify_changed(),
+      this.options.model_host,
     );
     this.definitions = definitions;
     const scheduler = new TaskSchedulerCoordinator(

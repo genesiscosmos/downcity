@@ -221,12 +221,14 @@ export async function createTaskDefinition(params: {
     return await params.definitions.mutate(async (storage) => {
       // 标题是可编辑内容，重复标题不合并任务；稳定身份由创建时生成。
       const target_task_id = taskId;
+      const model_binding = kind === "agent" ? await params.definitions.capture_model({ agent_id, workspace_id, delivery_session: params.delivery_session }) : {};
       const written = await writeTask({
         taskId: target_task_id,
         storage,
         overwrite: false,
         task: {
           taskId: target_task_id,
+          ...model_binding,
           title,
           when: validate_task_schedule(whenNormalized.value),
           agent_id: kind === "user" ? "" : agent_id,
@@ -336,12 +338,18 @@ export async function updateTaskDefinition(params: {
           ? req.body.trim()
           : current.body;
 
+      const target_changed = kind !== current.kind || agent_id !== current.agent_id || workspace_id !== current.workspace_id;
+      const model_binding = kind === "agent" && (target_changed || req.confirm_model === true)
+        ? await params.definitions.capture_model({ agent_id, workspace_id, delivery_session: current.delivery_session })
+        : kind === "agent" ? { model_id: current.model_id, binding_id: current.binding_id } : {};
       const written = await writeTask({
         storage,
         taskId: task_id,
         overwrite: true,
         task: {
           ...current,
+          model_id: undefined, binding_id: undefined,
+          ...model_binding,
           title: nextTitle,
           when: whenNormalized.value,
           agent_id,
@@ -427,6 +435,7 @@ export async function runTaskDefinition(params: {
         }
         return false;
       }
+      await params.definitions.validate_model(task);
       const workflow = normalize_task_state(task.workflow);
       workflow.progress = "in_progress";
       workflow.organized = true;
@@ -456,6 +465,7 @@ export async function runTaskDefinition(params: {
           storage,
           taskId,
           task_snapshot: task,
+          model_host: params.definitions.model_host,
           trigger,
           executionId,
           delivery: params.delivery,

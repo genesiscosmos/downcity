@@ -401,8 +401,12 @@ export interface MemoryPowerOptions {
   readonly on_changed?: import("./MemoryChange.js").MemoryChangeHandler;
   /** 可信可重放业务事实接线；自动开关单独按 Agent/Workspace/target 持久化，默认关闭。 */
   dreaming?: import("./MemoryDream.js").MemoryDreamOptions;
-  /** 专用 Memory Session 的模型；省略时首次创建使用所属 Agent 默认模型。 */
+  /** 专用 Memory 模型；新 Job 在提交时捕获，已有 Job 不跟随配置变化。 */
   model_id?: string;
+  /** 配置中明确确认的非秘密持久授权来源；与 model_id 配对，不能在后台补成当前账号。 */
+  binding_id?: string;
+  /** 提交时从可信宿主读取默认/专用模型基线；不会用于恢复或重试已有 Job。 */
+  resolve_model_binding?: import("./MemoryModelBinding.js").MemoryModelResolver;
   /** 宿主注入的知识后端；省略时创建 Builtin。生命周期由 Power 管理，Profile 不经过此后端。 */
   provider?: MemoryProvider;
   /** City 为当前 MemoryPower 唯一实例分配的共享绝对数据目录；通常由 City 生命周期提供。 */

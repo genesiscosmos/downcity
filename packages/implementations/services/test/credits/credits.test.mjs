@@ -7,7 +7,7 @@ import fs from "node:fs/promises"
 import os from "node:os"
 import path from "node:path"
 import test from "node:test"
-import { Federation } from "@downcity/federation"
+import { Downtown } from "@downcity/downtown"
 import { CreditsService } from "../../bin/index.js"
 import { createSqliteDb } from "./sqlite-db.mjs"
 
@@ -17,7 +17,7 @@ test("CreditsService manages primary and ephemeral cards atomically", async () =
   try {
     process.chdir(temp_dir)
     const db = createSqliteDb(path.join(temp_dir, "test.sqlite"))
-    const federation = new Federation({ database: db })
+    const federation = new Downtown({ database: db })
     const credits = new CreditsService()
     federation.use(credits)
     await federation.health()
@@ -171,7 +171,7 @@ test("CreditsService enforces expiration, active card, safe total, and full idem
   try {
     process.chdir(temp_dir)
     const db = createSqliteDb(path.join(temp_dir, "test.sqlite"))
-    const federation = new Federation({ database: db })
+    const federation = new Downtown({ database: db })
     const credits = new CreditsService()
     federation.use(credits)
     await federation.health()

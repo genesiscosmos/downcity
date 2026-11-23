@@ -131,6 +131,8 @@ export interface TaskWorkspaceSnapshot {
 
 /** 创建或替换任务编辑内容的输入；工作进度由单独命令管理。 */
 export interface TaskWorkspaceSaveInput {
+  /** 用户明确确认采用当前执行模型及账号；仅 true 才刷新同目标的既有模型基线。 */
+  confirm_model?: boolean;
   /** 直接创建的客户端 UUID；网络重试复用，生成稳定身份。 */
   create_id?: string;
   /** 修改时提供稳定 ID；创建时为空。 */

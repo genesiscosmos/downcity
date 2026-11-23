@@ -50,11 +50,11 @@ export function create_power_session_host(power_id: string, access: CityPowerRun
           ...descriptor, workspace_id: input.workspace_id,
           execution_profile_id: input.execution_profile_id,
           execution_profile_version: input.execution_profile_version,
-          model_id: input.model_id, creation_key: input.creation_key,
+          model_id: input.model_id, binding_id: input.binding_id, creation_key: input.creation_key,
         });
         return { session_id: session.id };
       }
-      if (input.execution_profile_version !== undefined || input.model_id || input.creation_key) throw new Error("execution_profile_required: execution options require a registered profile");
+      if (input.execution_profile_version !== undefined || input.model_id || input.binding_id || input.creation_key) throw new Error("execution_profile_required: execution options require a registered profile");
       const workspace = input.workspace_id ? await access.enter_workspace(input.agent_id, input.workspace_id) : undefined;
       const session = await agent.sessions.create({ workspace, ...descriptor, inherit_workspace: input.inherit_workspace === true });
       return { session_id: session.id };

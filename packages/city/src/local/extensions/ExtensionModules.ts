@@ -8,7 +8,7 @@ import { ExtensionFailure } from "./ExtensionError.js";
 /** 独立 Node 安装可用的模块映射；Electron 组合根需提供其实际共享 SDK 模块。 */
 export function resolve_extension_host_modules(): Readonly<Record<string, string>> {
   const modules: Record<string, string> = {};
-  for (const specifier of ["@downcity/agent", "@downcity/type", "@downcity/federation", "@downcity/city", "@downcity/city/power", "@downcity/city/power/react", "@downcity/city/local", "@downcity/city/extensions", "@downcity/agent/tools", "react", "react-dom", "react/jsx-runtime", "react/jsx-dev-runtime"]) {
+  for (const specifier of ["@downcity/agent", "@downcity/type", "@downcity/downtown", "@downcity/city", "@downcity/city/power", "@downcity/city/power/react", "@downcity/city/local", "@downcity/city/extensions", "@downcity/agent/tools", "react", "react-dom", "react/jsx-runtime", "react/jsx-dev-runtime"]) {
     try { modules[specifier] = fileURLToPath(import.meta.resolve(specifier)); }
     catch {
       if (specifier.startsWith("react") || specifier === "@downcity/city/extensions") continue;

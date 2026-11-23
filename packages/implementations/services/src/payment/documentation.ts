@@ -2,7 +2,7 @@
  * Payment 注册文档，覆盖 checkout、套餐、本人订单、管理事件与原文验签 webhook。
  * paid 是支付事实，fulfillment 是独立的权益交付事实，浏览器结果页不能确认支付。
  */
-import type { ApiDocumentation, ApiSchema } from "@downcity/federation";
+import type { ApiDocumentation, ApiSchema } from "@downcity/downtown";
 import { object_schema as obj, items_schema, text_schema as text, enum_schema, number_schema as num, time_schema, nullable_schema as nullable } from "../shared/documentation.js";
 
 const payment_id = text("Local payment ID");

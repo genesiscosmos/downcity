@@ -129,6 +129,8 @@ export interface RemoteSessionSetInput {
    * - 服务端宿主负责把模型 ID 解析为运行时 ModelClient。
    */
   model_id?: string;
+  /** 显式选择时预期的非秘密授权来源；宿主须核对，省略表示由本次选择捕获当前来源。 */
+  binding_id?: string;
 
   /** 当前远程 Session 的安全策略。 */
   security?: AgentSessionSecurityConfig;

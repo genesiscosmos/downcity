@@ -3,7 +3,7 @@ import fs from "node:fs/promises"
 import os from "node:os"
 import path from "node:path"
 import test from "node:test"
-import { Federation } from "@downcity/federation"
+import { Downtown } from "@downcity/downtown"
 import { createSqliteDb } from "../usage/sqlite-db.mjs"
 import { FeedbackService } from "../../bin/index.js"
 import { create_test_admin_session } from "../admin-fixture.mjs"
@@ -15,7 +15,7 @@ test("feedbackService manages user feedback and admin replies", async () => {
   try {
     process.chdir(tempDir)
     const db = createSqliteDb(path.join(tempDir, "test.sqlite"))
-    const base = new Federation({ database: db })
+    const base = new Downtown({ database: db })
     base.use(new FeedbackService())
 
     await base.health()

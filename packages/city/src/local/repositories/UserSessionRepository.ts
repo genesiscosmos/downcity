@@ -4,7 +4,7 @@
  * 接管崩溃进程或恢复网络时使用同一次轮换，提交使用租约及旧凭证 CAS 防止退出复活。
  */
 import { randomUUID } from "node:crypto";
-import type { UserSessionCredentials, FetchLike } from "@downcity/federation";
+import type { UserSessionCredentials, FetchLike } from "@downcity/downtown";
 import type { LocalDatabase } from "../database/LocalDatabase.js";
 import type { StoredUserSession } from "../types/UserSession.js";
 import { LocalSettingRepository } from "./LocalSettingRepository.js";

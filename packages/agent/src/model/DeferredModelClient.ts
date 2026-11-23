@@ -10,6 +10,8 @@ import type { ModelCall, ModelClient, ModelStreamEvent } from "@downcity/type";
 export class DeferredModelClient implements ModelClient {
   /** Session 持久化的稳定模型 ID。 */
   readonly id: string;
+  /** 已保存的非秘密授权来源；缺省也必须精确匹配，不能在解析时补成当前身份。 */
+  readonly binding_id?: string;
   /** 宿主提供的模型解析函数，只在执行需要完整客户端时调用。 */
   private readonly resolve_client: () => Promise<ModelClient>;
   /** 同一占位句柄共享的解析任务，拒绝后清空以允许重试。 */
@@ -17,8 +19,9 @@ export class DeferredModelClient implements ModelClient {
   /** 已核实 ID 的客户端，也用于提供恢复后的只读元信息。 */
   private resolved_client?: ModelClient;
 
-  constructor(model_id: string, resolve_client: () => Promise<ModelClient>) {
+  constructor(model_id: string, resolve_client: () => Promise<ModelClient>, binding_id?: string) {
     this.id = model_id;
+    this.binding_id = binding_id;
     this.resolve_client = resolve_client;
   }
 
@@ -32,6 +35,9 @@ export class DeferredModelClient implements ModelClient {
   async resolve(): Promise<ModelClient> {
     this.pending_client ??= Promise.resolve().then(this.resolve_client).then((client) => {
       if (client.id !== this.id || client === this) throw new Error(`Host resolved a different Session model: ${this.id}`);
+      if (client.binding_id !== this.binding_id) {
+        throw Object.assign(new Error(`Session model authorization requires explicit selection: ${this.id}`), { code: "session_model_binding_changed" });
+      }
       this.resolved_client = client;
       return client;
     }).catch((error) => { this.pending_client = undefined; throw error; });
@@ -52,7 +58,7 @@ export async function resolve_model_client(model: ModelClient | undefined): Prom
     if (visited.has(current)) throw new Error(`Circular deferred Session model: ${current.id}`);
     visited.add(current);
     const resolved = await current.resolve();
-    if (resolved.id !== current.id) throw new Error(`Host resolved a different Session model: ${current.id}`);
+    if (resolved.id !== current.id || resolved.binding_id !== current.binding_id) throw new Error(`Host resolved a different Session model identity: ${current.id}`);
     current = resolved;
   }
   return current;

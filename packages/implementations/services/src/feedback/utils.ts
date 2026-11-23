@@ -7,7 +7,7 @@
  * - JSON 上下文序列化失败时退化为 `{}`，避免用户反馈因为 meta 异常丢失
  */
 
-import { httpError } from "@downcity/federation";
+import { httpError } from "@downcity/downtown";
 import type { FeedbackMessage, FeedbackStatus } from "./types.js";
 
 const FEEDBACK_STATUSES: readonly FeedbackStatus[] = [

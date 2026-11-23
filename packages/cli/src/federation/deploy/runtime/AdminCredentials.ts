@@ -7,7 +7,7 @@
 
 import {
   create_federation_admin_password_hash,
-} from "@downcity/federation";
+} from "@downcity/downtown";
 import { randomUUID } from "node:crypto";
 import { CliError } from "@/shared/CliError.js";
 import { emitCliBlock } from "@/shared/CliReporter.js";

@@ -1,12 +1,12 @@
 #!/usr/bin/env node
 
 /**
- * downfed CLI 根命令装配模块。
+ * downtown CLI 根命令装配模块。
  *
  * 关键点（中文）
- * - `downfed` 是 Federation 管理器，负责部署与服务资源。
- * - 默认无参数时打开交互式 Federation 管理界面。
- * - 本模块承载 Federation commander 根命令，`src/index.ts` 只负责按命令名分发。
+ * - `downtown` 是 Downtown 管理器，负责部署与服务资源。
+ * - 默认无参数时打开交互式 Downtown 管理界面。
+ * - 本模块承载 Downtown commander 根命令，`src/index.ts` 只负责按命令名分发。
  */
 
 import { readFileSync } from "node:fs";
@@ -41,22 +41,22 @@ const packageJson = JSON.parse(
 ) as { version: string };
 
 /**
- * 执行 downfed CLI。
+ * 执行 downtown CLI。
  */
-export async function runDownfedCli(): Promise<void> {
+export async function run_downtown_cli(): Promise<void> {
   const program = new Command();
   const argv = process.argv.slice(2);
   const cli_locale = resolveCliLocale({
     argv,
-    persisted_locale: readPersistedCliLocale(),
+    persisted_locale: argv.includes("--help") ? undefined : readPersistedCliLocale(),
   });
   setCliLocale(cli_locale);
 
   program
-    .name("downfed")
+    .name("downtown")
     .description(t({
-      zh: "Downcity Federation CLI — 管理 Federation 与服务资源",
-      en: "Downcity Federation CLI — manage Federation and service resources",
+      zh: "Downcity Downtown CLI — 管理 Downtown 与服务资源",
+      en: "Downcity Downtown CLI — manage Downtown and service resources",
     }))
     .version(packageJson.version, "-v, --version");
 
@@ -74,11 +74,11 @@ export async function runDownfedCli(): Promise<void> {
   program
     .command("manage")
     .description(t({
-      zh: "选择本次 Federation 并打开管理工作区",
-      en: "select a Federation and open its management workspace",
+      zh: "选择本次 Downtown 并打开管理工作区",
+      en: "select a Downtown and open its management workspace",
     }))
-    .option("--id <id>", "Federation ID (exact match)")
-    .option("--name <name>", "Federation name (exact match)")
+    .option("--id <id>", "Downtown ID (exact match)")
+    .option("--name <name>", "Downtown name (exact match)")
     .helpOption("--help", helpText())
     .action(createVersionBanner(packageJson.version, async (options: FederationTargetOptions) => {
       await manage_federation_server(options);
@@ -87,11 +87,11 @@ export async function runDownfedCli(): Promise<void> {
   const server_program = program
     .command("server")
     .description(t({
-      zh: "配置并管理已部署 Federation",
-      en: "configure and manage deployed Federations",
+      zh: "配置并管理已部署 Downtown",
+      en: "configure and manage deployed Downtown",
     }))
-    .option("--id <id>", "Federation ID (exact match)")
-    .option("--name <name>", "Federation name (exact match)")
+    .option("--id <id>", "Downtown ID (exact match)")
+    .option("--name <name>", "Downtown name (exact match)")
     .helpOption("--help", helpText())
     .action(createVersionBanner(packageJson.version, async (options: FederationTargetOptions) => {
       await manage_federation_server(options);
@@ -100,11 +100,11 @@ export async function runDownfedCli(): Promise<void> {
   server_program
     .command("manage")
     .description(t({
-      zh: "选择本次 Federation 并进入 admin 管理工作区",
-      en: "select a Federation and open its admin workspace for this operation",
+      zh: "选择本次 Downtown 并进入 admin 管理工作区",
+      en: "select a Downtown and open its admin workspace for this operation",
     }))
-    .option("--id <id>", "Federation ID (exact match)")
-    .option("--name <name>", "Federation name (exact match)")
+    .option("--id <id>", "Downtown ID (exact match)")
+    .option("--name <name>", "Downtown name (exact match)")
     .helpOption("--help", helpText())
     .action(createVersionBanner(packageJson.version, async (_options: FederationTargetOptions, command: Command) => {
       await manage_federation_server(command.optsWithGlobals<FederationTargetOptions>());
@@ -114,14 +114,14 @@ export async function runDownfedCli(): Promise<void> {
   program
     .command("web")
     .description(t({
-      zh: "选择本次 Federation 并启动本地 Web 管理 UI",
-      en: "select a Federation and start its local Web admin UI",
+      zh: "选择本次 Downtown 并启动本地 Web 管理 UI",
+      en: "select a Downtown and start its local Web admin UI",
     }))
     .option("--host <host>", t({ zh: "本地监听地址（仅 loopback）", en: "local listen host (loopback only)" }), "127.0.0.1")
     .option("--port <port>", t({ zh: "本地监听端口", en: "local listen port" }), "43128")
     .option("--no-open", t({ zh: "不自动打开浏览器", en: "do not open the browser automatically" }))
-    .option("--id <id>", "Federation ID (exact match)")
-    .option("--name <name>", "Federation name (exact match)")
+    .option("--id <id>", "Downtown ID (exact match)")
+    .option("--name <name>", "Downtown name (exact match)")
     .helpOption("--help", helpText())
     .action(createVersionBanner(packageJson.version, async (options: Omit<FederationWebOptions, "port"> & {
       /** Commander 接收的本地 Web UI 端口字符串，校验后转换为整数。 */
@@ -142,9 +142,9 @@ export async function runDownfedCli(): Promise<void> {
       } catch (error) {
         if (error instanceof CliError) throw error;
         throw new CliError({
-          title: "无法启动 Federation Web UI。",
+          title: "无法启动 Downtown Web UI。",
           note: error instanceof Error ? error.message : String(error),
-          fix: "确认当前 Federation 与本地监听端口可用。",
+          fix: "确认当前 Downtown 与本地监听端口可用。",
         });
       }
     }));
@@ -152,8 +152,8 @@ export async function runDownfedCli(): Promise<void> {
   server_program
     .command("add")
     .description(t({
-      zh: "添加已部署 Federation URL",
-      en: "add a deployed Federation URL",
+      zh: "添加已部署 Downtown URL",
+      en: "add a deployed Downtown URL",
     }))
     .helpOption("--help", helpText())
     .action(createVersionBanner(packageJson.version, async () => {
@@ -166,8 +166,8 @@ export async function runDownfedCli(): Promise<void> {
     .command("create")
     .option("--path <path>", t({ zh: "创建路径，默认当前路径", en: "project path; defaults to the current path" }), ".")
     .description(t({
-      zh: "交互式创建 Federation 项目骨架",
-      en: "interactively scaffold a Federation project",
+      zh: "交互式创建 Downtown 项目骨架",
+      en: "interactively scaffold a Downtown project",
     }))
     .option("-f, --force", t({
       zh: "允许覆盖已有项目文件",
@@ -191,20 +191,20 @@ export async function runDownfedCli(): Promise<void> {
     .command("deploy")
     .option("--path <path>", t({ zh: "项目路径，默认当前路径", en: "project path; defaults to the current path" }), ".")
     .description(t({
-      zh: "部署当前目录或本地目录中的 Federation 项目",
-      en: "deploy a Federation project from the current directory or a local path",
+      zh: "部署当前目录或本地目录中的 Downtown 项目",
+      en: "deploy a Downtown project from the current directory or a local path",
     }))
     .option("--dry-run", t({
       zh: "只验证构建和部署配置，不启动或发布",
       en: "validate build and deployment config without starting or publishing",
     }))
     .option("--verify", t({
-      zh: "部署完成后请求 Federation /health",
-      en: "request Federation /health after deployment completes",
+      zh: "部署完成后请求 Downtown /health",
+      en: "request Downtown /health after deployment completes",
     }))
     .option("--verify-only", t({
-      zh: "只验证当前 Fed 已登记实例的 /health",
-      en: "verify the registered instance for the current Fed",
+      zh: "只验证当前 Downtown 已登记实例的 /health",
+      en: "verify the registered instance for the current Downtown",
     }))
     .option("--skip-build", t({
       zh: "跳过 package.json 中的 build",
@@ -239,14 +239,14 @@ export async function runDownfedCli(): Promise<void> {
   register_instance_commands(program);
   program.command("backup")
     .description(t({ zh: "为本地部署创建一致性 SQLite 在线备份", en: "create a consistent online SQLite backup for a local deployment" }))
-    .option("--id <id>", "Federation ID (exact match)")
-    .option("--name <name>", "Federation name (exact match)")
+    .option("--id <id>", "Downtown ID (exact match)")
+    .option("--name <name>", "Downtown name (exact match)")
     .helpOption("--help", helpText())
     .action(createVersionBanner(packageJson.version, run_federation_backup));
   program.command("restore")
     .description(t({ zh: "保全当前数据库后，恢复已停止本地部署的 SQLite 备份", en: "restore a stopped local SQLite deployment after saving its current database" }))
-    .option("--id <id>", "Federation ID (exact match)")
-    .option("--name <name>", "Federation name (exact match)")
+    .option("--id <id>", "Downtown ID (exact match)")
+    .option("--name <name>", "Downtown name (exact match)")
     .requiredOption("--path <path>", t({ zh: "完整备份目录或其中的 database.sqlite", en: "completed backup directory or its database.sqlite file" }))
     .option("--dry-run", t({ zh: "只读验证备份与停止状态，不创建安全备份", en: "read-only verification without creating a safety backup" }))
     .option("--yes", t({ zh: "明确确认替换数据库", en: "explicitly authorize replacing the database" }))
@@ -263,8 +263,8 @@ export async function runDownfedCli(): Promise<void> {
     }));
   program.command("clean")
     .description(t({ zh: "预览并清理本地发布产物，保留最近三个成功版本与所有受保护引用", en: "preview and clean local releases, retaining the latest three successful versions and protected references" }))
-    .option("--id <id>", "Federation ID (exact match)")
-    .option("--name <name>", "Federation name (exact match)")
+    .option("--id <id>", "Downtown ID (exact match)")
+    .option("--name <name>", "Downtown name (exact match)")
     .option("--dry-run", t({ zh: "仅展示清理清单", en: "preview the cleanup plan without deleting" }))
     .option("--yes", t({ zh: "明确确认删除清单中的候选版本", en: "explicitly confirm deletion of listed release candidates" }))
     .helpOption("--help", helpText())
@@ -289,7 +289,7 @@ export async function runDownfedCli(): Promise<void> {
 
   if (process.argv.length <= 2) {
     if (!process.stdin.isTTY || !process.stdout.isTTY) {
-      throw new CliError({ title: "Interactive Federation management requires a terminal", fix: "Use fed --help for explicit commands." });
+      throw new CliError({ title: "Interactive Downtown management requires a terminal", fix: "Use downtown --help for explicit commands." });
     }
     await runFederationApp([]);
     process.exit(0);
@@ -309,8 +309,8 @@ function register_instance_commands(program: Command): void {
     };
     program.command(action)
       .description(t(descriptions[action]))
-      .option("--id <id>", "Federation ID (exact match)")
-      .option("--name <name>", "Federation name (exact match)")
+      .option("--id <id>", "Downtown ID (exact match)")
+      .option("--name <name>", "Downtown name (exact match)")
       .helpOption("--help", helpText())
       .action(createVersionBanner(packageJson.version, async (options: FederationTargetOptions) => {
         await run_federation_instance_command(action, options);
@@ -328,11 +328,11 @@ function register_root_federation_query_command(program: Command): void {
   program
     .command("query <method> <path>")
     .description(t({
-      zh: "请求本次指定的 Federation HTTP API",
-      en: "query the HTTP API of a Federation selected for this operation",
+      zh: "请求本次指定的 Downtown HTTP API",
+      en: "query the HTTP API of a Downtown selected for this operation",
     }))
-    .option("--id <id>", "Federation ID (exact match)")
-    .option("--name <name>", "Federation name (exact match)")
+    .option("--id <id>", "Downtown ID (exact match)")
+    .option("--name <name>", "Downtown name (exact match)")
     .option("--raw", t({
       zh: "只输出原始响应 body",
       en: "print the raw response body only",

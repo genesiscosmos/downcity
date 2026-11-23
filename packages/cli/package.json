@@ -1,13 +1,12 @@
 {
   "name": "downcity",
-  "version": "1.6.11",
+  "version": "1.6.12",
   "type": "module",
-  "description": "Downcity CLI — local City container and Federation Server management",
+  "description": "Downcity CLI — local City container and Downtown Server management",
   "bin": {
     "city": "./bin/downcity.js",
     "downcity": "./bin/downcity.js",
-    "downfed": "./bin/downfed.js",
-    "fed": "./bin/downfed.js"
+    "downtown": "./bin/downtown.js"
   },
   "files": [
     "bin/",
@@ -32,7 +31,7 @@
   "dependencies": {
     "@downcity/agent": "workspace:^",
     "@downcity/city": "workspace:^",
-    "@downcity/federation": "workspace:^",
+    "@downcity/downtown": "workspace:^",
     "@downcity/powers": "workspace:^",
     "@downcity/sandbox-native": "workspace:^",
     "@downcity/type": "workspace:*",

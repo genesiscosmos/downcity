@@ -15,7 +15,7 @@ Downcity gives creators, indie builders, and teams one reusable runtime layer fo
 
 - Built for AI builders: create the next agent product without rebuilding model routing, tools, memory, tasks, auth, usage, billing, and operations again.
 - Reusable runtime layer: a repo or folder can become an agent boundary, while Downcity owns the broader infrastructure for long-running agents.
-- Federation: centralize model catalogs, runtime env, service routing, accounts, balance, usage, and payment.
+- Downtown: centralize model catalogs, runtime env, service routing, accounts, balance, usage, and payment.
 - Operable agents: run agents as managed daemons, inspect status, review history, and interact through CLI or SDK.
 - Extensible architecture: plugins, services, SDK APIs, and UI components are explicit integration surfaces for products and teams.
 
@@ -23,10 +23,10 @@ Downcity gives creators, indie builders, and teams one reusable runtime layer fo
 
 | Package | Purpose |
 | --- | --- |
-| `downcity` | Public CLI bundle: `city`/`downcity` is the local City container for Agent management, runtime, and console workflows; `fed`/`downfed` is the Federation Server Manager. |
+| `downcity` | Public CLI bundle: `city`/`downcity` is the local City container for Agent management, runtime, and console workflows; `fed`/`downfed` is the Downtown Server Manager. |
 | `@downcity/city` | Application composition root: Agent registry, Workspace/Shell resources, Plugin SDK and lifecycle, RemoteAgent, Storage, and HTTP/RPC transport. |
 | `@downcity/agent` | Single-Agent execution runtime: Agent, Group, AgentSessions, Session, model/tool loop, and neutral host-extension ports. |
-| `@downcity/federation` | Unified local and remote Federation SDK for Services, auth, env, user, and admin access. |
+| `@downcity/downtown` | Unified local and remote Downtown SDK for Services, auth, env, user, and admin access. |
 | `@downcity/type` | Neutral cross-package protocols, including Workspace, Shell, Session extension, and City model types. |
 | `@downcity/services` | Public services for accounts, balance, usage, payment, and Stripe payment flows. |
 | `@downcity/ui` | React + Tailwind UI SDK for reusable Console and host-application components. |
@@ -38,8 +38,8 @@ Downcity gives creators, indie builders, and teams one reusable runtime layer fo
 - Global Agent management: store Agent identity and config in the user-level Downcity data directory, while entering any Workspace at execution time.
 - Local City hosting: run `downcity on`, `downcity status`, and `downcity off` to host all configured Agents in one CLI City.
 - Agent operations: create, inspect, configure, and chat with globally managed Agents; Agents do not have an independent started/stopped state.
-- Federation connection: use `downcity federation` to connect local Agents to the active Federation.
-- Federation backend capabilities: reuse accounts, balance, usage, payment, env, auth, and Service routing across agents and products.
+- Downtown connection: use `downcity federation` to connect local Agents to the active Downtown.
+- Downtown backend capabilities: reuse accounts, balance, usage, payment, env, auth, and Service routing across agents and products.
 - Built-in agent capabilities: `chat`, `task`, `memory`, `shell`, `contact`, `skill`, `web`, `sound`, and `workboard`.
 - Product surfaces: Downcity CLI, Agent SDK, City SDK, and UI SDK.
 
@@ -69,9 +69,9 @@ The package exposes the `downcity` command (alias `city`):
 downcity --version
 ```
 
-`downcity` is the local City container for managing and running Agents through `City()` and the Agent SDK. Upgrade with `npm i -g downcity@latest`. The same package also provides `fed`/`downfed` for Federation Server management.
+`downcity` is the local City container for managing and running Agents through `City()` and the Agent SDK. Upgrade with `npm i -g downcity@latest`. The same package also provides `fed`/`downfed` for Downtown Server management.
 
-### 2. Connect to Federation
+### 2. Connect to Downtown
 
 ```bash
 downcity federation use
@@ -136,7 +136,7 @@ downcity agent chat <agent_id>
 
 ```ts
 import { Agent, Shell, Workspace } from "@downcity/city";
-import { create_openai_compatible_model } from "@downcity/federation";
+import { create_openai_compatible_model } from "@downcity/downtown";
 import { MicrosandboxProvider } from "@downcity/sandbox-microsandbox";
 
 const model = create_openai_compatible_model({

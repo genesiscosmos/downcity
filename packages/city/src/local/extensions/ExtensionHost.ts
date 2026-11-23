@@ -3,16 +3,18 @@
  * 模型、Federation 与作者资源；失败的清理保留运行记录与门禁，禁止叠加另一套实例。
  */
 import fs from "node:fs/promises";
+import { randomUUID } from "node:crypto";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
-import { Federation } from "@downcity/federation";
+import { Downtown } from "@downcity/downtown";
 import type { ModelClient } from "@downcity/type";
+import type { City } from "../../city/runtime/City.js";
 import type { CityPowerBatch } from "../../city/types/CityPowerBatch.js";
 import type { PowerDefinition } from "../../power/index.js";
 import type { ExtensionRuntime, ExtensionRecord, ExtensionCapabilityCounts, ExtensionError } from "../types/Extension.js";
 import type { ExtensionProject, ExtensionContext, ExtensionEntry } from "../types/ExtensionProject.js";
 import type { ExtensionHostOptions } from "../types/ExtensionHost.js";
-import { ExtensionGate } from "./ExtensionGate.js";
+import { ExtensionGate, track_extension_stream } from "./ExtensionGate.js";
 import { ExtensionPower } from "./ExtensionPower.js";
 import { ExtensionFailure } from "./ExtensionError.js";
 import { ExtensionConfigurationRequest } from "./ExtensionConfiguration.js";
@@ -29,6 +31,10 @@ class ProjectRun {
   readonly model_ids: string[] = [];
   readonly agent_ids: string[] = [];
   readonly federation_ids: string[] = [];
+  /** Town 统一目录中的直接模型 ID，和扩展内部别名分开保存。 */
+  readonly town_model_ids: string[] = [];
+  /** Town 统一目录中的扩展连接 ID。 */
+  readonly town_connection_ids: string[] = [];
   readonly cleanup = new Map<object, () => void | Promise<void>>();
   warnings: ExtensionError[] = [];
   readonly powers = new Map<string, ExtensionPowerView>();
@@ -99,6 +105,9 @@ export class ExtensionHost implements ExtensionRuntime {
     await run.gate.lifecycle(async () => await run.power_batch?.dispose());
     run.power_batch = undefined;
     run.power_ids.length = 0;
+    const town = get_town(this.options.city);
+    while (run.town_model_ids.length) { town.models.unregister(run.town_model_ids.at(-1)!); run.town_model_ids.pop(); }
+    while (run.town_connection_ids.length) { await town.remove(run.town_connection_ids.at(-1)!); run.town_connection_ids.pop(); }
     for (const id of run.agent_ids) this.options.catalog.agents.delete(id);
     for (const id of run.model_ids) this.options.catalog.models.remove(id);
     for (const id of run.federation_ids) this.options.catalog.federations.delete(id);
@@ -163,17 +172,33 @@ export class ExtensionHost implements ExtensionRuntime {
         run.powers.set(power_id, { power_id, title: power.title || power.name, description: power.description, extension_id: record.extension_id, generation: snapshot.snapshot_id, ...(renderer && artifact ? { renderer: { ...renderer }, entry: artifact.entry, styles: artifact.styles } : {}) });
       }
       // ready 可能有数据库副作用，但此时所有资源已接管、执行门禁关闭且目录不可见。
+      const town = get_town(this.options.city);
       for (const federation of project.federations ?? []) {
         await federation.ready();
-        const remove_guard = federation.guard_requests(() => run.gate.acquire(`federation:${federation.id}`));
+        const connection_id = extension_entry_id(record.extension_id, "federation", federation.id);
+        const remove_guard = federation.guard_requests(() => run.gate.acquire(`federation:${connection_id}`));
         run.cleanup.set(federation, async () => { await federation.dispose(); remove_guard(); });
+        town.add(connection_id, federation, { name: federation.name, auth_scope_id: `extension:${randomUUID()}`, durable: false });
+        run.town_connection_ids.push(connection_id);
       }
       await run.gate.lifecycle(async () => await run.power_batch!.initialize());
       const model_references = new Map<ModelClient, ModelClient>();
       for (const model of project.models ?? []) {
-        const id = extension_entry_id(record.extension_id, "model", model.id);
-        model_references.set(model, this.options.catalog.models.handle(id));
-        run.model_ids.push(id);
+        const source_id = extension_entry_id(record.extension_id, "model", model.id);
+        const guarded: ModelClient = {
+          id: model.id, binding_id: model.binding_id, name: model.name, context_window: model.context_window, model_stream_policy: model.model_stream_policy,
+          stream: async (call, signal) => {
+            const release = run.gate.acquire(`model:${source_id}`);
+            try { return track_extension_stream(await model.stream(call, signal), release, signal); }
+            catch (error) { release(); throw error; }
+          },
+        };
+        const model_id = town.models.register({ source_id, client: guarded, name: model.name, durable: false });
+        run.town_model_ids.push(model_id);
+        const town_model = town.models.client(model_id);
+        const registered = this.options.catalog.models.register(model_id, town_model, run.gate);
+        model_references.set(model, registered);
+        run.model_ids.push(model_id);
       }
       for (const power of project.powers ?? []) {
         const id = extension_entry_id(record.extension_id, "power", power.name);
@@ -191,7 +216,6 @@ export class ExtensionHost implements ExtensionRuntime {
         this.options.catalog.federations.set(id, federation);
         run.federation_ids.push(id);
       }
-      for (const model of project.models ?? []) this.options.catalog.models.register(extension_entry_id(record.extension_id, "model", model.id), model, run.gate);
       run.power_batch.publish();
       this.options.refresh_agents?.(record.extension_id);
       run.published = true;
@@ -206,6 +230,9 @@ export class ExtensionHost implements ExtensionRuntime {
     }
   }
 }
+
+/** 扩展仅使用 City 唯一 Town，不读取全局连接或创建平行目录。 */
+function get_town(city: import("../../city/runtime/City.js").City) { return city.town; }
 
 /** 在初始化或发布任何条目前校验全部导出与各类型本地 ID。 */
 function validate_project(value: unknown): ExtensionProject {
@@ -224,7 +251,7 @@ function validate_project(value: unknown): ExtensionProject {
       ids.add(id);
       if (kind === "powers" && (typeof entry.compile_tool !== "function" || typeof entry.compile_hooks !== "function")) throw new ExtensionFailure("exports_invalid", "Power must implement the SDK Power protocol", "load", 2);
       if (kind === "models" && (typeof entry.stream !== "function" || !Number.isSafeInteger(entry.context_window) || Number(entry.context_window) <= 0)) throw new ExtensionFailure("exports_invalid", "Text models require stream() and a positive context_window", "load", 2);
-      if (kind === "federations" && !(entry instanceof Federation)) throw new ExtensionFailure("sdk_incompatible", "Federation must use the host SDK instance", "load", 2);
+      if (kind === "federations" && !(entry instanceof Downtown)) throw new ExtensionFailure("sdk_incompatible", "Federation must use the host SDK instance", "load", 2);
       if (kind === "agents") {
         const behavior = entry.behavior;
         if (!behavior || typeof behavior !== "object" || Object.keys(behavior).some((key) => !["instruction", "tools", "hooks", "session_class", "session_composer", "model"].includes(key))) throw new ExtensionFailure("exports_invalid", "Agent definition must provide only supported behavior fields", "load", 2);

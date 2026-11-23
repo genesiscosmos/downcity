@@ -6,7 +6,7 @@
  */
 
 import type { Logger } from "@downcity/agent";
-import type { Federation } from "@downcity/federation";
+import type { PowerTown } from "@/power/types/PowerTown.js";
 import type { CityRuntimeAccess } from "@/city/types/CityRuntimeAccess.js";
 import type {
   CityPowerRegistration,
@@ -22,8 +22,8 @@ import type { StorageProvider } from "@/workspace/index.js";
 export interface CityPowerRuntimeOptions {
   /** City 为 Power 私有数据提供的底层存储。 */
   readonly storage: StorageProvider;
-  /** 通过 getter 读取 City 当前绑定；动作创建时解析，生命周期上下文按访问解析。 */
-  readonly federation?: Pick<Federation, "user">;
+  /** City 提供的受限 Town 模型与 Service 路由；执行时由 Town 验证来源绑定。 */
+  readonly town?: PowerTown;
   /** Power Runtime 所需的 City 内部事实源访问能力。 */
   readonly runtime_access: Pick<
     CityRuntimeAccess,

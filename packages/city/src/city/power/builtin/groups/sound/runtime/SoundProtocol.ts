@@ -248,14 +248,14 @@ export function normalize_asr_result(result: SoundAsrResult): SoundAsrResult {
   };
 }
 
-/** 校验 TTS 返回的 Session 消息已经落盘为本地音频。 */
+/** 校验 Town 返回的标准 TTS 媒体消息，路径落地由 SoundResultStorage 执行。 */
 export function normalize_tts_result(result: SoundTtsResult): SoundTtsResult {
   const record = to_record(result);
   if (!record || !Array.isArray(record.parts)) {
     throw new TypeError("sound provider tts must return a Downcity Session message");
   }
-  if (record.role !== "agent") {
-    throw new TypeError("sound provider tts must return an Agent Session message");
+  if (record.role !== "assistant") {
+    throw new TypeError("sound provider tts must return an assistant media message");
   }
   const has_audio_file = record.parts.some((part) => {
     const part_record = to_record(part);
@@ -265,14 +265,6 @@ export function normalize_tts_result(result: SoundTtsResult): SoundTtsResult {
   });
   if (!has_audio_file) {
     throw new TypeError("sound provider tts Session message must contain an audio file part");
-  }
-  for (const part of record.parts) {
-    const part_record = to_record(part);
-    if (part_record?.type !== "file") continue;
-    const url = String(part_record.url || "").trim();
-    if (!url || url.startsWith("data:") || /^https?:\/\//i.test(url)) {
-      throw new TypeError("sound provider tts file parts must be saved locally before returning");
-    }
   }
   return result;
 }

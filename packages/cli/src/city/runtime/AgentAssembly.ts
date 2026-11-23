@@ -5,7 +5,7 @@
  * 只接收已经创建完成的 Agent，不参与任何装配决策。
  */
 
-import type { Federation } from "@downcity/federation";
+import type { City, Town } from "@downcity/city";
 import { SshWorkspace } from "@downcity/workspace-ssh";
 import type { WorkspaceRuntime } from "@downcity/type/workspace";
 
@@ -24,22 +24,22 @@ import {
   DeferredModelClient,
   type AgentOptions,
 } from "@downcity/agent";
-import type { CityModelDescriptor, ModelClient } from "@downcity/type";
+import type { ModelClient } from "@downcity/type";
 import { AskQuestionsTool } from "@downcity/agent/tools";
 import { Shell, Workspace } from "@downcity/city";
 import {
   create_builtin_power_registrations,
 } from "@downcity/powers";
-import { create_city_ai_model_client } from "@/city/runtime/city-model/CityAiServiceBinding.js";
 import { resolve_local_agent_env } from "@downcity/city/local";
 import { resolve_local_root_path } from "@downcity/city/local";
 import { create_sandbox_provider } from "@/city/sandbox/PlatformSandbox.js";
 import os from "node:os";
 
 /** 创建 CLI 与 Desktop 可共享语义的官方 Power 注册集合。 */
-export function create_cli_builtin_power_registrations(): LocalPowerRegistration[] {
+export function create_cli_builtin_power_registrations(get_city?: () => City): LocalPowerRegistration[] {
   return create_builtin_power_registrations({
     platform_root_path: resolve_local_root_path(),
+    get_city,
   });
 }
 
@@ -47,10 +47,12 @@ export function create_cli_builtin_power_registrations(): LocalPowerRegistration
 export function create_cli_power_loader(input: {
   /** 当前 CLI 进程读取 Power 数据使用的仓储。 */
   power_repository: PowerRepository;
+  /** 运行 City 的延迟读取；后台模型恢复使用真实 Agent/Session SDK。 */
+  get_city: () => City;
 }): LocalPowerLoader {
   return new LocalPowerLoader({
     power_repository: input.power_repository,
-    power_registrations: create_cli_builtin_power_registrations(),
+    power_registrations: create_cli_builtin_power_registrations(input.get_city),
   });
 }
 
@@ -60,14 +62,14 @@ export async function create_cli_agent(input: {
   config: LocalAgentConfig;
   /** 可选的 Downcity 用户级数据根目录。 */
   root_path?: string;
-  /** 每次模型调用读取 City 当前绑定；未绑定时不回退机器账户。 */
-  resolve_federation: () => Federation | undefined;
+  /** 当前 City 唯一 Town 目录；模型 ID 和 binding 均通过此入口解析。 */
+  town: Town;
   /** 当前 root 共享扩展模型和行为目录。 */
   extensions?: ExtensionPlatform;
 }): Promise<Agent> {
   resolve_local_root_path(input.root_path);
   const [model, tools] = await Promise.all([
-    Promise.resolve(create_cli_agent_model(input.config, input.resolve_federation, input.extensions)),
+    Promise.resolve(create_cli_agent_model(input.config, input.town)),
     Promise.resolve(create_cli_agent_tools()),
   ]);
   const behavior = input.extensions?.agent_behavior(input.config, { model, tools }) ?? {};
@@ -80,9 +82,9 @@ export async function create_cli_agent(input: {
     instruction: input.config.instruction || behavior.instruction,
     model: model ?? behavior.model,
     tools: { ...tools, ...behavior.tools },
-    resolve_work_model: async (model_id) =>
-      await resolve_cli_agent_model(model_id, input.resolve_federation,
-        model_id === input.config.execution?.model_id ? read_reasoning_effort(input.config.execution) : undefined, input.extensions),
+    resolve_work_model: async (model_id, _workspace, binding_id) =>
+      binding_id === undefined ? unavailable_cli_model(model_id) : await resolve_cli_agent_model(model_id, input.town,
+        model_id === input.config.execution?.model_id ? read_reasoning_effort(input.config.execution) : undefined, binding_id),
   });
 }
 
@@ -111,48 +113,42 @@ export async function create_cli_workspace(
   });
 }
 
-/** 根据 Agent 默认模型配置创建延迟解析的模型实例；装配不访问远端。 */
-export function create_cli_agent_model(
-  config: LocalAgentConfig,
-  resolve_federation: () => Federation | undefined,
-  extensions?: ExtensionPlatform,
-): ModelClient | undefined {
+/** 恢复默认模型时保留历史浏览；不明确的旧来源直到执行时才要求重选。 */
+export function create_cli_agent_model(config: LocalAgentConfig, town: Town): ModelClient | undefined {
   const model_id = read_model_id(config.execution);
-  return model_id ? extensions?.model(model_id) ?? create_lazy_cli_model(model_id, resolve_federation, read_reasoning_effort(config.execution)) : undefined;
+  if (!model_id) return undefined;
+  const binding_id = typeof config.execution?.binding_id === "string" ? config.execution.binding_id : undefined;
+  if (!binding_id) return unavailable_cli_model(model_id);
+  try { return create_bound_cli_model(model_id, town, read_reasoning_effort(config.execution), binding_id); }
+  catch { return unavailable_cli_model(model_id, binding_id); }
 }
 
-/** Session 或 Agent 只记录模型选择，实际调用时读取 City 当前绑定。 */
-export async function resolve_cli_agent_model(
-  model_id_input: string,
-  resolve_federation: () => Federation | undefined,
-  reasoning_effort?: string,
-  extensions?: ExtensionPlatform,
-): Promise<ModelClient> {
-  const model_id = String(model_id_input || "").trim();
+/** HTTP/RPC/工作 resolver 透传已确认身份；明确选择模型时捕获当前来源。 */
+export async function resolve_cli_agent_model(model_id: string, town: Town, reasoning_effort?: string, binding_id?: string): Promise<ModelClient> {
   if (!model_id) throw new Error("model_id is required");
-  return extensions?.model(model_id) ?? create_lazy_cli_model(model_id, resolve_federation, reasoning_effort);
+  return create_bound_cli_model(model_id, town, reasoning_effort, binding_id);
 }
 
-/** 在请求边界解析当前 Federation 目录并应用有效的思考强度。 */
-function create_lazy_cli_model(
-  model_id: string,
-  resolve_federation: () => Federation | undefined,
-  reasoning_effort?: string,
-): ModelClient {
+/** Town 句柄先捕获身份，执行解析目录只补元数据，绝不追随换号后的身份。 */
+function create_bound_cli_model(model_id: string, town: Town, reasoning_effort?: string, binding_id?: string): ModelClient {
+  const captured = town.models.client(model_id, { binding_id });
   return new CliDeferredModelClient(model_id, async () => {
-    const model = await create_city_ai_model_client({ model_id, federation: resolve_federation() });
-    const reasoning = (model as ModelClient & Pick<CityModelDescriptor, "reasoning">).reasoning;
-    if (!reasoning_effort || !reasoning?.efforts.some((effort) => effort.id === reasoning_effort)) return model;
-    return {
-      id: model.id,
-      name: model.name,
-      context_window: model.context_window,
-      stream: (call, signal) => model.stream({
-        ...call,
-        reasoning: call.reasoning ?? { enabled: true, effort: reasoning_effort },
-      }, signal),
-    };
-  });
+    const catalog = await town.models.list();
+    const entry = catalog.items.find((item) => item.model_id === model_id);
+    if (!entry) throw new Error("town_model_source_unavailable");
+    const model = town.models.client(model_id, { binding_id: captured.binding_id });
+    const reasoning = entry.reasoning;
+    return { ...model, name: entry.name, context_window: entry.context_window,
+      stream: (call, signal) => model.stream(reasoning_effort && reasoning?.efforts.some((effort) => effort.id === reasoning_effort)
+        ? { ...call, reasoning: call.reasoning ?? { enabled: true, effort: reasoning_effort } } : call, signal) };
+  }, captured.binding_id);
+}
+
+/** 明确缺失来源的历史句柄不会借用其他连接；历史浏览只读取 ID。 */
+function unavailable_cli_model(model_id: string, binding_id?: string): ModelClient {
+  return new CliDeferredModelClient(model_id, async () => {
+    throw Object.assign(new Error("Saved model requires explicit source selection"), { code: "session_model_binding_changed" });
+  }, binding_id);
 }
 
 /** 创建 CLI 默认交互 Tool。 */
@@ -187,8 +183,9 @@ class CliDeferredModelClient extends DeferredModelClient {
   constructor(
     model_id: string,
     private readonly resolve_model: () => Promise<ModelClient>,
+    binding_id?: string,
   ) {
-    super(model_id, resolve_model);
+    super(model_id, resolve_model, binding_id);
   }
 
   /** 浏览不联网；执行 resolve 完成后提供真实名称。 */
@@ -200,7 +197,7 @@ class CliDeferredModelClient extends DeferredModelClient {
   /** 覆写 SDK 的永久缓存；每次执行按当前 City 绑定解析完整客户端。 */
   override async resolve(): Promise<ModelClient> {
     const model = await this.resolve_model();
-    if (model.id !== this.id || model === this || typeof model.stream !== "function") {
+    if (model.id !== this.id || model.binding_id !== this.binding_id || model === this || typeof model.stream !== "function") {
       throw new Error(`Resolved model does not implement the selected ModelClient: ${this.id}`);
     }
     this.selected_model = model;

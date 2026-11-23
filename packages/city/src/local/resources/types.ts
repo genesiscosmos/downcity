@@ -35,10 +35,14 @@ export interface ResourceHost {
 export interface ResourceDependencies {
   /** 宿主已装配的共享扩展用例，离线普通资源浏览可省略。 */
   extensions?: import("../extensions/ExtensionPlatform.js").ExtensionPlatform;
+  /** 离线显式模型选择使用的 Town resolver，不装配 Agent 或启动宿主。 */
+  resolve_model?: (model_id: string) => Promise<ModelClient>;
   /** 已经规范化并验证身份的 root。 */
   root_path: string;
   /** Agent 唯一配置仓储。 */
   agents: AgentRepository;
+  /** owner 已装配的 Town 管理入口；缺失能力时拒绝跨进程命令，不绕过 owner 写仓储。 */
+  town?: import("./ManagementChannel.js").ResourceDispatcher;
   /** 无 DB 的空 root 用 null；任何创建请求由写适配先打开 DB。 */
   workspaces: WorkspaceRepository | null;
   /** root 生命周期级协调器，与懒解析入口共享。 */

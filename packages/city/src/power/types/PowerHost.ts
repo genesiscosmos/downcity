@@ -5,7 +5,7 @@
  * `dispose` 使用同一个稳定上下文完成释放。这里不再声明第二套 main 生命周期。
  */
 
-import type { Federation } from "@downcity/federation";
+import type { PowerTown } from "@/power/types/PowerTown.js";
 import type { PowerInteractionHost } from "./PowerInteraction.js";
 import type {
   PowerLogger,
@@ -153,6 +153,8 @@ export interface PowerHostSystem extends PowerInteractionHost {
     readonly execution_profile_version?: number;
     /** 首次模型选择；恢复时以持久化的实际模型身份为准。 */
     readonly model_id?: string;
+    /** Job 创建时已确认的模型授权来源；后台执行不可在排队后默用当前账户。 */
+    readonly binding_id?: string;
     /** 稳定 attempt 创建键；同键重试找回原 Session。 */
     readonly creation_key?: string;
     /** 新 Session 的业务类型、入口用途及创建关系。 */
@@ -276,8 +278,8 @@ export interface PowerSelf {
 export interface PowerLifecycleContext {
   /** 本次初始化的取消信号；移除与关闭即时触发，扩展应传播到 I/O 并等待实际清理结算。 */
   readonly abort_signal: AbortSignal;
-  /** 当前 Federation 的动态访问入口；后台操作应在开始时读取，不长期缓存用户引用。 */
-  readonly federation?: Pick<Federation, "user">;
+  /** 受限 Town 资源路由；后台恢复必须显式传回持久化模型 binding_id。 */
+  readonly town?: PowerTown;
   /** 当前 Power 的自身能力。 */
   readonly power: PowerSelf;
   /** 当前 Power 在 City 中唯一的结构化配置存储。 */

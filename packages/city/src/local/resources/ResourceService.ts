@@ -23,6 +23,7 @@ export class ResourceService implements ResourceDispatcher {
 
   constructor(private readonly dependencies: ResourceDependencies) {
     if (dependencies.extensions) this.capabilities.push(...dependencies.extensions.service.capabilities);
+    if (dependencies.town) this.capabilities.push(...dependencies.town.capabilities);
     this.agents = new AgentResources(dependencies);
     this.workspaces = new WorkspaceResources(dependencies);
     this.sessions = new SessionResources(dependencies);
@@ -35,6 +36,10 @@ export class ResourceService implements ResourceDispatcher {
     if (method.startsWith("extension.") && this.dependencies.extensions) return await this.dependencies.extensions.service.dispatch(method, input);
     validate_resource_input(method, input);
     if (method.startsWith("config.")) return await this.config.call(method, input);
+    if (method.startsWith("town.")) {
+      if (!this.dependencies.town) throw new ResourceError("capability_missing", "Owner does not provide Town management", 5);
+      return await this.dependencies.town.dispatch(method, input);
+    }
     const target = (): string => { require_resource_value(typeof input.id === "string", "A complete resource ID is required"); return input.id; };
     const revision = typeof input.if_revision === "string" ? input.if_revision : undefined;
     try {
@@ -81,5 +86,8 @@ export class ResourceService implements ResourceDispatcher {
   }
 
   /** 只释放浏览快照；City/DB/租约按组合根逆序释放。 */
-  async dispose(): Promise<void> { await this.sessions.dispose(); }
+  async dispose(): Promise<void> {
+    try { await this.dependencies.town?.dispose?.(); }
+    finally { await this.sessions.dispose(); }
+  }
 }

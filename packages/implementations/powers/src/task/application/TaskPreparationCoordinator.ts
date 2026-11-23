@@ -45,9 +45,9 @@ export class TaskPreparationCoordinator {
   }
 
   /** 排队不阻塞录入响应；失败已写入任务，不作为未处理异常抛出。 */
-  enqueue(task_id: string): void {
+  enqueue(task_id: string, capture_model = false): void {
     if (this.abort.signal.aborted || this.pending.has(task_id)) return;
-    const operation = Promise.resolve().then(() => this.prepare(task_id)).catch((error) => {
+    const operation = Promise.resolve().then(() => this.prepare(task_id, capture_model)).catch((error) => {
       this.context.logger.warn("[TASK] Preparation failed", { task_id, error: String(error) });
     }).finally(async () => {
       this.pending.delete(task_id);
@@ -61,7 +61,7 @@ export class TaskPreparationCoordinator {
   /** 等待同一任务的准备请求收口，包括处理中收到的新版本；失败信息保留在任务中。 */
   async generate(task_id: string): Promise<void> {
     if (this.abort.signal.aborted) throw new Error("任务生成服务已关闭");
-    this.enqueue(task_id);
+    this.enqueue(task_id, true);
     while (this.pending.has(task_id)) {
       await this.pending.get(task_id);
       if (this.abort.signal.aborted) throw new Error("任务生成已中断");
@@ -74,7 +74,7 @@ export class TaskPreparationCoordinator {
     await Promise.allSettled([...this.pending.values()]);
   }
 
-  private async prepare(task_id: string): Promise<void> {
+  private async prepare(task_id: string, capture_model: boolean): Promise<void> {
     const processing_id = randomUUID();
     const task = await this.definitions.mutate(async (storage) => {
       const current = await readTask({ storage, taskId: task_id });
@@ -130,6 +130,12 @@ export class TaskPreparationCoordinator {
         const current = await readTask({ storage, taskId: task_id });
         const preparation = current.preparing;
         if (task_work_is_closed(current) || preparation?.revision !== revision || preparation.processing_id !== processing_id || this.abort.signal.aborted) return;
+        const same_target = current.kind === analysis.kind && current.agent_id === analysis.agent_id && current.workspace_id === analysis.workspace_id;
+        const baseline = analysis.kind === "agent" && capture_model && !same_target
+          ? await this.definitions.capture_model({ agent_id: analysis.agent_id, workspace_id: analysis.workspace_id, delivery_session: current.delivery_session })
+          : analysis.kind === "agent" && same_target ? { model_id: current.model_id, binding_id: current.binding_id } : {};
+        current.model_id = baseline.model_id;
+        current.binding_id = baseline.binding_id;
         current.title = analysis.title;
         current.kind = analysis.kind;
         current.agent_id = analysis.kind === "agent" ? analysis.agent_id : "";

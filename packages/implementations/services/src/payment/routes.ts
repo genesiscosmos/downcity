@@ -6,7 +6,7 @@
  * - PaymentService 自己拥有支付订单；paid 后通过 on_paid 通知接入方发放 Credits。
  */
 
-import { httpError, type ApiDocumentation, type ServiceInstallContext } from "@downcity/federation";
+import { httpError, type ApiDocumentation, type ServiceInstallContext } from "@downcity/downtown";
 import type { PaymentInbox } from "./PaymentInbox.js";
 import type { PaymentEntitlement } from "./types/Wallet.js";
 import { read_entitlement } from "./wallet.js";

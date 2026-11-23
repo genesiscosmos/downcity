@@ -5,7 +5,7 @@ import fs from "node:fs/promises"
 import os from "node:os"
 import path from "node:path"
 import test from "node:test"
-import { EnvService, Federation } from "@downcity/federation"
+import { EnvService, Downtown } from "@downcity/downtown"
 import { createSqliteDb } from "./sqlite-db.mjs"
 import { create_test_admin_session } from "../admin-fixture.mjs"
 import {
@@ -249,7 +249,7 @@ test("accountsService does not expose email login without an email provider", as
   try {
     process.chdir(tempDir)
     const db = createSqliteDb(path.join(tempDir, "test.sqlite"))
-    const base = new Federation({ database: db })
+    const base = new Downtown({ database: db })
   base.use(new EnvService())
     base.use(new AccountsService({ token_ttl: "7d" }))
     await base.health()
@@ -523,7 +523,7 @@ async function exchange_completed_login(base, start, callback_proof = {}) {
 async function setupBase(tempDir, env = {}, accountsOptions = {}) {
   const verification_emails = []
   const db = createSqliteDb(path.join(tempDir, "test.sqlite"))
-  const base = new Federation({ database: db })
+  const base = new Downtown({ database: db })
   base.use(new EnvService())
   base.use(new AccountsService({
     token_ttl: "7d",
@@ -574,7 +574,7 @@ function create_admin(base, admin_secret_key) {
 
 
 function create_federation(base, credentials = {}) {
-  return new Federation({
+  return new Downtown({
     url: "http://localhost",
     ...credentials,
     fetch: (input, init) => base.fetch(new Request(input, init)),

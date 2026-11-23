@@ -3,7 +3,7 @@
  * 网站只能回到宿主明确配置的精确可信产品 callback；CLI/Desktop 只能回到
  * 127.0.0.1 临时端口。Provider state 与产品 callback state 分别绑定两次浏览器跳转。
  */
-import { httpError } from "@downcity/federation";
+import { httpError } from "@downcity/downtown";
 import type { AccountsLoginStartRequest } from "./types.js";
 
 /** 校验全部 OAuth 客户端的回调目标；空白名单拒绝网站回调，不从请求推导信任。 */

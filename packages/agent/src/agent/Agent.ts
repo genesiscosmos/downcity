@@ -167,10 +167,10 @@ export class Agent {
       logger: this.logger,
       get_instruction: () => [...this.get_instructions()],
       get_agent_model: () => this.model,
-      resolve_model: async (model_id, workspace) => {
-        if (this.model?.id === model_id) return this.model;
+      resolve_model: async (model_id, workspace, binding_id) => {
+        if (this.model?.id === model_id && this.model.binding_id === binding_id) return this.model;
         if (!this.resolve_work_model) throw new Error(`Host cannot restore Session model: ${model_id}`);
-        return await this.resolve_work_model(model_id, workspace);
+        return await this.resolve_work_model(model_id, workspace, binding_id);
       },
       observe_session: (session) => this.interaction_collection.observe_session(session),
       session_class: this.session_class,

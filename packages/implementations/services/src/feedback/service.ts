@@ -12,7 +12,7 @@ import {
   httpError,
   type FederationTableApi,
   type ServiceInstallContext,
-} from "@downcity/federation";
+} from "@downcity/downtown";
 import { register_feedback_routes } from "./routes.js";
 import { feedback_database_schemas } from "./database-schemas.js";
 import type {

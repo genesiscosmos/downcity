@@ -1,6 +1,6 @@
 /** Service SQL 参数绑定；SQL 结构由各领域模块显式选择方言。 */
 
-import type { DatabaseStatement, ServiceDatabaseContext } from "@downcity/federation";
+import type { DatabaseStatement, ServiceDatabaseContext } from "@downcity/downtown";
 
 /** 将服务内部的问号参数转换为 PostgreSQL 编号参数，保留引号内的文本和标识符。 */
 export function bind_statement(schema_id: string, statement: DatabaseStatement): DatabaseStatement {

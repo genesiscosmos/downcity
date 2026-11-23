@@ -2,7 +2,7 @@
  * Admin Payment 管理命令。
  */
 
-import { FederationAdmin } from "@downcity/federation";
+import { FederationAdmin } from "@downcity/downtown";
 import { buildStripeEndpoints } from "@/federation/core/stripe.js";
 import { t } from "@/shared/CliLocale.js";
 import { adminErrorMessage, rethrowAdminAuthError } from "@/federation/admin/auth-error.js";

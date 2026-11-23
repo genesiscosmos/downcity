@@ -26,13 +26,25 @@ export function register_memory_session_profile(
     resolve: async (context) => {
       const job_id = /^memory:([a-f0-9]{64}):[1-9]\d*$/u.exec(context.creation_key ?? "")?.[1];
       if (!job_id) throw new Error("Memory Session requires a valid Job creation key");
-      const model = context.model_id
-        ? context.default_model?.id === context.model_id
-          ? context.default_model
-          : host.federation?.user.ai.model(context.model_id)
+      const model_id = context.model_id ?? context.default_model?.id;
+      const binding_id = context.binding_id;
+      // Town 模型必须带 Job/Session 已确认的身份。排队后才读取当前账号不能构成授权基线。
+      const uses_town = model_id?.startsWith("model:downtown:") || model_id?.startsWith("model:client:");
+      if (uses_town && !binding_id) {
+        throw Object.assign(new Error("Memory Job requires a confirmed model authorization binding before execution"), {
+          code: "memory_model_binding_required",
+        });
+      }
+      const model = uses_town && model_id
+        ? host.town?.models.client(model_id, { binding_id })
         : context.default_model;
       if (!model) throw new Error("Memory Session requires an available model");
-      if (context.model_id && model.id !== context.model_id) throw new Error("Memory Session model identity changed");
+      if (model_id && model.id !== model_id) throw new Error("Memory Session model identity changed");
+      if (model.binding_id !== binding_id) {
+        throw Object.assign(new Error("Memory Session model authorization requires explicit confirmation"), {
+          code: "session_model_binding_changed",
+        });
+      }
       return {
         instruction: [MEMORY_INSTRUCTION], composer: new MemoryComposer(), model,
         tools: create_memory_session_tools(options, job_id), hooks: { guard: {}, pipeline: {}, effect: {} },

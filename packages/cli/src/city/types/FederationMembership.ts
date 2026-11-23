@@ -40,7 +40,7 @@ export interface FederationProfile {
   source: "downcity-profile" | "federation-admin" | "default";
 
   /**
-   * 该 Federation 是否由 `downfed` CLI 保存了有效管理员会话。
+   * 该 Federation 是否由 `downtown` CLI 保存了有效管理员会话。
    *
    * 说明（中文）
    * - 这里只展示存在性，不暴露 Session Token。

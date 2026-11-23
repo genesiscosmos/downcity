@@ -2,7 +2,7 @@
  * 官方服务 API 文档的 JSON Schema 小型构建函数。
  * 仅组合静态公开契约，不参与请求校验，也不读取配置或执行业务。
  */
-import type { ApiSchema } from "@downcity/federation";
+import type { ApiSchema } from "@downcity/downtown";
 
 /** 对象字段与必填集合；省略必填集合时全部字段必填。 */
 export function object_schema(properties: Record<string, ApiSchema>, required = Object.keys(properties)): ApiSchema {

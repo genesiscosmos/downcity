@@ -10,6 +10,7 @@
  * - 不存在 execution lease：Power 被移除时正在执行的调用按各自实现收口。
  */
 
+import { create_power_town } from "@/power/core/PowerTown.js";
 import type { Hono } from "hono";
 import type { Agent, Group, Logger } from "@downcity/agent";
 import { EMPTY_TOOL_HOOK_SET, SESSION_TYPE_WORK, read_session_call_context, session_call_context } from "@downcity/type";
@@ -189,8 +190,8 @@ export class CityPowerRuntime implements PowerRuntimeHost {
       abort_signal: site.abort_signal ?? new AbortController().signal,
       label: `power:${power_id}`,
     });
-    // 动作和已挂载 HTTP 路由每次调用都取得当前身份，同次调用保持稳定引用。
-    const federation = this.options.federation;
+    // 只向 Power 交付普通资源能力；来源身份由 Town 在执行时校验。
+    const town = this.options.town ? create_power_town(this.options.town) : undefined;
     return create_power_context({
       host: this,
       site,
@@ -212,7 +213,7 @@ export class CityPowerRuntime implements PowerRuntimeHost {
       call,
       config: freeze_power_config(this.options.host?.config?.(power_id).get() ?? {}),
       logger: agent.get_logger(),
-      federation,
+      town,
       notifications: this.notifications.publisher({ source_kind: "power", power_id, agent_id }),
       get_workspace_env: () => workspace?.get_env() ?? {},
       get_instructions: () => agent.get_instructions(),
@@ -462,7 +463,7 @@ export class CityPowerRuntime implements PowerRuntimeHost {
     // 生命周期上下文可能被 Power 长期持有；每次读取都解析当前绑定。
     const options = this.options;
     return Object.freeze({
-      get federation() { return options.federation; },
+      get town() { return options.town ? create_power_town(options.town) : undefined; },
       power: Object.freeze({
         id: power_id,
         background: async <TResult>(operation: () => Promise<TResult>) => await this.with_record_execution(power_id, async () => await operation()),

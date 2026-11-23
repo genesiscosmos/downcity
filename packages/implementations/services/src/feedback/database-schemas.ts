@@ -1,5 +1,5 @@
 /** feedback 服务按数据库 schema_id 选择表声明。 */
-import type { ServiceDatabaseSchemas } from "@downcity/federation";
+import type { ServiceDatabaseSchemas } from "@downcity/downtown";
 import { feedbackMessages } from "./schema.js";
 import { pg_feedback_messages } from "./postgres-schema.js";
 

@@ -7,7 +7,7 @@
  * - 直接管理：list / upsert / remove 裸 key-value
  */
 
-import { FederationAdmin } from "@downcity/federation";
+import { FederationAdmin } from "@downcity/downtown";
 import { t } from "@/shared/CliLocale.js";
 import { adminErrorMessage, isAdminNotFoundError, rethrowAdminAuthError } from "@/federation/admin/auth-error.js";
 import type { admin_tui_runtime, admin_tui_select_option } from "@/federation/types/AdminTui.js";

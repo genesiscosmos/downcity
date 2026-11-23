@@ -57,7 +57,7 @@ export class ExtensionPower extends Power {
       const release = this.gate.acquire(consumer);
       try { return await operation(); } finally { release(); }
     };
-    await this.source.initialize?.({ ...context, get federation() { return context.federation; }, power: {
+    await this.source.initialize?.({ ...context, get town() { return context.town; }, power: {
       id: context.power.id,
       background: async (operation) => {
         const release = this.gate.acquire(`power:${this.name}:background`, false);

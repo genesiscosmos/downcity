@@ -1,5 +1,5 @@
 /** credits 服务按数据库 schema_id 选择表声明。 */
-import type { ServiceDatabaseSchemas } from "@downcity/federation";
+import type { ServiceDatabaseSchemas } from "@downcity/downtown";
 import { creditsPrimaryCards, creditsEphemeralCards, creditsTransactions, creditsTransactionEntries } from "./schema.js";
 import { pg_credits_primary_cards, pg_credits_ephemeral_cards, pg_credits_transactions, pg_credits_transaction_entries } from "./postgres-schema.js";
 

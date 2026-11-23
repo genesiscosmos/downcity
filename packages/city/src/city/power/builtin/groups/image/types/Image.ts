@@ -7,20 +7,10 @@
  * - 字段保持 JSON 可序列化，便于通过工具输入与 ActionResult 传递。
  */
 
-import type { AIActionMessage } from "@downcity/federation";
+import type { AIActionMessage } from "@downcity/downtown";
+import type { TownSourceStatus } from "@/town/types/Town.js";
 import type { PowerJsonObject, PowerJsonValue } from "@/power/index.js";
 
-/** Image capability 使用的最小图片 AI 服务协议。 */
-export interface ImageAiService {
-  /** 读取当前可用的图片模型目录。 */
-  catalog(): Promise<{ all(): readonly unknown[] }>;
-
-  /** 创建图片生成任务。 */
-  image_create(input: PowerJsonObject): Promise<unknown>;
-
-  /** 查询图片生成任务。 */
-  image_result(input: PowerJsonObject): Promise<unknown>;
-}
 
 /** 图片生成文本内容片段。 */
 export interface ImageTextContent {
@@ -223,8 +213,14 @@ export interface ImageResultInput {
 
 /** 图片模型信息。 */
 export interface ImageModel {
-  /** 模型唯一 ID，用于 `image_create` 的 `model` 字段。 */
+  /** Town 统一模型 ID，用于 `image_create` 的 `model` 字段。 */
   id: string;
+  /** 原始来源连接 ID；相同模型名仍分别展示。 */
+  source_id?: string;
+  /** 来源连接的可读名称。 */
+  source_name?: string;
+  /** 本次目录实际身份绑定；执行时不可切换到其他账户。 */
+  binding_id?: string;
   /** 模型展示名称。 */
   name: string;
   /** 模型说明文本。 */
@@ -239,6 +235,8 @@ export interface ImageModel {
 
 /** 图片模型列表结果。 */
 export interface ImageModelsResult {
-  /** 可用于图片生成的模型列表。 */
+  /** 可用于图片生成的模型列表；id 为 Town 统一模型 ID。 */
   items: ImageModel[];
+  /** 各连接本次发现状态；不可用连接不会被当成空模型来源。 */
+  sources?: TownSourceStatus[];
 }

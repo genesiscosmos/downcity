@@ -80,6 +80,8 @@ export async function runTaskNow(params: {
   taskId: string;
   /** 受理时的任务定义快照，编辑不改变本次输入。 */
   task_snapshot?: ShipTaskDefinitionV1;
+  /** 宿主模型基线读取和绑定端口；执行前再次核对，绝不自动改账号。 */
+  model_host?: import("../types/TaskModelBinding.js").TaskModelHost;
   trigger: ShipTaskRunTriggerV1;
   executionId?: string;
   /** Task 完成结果的 City 级跨 Agent Session 交付端口。 */
@@ -212,6 +214,8 @@ export async function runTaskNow(params: {
     errorText = scriptResult.errorText;
   } else {
     const taskSessionRuntime = await createTaskSessionRuntimePort({
+      task,
+      model_host: params.model_host,
       context,
       storage: params.storage,
       runDirAbs,

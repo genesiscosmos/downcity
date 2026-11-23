@@ -140,6 +140,8 @@ export interface TaskMainviewCreateInput {
 
 /** Task Mainview 更新 Task 的输入。 */
 export interface TaskMainviewUpdateInput extends TaskMainviewCreateInput {
+  /** 用户明确确认采用当前模型和账号，更新未来运行的身份基线。 */
+  readonly confirm_model?: boolean;
   /** 修改前的 Task 稳定 ID。 */
   readonly current_title: string;
 }

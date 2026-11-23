@@ -8,7 +8,7 @@ import type { CityCreateAgent } from "@/city/types/CityCreateAgent.js";
 import type { CityHttpRuntimeOptions } from "@/city/transport/types/CityHttpRuntime.js";
 import type { CityRpcRuntimeOptions } from "@/city/transport/types/CityRpcRuntime.js";
 import type { Agent } from "@downcity/agent";
-import type { Federation } from "@downcity/federation";
+import type { TownOptions } from "@/town/types/Town.js";
 import type { WorkspaceRuntime } from "@/workspace/index.js";
 import type { StorageProvider } from "@/workspace/index.js";
 import type { Group } from "@downcity/agent";
@@ -21,8 +21,8 @@ export interface CityOptions {
   /** City 为 Agent 提供的底层存储；省略时使用进程内存储。 */
   storage?: StorageProvider;
 
-  /** 可选初始绑定；宿主通过 city.federation.set 更新身份并负责客户端释放，City 不访问账户库。 */
-  federation?: Federation;
+  /** Town 的多 Downtown 连接、模型/Service 聚合与宿主登录适配器。 */
+  town?: TownOptions;
 
   /** City 持有的 Workspace 资源集合；每个 Workspace ID 必须唯一。 */
   workspaces?: readonly WorkspaceRuntime[] | Readonly<Record<string, WorkspaceRuntime>>;

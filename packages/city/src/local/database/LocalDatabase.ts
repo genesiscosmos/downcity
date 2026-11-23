@@ -27,6 +27,9 @@ export class LocalDatabase implements LocalDatabaseTransaction {
   /** 当前连接是否已经关闭。 */
   private closed = false;
 
+  /** 同步事务嵌套深度；内层以 SAVEPOINT 组合多个仓储的原子操作。 */
+  private transaction_depth = 0;
+
   constructor(options: LocalDatabaseOptions) {
     const filename_input = String(options?.filename || "").trim();
     if (!filename_input) throw new TypeError("LocalDatabase filename is required");
@@ -92,21 +95,26 @@ export class LocalDatabase implements LocalDatabaseTransaction {
     this.sqlite.exec(sql);
   }
 
-  /** 在单个立即事务中同步执行一组业务操作；异步回调会回滚并报错。 */
+  /** 外层取得立即事务，内层使用保存点；异步回调会回滚，不能跨网络等待持有事务。 */
   transaction<TResult>(handler: (transaction: LocalDatabaseTransaction) => TResult): TResult {
     this.assert_open();
-    this.sqlite.exec("BEGIN IMMEDIATE;");
+    const savepoint = this.transaction_depth > 0 ? `local_transaction_${this.transaction_depth}` : undefined;
+    this.sqlite.exec(savepoint ? `SAVEPOINT ${savepoint};` : "BEGIN IMMEDIATE;");
+    this.transaction_depth += 1;
     try {
       const result = handler(this);
       if (is_promise_like(result)) {
         throw new TypeError("LocalDatabase.transaction handler must be synchronous");
       }
-      this.sqlite.exec("COMMIT;");
+      this.sqlite.exec(savepoint ? `RELEASE SAVEPOINT ${savepoint};` : "COMMIT;");
       return result;
     } catch (error) {
-      this.sqlite.exec("ROLLBACK;");
+      if (savepoint) {
+        this.sqlite.exec(`ROLLBACK TO SAVEPOINT ${savepoint};`);
+        this.sqlite.exec(`RELEASE SAVEPOINT ${savepoint};`);
+      } else this.sqlite.exec("ROLLBACK;");
       throw error;
-    }
+    } finally { this.transaction_depth -= 1; }
   }
 
   /** 幂等关闭数据库连接。 */

@@ -1,6 +1,6 @@
 /** Public login protocol. Claim credentials travel only in JSON bodies; status never delivers tokens. */
-import type { ApiDocumentation, ServiceInstallContext } from "@downcity/federation";
-import { httpError } from "@downcity/federation";
+import type { ApiDocumentation, ServiceInstallContext } from "@downcity/downtown";
+import { httpError } from "@downcity/downtown";
 import type { AccountsRuntime } from "./AccountsRuntime.js";
 import type { AccountsLoginContinueRequest, AccountsLoginStartRequest, AccountsLoginExchangeRequest } from "./types.js";
 import { toRecord } from "./utils.js";

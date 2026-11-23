@@ -21,7 +21,7 @@ test("当前 workspace 被解析为四个稳定发布层", () => {
     ["@downcity/type"],
     [
       "@downcity/agent",
-      "@downcity/federation",
+      "@downcity/downtown",
       "@downcity/sandbox-microsandbox",
       "@downcity/sandbox-native",
       "@downcity/ui",

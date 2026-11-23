@@ -2,7 +2,7 @@
 /** 最小全栈 Agent 服务：City 唯一持有 Agent、Workspace 和持久存储，使用官方 HTTP transport。 */
 import { resolve } from "node:path";
 import { homedir } from "node:os";
-import { create_openai_compatible_model } from "@downcity/federation";
+import { create_openai_compatible_model } from "@downcity/downtown";
 import { Agent, City, LocalStorageProvider, Workspace } from "@downcity/city";
 import { serveStatic } from "@hono/node-server/serve-static";
 import { Hono } from "hono";
@@ -36,10 +36,10 @@ const city = new City({
   } },
 });
 // 重新启动时恢复同一 Agent 的最近 Web Session，避免每次启动创建新历史。
-const sessions = await agent.sessions.list({ category: "chat", workspace_id: workspace.id, limit: 1 });
+const sessions = await agent.sessions.list({ type: "chat", workspace_id: workspace.id, limit: 1 });
 const session = sessions.items[0]
-  ? await agent.sessions.get(sessions.items[0].session_id, "chat", { workspace })
-  : await agent.sessions.create({ workspace, origin: { category: "chat", type: "chat" } });
+  ? await agent.sessions.get(sessions.items[0].id, "chat", { workspace })
+  : await agent.sessions.create({ workspace, type: "chat", kind: "chat" });
 web_router.get("/api/chat", context => {
   if (!allow_request(context.req.raw)) return context.json({ error: "Access denied" }, 403);
   return context.json({ session_id: session.id, category: "chat", agent_url: "/agents/template-agent/workspaces/default" });

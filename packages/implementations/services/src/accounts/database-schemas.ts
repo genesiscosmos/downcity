@@ -1,5 +1,5 @@
 /** accounts 服务按数据库 schema_id 选择表声明。 */
-import type { ServiceDatabaseSchemas } from "@downcity/federation";
+import type { ServiceDatabaseSchemas } from "@downcity/downtown";
 import { userProfiles, authUsers, authSessions, authAccounts, authVerifications } from "./schema.js";
 import { login_flows } from "./login-schema.js";
 import { pg_user_profiles, pg_auth_users, pg_auth_sessions, pg_auth_accounts, pg_auth_verifications } from "./postgres-schema.js";

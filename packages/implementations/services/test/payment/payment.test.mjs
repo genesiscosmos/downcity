@@ -7,7 +7,7 @@ import fs from "node:fs/promises"
 import os from "node:os"
 import path from "node:path"
 import test from "node:test"
-import { Federation } from "@downcity/federation"
+import { Downtown } from "@downcity/downtown"
 import { CreditsService, PaymentService } from "../../bin/index.js"
 import { createSqliteDb } from "./sqlite-db.mjs"
 import { create_test_admin_session } from "../admin-fixture.mjs"
@@ -17,7 +17,7 @@ test("PaymentService owns orders and tops up Credits after paid webhook", async 
   const temp_dir = await fs.mkdtemp(path.join(os.tmpdir(), "downcity-payment-"))
   try {
     process.chdir(temp_dir)
-    const federation = new Federation({ database: createSqliteDb(path.join(temp_dir, "test.sqlite")) })
+    const federation = new Downtown({ database: createSqliteDb(path.join(temp_dir, "test.sqlite")) })
     const queued_messages = []
     federation.queue.use({ send: async (message) => { queued_messages.push(message) } })
     const drain_queue = async () => {

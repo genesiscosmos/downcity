@@ -1,5 +1,5 @@
 /** Feedback API 的静态注册文档；字段、长度和状态语义与服务校验保持一致。 */
-import type { ApiDocumentation } from "@downcity/federation";
+import type { ApiDocumentation } from "@downcity/downtown";
 import { object_schema as obj, items_schema, text_schema as text, enum_schema, time_schema } from "../shared/documentation.js";
 
 const status = enum_schema("open", "reviewing", "replied", "closed");

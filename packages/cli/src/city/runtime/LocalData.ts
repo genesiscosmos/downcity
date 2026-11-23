@@ -17,6 +17,7 @@ import {
   PowerRepository,
   LocalSettingRepository,
   WorkspaceRepository,
+  TownConnectionRepository,
 } from "@downcity/city/local";
 import { CityTokenRepository } from "@downcity/city/local";
 
@@ -38,6 +39,8 @@ export interface CliLocalData {
   settings: LocalSettingRepository;
   /** City HTTP 凭据及 Agent 授权范围。 */
   city_tokens: CityTokenRepository;
+  /** City/Town 共用的持久服务连接事实源。 */
+  town_connections: TownConnectionRepository;
 }
 
 /** 显式创建 CLI 本地数据依赖。 */
@@ -50,8 +53,9 @@ export function create_cli_local_data(root_path_input?: string): CliLocalData {
   const agents = new AgentRepository(root_path);
   const powers = new PowerRepository(root_path);
   const city_tokens = new CityTokenRepository(database);
+  const town_connections = new TownConnectionRepository(database);
   const extensions = new ExtensionPlatform(database, root_path, agents);
-  return { root_path, database, agents, workspaces, powers, settings, city_tokens, extensions };
+  return { root_path, database, agents, workspaces, powers, settings, city_tokens, town_connections, extensions };
 }
 
 /** 在短连接本地数据依赖上执行同步操作。 */

@@ -97,7 +97,7 @@ type AgentSessionsOptions = {
   /** 读取 Agent 当前持有的运行时模型实例。 */
   get_agent_model: () => ModelClient | undefined;
   /** 按持久化稳定模型 ID 恢复，不从 label 或新 Agent 默认值推断。 */
-  resolve_model?: (model_id: string, workspace?: WorkspaceRuntime) => Promise<ModelClient>;
+  resolve_model?: import("../types/model/SessionModelResolver.js").SessionModelResolver;
 
   /** 缓存实例时立即装配 Agent 级观察；返回的订阅在释放实例时一并解除。 */
   observe_session?: (session: AgentManagedSession) => () => void;

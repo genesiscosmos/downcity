@@ -190,7 +190,8 @@ export class SessionState {
   async set_model(model: ModelClient): Promise<SessionModelSetResult> {
     const next_model_label = read_model_label(model);
     const binding = await this.store.read_model_binding();
-    const changed = next_model_label !== this.state.session_config.model_label || binding?.override_model_id !== model.id;
+    const changed = next_model_label !== this.state.session_config.model_label
+      || binding?.override_model_id !== model.id || binding?.override_binding_id !== model.binding_id;
     const next_config: AgentSessionConfigSnapshot = {
       ...this.state.session_config,
       model,
@@ -198,7 +199,12 @@ export class SessionState {
       model_context_window: read_model_context_window(model),
     };
     // 即使展示名未变化，也必须保存稳定 ID；旧历史明确选择后才获得可恢复模型。
-    await this.store.write_model_binding({ default_model_id: binding?.default_model_id ?? null, override_model_id: model.id });
+    await this.store.write_model_binding({
+      default_model_id: binding?.default_model_id ?? null,
+      ...(binding?.default_binding_id !== undefined ? { default_binding_id: binding.default_binding_id } : {}),
+      override_model_id: model.id,
+      ...(model.binding_id !== undefined ? { override_binding_id: model.binding_id } : {}),
+    });
     if (changed) {
       await this.run_metadata_mutation(async () => {
         const metadata = await this.store.read_metadata();

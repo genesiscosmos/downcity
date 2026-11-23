@@ -11,7 +11,7 @@
   "dependencies": {
     "@downcity/agent": "workspace:*",
     "@downcity/city": "workspace:*",
-    "@downcity/federation": "workspace:*",
+    "@downcity/downtown": "workspace:*",
     "@hono/node-server": "2.1.6",
     "hono": "^4.12.23"
   },

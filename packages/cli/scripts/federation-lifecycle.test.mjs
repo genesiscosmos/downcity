@@ -96,7 +96,7 @@ test("City 登录无需来源或产品注册参数", () => {
 });
 
 test("Federation 管理命令不提供机器注册或凭据入口", () => {
-  const cli_path = fileURLToPath(new URL("../bin/downfed.js", import.meta.url));
+  const cli_path = fileURLToPath(new URL("../bin/downtown.js", import.meta.url));
   const output = execFileSync(process.execPath, [cli_path, "--lang", "en", "--help"], { encoding: "utf8" });
   assert.doesNotMatch(output, /^\s+bureau\b/mu);
 });

@@ -56,6 +56,7 @@ export class AdminPactAccess {
       (path, init) => this.json(path, init),
       "/v1",
       id,
+      (path, init) => this.requester.raw(path, init),
     );
   }
 

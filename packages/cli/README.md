@@ -7,57 +7,57 @@ npm install -g downcity
 downcity -v
 ```
 
-安装后会得到 `city` / `downcity` 与 `fed` / `downfed` 两个相互独立的工具：
+安装后会得到 `city` / `downcity` 与 `downtown` 两个相互独立的工具：
 
 - `city` 是本机 Agent 宿主。CLI 通过数据库 Adapter 和 Repository 读取配置，显式创建 Agent，再由 City 按 ID 统一转发 HTTP/RPC。
-- `fed` 是 Federation Server Manager；TUI 用于注册和管理 Server，项目命令读取当前目录的 `federation.toml`，项目配置只支持 TOML，不兼容 JSON 配置。Local Node.js 和 Cloudflare Workers 都通过 `fed deploy` 部署。
-- `fed web --id fed_x` 在 `127.0.0.1:43128` 启动本次指定 Federation 的本地 Web 管理 UI；管理员登录后的 Session 只保留在 CLI 本地 BFF 内存中。
+- `downtown` 是 Downtown Server Manager；TUI 用于注册和管理 Server，项目命令读取当前目录的 `federation.toml`，项目配置只支持 TOML，不兼容 JSON 配置。Local Node.js 和 Cloudflare Workers 都通过 `downtown deploy` 部署。
+- `downtown web --id fed_x` 在 `127.0.0.1:43128` 启动本次指定 Downtown 的本地 Web 管理 UI；管理员登录后的 Session 只保留在 CLI 本地 BFF 内存中。
 
 ```bash
-fed create --path ./my-fed
+downtown create --path ./my-fed
 cd my-fed
 pnpm install
-fed deploy
-fed
+downtown deploy
+downtown
 ```
 
-`fed create` 和 `fed deploy` 的 `--path` 默认是 `.`；指定其他目录时使用 `--path <path>`，不接受位置路径参数，例如 `fed deploy --path ./my-fed`。
+`downtown create` 和 `downtown deploy` 的 `--path` 默认是 `.`；指定其他目录时使用 `--path <path>`，不接受位置路径参数，例如 `downtown deploy --path ./my-fed`。
 
-Fed 没有全局 active/default Federation，也不保存 `active_server_url`。`stop`、`restart`、`clean`、`backup`、`restore`、`status`、`logs`、`query`、`web`、`server`、`manage` 与 `server manage` 使用互斥的 `--id <id>` 或 `--name <name>`，ID 和名称均精确匹配。省略选择参数时，TTY 显示列表，选择只用于本次操作；非交互环境缺少参数时报错。名称重名时，TTY 继续选择，非 TTY 报错。列表没有表示全局当前连接的星标。`fed manage --id fed_x` 直接进入目标管理工作区，不接受 action 位置参数；`fed server manage --id fed_x` 也支持同样的选择规则。
+Fed 没有全局 active/default Downtown，也不保存 `active_server_url`。`stop`、`restart`、`clean`、`backup`、`restore`、`status`、`logs`、`query`、`web`、`server`、`manage` 与 `server manage` 使用互斥的 `--id <id>` 或 `--name <name>`，ID 和名称均精确匹配。省略选择参数时，TTY 显示列表，选择只用于本次操作；非交互环境缺少参数时报错。名称重名时，TTY 继续选择，非 TTY 报错。列表没有表示全局当前连接的星标。`downtown manage --id fed_x` 直接进入目标管理工作区，不接受 action 位置参数；`downtown server manage --id fed_x` 也支持同样的选择规则。
 
 ```bash
-fed status --id fed_x
-fed logs --id fed_x
-fed stop --id fed_x
-fed restart --id fed_x
-fed clean --id fed_x --dry-run
-fed clean --name my-fed --yes
-fed query GET /health --name my-fed
-fed manage --id fed_x
-fed server manage --id fed_x
-fed web --id fed_x --no-open
+downtown status --id fed_x
+downtown logs --id fed_x
+downtown stop --id fed_x
+downtown restart --id fed_x
+downtown clean --id fed_x --dry-run
+downtown clean --name my-fed --yes
+downtown query GET /health --name my-fed
+downtown manage --id fed_x
+downtown server manage --id fed_x
+downtown web --id fed_x --no-open
 ```
 
 `status` 可查询任意已保存连接，分别展示 registry record、系统 manager 事实与 `/health` 实时探测；本地实例另展示发布历史。登记状态、保存的策略和发布结果都不证明服务已停止或某个 release 正在运行。本地 release 只有在 manager 核对实例身份，且健康响应为 `ok: true`、`fed_id`、`release_id`、`instance_id` 全部匹配时才显示 ready；HTTP 200 本身不足以确认身份。manager 检查异常显示 `unknown`，需要人工检查系统服务与健康端点。
 
-`logs`、`stop` 和 `restart` 仅支持 CLI 管理的 local 实例。`logs` 显示当前 `service.log` 末尾最多 200 行，不跨文件补足；归档可人工读取。`stop` 禁用自动启动并停止服务，停止状态跨系统重启保留，直到用户显式执行 `fed deploy` 或符合恢复保护要求的 `fed restart`；这些操作按持久配置恢复自动启动策略。`restart` 只运行已安装 release，读取持久运行配置，不读取源码或重新构建；原项目目录删除后仍可重启。重启还要求 `current.json` 与 registry 的 release 一致。切换前的 build/package/preflight 失败保留旧实例及运行配置；没有待恢复切换时，允许 restart 原成功 release。进入切换后设置 `recovery_required = true`；切换失败或中断时阻断 restart，恢复必须显式执行 `fed deploy` 并成功。此保护持续到发布成功，后续 build/preflight 失败也不会清除。历史 `last_failure` 本身不构成阻断。管理界面的 Remove connection 只移除连接，不停止服务。
+`logs`、`stop` 和 `restart` 仅支持 CLI 管理的 local 实例。`logs` 显示当前 `service.log` 末尾最多 200 行，不跨文件补足；归档可人工读取。`stop` 禁用自动启动并停止服务，停止状态跨系统重启保留，直到用户显式执行 `downtown deploy` 或符合恢复保护要求的 `downtown restart`；这些操作按持久配置恢复自动启动策略。`restart` 只运行已安装 release，读取持久运行配置，不读取源码或重新构建；原项目目录删除后仍可重启。重启还要求 `current.json` 与 registry 的 release 一致。切换前的 build/package/preflight 失败保留旧实例及运行配置；没有待恢复切换时，允许 restart 原成功 release。进入切换后设置 `recovery_required = true`；切换失败或中断时阻断 restart，恢复必须显式执行 `downtown deploy` 并成功。此保护持续到发布成功，后续 build/preflight 失败也不会清除。历史 `last_failure` 本身不构成阻断。管理界面的 Remove connection 只移除连接，不停止服务。
 
 ## 本地 SQLite 备份与恢复
 
 ```bash
-fed backup --id fed_x
-fed stop --id fed_x
-fed restore --id fed_x --path /absolute/path/to/backup_id --dry-run
-fed restore --id fed_x --path /absolute/path/to/backup_id
+downtown backup --id fed_x
+downtown stop --id fed_x
+downtown restore --id fed_x --path /absolute/path/to/backup_id --dry-run
+downtown restore --id fed_x --path /absolute/path/to/backup_id
 # 非交互环境明确授权替换
-fed restore --name my-fed --path /absolute/path/to/backup_id --yes
+downtown restore --name my-fed --path /absolute/path/to/backup_id --yes
 ```
 
 仅支持已登记独立 release 的本地 SQLite 数据库，路径来自持久运行配置的绝对 `DATABASE_PATH`。在线备份使用 SQLite backup API，包含 WAL，完成后校验完整性、大小和 SHA-256；备份目录位于 `~/.downcity/federation/backups/<fed_id>/<backup_id>/`，包含 `database.sqlite` 和完成标记 `backup.json`，权限分别为目录 `0700`、文件 `0600`。
 
-恢复必须先显式 `fed stop`，并核对系统服务已停止、无法自动恢复及自启关联已关闭。先为当前数据库创建安全备份，再预览确认；取消不替换数据库，`--dry-run` 不生成安全备份或改库。确认后再次校验输入和当前库变化，在同目录准备文件、收敛 WAL，再原子替换；服务保持停止，不切换 release、运行配置或 City 连接。同 Fed 锁排除并发部署与启停，不控制绕过 Fed 的外部数据库连接。
+恢复必须先显式 `downtown stop`，并核对系统服务已停止、无法自动恢复及自启关联已关闭。先为当前数据库创建安全备份，再预览确认；取消不替换数据库，`--dry-run` 不生成安全备份或改库。确认后再次校验输入和当前库变化，在同目录准备文件、收敛 WAL，再原子替换；服务保持停止，不切换 release、运行配置或 City 连接。同 Fed 锁排除并发部署与启停，不控制绕过 Fed 的外部数据库连接。
 
-备份可能包含用户信息、会话和凭据，不能提交 Git 或打入 release；摘要不等于加密或签名。恢复不保证 schema 跨版本兼容，也不自动回滚或迁移应用，恢复后管理员 Session 与 User Token 可能需重新登录。备份不自动定时或清理，`fed clean` 不删除它们。完整边界见 [SQLite 备份与恢复](https://downcity.ai/zh/city-sdk-docs/packages/cli/backup-and-restore)。
+备份可能包含用户信息、会话和凭据，不能提交 Git 或打入 release；摘要不等于加密或签名。恢复不保证 schema 跨版本兼容，也不自动回滚或迁移应用，恢复后管理员 Session 与 User Token 可能需重新登录。备份不自动定时或清理，`downtown clean` 不删除它们。完整边界见 [SQLite 备份与恢复](https://downcity.ai/zh/city-sdk-docs/packages/cli/backup-and-restore)。
 
 本地受管日志使用固定默认值，无需新增配置：
 
@@ -85,13 +85,13 @@ writer 的当前日志和归档路径必须是普通文件；符号链接、目�
 
 发布摘要保存在 `~/.downcity/federation/deployments/<fed_id>/deployment.json`。`status` 展示最后成功 release、最近失败 release 和失败阶段，以及 `latest` 的 release、outcome、phase、cutover、candidate、cleanup 与 `recovery required`。未形成候选 release 时显示 `not produced`；没有历史时单独显示未记录。`last_success` 不被失败覆盖，`last_failure` 与 `latest` 分别显示；`cleanup` 是该次尝试的清理结果，不是实时服务状态。记录缺失或损坏也不替代 manager 与健康检查。
 
-`fed clean` 仅清理本地已登记 Fed 的 release。使用互斥且精确匹配的 `--id <id>` 或 `--name <name>`；省略时，TTY 从列表选择一个 Fed，选择仅用于本次操作，非 TTY 直接报错。名称重名时，TTY 继续选择，非 TTY 报错。它不清理远程连接或未登记目录。
+`downtown clean` 仅清理本地已登记 Fed 的 release。使用互斥且精确匹配的 `--id <id>` 或 `--name <name>`；省略时，TTY 从列表选择一个 Fed，选择仅用于本次操作，非 TTY 直接报错。名称重名时，TTY 继续选择，非 TTY 报错。它不清理远程连接或未登记目录。
 
 ```bash
-fed clean                              # TTY 列表选择后预览、确认
-fed clean --id fed_x --dry-run          # 只预览
-fed clean --name my-fed                 # 预览后交互确认
-fed clean --id fed_x --yes              # 显式确认，适用于非交互调用
+downtown clean                              # TTY 列表选择后预览、确认
+downtown clean --id fed_x --dry-run          # 只预览
+downtown clean --name my-fed                 # 预览后交互确认
+downtown clean --id fed_x --yes              # 显式确认，适用于非交互调用
 ```
 
 清理先预览各 release 的 ID、大小及删除或保留原因，再确认删除。`--dry-run` 只预览，不删除；非交互删除必须显式传入 `--yes`，该参数不绕过保护检查。默认始终保留最近 3 个成功 release，不开放 `--keep` 参数。以下 release 同样受保护：
@@ -103,9 +103,9 @@ fed clean --id fed_x --yes              # 显式确认，适用于非交互调�
 
 运行器不可验证或其他保护信息检查出错时，直接拒绝清理。同一 Fed 的操作锁在目标选择后覆盖预览、确认与删除全过程，阻止并发切换改变引用。
 
-发布尝试保存在 `~/.downcity/federation/deployments/<fed_id>/attempts/<operation_id>.json`，用于识别成功与失败历史。失败产物仅由用户手动执行 `fed clean` 删除，仍须通过上述保护检查。CLI 不自动清理 release；`clean` 不删除 data、config、logs、staging 或部署历史，release 删除后发布尝试记录和发布摘要仍保留。
+发布尝试保存在 `~/.downcity/federation/deployments/<fed_id>/attempts/<operation_id>.json`，用于识别成功与失败历史。失败产物仅由用户手动执行 `downtown clean` 删除，仍须通过上述保护检查。CLI 不自动清理 release；`clean` 不删除 data、config、logs、staging 或部署历史，release 删除后发布尝试记录和发布摘要仍保留。
 
-运行配置单独保存在 `~/.downcity/federation/config/<fed_id>/runtime.env.json`，文件权限为 `0600`。默认 SQLite 位于 `~/.downcity/federation/data/<fed_id>/data.sqlite`。显式指定的数据库保持其绝对路径；删除源码前需确认数据库不在准备删除的目录内。已登记的数据库文件缺失时直接报错，拒绝创建空库替代；没有显式路径但源码目录中存在 `data.sqlite` 或 `data/local.db` 时，要求在项目 `.env` 中显式声明数据库路径，不猜测或迁移。`fed deploy --dry-run` 在临时目录构建和校验产物并清理，不安装 release、不修改持久运行配置、不启停实例；构建脚本仍可能向项目写入构建输出。
+运行配置单独保存在 `~/.downcity/federation/config/<fed_id>/runtime.env.json`，文件权限为 `0600`。默认 SQLite 位于 `~/.downcity/federation/data/<fed_id>/data.sqlite`。显式指定的数据库保持其绝对路径；删除源码前需确认数据库不在准备删除的目录内。已登记的数据库文件缺失时直接报错，拒绝创建空库替代；没有显式路径但源码目录中存在 `data.sqlite` 或 `data/local.db` 时，要求在项目 `.env` 中显式声明数据库路径，不猜测或迁移。`downtown deploy --dry-run` 在临时目录构建和校验产物并清理，不安装 release、不修改持久运行配置、不启停实例；构建脚本仍可能向项目写入构建输出。
 
 操作锁的 owner 已失效或没有 owner 时，CLI 只报告锁路径并要求人工核对，不自动回收锁。
 
@@ -117,7 +117,7 @@ auto_start = false
 restart_on_failure = true
 ```
 
-`deployment.process` 只适用于 `local`；省略表或字段时读取器补齐默认值。两个字段只接受布尔值，未知字段报错；Cloudflare Workers 配置此表时报错。修改项目配置后执行 `fed deploy` 应用，`fed restart` 使用持久运行配置。
+`deployment.process` 只适用于 `local`；省略表或字段时读取器补齐默认值。两个字段只接受布尔值，未知字段报错；Cloudflare Workers 配置此表时报错。修改项目配置后执行 `downtown deploy` 应用，`downtown restart` 使用持久运行配置。
 
 `restart_on_failure` 默认开启，异常退出后每隔 10 秒尝试恢复，60 秒内最多 5 次；主动停止不触发恢复。`auto_start` 默认关闭，只有显式设为 `true` 才持久安装到 macOS 的 `~/Library/LaunchAgents` 或启用 Linux 用户级 `default.target.wants`。macOS 在用户登录后自动启动；Linux 需要该用户的 systemd user manager 已存在并可用，不能据此保证开机启动。CLI 不自动开启 linger。
 
@@ -125,7 +125,7 @@ restart_on_failure = true
 
 本地部署未设置 `deployment.port` 时固定使用默认端口 `12314`；在 `federation.toml` 的 `[deployment]` 中显式设置 `port` 可覆盖默认值。选定端口被占用时，交互终端会展示占用进程的 PID、启动时间、命令和工作目录，并标明是否属于当前项目，询问是否停止后继续部署（默认否）。确认后 CLI 重新核对进程身份，发送 `SIGTERM` 并最多等待 5 秒释放端口，不自动强制终止。非交互终端、无法核实进程身份或端口未释放时部署失败；`--yes` 不跳过停止进程的确认。进程检查需要系统提供 `lsof` 和 `ps`。CLI 不扫描其他端口，也不从部署历史推断端口。
 
-`fed create` 默认生成 Local Node.js + SQLite 项目。首次 `fed deploy` 或 `fed deploy --admin-reset` 会交互式要求输入管理员 ID、密码和确认密码；密码至少 12 个字符，CLI 只在内存中使用明文并将摘要写入数据库。遗失密码时，只有拥有目标基础设施部署权限的人可以运行 `fed deploy --admin-reset`，非交互环境还必须显式传入 `--yes`（该参数只确认重置，不跳过凭证输入）。重置会撤销全部现有管理员 Session。CLI 通过本地 SQLite 事务或 Wrangler 远程 D1 权限直接完成管理员恢复，不要求 Worker 读取恢复环境变量；普通 deploy 永远不会修改管理员。部署期间会持续显示当前构建、资源准备、Worker 发布、健康检查与管理员验证阶段。无参数执行 `fed` 会进入系统级 Federation 管理面板，已部署实例不依赖当前工作目录。
+`downtown create` 默认生成 Local Node.js + SQLite 项目。首次 `downtown deploy` 或 `downtown deploy --admin-reset` 会交互式要求输入管理员 ID、密码和确认密码；密码至少 12 个字符，CLI 只在内存中使用明文并将摘要写入数据库。遗失密码时，只有拥有目标基础设施部署权限的人可以运行 `downtown deploy --admin-reset`，非交互环境还必须显式传入 `--yes`（该参数只确认重置，不跳过凭证输入）。重置会撤销全部现有管理员 Session。CLI 通过本地 SQLite 事务或 Wrangler 远程 D1 权限直接完成管理员恢复，不要求 Worker 读取恢复环境变量；普通 deploy 永远不会修改管理员。部署期间会持续显示当前构建、资源准备、Worker 发布、健康检查与管理员验证阶段。无参数执行 `downtown` 会进入系统级 Downtown 管理面板，已部署实例不依赖当前工作目录。
 
 City 的主要命令：
 
@@ -161,6 +161,16 @@ CLI 与 Desktop 在同一 root 下互斥持有执行权，资源命令连接经�
 
 CLI City 只维护一个 daemon，并分别监听一个 HTTP 端口和一个原生 TCP RPC 端口。两种协议都按 `agent_id` 路由，不为每个 Agent 分配独立端口。
 
-Federation Admin 配置与 Federation User Session 同样保存在 `~/.downcity/downcity.db`。脚本可通过 `DOWNCITY_FEDERATION_URL` 和 `DOWNCITY_USER_TOKEN` 显式覆盖当前 Federation 用户身份。
+Downtown 连接与独立账户凭据保存在当前 City root 的本地数据库中。使用连接 ID 显式选择服务：
 
-用户通过 `city federation login [url]` 登录 Federation。用户会话负责身份和额度，City 自动携带持久的 `city_id` 来源标签。来源不参与授权，多个 City 可共用同一个 Federation。
+```sh
+city downtown add https://base.downcity.ai --name Official
+city downtown list
+city downtown login <connection_id>
+city downtown whoami <connection_id>
+city downtown models --connection <connection_id>
+city downtown services --connection <connection_id>
+city downtown logout <connection_id>
+```
+
+每条连接独立登录，模型和服务保留来源 ID；不设置全局当前连接。账户用量由原 Downtown 记录，City 的来源标签不授予权限。独立的 `downtown deploy` 管理服务端部署，`city downtown` 管理 City 连接。

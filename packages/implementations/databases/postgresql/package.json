@@ -1,6 +1,6 @@
 {
   "name": "@downcity/database-postgresql",
-  "version": "1.5.4",
+  "version": "1.5.5",
   "description": "Downcity Federation Database adapter for PostgreSQL via postgres-js.",
   "type": "module",
   "main": "./bin/index.js",
@@ -30,10 +30,10 @@
     "postgres": "^3.4.9"
   },
   "devDependencies": {
-    "@downcity/federation": "workspace:*",
+    "@downcity/downtown": "workspace:*",
     "typescript": "^6.0.3"
   },
   "peerDependencies": {
-    "@downcity/federation": "workspace:^"
+    "@downcity/downtown": "workspace:^"
   }
 }

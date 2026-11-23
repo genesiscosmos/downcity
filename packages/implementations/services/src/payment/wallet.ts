@@ -2,7 +2,7 @@
  * Payment 钱包领域：套餐由管理端版本化维护，订单冻结权益，履约使用独立幂等日志。
  * 用户查询只投影本人安全字段；重试只处理已确认 paid 的订单，不接受回跳状态发卡。
  */
-import { httpError, type ApiDocumentation, type ServiceInstallContext } from "@downcity/federation";
+import { httpError, type ApiDocumentation, type ServiceInstallContext } from "@downcity/downtown";
 import type { PaymentRecord, PaymentProvider } from "./types.js";
 import type { PaymentCardPlan, PaymentEntitlement, PaymentFulfillment, PaymentFulfillmentContext, PaymentWalletTable } from "./types/Wallet.js";
 

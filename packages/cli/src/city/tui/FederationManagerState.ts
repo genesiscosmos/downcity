@@ -193,8 +193,8 @@ function build_city_items(params: {
       id: "use",
       title: t({ zh: "选择 Federation", en: "Select Federation" }),
       subtitle: t({
-        zh: "从 City 本地 / downfed admin 已保存项中选择",
-        en: "Choose from City-local or downfed-admin saved Federations",
+        zh: "从 City 本地 / downtown admin 已保存项中选择",
+        en: "Choose from City-local or downtown-admin saved Federations",
       }),
       detail: format_federation_list_detail(list_federations()),
     },

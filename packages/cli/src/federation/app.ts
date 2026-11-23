@@ -4,7 +4,7 @@
  * Downcity Federation 交互入口。
  *
  * 关键说明（中文）
- * - `downfed` 只负责 Federation 与 admin 管理。
+ * - `downtown` 只负责 Federation 与 admin 管理。
  * - 无参数时打开 Federation 管理 TUI，所选实例仅传入本次工作区。
  * - user 登录与本机 runtime 统一由 `downcity` 承担。
  */

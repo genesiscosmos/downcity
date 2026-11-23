@@ -1,7 +1,7 @@
 {
-  "name": "@downcity/federation",
-  "version": "1.6.11",
-  "description": "Unified local and remote Federation SDK for user and admin access.",
+  "name": "@downcity/downtown",
+  "version": "1.6.13",
+  "description": "Unified local and remote Downtown SDK for user and admin access.",
   "type": "module",
   "main": "./bin/index.js",
   "module": "./bin/index.js",
@@ -33,7 +33,7 @@
   },
   "keywords": [
     "downcity",
-    "federation",
+    "downtown",
     "services",
     "auth"
   ],

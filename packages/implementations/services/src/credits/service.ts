@@ -12,7 +12,7 @@ import {
   type ServiceInstallContext,
   type AdminUsageQuery,
   type UserDailyUsageQuery,
-} from "@downcity/federation";
+} from "@downcity/downtown";
 import { raw_all, raw_atomic, raw_first } from "./raw.js";
 import { credits_database_schemas } from "./database-schemas.js";
 import { postgres_credits_constraints } from "./postgres-constraints.js";

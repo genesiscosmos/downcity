@@ -4,7 +4,7 @@
  * 账务领域保留 SQL 命令所有权，具体查询和原子提交由 City Database Adapter 执行。
  */
 
-import type { ServiceDatabaseContext } from "@downcity/federation";
+import type { ServiceDatabaseContext } from "@downcity/downtown";
 import { bind_statement } from "../shared/database-sql.js";
 import type { CreditsRawCommand, CreditsRawRunResult } from "./types/RawDatabase.js";
 

@@ -3,17 +3,18 @@
  *
  * 关键点（中文）
  * - 三个动作：`sound.models`、`sound.asr`、`sound.tts`；读模型是 read，转写与合成是 write。
- * - 语音 AI 来自 City 持有的 Federation；本地音频读取以当前 Workspace 为根。
+ * - 语音 AI 经 Town 统一模型 ID 路由；本地音频读取以当前 Workspace 为根。
  * - `tts` 只返回已落盘的本地音频路径，不注入 Agent 消息。
  * - `asr` 同时服务模型调用与其它 power 的程序化调用（例如 chat 入站音频自动转写），
  *   因此不再需要单独的非模型侧动作或 `invoke` 入口。
  */
 
 import { z } from "zod";
-import type { PowerJsonObject, PowerJsonValue } from "@/power/index.js";
+import type { PowerJsonValue } from "@/power/index.js";
+import type { PowerTown } from "@/power/types/PowerTown.js";
+import type { TownModelEntry, TownModelList } from "@/town/types/TownModels.js";
 import type { CityPowerContext } from "@/city/types/CityPowerContext.js";
 import type {
-  SoundAiService,
   SoundAsrResult,
   SoundModel,
   SoundTtsOutput,
@@ -27,30 +28,22 @@ import {
   normalize_tts_result,
   resolve_asr_input,
 } from "@/city/power/builtin/groups/sound/runtime/SoundProtocol.js";
+import { localize_sound_result } from "./runtime/SoundResultStorage.js";
 import { CityAction, CityActionError } from "@/city/power/builtin/CityAction.js";
 import { CityActionGroup } from "@/city/power/builtin/CityActionGroup.js";
 
-/** 从 City 注入的 Federation 获取语音 AI 服务。 */
-function require_sound_ai(context: CityPowerContext): SoundAiService {
-  const service = context.federation?.user.ai;
-  if (!service) {
-    throw new CityActionError({
-      code: "unsupported_action",
-      message: "sound actions require a City Federation user AI service, and none is configured.",
-    });
+/** 语音动作仅使用 Town，不能隐式切换 Downtown 或账户。 */
+function require_sound_models(context: CityPowerContext): PowerTown["models"] {
+  if (!context.town) {
+    throw new CityActionError({ code: "unsupported_action", message: "sound actions require City Town model routing." });
   }
-  return {
-    catalog: async () => await service.catalog(),
-    asr: async (input) => await service.asr(input as never),
-    tts: async (input) => await service.tts(input as never),
-  };
+  return context.town.models;
 }
 
-/** 读取全部语音可用模型。 */
-async function list_models(context: CityPowerContext): Promise<SoundModel[]> {
-  return await require_sound_ai(context)
-    .catalog()
-    .then((catalog) => catalog.all()) as unknown as SoundModel[];
+/** 只读取实际支持语音能力的模型，保留每个来源失败状态。 */
+async function list_models(context: CityPowerContext): Promise<TownModelList> {
+  const catalog = await require_sound_models(context).list({ signal: context.abort_signal });
+  return { ...catalog, items: catalog.items.filter((entry) => entry.modalities.includes("asr") || entry.modalities.includes("tts")) };
 }
 
 /**
@@ -58,22 +51,30 @@ async function list_models(context: CityPowerContext): Promise<SoundModel[]> {
  *
  * 关键点（中文）
  * - 显式 `model` 永远优先。
- * - 未指定时取模型目录中第一个支持该能力的模型；没有则明确失败，不猜具体型号。
+ * - 未指定时仅在恰好一个可用候选时选择；多个候选要求明确模型，不按目录顺序切换计费来源。
  */
-function resolve_model_id(
-  context: CityPowerContext,
+function resolve_model(
   capability: "asr" | "tts",
   input_model: unknown,
-  models: SoundModel[],
-): string {
+  catalog: TownModelList,
+): TownModelEntry {
   const explicit = typeof input_model === "string" ? input_model.trim() : "";
-  if (explicit) return explicit;
-  const fallback = normalize_sound_models(models, capability).items[0]?.id;
-  if (fallback) return fallback;
+  const candidates = catalog.items.filter((entry) => entry.modalities.includes(capability));
+  if (explicit) {
+    const selected = candidates.find((entry) => entry.model_id === explicit);
+    if (selected) return selected;
+    throw new CityActionError({ code: "unsupported_action", message: `the selected ${capability} model is unavailable; select a model from sound.models.` });
+  }
+  // 来源故障时目录不完整，不能把剩余一项解释为用户已选定的唯一计费来源。
+  if (catalog.sources.some((source) => source.status !== "available")) {
+    throw new CityActionError({ code: "invalid_args", message: `some model sources are unavailable; pass an explicit ${capability} model from sound.models.` });
+  }
+  if (candidates.length === 1) return candidates[0]!;
   throw new CityActionError({
-    code: "unsupported_action",
-    message:
-      `no ${capability} model is available; call sound.models first and pass model explicitly.`,
+    code: candidates.length ? "invalid_args" : "unsupported_action",
+    message: candidates.length
+      ? `multiple ${capability} models are available; pass a model ID from sound.models explicitly.`
+      : `no ${capability} model is available; call sound.models first.`,
   });
 }
 
@@ -83,14 +84,17 @@ async function transcribe_audio(
   payload: PowerJsonValue | undefined,
 ): Promise<SoundAsrResult> {
   const input = normalize_asr_input(payload);
-  const model = resolve_model_id(context, "asr", input.model, await list_models(context));
+  const selected = resolve_model("asr", input.model, await list_models(context));
   const resolved = await resolve_asr_input({
     workspace_path: context.workspace_path,
-    payload: { ...input, model },
+    payload: { ...input, model: selected.model_id },
   });
+  const { model: _model, ...business_input } = resolved;
   return normalize_asr_result(
-    await require_sound_ai(context)
-      .asr(resolved as unknown as PowerJsonObject) as unknown as SoundAsrResult,
+    await require_sound_models(context).asr({
+      model_id: selected.model_id, binding_id: selected.binding_id,
+      input: business_input, signal: context.abort_signal,
+    }),
   );
 }
 
@@ -100,16 +104,13 @@ async function synthesize_speech(
   payload: PowerJsonValue | undefined,
 ): Promise<SoundTtsOutput> {
   const input = normalize_tts_input(payload);
-  const model = resolve_model_id(context, "tts", input.model, await list_models(context));
-  const result = await require_sound_ai(context).tts({
-    ...input,
-    model,
-  } as unknown as PowerJsonObject);
-  const normalized = normalize_tts_result(result as never);
-  return {
-    files: normalized.parts.flatMap((part) =>
-      part.type === "file" && part.url.trim() ? [part.url.trim()] : []),
-  };
+  const selected = resolve_model("tts", input.model, await list_models(context));
+  const { model: _model, ...business_input } = input;
+  const result = await require_sound_models(context).tts({
+    model_id: selected.model_id, binding_id: selected.binding_id,
+    input: business_input, signal: context.abort_signal,
+  });
+  return localize_sound_result(context, normalize_tts_result(result));
 }
 
 /** `sound.models` 的输入。 */
@@ -133,7 +134,15 @@ class SoundModelsAction extends CityAction<z.infer<typeof sound_models_input>> {
     context: CityPowerContext,
   ): Promise<ReturnType<typeof normalize_sound_models>> {
     const capability = normalize_models_input(args as PowerJsonValue);
-    return normalize_sound_models(await list_models(context), capability);
+    const catalog = await list_models(context);
+    const normalized = normalize_sound_models(catalog.items.map((entry) => ({ ...entry, id: entry.model_id })) as SoundModel[], capability);
+    return {
+      items: normalized.items.map((item) => {
+        const entry = catalog.items.find((entry) => entry.model_id === item.id)!;
+        return { ...item, source_id: entry.source_id, source_name: entry.source_name, binding_id: entry.binding_id };
+      }),
+      sources: catalog.sources,
+    };
   }
 }
 
@@ -237,8 +246,9 @@ export class SoundGroup extends CityActionGroup {
       "",
       "## Model selection",
       "",
-      "Pass the selected model id in `model`. When it is omitted, the first available model",
-      "supporting that capability is used, so call `sound.models` first when the choice matters.",
+      "Pass the unified model id returned by `sound.models` in `model`.",
+      "When omitted, a model is selected only if exactly one candidate supports the capability.",
+      "If several models are available, choose one explicitly; requests never switch billing sources automatically.",
       "Never use an ASR-only model for TTS or a TTS-only model for ASR.",
       "",
       "Never invent a transcript or audio result when a call fails.",

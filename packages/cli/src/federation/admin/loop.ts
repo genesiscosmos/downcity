@@ -6,7 +6,7 @@
  * - City 连接配置、管理员重新登录等低频操作通过 `更多` 回调交给 workspace 层处理。
  */
 
-import { Federation, type FederationAdmin } from "@downcity/federation";
+import { Downtown, type FederationAdmin } from "@downcity/downtown";
 import { type AdminSession } from "@/federation/core/session.js";
 import { adminErrorMessage, isAdminAuthError } from "@/federation/admin/auth-error.js";
 import { create_admin_tui_runtime } from "@/federation/tui/AdminTuiRuntime.js";
@@ -43,7 +43,7 @@ export async function adminLoop(
     runtime?: admin_tui_runtime;
   },
 ): Promise<"logout" | "quit" | "switch_identity" | "back"> {
-  const admin = new Federation({
+  const admin = new Downtown({
     url: session.base_url,
     admin_token: session.session_token,
   }).admin;

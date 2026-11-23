@@ -6,7 +6,7 @@ import type { Agent } from "@downcity/agent";
 import type { City, CityCreateAgentInput } from "@downcity/city";
 import { create_agent_id } from "@downcity/city/local";
 import type { CliLocalData } from "@/city/runtime/LocalData.js";
-import { create_cli_agent } from "@/city/runtime/AgentAssembly.js";
+import { create_cli_agent, resolve_cli_agent_model } from "@/city/runtime/AgentAssembly.js";
 
 /** 持久化并注册一个不绑定 Workspace 的 Agent。 */
 export async function create_cli_persistent_agent(
@@ -15,16 +15,17 @@ export async function create_cli_persistent_agent(
   city: City,
 ): Promise<Agent> {
   const agent_id = create_agent_id(input.name);
+  const model = input.model_id ? await resolve_cli_agent_model(input.model_id, city.town) : undefined;
   const config = data.agents.create({
     agent_id,
     name: input.name,
     description: input.description,
     instruction: input.instruction,
-    execution: { type: "api", model_id: input.model_id },
+    execution: { type: "api", model_id: input.model_id, ...(model?.binding_id ? { binding_id: model.binding_id } : {}) },
   });
   let agent: Agent | undefined;
   try {
-    agent = await create_cli_agent({ config, root_path: data.root_path, resolve_federation: () => city.federation.current });
+    agent = await create_cli_agent({ config, root_path: data.root_path, town: city.town });
     city.agents.add(agent);
     return agent;
   } catch (error) {
