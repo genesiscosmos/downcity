@@ -68,6 +68,9 @@ export interface AgentSessionCollection {
   /** 监听成功归档或删除活动会话；监听器失败不回滚领域提交。 */
   on_removed(listener: (event: SessionRemovalEvent) => void | Promise<void>): () => void;
 
+  /** 监听缓存实例释放（含卸载、归档和 Agent 关闭）；仅用于宿主清理附属资源，不改变领域状态。 */
+  on_released(listener: (session: AgentSession) => void): () => void;
+
   /** 在指定 Workspace 中恢复一个已经属于当前 Agent 的 Session。 */
   get(
     session_id: string,

@@ -27,7 +27,7 @@ export function InboxEntryDetail({ entry, current, handled, store, options, prop
   /** 关闭详情，由父级提供现有草稿确认。 */ on_close: () => Promise<void>;
   /** 只有实际可见的详情允许自动已读，由主视图控制。 */ can_read: boolean;
 }) {
-  const { Markdown, Button } = props.ui.components;
+  const { DetailContent, Markdown, Button } = props.ui.components;
   const title_id = useId();
   const [error, set_error] = useState("");
   const [opening, set_opening] = useState(false);
@@ -106,19 +106,14 @@ export function InboxEntryDetail({ entry, current, handled, store, options, prop
     : availability === "removed" ? "来源已移除，通知记录仍然保留。"
       : availability === "unknown" ? "来源身份未知或暂时不可达；已保留内容，无法确认是否可打开。" : "";
   const can_open = availability === "available" && (entry.pending ? !!options.open_interaction : !!entry.update?.target && !!options.open_notification);
-  return <article className="inbox-detail" aria-labelledby={title_id}>
-    <header className="inbox-detail-header">
-      <div className="inbox-detail-heading">
-        <h1 id={title_id} className="inbox-detail-title">{active.title}</h1>
-        <Button size="icon" title="关闭详情" aria_label="关闭详情" on_click={() => void on_close()}><InboxIcon kind="close" /></Button>
-      </div>
-      <div className="inbox-detail-meta">
+  return <DetailContent heading={active.title} heading_id={title_id}
+    header_actions={<Button size="icon" title="关闭详情" aria_label="关闭详情" on_click={() => void on_close()}><InboxIcon kind="close" /></Button>}
+    metadata={<>
         <span className="inbox-source"><InboxAvatar entry={active} size="detail" options={options} />{active.source}</span>
         <time dateTime={new Date(active.created_at).toISOString()}>{full_time(active.created_at)}</time>
         {!handled && (item || active.update?.outcome === "failure") ? <span className="inbox-detail-status">{item && unavailable ? "暂不可响应" : invalid ? current ? "已中断" : "已结束" : <InboxAttention entry={active} options={options} presentation="status" />}</span> : null}
-      </div>
-      {can_open ? <div className="inbox-detail-actions"><Button disabled={opening} on_click={() => void open()}>{opening ? "正在打开…" : entry.pending ? "查看原会话 ↗" : "查看结果 ↗"}</Button></div> : null}
-    </header>
+    </>}
+    actions={can_open ? <Button disabled={opening} on_click={() => void open()}>{opening ? "正在打开…" : entry.pending ? "查看原会话 ↗" : "查看结果 ↗"}</Button> : undefined}>
     {source_notice ? <p className="inbox-detail-note" role="status">{source_notice}</p> : null}
     {error ? <div className="inbox-inline-error" role="alert">{error}</div> : null}
     {handled ? <div className="inbox-resolution" role="status"><InboxIcon kind="check" /><div><h2>已处理</h2><p>你的回应已送回原会话。</p>{next ? <Button on_click={() => void choose(next)}>处理下一项</Button> : null}</div></div>
@@ -131,5 +126,5 @@ export function InboxEntryDetail({ entry, current, handled, store, options, prop
           {read_error ? <p className="inbox-inline-error" role="status">暂未标为已读。<button type="button" onClick={() => void read(true)}>重试</button></p> : null}
         </div>}
     {entry.pending ? <details className="inbox-origin"><summary>来源详情</summary><dl><dt>Agent</dt><dd>{active.source}</dd><dt>Session</dt><dd>{entry.pending.interaction.reference.session_id}</dd><dt>执行</dt><dd>{entry.pending.interaction.reference.turn_id}</dd></dl></details> : null}
-  </article>;
+  </DetailContent>;
 }

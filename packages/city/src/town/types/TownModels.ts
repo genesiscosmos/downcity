@@ -27,6 +27,24 @@ export interface TownModelList {
   sources: TownSourceStatus[];
 }
 
+/** 目录读取选项；显式刷新与普通读取共用同一来源的在途请求。 */
+export interface TownModelListOptions {
+  /** 只返回声明此能力的模型；不改变缓存的完整来源目录。 */
+  modality?: string;
+  /** 仅取消本次等待；最后一个等待者取消时中止来源目录请求。 */
+  signal?: AbortSignal;
+  /** 跳过未过期的目录快照，重新读取来源；并发刷新仍合并请求。 */
+  refresh?: boolean;
+}
+
+/** 精确解析一个模型；不访问其他来源，也不自动替换授权身份。 */
+export interface TownModelResolveOptions extends TownExecutionOptions {
+  /** 要求模型声明此能力；缺失时返回明确的能力错误。 */
+  modality?: string;
+  /** 跳过此来源未过期的目录快照；并发刷新仍合并请求。 */
+  refresh?: boolean;
+}
+
 /** 扩展直接 ModelClient 登记参数；只声明实际支持的文本能力。 */
 export interface TownDirectModelRegistration {
   /** 扩展/宿主的稳定条目标识，重复登记必须失败。 */

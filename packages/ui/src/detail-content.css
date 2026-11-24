@@ -1,4 +1,4 @@
-/** 共享详情正文：宿主主题、统一紧凑排版和留白；纵向尺寸与滚动归页面所有。 */
+/** 共享详情完整布局：标题、元信息、操作与正文同线；纵向尺寸与滚动归页面所有。 */
 .dc-detail-content {
   box-sizing: border-box;
   display: flex;
@@ -14,10 +14,18 @@
 }
 
 .dc-detail-content > :where(*) { min-width: 0; }
-.dc-detail-content > :where(p, dl, dd) { margin: 0; }
+.dc-detail-header, .dc-detail-body { display: flex; flex-direction: column; gap: .75rem; min-width: 0; }
+.dc-detail-header { gap: .5rem; }
+.dc-detail-heading-row { display: flex; align-items: flex-start; gap: .75rem; min-width: 0; }
+.dc-detail-heading { min-width: 0; margin: 0; font-size: inherit; font-weight: 500; line-height: inherit; overflow-wrap: anywhere; }
+.dc-detail-header-actions { display: flex; flex-shrink: 0; gap: .25rem; margin-left: auto; }
+.dc-detail-metadata, .dc-detail-actions { display: flex; flex-wrap: wrap; align-items: center; gap: .375rem .625rem; min-width: 0; }
+.dc-detail-metadata { color: var(--muted-foreground); }
+.dc-detail-body > :where(*) { min-width: 0; }
+.dc-detail-body > :where(p, dl, dd) { margin: 0; }
 .dc-detail-content :where(dt) { font-weight: 500; }
 /* 原始文本与 Markdown 使用相同字号；代码块仍保留专属的语法高亮与操作。 */
-.dc-detail-content > pre {
+.dc-detail-body > pre {
   margin: 0;
   font-family: var(--font-mono, monospace);
   font-size: inherit;

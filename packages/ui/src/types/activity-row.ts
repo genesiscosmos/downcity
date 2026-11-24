@@ -20,6 +20,8 @@ export interface ActivityRowSummary {
   summary_text?: string;
   /** 入站结果语义，只影响图标和标题颜色，不绘制容器。 */
   incoming?: boolean;
+  /** 可聚焦结果 region 的名称；设置后由共享外壳关联 ID 并提供详情框架。 */
+  detail_label?: string;
   /** 按需挂载的领域正文；缺省时不生成折叠入口。 */
   render_body?: () => ReactNode;
 }
@@ -38,6 +40,4 @@ export interface ActivityRowProps extends ActivityRowSummary {
   summary_class_name?: string;
   /** 是否显示紧跟内容的折叠箭头。 */
   show_chevron?: boolean;
-  /** 可聚焦结果 region 的名称；设置后由共享外壳关联 ID。 */
-  detail_label?: string;
 }

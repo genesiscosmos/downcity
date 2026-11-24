@@ -12,12 +12,14 @@ import type { ModelClient } from "@downcity/type";
 /** `Agent.reconfigure` 接受的增量配置。 */
 export interface AgentReconfigureInput {
   /**
-   * 新的用户可见名称。
+   * 新的个人化姓名。
    *
    * 省略时保持当前名称；传入空字符串时回退到 `agent_id`，与构造语义一致。
    */
   name?: string;
 
+  /** 身份与角色列表；省略时保留当前值，传入 [] 清空，覆盖时去除首尾空白、空项和重复项。 */
+  role?: string[];
   /**
    * 新的一句话能力描述。
    *

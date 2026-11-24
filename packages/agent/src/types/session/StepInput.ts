@@ -19,6 +19,8 @@ export interface StepInputOptions extends SessionCallContext {
   agent_id: string;
   /** 读取当前 Agent 的用户可见名称；实时读取，与 system 身份保持一致。 */
   get_agent_name: () => string;
+  /** 延迟读取 Agent 可选身份与角色列表。 */
+  get_agent_role?: () => string[] | undefined;
   /** 读取当前 Agent 的一句话能力描述；实时读取。 */
   get_agent_description: () => string;
   /** 当前 Session 的稳定标识。 */

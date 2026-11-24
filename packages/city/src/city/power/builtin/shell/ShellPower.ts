@@ -205,6 +205,7 @@ async function run_shell_tool(input: {
   const output = await tool.execute(input.payload as never, {
     agent_id: input.context.agent.id,
     agent_name: input.context.agent.name,
+    agent_role: input.context.agent.role,
     agent_description: input.context.agent.description,
     agent_instructions: input.context.agent.instructions,
     session_id: snapshot.session_id ?? "",

@@ -77,6 +77,8 @@ export interface SessionOptions extends SessionDescriptor {
 
   /** 当前 Agent 用户可见名称；实时读取，使重配后的身份立即进入工具与扩展调用环境。 */
   get_agent_name: () => string;
+  /** 延迟读取 Agent 可选身份与角色列表。 */
+  get_agent_role?: () => string[] | undefined;
 
   /** 当前 Agent 一句话能力描述；实时读取，与 system 身份保持一致。 */
   get_agent_description: () => string;

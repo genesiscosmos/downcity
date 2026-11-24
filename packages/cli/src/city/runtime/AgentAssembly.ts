@@ -79,6 +79,7 @@ export async function create_cli_agent(input: {
     acquire_execution: behavior.acquire_execution,
     id: input.config.agent_id,
     name: input.config.name,
+    role: input.config.role,
     description: input.config.description,
     instruction: input.config.instruction || behavior.instruction,
     model: model ?? behavior.model,

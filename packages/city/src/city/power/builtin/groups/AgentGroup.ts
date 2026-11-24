@@ -24,6 +24,7 @@ function describe_agent(
   return {
     agent_id: agent.id,
     name: String(agent.name || agent.id),
+    ...(agent.role ? { role: agent.role } : {}),
     description: agent.description,
     model: agent.model?.model_reference ?? null,
     is_current: agent.id === context.agent_id,
@@ -34,7 +35,7 @@ function describe_agent(
 class ListAgentsAction extends CityAction {
   readonly action = "list";
   readonly description = "List every agent visible in this City.";
-  readonly returns = "agents(agent_id, name, description, model, is_current)";
+  readonly returns = "agents(agent_id, name, role?, description, model, is_current)";
 
   protected async run(
     _args: Record<string, never>,
@@ -46,7 +47,8 @@ class ListAgentsAction extends CityAction {
 
 /** 持久 Agent 的创建参数；身份标识由宿主生成。 */
 const create_agent_input = z.strictObject({
-  name: z.string().trim().min(1).describe("Display name for the new persistent agent."),
+  name: z.string().trim().min(1).describe("Personal name for the new persistent agent."),
+  role: z.array(z.string()).optional().describe("Optional identities or roles; name is the agent's personal name."),
   description: z.string().trim().min(1).describe("Short description of the agent's responsibilities, shown in agent.list."),
   instruction: z.string().trim().min(1).describe("Complete persistent instructions defining the agent's role and working principles."),
   model: model_reference_schema.describe("Structured model reference from the model catalog."),
@@ -56,7 +58,7 @@ const create_agent_input = z.strictObject({
 class CreateAgentAction extends CityAction<z.infer<typeof create_agent_input>> {
   readonly action = "create";
   readonly description = "Create and register a persistent agent with a name, responsibility description, instructions, and default model. Requires user approval.";
-  readonly returns = "agent(agent_id, name, description, model, is_current)";
+  readonly returns = "agent(agent_id, name, role?, description, model, is_current)";
   readonly access = "write" as const;
   readonly approval = true;
   readonly args_schema = create_agent_input;

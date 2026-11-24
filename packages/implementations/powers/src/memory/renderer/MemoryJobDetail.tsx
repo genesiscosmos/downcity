@@ -1,7 +1,7 @@
 /**
  * Memory Job 的有界差异与证据展示。
  * 只消费 job_detail 固定快照，不读取当前知识或 Profile；正文和来源均按纯文本渲染。
- * 每次展示一条变更，正文按字符分段、证据分页，避免展开整个 Job 的长文。
+ * 每次展示一条变更，正文按字符分段、证据分页；当前段随所属页面滚动，不创建内部纵向滚动。
  */
 import { useState } from "react";
 import type { PowerMainviewComponentProps } from "@downcity/city/power/react";
@@ -75,7 +75,7 @@ export function memory_job_changes({ detail, ui }: MemoryJobChangesProps) {
     {change.sources.slice(current_source_offset, current_source_offset + SOURCE_PAGE_SIZE).map((source, index) => <Group key={`${source.source_id}:${source.excerpt_start}:${index}`}>
       <Row label={`${source.source_id} · ${ROLE_LABELS[source.role]}`}
         description={`${source.agent_id} · ${source.category}${source.session_id ? ` · Session ${source.session_id}` : ""}${source.message_id ? ` · 消息 ${source.message_id}` : ""}`} />
-      <pre style={{ margin: 0, padding: 12, whiteSpace: "pre-wrap", overflowWrap: "anywhere", maxHeight: 180, overflow: "auto", fontSize: 12 }}>
+      <pre style={{ margin: 0, padding: 12, whiteSpace: "pre-wrap", overflowWrap: "anywhere", overflowX: "auto", fontSize: 12 }}>
         {source.excerpt}
       </pre>
       <Row label="原文定位" description={`字符偏移 ${source.excerpt_start}–${source.excerpt_start + source.excerpt.length}${source.truncated ? " · 仅展示摘录" : " · 完整来源正文"}`} />
@@ -109,7 +109,7 @@ function render_snapshot(
   const highlight_end = Math.max(highlight_start, Math.min(end, changed_end));
   return <Group>
     <Row label={label} description={content.length ? `原文字符 ${offset + 1}–${end} / ${content.length}；高亮区域为差异。` : "空正文（删除此编辑区域）"} />
-    <pre style={{ margin: 0, padding: 12, whiteSpace: "pre-wrap", overflowWrap: "anywhere", maxHeight: 260, overflow: "auto", fontSize: 12 }}>
+    <pre style={{ margin: 0, padding: 12, whiteSpace: "pre-wrap", overflowWrap: "anywhere", overflowX: "auto", fontSize: 12 }}>
       {content.slice(offset, highlight_start)}
       {highlight_end > highlight_start ? <mark style={{ background: "rgba(234, 179, 8, 0.2)", color: "inherit" }}>{content.slice(highlight_start, highlight_end)}</mark> : null}
       {content.slice(highlight_end, end)}

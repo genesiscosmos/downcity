@@ -5,6 +5,7 @@
  * Agent、Workspace 与 Power 配置各自只有一个事实源。
  */
 
+import { normalize_agent_role } from "@downcity/type";
 import path from "node:path";
 import fs from "fs-extra";
 import { pinyin } from "pinyin-pro";
@@ -35,9 +36,11 @@ interface AgentDefinitionFile {
   schema_version: 2;
   /** Agent 稳定 ID。 */
   id: string;
-  /** Agent 的用户可见名称。 */
+  /** Agent 的个人化姓名。 */
   name: string;
-  /** Agent 对外展示的身份简介。 */
+  /** 可选身份与角色列表；去除首尾空白、空项和重复项，空列表表示无角色。 */
+  role?: string[];
+  /** Agent 的简短能力与职责描述。 */
   description: string;
   /** Agent 定义版本。 */
   version: string;
@@ -96,9 +99,11 @@ export class AgentRepository {
   create(input: {
     /** Agent 稳定 ID。 */
     agent_id: string;
-    /** Agent 的用户可见名称。 */
+    /** Agent 的个人化姓名。 */
     name?: string;
-    /** Agent 对外展示的身份简介。 */
+    /** 可选身份与角色列表；去除首尾空白、空项和重复项，空列表表示无角色。 */
+    role?: string[];
+    /** Agent 的简短能力与职责描述。 */
     description?: string;
     /** Agent 定义版本。 */
     version?: string;
@@ -112,10 +117,12 @@ export class AgentRepository {
     const agent_id = normalize_agent_id(input.agent_id);
     if (this.get(agent_id)) throw new Error(`Agent already exists: ${agent_id}`);
     const current_time = new Date().toISOString();
+    const role = normalize_agent_role(input.role);
     this.commit_definition({
       schema_version: 2,
       id: agent_id,
       name: normalize_agent_name(input.name || agent_id),
+      ...(role ? { role } : {}),
       description: normalize_agent_description(input.description),
       version: String(input.version || "1.0.0"),
       ...(input.execution ? { execution: structuredClone(input.execution) } : {}),
@@ -131,10 +138,12 @@ export class AgentRepository {
     const agent_id = normalize_agent_id(input.agent_id);
     const existing = this.get(agent_id);
     if (!existing) return this.create(input);
+    const role = normalize_agent_role(input.role);
     this.commit_definition({
       schema_version: 2,
       id: agent_id,
       name: normalize_agent_name(input.name),
+      ...(role ? { role } : {}),
       description: normalize_agent_description(input.description),
       version: String(input.version || "1.0.0"),
       ...(input.execution ? { execution: structuredClone(input.execution) } : {}),
@@ -169,9 +178,11 @@ export class AgentRepository {
     ) {
       throw new Error(`Invalid Agent definition: ${agent_id}`);
     }
+    const role = normalize_agent_role(definition.role);
     return {
       agent_id,
       name: normalize_agent_name(definition.name || agent_id),
+      ...(role ? { role } : {}),
       description: normalize_agent_description(definition.description),
       version: String(definition.version || "1.0.0"),
       ...(is_json_object(definition.execution)

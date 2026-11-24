@@ -19,6 +19,7 @@ export async function create_cli_persistent_agent(
   const config = data.agents.create({
     agent_id,
     name: input.name,
+    role: input.role,
     description: input.description,
     instruction: input.instruction,
     execution: { type: "api", ...(model?.model_reference ? { model: { ...model.model_reference } } : {}) },

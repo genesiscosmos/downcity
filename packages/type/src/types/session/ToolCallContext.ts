@@ -30,6 +30,8 @@ export interface ToolCallContext extends SessionCallContext {
   readonly agent_id: string;
   /** 当前 Agent 用户可见名称。 */
   readonly agent_name: string;
+  /** 当前 Agent 可选身份与角色列表快照。 */
+  readonly agent_role?: readonly string[];
   /** 当前 Agent 一句话能力描述。 */
   readonly agent_description: string;
   /** 当前 Agent 静态指令快照。 */

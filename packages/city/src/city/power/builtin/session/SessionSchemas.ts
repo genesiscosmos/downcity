@@ -40,10 +40,10 @@ export const session_archive_input = z.strictObject({
   session_id: z.string().trim().min(1).describe("Idle Work Session to archive. Running or queued Sessions must finish or stop first."),
 });
 
-/** `session.input` 输入：继续已有工作会话，执行结果自动回传。 */
+/** `session.input` 输入：仅补充已有会话原任务范围内的工作，执行结果自动回传。 */
 export const session_input_schema = z.strictObject({
-  session_id: z.string().trim().min(1).describe("Existing Work Session ID returned by session.start."),
-  query: z.string().trim().min(1).describe("Additional instructions, material, or feedback for the existing session. Results return automatically; do not poll."),
+  session_id: z.string().trim().min(1).describe("Directly created Work Session whose assigned job this input directly continues. A different objective requires a new session."),
+  query: z.string().trim().min(1).describe("Clarifications, corrections, additional material, or retries within the existing session's assigned job. Compare the objective and expected output with the original scope before sending; a shared project or overlapping files is not sufficient. Results return automatically; do not poll."),
 });
 
 /** `session.start` 输入：开一条会话并交给它任务。 */
@@ -53,7 +53,7 @@ export const session_start_input = z
       "Target project Workspace ID. Obtain it from context.workspaces.list; do not use the main session's private Workspace.",
     ),
     query: z.string().trim().min(1).describe(
-      "Self-contained assignment with a specific goal, necessary context, scope, expected output, and completion criteria; the new session does not inherit the caller's conversation. When a Work Main delegates, describe one bounded work thread after understanding the complete task and dependencies. Do not forward the entire Main assignment unchanged.",
+      "Self-contained assignment with a specific goal, necessary context, scope, expected output, and completion criteria; the new session does not inherit the caller's conversation. When a Work Main delegates, describe one bounded work thread after understanding the complete task and dependencies. Do not forward the entire Main assignment unchanged. Create a new Child for a different objective instead of sending unrelated work to an existing Child with input.",
     ),
     title: z.string().trim().min(1).optional().describe(
       "Optional short title for this piece of work, used when listing sessions.",

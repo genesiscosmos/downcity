@@ -20,8 +20,8 @@ function detail(props: PowerInputDetailProps) {
   const data = input_envelope(props.input, "shell_result");
   const output = text_value(data.output_preview).slice(0, 24_000).replace(/\x1b\[[0-?]*[ -/]*[@-~]/g, "");
   const reason = text_value(data.interruption_reason).slice(0, 4_000);
-  return create_element("div", { className: "space-y-3 text-xs" },
-    output ? create_element("pre", { className: "max-h-80 overflow-auto whitespace-pre-wrap break-words font-mono" }, output) : null,
+  return create_element("div", { className: "space-y-3" },
+    output ? create_element("pre", { className: "whitespace-pre-wrap break-words font-mono" }, output) : null,
     reason ? create_element("p", { className: "text-destructive" }, reason) : null,
     typeof data.exit_code === "number" && data.exit_code !== 0 ? create_element("p", { className: "text-destructive" }, is_chinese(props.locale) ? `退出码：${data.exit_code}` : `Exit code: ${data.exit_code}`) : null);
 }

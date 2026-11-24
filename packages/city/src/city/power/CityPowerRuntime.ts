@@ -197,6 +197,7 @@ export class CityPowerRuntime implements PowerRuntimeHost {
       site,
       agent_id,
       agent_name: agent.name,
+      agent_role: agent.role,
       agent_description: agent.description,
       ...(workspace ? { workspace } : {}),
       data_path: power_storage.root_path,

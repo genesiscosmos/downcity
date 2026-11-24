@@ -17,6 +17,10 @@ export interface CreateInstructionSystemBlocksInput {
   agent_id: string;
   /** 当前 Agent 的用户可见名称；为空时回退到 agent_id。 */
   agent_name: string;
+  /** 已归一化的可选身份与角色列表；空列表表示无角色。 */
+  role?: string[];
+  /** 简短能力与职责描述。 */
+  description?: string;
   /** 调用方传入的静态 instruction，应已由 `normalize_instruction_input` 归一化。 */
   instruction: readonly string[];
 }
@@ -41,13 +45,17 @@ export function normalize_instruction_input(
  * 渲染 Agent 身份说明。
  *
  * 关键点（中文）
- * - name 与 id 始终同时给出：name 是模型理解的角色名，id 是宿主可对账的稳定标识。
+ * - name 与 id 始终同时给出：name 是个人化姓名，id 是宿主可对账的稳定标识。
  * - name 缺省回退到 id，此时两者一致，仍然保持同一输出形状。
  */
 function create_identity_content(input: {
   /** 当前 Agent 的稳定标识。 */
   agent_id: string;
-  /** 当前 Agent 的用户可见名称。 */
+  /** 已归一化的可选身份与角色列表；空列表表示无角色。 */
+  role?: string[];
+  /** 简短能力与职责描述。 */
+  description?: string;
+  /** 当前 Agent 的个人化姓名。 */
   agent_name: string;
 }): string {
   const agent_id = String(input.agent_id || "").trim();
@@ -56,6 +64,8 @@ function create_identity_content(input: {
     "# Agent Identity",
     "",
     `You are "${agent_name}" (agent id: ${agent_id}).`,
+    ...(input.role?.length ? [`Roles: ${input.role.join(", ")}.`] : []),
+    ...(input.description ? [`Capabilities and responsibilities: ${input.description}`] : []),
   ].join("\n");
 }
 

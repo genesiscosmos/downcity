@@ -36,7 +36,5 @@ export function ActivityText({ body, render_text }: {
   /** 已明确解释的可读正文，不接受任意对象。 */ body?: string;
   /** 宿主的安全 Markdown 阅读端口；不注入执行能力。 */ render_text?: (text: string) => ReactNode;
 }) {
-  return <div className="space-y-3 p-3 text-xs leading-relaxed">
-    {body ? render_text?.(body.slice(0, 48_000)) ?? <p className="whitespace-pre-wrap break-words">{body.slice(0, 48_000)}</p> : null}
-  </div>;
+  return body ? render_text?.(body.slice(0, 48_000)) ?? <p className="whitespace-pre-wrap break-words">{body.slice(0, 48_000)}</p> : null;
 }

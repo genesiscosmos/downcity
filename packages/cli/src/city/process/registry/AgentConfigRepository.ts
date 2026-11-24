@@ -18,6 +18,7 @@ function to_agent_config(config: LocalAgentConfig): AgentConfig {
   return {
     agent_id: config.agent_id,
     name: config.name,
+    role: config.role,
     description: config.description,
     version: config.version,
     ...(config.execution ? { execution: config.execution as unknown as AgentConfig["execution"] } : {}),
@@ -47,6 +48,7 @@ export function create_agent_config(input: CreateAgentConfigInput): AgentConfig 
     const config = data.agents.create({
       agent_id: input.agent_id,
       name: input.name || input.agent_id,
+      role: input.role,
       description: input.description,
       version: input.version,
       execution: input.execution as unknown as JsonObject | undefined,
@@ -65,6 +67,7 @@ export function update_agent_config(input: UpdateAgentConfigInput): AgentConfig 
     const saved = to_agent_config(data.agents.save({
       ...current,
       ...(input.name !== undefined ? { name: input.name } : {}),
+      ...(input.role !== undefined ? { role: input.role } : {}),
       ...(input.description !== undefined ? { description: input.description } : {}),
       ...(input.execution !== undefined
         ? { execution: input.execution as unknown as JsonObject }
@@ -82,6 +85,7 @@ export function save_agent_config(input: AgentConfig): AgentConfig {
     const saved = to_agent_config(data.agents.save({
       agent_id: input.agent_id,
       name: input.name,
+      role: input.role,
       description: input.description,
       version: input.version,
       ...(input.execution ? { execution: input.execution as unknown as JsonObject } : {}),

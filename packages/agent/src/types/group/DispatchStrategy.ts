@@ -26,8 +26,10 @@ export interface DispatchGroupProfile {
 export interface DispatchMemberProfile {
   /** 成员 Agent 的稳定标识，也是选择结果引用的键。 */
   readonly agent_id: string;
-  /** 用户可见的成员名称。 */
+  /** 成员的个人化姓名。 */
   readonly name: string;
+  /** 可选身份与角色列表；去除首尾空白、空项和重复项，空列表表示无角色。 */
+  readonly role?: string[];
   /** 成员擅长的工作，用于判断是否需要其回复。 */
   readonly description: string;
 }

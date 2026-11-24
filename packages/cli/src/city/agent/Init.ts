@@ -134,6 +134,7 @@ export async function initCommand(
     save_agent_config({
       agent_id,
       name: existing_agent.name,
+      role: existing_agent.role,
       description: existing_agent.description,
       version: "1.0.0",
       execution,

@@ -101,6 +101,7 @@ export type {
   PowerRendererLoadingStateProps,
   PowerRendererMarkdownProps,
   PowerRendererPageProps,
+  PowerRendererDetailContentProps,
   PowerRendererNavigation,
   PowerRendererRowProps,
   PowerRendererSectionProps,

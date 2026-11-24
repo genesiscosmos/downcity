@@ -44,6 +44,22 @@ export class CityTokenRepository {
     return this.get(token_id);
   }
 
+  /** 原子替换同一授权的密钥，保留名称、范围、有效期与使用记录；过期授权须先编辑。 */
+  regenerate(token_id: string): IssuedCityToken {
+    return this.database.transaction(() => {
+      const summary = this.get(token_id);
+      if (summary.expires_at && Date.parse(summary.expires_at) <= Date.now()) {
+        throw new Error("Update the expiry before regenerating this City Code");
+      }
+      const token = `dc_city_${randomBytes(32).toString("base64url")}`;
+      const updated_at = new Date().toISOString();
+      // 预检和替换共用短事务；异常或提交失败会回滚，旧凭据保持有效。
+      this.database.prepare("UPDATE city_tokens SET token_hash = ?, updated_at = ? WHERE token_id = ?")
+        .run(hash_token(token), updated_at, token_id);
+      return { ...summary, updated_at, token };
+    });
+  }
+
   /** 撤销后不能再通过身份校验。 */
   remove(token_id: string): void {
     if (!this.database.prepare("DELETE FROM city_tokens WHERE token_id = ?").run(token_id).changes) throw new Error("City Token not found");

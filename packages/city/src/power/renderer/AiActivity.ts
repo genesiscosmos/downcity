@@ -38,7 +38,7 @@ function detail(props: PowerActivityProps) {
     succeeded: ["已生成", "Generated"], failed: ["生成失败", "Generation failed"],
   };
   const stage = action === "image.result" ? stages[text_value(data.status)]?.[is_chinese(props.locale) ? 0 : 1] : undefined;
-  return create_element("div", { className: "space-y-3 p-3 text-xs" },
+  return create_element("div", { className: "space-y-3" },
     stage ? create_element("p", null, `${is_chinese(props.locale) ? "查询时状态" : "Status when checked"}: ${stage}`) : null,
     transcript ? props.render_text?.(transcript) ?? create_element("p", { className: "whitespace-pre-wrap" }, transcript) : null,
     ...files(props).map((url, index) => create_element("div", { key: index }, props.render_file?.({ type: "file", url, media_type: action === "sound.tts" ? "audio/mpeg" : "image/png" }) ?? create_element("p", null, url))));

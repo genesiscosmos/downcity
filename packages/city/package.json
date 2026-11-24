@@ -1,6 +1,6 @@
 {
   "name": "@downcity/city",
-  "version": "1.5.37",
+  "version": "1.5.38",
   "type": "module",
   "description": "Downcity City 组合根、Power 生命周期与 Agent transport 运行时",
   "files": [
@@ -12,6 +12,10 @@
     ".": {
       "types": "./bin/index.d.ts",
       "import": "./bin/index.js"
+    },
+    "./application": {
+      "types": "./bin/application/index.d.ts",
+      "import": "./bin/application/index.js"
     },
     "./extensions": {
       "types": "./bin/extensions.d.ts",
@@ -50,7 +54,7 @@
     "access": "public"
   },
   "scripts": {
-    "build": "node ../../scripts/clean-package.mjs && tsc && tsc-alias -f && node scripts/rewrite-build-aliases.mjs && node scripts/verify-build-aliases.mjs",
+    "build": "node ../../scripts/clean-package.mjs && tsc && tsc-alias -f && node scripts/rewrite-build-aliases.mjs && node scripts/verify-build-aliases.mjs && node scripts/verify-application-sdk.mjs",
     "migrate:power-config-v2": "node scripts/migrate-power-config-v2.mjs",
     "typecheck": "tsc --noEmit",
     "test": "pnpm build && node --test test/*.test.mjs test/local/*.test.mjs",
@@ -66,14 +70,16 @@
     "commander": "^15.0.0",
     "dotenv": "^17.4.2",
     "esbuild": "0.27.7",
-    "npm": "11.6.2",
-    "pnpm": "10.22.0",
     "fs-extra": "^11.3.5",
     "hono": "^4.12.23",
     "node-pty": "1.2.0-beta.14",
+    "npm": "11.6.2",
     "picomatch": "^4.0.7",
     "pinyin-pro": "^3.27.0",
+    "pnpm": "10.22.0",
+    "quickjs-emscripten": "0.31.0",
     "smol-toml": "^1.7.1",
+    "typescript": "^6.0.3",
     "undici": "^7.16.0",
     "ws": "^8.21.0",
     "zod": "^4.4.3"
@@ -87,13 +93,12 @@
     }
   },
   "devDependencies": {
-    "@types/react": "^19.2.14",
     "@types/fs-extra": "^11.0.4",
     "@types/node": "^25.9.1",
     "@types/picomatch": "^4.0.3",
+    "@types/react": "^19.2.14",
     "@types/ws": "^8.18.1",
     "react": "^19.2.6",
-    "tsc-alias": "^1.8.17",
-    "typescript": "^6.0.3"
+    "tsc-alias": "^1.8.17"
   }
 }

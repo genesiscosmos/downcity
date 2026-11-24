@@ -363,7 +363,7 @@ export class GroupSession implements GroupSessionContract {
       current_message: message,
       pending_messages,
       history: this.messages_by_id.filter((item) => !pending_ids.has(item.id)),
-      members: this.members.map((member) => ({ agent_id: member.id, name: member.name, description: member.description })),
+      members: this.members.map((member) => ({ agent_id: member.id, name: member.name, ...(member.role ? { role: member.role } : {}), description: member.description })),
     });
   }
 
@@ -548,9 +548,10 @@ export class GroupSession implements GroupSessionContract {
       `Group: ${this.group_name}`,
       this.instruction ? `Group objective: ${this.instruction}` : "",
       `Your identity: ${agent.name} (${agent.id})`,
+      ...(agent.role?.length ? [`Your roles: ${agent.role.join(", ")}`] : []),
       `Your description: ${agent.description || "（未提供）"}`,
       "Group members (only these Agents belong to this Group):",
-      ...this.members.map((member) => `- ${member.name} (${member.id}): ${member.description || "（未提供）"}`),
+      ...this.members.map((member) => `- ${member.name} (${member.id})${member.role?.length ? ` [${member.role.join(", ")}]` : ""}: ${member.description || "（未提供）"}`),
       `Trigger: ${pending_messages.some((item) => item.sender_type === "user") ? "user" : "auto"}`,
       "Latest user request:",
       latest_user_message ? format_message(latest_user_message) : "（无）",

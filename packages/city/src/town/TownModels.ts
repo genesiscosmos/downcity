@@ -1,6 +1,8 @@
 /**
  * 来源明确的 City 模型目录与执行路由。目录失败按来源隔离，文本句柄捕获身份，
  * 每次执行校验绑定并取得实际来源租约，不跨来源回退或重放计费调用。
+ * 目录快照只在同一连接代次与授权主体内保留 30 秒；精确解析和执行共享来源读取，
+ * 并发等待分别支持取消，最后一个等待者离开时才中止底层请求。
  */
 import { randomUUID } from "node:crypto";
 import type { ModelClient, ModelCall, ModelStreamEvent, CityModelDescriptor, ModelReference, ClientModelReference } from "@downcity/type";
@@ -10,7 +12,11 @@ import { is_model_reference, same_model } from "@downcity/type";
 import { ExecutionLease, TownError, lease_stream } from "./ExecutionLease.js";
 import { TownImageJobs } from "./TownImageJobs.js";
 import type { TownExecutionOptions, TownOptions, TownSourceStatus } from "./types/Town.js";
-import type { TownDirectModelRegistration, TownModelEntry, TownModelList, TownModelRequest, TownDecisionInput, TownImageInput, TownTtsInput, TownAsrInput } from "./types/TownModels.js";
+import type { TownDirectModelRegistration, TownModelEntry, TownModelList, TownModelListOptions, TownModelResolveOptions, TownModelRequest, TownDecisionInput, TownImageInput, TownTtsInput, TownAsrInput } from "./types/TownModels.js";
+import type { TownModelCatalogRequest, TownModelCatalogState } from "./types/TownModelCatalog.js";
+
+/** 短期复用模型能力；授权与连接门禁仍在每次执行时实时核对。 */
+const catalog_ttl_ms = 30_000;
 
 /** 直接模型来源也拥有独立卸载门禁。 */
 interface DirectModelState {
@@ -33,7 +39,8 @@ export interface TownModelClient extends ModelClient {
 /** 统一文本、多模态目录与路由。 */
 export class TownModels {
   private readonly direct = new Map<string, DirectModelState>();
-  private readonly metadata = new Map<string, Map<string, TownModelEntry>>();
+  /** 替换或重新登记连接时对象身份变化，旧代次目录不会被新主体读取。 */
+  private catalogs = new WeakMap<TownConnectionState, TownModelCatalogState>();
   private readonly jobs: TownImageJobs;
 
   constructor(private readonly connections: TownConnections, options: TownOptions = {}) {
@@ -41,14 +48,15 @@ export class TownModels {
   }
 
   /** 并行读取所有来源；失败来源只贡献自身错误，不吞掉其他目录。 */
-  async list(options: { /** 只返回具备此能力的模型。 */ modality?: string; /** 取消本次目录读取。 */ signal?: AbortSignal } = {}): Promise<TownModelList> {
+  async list(options: TownModelListOptions = {}): Promise<TownModelList> {
     options.signal?.throwIfAborted();
     const results = await Promise.all(this.connections.list().map(async (view) => {
       const state = this.connections.require(view.downtown_id);
       let release: (() => void) | undefined;
       try {
         release = this.connections.acquire(state);
-        const items = await this.read_source(state, options.signal);
+        const entries = await this.read_source(state, options.signal, options.refresh);
+        const items = entries.map(entry => ({ ...structuredClone(entry), source_name: state.source.name }));
         options.signal?.throwIfAborted();
         return { items, source: { ...state.source, status: "available" } as TownSourceStatus };
       } catch (error) {
@@ -60,6 +68,34 @@ export class TownModels {
     return { items: items.filter((entry) => !options.modality || entry.modalities.includes(options.modality)), sources: results.map((result) => result.source) };
   }
 
+  /** 精确解析选定来源的模型；目录复用不放宽身份、能力或注册代次校验。 */
+  async resolve(model: ModelReference, options: TownModelResolveOptions = {}): Promise<TownModelEntry> {
+    options.signal?.throwIfAborted();
+    if (!is_model_reference(model)) throw new TownError("town_model_required");
+    if ("client" in model) {
+      const state = this.require_direct(model);
+      if (options.binding_id !== undefined && options.binding_id !== state.binding_id) throw new TownError("town_model_identity_confirmation_required");
+      const release = state.gate.acquire();
+      try {
+        const entry = this.direct_entry(state);
+        if (options.modality && !entry.modalities.includes(options.modality)) throw new TownError("town_model_capability_unavailable");
+        return entry;
+      } finally { release(); }
+    }
+    const state = this.connections.require(model.downtown);
+    if (options.binding_id !== undefined && options.binding_id !== state.source.auth_scope_id) throw new TownError("town_model_identity_confirmation_required");
+    const release = this.connections.acquire(state);
+    try {
+      const entries = await this.read_source(state, options.signal, options.refresh);
+      options.signal?.throwIfAborted();
+      this.connections.assert_current(state);
+      const entry = entries.find(item => same_model(item.model, model));
+      if (!entry) throw new TownError("town_model_not_found");
+      if (options.modality && !entry.modalities.includes(options.modality)) throw new TownError("town_model_capability_unavailable");
+      return { ...structuredClone(entry), source_name: state.source.name };
+    } finally { release(); }
+  }
+
   /** 返回捕获当时身份的惰性客户端；同名裸 ID 不会被尝试或自动迁移。 */
   client(model: ModelReference, options: TownExecutionOptions = {}): TownModelClient {
     if (!is_model_reference(model)) throw new TownError("town_model_required");
@@ -68,7 +104,9 @@ export class TownModels {
     const source_binding = direct?.binding_id ?? this.connections.require((reference as { downtown: string }).downtown).source.auth_scope_id;
     const binding_id = options.binding_id ?? source_binding;
     if (binding_id !== source_binding) throw new TownError("town_model_identity_confirmation_required");
-    const metadata = "downtown" in reference ? this.metadata.get(reference.downtown)?.get(reference.id) : undefined;
+    const catalog = "downtown" in reference ? this.catalogs.get(this.connections.require(reference.downtown)) : undefined;
+    const metadata = catalog && catalog.auth_scope_id === binding_id && catalog.expires_at > performance.now()
+      ? catalog.items.find(entry => entry.id === reference.id) : undefined;
     return Object.freeze({
       id: reference.id, model_reference: reference, binding_id,
       name: metadata?.name ?? direct?.registration.client.name,
@@ -145,7 +183,7 @@ export class TownModels {
     try {
       for (const state of this.direct.values()) end_changes.push(state.gate.begin_change());
       for (const state of this.direct.values()) state.gate.close();
-      this.direct.clear(); this.metadata.clear();
+      this.direct.clear(); this.catalogs = new WeakMap();
     } finally { for (const end of end_changes) end(); }
   }
 
@@ -171,7 +209,70 @@ export class TownModels {
     } catch (error) { release(); throw error; }
   }
 
-  private async read_source(state: TownConnectionState, signal?: AbortSignal): Promise<TownModelEntry[]> {
+  /** 同一连接代次共享目录读取；网络请求自己的租约覆盖所有等待者取消后的收口。 */
+  private async read_source(state: TownConnectionState, signal?: AbortSignal, refresh = false): Promise<TownModelEntry[]> {
+    signal?.throwIfAborted();
+    this.connections.assert_current(state);
+    let catalog = this.catalogs.get(state);
+    if (!catalog || catalog.auth_scope_id !== state.source.auth_scope_id) {
+      catalog = { auth_scope_id: state.source.auth_scope_id, items: [], expires_at: 0 };
+      this.catalogs.set(state, catalog);
+    }
+    if (!refresh && catalog.expires_at > performance.now()) return catalog.items;
+    let pending = catalog.pending;
+    if (!pending) {
+      const release = this.connections.acquire(state);
+      const controller = new AbortController();
+      const current_catalog = catalog;
+      // 显式刷新失败后也不能继续使用刷新前的能力快照。
+      current_catalog.expires_at = 0;
+      const request: TownModelCatalogRequest = {
+        controller, waiters: 0,
+        promise: Promise.resolve().then(() => this.fetch_source(state, controller.signal)).then(items => {
+          controller.signal.throwIfAborted();
+          this.connections.assert_current(state);
+          current_catalog.items = items;
+          current_catalog.expires_at = performance.now() + catalog_ttl_ms;
+          return items;
+        }).finally(() => {
+          if (current_catalog.pending === request) current_catalog.pending = undefined;
+          release();
+        }),
+      };
+      current_catalog.pending = request;
+      pending = request;
+    }
+    return await this.wait_for_catalog(catalog, pending, signal);
+  }
+
+  /** 调用方取消只结束自己的等待；底层请求仍服务其他等待者。 */
+  private wait_for_catalog(catalog: TownModelCatalogState, request: TownModelCatalogRequest, signal?: AbortSignal): Promise<TownModelEntry[]> {
+    request.waiters += 1;
+    return new Promise((resolve, reject) => {
+      let settled = false;
+      const finish = (complete: () => void) => {
+        if (settled) return;
+        settled = true;
+        signal?.removeEventListener("abort", abort);
+        request.waiters -= 1;
+        complete();
+      };
+      const abort = () => {
+        finish(() => reject(signal?.reason));
+        if (!request.waiters && catalog.pending === request) {
+          catalog.pending = undefined;
+          request.controller.abort(signal?.reason);
+        }
+      };
+      signal?.addEventListener("abort", abort, { once: true });
+      request.promise.then(items => finish(() => resolve(items)), error => finish(() => reject(error)));
+      if (signal?.aborted) abort();
+    });
+  }
+
+  /** 仅成功且仍属于当前连接的完整目录可以发布到短期缓存。 */
+  private async fetch_source(state: TownConnectionState, signal: AbortSignal): Promise<TownModelEntry[]> {
+    signal.throwIfAborted();
     const response = await state.user.service("ai").request("models", { method: "GET", signal });
     const body = await response.json() as { /** 远端目录原始条目。 */ items: CityModelDescriptor[] };
     this.connections.assert_current(state);
@@ -188,7 +289,6 @@ export class TownModels {
       };
       return entry;
     });
-    this.metadata.set(state.source.downtown_id, new Map(entries.map((entry) => [entry.id, entry])));
     return entries;
   }
 

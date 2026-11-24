@@ -32,7 +32,7 @@ function describe(props: PowerActivityProps): PowerActivityDescription {
 function detail(props: PowerActivityProps) {
   const args = input_args(props);
   const body = text_value(action_id(props) === "agent.delegate" ? args.query : args.description).slice(0, 24_000);
-  return create_element("div", { className: "space-y-3 p-3 text-xs" },
+  return create_element("div", { className: "space-y-3" },
     body ? props.render_text?.(body) ?? create_element("p", { className: "whitespace-pre-wrap" }, body) : null);
 }
 /** Agent 自有插槽。 */

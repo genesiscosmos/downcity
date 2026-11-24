@@ -34,7 +34,7 @@ function describe(props: PowerActivityProps): PowerActivityDescription {
 function detail(props: PowerActivityProps) {
   const data = output_data(props);
   const reason = action_id(props) === "sandbox.explain_path" && data.allowed === false ? text_value(data.reason) : "";
-  return create_element("p", { className: "p-3 text-xs text-muted-foreground whitespace-pre-wrap" }, reason.slice(0, 4_000));
+  return create_element("p", { className: "text-muted-foreground whitespace-pre-wrap" }, reason.slice(0, 4_000));
 }
 /** Context 自有插槽。 */
 export const CONTEXT_ACTIVITY_RENDERER: PowerActivityRenderer = with_activity_error({ describe, detail });

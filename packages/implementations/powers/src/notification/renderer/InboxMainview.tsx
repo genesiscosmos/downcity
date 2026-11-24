@@ -25,7 +25,7 @@ export function InboxMainview({ store, options, ...props }: PowerMainviewCompone
   const next = inbox_entries(data, "pending").find((entry) => entry.key !== selected?.key);
   const unavailable = !!state.error || !!data?.unavailable_agents.includes(selected?.pending?.agent_id ?? "");
   const loading_failed = !data && !!state.error;
-  return <Page>
+  return <Page layout="detail">
     <div ref={detail_region} tabIndex={-1} className="inbox-workspace" role="region" aria-label="事项详情">
       {selected ? <InboxEntryDetail key={selected.key} entry={selected} current={entries.find((entry) => entry.key === selected.key)}
         handled={state.handled.has(selected.key)} store={store} options={options} props={props}

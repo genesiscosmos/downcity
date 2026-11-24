@@ -1,6 +1,6 @@
 {
   "name": "@downcity/ui",
-  "version": "1.5.13",
+  "version": "1.5.14",
   "description": "Downcity UI SDK for React and Tailwind CSS applications.",
   "type": "module",
   "license": "MIT",

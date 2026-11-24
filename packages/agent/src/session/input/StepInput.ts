@@ -530,6 +530,7 @@ export class StepInput {
     return Object.freeze({
       agent_id: this.options.agent_id,
       agent_name: this.options.get_agent_name(),
+      agent_role: this.options.get_agent_role?.(),
       agent_description: this.options.get_agent_description(),
       agent_instructions: Object.freeze(
         this.effective_instruction_blocks.map((block) => block.content),
@@ -553,6 +554,7 @@ export class StepInput {
     return Object.freeze({
       agent_id: this.options.agent_id,
       agent_name: this.options.get_agent_name(),
+      agent_role: this.options.get_agent_role?.(),
       agent_description: this.options.get_agent_description(),
       agent_instructions: Object.freeze([...(agent_systems ?? [])]),
       session_id: this.options.session_id,

@@ -53,6 +53,7 @@ export class Session implements AgentSession {
    */
   private readonly get_agent_name: SessionOptions["get_agent_name"];
   /** 读取当前 Agent 一句话能力描述；与名称同一时机实时读取。 */
+  private readonly get_agent_role: SessionOptions["get_agent_role"];
   private readonly get_agent_description: SessionOptions["get_agent_description"];
   /** 创建时确定的 Workspace 归属；未装配执行资源时仍保留。 */
   readonly workspace_id?: string;
@@ -122,6 +123,7 @@ export class Session implements AgentSession {
     this.archive_session = options.archive_session;
     this.agent_id = String(options.agent_id || "").trim();
     this.get_agent_name = options.get_agent_name;
+    this.get_agent_role = options.get_agent_role;
     this.get_agent_description = options.get_agent_description;
     this.workspace_id = Object.hasOwn(options, "workspace_id") ? options.workspace_id : options.workspace?.id;
     Object.defineProperty(this, "workspace_id", { writable: false, configurable: false });
@@ -182,6 +184,7 @@ export class Session implements AgentSession {
       read_result_session: this.read_result_session,
       agent_id: this.agent_id,
       get_agent_name: this.get_agent_name,
+      get_agent_role: this.get_agent_role,
       get_agent_description: this.get_agent_description,
       session_id: this.id,
       ...session_call_context(this),
@@ -749,6 +752,7 @@ export class Session implements AgentSession {
     return Object.freeze({
       agent_id: this.agent_id,
       agent_name: this.get_agent_name(),
+      agent_role: this.get_agent_role?.(),
       agent_description: this.get_agent_description(),
       agent_instructions: Object.freeze(
         this.get_instruction_system_blocks().map((block) => block.content),
@@ -780,6 +784,7 @@ export class Session implements AgentSession {
       archive_session: this.archive_session,
       agent_id: this.agent_id,
       get_agent_name: this.get_agent_name,
+      get_agent_role: this.get_agent_role,
       get_agent_description: this.get_agent_description,
       workspace_id: this.workspace_id,
       workspace_path: this.local_state.fallback_workspace_path,

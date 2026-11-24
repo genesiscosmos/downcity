@@ -14,6 +14,8 @@ import { create_shell_completion_handler } from "./ShellCompletionBridge.js";
 import { CityPowerRuntime } from "@/city/power/CityPowerRuntime.js";
 import { AiPower } from "@/city/power/builtin/AiPower.js";
 import { AgentPower } from "@/city/power/builtin/AgentPower.js";
+import { RuntimeService } from "../power/builtin/runtime/RuntimeService.js";
+import { create_core_application } from "../../application/CoreApplication.js";
 import { ContextPower } from "@/city/power/builtin/ContextPower.js";
 import { ShellPower } from "@/city/power/builtin/shell/ShellPower.js";
 import type { Power } from "@/power/index.js";
@@ -48,6 +50,10 @@ export class City implements CityRuntime {
 
   /** City 唯一的 Power 生命周期运行时。 */
   private readonly power_runtime: CityPowerRuntime;
+  /** 唯一 ContextPower 持有的执行服务；组合根只提供生命周期通知。 */
+  private readonly context_runtime: RuntimeService;
+  /** Agent 移除与 Session 归档后释放的窄订阅。 */
+  private readonly context_session_subscriptions = new Map<string, () => void>();
 
 
   /** 仅供包内运行时组件使用的 City 事实源访问面。 */
@@ -137,6 +143,10 @@ export class City implements CityRuntime {
       ...(options.power_host ? { host: options.power_host } : {}),
     });
     this.powers = this.power_runtime.public_api;
+    this.context_runtime = new RuntimeService([
+      ...create_core_application(this.runtime_access, this.city_id),
+      ...(options.runtime?.application_modules ?? []),
+    ], options.runtime?.application_policy);
     // City 领域 Power 与 Shell 走同一条注册路径；特权依赖在这里注入。
     for (const power of this.create_city_powers(options.runtime?.create_agent)) {
       void this.powers.add(power).catch(() => undefined);
@@ -217,7 +227,7 @@ export class City implements CityRuntime {
       files_for: (agent_id: string, group_id: string) =>
         this.storage.open_scope(["agents", agent_id, "powers", group_id]).files,
     };
-    return [new ContextPower(options), new AiPower(options), new AgentPower(options, create_agent), new SessionPower(options)];
+    return [new ContextPower(options, this.context_runtime), new AiPower(options), new AgentPower(options, create_agent), new SessionPower(options)];
   }
 
   /**
@@ -396,6 +406,8 @@ export class City implements CityRuntime {
     agent.unbind();
     try {
       await agent.dispose();
+      this.context_session_subscriptions.get(agent_id)?.();
+      this.context_session_subscriptions.delete(agent_id);
     } catch (error) {
       errors.push(error);
     }
@@ -458,6 +470,8 @@ export class City implements CityRuntime {
           this.http_transport.close(),
           this.rpc_transport.close(),
         ]));
+        // 先撤销脚本桥并结算已接受业务调用，避免主体或数据库关闭后再产生效果。
+        results.push(...await Promise.allSettled([this.context_runtime.dispose()]));
         // 等待已开始的配置工厂退出，禁止 Storage 释放后再写入或绑定新实例。
         await Promise.allSettled([...this.workspace_transitions.values()]);
         const assert_settled = () => {
@@ -479,6 +493,8 @@ export class City implements CityRuntime {
         results.push(...await Promise.allSettled([...this.agents_by_id.values()].map(async (agent) => {
           agent.unbind();
           await agent.dispose();
+          this.context_session_subscriptions.get(agent.id)?.();
+          this.context_session_subscriptions.delete(agent.id);
           this.power_runtime.detach_agent_notifications(agent);
           this.agents_by_id.delete(agent.id);
         })));
@@ -529,6 +545,11 @@ export class City implements CityRuntime {
     try {
       this.power_runtime.attach_agent_execution_profiles(agent);
       this.agents_by_id.set(agent.id, agent);
+      const release_removed = agent.sessions.on_removed(event => this.context_runtime.release_session(agent.id, event.session_id, event.type));
+      const release_unloaded = agent.sessions.on_released(session => {
+        void this.context_runtime.release_session(agent.id, session.id, session.type);
+      });
+      this.context_session_subscriptions.set(agent.id, () => { release_removed(); release_unloaded(); });
     } catch (error) {
       this.agents_by_id.delete(agent.id);
       agent.unbind();

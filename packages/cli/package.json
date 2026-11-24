@@ -1,6 +1,6 @@
 {
   "name": "downcity",
-  "version": "1.6.14",
+  "version": "1.6.15",
   "type": "module",
   "description": "Downcity CLI — local City container and Downtown Server management",
   "bin": {

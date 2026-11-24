@@ -143,6 +143,8 @@ export interface PowerAgentHandle {
   readonly id: string;
   /** Agent 用户可见名称。 */
   readonly name: string;
+  /** Agent 可选身份与角色列表快照。 */
+  readonly role?: readonly string[];
   /** Agent 能力描述。 */
   readonly description: string;
   /** 当前 Agent 静态指令快照。 */

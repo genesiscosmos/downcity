@@ -6,9 +6,9 @@ import { inspect } from "node:util";
 
 /** 创建独立 Agent 身份，不登记 cwd 或安装项目资产。 */
 export async function create_agent_tui(): Promise<void> {
-  const input = await prompts([{ type: "text", name: "name", message: "Agent name" }, { type: "text", name: "description", message: "Description" }, { type: "text", name: "model", message: "Default model ID (optional)" }]);
+  const input = await prompts([{ type: "text", name: "name", message: "Agent name" }, { type: "text", name: "role", message: "Roles (comma-separated, optional)" }, { type: "text", name: "description", message: "Capabilities and responsibilities" }, { type: "text", name: "model", message: "Default model ID (optional)" }]);
   if (!input.name) return;
-  await new ResourceClient().call("agent.create", { name: input.name, description: input.description ?? "", ...(input.model ? { model: input.model } : {}) });
+  await new ResourceClient().call("agent.create", { name: input.name, role: String(input.role ?? "").split(","), description: input.description ?? "", ...(input.model ? { model: input.model } : {}) });
 }
 
 /** 项目登记/改名/移除与会话浏览管理，共用显式命令相同的用例结果。 */

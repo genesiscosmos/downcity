@@ -94,8 +94,9 @@ function shell_detail(props: PowerActivityProps) {
   const action = action_id(props);
   const command = action === "exec" || action === "session_start" ? text_value(args.cmd) || text_value(data.cmd) : "";
   const output = safe_terminal_text(props, text_value(data.output));
-  const pre_class = "max-h-80 overflow-auto whitespace-pre-wrap break-words font-mono text-xs";
-  return create_element("div", { className: "space-y-3 p-3 text-xs leading-relaxed" },
+  // 输出随共享详情所在页面展开；这里不再创建带高度上限的内部滚动区。
+  const pre_class = "whitespace-pre-wrap break-words font-mono";
+  return create_element("div", { className: "space-y-3" },
     command ? create_element("pre", { className: pre_class }, `$ ${command.slice(0, 12_000)}`) : null,
     output ? create_element("div", { className: "space-y-1" },
       create_element("pre", { className: pre_class }, output),

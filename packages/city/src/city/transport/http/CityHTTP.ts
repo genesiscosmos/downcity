@@ -60,7 +60,7 @@ export class CityHTTP {
     if (this.cached_router) return this.cached_router;
     const root = new Hono();
     if (this.runtime_options.allowed_origins) root.use("*", create_city_cors(this.runtime_options.allowed_origins));
-    const describe_agent = (agent: import("@downcity/agent").Agent) => ({ id: agent.id, name: agent.name, description: agent.description });
+    const describe_agent = (agent: import("@downcity/agent").Agent) => ({ id: agent.id, name: agent.name, ...(agent.role ? { role: agent.role } : {}), description: agent.description });
     root.get("/api/sdk/agents", async (context) => {
       const agents = this.runtime_access.list_agents();
       const visible = await Promise.all(agents.map(async (agent) => await this.authorize_agent(agent, context.req.raw) ? describe_agent(agent) : null));

@@ -11,10 +11,12 @@ export interface AgentConfig {
   /** Agent 的全局稳定标识，也是数据库主键。 */
   agent_id: string;
 
-  /** Agent 的用户可见名称。 */
+  /** Agent 的个人化姓名。 */
   name: string;
 
-  /** Agent 对外展示的身份简介。 */
+  /** 可选身份与角色列表；去除首尾空白、空项和重复项，空列表表示无角色。 */
+  role?: string[];
+  /** Agent 的简短能力与职责描述。 */
   description: string;
 
   /** Agent 配置结构版本。 */
@@ -44,7 +46,9 @@ export interface CreateAgentConfigInput {
   /** 可选用户可见名称；未提供时使用 Agent ID。 */
   name?: string;
 
-  /** 可选对外身份简介。 */
+  /** 可选身份与角色列表；去除首尾空白、空项和重复项，空列表表示无角色。 */
+  role?: string[];
+  /** 可选简短能力与职责描述。 */
   description?: string;
 
   /** 可选 Agent 配置结构版本。 */
@@ -65,10 +69,12 @@ export interface UpdateAgentConfigInput {
   /** 需要更新的 Agent 全局标识。 */
   agent_id: string;
 
-  /** 新的用户可见名称。 */
+  /** 新的个人化姓名。 */
   name?: string;
 
-  /** 新的对外身份简介。 */
+  /** 可选身份与角色列表；去除首尾空白、空项和重复项，空列表表示无角色。 */
+  role?: string[];
+  /** 新的简短能力与职责描述。 */
   description?: string;
 
   /** 新的模型执行绑定。 */

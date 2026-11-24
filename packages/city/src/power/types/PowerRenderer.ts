@@ -81,6 +81,24 @@ export interface PowerRendererSelectOption {
 export interface PowerRendererPageProps {
   /** 页面内的全部 Mainview 内容。 */
   readonly children: ReactNode;
+  /** 正文布局：默认采用页面留白，detail 让共享详情框架持有全部内容留白；滚动视口始终贴合面板。 */
+  readonly layout?: "page" | "detail";
+}
+
+/** 宿主提供的完整详情框架；字段只传递展示内容，不提供额外执行能力。 */
+export interface PowerRendererDetailContentProps {
+  /** 详情正文，包含所属业务的表单、结果与状态。 */
+  readonly children: ReactNode;
+  /** 可选紧凑标题，未提供时不占位。 */
+  readonly heading?: string;
+  /** 共享标题的 DOM 标识，供详情区域及外部表单引用。 */
+  readonly heading_id?: string;
+  /** 可选来源、时间和状态，由共享布局排列。 */
+  readonly metadata?: ReactNode;
+  /** 标题行尾部控件，例如关闭详情。 */
+  readonly header_actions?: ReactNode;
+  /** 可选详情操作，例如打开来源。 */
+  readonly actions?: ReactNode;
 }
 
 /** Power Sidebar 根布局属性。 */
@@ -589,6 +607,8 @@ export interface PowerRendererUiComponents {
   readonly SidebarCreateMenu: (props: PowerRendererSidebarCreateMenuProps) => ReactNode;
   /** Mainview 页面根布局。 */
   readonly Page: (props: PowerRendererPageProps) => ReactNode;
+  /** 与消息活动共用的详情正文排版；不限制高度或创建纵向滚动，children 由业务提供。 */
+  readonly DetailContent: (props: PowerRendererDetailContentProps) => ReactNode;
   /** 带标题和表面的内容分区。 */
   readonly Section: (props: PowerRendererSectionProps) => ReactNode;
   /** 统一成组表面。 */

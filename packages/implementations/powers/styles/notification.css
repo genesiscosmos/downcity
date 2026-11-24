@@ -21,29 +21,19 @@
 .inbox-avatar > :is(svg, img) { width: 100%; height: 100%; }
 .inbox-attention-dot { display: inline-block; flex: 0 0 6px; width: 6px; height: 6px; border-radius: 50%; }
 .inbox-attention-neutral { background: var(--muted-foreground); }
-.inbox-detail { box-sizing: border-box; width: 100%; max-width: 48rem; min-width: 0; margin-inline: auto; padding-bottom: 2rem; overflow-wrap: anywhere; }
-.inbox-detail :is(.inbox-form, .inbox-result, .markdown-body) { min-width: 0; max-width: none; }
-.inbox-result :is(pre, table) { max-width: 100%; overflow-x: auto; }
-.inbox-result pre { white-space: pre-wrap; overflow-wrap: anywhere; }
-.inbox-detail-header { display: grid; gap: .75rem; padding-bottom: 1.5rem; }
-.inbox-detail-heading { display: flex; align-items: flex-start; gap: 1rem; }
-.inbox-detail-heading > :last-child { flex-shrink: 0; margin-left: auto; }
-.inbox-detail-actions { display: flex; flex-wrap: wrap; gap: .5rem; }
 .inbox-detail-status { display: inline-flex; align-items: center; gap: 6px; }
-.inbox-detail-title { min-width: 0; margin: 0; font-size: var(--text-xl, 1.25rem); font-weight: 500; line-height: var(--text-xl--line-height, 1.75rem); overflow-wrap: anywhere; }
-.inbox-detail-meta { display: flex; flex-wrap: wrap; align-items: center; gap: .375rem .625rem; font-size: var(--text-2xs, .6875rem); color: var(--muted-foreground); }
 .inbox-source { display: inline-flex; align-items: center; gap: 7px; }
-.inbox-form { padding-block: 4px 12px; }
-.inbox-result { font-size: var(--text-sm, .8125rem); line-height: 1.9; overflow-wrap: anywhere; }
-.inbox-detail-note { color: var(--muted-foreground); font-size: var(--text-xs, 13px); line-height: 1.7; }
-.inbox-origin { margin-top: 20px; padding-top: 8px; font-size: var(--text-2xs, 12px); color: var(--muted-foreground); }
+/* 标题、元信息、操作与正文的完整布局归宿主共享 DetailContent；此处只定义业务内容。 */
+.inbox-detail-note { color: var(--muted-foreground); }
+.inbox-origin { color: var(--muted-foreground); }
 .inbox-origin summary { cursor: pointer; width: fit-content; }
-.inbox-origin dl { display: grid; grid-template-columns: 60px minmax(0, 1fr); gap: 8px 12px; margin-top: 14px; }
-.inbox-origin dd { margin: 0; overflow-wrap: anywhere; font-family: var(--font-mono); font-size: var(--text-3xs, 11px); }
-.inbox-resolution { display: flex; gap: 12px; align-items: flex-start; padding-block: 24px; }
+.inbox-origin dl { display: grid; grid-template-columns: 60px minmax(0, 1fr); gap: .5rem .75rem; margin-top: .75rem; }
+.inbox-origin dd { overflow-wrap: anywhere; font-family: var(--font-mono); }
+.inbox-resolution { display: flex; gap: .75rem; align-items: flex-start; }
 .inbox-resolution > svg { width: 20px; height: 20px; flex-shrink: 0; color: var(--muted-foreground); }
-.inbox-resolution h2 { margin: 0 0 5px; font-size: var(--text-sm, 14px); font-weight: 500; }
-.inbox-resolution p { margin: 0 0 16px; color: var(--muted-foreground); font-size: var(--text-xs, 13px); line-height: 1.7; }
+.inbox-resolution h2 { margin: 0 0 .25rem; font-size: inherit; font-weight: 500; }
+.inbox-resolution p { color: var(--muted-foreground); }
+.inbox-resolution button { margin-top: .75rem; }
 .inbox-inline-error button { text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
-.inbox-inline-error { color: var(--destructive); font-size: var(--text-2xs, 12px); line-height: 1.6; padding-bottom: 12px; }
+.inbox-inline-error { color: var(--destructive); }
 .inbox-inline-error button { margin-left: 8px; }

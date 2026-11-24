@@ -45,9 +45,11 @@ export interface LocalGroupConfig {
 export interface LocalAgentConfig {
   /** Agent 的全局稳定 ID。 */
   agent_id: string;
-  /** Agent 的用户可见名称。 */
+  /** Agent 的个人化姓名。 */
   name: string;
-  /** Agent 对外展示的身份简介。 */
+  /** 可选身份与角色列表；去除首尾空白、空项和重复项，空列表表示无角色。 */
+  role?: string[];
+  /** Agent 的简短能力与职责描述。 */
   description: string;
   /** 当前 Agent 定义版本。 */
   version: string;

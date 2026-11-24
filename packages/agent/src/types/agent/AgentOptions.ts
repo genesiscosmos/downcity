@@ -45,12 +45,14 @@ export interface AgentOptions {
   id: string;
 
   /**
-   * 当前 Agent 的用户可见名称。
+   * 当前 Agent 的个人化姓名。
    *
-   * 省略或传入空字符串时使用 `id`；Group 调度会使用该名称理解成员身份。
+   * 省略或传入空字符串时使用 `id`；身份与职责由 `role` 和 `description` 表达。
    */
   name?: string;
 
+  /** 可选身份与角色列表；去除首尾空白、空项和重复项，空列表表示无角色。 */
+  role?: string[];
   /**
    * 当前 Agent 的一句话能力描述。
    *

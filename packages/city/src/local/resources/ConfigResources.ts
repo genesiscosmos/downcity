@@ -69,6 +69,7 @@ export class ConfigResources {
       const token_id = String(input.token_id ?? "");
       if (method === "config.token.get") return repository.get(token_id);
       if (method === "config.token.remove") { repository.remove(token_id); return { deleted: token_id }; }
+      if (method === "config.token.regenerate") return repository.regenerate(token_id);
       const config = input.config as CityTokenConfig;
       require_resource_value(config && Array.isArray(config.agent_ids), "Token configuration is required");
       for (const agent_id of config.agent_ids) if (!this.dependencies.agents.get(agent_id)) throw new ResourceError("resource_not_found", `Agent not found: ${agent_id}`, 3);

@@ -19,7 +19,7 @@ export class ResourceService implements ResourceDispatcher {
   /** 既有共享配置写入口，与资源删除共用协调器。 */
   readonly config: ConfigResources;
   /** 支持的完整操作名，不允许任意函数路径访问。 */
-  readonly capabilities = ["agent.list", "agent.get", "agent.create", "agent.update", "agent.delete", "workspace.register", "workspace.initialize", "workspace.list", "workspace.get", "workspace.update", "workspace.remove", "session.create", "session.list", "session.get", "session.history", "session.receipt", "session.send", "session.stop", "session.archive", "config.token.list", "config.token.get", "config.token.create", "config.token.update", "config.token.remove", "config.power.get", "config.power.set", "config.env.get", "config.env.set", "config.env.delete"];
+  readonly capabilities = ["agent.list", "agent.get", "agent.create", "agent.update", "agent.delete", "workspace.register", "workspace.initialize", "workspace.list", "workspace.get", "workspace.update", "workspace.remove", "session.create", "session.list", "session.get", "session.history", "session.receipt", "session.send", "session.stop", "session.archive", "config.token.list", "config.token.get", "config.token.create", "config.token.update", "config.token.regenerate", "config.token.remove", "config.power.get", "config.power.set", "config.env.get", "config.env.set", "config.env.delete"];
 
   constructor(private readonly dependencies: ResourceDependencies) {
     if (dependencies.extensions) this.capabilities.push(...dependencies.extensions.service.capabilities);

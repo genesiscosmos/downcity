@@ -85,7 +85,7 @@ function describe_session(props: PowerActivityProps): PowerActivityDescription {
 /** 安全正文：作为 React 文本显示，长文本只在展开后截取。 */
 function text_block(text: string, mono = false): ReactNode {
   return create_element("pre", {
-    className: `max-h-80 overflow-auto whitespace-pre-wrap break-words text-xs ${mono ? "font-mono" : "font-sans"}`,
+    className: `whitespace-pre-wrap break-words ${mono ? "font-mono" : "font-sans"}`,
   }, text.length > 2000 ? `${text.slice(0, 2000)}…` : text);
 }
 
@@ -127,7 +127,7 @@ function session_detail(props: PowerActivityProps) {
   const pending = record_items(data.pending_interactions).filter(item => text_value(item.title) || text_value(item.description));
   const response = has_response(props) ? text_value(args.note) : "";
   const failure = text_value(data.failure);
-  return create_element("div", { className: "space-y-3 p-3 text-xs leading-relaxed" },
+  return create_element("div", { className: "space-y-3" },
     sessions.length ? section(chinese ? "会话快照" : "Session snapshot", sessions.map((session, index) => session_snapshot(session, chinese, index))) : null,
     text_value(args.query) ? section(chinese ? "工作指令" : "Instruction", text_block(text_value(args.query))) : null,
     response ? section(chinese ? "回复内容" : "Response", text_block(response)) : null,

@@ -24,6 +24,7 @@ const GUEST_WORKSPACE_PATH = "/workspace";
 const CITY_POWER_ACTIONS = {
   context: [
     "env.get",
+    "execute",
     "sandbox.explain_path",
     "sandbox.get",
     "sandbox.list_mounts",

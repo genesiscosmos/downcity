@@ -12,8 +12,10 @@ export interface RemoteCityOptions {
 export interface RemoteCityAgentInfo {
   /** Agent 稳定标识。 */
   readonly id: string;
-  /** 用户可见名称。 */
+  /** 个人化姓名。 */
   readonly name: string;
+  /** 可选身份与角色列表；无角色时省略，不包含行为指令。 */
+  readonly role?: string[];
   /** 对外能力说明。 */
   readonly description: string;
 }

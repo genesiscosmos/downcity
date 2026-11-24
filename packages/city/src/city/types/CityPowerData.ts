@@ -115,6 +115,8 @@ export interface CityToolWorkspaceSummary {
 
 /** `agent.list` 与 `agent.create` 返回的单个 Agent 摘要。 */
 export interface CityToolAgentSummary {
+  /** Agent 可选身份与角色列表，供语义发现选择协作对象。 */
+  readonly role?: string[];
   /** Agent 对外职责简介，用于选择协作对象。 */
   readonly description: string;
   /** Agent 标识。 */

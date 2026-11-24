@@ -1,5 +1,5 @@
 /** Agent 身份配置用例；创建独立于项目，更新仅作用于新 Session，删除受执行/引用门禁保护。 */
-import { is_model_reference } from "@downcity/type";
+import { normalize_agent_role, is_model_reference } from "@downcity/type";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
@@ -24,7 +24,7 @@ export class AgentResources {
     const ids = new Set([...configs.keys(), ...(host?.city.agents.list().map((agent) => agent.id) ?? [])]);
     const query = String(input.query ?? "").toLowerCase();
     const items = [...ids].sort().map((id) => this.project(id, configs.get(id))).filter((item) =>
-      (!query || `${item.agent_id}\n${item.name}`.toLowerCase().includes(query)) &&
+      (!query || `${item.agent_id}\n${item.name}\n${item.role?.join(" ") ?? ""}\n${item.description}`.toLowerCase().includes(query)) &&
       (!input.loaded || item.runtime_state === "loaded") && (!input.unloaded || item.runtime_state === "unloaded"));
     return { items, total: items.length };
   }
@@ -52,7 +52,7 @@ export class AgentResources {
       const reasoning_effort = optional_text(input.reasoning_effort);
       if (definition_id && !this.dependencies.extensions?.catalog.agents.has(definition_id)) throw new ResourceError("definition_unavailable", "The selected Agent definition is unavailable", 2);
       const model = await this.resolve_selected_model(model_id);
-      const config = this.dependencies.agents.create({ agent_id, name: input.name as string, description: optional_text(input.description) ?? "", instruction: optional_text(input.instruction) ?? "", ...((model_id || definition_id || reasoning_effort) ? { execution: { ...(model?.model_reference ? { model: { ...model.model_reference } } : {}), ...(definition_id ? { definition_id } : {}), ...(reasoning_effort ? { reasoning_effort } : {}) } as JsonObject } : {}) });
+      const config = this.dependencies.agents.create({ agent_id, name: input.name as string, role: optional_role(input.role), description: optional_text(input.description) ?? "", instruction: optional_text(input.instruction) ?? "", ...((model_id || definition_id || reasoning_effort) ? { execution: { ...(model?.model_reference ? { model: { ...model.model_reference } } : {}), ...(definition_id ? { definition_id } : {}), ...(reasoning_effort ? { reasoning_effort } : {}) } as JsonObject } : {}) });
       try {
         if (this.dependencies.host) this.dependencies.host.city.agents.add(await this.dependencies.host.create_agent(config));
       } catch (error) { this.application_failed(config, error); }
@@ -64,7 +64,7 @@ export class AgentResources {
   /** 保存前解析模型；同值重试仍应用运行配置，历史 Session 快照不批量改写。 */
   async update(agent_id: string, input: Record<string, unknown>) {
     require_agent_id(agent_id);
-    require_resource_value(["name", "description", "model", "instruction", "unset_model"].some((key) => input[key] !== undefined && input[key] !== false), "At least one Agent configuration field is required");
+    require_resource_value(["name", "role", "description", "model", "instruction", "unset_model"].some((key) => input[key] !== undefined && input[key] !== false), "At least one Agent configuration field is required");
     require_resource_value(!(input.model !== undefined && input.unset_model), "model and unset_model are mutually exclusive");
     return await this.dependencies.coordinator.mutate(async () => {
       const current = this.require_registered(agent_id);
@@ -80,7 +80,7 @@ export class AgentResources {
         if (effort) execution.reasoning_effort = effort;
         else delete execution.reasoning_effort;
       }
-      const next = { ...current, ...(name !== undefined ? { name: name.trim() } : {}), ...(input.description !== undefined ? { description: optional_text(input.description)! } : {}), ...(input.instruction !== undefined ? { instruction: optional_text(input.instruction)! } : {}), execution };
+      const next = { ...current, ...(name !== undefined ? { name: name.trim() } : {}), ...(input.role !== undefined ? { role: optional_role(input.role) } : {}), ...(input.description !== undefined ? { description: optional_text(input.description)! } : {}), ...(input.instruction !== undefined ? { instruction: optional_text(input.instruction)! } : {}), execution };
 
       const saved_model = read_model_reference(execution.model);
       const model = input.model !== undefined
@@ -96,7 +96,7 @@ export class AgentResources {
         const host = this.dependencies.host;
         if (host) {
           const agent = host.city.agents.get(agent_id);
-          if (agent) agent.reconfigure({ name: config.name, description: config.description, instruction: config.instruction, model });
+          if (agent) agent.reconfigure({ name: config.name, role: config.role ?? [], description: config.description, instruction: config.instruction, model });
           else host.city.agents.add(await host.create_agent(config));
           this.dependencies.coordinator.blocked_agents.delete(agent_id);
           host.invalidate();
@@ -151,7 +151,8 @@ export class AgentResources {
   private project(agent_id: string, config?: LocalAgentConfig) {
     const runtime = this.dependencies.host?.city.agents.get(agent_id);
     const runtime_state: "loaded" | "unloaded" | "unknown" = this.dependencies.host ? runtime ? "loaded" : "unloaded" : "unknown";
-    return { agent_id, name: config?.name ?? runtime?.name ?? agent_id, description: config?.description ?? runtime?.description ?? "", version: config?.version ?? null, model: read_model_reference(config?.execution?.model) ?? null, definition_id: typeof config?.execution?.definition_id === "string" ? config.execution.definition_id : null, registered: !!config, runtime_state, revision: config ? resource_revision(config) : null, created_at: config?.created_at ?? null, updated_at: config?.updated_at ?? null };
+    const role = config ? config.role : runtime?.role;
+    return { agent_id, name: config?.name ?? runtime?.name ?? agent_id, ...(role ? { role } : {}), description: config?.description ?? runtime?.description ?? "", version: config?.version ?? null, model: read_model_reference(config?.execution?.model) ?? null, definition_id: typeof config?.execution?.definition_id === "string" ? config.execution.definition_id : null, registered: !!config, runtime_state, revision: config ? resource_revision(config) : null, created_at: config?.created_at ?? null, updated_at: config?.updated_at ?? null };
   }
 
   private require_registered(agent_id: string): LocalAgentConfig {
@@ -188,4 +189,10 @@ function optional_model(value: unknown): ModelReference | undefined {
   if (value === undefined) return undefined;
   require_resource_value(is_model_reference(value), "model requires a structured source and original id");
   return { ...value };
+}
+
+/** 校验公开资源输入，再复用跨层角色归一化规则。 */
+function optional_role(input: unknown): string[] | undefined {
+  require_resource_value(input === undefined || (Array.isArray(input) && input.every((item) => typeof item === "string")), "role must be an array of strings");
+  return normalize_agent_role(input as string[] | undefined);
 }

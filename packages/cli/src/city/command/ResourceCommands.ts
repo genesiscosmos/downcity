@@ -4,13 +4,13 @@ import { execute_resource_command, resource_options } from "../resources/Resourc
 
 /** Agent CRUD，独立于项目初始化和模型选择交互。 */
 export function register_agent_resource_commands(agent: Command): void {
-  resource_options(agent.command("create").description("Create an Agent identity without initializing a project").option("--name <name>").option("--id <id>").option("--description <text>").option("--model <model_id>").option("--definition-id <definition_id>", "Behavior definition from a loaded extension").option("--instruction-file <path>"))
+  resource_options(agent.command("create").description("Create an Agent identity without initializing a project").option("--name <name>").option("--id <id>").option("--role <role...>", "Identities or roles; pass an empty string to clear").option("--description <text>").option("--model <model_id>").option("--definition-id <definition_id>", "Behavior definition from a loaded extension").option("--instruction-file <path>"))
     .action(async (options) => await execute_resource_command("agent.create", options));
   resource_options(agent.command("list").description("List registered and current runtime Agents").option("--query <text>").option("--loaded").option("--unloaded"))
     .action(async (options) => await execute_resource_command("agent.list", options));
   resource_options(agent.command("get <agent_id>").option("--include-instruction"))
     .action(async (id, options) => await execute_resource_command("agent.get", options, { id }));
-  resource_options(agent.command("update <agent_id>").option("--name <name>").option("--description <text>").option("--model <model_id>").option("--unset-model").option("--instruction-file <path>").option("--if-revision <hash>"))
+  resource_options(agent.command("update <agent_id>").option("--name <name>").option("--role <role...>", "Identities or roles; pass an empty string to clear").option("--description <text>").option("--model <model_id>").option("--unset-model").option("--instruction-file <path>").option("--if-revision <hash>"))
     .action(async (id, options) => await execute_resource_command("agent.update", options, { id }));
   resource_options(agent.command("delete <agent_id>").description("Permanently delete Agent-owned data after reference and execution checks").option("--if-revision <hash>").option("--yes"))
     .action(async (id, options) => await execute_resource_command("agent.delete", options, { id }));

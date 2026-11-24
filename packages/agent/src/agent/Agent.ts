@@ -7,7 +7,7 @@
  * - Session 由 AgentSessions 统一持有；Workspace 只在单个 Session 创建或恢复时提供。
  * - Agent 自己那条会话由 `session()` 暴露；它是一条普通 Session。
  */
-import { same_model } from "@downcity/type";
+import { normalize_agent_role, same_model } from "@downcity/type";
 import { safe_error_diagnostic } from "@/utils/logger/SafeErrorDiagnostic.js";
 import type { CityRuntime, ModelReference, ModelClient, AgentTool as Tool, StorageProvider, ToolCallContext, ToolHookSet, WorkspaceRuntime, SessionTurnCommittedHookValue, SessionSystemMessage } from "@downcity/type";
 import { create_instruction_system_blocks, normalize_instruction_input } from "@/agent/AgentInstructions.js";
@@ -47,6 +47,9 @@ export class Agent {
 
   /** Agent 的用户可见名称；通过 `reconfigure` 原地更新。 */
   private agent_name: string;
+
+  /** Agent 当前身份与角色；仅由构造和重配修改。 */
+  private agent_role?: string[];
 
   /** Agent 的一句话能力描述，供展示与 Group 调度使用；通过 `reconfigure` 原地更新。 */
   private agent_description: string;
@@ -128,6 +131,7 @@ export class Agent {
     this.id = String(options.id || "").trim();
     if (!this.id) throw new Error("Agent requires a non-empty id");
     this.agent_name = String(options.name || "").trim() || this.id;
+    this.agent_role = normalize_agent_role(options.role);
     this.agent_description = String(options.description || "").trim();
     this.agent_model = options.model;
     this.workspace = options.workspace;
@@ -163,6 +167,7 @@ export class Agent {
       // 关键点（中文）：身份用回调实时读取，使重配后的名称与描述立即进入 system、
       // Power 上下文与工具调用环境，三处不再出现同一 Turn 内身份漂移。
       get_agent_name: () => this.agent_name,
+      get_agent_role: () => this.role,
       get_agent_description: () => this.agent_description,
       logger: this.logger,
       get_instruction: () => [...this.get_instructions()],
@@ -235,6 +240,11 @@ export class Agent {
     return this.agent_name;
   }
 
+  /** 返回角色列表副本，避免调用方绕过重配修改身份。 */
+  get role(): string[] | undefined {
+    return this.agent_role ? [...this.agent_role] : undefined;
+  }
+
   /** 返回 Agent 当前的能力描述。 */
   get description(): string {
     return this.agent_description;
@@ -265,6 +275,7 @@ export class Agent {
     if (input.name !== undefined) {
       this.agent_name = String(input.name || "").trim() || this.id;
     }
+    if (input.role !== undefined) this.agent_role = normalize_agent_role(input.role);
     if (input.description !== undefined) {
       this.agent_description = String(input.description || "").trim();
     }
@@ -402,6 +413,8 @@ export class Agent {
     const instruction_system_blocks = create_instruction_system_blocks({
       agent_id: this.id,
       agent_name: this.name,
+      role: this.role,
+      description: this.description,
       instruction: [...this.get_instructions()],
     });
     const hooks = this.resolve_hooks();
@@ -441,6 +454,7 @@ export class Agent {
     return Object.freeze({
       agent_id: this.id,
       agent_name: this.name,
+      agent_role: this.role,
       agent_description: this.description,
       agent_instructions: Object.freeze(
         input.instruction_system_blocks.map((block) => block.content),
@@ -650,6 +664,7 @@ export class Agent {
         return {
           agent_id: this.id,
           agent_name: this.name,
+          agent_role: this.role,
           agent_description: this.description,
           agent_instructions: [...this.get_instructions()],
           session_id: session.id,

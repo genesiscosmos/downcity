@@ -34,6 +34,8 @@ export interface CreatePowerContextInput {
   readonly agent_id: string;
   /** 当前 Agent 用户可见名称。 */
   readonly agent_name?: string;
+  /** 当前 Agent 可选身份与角色列表快照。 */
+  readonly agent_role?: readonly string[];
   /** 当前 Agent 能力描述。 */
   readonly agent_description?: string;
   /** 当前 Workspace 运行时引用；无项目会话时为空。 */
@@ -80,6 +82,7 @@ export function create_power_context(input: CreatePowerContextInput): PowerConte
     agent: {
       id: input.agent_id,
       name: String(input.agent_name || input.agent_id).trim() || input.agent_id,
+      ...(input.agent_role?.length ? { role: [...input.agent_role] } : {}),
       description: String(input.agent_description || "").trim(),
       get instructions() {
         return input.get_instructions();

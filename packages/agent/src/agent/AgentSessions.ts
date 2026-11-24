@@ -48,6 +48,8 @@ type AgentSessionsOptions = {
    * 当前 agent 用户可见名称；实时读取，使 `reconfigure` 后的新建 Session 立即使用新身份。
    */
   get_agent_name: () => string;
+  /** 延迟读取 Agent 可选身份与角色列表。 */
+  get_agent_role?: () => string[] | undefined;
 
   /**
    * 当前 agent 一句话能力描述；实时读取，进入工具与扩展的调用环境。
@@ -109,6 +111,7 @@ type AgentSessionsOptions = {
 export class AgentSessions implements AgentSessionsContract<AgentSession> {
   private readonly agent_id: string;
   private readonly get_agent_name: AgentSessionsOptions["get_agent_name"];
+  private readonly get_agent_role: AgentSessionsOptions["get_agent_role"];
   private readonly get_agent_description: AgentSessionsOptions["get_agent_description"];
   private readonly resolve_session_context: AgentSessionsOptions["resolve_session_context"];
   private readonly logger: Logger;
@@ -143,12 +146,22 @@ export class AgentSessions implements AgentSessionsContract<AgentSession> {
   private readonly creation_listeners = new Set<(session: AgentSession) => void | Promise<void>>();
   /** 会话成功离开活动集合后的宿主订阅。 */
   private readonly removal_listeners = new Set<(event: SessionRemovalEvent) => void | Promise<void>>();
+  /** 宿主附属资源随缓存实例释放，不能据此绕过归档或 busy 检查。 */
+  private readonly release_listeners = new Set<(session: AgentSession) => void>();
+
+  /** 监听实例卸载与最终关闭；取消函数解除订阅。 */
+  on_released(listener: (session: AgentSession) => void): () => void {
+    this.release_listeners.add(listener);
+    return () => { this.release_listeners.delete(listener); };
+  }
+
   /** Agent 会话创建链；并发调用共享同一创建过程，避免产生第二条。 */
   private agent_session_creation_chain: Promise<void> = Promise.resolve();
 
   constructor(options: AgentSessionsOptions) {
     this.agent_id = options.agent_id;
     this.get_agent_name = options.get_agent_name;
+    this.get_agent_role = options.get_agent_role;
     this.get_agent_description = options.get_agent_description;
     this.resolve_session_context = options.resolve_session_context;
     this.logger = options.logger;
@@ -789,7 +802,8 @@ export class AgentSessions implements AgentSessionsContract<AgentSession> {
     const profile = input?.execution_profile;
     const assert_profile = () => { if (profile) this.execution_profiles.assert_registered(profile.reference); };
     const instruction_blocks = () => profile ? create_instruction_system_blocks({
-      agent_id: this.agent_id, agent_name: this.get_agent_name(), instruction: profile.resources.instruction,
+      agent_id: this.agent_id, agent_name: this.get_agent_name(), role: this.get_agent_role?.(),
+      description: this.get_agent_description(), instruction: profile.resources.instruction,
     }) : this.load_instruction_system_blocks();
 
     const context = this.resolve_session_context({
@@ -812,6 +826,7 @@ export class AgentSessions implements AgentSessionsContract<AgentSession> {
       ...(profile ? { assert_execution_profile: assert_profile } : {}),
       agent_id: this.agent_id,
       get_agent_name: this.get_agent_name,
+      get_agent_role: this.get_agent_role,
       get_agent_description: this.get_agent_description,
       workspace_id,
       workspace_path: context.workspace_path,
@@ -901,6 +916,8 @@ export class AgentSessions implements AgentSessionsContract<AgentSession> {
 
   /** 移出实例时同步解除其观察，避免旧实例向新实例的集合发布变化。 */
   private delete_cached_session(cache_key: string): void {
+    const session = this.sessions_by_id.get(cache_key);
+    if (session) this.notify_released(session);
     this.session_observers.get(cache_key)?.();
     this.session_observers.delete(cache_key);
     this.sessions_by_id.delete(cache_key);
@@ -908,8 +925,17 @@ export class AgentSessions implements AgentSessionsContract<AgentSession> {
 
   /** Agent 停止全部执行后释放所有实例订阅。 */
   dispose_session_observers(): void {
+    for (const session of this.sessions_by_id.values()) this.notify_released(session);
+    this.release_listeners.clear();
     for (const unsubscribe of this.session_observers.values()) unsubscribe();
     this.session_observers.clear();
+  }
+
+  /** 清理通知失败不能改变已经完成的卸载事实。 */
+  private notify_released(session: AgentSession): void {
+    for (const listener of this.release_listeners) {
+      try { listener(session); } catch (error) { this.logger.warn("Session release observer failed", { error: String(error) }); }
+    }
   }
 
   /** 返回来源分类内唯一的 Session 运行时缓存键。 */
@@ -952,6 +978,8 @@ export class AgentSessions implements AgentSessionsContract<AgentSession> {
     return create_instruction_system_blocks({
       agent_id: this.agent_id,
       agent_name: this.get_agent_name(),
+      role: this.get_agent_role?.(),
+      description: this.get_agent_description(),
       instruction: this.get_instruction(),
     });
   }
