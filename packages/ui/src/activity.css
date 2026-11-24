@@ -1,0 +1,360 @@
+/** 共享 Activity 的 Desktop 活动样式；宿主主题与阅读字号通过 token 继承。 */
+.agent-process-body {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  /* 活动组内部沿用 message_layout.ts 的 gap-1，推理与工具行之间保留 4px 留白。 */
+  gap: var(--spacing);
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
+.activity-tool-row {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0.2rem;
+  min-width: 0;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  color: var(--muted-foreground);
+  background: transparent;
+  font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-size: var(--text-base);
+  line-height: 1.3;
+  transition: background-color 0.15s ease, border-color 0.15s ease;
+}
+
+.activity-tool-summary {
+  position: relative;
+  display: block;
+  min-width: 0;
+  min-height: 1.45rem;
+  padding: 0.08rem 0;
+  border-radius: var(--radius-chip);
+  overflow: hidden;
+  list-style: none;
+  cursor: pointer;
+  /*
+   * 活动行是过程记录，不是正文：它不在 `data-chat-selectable-message` 里，
+   * 选中它不会得到任何引用入口，因此直接禁掉文本选中。
+   * 写在共享类上，工具行与思考行才会一致，不靠调用处逐个补 `select-none`。
+   */
+  user-select: none;
+}
+
+.activity-tool-summary::-webkit-details-marker {
+  display: none;
+}
+
+.activity-tool-summary:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--primary) 55%, transparent);
+  outline-offset: 2px;
+}
+
+.activity-tool-summary:hover .activity-tool-state,
+.activity-tool-summary:hover .activity-tool-icon,
+.activity-tool-summary:hover .activity-tool-chevron {
+  color: color-mix(in srgb, var(--foreground) 76%, transparent);
+}
+
+.activity-tool-main {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  min-width: 0;
+  min-height: 1.25rem;
+  align-items: center;
+  gap: 0.38rem;
+}
+
+/*
+ * 活动行图标容器。
+ *
+ * **不写 `stroke-width`。** 这里曾经写了 `stroke-width: 1.8` 想把线条收细一点，
+ * 但它对两种图形语言的效果相反：
+ *
+ * - Tabler 的描边图标根属性是 `fill:none; stroke:currentColor; stroke-width:2`，
+ *   改 1.8 确实是变细；
+ * - 实心图标（如 skill 的 `TbPillFilled`）根属性只有 `fill:currentColor`、**没有 stroke**，
+ *   而 CSS 声明 `stroke-width` 会让描边变得可绘制（浏览器用默认 stroke 补齐），
+ *   于是实心图形除了被填满，外面还多套了一圈描边——反而更粗。
+ *
+ * 图标表里两种语言并存（见 PowerIcon），因此容器不能统一改线宽；
+ * 用 Tabler 自带的 `2`，两类图标都回到它的原始设计意图。
+ * 需要收细的单个图标（如展开箭头）在自己的类上写。
+ */
+.activity-tool-icon {
+  width: 1rem;
+  height: 1rem;
+  flex: 0 0 auto;
+  color: color-mix(in srgb, var(--foreground) 52%, transparent);
+}
+
+.activity-tool-state {
+  flex: 0 0 auto;
+  min-width: 0;
+  color: color-mix(in srgb, var(--foreground) 58%, transparent);
+  font-size: var(--text-base);
+  font-weight: 400;
+  line-height: 1.3;
+}
+
+/*
+ * 身份槽：这一行的重点，永不截断。
+ *
+ * 「已调用」只说生命周期，「Shell · 执行命令」才是用户真正要读的内容。
+ * 允许它撑开一行是刻意的：身份被省略号吃掉之后，这一行就没有信息了。
+ * 横向溢出由参数槽承担（见 .activity-tool-target）。
+ */
+.activity-tool-identity {
+  flex: 0 0 auto;
+  min-width: 0;
+  color: color-mix(in srgb, var(--foreground) 78%, transparent);
+  font-size: var(--text-base);
+  font-weight: 400;
+  line-height: 1.3;
+  white-space: nowrap;
+}
+
+/*
+ * 参数槽：目标对象或参数预览，第一个被截断的槽。
+ *
+ * 它的信息量低于身份，所以空间不够时先牺牲它；`title` 属性给出完整值。
+ */
+.activity-tool-target {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  color: color-mix(in srgb, var(--muted-foreground) 82%, transparent);
+  font-size: var(--text-base);
+  font-weight: 400;
+  line-height: 1.3;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.activity-tool-chevron {
+  flex: 0 0 auto;
+  width: 0.875rem;
+  height: 0.875rem;
+  margin-left: -0.12rem;
+  /* 展开箭头是可交互控件，不能低于非文本对比度下限。 */
+  color: var(--muted-foreground);
+  stroke-width: 1.8;
+  transition: color 0.14s ease, transform 0.14s ease;
+}
+
+/*
+ * 会修改文件的 Tool（write / edit）不再用颜色区分。
+ *
+ * 曾经整行染成克莱茵蓝，但那与行右端的 `+N -M` 标签在表达同一件事，
+ * 而颜色会与主题调色板相互干扰（跨 18 种主题组合调平衡很费力）。
+ * 现在只靠标签：数字比颜色更准确，也不需要任何色相。
+ */
+
+/*
+ * 活动行内的计数 / 标签胶囊。
+ *
+ * 分组计数（`+N`）与改动行数（`+N -M`）共用这一个基类：两者都是“行尾的一个小数字标签”，
+ * 几何（内边距、胶囊圆角、字号、等宽数字）必须一致。
+ * 属性写两遍就会漂移，因此只在这里定义一次；各自的差异用修饰类表达。
+ * 胶囊圆角是它的识别特征，不参与圆角档位收敛（见 desktop-dimension-scale-design）。
+ */
+.activity-tool-pill {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  padding: 0.06rem 0.28rem;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--muted) 52%, transparent);
+  font-size: var(--text-3xs);
+  font-variant-numeric: tabular-nums;
+  line-height: 1.2;
+}
+
+/* 分组计数：中性色，跟在分组摘要后面。 */
+.activity-tool-count {
+  color: color-mix(in srgb, var(--foreground) 46%, transparent);
+}
+
+/* 改动行数紧跟文件路径，间距沿用活动行的 gap；配色与文件差异视图共用。 */
+.activity-tool-row[open] > .activity-tool-summary .activity-tool-chevron {
+  transform: rotate(90deg);
+}
+
+.activity-tool-row.is-running > .activity-tool-summary :is(.activity-tool-icon, .activity-tool-state, .activity-tool-identity) {
+  animation: activity-tool-pulse 1.4s ease-in-out infinite;
+}
+
+@keyframes activity-tool-pulse {
+  0%, 100% { opacity: 0.58; }
+  50% { opacity: 1; }
+}
+
+/* Agent 活动详情遵循 Duobox 的紧凑日志布局。 */
+.activity-tool-log {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 0.16rem;
+}
+
+.activity-tool-group-summary .activity-tool-state {
+  color: color-mix(in srgb, var(--foreground) 66%, transparent);
+}
+
+.activity-tool-group-body {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 0.25rem;
+  margin: 0.1rem 0 0 0.47rem;
+  padding: 0.08rem 0 0.1rem 0.92rem;
+  border-left: 1px solid color-mix(in srgb, var(--border) 52%, transparent);
+}
+
+.activity-tool-diff-line {
+  margin: 0;
+  border: 0;
+  color: inherit;
+  background: transparent;
+  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  font-size: var(--text-3xs);
+  font-weight: 400;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
+.activity-tool-edit-pair {
+  min-width: 0;
+}
+
+.activity-tool-diff-line code {
+  min-width: 0;
+  color: inherit;
+  font: inherit;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
+.activity-tool-input-caret {
+  display: inline-block;
+  width: 1px;
+  height: 0.88rem;
+  margin-left: 0.12rem;
+  vertical-align: -0.14rem;
+  background: var(--primary);
+  animation: activity-tool-input-caret-blink 0.9s steps(1, end) infinite;
+}
+
+@keyframes activity-tool-input-caret-blink {
+  50% { opacity: 0; }
+}
+
+/* 活动只拥有表面和缩进；正文排版与留白归共享 DetailContent，纵向滚动归消息页面。 */
+.activity-tool-detail {
+  min-width: 0;
+  margin: 0.18rem 0 0.18rem 1.38rem;
+  border: 1px solid color-mix(in srgb, var(--border) 28%, transparent);
+  border-radius: var(--radius-chip);
+  background: color-mix(in srgb, var(--muted-foreground) 10%, transparent);
+}
+
+/* 仅格式化工具日志本身，不覆盖嵌入 Markdown 的代码块。 */
+.activity-tool-detail .activity-tool-diff-line {
+  min-width: 0;
+  margin: 0;
+  padding: 0.55rem 0.62rem;
+  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  font-size: var(--text-2xs);
+  font-weight: 400;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
+.activity-tool-console {
+  color: color-mix(in srgb, var(--foreground) 78%, transparent);
+  background: transparent;
+}
+
+.activity-tool-edit-diff {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  padding: 0.36rem 0;
+}
+
+.activity-tool-edit-diff .activity-tool-diff-line {
+  display: block;
+  min-height: 1.45rem;
+  padding: 0.16rem 0.62rem;
+  border-left: 3px solid transparent;
+  font-size: var(--text-2xs);
+  line-height: 1.48;
+}
+
+.activity-tool-edit-diff .activity-tool-diff-line.is-removal {
+  border-left-color: rgb(220 38 38);
+  color: rgb(153 27 27);
+  background: rgb(239 68 68 / 0.14);
+}
+
+.activity-tool-edit-diff .activity-tool-diff-line.is-addition {
+  border-left-color: rgb(22 163 74);
+  color: rgb(3 105 67);
+  background: rgb(34 197 94 / 0.14);
+}
+
+.dark .activity-tool-edit-diff .activity-tool-diff-line.is-removal {
+  color: rgb(252 165 165);
+}
+
+.dark .activity-tool-edit-diff .activity-tool-diff-line.is-addition {
+  color: rgb(110 231 183);
+}
+
+
+.activity-tool-row.is-failed > .activity-tool-summary :is(.activity-tool-icon,.activity-tool-state,.activity-tool-identity) { color: var(--destructive); }
+@media (prefers-reduced-motion: reduce) { .activity-tool-row.is-running > .activity-tool-summary :is(.activity-tool-icon,.activity-tool-state,.activity-tool-identity), .activity-tool-input-caret { animation: none; } }
+
+/* Input 摘要使用轻底色胶囊；展开正文留在胶囊外，沿用 Tool 的详情布局。 */
+.activity-tool-row.is-incoming > .activity-tool-summary {
+  align-self: flex-start;
+  box-sizing: border-box;
+  width: fit-content;
+  max-width: 100%;
+  padding: 0.16rem 0.5rem;
+  border-radius: 999px;
+  background: var(--surface-subtle);
+}
+.activity-input-icon {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  width: 1rem;
+  height: 1rem;
+  color: var(--muted-foreground);
+}
+.activity-input-source-icon { width: 0.875rem; height: 0.875rem; }
+.activity-tool-row.is-incoming > .activity-tool-summary :is(.activity-input-icon, .activity-tool-state, .activity-tool-identity) { animation: none; }
+.activity-tool-row.is-incoming.is-failed > .activity-tool-summary .activity-input-icon { color: var(--destructive); }
+.activity-input-file {
+  cursor: pointer;
+  border-radius: var(--radius-chip);
+  text-align: left;
+}
+.activity-input-file:hover { text-decoration: underline; }
+.activity-input-file:focus-visible,
+.activity-tool-row.is-incoming .activity-tool-detail:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}

@@ -17,8 +17,6 @@ export async function connect_chat_session(session: DowncityChatSession): Promis
   let loading_earlier: Promise<boolean> | undefined;
   let snapshot: SessionRuntimeSnapshot = { state: "idle", live_execution: false };
   let unsubscribe: (() => void) | undefined;
-  let draining = false;
-  let queue_paused = false;
   let connection_error: Error | undefined;
   let runtime_generation = 0;
   let status_request = 0;
@@ -88,17 +86,6 @@ export async function connect_chat_session(session: DowncityChatSession): Promis
     snapshot = next;
     runtime.set_connection_state(undefined, next.model_retry?.message_id);
     runtime.set_status(next.state === "failed" ? "error" : next.live_execution ? "streaming" : "ready");
-    if (!next.live_execution) void drain_queue();
-  };
-  const drain_queue = async () => {
-    if (!ready || closed || connection_error || queue_paused || draining || snapshot.live_execution) return;
-    const input = runtime.dequeue();
-    if (!input) return;
-    draining = true;
-    try { await runtime.submit(input, "steer"); }
-    catch (error) { queue_paused = true; runtime.restore_queued_input(input); fail(error); }
-    finally { draining = false; }
-    if (!closed && !connection_error && !queue_paused && !snapshot.live_execution) queueMicrotask(() => { void drain_queue(); });
   };
   const flush = () => {
     scheduled = false;
@@ -139,7 +126,7 @@ export async function connect_chat_session(session: DowncityChatSession): Promis
   }
   return {
     runtime,
-    close: () => { if (closed) return; closed = true; buffered = []; unsubscribe?.(); },
+    close: () => { if (closed) return; closed = true; buffered = []; unsubscribe?.(); runtime.close(); },
     load_earlier: () => {
       assert_open();
       if (loading_earlier) return loading_earlier;

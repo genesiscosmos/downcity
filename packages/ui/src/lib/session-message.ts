@@ -93,10 +93,10 @@ export function session_part_to_chat_part(raw_part: unknown, index = 0): Downcit
       created_at: typeof part.created_at === "number" ? part.created_at : undefined,
     };
   }
-  if (type === "text" || type === "reasoning") return { id, type, text: typeof part.text === "string" ? part.text : "", state: typeof part.state === "string" ? part.state : undefined };
+  if (type === "text" || type === "reasoning") return { id, type, text: typeof part.text === "string" ? part.text : "", state: typeof part.state === "string" ? part.state : undefined, activity_part: type === "reasoning" ? part as unknown as import("@downcity/type").SessionAgentReasoningPart : undefined };
   if (type === "power") return { id, type: "text", text: to_string(part.fallback_text) ?? "" };
   if (type === "step-start") return { id, type };
-  if (type === "tool") return { id, type, tool_call_id: to_string(part.tool_call_id), tool_name: to_string(part.tool_name), tool_state: to_string(part.state), input_text: to_string(part.input_text), input: part.input, output: part.output, error: to_string(part.error) };
+  if (type === "tool") return { id, type, activity_part: part as unknown as import("@downcity/type").SessionAgentToolPart, tool_call_id: to_string(part.tool_call_id), tool_name: to_string(part.tool_name), tool_state: to_string(part.state), input_text: to_string(part.input_text), input: part.input, output: part.output, error: to_string(part.error) };
   if (type === "interaction") {
     const request = part.request && typeof part.request === "object" ? part.request as Record<string, unknown> : {};
     const source = request.source && typeof request.source === "object" ? request.source as Record<string, unknown> : {};
@@ -107,6 +107,7 @@ export function session_part_to_chat_part(raw_part: unknown, index = 0): Downcit
     return {
       id,
       type,
+      interaction: part as unknown as import("@downcity/type").SessionAgentInteraction,
       interaction_id: typeof request.interaction_id === "string" ? request.interaction_id : typeof part.interaction_id === "string" ? part.interaction_id : undefined,
       interaction_tool_call_id: to_string(source.tool_call_id),
       interaction_type: typeof request.type === "string" ? request.type : typeof part.interaction_type === "string" ? part.interaction_type : undefined,
@@ -134,7 +135,7 @@ export function session_part_to_chat_part(raw_part: unknown, index = 0): Downcit
   if (type === "action") {
     const status = part.state === "completed" ? "finished" : part.state === "failed" ? "failed" : "progress";
     const data = part.data && typeof part.data === "object" && !Array.isArray(part.data) ? part.data as Record<string, unknown> : undefined;
-    return { id, type: "operation", operation: { status, name: String(part.action_type ?? "operation"), label: to_string(part.title), error: status === "failed" ? to_string(part.description) : undefined, progress: typeof data?.progress === "number" ? data.progress : undefined } };
+    return { id, type: "operation", activity_part: part as unknown as import("@downcity/type").SessionAgentActionPart, operation: { status, name: String(part.action_type ?? "operation"), label: to_string(part.title), error: status === "failed" ? to_string(part.description) : undefined, progress: typeof data?.progress === "number" ? data.progress : undefined } };
   }
   if (type === "error") return { id, type: "operation", operation: { status: "failed", name: to_string(part.code) ?? "error", label: to_string(part.message), error: to_string(part.message) } };
   return null;

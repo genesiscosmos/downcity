@@ -8,6 +8,8 @@
  */
 
 export { cn } from "./lib/utils";
+export { DetailContent } from "./components/detail-content";
+export type { DetailContentProps } from "./types/detail-content";
 export { ModelSelector } from "./components/model/ModelSelector";
 export { ChatModelSelector, ModelDetails, ModelOptions, ReasoningOptions, SelectorSubmenu } from "./components/model/ChatModelSelector";
 export { ChatApprovalModeSelector } from "./components/model/ChatApprovalModeSelector";
@@ -386,3 +388,24 @@ export type { AgentMessageBlock, AgentActivityPart, AgentMessageContentProps, Us
 
 export { build_user_message_preview, split_complete_blocks, user_message_collapse_over_chars, user_message_preview_chars, user_message_parts_text } from "./lib/user-message-preview";
 export type { UserMessagePreview } from "./types/user-message-preview";
+
+// 完整消息活动组件及宿主适配契约。
+export { Activity, ActivityProvider } from "./components/activity";
+export { ActivityRow } from "./components/activity-row";
+export { ActivityReadableDetailView } from "./components/activity-readable";
+export type { ActivityProps } from "./types/activity-props";
+export type { ActivityHost } from "./types/activity-host";
+export type { ActivityRowProps, ActivityRowSummary } from "./types/activity-row";
+export type { AgentActivityPresentation, AgentActivityDetail, AgentActivityTone, AgentActivityDiffStat, AgentActivityEditPair, AgentToolIdentity, AgentToolVisualKind, AgentActivityVisualKind, AgentActionVisualKind } from "./types/activity";
+export type { ActivityReadableDetail, ActivityReadableBody, ActivityText, ActivityQuestion } from "./types/activity-readable";
+export { resolve_agent_tool_presentation, resolve_agent_action_presentation, resolve_agent_reasoning_presentation, resolve_agent_tool_identity, resolve_chat_power_lookup, chat_power_names, read_streaming_input_values } from "./lib/activity/agent_activity_presentation";
+
+// 已加载消息中待处理交互的无副作用投影，供状态来源适配器复用。
+export { message_pending_interactions } from "./components/chat-status";
+
+export { ActivityIcon } from "./components/activity-icon";
+export { ActivityDetailBoundary } from "./components/activity-detail-boundary";
+
+// 宿主领域适配器复用相同的 canonical 错误与私密引用处理。
+export { activity_call_failed, activity_error_original } from "./lib/activity/activity_error";
+export { redact_private as redact_activity_private } from "./lib/activity/activity_detail_shared";

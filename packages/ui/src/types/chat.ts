@@ -21,6 +21,8 @@ export type DowncityChatMessagePart = DowncityChatContentPart | DowncityChatInpu
 export interface DowncityChatContentPart {
   /** part 稳定标识。 */ id: string;
   /** part 类型；input 使用独立的判别分支。 */ type: Exclude<DowncityChatMessagePartType, "input">;
+  /** canonical 活动快照；SDK 保留字段供完整 Activity 使用，不重新猜测工具语义。 */ activity_part?: import("./chat-blocks").AgentActivityPart;
+  /** canonical 交互请求与已保存历史结果；待处理表单由 StatusPanel 持有。 */ interaction?: import("@downcity/type").SessionAgentInteraction;
   /** 文本内容。 */ text?: string;
   /** part 是否仍在流式生成。 */ state?: string;
   /** 工具调用标识。 */ tool_call_id?: string;
@@ -91,13 +93,15 @@ export interface DowncityChatSubmitAttachment extends DowncityChatAttachment { /
 /** Chat 输入提交意图：常规发送、显式排队或绕过队列即时调整。 */
 export type DowncityChatSubmitMode = "send" | "queue" | "steer";
 /** 输入提交值。 */
-export interface DowncityChatSubmitInput { /** 从富文本按原位投影的正文、引用、附件与数据；存在时提交这些 parts。 */ parts?: import("./chat-document").ChatComposerPart[]; /** 输入正文。 */ text: string; /** 输入附件。 */ attachments: DowncityChatSubmitAttachment[]; }
+export interface DowncityChatSubmitInput { /** 原始富文本编辑文档，仅用于本地队列显示和完整编辑，不发送至 Session。 */ document?: import("@tiptap/core").JSONContent; /** 从富文本按原位投影的正文、引用、附件与数据；存在时提交这些 parts。 */ parts?: import("./chat-document").ChatComposerPart[]; /** 输入正文。 */ text: string; /** 输入附件。 */ attachments: DowncityChatSubmitAttachment[]; }
 /** 自定义消息渲染参数。 */
 export interface DowncityChatMessageRenderProps { /** 当前消息。 */ message: DowncityChatMessage; }
 /** Chat Panel 属性。 */
-export interface DowncityChatPanelProps extends Omit<React.ComponentPropsWithoutRef<"div">, "children" | "title"> {
+export interface DowncityChatPanelProps extends Omit<React.ComponentPropsWithoutRef<"div">, "children" | "title" | "translate"> {
   /** 可选 Chat runtime；提供后由 runtime 持有消息、状态和提交逻辑。 */
   runtime?: import("../lib/chat-runtime").DowncityChatRuntime;
+  /** Optional host translations for shared message interaction and composer labels; missing keys use SDK defaults. */ translate?: import("./chat-controls").ChatControlTranslate;
+  /** Public Agent identity used by shared assistant message rows; does not grant runtime capabilities. */ agent?: import("./chat-message").MessageIdentity;
   /** 当前会话。 */ thread?: DowncityChatThread | null;
   /** 历史会话。 */ threads?: DowncityChatThread[];
   /** 消息列表。 */ messages?: DowncityChatMessage[];
@@ -107,6 +111,12 @@ export interface DowncityChatPanelProps extends Omit<React.ComponentPropsWithout
   /** 是否有更多历史。 */ has_more_threads?: boolean;
   /** 是否登录。 */ is_logged_in?: boolean;
   /** 标题。 */ title?: React.ReactNode;
+  /** Render the standard header; disable when the host already owns a conversation header. */ show_header?: boolean;
+  /** Load preceding canonical messages inside this panel's scroll area; the panel preserves the visible scroll position on prepend. */ on_load_earlier?: () => void | Promise<void>;
+  /** Disable repeated history requests while the host loads a page. */ earlier_loading?: boolean;
+  /** Accessible idle text for the preceding-history action. */ earlier_label?: string;
+  /** Accessible progress text while preceding history is loading. */ earlier_loading_label?: string;
+  /** Host-owned history failure shown next to its retry action. */ earlier_error?: string;
   /** 空状态标题。 */ empty_title?: React.ReactNode;
   /** 空状态描述。 */ empty_description?: React.ReactNode;
   /** 输入占位符。 */ input_placeholder?: string;
@@ -128,5 +138,7 @@ export interface DowncityChatPanelProps extends Omit<React.ComponentPropsWithout
   /** 当前进程仍可重试的消息标识。 */ retry_message_id?: string;
   /** 重试当前有效的失败请求。 */ on_retry_message?: (message_id: string) => Promise<void>;
   /** 顶部自定义操作。 */ render_header_actions?: () => React.ReactNode;
+  /** 完整活动块的宿主能力；默认提供内建展示，Power 与导航按需适配。 */ activity_host?: import("./activity-host").ActivityHost;
+  /** 输入框上方共享状态面板；宿主持有跨来源交互与子会话能力，本地队列由 runtime 适配。 */ status_panel?: Omit<import("./status-panel").StatusPanelProps, "queue">;
   /** 底部自定义内容。 */ render_footer?: () => React.ReactNode;
 }

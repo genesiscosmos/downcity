@@ -5,6 +5,8 @@ import type { DowncityChatApprovalMode, DowncityChatMessage, DowncityChatModelOp
 export interface DowncityChatQueuedInput {
   /** 队列项稳定标识。 */ id: string;
   /** 队列项正文。 */ text: string;
+  /** 完整提交内容，保留有序引用、附件和原始编辑文档；只存于当前 runtime。 */ input: DowncityChatSubmitInput;
+  /** 已开始提交的队列项；提交期间锁定编辑和移动。 */ sending: boolean;
 }
 
 /** Runtime 初始化和宿主能力。 */
@@ -32,6 +34,8 @@ export interface DowncityChatRuntimeSnapshot {
   /** 当前模型。 */ model_id: string;
   /** approval 模式。 */ approval_mode: DowncityChatApprovalMode;
   /** 当前等待执行的输入队列。 */ queued_inputs: DowncityChatQueuedInput[];
+  /** 暂停后不自动调度；显式发送仍可立即执行。 */ queue_paused: boolean;
+  /** 正在编辑的条目标识；编辑期间阻止自动调度并锁定队列动作。 */ editing_queue_id?: string;
 }
 
 /** Runtime 状态订阅回调。 */

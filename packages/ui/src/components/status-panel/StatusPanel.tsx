@@ -86,7 +86,7 @@ function StatusPanelContent<Address>({ queue, interactions, auto_expand_interact
     observer.observe(content);
     return () => observer.disconnect();
   }, [has_content, display_tab, available_width]);
-  if (!has_content) return null;
+  if (!has_content) return error ? <p role="alert" className="py-2 text-xs text-destructive">{error}</p> : null;
   const options = [
     ...(queue_count ? [{ value: "queue" as const, label: <StatusPillLabel icon={<TbListDetails />} label={translate("status_panel.queue")} count={queue_count} /> }] : []),
     ...(interaction_count ? [{ value: "interaction" as const, label: <StatusPillLabel icon={<TbMessageQuestion />} label={translate("status_panel.interaction")} count={interaction_count} /> }] : []),
@@ -111,9 +111,9 @@ function StatusPanelContent<Address>({ queue, interactions, auto_expand_interact
               await interactions.respond(input, private_question, item);
               set_submitted_keys((current) => new Set([...current, item.key ?? item.part.interaction_id]));
             }} /> : null}
-            {error ? <p role="alert" className="px-3 pb-2 text-2xs text-destructive">{error}</p> : null}
           </div>
           <div hidden={display_tab !== "sub_sessions"}>{sub_sessions ? <SubSessionList {...sub_sessions} /> : null}</div>
+          {error ? <p role="alert" className="px-3 pb-2 text-2xs text-destructive">{error}</p> : null}
         </div>
       </motion.div>
       {/* 使用可用宽度约束自然尺寸；折叠动画期间也不创建横向滚动区域。 */}
