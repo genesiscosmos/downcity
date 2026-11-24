@@ -1,3 +1,4 @@
-/** 应用公开契约与生成器；宿主使用同一协议发布 SDK 模块。 */
-export { ApplicationCatalog } from "./ApplicationCatalog.js";
-export type { ApplicationModule, ApplicationExport, ApplicationCall, ApplicationPolicy, ApplicationDescriptor } from "./types/Application.js";
+/** 应用公开对象与接口契约；宿主只挂载显式公开对象。 */
+export { PublicApplication } from "./PublicApplication.js";
+export { create_agent_profiles } from "./AgentProfiles.js";
+export type { ApplicationObject, ApplicationCall, ApplicationPolicy, ApplicationDescriptor } from "./types/Application.js";

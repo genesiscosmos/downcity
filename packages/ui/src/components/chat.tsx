@@ -10,7 +10,7 @@ import { cn } from "../lib/utils";
 import { ControlMessagesProvider, default_control_translate } from "../lib/control-messages";
 import { AgentChatMessage, UserMessage } from "./chat-messages";
 import { ChatInput } from "./chat-input/ChatInput";
-import { ActivityProvider } from "./activity";
+import { ActivityProvider } from "./agent-activity";
 import { ChatComposerStatus, message_pending_interactions } from "./chat-status";
 import type { ChatComposerStatusProps } from "./chat-status";
 import type { JSONContent } from "@tiptap/core";

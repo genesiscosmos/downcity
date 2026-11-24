@@ -53,10 +53,10 @@ export class AgentResources {
       if (definition_id && !this.dependencies.extensions?.catalog.agents.has(definition_id)) throw new ResourceError("definition_unavailable", "The selected Agent definition is unavailable", 2);
       const model = await this.resolve_selected_model(model_id);
       const config = this.dependencies.agents.create({ agent_id, name: input.name as string, role: optional_role(input.role), description: optional_text(input.description) ?? "", instruction: optional_text(input.instruction) ?? "", ...((model_id || definition_id || reasoning_effort) ? { execution: { ...(model?.model_reference ? { model: { ...model.model_reference } } : {}), ...(definition_id ? { definition_id } : {}), ...(reasoning_effort ? { reasoning_effort } : {}) } as JsonObject } : {}) });
+      this.dependencies.host?.invalidate({ kind: "agent", id: agent_id, operation: "created", revision: resource_revision(config) });
       try {
         if (this.dependencies.host) this.dependencies.host.city.agents.add(await this.dependencies.host.create_agent(config));
       } catch (error) { this.application_failed(config, error); }
-      this.dependencies.host?.invalidate();
       return this.saved_result(config, true);
     });
   }
@@ -92,6 +92,7 @@ export class AgentResources {
       }
       const changed = resource_revision(next) !== resource_revision(current);
       const config = changed ? this.dependencies.agents.save(next) : current;
+      if (changed) this.dependencies.host?.invalidate({ kind: "agent", id: agent_id, operation: "updated", revision: resource_revision(config) });
       try {
         const host = this.dependencies.host;
         if (host) {
@@ -99,7 +100,6 @@ export class AgentResources {
           if (agent) agent.reconfigure({ name: config.name, role: config.role ?? [], description: config.description, instruction: config.instruction, model });
           else host.city.agents.add(await host.create_agent(config));
           this.dependencies.coordinator.blocked_agents.delete(agent_id);
-          host.invalidate();
         }
       } catch (error) { this.application_failed(config, error); }
       return this.saved_result(config, changed);
@@ -138,9 +138,9 @@ export class AgentResources {
         await fs.mkdir(trash_root, { recursive: true, mode: 0o700 });
         await fs.rename(source, trash);
         committed = true;
+        host?.invalidate({ kind: "agent", id: agent_id, operation: "removed" });
         await fs.rm(trash, { recursive: true });
         coordinator.blocked_agents.delete(agent_id);
-        host?.invalidate();
         return { agent_id, deleted: true, deleted_scopes: ["agent_configuration", "sessions", "archives", "attachments", "skills", "logs", "agent_power_data"], retained_references: [] };
       } catch (error) {
         throw new ResourceError("partial_failure", error instanceof Error ? error.message : "Agent deletion failed", 9, false, { committed, deleted: committed, cleanup_pending: committed });

@@ -41,7 +41,7 @@ export class ApprovalInteraction implements SessionApprovalPort {
    * - 非用户参与的结果（取消、失败）一律按未放行处理。
    */
   async request(input: SessionApprovalRequestInput): Promise<SessionApprovalDecision> {
-    if (this.read_mode() === "always-allow") {
+    if (!input.require_user && this.read_mode() === "always-allow") {
       return { approved: true, auto_approved: true };
     }
 

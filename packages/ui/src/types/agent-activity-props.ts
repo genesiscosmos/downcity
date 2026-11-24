@@ -4,7 +4,7 @@ import type { ActivityHost } from "./activity-host";
 import type { ChatControlMessages } from "./chat-controls";
 
 /** 单条消息内按原始顺序展示的完整活动块。 */
-export interface ActivityProps extends ChatControlMessages {
+export interface AgentActivityProps extends ChatControlMessages {
   /** canonical Tool、Action、Reasoning 与 Input；相邻非推理活动自动分组。 */
   parts: readonly AgentActivityPart[];
   /** 可选领域元数据、资源入口、Power 详情和阅读状态适配；缺省时组件完整可用。 */

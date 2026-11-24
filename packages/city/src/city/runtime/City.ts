@@ -15,7 +15,7 @@ import { CityPowerRuntime } from "@/city/power/CityPowerRuntime.js";
 import { AiPower } from "@/city/power/builtin/AiPower.js";
 import { AgentPower } from "@/city/power/builtin/AgentPower.js";
 import { RuntimeService } from "../power/builtin/runtime/RuntimeService.js";
-import { create_core_application } from "../../application/CoreApplication.js";
+import { create_core_objects } from "../../application/CoreObjects.js";
 import { ContextPower } from "@/city/power/builtin/ContextPower.js";
 import { ShellPower } from "@/city/power/builtin/shell/ShellPower.js";
 import type { Power } from "@/power/index.js";
@@ -144,9 +144,14 @@ export class City implements CityRuntime {
     });
     this.powers = this.power_runtime.public_api;
     this.context_runtime = new RuntimeService([
-      ...create_core_application(this.runtime_access, this.city_id),
-      ...(options.runtime?.application_modules ?? []),
-    ], options.runtime?.application_policy);
+      ...create_core_objects(this.runtime_access, this.city_id, options.runtime?.assert_resource_access),
+      ...(options.runtime?.application_objects ?? []),
+    ], { authorize: async (path, input, call) => {
+      const context = call.context;
+      if (!context.session || !this.runtime_access.get_agent(context.agent.id)?.sessions.peek(context.session.id, context.session.type)) throw new Error("permission_denied: live caller Session required");
+      if (context.workspace) options.runtime?.assert_resource_access?.(context.agent.id, context.workspace.id);
+      await options.runtime?.application_policy?.authorize(path, input, call);
+    } });
     // City 领域 Power 与 Shell 走同一条注册路径；特权依赖在这里注入。
     for (const power of this.create_city_powers(options.runtime?.create_agent)) {
       void this.powers.add(power).catch(() => undefined);

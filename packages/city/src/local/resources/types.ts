@@ -6,6 +6,7 @@ import type { LocalAgentConfig, LocalWorkspaceConfig } from "../types/LocalConfi
 import type { AgentRepository } from "../repositories/AgentRepository.js";
 import type { WorkspaceRepository } from "../repositories/WorkspaceRepository.js";
 import type { ResourceCoordinator } from "./ResourceCoordinator.js";
+import type { ResourceChange } from "./types/ResourceChange.js";
 
 /** 宿主注入；不存在时只允许配置与历史操作。 */
 export interface ResourceHost {
@@ -28,7 +29,7 @@ export interface ResourceHost {
   /** 按宿主既有进程环境优先级重载 Workspace Env，不统一覆盖各产品身份边界。 */
   refresh_env?: (workspace_id?: string) => Promise<void>;
   /** 产品视图失效；在实际提交之后通知。 */
-  invalidate: () => void;
+  invalidate: (change: ResourceChange) => void;
 }
 
 /** 持有 root 租约的同一组业务依赖。 */

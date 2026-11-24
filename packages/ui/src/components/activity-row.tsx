@@ -1,7 +1,7 @@
-/** 活动行的唯一 DOM：来源、标题、目标、改动统计与按需详情；显式选择保持消息阅读位置。 */
-import { useId, useState } from "react";
-import { DetailContent } from "./detail-content";
-import { TbChevronRight } from "react-icons/tb";
+/** 工具活动的领域组合：将摘要投影组合为 ActivityItem + Header，不再持有独立折叠或详情结构。 */
+import { useId } from "react";
+import { ActivityItem } from "./activity-item";
+import { ActivityHeader } from "./activity-header";
 import type { ActivityRowProps } from "../types/activity-row";
 import type { AgentActivityTone } from "../types/activity";
 import { cn } from "../lib/utils";
@@ -13,11 +13,8 @@ const activity_tone_class: Record<AgentActivityTone, string> = {
 };
 
 /** 单条与分组共享同一折叠结构；收起即卸载正文，文件入口不触发展开。 */
-export function ActivityRow({ open: controlled_open, on_open_change, icon, tone, diff_stat, state, identity, summary, summary_text, incoming, badge, render_body, render_extra_body, summary_class_name, show_chevron = true, detail_label }: ActivityRowProps) {
-  const [local_open, set_local_open] = useState(false);
-  const open = controlled_open ?? local_open;
-  const set_choice = (next: boolean) => { set_local_open(next); on_open_change?.(next); };
-  const detail_id = useId();
+export function ActivityRow({ item_id, open, on_open_change, icon, tone, diff_stat, state, identity, summary, summary_text, incoming, badge, render_body, render_items, render_extra_body, summary_class_name, show_chevron = true, detail_label }: ActivityRowProps) {
+  const fallback_id = useId();
   const has_expandable = Boolean(render_body || render_extra_body);
   const summary_content = <span className="activity-tool-main">
     {icon}
@@ -29,18 +26,11 @@ export function ActivityRow({ open: controlled_open, on_open_change, icon, tone,
     </span> : null}
     {summary ? <span className="activity-tool-target" title={summary_text ?? (typeof summary === "string" ? summary : undefined)}>{summary}</span> : null}
     {badge ? <span className="activity-tool-pill activity-tool-count">{badge}</span> : null}
-    {has_expandable && show_chevron ? <TbChevronRight className="activity-tool-chevron" aria-hidden /> : null}
   </span>;
   const row_class = cn("activity-tool-row", activity_tone_class[tone], incoming && "is-incoming");
   const summary_class = cn("activity-tool-summary", summary_class_name);
-  if (!has_expandable) return <div className={row_class}><div className={summary_class}>{summary_content}</div></div>;
-  return <details open={open} className={row_class}>
-    <summary className={summary_class} aria-label={detail_label} aria-expanded={open} aria-controls={open && detail_label ? detail_id : undefined}
-      onClick={(event) => {
-        if (event.target instanceof Element && event.target.closest("a[href], button")) return;
-        event.preventDefault(); set_choice(!open);
-      }}>{summary_content}</summary>
-    {open ? detail_label ? <DetailContent id={detail_id} class_name="activity-tool-detail" tabIndex={0} role="region" aria-label={detail_label}>{render_body?.()}{render_extra_body?.()}</DetailContent>
-      : <>{render_body?.()}{render_extra_body?.()}</> : null}
-  </details>;
+  return <ActivityItem item_id={item_id ?? fallback_id} open={open} on_open_change={on_open_change} class_name={row_class} detail_label={detail_label}
+    header={<ActivityHeader class_name={summary_class} show_chevron={show_chevron}>{summary_content}</ActivityHeader>}
+    render_items={render_items}
+    render_detail={has_expandable ? () => <>{render_body?.()}{render_extra_body?.()}</> : undefined} />;
 }

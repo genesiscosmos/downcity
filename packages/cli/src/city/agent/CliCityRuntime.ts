@@ -5,6 +5,7 @@
  * 与一个 RPC Server。Agent 不拥有独立端口。
  */
 
+import { create_agent_profiles } from "@downcity/city/application";
 import { Agent } from "@downcity/agent";
 import { City } from "@downcity/city";
 import { LocalStorageProvider } from "@downcity/city";
@@ -153,6 +154,12 @@ export class CliCityRuntime {
         }),
       },
       runtime: {
+        application_objects: [create_agent_profiles(() => resources.agents, (call, target_agent_id) => {
+          const context = call.context;
+          if (!context.session || !city.agents.get(context.agent.id)?.sessions.peek(context.session.id, context.session.type)) throw new Error("permission_denied: live caller Session required");
+          coordinator.assert_available(context.agent.id, context.workspace?.id);
+          if (target_agent_id) coordinator.assert_available(target_agent_id);
+        })],
         assert_resource_access: (agent_id, workspace_id) => coordinator.assert_available(agent_id, workspace_id),
         create_agent: async (input) => {
           const result = await resources.agents.create({ name: input.name, role: input.role, description: input.description, instruction: input.instruction, model: input.model });

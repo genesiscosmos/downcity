@@ -10,34 +10,30 @@ export interface ApplicationCall {
   readonly execution_id: string;
   /** 当前调用的可取消信号。 */
   readonly signal: AbortSignal;
-  /** 在等待可信审批期间暂停活动预算；返回恢复函数。 */
-  readonly pause_budget: () => () => void;
 }
 
-/** 公开方法的单一运行时契约；同一契约生成 client、声明和 help。 */
-export interface ApplicationExport {
-  /** 宿主分配的稳定公开符号，例如 sessions.rename。 */
-  readonly symbol: string;
-  /** 面向调用者的用途、效果时机和失败语义。 */
-  readonly description: string;
-  /** 公开输入校验；所有方法使用一个对象参数。 */
-  readonly input: z.ZodType;
-  /** 公开输出投影校验，不允许内部活对象进入引擎。 */
-  readonly output: z.ZodType;
-  /** 是否修改应用状态；写方法逐次请求宿主审批。 */
-  readonly effect: "read" | "write";
-  /** 每次调用、审批后再次执行的领域 scope 检查；不能靠脚本提供 actor。 */
-  readonly authorize: (input: unknown, call: ApplicationCall) => void | Promise<void>;
-  /** 调用共享领域服务；不得复制产品入口的业务规则。 */
-  readonly invoke: (input: unknown, call: ApplicationCall) => unknown | Promise<unknown>;
+/** 宿主挂载的公开应用对象；只遍历契约，不反射内部服务。 */
+export interface ApplicationObject {
+  /** downcity 下的对象名；不能覆盖其他对象。 */
+  readonly name: string;
+  /** 应用公开接口，函数的输入输出同时用于校验、代理、声明和帮助。 */
+  readonly contract: z.ZodObject;
+  /** 为本次执行绑定真实对象；闭包持有可信身份与目标引用。 */
+  readonly bind: (call: ApplicationCall) => object;
+  /** 每次访问检查调用方生命周期与对象权限；业务方法继续检查目标。 */
+  readonly authorize: (call: ApplicationCall) => void | Promise<void>;
 }
 
-/** 宿主安装的应用模块；模块由组合根授予命名空间。 */
-export interface ApplicationModule {
-  /** 顶级公开命名空间；禁止覆盖已有模块。 */
-  readonly namespace: string;
-  /** 此模块全部显式公开方法。 */
-  readonly exports: readonly ApplicationExport[];
+/** 一个执行期内由宿主持有的对象引用；不序列化内部实例。 */
+export interface BoundPublicObject {
+  /** 真实公开对象，方法通过自己的闭包访问领域服务。 */
+  readonly object: object;
+  /** 该对象唯一的公开成员契约。 */
+  readonly contract: z.ZodObject;
+  /** 提供统一 caller 检查的顶层对象。 */
+  readonly owner: ApplicationObject;
+  /** 可公开的语义路径，用于策略检查与调用回执。 */
+  readonly path: string;
 }
 
 /** 可选宿主策略；默认 scope 不因 execute 而扩大。 */
@@ -52,8 +48,6 @@ export interface ApplicationDescriptor {
   readonly symbol: string;
   /** 方法用途与副作用约定。 */
   readonly description: string;
-  /** 是否产生写效果。 */
-  readonly effect: "read" | "write";
   /** 由输入 schema 生成的 TypeScript 类型文本。 */
   readonly input_type: string;
   /** 由输出 schema 生成的 TypeScript 类型文本。 */

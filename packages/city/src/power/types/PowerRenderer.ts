@@ -85,20 +85,50 @@ export interface PowerRendererPageProps {
   readonly layout?: "page" | "detail";
 }
 
-/** 宿主提供的完整详情框架；字段只传递展示内容，不提供额外执行能力。 */
-export interface PowerRendererDetailContentProps {
-  /** 详情正文，包含所属业务的表单、结果与状态。 */
+/** 宿主 Activity 顺序容器；Powers 不直接依赖 UI package。 */
+export interface PowerRendererActivityProps {
+  /** 按业务顺序组合的 ActivityItem。 */
   readonly children: ReactNode;
-  /** 可选紧凑标题，未提供时不占位。 */
-  readonly heading?: string;
-  /** 共享标题的 DOM 标识，供详情区域及外部表单引用。 */
-  readonly heading_id?: string;
-  /** 可选来源、时间和状态，由共享布局排列。 */
+}
+
+/** 一个稳定事项，必需 Header 与可选的惰性详情由相同 ActivityItem 组合。 */
+export interface PowerRendererActivityItemProps {
+  /** 来源业务的稳定身份。 */
+  readonly item_id: string;
+  /** 必需的 ActivityHeader。 */
+  readonly header: ReactNode;
+  /** 按需构造正文；只有展开时调用并放入同一个 ActivityDetailPanel。 */
+  readonly render_detail?: () => ReactNode;
+  /** 受控展开选择；Inbox 由当前 selection 控制。 */
+  readonly open?: boolean;
+  /** 本地展开状态的初始值。 */
+  readonly default_open?: boolean;
+  /** 请求改变展开状态；宿主可先确认未提交草稿。 */
+  readonly on_open_change?: (open: boolean) => void;
+  /** 结果 region 的可访问名称；未提供时引用 Header。 */
+  readonly detail_label?: string;
+}
+
+/** 共享 Header 的描述、元信息和独立控件插槽。 */
+export interface PowerRendererActivityHeaderProps {
+  /** 标题、图标或领域描述，不在详情中重复。 */
+  readonly children: ReactNode;
+  /** 外部表单引用的描述 DOM 标识。 */
+  readonly description_id?: string;
+  /** 可选来源、时间与状态。 */
   readonly metadata?: ReactNode;
-  /** 标题行尾部控件，例如关闭详情。 */
-  readonly header_actions?: ReactNode;
-  /** 可选详情操作，例如打开来源。 */
+  /** 描述行尾部控件，如关闭。 */
+  readonly trailing?: ReactNode;
+  /** 可选导航操作；按钮与链接不触发展开。 */
   readonly actions?: ReactNode;
+  /** 是否显示展开箭头；无详情时始终不显示。 */
+  readonly show_chevron?: boolean;
+}
+
+/** 同一个共享正文面板；展开生命周期由 ActivityItem 管理。 */
+export interface PowerRendererActivityDetailPanelProps {
+  /** 已解释的只读内容或宿主表单。 */
+  readonly children: ReactNode;
 }
 
 /** Power Sidebar 根布局属性。 */
@@ -607,8 +637,14 @@ export interface PowerRendererUiComponents {
   readonly SidebarCreateMenu: (props: PowerRendererSidebarCreateMenuProps) => ReactNode;
   /** Mainview 页面根布局。 */
   readonly Page: (props: PowerRendererPageProps) => ReactNode;
-  /** 与消息活动共用的详情正文排版；不限制高度或创建纵向滚动，children 由业务提供。 */
-  readonly DetailContent: (props: PowerRendererDetailContentProps) => ReactNode;
+  /** 消息活动与 Inbox 共用的有序条目容器。 */
+  readonly Activity: (props: PowerRendererActivityProps) => ReactNode;
+  /** 稳定身份、展开状态和惰性详情的唯一组合。 */
+  readonly ActivityItem: (props: PowerRendererActivityItemProps) => ReactNode;
+  /** 条目的描述与展开栏；复用相同交互，内容由业务提供。 */
+  readonly ActivityHeader: (props: PowerRendererActivityHeaderProps) => ReactNode;
+  /** 相同的正文面板，统一限制最大高度并滚动，正文内层持有留白与默认排版。 */
+  readonly ActivityDetailPanel: (props: PowerRendererActivityDetailPanelProps) => ReactNode;
   /** 带标题和表面的内容分区。 */
   readonly Section: (props: PowerRendererSectionProps) => ReactNode;
   /** 统一成组表面。 */

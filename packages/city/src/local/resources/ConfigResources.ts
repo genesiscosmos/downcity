@@ -22,14 +22,18 @@ export class ConfigResources {
   async call(method: string, input: Record<string, unknown>): Promise<unknown> {
     const read_only = ["config.token.list", "config.token.get", "config.power.get", "config.env.get"].includes(method);
     const operation = async () => {
-      if (method.startsWith("config.token.")) return this.token(method, input, read_only);
+      if (method.startsWith("config.token.")) {
+        const result = this.token(method, input, read_only);
+        if (!read_only) this.dependencies.host?.invalidate({ kind: "city_token", id: String((result as { token_id?: string }).token_id ?? input.token_id), operation: method === "config.token.create" ? "created" : method === "config.token.remove" ? "removed" : "updated" });
+        return result;
+      }
       if (method.startsWith("config.power.")) {
         const repository = new PowerRepository(this.dependencies.root_path);
         const power_id = String(input.power_id ?? "");
         if (method === "config.power.get") return repository.get_config(power_id);
         require_resource_value(method === "config.power.set" && input.config && typeof input.config === "object" && !Array.isArray(input.config), "Power configuration must be an object");
         const result = repository.set_config(power_id, input.config as import("@downcity/type").JsonObject);
-        this.dependencies.host?.invalidate();
+        this.dependencies.host?.invalidate({ kind: "power", id: power_id, operation: "updated" });
         return result;
       }
       require_resource_value(method.startsWith("config.env."), "Unsupported configuration operation");
@@ -48,6 +52,7 @@ export class ConfigResources {
         const temporary = `${filename}.${randomUUID()}.tmp`;
         await fs.writeFile(temporary, mutate_env_text(raw, input.key, method === "config.env.set" ? input.value as string : undefined), { mode: 0o600 });
         try { await fs.rename(temporary, filename); } finally { await fs.rm(temporary, { force: true }); }
+        this.dependencies.host?.invalidate({ kind: "environment", id: workspace_id ?? "global", operation: "updated", ...(workspace_id ? { workspace_id } : {}) });
         await this.dependencies.host?.refresh_env?.(workspace_id);
       }
       return { changed, broadcast: { updated_agent_ids: changed ? this.dependencies.host?.city.agents.list().map((agent) => agent.id).sort() ?? [] : [], failed_agents: [] } };

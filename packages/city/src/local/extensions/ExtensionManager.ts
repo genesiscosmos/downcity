@@ -179,6 +179,7 @@ export class ExtensionManager {
     } finally {
       operation.result = this.result(record);
       this.repository.commit(record, operation);
+      try { this.options.changed?.({ kind: "extension", id: record.extension_id, operation: method === "remove" && record.status === "removed" ? "removed" : method === "add" ? "created" : "updated" }); } catch { console.warn("Extension change subscriber failed"); }
       this.operations.delete(record.extension_id);
     }
     return operation.result;

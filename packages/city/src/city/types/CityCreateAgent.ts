@@ -7,11 +7,11 @@ import type { Agent } from "@downcity/agent";
 
 /** 创建一个持久 Agent 所需的业务配置。 */
 export interface CityCreateAgentInput {
-  /** 用户可见名称；稳定 Agent ID 由宿主生成并校验唯一性。 */
+  /** Agent 的个人化姓名；稳定 Agent ID 由宿主生成并校验唯一性。 */
   name: string;
   /** 可选身份与角色列表；去除首尾空白、空项和重复项，空列表表示无角色。 */
   role?: string[];
-  /** 对外职责简介，供 agent.list 发现和选择协作对象。 */
+  /** 简短能力与职责说明，供 agent.list 发现和选择协作对象。 */
   description: string;
   /** 主体行为指令，保存为该 Agent 的持久化指令。 */
   instruction: string;

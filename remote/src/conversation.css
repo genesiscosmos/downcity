@@ -88,6 +88,5 @@
 /* Activity 与 StatusPanel 沿用 SDK 结构，只调整 Remote 已有阅读比例和窄屏约束。 */
 .remote-chat .agent-process-body { --text-base: 12px; --text-3xs: 10px; --text-2xs: 11px; --spacing: 4px; --radius-chip: 6px; }
 .remote-chat .activity-tool-identity { flex-shrink: 1; overflow: hidden; text-overflow: ellipsis; }
-.remote-chat .activity-tool-detail { font-size: 11px; }
 .remote-chat .chat-status-panel { padding-top: 0; margin-bottom: 8px; max-height: min(48dvh, 360px); overflow-y: auto; }
 .dc-chat-queue-edit { display: flex; justify-content: space-between; gap: 12px; padding: 6px 2px; color: var(--muted-foreground); font-size: 12px; }

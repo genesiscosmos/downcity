@@ -1,7 +1,7 @@
 /** Remote 的浏览器安全 Power 插槽：使用 City 自有真实 Renderer，不引入 Desktop 或工具执行能力。 */
 import { createElement } from "react";
-import { CITY_POWER_RENDERERS, input_power_id } from "@downcity/city/power/react";
-import { ActivityDetailBoundary, ActivityIcon, DetailContent, MarkdownView, resolve_agent_tool_identity, type ActivityHost } from "@downcity/ui";
+import { CITY_POWER_RENDERERS, activity_error_reason, input_power_id } from "@downcity/city/power/react";
+import { ActivityDetailBoundary, ActivityErrorContent, ActivityIcon, activity_error_original, MarkdownView, resolve_agent_tool_identity, type ActivityHost } from "@downcity/ui";
 
 /** 只注入静态已确认 Power；可安装扩展的目录与 Renderer 地址没有浏览器协议时保持 SDK 默认展示。 */
 export function remote_activity_host(locale: string): ActivityHost {
@@ -20,7 +20,7 @@ export function remote_activity_host(locale: string): ActivityHost {
       if (!description) return null;
       return { icon: <span className="activity-input-icon"><ActivityIcon kind="power" power_name={power_name} /></span>, incoming: true, tone: description.tone, diff_stat: null,
         state: "", identity: description.title, summary: description.file?.label || description.summary || "",
-        render_body: group_summary || !description.has_detail || !renderer.detail ? undefined : () => <DetailContent class_name="activity-tool-detail"><ActivityDetailBoundary fallback={fallback}>{createElement(renderer.detail!, { input: part, locale, render_text, render_file })}</ActivityDetailBoundary></DetailContent>,
+        render_body: group_summary || !description.has_detail || !renderer.detail ? undefined : () => <><ActivityDetailBoundary fallback={fallback}>{createElement(renderer.detail!, { input: part, locale, render_text, render_file })}</ActivityDetailBoundary></>,
       };
     }
     if (part.type !== "tool") return undefined;
@@ -30,14 +30,16 @@ export function remote_activity_host(locale: string): ActivityHost {
     if (!renderer) return undefined;
     let description;
     try { description = renderer.describe({ tool: part, locale }); } catch { return undefined; }
-    // canonical 失败交给 SDK 统一原因/原文展示；成功调用中的业务失败由 Power 自有 Renderer 描述。
+    // canonical 失败由 SDK 的共享错误正文处理；业务失败也收敛到同一内容组件。
     if (!description || part.state === "failed") return undefined;
     const terminal = part.state === "completed";
     const waiting = !terminal && (part.state === "waiting-user" || part.interactions?.some(item => item.status === "pending"));
     if (waiting && description.tone !== "waiting" || terminal && ["running", "waiting"].includes(description.tone)) return undefined;
     return { icon: <ActivityIcon kind="power" power_name={identity.power_name} />, tone: description.tone, diff_stat: null,
       state: "", identity: description.title, summary: description.resource?.label || description.summary || "",
-      render_body: group_summary || !description.has_detail || !renderer.detail ? undefined : () => <DetailContent class_name="activity-tool-detail"><ActivityDetailBoundary fallback={fallback}>{createElement(renderer.detail!, { tool: part, locale, render_text, render_file })}</ActivityDetailBoundary></DetailContent>,
+      render_body: group_summary ? undefined : description.error || description.tone === "failed"
+        ? () => <ActivityErrorContent reason={description.error?.reason || activity_error_reason({ tool: part, locale }, description.title)} original={activity_error_original(part)} />
+        : !description.has_detail || !renderer.detail ? undefined : () => <ActivityDetailBoundary fallback={fallback}>{createElement(renderer.detail!, { tool: part, locale, render_text, render_file })}</ActivityDetailBoundary>,
     };
   } };
 }

@@ -138,7 +138,7 @@ function session_detail(props: PowerActivityProps) {
     pending.length ? section(chinese ? "待响应事项" : "Pending interactions", pending.map((item, index) => create_element("div", { key: index, className: "space-y-1 border-l border-border pl-2" },
       text_value(item.title) ? create_element("p", { className: "font-medium" }, short_text(item.title)) : null,
       text_value(item.description) ? text_block(text_value(item.description)) : null))) : null,
-    failure ? section(chinese ? "失败信息" : "Failure", create_element("div", { className: "text-destructive" }, text_block(failure))) : null);
+    failure ? section(chinese ? "失败信息" : "Failure", create_element("div", { className: "text-inherit" }, text_block(failure))) : null);
 }
 
 /** Session 自有 activity 插槽。 */

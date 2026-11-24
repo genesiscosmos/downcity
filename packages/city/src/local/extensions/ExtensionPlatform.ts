@@ -27,12 +27,13 @@ export class ExtensionPlatform {
   readonly service: ExtensionService;
   readonly manager: ExtensionManager;
   private runtime?: ExtensionHost;
+  private invalidate: (change: import("../resources/types/ResourceChange.js").ResourceChange) => void = () => {};
   private city?: City;
   private readonly agent_defaults = new Map<string, Partial<AgentOptions>>();
 
   constructor(database: LocalDatabase, readonly root_path: string, private readonly agents: AgentRepository) {
     this.repository = new ExtensionRepository(database, true);
-    this.manager = new ExtensionManager(this.repository, { root_path, host_modules: resolve_extension_host_modules(), runtime: {
+    this.manager = new ExtensionManager(this.repository, { root_path, changed: (change) => this.invalidate(change), host_modules: resolve_extension_host_modules(), runtime: {
       active_snapshot: (id) => this.runtime?.active_snapshot(id) ?? null,
       warnings: (id) => this.runtime?.warnings(id) ?? [],
       close_gate: async (id) => await this.require_runtime().close_gate(id),
@@ -43,9 +44,10 @@ export class ExtensionPlatform {
   }
 
   /** 先建立解析器再恢复项目，随后宿主才恢复依赖这些定义的 Agent。 */
-  attach(city: City, invalidate: () => void): void {
+  attach(city: City, invalidate: (change: import("../resources/types/ResourceChange.js").ResourceChange) => void): void {
     if (this.runtime) throw new Error("Extension platform is already attached");
     this.city = city;
+    this.invalidate = invalidate;
     this.runtime = new ExtensionHost({ city, catalog: this.catalog, host_modules: resolve_extension_host_modules(), invalidate, refresh_agents: (extension_id) => this.refresh_agents(extension_id), secret: async (extension_id, version, name) => (await new ExtensionSecrets(this.root_path).read(extension_id, version))[name], assert_idle: async (extension_id) => {
       const prefix = `ext_${extension_id.replaceAll("-", "")}_`;
       // Downtown 连接由 City Town 独立登记；扩展卸载只检查自身执行租约，不读取全局当前连接。

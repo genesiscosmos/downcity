@@ -28,6 +28,6 @@ export interface ExtensionHostOptions {
   /** 在同步发布点更新既有 Agent 行为，不能异步打开新请求窗口。 */
   refresh_agents?: (extension_id: string) => void;
   /** 提交真实目录变化后刷新产品视图。 */
-  invalidate: () => void;
+  invalidate: (change: import("../resources/types/ResourceChange.js").ResourceChange) => void;
 }
 

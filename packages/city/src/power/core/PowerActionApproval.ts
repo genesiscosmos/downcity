@@ -38,6 +38,8 @@ export async function request_power_action_approval(input: {
   readonly description?: string;
   /** 已通过 schema 校验的真实调用输入。 */
   readonly payload: JsonValue;
+  /** 要求本次由用户决定，不采用会话的自动批准模式。 */
+  readonly require_user?: boolean;
   /** 本次调用的来源身份。 */
   readonly site: PowerCallSite;
 }): Promise<PowerActionApprovalDenial | undefined> {
@@ -52,23 +54,32 @@ export async function request_power_action_approval(input: {
   }
   // 审批归属到真实 Tool Part，因此不能用一个本地合成的标识顶替。
   const tool_call_id = String(input.site.tool_call_id || "").trim();
-  if (!tool_call_id) {
+  if (!tool_call_id || !input.site.turn_id?.trim()) {
     return denial(
-      `Power action "${action_label}" requires approval, but this call has no Tool Call identity.`,
+      `Power action "${action_label}" requires approval, but this call has no Turn/Tool Call identity.`,
     );
   }
 
   let approved = false;
+  const signal = input.site.abort_signal;
+  let on_abort: (() => void) | undefined;
   try {
-    const decision = await approval.request(redact_public_value<SessionApprovalRequestInput>({
+    signal?.throwIfAborted();
+    const cancelled = new Promise<never>((_resolve, reject) => {
+      on_abort = () => reject(new Error("Power action cancelled while awaiting approval"));
+      signal?.addEventListener("abort", on_abort, { once: true });
+    });
+    const decision = await Promise.race([approval.request(redact_public_value<SessionApprovalRequestInput>({
+      require_user: input.require_user,
       turn_id: input.site.turn_id ?? "",
       tool_call_id,
       tool_name: action_label,
       source_type: "tool",
       ...(input.description ? { description: input.description } : {}),
       payload: { operation: "tool", validated_input: input.payload },
-    }, input.site.interactions));
-    approved = decision.approved;
+    }, input.site.interactions)), cancelled]);
+    signal?.throwIfAborted();
+    approved = decision.approved && (!input.require_user || !decision.auto_approved);
   } catch (error) {
     // 交互端口在无人在场或上游失败时会抛错，统一收敛为明确的未获批准。
     return denial(
@@ -76,6 +87,8 @@ export async function request_power_action_approval(input: {
         redact_public_value(error instanceof Error ? error.message : String(error), input.site.interactions)
       }`,
     );
+  } finally {
+    if (on_abort) signal?.removeEventListener("abort", on_abort);
   }
 
   if (!approved) {

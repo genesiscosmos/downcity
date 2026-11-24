@@ -8,8 +8,11 @@
  */
 
 export { cn } from "./lib/utils";
-export { DetailContent } from "./components/detail-content";
-export type { DetailContentProps } from "./types/detail-content";
+export { Activity } from "./components/activity";
+export { ActivityItem } from "./components/activity-item";
+export { ActivityHeader } from "./components/activity-header";
+export { ActivityDetailPanel } from "./components/activity-detail-panel";
+export type { ActivityProps, ActivityItemProps, ActivityHeaderProps, ActivityDetailPanelProps } from "./types/activity-components";
 export { ModelSelector } from "./components/model/ModelSelector";
 export { ChatModelSelector, ModelDetails, ModelOptions, ReasoningOptions, SelectorSubmenu } from "./components/model/ChatModelSelector";
 export { ChatApprovalModeSelector } from "./components/model/ChatApprovalModeSelector";
@@ -390,10 +393,10 @@ export { build_user_message_preview, split_complete_blocks, user_message_collaps
 export type { UserMessagePreview } from "./types/user-message-preview";
 
 // 完整消息活动组件及宿主适配契约。
-export { Activity, ActivityProvider } from "./components/activity";
+export { AgentActivity, ActivityProvider } from "./components/agent-activity";
 export { ActivityRow } from "./components/activity-row";
 export { ActivityReadableDetailView } from "./components/activity-readable";
-export type { ActivityProps } from "./types/activity-props";
+export type { AgentActivityProps } from "./types/agent-activity-props";
 export type { ActivityHost } from "./types/activity-host";
 export type { ActivityRowProps, ActivityRowSummary } from "./types/activity-row";
 export type { AgentActivityPresentation, AgentActivityDetail, AgentActivityTone, AgentActivityDiffStat, AgentActivityEditPair, AgentToolIdentity, AgentToolVisualKind, AgentActivityVisualKind, AgentActionVisualKind } from "./types/activity";
@@ -405,6 +408,8 @@ export { message_pending_interactions } from "./components/chat-status";
 
 export { ActivityIcon } from "./components/activity-icon";
 export { ActivityDetailBoundary } from "./components/activity-detail-boundary";
+export { ActivityErrorContent } from "./components/activity-error-content";
+export type { ActivityErrorContentProps } from "./types/activity-error-content";
 
 // 宿主领域适配器复用相同的 canonical 错误与私密引用处理。
 export { activity_call_failed, activity_error_original } from "./lib/activity/activity_error";

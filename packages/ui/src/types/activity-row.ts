@@ -6,7 +6,7 @@ import type { AgentActivityDiffStat, AgentActivityTone } from "./activity";
 export interface ActivityRowSummary {
   /** 来源图标；Input 同时提供接收方向标记。 */
   icon: ReactNode;
-  /** 生命周期语气，失败始终使用 destructive。 */
+  /** 生命周期语义，失败保留分组优先级，视觉通过文案表达并沿用中性色。 */
   tone: AgentActivityTone;
   /** 文件改动统计，紧跟路径且不属于路径链接。 */
   diff_stat: AgentActivityDiffStat | null;
@@ -28,12 +28,16 @@ export interface ActivityRowSummary {
 
 /** 活动行的显式展示选择与可访问详情能力。 */
 export interface ActivityRowProps extends ActivityRowSummary {
+  /** 可选 canonical Part 身份；无业务 ID 的独立行使用挂载实例 ID。 */
+  item_id?: string;
   /** 宿主持有的展开状态；省略时由当前挂载实例持有。 */
   open?: boolean;
   /** 展开变化回调；宿主可按完整消息与 Part 身份保存阅读状态。 */
   on_open_change?(open: boolean): void;
   /** 活动组额外记录数；单条 Input 不使用徽标。 */
   badge?: string;
+  /** 活动分组的惰性条目列表；直接展开原有缩进列表，不套业务详情面板。 */
+  render_items?: () => ReactNode;
   /** 按需挂载的追加交互区域。 */
   render_extra_body?: () => ReactNode;
   /** 分组摘要附加样式。 */

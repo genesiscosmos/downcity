@@ -14,7 +14,7 @@ export function InboxMainview({ store, options, ...props }: PowerMainviewCompone
   /** 宿主表单、私密提交和来源导航适配。 */ options: NotificationRendererOptions;
 }) {
   const { state, choose, close } = use_inbox(store, props);
-  const { Page, EmptyState } = props.ui.components;
+  const { Page, Activity, EmptyState } = props.ui.components;
   const detail_region = useRef<HTMLDivElement>(null);
   const data = state.data;
   const entries = inbox_entries(data, "all");
@@ -27,9 +27,9 @@ export function InboxMainview({ store, options, ...props }: PowerMainviewCompone
   const loading_failed = !data && !!state.error;
   return <Page layout="detail">
     <div ref={detail_region} tabIndex={-1} className="inbox-workspace" role="region" aria-label="事项详情">
-      {selected ? <InboxEntryDetail key={selected.key} entry={selected} current={entries.find((entry) => entry.key === selected.key)}
+      {selected ? <Activity><InboxEntryDetail key={selected.key} entry={selected} current={entries.find((entry) => entry.key === selected.key)}
         handled={state.handled.has(selected.key)} store={store} options={options} props={props}
-        unavailable={unavailable} next={next} choose={choose} on_close={close} can_read={true} />
+        unavailable={unavailable} next={next} choose={choose} on_close={close} can_read={true} /></Activity>
         : <EmptyState
           icon={<InboxIcon kind={!state.loading && data && !entries.length ? "check" : "inbox"} />}
           title={state.loading ? "正在读取收件箱…" : loading_failed ? "暂时无法读取收件箱" : entries.length ? "选择一个事项" : "暂无事项"}

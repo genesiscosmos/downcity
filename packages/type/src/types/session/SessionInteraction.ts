@@ -267,6 +267,8 @@ export interface SessionApprovalDecision {
 
 /** 请求一次审批所需的语义输入。 */
 export interface SessionApprovalRequestInput {
+  /** 强制本次由用户决定，不能由 always-allow 模式自动放行；只由可信宿主设置。 */
+  readonly require_user?: boolean;
   /** 当前审批所属 Turn 标识。 */
   readonly turn_id: string;
   /** 当前审批归属的 Tool Call 标识。 */

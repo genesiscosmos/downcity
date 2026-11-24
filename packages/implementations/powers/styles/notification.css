@@ -23,7 +23,7 @@
 .inbox-attention-neutral { background: var(--muted-foreground); }
 .inbox-detail-status { display: inline-flex; align-items: center; gap: 6px; }
 .inbox-source { display: inline-flex; align-items: center; gap: 7px; }
-/* 标题、元信息、操作与正文的完整布局归宿主共享 DetailContent；此处只定义业务内容。 */
+/* ActivityHeader 持有描述和操作，ActivityDetailPanel 持有正文排版；此处只定义业务内容。 */
 .inbox-detail-note { color: var(--muted-foreground); }
 .inbox-origin { color: var(--muted-foreground); }
 .inbox-origin summary { cursor: pointer; width: fit-content; }

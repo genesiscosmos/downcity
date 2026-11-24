@@ -8,6 +8,7 @@
  * - Session Power 只管理调用方自己的会话，不能访问此处发现的其他 Agent 的会话。
  */
 
+import { normalize_agent_role } from "@downcity/type";
 import type { CityPowerContext } from "@/city/types/CityPowerContext.js";
 import type { CityToolAgentSummary } from "@/city/types/CityPowerData.js";
 import { CityAction, CityActionError } from "@/city/power/builtin/CityAction.js";
@@ -34,7 +35,7 @@ function describe_agent(
 /** 列出当前 City 可见的全部 Agent。 */
 class ListAgentsAction extends CityAction {
   readonly action = "list";
-  readonly description = "List every agent visible in this City.";
+  readonly description = "List every agent visible in this City with its personal name, optional role list, capabilities and responsibilities, and default model.";
   readonly returns = "agents(agent_id, name, role?, description, model, is_current)";
 
   protected async run(
@@ -48,8 +49,8 @@ class ListAgentsAction extends CityAction {
 /** 持久 Agent 的创建参数；身份标识由宿主生成。 */
 const create_agent_input = z.strictObject({
   name: z.string().trim().min(1).describe("Personal name for the new persistent agent."),
-  role: z.array(z.string()).optional().describe("Optional identities or roles; name is the agent's personal name."),
-  description: z.string().trim().min(1).describe("Short description of the agent's responsibilities, shown in agent.list."),
+  role: z.array(z.string()).overwrite((role) => normalize_agent_role(role) ?? []).optional().describe("Optional string list of identities or roles, such as ['CTO', 'Software Engineer']. Entries are trimmed; blanks and duplicates are removed. Omit or pass [] for no roles."),
+  description: z.string().trim().min(1).describe("Brief capabilities and responsibilities, separate from the personal name and role list; shown in agent.list."),
   instruction: z.string().trim().min(1).describe("Complete persistent instructions defining the agent's role and working principles."),
   model: model_reference_schema.describe("Structured model reference from the model catalog."),
 });
@@ -57,7 +58,7 @@ const create_agent_input = z.strictObject({
 /** 创建前请求用户审批；宿主拥有持久化、模型装配和注册生命周期。 */
 class CreateAgentAction extends CityAction<z.infer<typeof create_agent_input>> {
   readonly action = "create";
-  readonly description = "Create and register a persistent agent with a name, responsibility description, instructions, and default model. Requires user approval.";
+  readonly description = "Create and register a persistent agent with a personal name, optional role string list, brief capabilities and responsibilities, behavioral instructions, and default model. Requires user approval.";
   readonly returns = "agent(agent_id, name, role?, description, model, is_current)";
   readonly access = "write" as const;
   readonly approval = true;

@@ -61,10 +61,12 @@ export type { ResourceDispatcher } from "./resources/ManagementChannel.js";
 export { validate_resource_input } from "./resources/ResourceInput.js";
 export { ResourceService } from "./resources/ResourceService.js";
 export { ResourceStore } from "./resources/ResourceStore.js";
-export { ResourceCoordinator } from "./resources/ResourceCoordinator.js";
+export { resource_revision, ResourceCoordinator } from "./resources/ResourceCoordinator.js";
 export { LocalHostClient, select_local_host } from "./resources/LocalHostClient.js";
 export type { LocalHostClientOptions, LocalHostCallOptions, LocalHostTransport, LocalHostSelection } from "./types/LocalHostClient.js";
 export type { ResourceDependencies, ResourceHost } from "./resources/types.js";
 
 export { TownServiceDispatcher, TOWN_SERVICE_CAPABILITIES } from "./resources/TownServiceDispatcher.js";
 export type { TownResponseOpen, TownResponseChunk } from "./resources/TownServiceDispatcher.js";
+
+export type { ResourceChange } from "./resources/types/ResourceChange.js";

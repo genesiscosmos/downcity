@@ -161,7 +161,9 @@ export async function execute_power_action(
       power_name: input.power_name,
       action_name: input.action_name,
       description: input.action.description,
-      payload: parsed_payload.input,
+      // 审批展示使用独立快照，异步交互不能修改随后真正执行的输入。
+      payload: structuredClone(parsed_payload.input),
+      require_user: input.action.approval === "always",
       site: input.site,
     });
     if (denied) return denied;
@@ -191,7 +193,8 @@ export async function execute_power_action(
       power_name: input.power_name,
       action_name: input.action_name,
     });
-    if (abort_scope.signal.aborted) {
+    // 动作已经返回结构化取消结果时保留其执行 ID 与回执；不能伪装为成功。
+    if (abort_scope.signal.aborted && result.success) {
       return failure_result(
         error_message(abort_scope.signal.reason || "Power action cancelled"),
       );

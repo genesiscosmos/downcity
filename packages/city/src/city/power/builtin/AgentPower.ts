@@ -18,7 +18,7 @@ export class AgentPower extends CityGroupPower {
   readonly name = "agent";
   readonly title = "Agent";
   readonly description =
-    "Discover agents, create persistent agents, and delegate self-contained work to another agent. Delegation results return automatically. Session Power manages only the current agent's own sessions.";
+    "Discover agents by personal name, optional roles, and capabilities; create persistent agents with that identity; and delegate self-contained work to another agent. Delegation results return automatically. Session Power manages only the current agent's own sessions.";
 
   constructor(options: CityGroupPowerOptions, create_agent?: CityCreateAgent) {
     super({

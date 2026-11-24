@@ -1,0 +1,54 @@
+/** Activity 结构与唯一详情面板；分组保持无表面，详情视口限高滚动，正文独立持有留白。 */
+.activity { display: flex; flex-direction: column; gap: var(--spacing, .25rem); min-width: 0; }
+.activity-item { display: flex; flex-direction: column; gap: .2rem; min-width: 0; }
+.activity-header { min-width: 0; padding: .5rem .625rem; list-style: none; color: var(--foreground); font-size: var(--text-2xs, .6875rem); line-height: 1.65; }
+.activity-header.activity-tool-summary { padding: .08rem 0; font-size: inherit; line-height: inherit; }
+summary.activity-header { cursor: pointer; user-select: none; }
+.activity-header::-webkit-details-marker { display: none; }
+.activity-header:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; border-radius: var(--radius-chip); }
+.activity-header-row { display: flex; align-items: center; gap: .375rem; min-width: 0; }
+.activity-header-description { min-width: 0; overflow-wrap: anywhere; }
+.activity-header-chevron { flex-shrink: 0; width: .875rem; height: .875rem; }
+.activity-item[open] > .activity-header .activity-header-chevron { transform: rotate(90deg); }
+.activity-header-trailing { display: flex; flex-shrink: 0; gap: .25rem; margin-left: auto; }
+.activity-header-metadata, .activity-header-actions { display: flex; flex-wrap: wrap; align-items: center; gap: .375rem .625rem; min-width: 0; margin-top: .5rem; }
+.activity-header-metadata { color: var(--muted-foreground); }
+.activity-detail-panel {
+  box-sizing: border-box;
+  min-width: 0;
+  min-height: 0;
+  max-height: min(24rem, 60dvh);
+  overflow: auto;
+  border: 1px solid color-mix(in srgb, var(--border) 28%, transparent);
+  border-radius: var(--radius-chip);
+  background: color-mix(in srgb, var(--muted-foreground) 10%, transparent);
+}
+
+/* 字体、行高与颜色复用 downcity-writing-text；字号和 Markdown 使用相同受控档位。 */
+.activity-detail-content {
+  display: flex;
+  flex-direction: column;
+  gap: .75rem;
+  min-width: 0;
+  padding: .5rem .625rem;
+  overflow-wrap: anywhere;
+}
+.activity-detail-content > :where(*) { min-width: 0; }
+.activity-detail-content > :where(p, dl, dd) { margin: 0; }
+.activity-detail-content :where(dt) { font-weight: 500; }
+/* 原始文本与 Markdown 使用相同字号；代码块仍保留专属的语法高亮与操作。 */
+.activity-detail-content > pre {
+  margin: 0;
+  font-family: var(--font-mono, monospace);
+  font-size: inherit;
+  line-height: inherit;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.activity-detail-panel :where(pre, table) { max-width: 100%; overflow-x: auto; }
+/* 源码回退和审批命令不再单独限高；纵向滚动统一归所属详情面板。 */
+.activity-detail-panel .markdown-view :is(.markdown-svg-source, .markdown-mermaid-source),
+.activity-detail-panel :is(.interaction-command-standalone, .interaction-command pre) {
+  max-height: none;
+  overflow-x: auto;
+}

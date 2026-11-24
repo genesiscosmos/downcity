@@ -1,6 +1,6 @@
 {
   "name": "@downcity/ui",
-  "version": "1.5.14",
+  "version": "1.5.15",
   "description": "Downcity UI SDK for React and Tailwind CSS applications.",
   "type": "module",
   "license": "MIT",
@@ -21,7 +21,7 @@
     "./src/markdown.css",
     "./src/components/markdown/**/*.css",
     "./src/chat.css",
-    "./src/detail-content.css",
+    "./src/activity-detail-panel.css",
     "./src/status-panel.css",
     "./src/activity.css"
   ],
@@ -37,7 +37,7 @@
     "./source.css": "./src/source.css",
     "./styles.css": "./src/styles.css",
     "./markdown.css": "./src/markdown.css",
-    "./detail-content.css": "./src/detail-content.css",
+    "./activity-detail-panel.css": "./src/activity-detail-panel.css",
     "./composer": {
       "types": "./dist/composer.d.ts",
       "import": "./dist/composer.js",
@@ -54,7 +54,7 @@
     "src/markdown.css",
     "src/components/markdown/**/*.css",
     "src/chat.css",
-    "src/detail-content.css",
+    "src/activity-detail-panel.css",
     "src/status-panel.css",
     "src/activity.css"
   ],

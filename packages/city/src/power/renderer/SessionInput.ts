@@ -38,7 +38,7 @@ function detail(props: PowerInputDetailProps) {
     const error = text_value(data.error).slice(0, 4_000);
     return create_element("div", { className: "space-y-3" },
       text ? props.render_text(text) : null,
-      error ? create_element("p", { className: "text-destructive whitespace-pre-wrap" }, error) : null);
+      error ? create_element("p", { className: "text-inherit whitespace-pre-wrap" }, error) : null);
   }
   return create_element("div", { className: "space-y-3" }, ...readable_content(props).map((item, index) =>
     create_element("div", { key: index }, item.type === "file" ? props.render_file(item) : item.type === "text" ? props.render_text(item.text.slice(0, 48_000)) : null)));

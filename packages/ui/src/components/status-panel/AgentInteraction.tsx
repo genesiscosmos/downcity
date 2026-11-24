@@ -70,14 +70,17 @@ function ApprovalCard({ part, respond, presentation, external_heading }: AgentIn
     }
   };
   const operation = typeof payload.operation === "string" ? payload.operation : undefined;
-  const detail = operation === "tool" ? format_value(payload.validated_input) : string_value(payload.command);
+  const validated_input = payload.validated_input;
+  // 编程执行直接展示完整源码，审批对象就是随后运行的这一份代码。
+  const execute_code = request.source.tool_name === "context.execute" && validated_input && typeof validated_input === "object" && !Array.isArray(validated_input) ? string_value((validated_input as Record<string, unknown>).code) : undefined;
+  const detail = execute_code ?? (operation === "tool" ? format_value(validated_input) : string_value(payload.command));
   const description = operation === "tool" ? string_value(payload.model_explanation) || string_value(payload.tool_description) : request.description || string_value(payload.reason);
   const heading_id = presentation === "input" ? external_heading?.title_id : undefined;
   return <section className="interaction-card approval-interaction" data-presentation={presentation} aria-labelledby={heading_id ?? `${part.interaction_id}-title`} aria-busy={Boolean(submitting)}>
     {!heading_id || description ? <header className="interaction-card-header">
       <div className="interaction-heading">{!heading_id ? <span id={`${part.interaction_id}-title`} className="interaction-card-title">{request.title || translate("chat:activity.confirmation")}</span> : null}{description ? <p className="approval-card-message">{description}</p> : null}</div>
     </header> : null}
-    {detail ? presentation === "input"
+    {detail ? execute_code || presentation === "input"
       ? <pre className="interaction-command interaction-command-standalone">{detail}</pre>
       : <details className="interaction-command"><summary aria-label={translate("chat:attachment.show_details")}><code>{detail}</code></summary><pre>{detail}</pre></details> : null}
     <Input className="approval-note-input" aria-label={translate("chat:activity.additional_note")} placeholder={translate("chat:activity.additional_note_placeholder")} disabled={Boolean(submitting)} value={note} onChange={(event) => set_note(event.target.value)} />

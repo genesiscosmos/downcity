@@ -1,6 +1,6 @@
 {
   "name": "@downcity/type",
-  "version": "1.5.24",
+  "version": "1.5.25",
   "description": "Downcity shared protocol types for cross-package SDK boundaries.",
   "type": "module",
   "main": "./bin/index.js",

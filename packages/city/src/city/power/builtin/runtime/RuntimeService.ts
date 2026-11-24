@@ -3,8 +3,9 @@ import { runtime_error } from "./RuntimeError.js";
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import type { PowerContext } from "../../../../power/index.js";
-import { ApplicationCatalog } from "../../../../application/ApplicationCatalog.js";
-import type { ApplicationModule, ApplicationPolicy } from "../../../../application/types/Application.js";
+import { PublicApplication } from "../../../../application/PublicApplication.js";
+import { application_help_schema } from "../../../../application/ApplicationHelp.js";
+import type { ApplicationObject, ApplicationPolicy } from "../../../../application/types/Application.js";
 import { SessionRuntimePool, runtime_key } from "./SessionRuntimePool.js";
 import type { ReceiptQuery, ResultQuery } from "./types/RuntimeQueries.js";
 import type { ExecuteInput, ExecuteResult, CallReceipt } from "./types/Runtime.js";
@@ -12,37 +13,46 @@ import type { ExecuteInput, ExecuteResult, CallReceipt } from "./types/Runtime.j
 /** 唯一运行服务由 ContextPower 持有；宿主端口只在组合根注入。 */
 export class RuntimeService {
   private readonly pool = new SessionRuntimePool();
-  private readonly catalog: ApplicationCatalog;
+  private readonly application: PublicApplication;
   private readonly receipts = new Map<string, { key: string; value: CallReceipt; at: number }>();
   private readonly results = new Map<string, { key: string; text: string; at: number }>();
   private closed = false;
   /** 宿主已接收的调用独立于 Worker 终止结算；释放数据库前必须等待。 */
   private readonly in_flight = new Set<Promise<unknown>>();
 
-  constructor(modules: readonly ApplicationModule[], policy?: ApplicationPolicy) {
+  constructor(objects: readonly ApplicationObject[], private readonly policy?: ApplicationPolicy) {
     const caller_key = (context: PowerContext): string => {
       if (!context.session) throw new Error("host_unavailable: Session required");
       return runtime_key(context.agent.id, context.session.id, context.session.type);
     };
-    this.catalog = new ApplicationCatalog([...modules, { namespace: "runtime", exports: [
-      { symbol: "runtime.receipts", description: "Query this Session's short-lived SDK call receipts, including calls whose effects completed after a cell timed out. Never replay a whole script to recover an unknown outcome.",
-        input: z.object({ execution_id: z.string(), cursor: z.number().int().min(0).default(0) }).strict(),
-        output: z.object({ calls: z.array(z.object({ receipt_id: z.string(), execution_id: z.string(), symbol: z.string(), status: z.string(), error: z.string().optional() })), next_cursor: z.number().nullable() }),
-        effect: "read", authorize: (_input, call) => { caller_key(call.context); }, invoke: (input, call) => {
-          const query = input as ReceiptQuery;
-          const calls = [...this.receipts.values()].filter(item => item.key === caller_key(call.context) && item.value.execution_id === query.execution_id).map(item => item.value);
-          return { calls: calls.slice(query.cursor, query.cursor + 20), next_cursor: query.cursor + 20 < calls.length ? query.cursor + 20 : null };
-        } },
-      { symbol: "runtime.read_result", description: "Read a bounded UTF-16 text page of a truncated non-secret result. References are scoped to the calling Session and expire after ten minutes.",
-        input: z.object({ result_ref: z.string(), offset: z.number().int().min(0).default(0) }).strict(), output: z.object({ text: z.string(), next_offset: z.number().nullable() }),
-        effect: "read", authorize: (_input, call) => { caller_key(call.context); }, invoke: (input, call) => {
-          const query = input as ResultQuery;
-          const item = this.results.get(query.result_ref);
-          if (!item || item.key !== caller_key(call.context) || Date.now() - item.at > 600_000) throw new Error("permission_denied: result is unavailable in this Session");
-          const end = Math.min(item.text.length, query.offset + 4096);
-          return { text: item.text.slice(query.offset, end), next_offset: end < item.text.length ? end : null };
-        } },
-    ] }], policy);
+    this.application = new PublicApplication([...objects, { name: "runtime", contract: z.object({
+      receipts: z.function({ input: [z.object({ execution_id: z.string(), cursor: z.number().int().min(0).default(0) }).strict()], output: z.object({ calls: z.array(z.object({ receipt_id: z.string(), execution_id: z.string(), symbol: z.string(), status: z.string(), error: z.string().optional() })), next_cursor: z.number().nullable() }) }).describe("Query this Session's short-lived call receipts. Never replay a whole script to recover unknown effects."),
+      read_result: z.function({ input: [z.object({ result_ref: z.string(), offset: z.number().int().min(0).default(0) }).strict()], output: z.object({ text: z.string(), next_offset: z.number().nullable() }) }).describe("Read a bounded UTF-16 page of a non-secret result scoped to this Session; expires after ten minutes."),
+    }), authorize: call => { caller_key(call.context); }, bind: call => ({
+      receipts: (query: ReceiptQuery) => {
+        const calls = [...this.receipts.values()].filter(item => item.key === caller_key(call.context) && item.value.execution_id === query.execution_id).map(item => item.value);
+        return { calls: calls.slice(query.cursor, query.cursor + 20), next_cursor: query.cursor + 20 < calls.length ? query.cursor + 20 : null };
+      },
+      read_result: (query: ResultQuery) => {
+        const item = this.results.get(query.result_ref);
+        if (!item || item.key !== caller_key(call.context) || Date.now() - item.at > 600_000) throw new Error("permission_denied: result is unavailable in this Session");
+        const end = Math.min(item.text.length, query.offset + 4096);
+        return { text: item.text.slice(query.offset, end), next_offset: end < item.text.length ? end : null };
+      },
+    }) }], policy);
+  }
+
+  /** 只读发现共享生成契约：校验可信 caller 与宿主策略，不调度引擎、不绑定业务对象。 */
+  async help(input: unknown, context: PowerContext): Promise<unknown> {
+    if (this.closed || !context.session) throw new Error("host_unavailable: trusted live Session required");
+    context.abort_signal?.throwIfAborted();
+    const query = application_help_schema.parse(input);
+    await this.policy?.authorize("help", query, {
+      context, execution_id: randomUUID(), signal: context.abort_signal ?? new AbortController().signal,
+    });
+    context.abort_signal?.throwIfAborted();
+    if (this.closed) throw new Error("host_unavailable: runtime closed");
+    return context.call.interactions.redact_secret_values(this.application.help(query));
   }
 
   /** 已取消请求在出队后、引擎创建前拒绝；代码不能指定 Session key。 */
@@ -56,32 +66,23 @@ export class RuntimeService {
       const calls: CallReceipt[] = [];
       let gate_open = true;
       let timed_out = false;
-      let paused = 0;
-      let remaining = input.timeout_ms;
-      let started = Date.now();
-      let timer: ReturnType<typeof setTimeout> | undefined;
-      const arm = (): void => { started = Date.now(); timer = setTimeout(() => { timed_out = true; controller.abort(new Error("execution_timeout")); }, Math.max(1, remaining)); };
-      const pause_budget = (): (() => void) => {
-        if (paused++ === 0) { clearTimeout(timer); remaining -= Date.now() - started; }
-        let resumed = false;
-        return () => { if (resumed) return; resumed = true; if (--paused === 0 && gate_open && !controller.signal.aborted) arm(); };
-      };
+      const timer = setTimeout(() => { timed_out = true; controller.abort(new Error("execution_timeout")); }, input.timeout_ms);
       const abort = (): void => { gate_open = false; void entry.engine.dispose(); };
       const relay = (): void => controller.abort(new Error("execution_cancelled"));
       controller.signal.addEventListener("abort", abort, { once: true });
       const sources = [context.abort_signal, pool_signal].filter((signal): signal is AbortSignal => Boolean(signal));
       for (const signal of sources) { signal.addEventListener("abort", relay, { once: true }); if (signal.aborted) relay(); }
-      arm();
       let result: ExecuteResult;
       try {
         controller.signal.throwIfAborted();
-        const output = await entry.engine.execute({ ...input, execution_id, declarations: this.catalog.declarations, descriptors: this.catalog.descriptors }, async (symbol, raw_input) => {
+        const binding = this.application.bind({ context, execution_id, signal: controller.signal });
+        const output = await entry.engine.execute({ ...input, execution_id, declarations: this.application.declarations, descriptors: this.application.descriptors.filter(item => !item.symbol.includes("()")) }, async (symbol, raw_input) => {
           if (!gate_open || controller.signal.aborted) throw new Error("execution_cancelled: execution call gate is closed");
           if (calls.length >= 256) throw new Error("runtime_busy: per-cell call budget exhausted");
           const receipt: CallReceipt = { receipt_id: randomUUID(), execution_id, symbol, status: "pending" };
           calls.push(receipt);
           this.receipts.set(receipt.receipt_id, { key, value: receipt, at: Date.now() });
-          const operation = this.catalog.invoke(symbol, raw_input, { context, execution_id, signal: controller.signal, pause_budget });
+          const operation = symbol === "help" ? this.help(raw_input, { ...context, abort_signal: controller.signal }) : binding.invoke(symbol, raw_input);
           this.in_flight.add(operation);
           try {
             const value = await operation;
@@ -105,7 +106,7 @@ export class RuntimeService {
         gate_open = false;
         clearTimeout(timer);
         controller.signal.removeEventListener("abort", abort);
-        // 关闭 SDK signal 但保留正常完成的引擎；未 await 的审批不能在 cell 终态后提交效果。
+        // 关闭本次对象引用的权限，旧代理不能借用下一次调用身份。
         if (!controller.signal.aborted) controller.abort(new Error("execution_cancelled: cell reached terminal state"));
         for (const signal of sources) signal.removeEventListener("abort", relay);
         for (const call of calls) if (call.status === "pending") call.status = "outcome_unknown";

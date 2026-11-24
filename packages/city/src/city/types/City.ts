@@ -4,7 +4,7 @@
  * City 维护 Agent 集合与 transport，并协调已加入 Agent 的运行时生命周期。
  */
 
-import type { ApplicationModule, ApplicationPolicy } from "../../application/types/Application.js";
+import type { ApplicationObject, ApplicationPolicy } from "../../application/types/Application.js";
 import type { CityCreateAgent } from "@/city/types/CityCreateAgent.js";
 import type { CityHttpRuntimeOptions } from "@/city/transport/types/CityHttpRuntime.js";
 import type { CityRpcRuntimeOptions } from "@/city/transport/types/CityRpcRuntime.js";
@@ -46,8 +46,8 @@ export interface CityOptions {
 
 /** City 构造时可注入的 transport 扩展能力。 */
 export interface CityRuntimeOptions {
-  /** 宿主显式发布的应用模块；真实服务不进入通用 PowerContext。 */
-  application_modules?: readonly ApplicationModule[];
+  /** 宿主显式挂载的公开应用对象；真实服务不进入通用 PowerContext。 */
+  application_objects?: readonly ApplicationObject[];
   /** 宿主应用能力授权策略；不能通过脚本或普通配置修改。 */
   application_policy?: ApplicationPolicy;
   /** 宿主生命周期门禁；任何 transport 进入已有或懒装配 Workspace 前调用。 */

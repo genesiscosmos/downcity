@@ -2,7 +2,7 @@
 import { type ReactNode } from "react";
 import { ChevronDown, File } from "lucide-react";
 import { use_control_translation } from "../lib/control-messages";
-import { Activity } from "./activity";
+import { AgentActivity } from "./agent-activity";
 import { chat_activity_part } from "../lib/chat-activity";
 import type { AgentActivityPart } from "../types/chat-blocks";
 import { MarkdownView } from "./markdown/MarkdownView";
@@ -21,12 +21,12 @@ function ChangedFiles({ files = [] }: { files?: DowncityChatChangedFile[] }) {
 }
 
 function render_part(part: DowncityChatMessagePart, on_respond_interaction?: DowncityChatPanelProps["on_respond_interaction"], render_interaction?: DowncityChatPanelProps["render_interaction"], streaming = false): ReactNode {
-  if (part.type === "input") return <Activity parts={[chat_activity_part(part, 0)!]} />;
+  if (part.type === "input") return <AgentActivity parts={[chat_activity_part(part, 0)!]} />;
   if (part.type === "text") return <MarkdownView text={part.text ?? ""} mode={streaming && part.state === "streaming" ? "streaming" : "static"} layout="embedded" />;
-  if (part.type === "reasoning" || part.type === "tool") return <Activity parts={[chat_activity_part(part, 0)!]} />;
+  if (part.type === "reasoning" || part.type === "tool") return <AgentActivity parts={[chat_activity_part(part, 0)!]} />;
   if (part.type === "interaction") return <InteractionHistory part={part} />;
   if (part.type === "changed-files") return <ChangedFiles files={part.files} />;
-  if (part.type === "operation") return <Activity parts={[chat_activity_part(part, 0)!]} />;
+  if (part.type === "operation") return <AgentActivity parts={[chat_activity_part(part, 0)!]} />;
   if (part.type === "file") return <a className="dc-chat-attachment" href={part.url} target="_blank" rel="noreferrer"><File />{part.filename ?? "附件"}</a>;
   if (part.type === "data" && part.data_type && ["reference", "task_result", "file-reference", "session-reference"].includes(part.data_type)) return <details className="text-xs"><summary>{part.data_type}</summary><pre className="whitespace-pre-wrap">{format_value(part.data)}</pre></details>;
   if (part.type === "source") return <a className="dc-chat-source" href={part.source_url} target="_blank" rel="noreferrer">{part.source_title ?? part.source_url}</a>;
@@ -45,7 +45,7 @@ export function render_message_parts(parts: DowncityChatMessagePart[], on_respon
   let activity: AgentActivityPart[] = [];
   const flush_activity = () => {
     if (!activity.length) return;
-    nodes.push(<Activity parts={activity} key={`activity-${activity[0].part_id}`} />);
+    nodes.push(<AgentActivity parts={activity} key={`activity-${activity[0].part_id}`} />);
     activity = [];
   };
   for (const [index, part] of parts.entries()) {

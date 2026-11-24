@@ -13,9 +13,10 @@ const execute_schema = z.object({
 /** 预算由 RuntimeService 管理，审批等待不得计入外层固定 timeout。 */
 export function create_execute_action(runtime: RuntimeService): PowerAction {
   return {
-    description: "Run JavaScript/TypeScript against the discoverable public downcity SDK. Start with return await downcity.help(). Calls are authorized individually; a cell is not a transaction.",
+    description: "Run JavaScript/TypeScript against the discoverable public downcity SDK. Discover objects with context.help first; downcity.help() is also available inside scripts. Each exact script requires user approval before execution; host object permissions still apply. A cell is not a transaction.",
     returns: "Execution ID, runtime generation, status, JSON value, bounded logs and SDK call receipts; state_reset and result_ref describe recovery and truncation.",
     access: "write",
+    approval: "always",
     input_schema: { zod: execute_schema, json_schema: { type: "object", properties: { code: { type: "string" }, language: { type: "string", enum: ["javascript", "typescript"] }, timeout_ms: { type: "integer", minimum: 1, maximum: 60000 }, max_output_tokens: { type: "integer", minimum: 256, maximum: 8000 } }, required: ["code"], additionalProperties: false } },
     async execute({ input, context }) {
       try {

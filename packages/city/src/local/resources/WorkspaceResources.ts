@@ -67,7 +67,7 @@ export class WorkspaceResources {
       if (aliases.length) throw new ResourceError("dependency_conflict", "Existing Workspace aliases resolve to this directory", 4, false, { workspace_ids: aliases });
       const existing = repository.get_by_path(real_path);
       const config = existing ?? repository.ensure({ workspace_path: real_path, name });
-      this.dependencies.host?.invalidate();
+      if (!existing) this.dependencies.host?.invalidate({ kind: "workspace", id: config.workspace_id, operation: "created", revision: resource_revision(config) });
       return { workspace: await this.project(config.workspace_id, config), changed: !existing, name_mismatch: !!existing && name !== undefined && name !== existing.name };
     });
   }
@@ -93,7 +93,7 @@ export class WorkspaceResources {
         if (!repository) throw new Error("Workspace repository is unavailable");
         const existing = repository.list().find((item) => item.source?.host === source.host && item.workspace_path === validation.root_path);
         const config = existing ?? repository.ensure({ workspace_path: validation.root_path, name, source });
-        this.dependencies.host?.invalidate();
+        if (!existing) this.dependencies.host?.invalidate({ kind: "workspace", id: config.workspace_id, operation: "created", revision: resource_revision(config) });
         return { workspace: await this.project(config.workspace_id, config), changed: !existing, name_mismatch: !!existing && !!name && name !== existing.name };
       });
     } finally { await workspace.dispose(); }
@@ -129,7 +129,7 @@ export class WorkspaceResources {
       assert_resource_revision(current, if_revision);
       const changed = current.name !== name.trim();
       const config = changed ? this.dependencies.workspaces!.update_name(workspace_id, name) : current;
-      this.dependencies.host?.invalidate();
+      if (changed) this.dependencies.host?.invalidate({ kind: "workspace", id: workspace_id, operation: "updated", revision: resource_revision(config) });
       return { workspace: await this.project(workspace_id, config), changed, revision: resource_revision(config) };
     });
   }
@@ -163,7 +163,7 @@ export class WorkspaceResources {
         await host?.release_workspace?.(workspace_id);
         if (host?.city.workspaces.get(workspace_id)) await host.city.workspaces.remove(workspace_id);
         this.dependencies.workspaces!.remove(workspace_id);
-        host?.invalidate();
+        host?.invalidate({ kind: "workspace", id: workspace_id, operation: "removed" });
         return { workspace_id, removed: true, retained_project_path: current.workspace_path, retained_session_count, retained_history: true };
       } catch (error) {
         if (!releasing) { coordinator.blocked_workspaces.delete(workspace_id); throw error; }

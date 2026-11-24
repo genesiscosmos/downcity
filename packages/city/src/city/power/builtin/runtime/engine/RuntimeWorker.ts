@@ -128,17 +128,22 @@ port.on("message", (message) => {
         }
         check(value); return stringify(value);
       }
-      const sdk = Object.create(null);
-      for(const symbol of symbols) {
-        const parts = symbol.split('.'); let node = sdk;
-        for(const part of parts.slice(0,-1)) node = node[part] ||= Object.create(null);
-        node[parts[parts.length-1]] = async (input = {}) => {
-          const result = parse(await rpc(symbol, encode(input)));
-          if(result.error) throw Error(result.error);
-          return result.value;
-        };
+      function bind_object(symbols, prefix = '') {
+        const object = Object.create(null);
+        for(const symbol of symbols) {
+          const parts = symbol.split('.'); let node = object;
+          for(const part of parts.slice(0,-1)) node = node[part] ||= Object.create(null);
+          node[parts[parts.length-1]] = async (input = {}) => {
+            const result = parse(await rpc(prefix + symbol, encode(input)));
+            if(result.error) throw Error(result.error);
+            const value = result.value;
+            return value && typeof value.__downcity_object === 'string' && Array.isArray(value.methods)
+              ? bind_object(value.methods, value.__downcity_object + '.') : value;
+          };
+        }
+        return object;
       }
-      const downcity = sdk;
+      const downcity = bind_object(symbols);
       const console = Object.fromEntries(['log','info','warn','error'].map(level => [level, (...values) => log(level + ': ' + values.map(value => {try{return encode(value)}catch{return String(value)}}).join(' '))]));
       const __encode_result = value => encode(value === undefined ? null : value);
       ${cell_javascript}

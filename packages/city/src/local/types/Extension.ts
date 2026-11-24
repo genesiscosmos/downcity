@@ -161,6 +161,8 @@ export interface ExtensionRuntime {
 
 /** 管理器构造参数；租约和数据库由上层唯一持有。 */
 export interface ExtensionManagerOptions {
+  /** 持久化操作结果提交后通知宿主，包含失败和待配置状态。 */
+  changed?: (change: import("../resources/types/ResourceChange.js").ResourceChange) => void;
   /** 当前规范数据根。 */
   root_path: string;
   /** 同一宿主的 SDK 模块映射。 */

@@ -119,7 +119,7 @@ export class ExtensionHost implements ExtensionRuntime {
     for (const artifact of run.renderers.values()) await fs.rm(artifact.directory, { recursive: true, force: true });
     this.runs.delete(extension_id);
     this.options.refresh_agents?.(extension_id);
-    this.options.invalidate();
+    this.options.invalidate({ kind: "extension", id: extension_id, operation: "updated" });
   }
 
   /** 只在准备完整且旧运行释放后调用；不接受半成功能力目录。 */
@@ -221,7 +221,7 @@ export class ExtensionHost implements ExtensionRuntime {
       this.options.refresh_agents?.(record.extension_id);
       run.published = true;
       run.gate.open();
-      this.options.invalidate();
+      this.options.invalidate({ kind: "extension", id: record.extension_id, operation: "updated" });
       return { powers: run.power_ids.length, agents: run.agent_ids.length, models: run.model_ids.length, downtowns: run.downtown_ids.length };
     } catch (error) {
       controller.abort();

@@ -3,8 +3,7 @@
   position: relative;
   display: flex;
   flex-direction: column;
-  /* 活动组内部沿用 message_layout.ts 的 gap-1，推理与工具行之间保留 4px 留白。 */
-  gap: var(--spacing);
+  /* 条目间距由 Activity 容器持有。 */
   margin: 0;
   padding: 0;
   border: 0;
@@ -213,7 +212,6 @@
   display: flex;
   min-width: 0;
   flex-direction: column;
-  gap: 0.25rem;
   margin: 0.1rem 0 0 0.47rem;
   padding: 0.08rem 0 0.1rem 0.92rem;
   border-left: 1px solid color-mix(in srgb, var(--border) 52%, transparent);
@@ -258,17 +256,11 @@
   50% { opacity: 0; }
 }
 
-/* 活动只拥有表面和缩进；正文排版与留白归共享 DetailContent，纵向滚动归消息页面。 */
-.activity-tool-detail {
-  min-width: 0;
-  margin: 0.18rem 0 0.18rem 1.38rem;
-  border: 1px solid color-mix(in srgb, var(--border) 28%, transparent);
-  border-radius: var(--radius-chip);
-  background: color-mix(in srgb, var(--muted-foreground) 10%, transparent);
-}
+/* 工具条目只保留相对图标的缩进，面板表面和排版由唯一 ActivityDetailPanel 持有。 */
+.activity-tool-row > .activity-detail-panel { margin: .18rem 0 .18rem 1.38rem; }
 
 /* 仅格式化工具日志本身，不覆盖嵌入 Markdown 的代码块。 */
-.activity-tool-detail .activity-tool-diff-line {
+.activity-detail-panel .activity-tool-diff-line {
   min-width: 0;
   margin: 0;
   padding: 0.55rem 0.62rem;
@@ -322,7 +314,6 @@
 }
 
 
-.activity-tool-row.is-failed > .activity-tool-summary :is(.activity-tool-icon,.activity-tool-state,.activity-tool-identity) { color: var(--destructive); }
 @media (prefers-reduced-motion: reduce) { .activity-tool-row.is-running > .activity-tool-summary :is(.activity-tool-icon,.activity-tool-state,.activity-tool-identity), .activity-tool-input-caret { animation: none; } }
 
 /* Input 摘要使用轻底色胶囊；展开正文留在胶囊外，沿用 Tool 的详情布局。 */
@@ -346,7 +337,6 @@
 }
 .activity-input-source-icon { width: 0.875rem; height: 0.875rem; }
 .activity-tool-row.is-incoming > .activity-tool-summary :is(.activity-input-icon, .activity-tool-state, .activity-tool-identity) { animation: none; }
-.activity-tool-row.is-incoming.is-failed > .activity-tool-summary .activity-input-icon { color: var(--destructive); }
 .activity-input-file {
   cursor: pointer;
   border-radius: var(--radius-chip);
@@ -354,7 +344,18 @@
 }
 .activity-input-file:hover { text-decoration: underline; }
 .activity-input-file:focus-visible,
-.activity-tool-row.is-incoming .activity-tool-detail:focus-visible {
+.activity-tool-row.is-incoming > .activity-detail-panel:focus-visible {
   outline: 2px solid var(--ring);
   outline-offset: 2px;
 }
+
+/* 错误属于活动正文，不另建卡片；全文宽度留给原因，复制低对比地放在下一行。 */
+.activity-error-content { display: flex; flex-direction: column; gap: .5rem; min-width: 0; }
+.activity-error-reason { width: 100%; min-width: 0; margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+.activity-error-actions { display: flex; align-items: center; justify-content: flex-end; gap: .375rem; min-width: 0; color: var(--muted-foreground); }
+.activity-error-status { min-width: 0; overflow-wrap: anywhere; }
+.activity-error-copy { display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; width: 1.5rem; height: 1.5rem; border-radius: var(--radius-control); color: inherit; cursor: pointer; }
+.activity-error-copy > svg { width: .875rem; height: .875rem; }
+.activity-error-copy:hover { color: var(--foreground); background: var(--interaction-hover); }
+.activity-error-copy:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
+.activity-error-copy:disabled { cursor: default; opacity: .5; }
