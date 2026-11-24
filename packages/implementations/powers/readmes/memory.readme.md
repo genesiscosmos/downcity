@@ -8,6 +8,14 @@ Core Profiles are captured in the Session system snapshot. On each turn, MemoryP
 
 Ordinary Sessions call the public actions. Semantic operations create persisted Memory Jobs and dedicated Sessions with a fixed model, memory-only tools, bounded sources and a processing budget. These Sessions do not inherit the Agent's business instructions, Skills, Workspace tools or ordinary completion delivery. Their output is staged; only the host's validated commit establishes success. There is no automatic per-turn capture or Profile optimization. Background knowledge consolidation is explicitly enabled per scope and disabled by default.
 
+## Memory selection and evidence
+
+Select memory for expected future usefulness: enduring goals and stable constraints, decision reasons, strategies and verified lessons that can change future choices or avoid repeated investigation. Skip routine logs, temporary progress and state readily available from the environment; short-term next steps belong in Task or Session context. Keep Profile concise and focused on persistent agreements, with detailed experience and project knowledge in searchable knowledge.
+
+When learning from success or failure, distinguish observations, explanations and verified rules. The business Agent should test explanations when authorized and practical, then retain the rule, verification evidence, applicable conditions and limitations. A successful retry, human acceptance or an exact quote alone does not establish causation. Repeated references are not new evidence. An untested explanation must not become a verified lesson; retain labeled observations or unresolved questions only when clearly useful, without accumulating speculation. Explicit user preferences and agreements require no experimental verification.
+
+The dedicated Memory Session reviews only the support in provided sources, including claimed verification; it does not perform business experiments. Narrow or skip unsupported conclusions, preserve counterevidence and uncertainty, and do not treat existing memories as independent corroboration. Source and commit checks establish traceability and storage consistency, not semantic truth. Explicit remember directly saves submitted content; the calling Agent is responsible for its selection and wording.
+
 ## remember
 
 - content: required non-empty text.

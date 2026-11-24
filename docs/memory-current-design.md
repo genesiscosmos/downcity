@@ -1,8 +1,8 @@
-# Memory 当前设计说明：单用户与两级 Profile
+# Memory 当前设计说明
 
-> 当前架构：一份平台数据根对应一个本地使用者；User / Agent 两级 Profile 常驻，长期知识按需检索。不使用 Jev，也不周期性提取 Session。
+> 一份平台数据根对应一个本地使用者；User / Agent Profile 保存持续约定，知识按需检索。语义处理通过有界 Memory Job 和专用 Session 完成；后台知识整理按范围显式启用，默认关闭。
 >
-> 本文替代旧消息判定 PRD。旧缓存文件保留但不再消费，不自动迁移原多用户记忆。
+> 本文说明当前职责与边界。工具参数、宿主 actions 和配置详见 [Memory README](../packages/implementations/powers/readmes/memory.readme.md)。
 
 ## 1. 身份与全局用户中心
 
@@ -24,192 +24,92 @@ flowchart TD
     F[Downtown 账户] -.服务登录，不改变 local User.-> U
 ```
 
-## 2. Session system 快照与消息处理
+## 2. 归属与上下文
+
+| target | profile | knowledge |
+| --- | --- | --- |
+| user | 跨 Agent 的持续偏好与约定 | 用户长期目标、事实与历史知识 |
+| agent | 当前 Agent 专属约定 | 私有经验和知识 |
+| current_workspace | 不支持 | 当前项目事实、决策与流程 |
+
+作用域由可信调用上下文解析，不接受调用方文件路径，也不在失败后静默改换 target。Agent 知识不跨 Agent 读取，Workspace 知识不跨项目读取。User / Agent 知识管理无需 Workspace；项目写入要求 Workspace。
+
+首次组装和 syncshot 读取完整 User / Agent Profile 并冻结到 system 快照。Agent Profile 紧随 Agent Identity / Instruction；User Profile 独立位于 Session 信息之前。每轮比较冻结版本与当前版本，变化通过有界本轮参考更正提供，不改写快照或 canonical 消息；新 Session 和 syncshot 读取完整当前内容。
+
+Profile 是历史偏好和持续约定，不构成本轮新任务或新授权。当前请求与系统权限优先，冲突按约定的适用范围处理。知识通过 search / read 按需读取，作为参考数据使用。SOUL.md 由 Agent 配置管理，Memory 不负责修改。
+
+## 3. 选择原则与验证职责
+
+记忆是对未来用途的判断。优先保存能改变未来相似任务决策、避免重复探索的长期目标、稳定约束、决策理由、策略和已验证规律。跳过流水账、临时进度、易从当前环境重新读取的状态；短期 next steps 留在 Task 或 Session。Profile 聚焦简洁持续约定，详细经验与项目知识放入可检索的 knowledge。
+
+业务 Agent 从成功或失败中总结经验时，区分观察、解释和已验证规则，在有权限且合理可行时验证解释，再保存规则、验证依据、适用条件与限制。成功重试、人工验收或原句引用本身不足以证明因果；重复引用不是新证据。未经验证不能升格为确定经验；明确有未来价值的观察或未决事项可以标注后保留，避免堆积猜测。用户明确表达的偏好和约定不要求实验验证。
+
+专用 Memory Session 只审查提供来源对结论及验证声明的支持程度，不承担业务实验。证据不足时缩小表述或 skip，保留反证和不确定性。既有记忆用于核对与去重，不构成独立佐证。原句校验与事务提交保障可追溯性和保存一致性，不能证明语义真实。
+
+## 4. 写入与语义处理
 
 ```mermaid
 flowchart TD
-    M[首次组装或显式 syncshot] --> UP[读取 User PROFILE.md]
-    UP --> AP[读取当前 Agent PROFILE.md]
-    AP --> C[完整 system 快照冻结 + 原始对话]
-    C --> A[Agent 处理请求]
-    A --> T{按需使用工具}
-    T -->|持续约定| P[remember mode=profile]
-    T -->|长期知识| K[remember mode=knowledge]
-    T -->|历史依据缺失| R[search / read]
-    T -->|无须工具| O[回答]
-    P --> O
-    K --> O
-    R --> A
+    A[业务 Agent 按未来用途选择内容] --> R{操作}
+    R -->|remember| D[确定性保存 Profile 或独立知识记录]
+    R -->|digest / revise / optimize| J[固定来源、范围与模型绑定的 Job]
+    J --> M[专用 Memory Session 审查来源与已有内容]
+    M --> S[暂存有界变更或明确跳过]
+    S --> C[宿主校验与提交]
+    C --> O[持久化结果与原调用轮次反馈]
 ```
 
-没有 memory/decision block、入口模型调用、回复后自动采集或 30 分钟形成任务。聊天模型自己选择工具，因此会不会漏记或漏查需要实际评估。
+remember 直接保存提交正文，调用业务 Agent 负责内容选择与表述。Profile 立即追加，返回 profile_id、status=saved、activation=next_turn_or_new_session。knowledge 创建独立版本记录，保留请求来源，返回 memory_id、version、status=created、activation=on_recall。topic 是组织提示，不是覆盖地址；显式请求不能假称用户原话。
 
-## 3. 模块职责
+digest 从明确指定的 chat / work Session 提炼知识；默认最近 30 条，最多 100 条、读取预算 256,000 字节，并限制来源正文合计 64,000 字符。输入只包含 user / agent 的 text Part，不包含工具 Part，不代表完整实验记录。Memory Session 历史不能再次作为来源，来源会话受 Agent / Workspace 校验。
+
+revise 绑定单条记忆，以提交的 instruction / evidence 为来源。optimize 显式整理 User 或 Agent Profile，仅合并重复及应用已有明确更正，不推断新偏好；来源是固定 Profile 版本，不是对历史事实的独立证明。相同来源和策略在同一请求范围内用于幂等归并。
+
+三者返回异步 Job。只有 succeeded 表示提交成功；skipped 表示无需变更，queued / running / failed 都不表示已保存。job_detail 返回固定 before / after、实际读取版本、来源原句与可用角色和消息定位，不用当前内容重建历史。失败请求可显式 retry，不扩大原范围或来源。
+
+原调用 Session / Turn 订阅最终结果；可接收时注入不含来源正文的完成摘要，轮次结束后仅保留处理记录，不自动新开轮次。投递与记忆提交分别记录，delivery_status=saved 不表示记忆已保存。
+
+## 5. 模块与提交边界
 
 | 模块 | 职责 |
 | --- | --- |
-| City UserRepository | 唯一本地身份和基础资料，排他创建与原子更新 |
-| DesktopLocalData.users | 将本地用户仓储组合到 Desktop 宿主数据入口 |
-| MemoryPower | 生命周期、工具、宿主 actions 和通用 Session hook 装配 |
-| MemoryProfile | 统一 User / Agent Profile 的追加、读取、精确编辑、删除与每日优化 |
-| ProfileScope | user 或 agent + agent_id；不接受调用方文件路径 |
-| AccessResolver / MemoryAddress | 固定本地 User、当前 Agent、当前 Workspace 的可读写范围 |
-| BuiltinMemoryProvider | 知识的保存、检索、读取、修订与删除 |
-| Router / FileAdapter | 独立存储路径、逻辑地址映射、文件原子持久化 |
-| MemoryModel | Profile 优化的 JSON 文本模型调用 |
+| MemoryPower / AccessResolver | 生命周期、工具与宿主 actions 装配、可信范围解析 |
+| SystemProvider | 业务 Agent 的选择、验证和调用原则 |
+| MemoryService / MemorySources | 显式写入、Job 请求及有界 canonical 来源读取 |
+| MemoryCoordinator / MemoryJobStore / MemoryDelivery | 执行、恢复、固定输入、处理状态与可靠结果反馈 |
+| MemorySession / MemorySessionTools | 专用指令、受限来源/检索/暂存工具及实际 Session 绑定 |
+| MemoryProfile | User / Agent Profile 版本化追加、精确编辑、删除及可恢复提交 |
+| BuiltinMemoryProvider / 知识事务存储 | 记录、有效性、来源、范围版本和原子提交回执 |
+| MemorySignalIntake / MemoryDreamPlanner | 可信后台材料接收、有界选材、额度与冷却 |
 
-Profile 和知识共用持久化原语，但互不依赖检索。Session 核心只提供通用 hook。SOUL.md 仍由 Agent 配置管理，不由 Memory 修改。
+专用 Session 不继承业务指令、Skills 或 Workspace 工具；来源、既有记忆和 Job instruction 都是待审查数据，不能授予新权限。先读取来源，创建前检索去重，修改前读取完整记录与版本；每条变更引用授权原始来源。暂存不等于提交，宿主完成校验和提交后才报告成功。
 
-## 4. 归属与使用方式
+Profile 编辑要求读取版本、old_text 唯一匹配和互不重叠区域；保留来源标记及所有仍适用约定，不能为缩短而整篇替换或静默跨模式迁移。Profile 与知识是独立事务。当前没有 Profile 硬预算或自动截断；简洁性依赖选择与显式整理。
 
-| target | mode | 语义 |
-| --- | --- | --- |
-| user | profile | 用户通用偏好与持续约定，各 Agent 新 Session 或 syncshot 时读取 |
-| agent | profile | 仅当前 Agent 生效的专属约定 |
-| user | knowledge | 关于使用者的事实、目标、历史信息，跨 Agent 查询 |
-| agent | knowledge | 当前 Agent 私有经验和知识 |
-| current_workspace | knowledge | 当前项目事实、决策与流程，项目内共享 |
+## 6. 后台知识整理
 
-current_workspace + profile 明确拒绝，不回退到其他范围。旧 City 知识可继续显式访问，不作为新的 User 范围。
+后台整理默认关闭，按 Agent、Workspace 上下文和目标范围显式启用。可信材料仅来自明确纠错及受信 Task accept / 带明确反馈的 revise 事实；执行成功、打开结果或 Turn 结束不是人工验收。Task 事实保留当时输出、角色、指纹和有界读取区间，默认进入原 Agent 私有范围；项目共享需要明确授权。
 
-## 5. remember 参数
+自动批次只写 Agent 私有知识或获准共享的 Workspace 知识，不写 Profile 或 User knowledge，不扫描私人 Session 历史。Memory Session、生成变更与完成反馈不能再次成为原始来源。
 
-| 参数 | 类型 | 行为 |
-| --- | --- | --- |
-| content | string | 必填非空正文 |
-| target | user / agent / current_workspace | 必填归属 |
-| mode | profile / knowledge | 默认 knowledge |
-| topic | string | knowledge 主题，默认 inbox |
-| memory_type | fact / preference / decision / episode / procedure / document | knowledge 默认 fact |
-| source | string | knowledge 证据说明 |
+维护每五分钟检查，即使关闭自动计算也可接收事实与核对既有提交回执。每批最多 4 个事实、16 个来源、32,000 字符；同范围每日按 UTC 最多 2 次计算，含重试，间隔至少十分钟。常规尝试限 120 秒、每 Job 最多 3 次。空队列不调用模型，显式请求在 Job 边界优先。失败批次需显式重试，仍受开关、额度和冷却约束。
 
-### User Profile
+只有有提交回执的 succeeded 或明确 skipped 才推进已处理状态；来源错误、失败和延期保留待处理输入。自动批次没有聊天接收方。共享平台账本去重事件与批次，批次始终绑定原 City 的私有 Job，不由另一 City 接管。
 
-```json
-{"target":"user","mode":"profile","content":"主回答前提醒我使用英语；我写英语时简要纠正表达。"}
-```
+## 7. 存储、模型与限制
 
-立即追加 user/PROFILE.md，无篇幅上限，无需模型或身份回调。成功返回 target=user、profile_id=user/local/profile、status=saved、mode=profile、activation=new_session_or_syncshot、location=PROFILE.md。
-
-### Agent Profile
-
-```json
-{"target":"agent","mode":"profile","content":"修改多个模块前先提出方案并等待确认。"}
-```
-
-追加 agents/<agent_id>/PROFILE.md，成功返回 agent/<agent_id>/profile。topic、memory_type、source 不参与 Profile 追加。
-
-### 长期知识
-
-```json
-{"target":"user","mode":"knowledge","content":"用户正在准备英语考试。","topic":"learning","memory_type":"fact"}
-```
-
-Provider 保存 evidence，然后创建或追加 wiki/<topic>。默认是确定性追加，不自动语义融合；返回 target、mode=knowledge、status=created/updated、memory_id、evidence_id、activation=on_recall、location=wiki。
-
-User 知识逻辑前缀仍为 user/<hex-local-id>，物理上统一进入 user/memory。调用方原样使用返回 ID，不解析目录。不同平台数据根物理隔离，即使逻辑用户标识相同也不会共享文件。
-
-## 6. 两级上下文
-
-Identity 与 Instruction 合并为一条 Agent system，Agent Profile 紧随其后；User Profile 保持独立，位于 Session 信息之前。不再将 Profile 注入 User 消息：
-
-```text
-system: Agent Identity + Instruction（SOUL）
-system: Agent Profile
-system: SDK 规则
-system: Power 使用说明
-system: User Profile
-system: Session 信息
-历史 user / assistant / tool 消息
-user: 当前原始请求
-```
-
-Profile 明确标注为历史偏好和持续约定，只影响适用行为，不是新请求，也不能充当“上文”等任务指代的对象。
-
-两者保留 User / Agent 标题，去掉来源幂等 HTML 注释，不写回 canonical 消息。Profile 与 Instruction 一起参与完整 system 的首次组装和冻结。文件更新、删除和每日优化均不改变已有 Session；新 Session 使用最新文件，已有 Session 执行 syncshot 后整体刷新。snapshot 持久化当前快照，恢复沿用现有 Instruction 快照机制。
-
-当前请求和系统权限优先。Agent Profile 是更具体范围；两者对同事项不同要求时，按其适用范围处理。代码不合并改写用户正文，也不假定靠位置就能保证模型正确处理冲突。
-
-单份 Profile 读取失败只跳过该范围，另一份仍可加载。不存在是正常空态。
-
-## 7. Profile 文档维护
-
-- 新内容无上限追加，按来源幂等；相同文本在不同来源出现可能暂时重复。
-- User 和每个 Agent 有各自的串行提交队列、profile-state.json 和上一版备份。
-- 读取返回 content 与 SHA-256 version；编辑要求版本相同、old_text 唯一匹配且区域不重叠。
-- 删除整份 Profile 也要求 version，保存备份，保留旧来源幂等账本防止同来源重放恢复。
-- 普通知识 read/revise/forget 不接受 profile_id；通过专用宿主 Profile actions 管理。
-
-```mermaid
-flowchart TD
-    A[City 启动与每小时唤醒] --> B[检查 User Profile 与所有 Agent Profile]
-    B --> C{本地日历今天已检查？}
-    C -->|是| Z[跳过]
-    C -->|否| D{可见正文超过2000字符？}
-    D -->|否| E[记录今天已检查]
-    D -->|是| F[profile_model_id 提出精确编辑]
-    F --> G[匹配、区域、来源与版本校验]
-    G --> H[备份原文，原子提交]
-    H --> E
-```
-
-字符按 Unicode code point 计数，去除来源标记但包含标题。2,000 是触发阈值和目标，不是写入或加载硬上限。优化最多32处编辑，不允许模型整篇替换或丢弃来源标记。有效语义是否完整保留仍依赖模型质量，代码不能证明语义无损。
-
-普通优化失败记录当天已检查并保留原文，通常次日再试；并发版本变化不覆盖新内容，可下次小时扫描重算。无模型时读写仍可用。City 离线不执行。
-
-## 8. 宿主管理 actions
-
-| action | 输入 / 输出 |
+| 数据 | 位置 |
 | --- | --- |
-| memory.user_read | 返回 City 仓储中的唯一使用者基础资料 |
-| memory.user_update | display_name；只更新基础资料，不能换 user_id |
-| memory.profile_read | target=user，或 target=agent + agent_id；返回 content/version |
-| memory.profile_edit | 相同范围 + version + edits(old_text/new_text) |
-| memory.profile_delete | 相同范围 + version；删除整份 Profile并备份 |
-| memory.profile_status | 相同范围；返回字符数、检查日期、错误 |
+| 本地用户基础资料 | `<platform-root>/user/user.json` |
+| User Profile | `<platform-root>/user/PROFILE.md` |
+| Agent Profile | `<platform-root>/agents/<agent_id>/PROFILE.md` |
+| User 知识 manifest | `<platform-root>/user/memory/runtime/knowledge/current.json` |
+| Agent 知识 manifest | `<platform-root>/agents/<agent_id>/memory/runtime/knowledge/current.json` |
+| Workspace 知识 manifest | `<shared-memory-root>/workspaces/<encoded-id>/runtime/knowledge/current.json` |
+| 后台范围账本 | `<platform-root>/memory/dreaming/scopes/<scope-hash>.json` |
 
-Agent 目标必须是宿主登记的 Agent。User / Agent 知识管理和 Provider 状态读取无需存在 Workspace；只有项目写入要求 Workspace。工具和管理 action 使用相同领域服务，不另外实现文件操作。现有 Desktop User/Agent Profile 专属界面尚未增加，本次提供仓储和宿主 API。
+Memory ID 是逻辑引用，不应解析为物理路径。知识事务在同一范围 manifest 中发布记录、有效性和回执；删除后正常 read / list / search 不再返回内容，并通过归一化正文指纹抑制相同内容重建。该抑制不保证阻止语义改写。forget 不删除原 Session、Job 来源副本或全部保留历史。
 
-## 9. 工具与检索
+新 Memory Session 使用显式确认的结构化 model 与 binding_id，或所属 Agent 的默认模型；执行时固定模型与授权身份。切换服务账户不改写已提交 Job 的绑定，重试不得静默换账户计费。
 
-知识工具保留 status、list、search、read、remember、digest、revise、forget。search 默认最多6个片段、最低0.35评分，使用 Intl.Segmenter 分词与确定性文本扫描，无 embedding。
-
-同一 User 记录保存一次，所有本地 Agent 查询同份记录；Agent 私有范围不能跨 Agent 读，Workspace 范围不能跨项目读。默认 revise 追加修订说明；digest 默认归档最近30条消息，不是自动摘要。
-
-## 10. 配置与路径
-
-```ts
-const memory_power = new MemoryPower({
-  platform_root_path: "/absolute/platform-root",
-  profile_model_id: "configured-text-model",
-});
-```
-
-无 resolve_user、Jev 或启用判定开关。profile_model_id 只用于每日优化，也可由 Power 配置提供，修改后重启。
-
-```text
-平台数据根/
-├── user/
-│   ├── user.json                  # City 唯一本地用户
-│   ├── PROFILE.md                 # User Core
-│   └── memory/
-│       ├── wiki/ 与 evidence/
-│       ├── profile-state.json
-│       └── profile-backup.md
-├── agents/<agent_id>/
-│   ├── SOUL.md
-│   ├── PROFILE.md                 # Agent Core
-│   └── memory/                    # Agent knowledge 与 Profile状态
-└── powers/memory/
-    ├── workspaces/<hex-id>/wiki/ 与 evidence/
-    ├── wiki/ 与 evidence/          # 旧City内容
-    └── runtime/                   # 如有旧判定文件，保留但不消费
-```
-
-不猜测旧 user ID 的记录属于谁，不自动迁移旧 users/<id> 内容；显式新写入使用唯一 User。旧 Agent wiki 偏好也不自动升级为 Profile。
-
-## 11. 验证与限制
-
-已运行 City/Powers 构建、15项 Memory 回归和 Desktop 类型检查。模拟运行验证了免登录 User写入、跨 Agent Profile/知识共享、Agent Profile隔离、版本化编辑、重启加载和版本化删除。
-
-仍需明确：不包含多租户身份体系；被授权使用本地 Agent 的渠道共享本地 User，应由宿主渠道授权控制入口。Profile 专属 UI 和真实模型优化质量需后续验证。Agent 仍可能漏用工具，保存确认必须以工具结果为准。两级 Profile 无加载硬上限，token成本随内容增长。
+不得在未经明确授权时保存秘密或敏感个人数据。来源读取有界，可能缺少较早记录或工具输出；整理器不能替来源补做实验。模型仍可能漏记、漏查或误判语义支持程度，真实质量需要在获准的隔离环境中评估。

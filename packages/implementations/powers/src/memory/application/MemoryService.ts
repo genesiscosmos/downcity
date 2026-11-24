@@ -56,8 +56,8 @@ export class MemoryService {
     const sources = await read_memory_sources(context, this.host, input.session_id, input.type, input.max_messages);
     return await this.submit(context, {
       kind: "digest", access, target: input.target, mode: "knowledge", sources,
-      instruction: "Extract supported durable decisions, reasons, constraints and reusable knowledge. Do not store transient task status or assistant proposals as accepted decisions.",
-      request_key: memory_request_hash(["digest-v1", input.session_id, input.type, sources]),
+      instruction: "Extract supported goals, constraints, decision reasons, strategies and verified lessons useful to future decisions. Keep observations and unresolved questions only when clearly valuable and labeled as such. Do not store transient task status or assistant proposals as accepted decisions.",
+      request_key: memory_request_hash(["digest-v2", input.session_id, input.type, sources]),
     });
   }
 
