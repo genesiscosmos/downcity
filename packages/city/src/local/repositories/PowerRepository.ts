@@ -7,6 +7,7 @@
  */
 
 import path from "node:path";
+import { validate_power_renderers } from "../../power/RendererBindings.js";
 import fs from "fs-extra";
 import { parse, stringify } from "smol-toml";
 import type { JsonObject, JsonValue } from "@downcity/type";
@@ -83,17 +84,18 @@ export class PowerRepository {
       || !value.version
       || !value.description
       || !is_installed_readme_path(value.readme)
-      || (!value.main && !value.renderer)
+      || (!value.main && !Object.keys(value.renderers ?? {}).length)
       || !value.source
       || !value.integrity
       || !value.installed_at
       || !value.updated_at
       || (value.icon !== undefined && typeof value.icon !== "string")
       || (value.main !== undefined && typeof value.main !== "string")
-      || (value.renderer !== undefined && !is_installed_renderer(value.renderer))
+      || "renderer" in value
     ) {
       throw new Error(`Invalid installed Power definition: ${power_id}`);
     }
+    validate_power_renderers(value.renderers);
     return structuredClone(value);
   }
 
@@ -219,21 +221,4 @@ function is_installed_readme_path(value: unknown): value is string {
   }
   return path.posix.extname(value).toLowerCase() === ".md"
     && !value.split("/").includes("..");
-}
-
-/** 判断已安装 Renderer 是否包含规范入口和完整静态插槽声明。 */
-function is_installed_renderer(
-  value: unknown,
-): value is LocalInstalledPowerDefinition["renderer"] {
-  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
-  const renderer = value as Record<string, unknown>;
-  if (
-    typeof renderer.entry !== "string"
-    || typeof renderer.sidebar !== "boolean"
-    || typeof renderer.mainview !== "boolean"
-    || typeof renderer.config !== "boolean"
-  ) return false;
-  if (renderer.sidebar !== renderer.mainview) return false;
-  if (renderer.message !== undefined && typeof renderer.message !== "boolean") return false;
-  return renderer.sidebar || renderer.config || renderer.message === true;
 }

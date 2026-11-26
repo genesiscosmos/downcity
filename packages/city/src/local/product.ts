@@ -43,7 +43,6 @@ export type {
   LocalPowerDefinition,
   LocalPowerLoadFailure,
   LocalPowerLoadResult,
-  LocalPowerRendererDefinition,
   LocalPowerRegistration,
 } from "./types/LocalPower.js";
 export type {

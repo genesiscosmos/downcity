@@ -6,10 +6,11 @@
  */
 
 import path from "node:path";
-import { createHash, randomUUID } from "node:crypto";
+import { randomUUID } from "node:crypto";
 import fs from "fs-extra";
 import { execa } from "execa";
-import { get_local_power_path, RootLease, resolve_resource_root } from "@downcity/city/local";
+import { validate_power_renderers, DESKTOP_REACT_RENDERER_PROTOCOL } from "@downcity/city/power";
+import { calculate_local_power_integrity, power_package_files, resolve_power_package_file, get_local_power_path, RootLease, resolve_resource_root } from "@downcity/city/local";
 import {
   get_installed_power,
   is_builtin_power,
@@ -74,7 +75,7 @@ async function install_owned_power(source: ResolvedPowerSource, root_path: strin
     );
     await validate_power_package(package_path);
     const definition = await read_power_definition(power_root);
-    const readme_path = await assert_power_package_file(
+    await assert_power_package_file(
       power_root,
       definition.readme,
       "README",
@@ -85,44 +86,15 @@ async function install_owned_power(source: ResolvedPowerSource, root_path: strin
     if (is_builtin_power(definition.id)) {
       throw new Error(`Power ID conflicts with builtin Power: ${definition.id}`);
     }
-    const declared_entries: Array<[label: string, relative_path: string]> = [];
-    if (definition.main) declared_entries.push(["main", definition.main]);
-    if (definition.renderer) declared_entries.push(["renderer", definition.renderer.entry]);
-    const entry_paths = await Promise.all(declared_entries.map(async ([label, relative_path]) => [
-      relative_path,
-      await assert_power_package_file(power_root, relative_path, label),
-    ] as const));
-    const icon_path = definition.icon && is_local_power_asset(definition.icon)
-      ? await assert_power_package_file(power_root, definition.icon, "icon")
-      : undefined;
-
     await fs.ensureDir(staging_dir, { mode: 0o700 });
-    const installed_package_path = path.join(staging_dir, POWER_PACKAGE_FILE_NAME);
-    await fs.copyFile(package_path, installed_package_path);
-    await fs.chmod(installed_package_path, 0o600);
-    const installed_readme_path = resolve_power_path(staging_dir, definition.readme, "README");
-    await fs.ensureDir(path.dirname(installed_readme_path), { mode: 0o700 });
-    await fs.copyFile(readme_path, installed_readme_path);
-    await fs.chmod(installed_readme_path, 0o600);
-    for (const [relative_path, source_path] of entry_paths) {
-      const installed_path = resolve_power_path(staging_dir, relative_path, "entry");
+    for (const relative_path of power_package_files(definition)) {
+      const source_path = await resolve_power_package_file(power_root, relative_path);
+      const installed_path = resolve_power_path(staging_dir, relative_path, "package file");
       await fs.ensureDir(path.dirname(installed_path), { mode: 0o700 });
       await fs.copyFile(source_path, installed_path);
       await fs.chmod(installed_path, 0o600);
     }
-    if (icon_path && definition.icon) {
-      const installed_icon_path = resolve_power_path(staging_dir, definition.icon, "icon");
-      await fs.ensureDir(path.dirname(installed_icon_path), { mode: 0o700 });
-      await fs.copyFile(icon_path, installed_icon_path);
-      await fs.chmod(installed_icon_path, 0o600);
-    }
-    const integrity = await calculate_power_integrity(staging_dir, [
-      POWER_PACKAGE_FILE_NAME,
-      definition.readme,
-      ...[definition.main, definition.renderer?.entry]
-        .filter((item): item is string => Boolean(item)),
-      ...(definition.icon && is_local_power_asset(definition.icon) ? [definition.icon] : []),
-    ]);
+    const integrity = await calculate_local_power_integrity(staging_dir, definition);
     const existing = get_installed_power(definition.id);
     const target_dir = get_local_power_path(root_path, definition.id);
     const existing_config = path.join(target_dir, POWER_CONFIG_FILE_NAME);
@@ -189,7 +161,7 @@ export async function read_power_definition(
       "readme",
       "icon",
       "main",
-      "renderer",
+      "renderers",
       "source",
       "revision",
       "integrity",
@@ -214,9 +186,12 @@ export async function read_power_definition(
   const readme = normalize_power_readme(raw.readme, power_root, id);
   const icon = normalize_power_icon(raw.icon, id);
   const main = normalize_power_entry(raw.main, power_root, "main", [".js", ".mjs"]);
-  const renderer = normalize_power_renderer(raw.renderer, power_root);
-  if (!main && !renderer) {
-    throw new Error(`Power must provide main or renderer: ${id}`);
+  const renderers = validate_power_renderers(raw.renderers);
+  for (const [protocol_id, binding] of Object.entries(renderers)) {
+    if (protocol_id === DESKTOP_REACT_RENDERER_PROTOCOL) normalize_power_entry(binding.entry, power_root, "Desktop renderer.entry", [".js", ".mjs"]);
+  }
+  if (!main && !Object.keys(renderers).length) {
+    throw new Error(`Power must provide main or renderers: ${id}`);
   }
   const title = typeof raw.title === "string" ? raw.title.trim() : "";
   return {
@@ -228,36 +203,8 @@ export async function read_power_definition(
     readme,
     ...(icon ? { icon } : {}),
     ...(main ? { main } : {}),
-    ...(renderer ? { renderer } : {}),
+    ...(Object.keys(renderers).length ? { renderers } : {}),
   };
-}
-
-/** 校验 Renderer 入口及其静态 UI 插槽。 */
-function normalize_power_renderer(
-  value: unknown,
-  power_root: string,
-): PowerPackageDefinition["renderer"] {
-  if (value === undefined || value === null) return undefined;
-  if (!value || typeof value !== "object" || Array.isArray(value)) {
-    throw new Error("Power renderer must be an object");
-  }
-  const raw = value as Record<string, unknown>;
-  assert_known_fields(raw, ["entry", "sidebar", "mainview", "config", "message"], "Power renderer");
-  const entry = normalize_power_entry(raw.entry, power_root, "renderer.entry", [".js", ".mjs"]);
-  if (!entry) throw new Error("Power renderer.entry is required");
-  for (const key of ["sidebar", "mainview", "config"] as const) {
-    if (typeof raw[key] !== "boolean") throw new Error(`Power renderer.${key} must be boolean`);
-  }
-  const sidebar = raw.sidebar as boolean;
-  const mainview = raw.mainview as boolean;
-  const config = raw.config as boolean;
-  if (sidebar !== mainview) {
-    throw new Error("Power renderer.sidebar and renderer.mainview must be declared together");
-  }
-  if (raw.message !== undefined && typeof raw.message !== "boolean") throw new Error("Power renderer.message must be boolean");
-  const message = raw.message === true;
-  if (!sidebar && !config && !message) throw new Error("Power renderer must provide a workspace UI, config or message");
-  return { entry, sidebar, mainview, config, message };
 }
 
 /** 校验并规范化 Power 必需的 Markdown 用户文档路径。 */
@@ -309,11 +256,6 @@ function normalize_power_icon(value: unknown, power_id: string): string | undefi
     throw new Error(`Power icon protocol is not supported: ${icon}`);
   }
   return icon.split(path.sep).join("/");
-}
-
-/** 判断图标是否为 Power 根目录内的本地资源。 */
-function is_local_power_asset(icon: string): boolean {
-  return !/^https?:\/\//iu.test(icon);
 }
 
 /** 安全解析 Power 根目录内的静态路径。 */
@@ -414,18 +356,6 @@ async function validate_power_package(package_path: string): Promise<void> {
   if (!is_json_object(package_definition) || package_definition.type !== "module") {
     throw new Error('Power package.json must declare "type": "module"');
   }
-}
-
-/** 计算 Power package 边界与自包含入口的稳定 SHA-256 摘要。 */
-async function calculate_power_integrity(root: string, files: string[]): Promise<string> {
-  const hash = createHash("sha256");
-  for (const relative_path of [...files].sort((left, right) => left.localeCompare(right))) {
-    hash.update(relative_path.split(path.sep).join("/"));
-    hash.update("\0");
-    hash.update(await fs.readFile(resolve_power_path(root, relative_path, "package file")));
-    hash.update("\0");
-  }
-  return `sha256-${hash.digest("hex")}`;
 }
 
 /** 拒绝 Power definition 中无法识别的字段。 */

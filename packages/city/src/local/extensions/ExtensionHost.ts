@@ -2,6 +2,7 @@
  * 单项目执行、校验及整批发布。City 唯一拥有 Power 生命周期，项目运行唯一拥有
  * 模型、Downtown 与作者资源；失败的清理保留运行记录与门禁，禁止叠加另一套实例。
  */
+import { select_power_renderer, validate_power_renderers, DESKTOP_REACT_RENDERER_PROTOCOL } from "../../power/RendererBindings.js";
 import type { ClientModelReference } from "@downcity/type";
 import fs from "node:fs/promises";
 import { randomUUID } from "node:crypto";
@@ -21,11 +22,13 @@ import { ExtensionFailure } from "./ExtensionError.js";
 import { ExtensionConfigurationRequest } from "./ExtensionConfiguration.js";
 import { verify_extension_snapshot } from "./ExtensionCompiler.js";
 import type { ExtensionPowerView, ExtensionRendererArtifact } from "../types/ExtensionRenderer.js";
-import { compile_extension_renderer, EXTENSION_BROWSER_MODULES, read_extension_renderer_resource } from "./ExtensionRendererCompiler.js";
+import { compile_desktop_react_renderer, EXTENSION_BROWSER_MODULES, read_extension_renderer_resource } from "./DesktopReactRendererCompiler.js";
 import { extension_entry_id } from "./ExtensionModelRegistry.js";
 
 /** 每个运行代次的独立资源集合。 */
 class ProjectRun {
+  /** 每次实际加载的随机代次，同一源码快照重新加载也轮换。 */
+  readonly generation = randomUUID();
   readonly gate = new ExtensionGate(true);
   power_batch?: CityPowerBatch;
   readonly power_ids: string[] = [];
@@ -67,8 +70,8 @@ export class ExtensionHost implements ExtensionRuntime {
   power_catalog(): ExtensionPowerView[] { return [...this.runs.values()].flatMap((run) => run.published ? [...run.powers.values()] : []); }
 
   /** 旧页面与旧 URL 即使缓存仍在，也不能读取已替换运行的资源。 */
-  async renderer_resource(power_id: string, generation: string, resource: string): Promise<Response> {
-    const view = this.power_catalog().find((item) => item.power_id === power_id && item.generation === generation);
+  async renderer_resource(power_id: string, protocol_id: string, generation: string, resource: string): Promise<Response> {
+    const view = this.power_catalog().find((item) => item.power_id === power_id && item.generation === generation && item.selected_renderer?.protocol_id === protocol_id);
     if (!view) return new Response("Renderer generation is no longer active", { status: 410 });
     const run = this.runs.get(view.extension_id)!;
     const artifact = run.renderers.get(power_id);
@@ -78,8 +81,8 @@ export class ExtensionHost implements ExtensionRuntime {
   }
 
   /** UI 动作在检查代次与执行之间持有同一门禁，防止迟到调用进入新运行。 */
-  async invoke_renderer(power_id: string, generation: string, surface: "mainview" | "config", action_id: string, input?: import("../../power/index.js").PowerJsonValue) {
-    const view = this.power_catalog().find((item) => item.power_id === power_id && item.generation === generation);
+  async invoke_renderer(power_id: string, protocol_id: string, generation: string, surface: "mainview" | "config", action_id: string, input?: import("../../power/index.js").PowerJsonValue) {
+    const view = this.power_catalog().find((item) => item.power_id === power_id && item.generation === generation && item.selected_renderer?.protocol_id === protocol_id);
     if (!view) throw new ExtensionFailure("renderer_generation_expired", "This extension page has been replaced or removed; reopen it", "load");
     const release = this.acquire(view.extension_id, `renderer-action:${power_id}`);
     try { return surface === "config" ? await this.options.city.powers.invoke_config(power_id, action_id, input) : await this.options.city.powers.invoke(power_id, action_id, input); }
@@ -163,14 +166,16 @@ export class ExtensionHost implements ExtensionRuntime {
       const project = validate_project(raw);
       for (const power of project.powers ?? []) {
         const power_id = extension_entry_id(record.extension_id, "power", power.name);
-        const renderer = power.renderer;
-        if (renderer) {
-          if (!renderer.entry || typeof renderer.entry !== "string" || Object.keys(renderer).some((key) => !["entry", "sidebar", "mainview", "config"].includes(key)) || [renderer.sidebar, renderer.mainview, renderer.config].some((value) => value !== undefined && typeof value !== "boolean") || Boolean(renderer.sidebar) !== Boolean(renderer.mainview)) throw new ExtensionFailure("renderer_invalid", "Renderer requires an entry, boolean slot flags and matching sidebar/mainview", "load", 2);
-          const artifact = await compile_extension_renderer({ source_path: path.join(snapshot_path, "source"), output_path: path.resolve(snapshot_path, "..", "..", "renderers", snapshot.snapshot_id, power_id), entry: renderer.entry, resource_base_url: `downcity-power://extension/${power_id}/${snapshot.snapshot_id}/`, runtime_modules: EXTENSION_BROWSER_MODULES });
+        if ("renderer" in power) throw new ExtensionFailure("renderer_invalid", "Declare renderers by protocol ID", "load", 2);
+        const renderers = validate_power_renderers(power.renderers);
+        const selected_renderer = select_power_renderer(renderers, this.options.renderer_protocols ?? []);
+        if (selected_renderer) {
+          if (selected_renderer.protocol_id !== DESKTOP_REACT_RENDERER_PROTOCOL) throw new ExtensionFailure("renderer_adapter_missing", "Host selected a protocol without an adapter", "load", 2);
+          const artifact = await compile_desktop_react_renderer({ source_path: path.join(snapshot_path, "source"), output_path: path.resolve(snapshot_path, "..", "..", "renderers", run.generation, power_id, selected_renderer.protocol_id), entry: selected_renderer.binding.entry, resource_base_url: `downcity-power://extension/${encodeURIComponent(power_id)}/${encodeURIComponent(selected_renderer.protocol_id)}/${encodeURIComponent(run.generation)}/`, runtime_modules: EXTENSION_BROWSER_MODULES });
           run.renderers.set(power_id, artifact);
         }
         const artifact = run.renderers.get(power_id);
-        run.powers.set(power_id, { power_id, title: power.title || power.name, description: power.description, extension_id: record.extension_id, generation: snapshot.snapshot_id, ...(renderer && artifact ? { renderer: { ...renderer }, entry: artifact.entry, styles: artifact.styles } : {}) });
+        run.powers.set(power_id, { power_id, title: power.title || power.name, description: power.description, extension_id: record.extension_id, generation: run.generation, renderers, ...(selected_renderer && artifact ? { selected_renderer, entry: artifact.entry, styles: artifact.styles } : {}) });
       }
       // ready 可能有数据库副作用，但此时所有资源已接管、执行门禁关闭且目录不可见。
       const town = get_town(this.options.city);

@@ -9,6 +9,8 @@ packages:
   - templates/*
   - templates/agent/server
   - templates/agent/web
+  # 可复制的独立作者项目使用 registry 依赖，不参与宿主 workspace 安装。
+  - "!templates/notes-power"
 
 allowBuilds:
   better-sqlite3: true

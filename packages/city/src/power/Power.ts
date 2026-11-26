@@ -79,6 +79,9 @@ export abstract class Power implements PowerDefinition {
   /** Power 用途说明。 */
   readonly description: string = "";
 
+  /** 按完整宿主协议 ID 声明前端入口；后端不导入 Renderer 模块。 */
+  readonly renderers?: import("./types/PowerRendererBinding.js").PowerRendererBindings;
+
   /** Power Action 集合。 */
   readonly actions: PowerActions = {};
 

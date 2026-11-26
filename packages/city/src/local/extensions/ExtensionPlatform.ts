@@ -31,7 +31,7 @@ export class ExtensionPlatform {
   private city?: City;
   private readonly agent_defaults = new Map<string, Partial<AgentOptions>>();
 
-  constructor(database: LocalDatabase, readonly root_path: string, private readonly agents: AgentRepository) {
+  constructor(database: LocalDatabase, readonly root_path: string, private readonly agents: AgentRepository, private readonly renderer_protocols: readonly string[] = []) {
     this.repository = new ExtensionRepository(database, true);
     this.manager = new ExtensionManager(this.repository, { root_path, changed: (change) => this.invalidate(change), host_modules: resolve_extension_host_modules(), runtime: {
       active_snapshot: (id) => this.runtime?.active_snapshot(id) ?? null,
@@ -48,7 +48,7 @@ export class ExtensionPlatform {
     if (this.runtime) throw new Error("Extension platform is already attached");
     this.city = city;
     this.invalidate = invalidate;
-    this.runtime = new ExtensionHost({ city, catalog: this.catalog, host_modules: resolve_extension_host_modules(), invalidate, refresh_agents: (extension_id) => this.refresh_agents(extension_id), secret: async (extension_id, version, name) => (await new ExtensionSecrets(this.root_path).read(extension_id, version))[name], assert_idle: async (extension_id) => {
+    this.runtime = new ExtensionHost({ city, renderer_protocols: this.renderer_protocols, catalog: this.catalog, host_modules: resolve_extension_host_modules(), invalidate, refresh_agents: (extension_id) => this.refresh_agents(extension_id), secret: async (extension_id, version, name) => (await new ExtensionSecrets(this.root_path).read(extension_id, version))[name], assert_idle: async (extension_id) => {
       const prefix = `ext_${extension_id.replaceAll("-", "")}_`;
       // Downtown 连接由 City Town 独立登记；扩展卸载只检查自身执行租约，不读取全局当前连接。
       for (const config of this.agents.list()) {
@@ -63,10 +63,10 @@ export class ExtensionPlatform {
   power_catalog() { return this.runtime?.power_catalog() ?? []; }
 
   /** 仅当前代次可访问编译资产。 */
-  async renderer_resource(power_id: string, generation: string, resource: string): Promise<Response> { return await this.require_runtime().renderer_resource(power_id, generation, resource); }
+  async renderer_resource(power_id: string, protocol_id: string, generation: string, resource: string): Promise<Response> { return await this.require_runtime().renderer_resource(power_id, protocol_id, generation, resource); }
 
   /** UI 动作必须携带该页面的原运行代次，不允许旧页面调用新实例。 */
-  async invoke_renderer(power_id: string, generation: string, surface: "mainview" | "config", action: string, input?: import("../../power/index.js").PowerJsonValue) { return await this.require_runtime().invoke_renderer(power_id, generation, surface, action, input); }
+  async invoke_renderer(power_id: string, protocol_id: string, generation: string, surface: "mainview" | "config", action: string, input?: import("../../power/index.js").PowerJsonValue) { return await this.require_runtime().invoke_renderer(power_id, protocol_id, generation, surface, action, input); }
 
   /** 项目恢复只发布每个扩展自己的 Town 来源，不恢复全局当前连接。 */
   async restore(): Promise<void> { await this.manager.restore(); }

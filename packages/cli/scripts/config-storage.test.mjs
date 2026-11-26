@@ -19,7 +19,7 @@ function write_power_source(root, input = {}) {
   const main = input.main === null ? undefined : input.main ?? "dist/main.js";
   const renderer_input = input.renderer === null ? undefined : input.renderer ?? "dist/mainview.js";
   const renderer = typeof renderer_input === "string"
-    ? { entry: renderer_input, sidebar: true, mainview: true, config: true }
+    ? { entry: renderer_input, capabilities: { sidebar: true, mainview: true, config: true } }
     : renderer_input;
   const readme_path = input.readme_path === null ? undefined : input.readme_path ?? "README.md";
   fs.writeFileSync(
@@ -41,7 +41,7 @@ function write_power_source(root, input = {}) {
     description,
     ...(readme_path ? { readme: readme_path } : {}),
     ...(main ? { main } : {}),
-    ...(renderer ? { renderer } : {}),
+    ...(renderer ? { renderers: { "downcity.desktop.react.v1": renderer } } : {}),
     ...(input.extra_manifest ?? {}),
   }));
   if (main) {
@@ -229,7 +229,7 @@ test("第三方 Power 使用 definition ID 目录和统一入口协议", async (
     const installed = await installer.install_power(power_source);
     assert.equal(installed.id, "example");
     assert.equal(installed.main, "dist/main.js");
-    assert.deepEqual(installed.renderer, { entry: "dist/mainview.js", sidebar: true, mainview: true, config: true });
+    assert.deepEqual(installed.renderers, { "downcity.desktop.react.v1": { entry: "dist/mainview.js", capabilities: { sidebar: true, mainview: true, config: true } } });
     assert.equal(installed.readme, "README.md");
     assert.match(installed.integrity, /^sha256-[a-f0-9]{64}$/u);
     const power_dir = path.join(platform_root, "powers", "example");
@@ -425,7 +425,7 @@ test("Power 安装拒绝内置 ID、非法清单与逃逸入口", async () => {
   process.env.DC_PLATFORM_ROOT = platform_root;
   try {
     const installer = await import("../bin/city/process/power/PowerInstaller.js");
-    write_power_source(power_source, { id: "chat" });
+    write_power_source(power_source, { id: "notification" });
     await assert.rejects(() => installer.install_power(power_source), /conflicts with builtin/u);
 
     write_power_source(power_source, { extra_manifest: { actions: [] } });
@@ -461,7 +461,7 @@ test("Power 安装拒绝内置 ID、非法清单与逃逸入口", async () => {
       path.join(power_source, "dist", "real.js"),
     );
     fs.symlinkSync("real.js", path.join(power_source, "dist", "main.js"));
-    await assert.rejects(() => installer.install_power(power_source), /main cannot use symlinks/u);
+    await assert.rejects(() => installer.install_power(power_source), /Invalid Power package file/u);
   } finally {
     delete process.env.DC_PLATFORM_ROOT;
     fs.rmSync(platform_root, { recursive: true, force: true });

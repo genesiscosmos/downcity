@@ -29,20 +29,8 @@ export interface ExtensionAgentDefinition {
 /** 标准 Downtown 的稳定条目身份由作者实例提供。 */
 export type ExtensionDowntown = Downtown;
 
-/** Power 与其浏览器源码的唯一绑定，不需要额外清单或独立资源注册。 */
-export interface ExtensionPowerDefinition extends PowerDefinition {
-  /** 项目内浏览器入口与 UI 插槽；宿主独立编译，CLI 不执行浏览器代码。 */
-  readonly renderer?: {
-    /** 浏览器源码相对于项目根的路径。 */
-    entry: string;
-    /** 是否提供工作页面。 */
-    mainview?: boolean;
-    /** 是否提供侧栏。 */
-    sidebar?: boolean;
-    /** 是否提供配置界面。 */
-    config?: boolean;
-  };
-}
+/** 扩展 Power 直接复用通用多协议 Renderer 声明。 */
+export interface ExtensionPowerDefinition extends PowerDefinition {}
 
 /** 单入口的全部导出；不存在逐项注册旁路。 */
 export interface ExtensionProject {

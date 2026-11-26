@@ -1,5 +1,5 @@
 /**
- * Power 浏览器源码独立编译，不执行浏览器入口。相对 import 和资产限定在固定快照内，
+ * Desktop React v1 浏览器源码独立编译，不执行浏览器入口。相对 import 和资产限定在固定快照内，
  * React/DOM/Power SDK 只通过宿主模块桥接；作者 node_modules 中的副本不会进入 bundle。
  */
 import fs from "node:fs/promises";
@@ -19,7 +19,7 @@ export const EXTENSION_BROWSER_MODULES: Readonly<Record<string, string>> = Objec
 });
 
 /** 编译并原子写出浏览器产物，具体入口由唯一项目导出的 Power 对象声明。 */
-export async function compile_extension_renderer(options: ExtensionRendererCompileOptions): Promise<ExtensionRendererArtifact> {
+export async function compile_desktop_react_renderer(options: ExtensionRendererCompileOptions): Promise<ExtensionRendererArtifact> {
   const source = await fs.realpath(options.source_path);
   const requested = path.resolve(source, options.entry);
   if (!inside(source, requested)) throw new ExtensionFailure("renderer_entry_invalid", "Renderer entry must stay inside the project", "compile", 2);

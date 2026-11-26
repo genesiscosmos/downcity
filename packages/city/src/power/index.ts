@@ -7,6 +7,8 @@
 
 export { create_action } from "./runtime.js";
 export { Power } from "./Power.js";
+export { DESKTOP_REACT_RENDERER_PROTOCOL, DESKTOP_RENDERER_PROTOCOLS, select_power_renderer, validate_power_renderers, power_renderer_files } from "./RendererBindings.js";
+export type { PowerRendererBinding, PowerRendererBindings, PowerRendererSelection } from "./types/PowerRendererBinding.js";
 export { export_prompt_power } from "./PromptPower.js";
 export type { PromptPower, PromptPowerAction, PromptPowerCallContext } from "@downcity/type";
 

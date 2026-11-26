@@ -70,3 +70,5 @@ export { TownServiceDispatcher, TOWN_SERVICE_CAPABILITIES } from "./resources/To
 export type { TownResponseOpen, TownResponseChunk } from "./resources/TownServiceDispatcher.js";
 
 export type { ResourceChange } from "./resources/types/ResourceChange.js";
+
+export { calculate_local_power_integrity, read_local_power_package_resource, power_package_files, resolve_power_package_file } from "./runtime/PowerPackageIntegrity.js";

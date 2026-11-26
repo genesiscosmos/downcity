@@ -1,4 +1,6 @@
 /** City 全局 Power Catalog。 */
+import { select_power_renderer, DESKTOP_RENDERER_PROTOCOLS } from "@downcity/city/power";
+
 
 import { list_installed_powers } from "@/city/process/registry/PowerRepository.js";
 import { create_cli_builtin_power_registrations } from "@/city/runtime/AgentAssembly.js";
@@ -28,9 +30,9 @@ export function list_power_catalog(): PowerCatalogItem[] {
     source: "installed" as const,
     source_label: power.source,
     has_main: Boolean(power.main),
-    has_sidebar: power.renderer?.sidebar === true,
-    has_mainview: power.renderer?.mainview === true,
-    has_config: power.renderer?.config === true,
+    has_sidebar: select_power_renderer(power.renderers, DESKTOP_RENDERER_PROTOCOLS)?.binding.capabilities?.sidebar === true,
+    has_mainview: select_power_renderer(power.renderers, DESKTOP_RENDERER_PROTOCOLS)?.binding.capabilities?.mainview === true,
+    has_config: select_power_renderer(power.renderers, DESKTOP_RENDERER_PROTOCOLS)?.binding.capabilities?.config === true,
   }));
   return [...builtin_items, ...installed_items]
     .sort((left, right) => left.power_id.localeCompare(right.power_id));

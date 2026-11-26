@@ -234,6 +234,8 @@ export interface PowerHttpDefinition {
 
 /** City 中一个 PowerDefinition 的 Agent 执行模块。 */
 export interface PowerDefinition {
+  /** 按完整宿主协议声明的静态前端集合，由宿主选择且不影响后端生命周期。 */
+  readonly renderers?: import("./PowerRendererBinding.js").PowerRendererBindings;
   /** PowerDefinition 稳定 ID。 */ readonly name: string;
   /** PowerDefinition 用户可见标题。 */ readonly title: string;
   /** PowerDefinition 用途说明。 */ readonly description: string;

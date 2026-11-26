@@ -7,7 +7,8 @@
  */
 
 import path from "node:path";
-import { createHash } from "node:crypto";
+import { calculate_local_power_integrity } from "./PowerPackageIntegrity.js";
+import { select_power_renderer, DESKTOP_RENDERER_PROTOCOLS } from "../../power/RendererBindings.js";
 import { pathToFileURL } from "node:url";
 import fs from "fs-extra";
 import type {
@@ -95,11 +96,12 @@ export class LocalPowerLoader {
     if (power.name !== definition.id) {
       throw new Error(`Installed Power ID does not match its instance: ${definition.id}`);
     }
+    const renderer = select_power_renderer(definition.renderers, DESKTOP_RENDERER_PROTOCOLS)?.binding.capabilities;
     return {
       readme: resolve_power_path(power_root, definition.readme),
-      has_config: definition.renderer?.config === true,
-      has_sidebar: definition.renderer?.sidebar === true,
-      has_mainview: definition.renderer?.mainview === true,
+      has_config: renderer?.config === true,
+      has_sidebar: renderer?.sidebar === true,
+      has_mainview: renderer?.mainview === true,
       power,
     };
   }
@@ -138,26 +140,7 @@ export async function verify_local_installed_power_integrity(
   power_root: string,
   definition: LocalInstalledPowerDefinition,
 ): Promise<void> {
-  const files = [
-    "package.json",
-    definition.readme,
-    ...[definition.main, definition.renderer?.entry]
-      .filter((item): item is string => Boolean(item)),
-  ];
-  if (definition.icon && !/^https?:\/\//iu.test(definition.icon)) files.push(definition.icon);
-  const hash = createHash("sha256");
-  for (const relative_path of [...files].sort((left, right) => left.localeCompare(right))) {
-    const file_path = resolve_power_path(power_root, relative_path);
-    const stats = await fs.lstat(file_path).catch(() => null);
-    if (!stats?.isFile() || stats.isSymbolicLink()) {
-      throw new Error(`Installed Power file is invalid: ${definition.id}/${relative_path}`);
-    }
-    hash.update(relative_path.split(path.sep).join("/"));
-    hash.update("\0");
-    hash.update(await fs.readFile(file_path));
-    hash.update("\0");
-  }
-  const actual_integrity = `sha256-${hash.digest("hex")}`;
+  const actual_integrity = await calculate_local_power_integrity(power_root, definition);
   if (actual_integrity !== definition.integrity) {
     throw new Error(`Installed Power integrity check failed: ${definition.id}`);
   }

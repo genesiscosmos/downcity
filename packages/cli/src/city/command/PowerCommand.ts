@@ -65,7 +65,7 @@ export function registerPowersCommand(program: Command): void {
         summary: installed.id,
         facts: [
           ...(installed.main ? [{ label: "Main", value: installed.main }] : []),
-          ...(installed.renderer ? [{ label: "Renderer", value: installed.renderer.entry }] : []),
+          ...Object.entries(installed.renderers ?? {}).map(([protocol_id, binding]) => ({ label: protocol_id, value: binding.entry })),
         ],
       });
     });

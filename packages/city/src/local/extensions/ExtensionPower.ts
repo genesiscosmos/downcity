@@ -18,9 +18,12 @@ export class ExtensionPower extends Power {
   readonly hooks: PowerDefinition["hooks"];
   readonly resolves: PowerDefinition["resolves"];
   readonly http: PowerDefinition["http"];
+  /** 原始 Power 的静态宿主协议集合，宿主目录独立保存已校验的选择快照。 */
+  readonly renderers: PowerDefinition["renderers"];
 
   constructor(readonly name: string, private readonly source: PowerDefinition, private readonly gate: ExtensionGate) {
     super();
+    this.renderers = source.renderers;
     this.title = source.title;
     this.description = source.description;
     const hooks = source.hooks;

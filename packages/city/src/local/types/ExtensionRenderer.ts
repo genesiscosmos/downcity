@@ -1,5 +1,5 @@
 /** 扩展浏览器编译产物与宿主目录投影；只描述固定代次，不持有 SDK 实例。 */
-import type { ExtensionPowerDefinition } from "./ExtensionProject.js";
+import type { PowerRendererBindings, PowerRendererSelection } from "../../power/types/PowerRendererBinding.js";
 
 /** 一份受控浏览器编译结果，仅暴露实际输出文件。 */
 export interface ExtensionRendererArtifact {
@@ -25,9 +25,11 @@ export interface ExtensionPowerView {
   generation: string;
   /** 稳定项目身份。 */
   extension_id: string;
-  /** 可选浏览器绑定；未提供时仅有后台功能。 */
-  renderer?: NonNullable<ExtensionPowerDefinition["renderer"]>;
-  /** 根 ESM 路径，只在 renderer 存在时设置。 */
+  /** 原样保留全部协议静态声明，未知协议不编译或执行。 */
+  renderers: PowerRendererBindings;
+  /** 仅宿主已支持且准备完毕的协议；无匹配时只公开后端。 */
+  selected_renderer?: PowerRendererSelection;
+  /** 根 ESM 路径，只在 selected_renderer 已准备好时设置。 */
   entry?: string;
   /** CSS 路径，只指向已编译资源。 */
   styles?: readonly string[];
@@ -41,7 +43,7 @@ export interface ExtensionRendererCompileOptions {
   output_path: string;
   /** 项目内根入口相对路径。 */
   entry: string;
-  /** 与 Power/代次绑定的资源根 URL，资产引用不得相对于宿主页面解析。 */
+  /** 与 Power/协议/代次绑定的资源根 URL，资产引用不得相对于宿主页面解析。 */
   resource_base_url: string;
   /** 宿主浏览器 SDK 的模块地址。 */
   runtime_modules: Readonly<Record<string, string>>;

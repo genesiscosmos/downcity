@@ -6,20 +6,6 @@ import type {
   PowerJsonObject,
 } from "@/power/index.js";
 
-/** Power Renderer 入口及其静态 UI 插槽声明。 */
-export interface LocalPowerRendererDefinition {
-  /** 相对 Power 根目录的 Renderer ESM 入口。 */
-  entry: string;
-  /** Renderer 是否提供 Power 专属 Sidebar。 */
-  sidebar: boolean;
-  /** Renderer 是否提供与 Sidebar 协作的业务 Mainview。 */
-  mainview: boolean;
-  /** Renderer 是否提供独立的设置中心 Config。 */
-  config: boolean;
-  /** Renderer 是否提供回复正文消息组件。 */
-  message?: boolean;
-}
-
 /** 内置与第三方 Power 共享的静态领域定义。 */
 export interface LocalPowerDefinition {
   /** Power 的全局稳定 ID。 */
@@ -80,8 +66,8 @@ export interface LocalInstalledPowerDefinition extends Omit<
   version: string;
   /** 相对 Power 目录的统一 City Power ESM 入口。 */
   main?: string;
-  /** Renderer 入口及其静态 UI 插槽。 */
-  renderer?: LocalPowerRendererDefinition;
+  /** 完整宿主协议到预构建入口、能力与运行文件的静态映射。 */
+  renderers?: import("../../power/types/PowerRendererBinding.js").PowerRendererBindings;
   /** 可供更新命令重放的规范化来源。 */
   source: string;
   /** Git 来源解析得到的 commit SHA。 */
@@ -101,3 +87,6 @@ export interface LocalPowerConfig {
   /** 当前 Power 拥有的唯一配置。 */
   config: PowerJsonObject;
 }
+
+/** 安装摘要使用的静态清单，不包含来源、配置或安装时间。 */
+export type LocalPowerPackageManifest = Pick<LocalInstalledPowerDefinition, "id" | "version" | "main" | "readme" | "icon" | "renderers">;

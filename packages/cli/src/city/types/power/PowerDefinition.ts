@@ -35,8 +35,8 @@ export interface PowerPackageDefinition extends Omit<
   /** 相对来源目录的统一 City Power ESM 入口。 */
   main?: string;
 
-  /** Renderer 入口及其静态 Sidebar、Mainview 与 Config 插槽。 */
-  renderer?: import("@downcity/city/local").LocalPowerRendererDefinition;
+  /** 完整宿主协议到预构建入口、能力及逐文件资源声明的映射。 */
+  renderers?: import("@downcity/city/power").PowerRendererBindings;
 }
 
 /** 已安装 Power 的管理视图。 */

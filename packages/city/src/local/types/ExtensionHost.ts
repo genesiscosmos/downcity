@@ -19,6 +19,8 @@ export interface ExtensionHostOptions {
   city: City;
   /** 当前实际 SDK 模块映射，用于恢复前检查快照绑定。 */
   host_modules: Readonly<Record<string, string>>;
+  /** 宿主支持且有实际适配器的协议，按选择优先级排列；默认无前端。 */
+  renderer_protocols?: readonly string[];
   /** 共享能力目录。 */
   catalog: ExtensionCatalog;
   /** 查询宿主中 Agent 活跃执行、连接绑定与其他真实借用引用。 */
