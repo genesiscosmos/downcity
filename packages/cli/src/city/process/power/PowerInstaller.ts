@@ -8,11 +8,10 @@
 import path from "node:path";
 import { randomUUID } from "node:crypto";
 import fs from "fs-extra";
-import { execa } from "execa";
 import { validate_power_renderers, DESKTOP_REACT_RENDERER_PROTOCOL } from "@downcity/city/power";
-import { calculate_local_power_integrity, power_package_files, resolve_power_package_file, get_local_power_path, RootLease, resolve_resource_root } from "@downcity/city/local";
+import { calculate_local_power_integrity, power_package_files, resolve_power_package_file, get_local_power_path, RootLease, resolve_resource_root, PowerRepository, LocalDatabase, ExtensionRepository } from "@downcity/city/local";
+import { with_power_source, type PreparedPowerSource } from "./PowerSource.js";
 import {
-  get_installed_power,
   is_builtin_power,
   normalize_power_id,
 } from "@/city/process/registry/PowerRepository.js";
@@ -21,7 +20,6 @@ import {
   POWER_DEFINITION_SCHEMA_VERSION,
   type InstalledPower,
   type PowerPackageDefinition,
-  type ResolvedPowerSource,
 } from "@/city/types/power/PowerDefinition.js";
 
 const POWER_CONFIG_FILE_NAME = "config.toml";
@@ -31,38 +29,34 @@ const POWER_PACKAGE_FILE_NAME = "package.json";
 export async function install_power(
   source_input: string,
   expected_power_id?: string,
+  root?: string,
+  ref?: string,
 ): Promise<InstalledPower> {
-  const source = await resolve_power_source(source_input);
-  const root_path = resolve_resource_root();
+  return await with_power_source(source_input, ref, async (source) => await install_prepared_power(source, root, expected_power_id));
+}
+
+/** 使用已探测的固定来源安装单包，统一入口无需再次下载。 */
+export async function install_prepared_power(source: PreparedPowerSource, root?: string, expected_power_id?: string): Promise<InstalledPower> {
+  const root_path = resolve_resource_root(root);
   const lease = RootLease.acquire_write(root_path);
   try { return await install_owned_power(source, root_path, expected_power_id); }
   finally { lease.release(); }
 }
 
 /** 安装/更新在离线写租约内替换完整制品，不能与运行 Power 或配置写入交错。 */
-async function install_owned_power(source: ResolvedPowerSource, root_path: string, expected_power_id?: string): Promise<InstalledPower> {
+async function install_owned_power(source: PreparedPowerSource, root_path: string, expected_power_id?: string): Promise<InstalledPower> {
   const powers_root = path.join(root_path, "powers");
   await fs.ensureDir(powers_root, { mode: 0o700 });
-  const source_dir = path.join(powers_root, `.source-${randomUUID()}`);
   const staging_dir = path.join(powers_root, `.install-${randomUUID()}`);
   const backup_dir = path.join(powers_root, `.backup-${randomUUID()}`);
-  let revision: string | undefined;
+  const repository = new PowerRepository(root_path);
+  const power_root = source.directory;
+  const revision = source.revision;
 
   try {
-    let power_root = source.local_path;
-    if (!power_root) {
-      const clone_arguments = ["clone", "--depth", "1"];
-      if (source.git_ref) clone_arguments.push("--branch", source.git_ref);
-      clone_arguments.push(source.git_url!, source_dir);
-      await execa("git", clone_arguments, { stdio: "pipe" });
-      const revision_result = await execa("git", ["rev-parse", "HEAD"], {
-        cwd: source_dir,
-        stdio: "pipe",
-      });
-      revision = revision_result.stdout.trim() || undefined;
-      power_root = source_dir;
+    if (await fs.pathExists(path.join(power_root, "downcity.ts")) || await fs.pathExists(path.join(power_root, "downcity.js"))) {
+      throw new Error("Power source is ambiguous: provide either power.json or downcity.ts/downcity.js at its root");
     }
-
     await assert_power_package_file(
       power_root,
       POWER_DEFINITION_FILE_NAME,
@@ -86,6 +80,9 @@ async function install_owned_power(source: ResolvedPowerSource, root_path: strin
     if (is_builtin_power(definition.id)) {
       throw new Error(`Power ID conflicts with builtin Power: ${definition.id}`);
     }
+    if (/^ext_[a-f\d]{32}_power_[a-f\d]{16}$/u.test(definition.id)) {
+      throw new Error(`Power ID uses the reserved code runtime namespace: ${definition.id}`);
+    }
     await fs.ensureDir(staging_dir, { mode: 0o700 });
     for (const relative_path of power_package_files(definition)) {
       const source_path = await resolve_power_package_file(power_root, relative_path);
@@ -95,7 +92,17 @@ async function install_owned_power(source: ResolvedPowerSource, root_path: strin
       await fs.chmod(installed_path, 0o600);
     }
     const integrity = await calculate_local_power_integrity(staging_dir, definition);
-    const existing = get_installed_power(definition.id);
+    const database_path = path.join(root_path, "downcity.db");
+    if (await fs.pathExists(database_path)) {
+      const database = new LocalDatabase({ filename: database_path, read_only: true, immutable: true });
+      try {
+        if (new ExtensionRepository(database).get(definition.id)) throw new Error(`Power ID conflicts with an installed code source: ${definition.id}`);
+      } finally { database.close(); }
+    }
+    const existing = repository.get_installed(definition.id);
+    if (existing && !expected_power_id && existing.source !== source.source) {
+      throw new Error(`Power ID already belongs to another source: ${definition.id}; use update or uninstall explicitly`);
+    }
     const target_dir = get_local_power_path(root_path, definition.id);
     const existing_config = path.join(target_dir, POWER_CONFIG_FILE_NAME);
     if (await fs.pathExists(existing_config)) {
@@ -104,7 +111,7 @@ async function install_owned_power(source: ResolvedPowerSource, root_path: strin
     const current_time = new Date().toISOString();
     const installed: InstalledPower = {
       ...definition,
-      source: source.normalized_source,
+      source: source.source,
       ...(revision ? { revision } : {}),
       integrity,
       installed_at: existing?.installed_at ?? current_time,
@@ -127,18 +134,17 @@ async function install_owned_power(source: ResolvedPowerSource, root_path: strin
     await fs.remove(backup_dir);
     return installed;
   } finally {
-    await fs.remove(source_dir);
     await fs.remove(staging_dir);
     await fs.remove(backup_dir);
   }
 }
 
 /** 使用 Power 自己保存的来源更新目录。 */
-export async function update_power(power_id_input: string): Promise<InstalledPower> {
+export async function update_power(power_id_input: string, root?: string): Promise<InstalledPower> {
   const power_id = normalize_power_id(power_id_input);
-  const power = get_installed_power(power_id);
+  const power = new PowerRepository(resolve_resource_root(root)).get_installed(power_id);
   if (!power) throw new Error(`Power is not installed: ${power_id}`);
-  return await install_power(power.source, power_id);
+  return await install_power(power.source, power_id, root);
 }
 
 /** 读取并严格验证 Power 根目录中的唯一静态定义。 */
@@ -270,41 +276,6 @@ export function resolve_power_path(
     throw new Error(`Power ${label} must stay inside the Power directory`);
   }
   return resolved;
-}
-
-/** 解析 local、Git URL 与 GitHub shorthand。 */
-async function resolve_power_source(source_input: string): Promise<ResolvedPowerSource> {
-  const source = String(source_input || "").trim();
-  if (!source) throw new Error("Power source is required");
-  const local_path = path.resolve(source);
-  if (await fs.pathExists(local_path)) {
-    if (!(await fs.stat(local_path)).isDirectory()) {
-      throw new Error("Local Power source must be a directory");
-    }
-    return { normalized_source: local_path, local_path };
-  }
-  const github_match = /^github:([A-Za-z0-9_.-]+)\/([A-Za-z0-9_.-]+?)(?:#(.+))?$/u.exec(source);
-  if (github_match) {
-    const owner = github_match[1]!;
-    const repository = github_match[2]!.replace(/\.git$/u, "");
-    const git_ref = github_match[3]?.trim() || undefined;
-    return {
-      normalized_source: `github:${owner}/${repository}${git_ref ? `#${git_ref}` : ""}`,
-      git_url: `https://github.com/${owner}/${repository}.git`,
-      ...(git_ref ? { git_ref } : {}),
-    };
-  }
-  const fragment_index = source.lastIndexOf("#");
-  const git_url = fragment_index > 0 ? source.slice(0, fragment_index) : source;
-  const git_ref = fragment_index > 0 ? source.slice(fragment_index + 1).trim() : "";
-  if (!/^(?:https?:\/\/|ssh:\/\/|git@)[^\s]+$/u.test(git_url)) {
-    throw new Error("Power source must be a local directory, Git URL, or github:owner/repo#ref");
-  }
-  return {
-    normalized_source: `${git_url}${git_ref ? `#${git_ref}` : ""}`,
-    git_url,
-    ...(git_ref ? { git_ref } : {}),
-  };
 }
 
 /**

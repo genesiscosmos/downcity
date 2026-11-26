@@ -39,6 +39,7 @@ Downcity 为 Agent、模型、工具、任务、记忆和权限提供一套可�
 - 通过 CLI 或 SDK 创建 Session、发送消息和查看历史。
 - 通过 `downcity towns` 管理独立的 Downtown 连接，发现模型与服务。
 - 将 Workspace 的文件/Shell 工具与内建、自定义 Power 组合使用。
+- 通过 `city power install` 安装预构建包或本地/Git 代码来源，统一使用 `list`、`inspect`、`config`、`reload`、`update`、`uninstall` 和 `action` 管理。操作使用稳定 `power_id`，统一列表显示安装形态、来源和实际状态。代码来源还可提供 Agent 定义、模型及 Downtown 连接，详见 [Power 管理](https://downcity.ai/zh/docs/cli/powers)。
 
 ## 平台支持
 

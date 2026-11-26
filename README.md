@@ -40,6 +40,7 @@ Downcity provides a reusable runtime for Agents, models, tools, tasks, memory, a
 - Create Sessions, send messages, and inspect history through the CLI or SDK.
 - Use `downcity towns` to manage independent Downtown connections and discover models and services.
 - Combine Workspace file/Shell tools with built-in and application-defined Powers.
+- Use `city power install` for prebuilt packages or local/Git code sources, then manage them through one `list`, `inspect`, `config`, `reload`, `update`, `uninstall`, and `action` entry point. Operations use the stable `power_id`; the unified list reports installation form, source and observed state. Code sources can also publish Agent definitions, models and Downtown connections. See [Power management](https://downcity.ai/docs/cli/powers).
 
 ## Platform Support
 

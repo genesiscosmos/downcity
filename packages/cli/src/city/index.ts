@@ -17,7 +17,6 @@ import { register_city_token_command } from "@/city/command/TokenCommand.js";
 import { register_city_remote_command } from "@/city/command/RemoteCommand.js";
 import { registerAgentCommands } from "@/city/command/AgentCommand.js";
 import { register_workspace_commands, register_session_commands } from "./command/ResourceCommands.js";
-import { register_extension_commands } from "./command/ExtensionCommands.js";
 import { registerGatewayCommands } from "@/city/command/GatewayCommand.js";
 import { registerPowersCommand } from "@/city/command/PowerCommand.js";
 import { runInteractiveCityManager } from "@/city/shared/CityManager.js";
@@ -96,7 +95,6 @@ export function registerCityCommands(program: Command): void {
     version: packageJson.version,
     cliPath: cli_path,
   });
-  register_extension_commands(program);
   register_workspace_commands(program);
   register_session_commands(program);
   registerAgentCommands(program, {
@@ -126,7 +124,7 @@ export async function runDowncityCli(): Promise<void> {
   const cli_locale = resolveCliLocale({
     argv,
     // 资源命令在发现/租约前不能打开会初始化 DB 的全局配置读取。
-    persisted_locale: argv.some((item) => ["agent", "workspace", "session", "extension", "token", "env", "power", "on", "off", "restart", "status", "--help", "--version"].includes(item)) ? undefined : read_persisted_downcity_cli_locale(),
+    persisted_locale: argv.some((item) => ["agent", "workspace", "session", "token", "env", "power", "on", "off", "restart", "status", "--help", "--version"].includes(item)) ? undefined : read_persisted_downcity_cli_locale(),
   });
   setCliLocale(cli_locale);
 
@@ -182,7 +180,7 @@ export async function runDowncityCli(): Promise<void> {
     else if (opts.verbose) setCliVerbosity("verbose");
   });
 
-  const resource_json = argv.includes("--json") && argv.some((item) => ["agent", "workspace", "session"].includes(item));
+  const resource_json = argv.includes("--json") && argv.some((item) => ["agent", "workspace", "session", "power"].includes(item));
   if (resource_json) {
     const configure_json_errors = (command: Command): void => {
       command.exitOverride();

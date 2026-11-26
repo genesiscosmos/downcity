@@ -11,18 +11,6 @@ export const POWER_DEFINITION_FILE_NAME = "power.json";
 /** 当前支持的 Power 文件协议版本。 */
 export const POWER_DEFINITION_SCHEMA_VERSION = 1;
 
-/** 安装器解析后的 Power 来源。 */
-export interface ResolvedPowerSource {
-  /** 保存后可供 update 重放的规范化来源。 */
-  normalized_source: string;
-  /** 本地目录绝对路径。 */
-  local_path?: string;
-  /** Git clone 使用的仓库 URL。 */
-  git_url?: string;
-  /** 可选 Git branch 或 tag。 */
-  git_ref?: string;
-}
-
 /** 来源目录 `power.json` 必须声明的可安装 Power 包。 */
 export interface PowerPackageDefinition extends Omit<
   LocalPowerDefinition,

@@ -1,21 +1,14 @@
 /** City Power 的交互式制品管理器。 */
 
 import prompts from "@/city/tui/Prompts.js";
-import {
-  remove_installed_power,
-} from "@/city/process/registry/PowerRepository.js";
-import {
-  resolve_power_catalog_item,
-  list_power_catalog,
-} from "@/city/process/power/PowerCatalog.js";
-import { install_power, update_power } from "@/city/process/power/PowerInstaller.js";
+import { PowerManagement, type ManagedPower } from "./PowerManagement.js";
 import { emitCliBlock } from "@/shared/CliReporter.js";
-import type { PowerCatalogItem } from "@/city/types/power/PowerCatalog.js";
 
 /** 打开 City 全局 Power 管理器。 */
 export async function run_interactive_power_manager(): Promise<void> {
   while (true) {
-    const catalog = list_power_catalog();
+    const manager = new PowerManagement();
+    const catalog = await manager.list();
     const response = await prompts({
       type: "select",
       name: "selection",
@@ -23,7 +16,7 @@ export async function run_interactive_power_manager(): Promise<void> {
       choices: [
         ...catalog.map((power) => ({
           title: power.title,
-          description: [power.power_id, power.source, power.version].filter(Boolean).join(" · "),
+          description: [power.power_id, power.kind, power.status].join(" · "),
           value: `power:${power.power_id}`,
         })),
         { title: "操作", disabled: true },
@@ -38,21 +31,21 @@ export async function run_interactive_power_manager(): Promise<void> {
       continue;
     }
     const power_id = selection.startsWith("power:") ? selection.slice(7) : "";
-    const power = await resolve_power_catalog_item(power_id);
+    const power = await manager.resolve(power_id);
     if (power) await run_interactive_power_actions(power);
   }
 }
 
 /** 管理一个 Power 的全局配置与制品。 */
-async function run_interactive_power_actions(power: PowerCatalogItem): Promise<void> {
+async function run_interactive_power_actions(power: ManagedPower): Promise<void> {
   const response = await prompts({
     type: "select",
     name: "action",
     message: power.title,
     subtitle: power.description,
     choices: [
-      ...(power.has_config ? [{ title: "配置说明", description: "使用 downcity power config 读写独立 Config", value: "config" }] : []),
-      ...(power.source === "installed"
+      { title: "配置说明", description: "使用 city power config 管理配置", value: "config" },
+      ...(power.kind !== "builtin"
         ? [
             { title: "更新", description: "从已保存来源更新 Power", value: "update" },
             { title: "卸载", description: "删除本地 Power 制品", value: "uninstall" },
@@ -66,12 +59,12 @@ async function run_interactive_power_actions(power: PowerCatalogItem): Promise<v
       tone: "info",
       title: "Power config",
       summary: power.power_id,
-      note: "使用 downcity power config --set 写入配置；配置由 City 持有，对所有 Agent 生效。",
+      note: `使用 city power config ${power.power_id} --set 写入完整配置。代码来源的配置需通过 city power reload 应用。`,
     });
   }
   if (response.action === "update") {
-    const installed = await update_power(power.power_id);
-    emitCliBlock({ tone: "success", title: "Power updated", summary: installed.id });
+    const installed = await new PowerManagement().refresh(power.power_id);
+    emitCliBlock({ tone: installed.details?.error ? "error" : "info", title: `Power ${installed.status}`, summary: installed.power_id });
   }
   if (response.action === "uninstall") {
     const confirmed = await prompts({
@@ -81,8 +74,8 @@ async function run_interactive_power_actions(power: PowerCatalogItem): Promise<v
       initial: false,
     });
     if (confirmed.confirmed === true) {
-      const removed = remove_installed_power(power.power_id);
-      emitCliBlock({ tone: "success", title: "Power uninstalled", summary: removed.id });
+      const removed = await new PowerManagement().uninstall(power.power_id);
+      emitCliBlock({ tone: removed.details?.error ? "error" : "info", title: `Power ${removed.status}`, summary: removed.power_id });
     }
   }
 }
@@ -104,6 +97,6 @@ async function run_interactive_install(): Promise<void> {
     initial: false,
   });
   if (trust_response.trusted !== true) return;
-  const installed = await install_power(source);
-  emitCliBlock({ tone: "success", title: "Power installed", summary: installed.id });
+  const installed = await new PowerManagement().install(source);
+  emitCliBlock({ tone: installed.details?.error ? "error" : "info", title: `Power ${installed.status}`, summary: installed.power_id });
 }

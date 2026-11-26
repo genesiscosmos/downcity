@@ -1,27 +1,20 @@
 /**
- * `downcity power` 命令树。
+ * `city power` 统一命令树。
  *
- * Power 以稳定 ID 管理，唯一配置保存于 Power 自己的 `config.toml`。
+ * 内置能力、单包制品和代码来源共用管理身份与操作路由；底层快照协议保留职责边界。
  */
 
 import type { Command } from "commander";
-import type { JsonObject, JsonValue } from "@downcity/agent";
+import type { JsonValue } from "@downcity/agent";
+import { randomUUID } from "node:crypto";
+import { PowerManagement, code_power_view } from "../process/power/PowerManagement.js";
+import { power_options, run_power_command, type PowerCommandOptions } from "./PowerCommandSupport.js";
+import { register_power_configuration } from "./PowerConfiguration.js";
+import type { ExtensionManager } from "@downcity/city/local";
 import { resolve_cli_agent_target } from "@/city/agent/AgentSelection.js";
 import { callServer } from "@/city/process/daemon/Client.js";
-import {
-  get_installed_power,
-  get_power_config,
-  remove_installed_power,
-  save_power_config,
-} from "@/city/process/registry/PowerRepository.js";
-import { install_power, update_power } from "@/city/process/power/PowerInstaller.js";
-import {
-  resolve_power_catalog_item,
-  list_power_catalog,
-} from "@/city/process/power/PowerCatalog.js";
 import { run_interactive_power_manager } from "@/city/process/power/InteractivePowerManager.js";
 import { printResult } from "@/city/utils/cli/CliOutput.js";
-import { emitCliBlock, emitCliList } from "@/shared/CliReporter.js";
 import { helpText, t } from "@/shared/CliLocale.js";
 import { parsePort } from "@/shared/IndexSupport.js";
 
@@ -50,90 +43,43 @@ export function registerPowersCommand(program: Command): void {
     .helpOption("--help", helpText())
     .action(() => power.outputHelp());
 
-  power.command("list")
-    .option("--json", t({ zh: "以 JSON 输出", en: "output as JSON" }))
-    .helpOption("--help", helpText())
-    .action((options: { json?: boolean }) => print_power_list(options.json === true));
+  power_options(power.command("list"))
+    .action(async (options: PowerCommandOptions) => await run_power_command(options, async () => ({ powers: await new PowerManagement(options.root).list() })));
 
-  power.command("install <source>")
-    .helpOption("--help", helpText())
-    .action(async (source: string) => {
-      const installed = await install_power(source);
-      emitCliBlock({
-        tone: "success",
-        title: "Power installed",
-        summary: installed.id,
-        facts: [
-          ...(installed.main ? [{ label: "Main", value: installed.main }] : []),
-          ...Object.entries(installed.renderers ?? {}).map(([protocol_id, binding]) => ({ label: protocol_id, value: binding.entry })),
-        ],
-      });
-    });
+  power_options(power.command("install <source>"), true)
+    .option("--ref <ref>", "Git branch, tag or commit")
+    .action(async (source: string, options: PowerCommandOptions) => await run_power_command(options, async () => ({ power: await new PowerManagement(options.root).install(source, options.ref, options.operationId ?? randomUUID()) })));
 
-  power.command("update <power_id>")
-    .helpOption("--help", helpText())
-    .action(async (power_id: string) => {
-      const installed = await update_power(power_id);
-      emitCliBlock({
-        tone: "success",
-        title: "Power updated",
-        summary: installed.id,
-        facts: [{ label: "Integrity", value: installed.integrity }],
-      });
-    });
+  for (const method of ["update", "reload", "uninstall"] as const) {
+    power_options(power.command(`${method} <power_id>`), true)
+      .action(async (power_id: string, options: PowerCommandOptions) => await run_power_command(options, async () => {
+        const manager = new PowerManagement(options.root);
+        const operation_id = options.operationId ?? randomUUID();
+        return { power: method === "uninstall" ? await manager.uninstall(power_id, operation_id) : await manager.refresh(power_id, operation_id) };
+      }));
+  }
 
-  power.command("uninstall <power_id>")
-    .helpOption("--help", helpText())
-    .action((power_id: string) => {
-      const removed = remove_installed_power(power_id);
-      emitCliBlock({ tone: "success", title: "Power uninstalled", summary: removed.id });
-    });
+  power_options(power.command("inspect <power_id>"))
+    .action(async (power_id: string, options: PowerCommandOptions) => await run_power_command(options, async () => ({ power: await new PowerManagement(options.root).inspect(power_id), inspected: true })));
 
-  power.command("inspect <power_id>")
-    .option("--json", t({ zh: "以 JSON 输出", en: "output as JSON" }))
-    .helpOption("--help", helpText())
-    .action(async (power_id: string, options: { json?: boolean }) => {
-      const catalog = await resolve_power_catalog_item(power_id);
-      if (!catalog) throw new Error(`Power not found: ${power_id}`);
-      const installed = get_installed_power(power_id);
-      printResult({
-        type: "block",
-        asJson: options.json === true,
-        success: true,
-        title: "power",
-        data: { power: { ...catalog, ...(installed ?? {}) } },
-      });
-    });
+  for (const method of ["definitions", "connections"] as const) {
+    power_options(power.command(method))
+      .action(async (options: PowerCommandOptions) => await run_power_command(options, async () => await new PowerManagement(options.root).code.call(`extension.${method}`)));
+  }
+  power_options(power.command("operation <operation_id>"))
+    .action(async (operation_id: string, options: PowerCommandOptions) => await run_power_command(options, async () => {
+      const operation = await new PowerManagement(options.root).code.call("extension.operation", { operation_id }) as ReturnType<ExtensionManager["operation"]>;
+      return operation ? { operation_id: operation.operation_id, power_id: operation.extension_id, power: operation.result ? code_power_view(operation.result) : null } : { operation_id, found: false };
+    }));
 
-  register_config_command(power);
+  register_power_configuration(power);
   register_action_command(power);
-}
-
-/** 注册 Power 唯一配置命令。 */
-function register_config_command(power: Command): void {
-  power.command("config <power_id>")
-    .option("--set <json>", t({ zh: "替换完整 Power 配置 JSON", en: "replace the complete Power config JSON" }))
-    .option("--json", t({ zh: "以 JSON 输出", en: "output as JSON" }))
-    .helpOption("--help", helpText())
-    .action(async (
-      power_id: string,
-      options: { set?: string; json?: boolean },
-    ) => {
-      const catalog = await resolve_power_catalog_item(power_id);
-      if (!catalog) throw new Error(`Power not found: ${power_id}`);
-      if (options.set) {
-        const config = parse_json_object(options.set, "config");
-        const saved = await save_power_config(power_id, config);
-        print_config_status(power_id, saved, options.json === true);
-        return;
-      }
-      print_config_status(power_id, get_power_config(power_id), options.json === true);
-    });
 }
 
 /** 注册运行中 Agent 的 Action 调用命令。 */
 function register_action_command(power: Command): void {
   power.command("action <power_id> <action_name> [agent_id]")
+    .option("--entry <entry_id>", "Runtime entry from power inspect")
     .option("--input <json>", t({ zh: "Action 输入 JSON", en: "Action input JSON" }))
     .option("--host <host>", t({ zh: "覆盖 Gateway host", en: "override Gateway host" }))
     .option("--port <port>", t({ zh: "覆盖 Gateway port", en: "override Gateway port" }), parsePort)
@@ -146,14 +92,23 @@ function register_action_command(power: Command): void {
       action_name: string,
       agent_id: string | undefined,
       options: {
+        /** Action 输入 JSON。 */
         input?: string;
+        /** 显式远端 Gateway 地址。 */
         host?: string;
+        /** 显式 Gateway 端口。 */
         port?: number;
+        /** 执行 Workspace ID 或路径。 */
         workspace?: string;
+        /** Agent 的 Gateway 访问令牌。 */
         token?: string;
+        /** 唯一 JSON 输出模式。 */
         json?: boolean;
+        /** 从 inspect 选择的运行入口 ID。 */
+        entry?: string;
       },
-    ) => {
+    ) => await run_power_command(options, async () => {
+      const runtime_power_id = await new PowerManagement().action_target(power_id, options.entry);
       const target = await resolve_cli_agent_target(agent_id, options.workspace);
       const remote = await callServer<PowerActionHttpResponse>({
         agent_id: target.agent_id,
@@ -165,7 +120,7 @@ function register_action_command(power: Command): void {
         port: options.port,
         authToken: options.token,
         body: {
-          power_name: power_id,
+          power_name: runtime_power_id,
           action_name,
           ...(options.input ? { payload: JSON.parse(options.input) as JsonValue } : {}),
         },
@@ -180,61 +135,12 @@ function register_action_command(power: Command): void {
           agent_id: target.agent_id,
           workspace_id: target.workspace_id,
           power_id,
+          entry_id: runtime_power_id,
           action_name,
           ...(result?.data !== undefined ? { data: result.data } : {}),
           ...(result?.message ? { message: result.message } : {}),
           ...(!remote.success || result?.error ? { error: result?.error ?? remote.error } : {}),
         },
       });
-    });
-}
-
-/** 输出 Power Catalog。 */
-async function print_power_list(as_json: boolean): Promise<void> {
-  const catalog = list_power_catalog();
-  if (as_json) {
-    printResult({ type: "block", asJson: true, success: true, title: "powers", data: { powers: catalog } });
-    return;
-  }
-  emitCliList({
-    tone: "accent",
-    title: "Powers",
-    summary: `${catalog.length} powers`,
-    items: catalog.map((item) => ({
-      title: item.title === item.power_id ? item.power_id : `${item.title} (${item.power_id})`,
-      facts: [
-        { label: "Description", value: item.description },
-        { label: "Source", value: item.source },
-        { label: "Config panel", value: item.has_config ? "separate" : "in workspace" },
-      ],
-    })),
-  });
-}
-
-/** 输出配置状态，不把 Power 私有配置或凭据写到终端。 */
-function print_config_status(
-  power_id: string,
-  config: JsonObject,
-  as_json: boolean,
-): void {
-  printResult({
-    type: "block",
-    asJson: as_json,
-    success: true,
-    title: "power config",
-    data: {
-      power_id,
-      configured: Object.keys(config).length > 0,
-      fields: Object.keys(config).sort(),
-    },
-  });
-}
-
-/** 解析并要求 JSON 对象。 */
-function parse_json_object(input: string, label: string): JsonObject {
-  const value = JSON.parse(input) as unknown;
-  if (!value || typeof value !== "object" || Array.isArray(value)) {
-    throw new Error(`${label} must be a JSON object`);
-  }
-  return value as JsonObject;
+    }));
 }

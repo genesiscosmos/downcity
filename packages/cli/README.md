@@ -153,11 +153,31 @@ CLI 从本地产品配置装配的 Agent 默认启用 `ask_user` Tool。使用
 提交前确认私密值数量、名称及覆盖同名值。明文只保存在当前 Session 内存中，释放或重启后丢失。
 缺少专用私密提交接口的远程传输会拒绝收集私密表单，请使用 Desktop 或本地 Session。
 
-Agent 定义保存在 `~/.downcity/agents/<agent_id>/agent.json` 和 `SOUL.md`；创建独立于项目登记，不初始化项目资产。`downcity.db` 保存 Workspace、Token 和平台状态，Power 使用 `powers/<power_id>/config.toml`。Session 属于 Agent，地址包含 Agent/category/Session ID。项目登记缺失时历史仍可读，执行拒绝。默认配置更新作用于新 Session，保留已有快照与覆盖。
+Agent 定义保存在 `~/.downcity/agents/<agent_id>/agent.json` 和 `SOUL.md`；创建独立于项目登记，不初始化项目资产。`downcity.db` 保存 Workspace、Token 和平台状态，内置和单包 Power 使用 `powers/<power_id>/config.toml`，代码来源保留独立版本化配置。Session 属于 Agent，地址包含 Agent/category/Session ID。项目登记缺失时历史仍可读，执行拒绝。默认配置更新作用于新 Session，保留已有快照与覆盖。
 
 CLI 与 Desktop 在同一 root 下互斥持有执行权，资源命令连接经核对的当前宿主；不自动启动或接管宿主。无宿主可配置管理和无副作用历史浏览，执行、创建、停止和归档 Session 需要显式启动。资源命令支持 `--root`、`--json`、`--timeout`；JSON stdout 为单个 schema_version=1 envelope，含 success/command/data/error/meta。退出码：0 成功、1 内部错误、2 参数、3 不存在、4 冲突、5 宿主/能力、6 权限、7 超时、8 Turn 失败/停止、9 部分失败、130 取消。`--no-wait` 后执行由宿主持有，超时/客户端退出不停止 Turn。
 
 `city agent delete ID --yes` 永久删除 Agent 自有 scope（含 Session/归档/附件/skills/日志/Power 数据），有工作或强引用时拒绝。`city workspace remove ID --yes` 只移除登记和空闲运行资源，保留工程与历史。完整说明见 [资源管理](https://downcity.ai/zh/docs/cli/resources)。
+
+`city power` 统一管理内置能力、预构建单包和本地/Git 代码来源。一个代码来源可以提供 Power、Agent 定义、模型与 Downtown 连接。`list` 返回统一列表，包含稳定 `power_id`、安装形态、来源及状态；显示名可重复，管理操作使用完整 ID。
+
+```sh
+city power install ./notes-power --json
+city power install github:owner/repository --ref main --json
+city power list --json
+city power inspect <power_id> --json
+city power config <power_id> --configuration-file ./configuration.json --json
+city power reload <power_id> --json
+city power update <power_id> --json
+city power uninstall <power_id> --json
+city power definitions --json
+city power connections --json
+city power operation <operation_id> --json
+```
+
+根目录的 `power.json` 标识预构建单包，`downcity.ts` / `downcity.js` 标识代码来源，同时出现时拒绝歧义。单包沿用定义 ID，制品替换需要离线写租约。代码来源沿用来源 UUID；在线交给已有宿主，离线只准备快照并返回 `pending`，不会执行入口或启动 City。代码配置保存后需 reload 应用；秘密字段用 `--secrets-stdin` 提交。`inspect` 展示代码来源的活动运行入口，Action 有多个入口时使用 `--entry`。代码卸载保留身份、配置和 data，单包卸载删除其管理目录。同 ID 不同来源的安装会被拒绝。
+
+Power management also uses `city power` for built-ins, prebuilt packages, and code sources. Use the exact `power_id` from the unified list for configuration and lifecycle operations. Offline code installation only prepares snapshots; online operations use the discovered host. See [Power management](https://downcity.ai/docs/cli/powers) / [Power 管理](https://downcity.ai/zh/docs/cli/powers) for JSON output, private configuration and Action routing.
 
 CLI City 只维护一个 daemon，并分别监听一个 HTTP 端口和一个原生 TCP RPC 端口。两种协议都按 `agent_id` 路由，不为每个 Agent 分配独立端口。
 

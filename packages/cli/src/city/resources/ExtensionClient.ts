@@ -23,9 +23,9 @@ export class ExtensionClient {
       try { return await client.call(method, input, { timeout_ms: 360000 }); }
       finally { await client.close(); }
     }
-    const readonly = ["extension.list", "extension.show", "extension.operation", "extension.configuration", "extension.definitions", "extension.connections"].includes(method);
+    const readonly = ["extension.list", "extension.show", "extension.operation", "extension.configuration", "extension.definitions", "extension.connections", "extension.powers"].includes(method);
     if (readonly && !fs.existsSync(path.join(this.root_path, "downcity.db"))) {
-      if (method === "extension.list") return [];
+      if (["extension.list", "extension.powers"].includes(method)) return [];
       throw new ExtensionFailure("project_not_found", "Extension project was not found", "source", 2);
     }
     if (["extension.definitions", "extension.connections", "extension.select_connection"].includes(method)) throw new ExtensionFailure("host_required", "Capability selection requires a running host; offline commands never execute entries", "host", 5);

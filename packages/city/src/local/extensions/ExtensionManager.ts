@@ -52,6 +52,8 @@ export class ExtensionManager {
       const existing = this.repository.find_source(source.identity);
       if (existing && existing.status !== "removed") return this.result(existing);
       const extension_id = existing?.extension_id ?? randomUUID();
+      const package_exists = await fs.access(path.join(this.options.root_path, "powers", extension_id, "power.json")).then(() => true, () => false);
+      if (package_exists) throw new ExtensionFailure("power_id_conflict", "Power ID conflicts with an installed package", "source", 2);
       const record = existing ?? this.new_record(extension_id, source);
       return await this.mutate(record, "add", operation_id, source.identity, async () => await this.prepare(record));
     } finally { this.adding = false; }
