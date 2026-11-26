@@ -190,6 +190,8 @@ export type ShellExecRequest = {
   reason?: string;
   /** 显式指定 owner session_id。 */
   owner_context_id?: string;
+  /** 可信执行上下文登记的完整来源；一次性执行不启用后台回投。 */
+  completion_target?: import("./ShellRuntime.js").ShellCompletionTarget;
   /** 显式指定当前 turn id。 */
   turn_id?: string;
   /**

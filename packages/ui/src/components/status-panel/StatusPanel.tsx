@@ -11,17 +11,18 @@
  * 这里只保存已提交交互的身份，不保存答案或私密值。
  */
 import { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
-import { TbHierarchy2, TbListDetails, TbLoader2, TbMessageQuestion } from "react-icons/tb";
+import { TbHierarchy2, TbListDetails, TbLoader2, TbMessageQuestion, TbTerminal2 } from "react-icons/tb";
 import { motion, useReducedMotion } from "framer-motion";
 import { PillSwitcher } from "../pill-switcher";
 import { ControlMessagesProvider, use_control_translation as use_translation } from "../../lib/control-messages";
 import type { StatusPanelProps, StatusTab, StatusPillLabelProps } from "../../types/status-panel";
 import { PendingInteractionArea } from "./PendingInteractionArea";
 import { MessageQueue } from "./MessageQueue";
+import { ShellList } from "./ShellList";
 import { SubSessionList } from "./SubSessionList";
 
 /** 统一分类计数、折叠、切换与内容生命周期，避免两类状态各自占用外层布局。 */
-function StatusPanelContent<Address>({ queue, interactions, auto_expand_interactions = false, sub_sessions, error }: StatusPanelProps<Address>) {
+function StatusPanelContent<Address>({ queue, interactions, auto_expand_interactions = false, sub_sessions, shells, error }: StatusPanelProps<Address>) {
   const translate = use_translation("chat");
   const panel_id = useId();
   const reduce_motion = useReducedMotion();
@@ -56,7 +57,9 @@ function StatusPanelContent<Address>({ queue, interactions, auto_expand_interact
   }, [auto_expand_interactions, pending]);
   const sub_session_count = sub_sessions?.items.length ?? 0;
   const has_running_sub_session = sub_sessions?.items.some((item) => item.status === "working") ?? false;
-  const counts = { queue: queue_count, interaction: interaction_count, sub_sessions: sub_session_count };
+  const active_shells = shells?.items.filter(item => item.status === "starting" || item.status === "running") ?? [];
+  const shell_count = active_shells.length;
+  const counts = { queue: queue_count, interaction: interaction_count, sub_sessions: sub_session_count, shells: shell_count };
   const active_tab = selected_tab && counts[selected_tab] > 0 ? selected_tab : "";
   useEffect(() => {
     if (selected_tab && !active_tab) set_selected_tab("");
@@ -91,6 +94,7 @@ function StatusPanelContent<Address>({ queue, interactions, auto_expand_interact
     ...(queue_count ? [{ value: "queue" as const, label: <StatusPillLabel icon={<TbListDetails />} label={translate("status_panel.queue")} count={queue_count} /> }] : []),
     ...(interaction_count ? [{ value: "interaction" as const, label: <StatusPillLabel icon={<TbMessageQuestion />} label={translate("status_panel.interaction")} count={interaction_count} /> }] : []),
     ...(sub_session_count ? [{ value: "sub_sessions" as const, label: <StatusPillLabel icon={has_running_sub_session ? <TbLoader2 className="animate-spin motion-reduce:animate-none" /> : <TbHierarchy2 />} label={translate("status_panel.sessions")} count={sub_session_count} /> }] : []),
+    ...(shell_count ? [{ value: "shells" as const, label: <StatusPillLabel icon={<TbTerminal2 />} label={translate("status_panel.shells")} count={shell_count} /> }] : []),
   ];
   return <section ref={container_ref} className="chat-composer-context-row chat-status-panel flex flex-none flex-col items-start pt-2" aria-label={translate("status_panel.label")}>
     <div className="max-w-full overflow-hidden rounded-surface bg-control-track" style={{
@@ -112,6 +116,7 @@ function StatusPanelContent<Address>({ queue, interactions, auto_expand_interact
               set_submitted_keys((current) => new Set([...current, item.key ?? item.part.interaction_id]));
             }} /> : null}
           </div>
+          <div hidden={display_tab !== "shells"}>{shells ? <ShellList {...shells} items={active_shells} /> : null}</div>
           <div hidden={display_tab !== "sub_sessions"}>{sub_sessions ? <SubSessionList {...sub_sessions} /> : null}</div>
           {error ? <p role="alert" className="px-3 pb-2 text-2xs text-destructive">{error}</p> : null}
         </div>

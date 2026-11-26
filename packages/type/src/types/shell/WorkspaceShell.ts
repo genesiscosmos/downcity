@@ -53,6 +53,20 @@ export interface WorkspaceShellSandboxCommandResult {
   spawn: ShellProcessResult;
 }
 
+/** 只读活动进程摘要；不包含输出、环境变量或进程控制句柄。 */
+export interface WorkspaceActiveShell {
+  /** Workspace 内稳定的 Shell 标识。 */
+  shell_id: string;
+  /** 已通过原执行路径脱敏的完整命令。 */
+  cmd: string;
+  /** 当前仍在启动或运行的进程阶段。 */
+  status: "starting" | "running";
+  /** 可信执行上下文登记的来源；无会话的 SDK 命令不设置。 */
+  owner?: Pick<import("./ShellRuntime.js").ShellCompletionTarget, "agent_id" | "type" | "session_id">;
+  /** 命令开始启动的毫秒时间戳，用于稳定排序。 */
+  started_at: number;
+}
+
 /** 由 Workspace 持有并绑定到项目边界的命令执行能力。 */
 export interface WorkspaceShell {
   /** 当前 Shell 向 Agent 暴露的命令与进程工具。 */
@@ -88,6 +102,9 @@ export interface WorkspaceShell {
 
   /** 关闭全部 Shell Sessions，并删除、重建当前 Shell 的持久 Sandbox。 */
   reset_sandbox(): Promise<void>;
+
+  /** 返回当前内存中的活动进程；不恢复进程、不读取输出、不创建资源。 */
+  get_active_sessions?(): WorkspaceActiveShell[];
 
   /** 只观察活跃/启动中的进程；不创建 Sandbox。宿主移除项目必须先检查。 */
   has_active_sessions?(): boolean;

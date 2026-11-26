@@ -22,6 +22,7 @@ import type {
   ShellActionResponse,
   ShellApprovalStatus,
   ShellStartRequest,
+  ShellSessionSnapshot,
 } from "@downcity/type/shell";
 import { get_shell_dir, get_shell_output_path, get_shell_snapshot_path } from "../Paths.js";
 import {
@@ -124,18 +125,18 @@ export async function start_shell_session(
     }
   }
 
-  // 启动前保存可信目标。即使随后进程监管中断，也能报告未知状态而不重跑命令。
-  if (request.completion_target) {
-    await write_shell_snapshot(snapshot_file_path, {
-      shell_id, ...(owner_context_id ? { owner_context_id } : {}),
-      completion_target: request.completion_target,
-      cmd: public_metadata.cmd, cwd: public_metadata.cwd, shell_path: public_metadata.shell_path,
-      target, execution_backend: target, status: "starting",
-      started_at: Date.now(), updated_at: Date.now(), version: 1,
-      output_chars: 0, dropped_chars: 0, external_refs: [],
-      auto_notify_on_exit: request.auto_notify_on_exit !== false, notification_sent: false,
-    });
-  }
+  // 同一个脱敏快照用于启动观察与持久化可信回投目标。
+  const starting_snapshot: ShellSessionSnapshot = {
+    shell_id, ...(owner_context_id ? { owner_context_id } : {}),
+    ...(request.completion_target ? { completion_target: request.completion_target } : {}),
+    cmd: public_metadata.cmd, cwd: public_metadata.cwd, shell_path: public_metadata.shell_path,
+    target, execution_backend: target, status: "starting", started_at: Date.now(), updated_at: Date.now(),
+    version: 1, output_chars: 0, dropped_chars: 0, external_refs: [],
+    auto_notify_on_exit: request.auto_notify_on_exit !== false, notification_sent: false,
+  };
+  // 启动前保存可信目标。监管中断时报告未知状态，不重跑命令。
+  if (request.completion_target) await write_shell_snapshot(snapshot_file_path, starting_snapshot);
+  state.starting_sessions.set(shell_id, starting_snapshot);
   const spawn_result = await spawn_shell_process({
     context,
     execution_id: shell_id,
@@ -164,7 +165,7 @@ export async function start_shell_session(
       state.on_terminal?.(shell_id);
     }
     throw error;
-  });
+  }).finally(() => state.starting_sessions.delete(shell_id));
   const child = spawn_result.child;
   let public_cwd: string;
   try {

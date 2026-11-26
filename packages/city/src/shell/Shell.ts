@@ -230,6 +230,17 @@ export class Shell {
     return this.active_commands > 0 || this.pending_starts.size > 0 || [...this.state.sessions.values()].some((session) => session.snapshot.status === "running");
   }
 
+  /** 读取现有脱敏进程事实，不恢复磁盘快照或创建执行资源。 */
+  get_active_sessions(): import("@downcity/type/shell").WorkspaceActiveShell[] {
+    return [...this.state.starting_sessions.values(), ...[...this.state.sessions.values()].map(item => item.snapshot)]
+      .filter(item => item.status === "starting" || item.status === "running")
+      .map(item => ({ shell_id: item.shell_id, cmd: item.cmd,
+        status: item.status as "starting" | "running", started_at: item.started_at,
+        ...(item.completion_target ? { owner: { agent_id: item.completion_target.agent_id,
+          type: item.completion_target.type, session_id: item.completion_target.session_id } } : {}),
+      }));
+  }
+
   /** 在当前 Workspace 的持久 Sandbox 中执行一次短命令。 */
   async run_sandbox_command(input: WorkspaceShellSandboxCommandInput) {
     const context = this.create_host_context();

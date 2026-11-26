@@ -90,6 +90,11 @@ export class SshShell implements WorkspaceShell {
     describe_sandbox(): null { return null; }
     async reset_sandbox(): Promise<void> { throw new Error("SSH Workspace has no local Sandbox to reset"); }
     has_active_sessions(): boolean { return [...this.sessions.values()].some((session) => session.exit_code === null); }
+    /** 只投影当前进程，不读取输出或创建远程连接。 */
+    get_active_sessions(): import("@downcity/type/shell").WorkspaceActiveShell[] {
+        return [...this.sessions.values()].filter(item => item.exit_code === null)
+            .map(item => ({ shell_id: item.id, cmd: item.cmd, status: "running", owner: item.owner, started_at: item.started_at }));
+    }
     private owner_id(context: ToolCallContext): string { return `${context.agent_id}:${context.session_type}:${context.session_id}`; }
     private async start(input: SshCommandOptions, context?: ToolCallContext): Promise<SshProcessSession> {
         const serialized = JSON.stringify(input);
@@ -112,7 +117,8 @@ export class SshShell implements WorkspaceShell {
         context?.abort_signal?.throwIfAborted();
         const payload = Buffer.from(JSON.stringify({ ...input, cwd, env: { ...this.env, ...input.env } })).toString("base64");
         const child = this.connection.start(ssh_runtime_command('exec python3 -c "$1" "$2"', remote_shell_program, payload));
-        const session: SshProcessSession = { id: `ssh_${crypto.randomUUID()}`, process: child, owner_context_id: context ? this.owner_id(context) : undefined, output: "", truncated: false, exit_code: null, cleanup: () => { } };
+        const session: SshProcessSession = { cmd: input.cmd, started_at: Date.now(),
+            owner: context ? { agent_id: context.agent_id, type: context.session_type, session_id: context.session_id } : undefined, id: `ssh_${crypto.randomUUID()}`, process: child, owner_context_id: context ? this.owner_id(context) : undefined, output: "", truncated: false, exit_code: null, cleanup: () => { } };
         this.sessions.set(session.id, session);
         const stdout_decoder = new StringDecoder("utf8");
         const stderr_decoder = new StringDecoder("utf8");

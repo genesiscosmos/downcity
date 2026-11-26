@@ -42,8 +42,14 @@ export interface SshProcessSession {
     /** 宿主内唯一的交互会话标识。 */
     id: string;
     /** 发起 Session 的作用域；没有 Session 的 SDK 执行不暴露给工具会话。 */
-  owner_context_id?: string;
-  /** 当前 OpenSSH 子进程。 */
+    owner_context_id?: string;
+    /** 已验证不含私密引用的命令源码。 */
+    cmd: string;
+    /** 可信工具上下文登记的完整 Session 身份。 */
+    owner?: import("@downcity/type/shell").WorkspaceActiveShell["owner"];
+    /** 本地监督器开始执行的毫秒时间戳。 */
+    started_at: number;
+    /** 当前 OpenSSH 子进程。 */
     process: ChildProcessWithoutNullStreams;
     /** 有界输出缓冲。 */
     output: string;

@@ -101,6 +101,8 @@ export type ShellRuntimeState = {
    * 当前实例持有的全部 in-memory shell session。
    */
   sessions: Map<string, ShellSessionRuntimeState>;
+  /** 已获准启动、尚未取得进程句柄的脱敏快照；不包含私密执行参数。 */
+  starting_sessions: Map<string, ShellSessionSnapshot>;
   /**
    * 当前实例最近一次启动时绑定的 agent context。
    *

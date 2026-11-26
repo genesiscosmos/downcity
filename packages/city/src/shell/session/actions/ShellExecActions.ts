@@ -56,6 +56,7 @@ export async function exec_shell_command(
     inline_wait_ms: Math.min(state.options.default_inline_wait_ms, timeout_ms),
     max_output_tokens: request.max_output_tokens,
     auto_notify_on_exit: false,
+    ...(request.completion_target ? { completion_target: request.completion_target } : {}),
     ...(request.owner_context_id ? { owner_context_id: request.owner_context_id } : {}),
     ...(request.turn_id ? { turn_id: request.turn_id } : {}),
     ...(request.tool_call_id ? { tool_call_id: request.tool_call_id } : {}),

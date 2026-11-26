@@ -133,6 +133,7 @@ export function create_shell_runtime_state(
   return {
     options: resolve_shell_runtime_options(options),
     sessions: new Map<string, ShellSessionRuntimeState>(),
+    starting_sessions: new Map(),
     context: null,
   };
 }

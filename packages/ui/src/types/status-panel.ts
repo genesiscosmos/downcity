@@ -56,12 +56,29 @@ export interface StatusPanelHeaderProps {
   /** 可选来源与详情入口。 */ source?: ReactNode;
   /** 分类整体动作。 */ actions?: ReactNode;
 }
+/** 一个活动 Shell 的只读展示条目。 */
+export interface StatusPanelShellItem {
+  /** Workspace 与 Shell 组成的稳定唯一身份。 */
+  key: string;
+  /** 宿主提供的脱敏命令，截断时仍可悬停查看全文。 */
+  cmd: string;
+  /** 仅展示启动中和运行中，终态由宿主从集合移除。 */
+  status: "starting" | "running";
+  /** 原始所属 Session 的可辨识名称，由宿主解析真实归属。 */
+  session_label: string;
+}
+/** 活动 Shell 列表与本地化文案。 */
+export interface ShellListProps extends ChatControlMessages {
+  /** 当前 Session 及所有后代拥有的活动 Shell，顺序由宿主确定。 */
+  items: readonly StatusPanelShellItem[];
+}
 /** 一个会话的完整状态面板。 */
 export interface StatusPanelProps<Address = unknown> extends ChatControlMessages {
   /** 当前会话的本地队列。 */ queue?: MessageQueueProps;
   /** 已解析来源的交互与响应动作。 */ interactions?: PendingInteractionAreaProps;
   /** 每个新待处理交互出现时自动展开；按 key 或 interaction_id 去重，同一交互刷新保留手动选择，默认关闭。 */ auto_expand_interactions?: boolean;
   /** 已加载子会话与导航动作。 */ sub_sessions?: SubSessionListProps<Address>;
+  /** 当前会话及所有后代的活动 Shell。 */ shells?: ShellListProps;
   /** 来源解析或详情操作错误。 */ error?: string;
   /** 完整会话身份；变化时释放所有临时状态，包括尚未提交的私密值。 */ session_key: string;
 }
@@ -73,7 +90,7 @@ export interface QueuedMessageResourcesProps {
 }
 
 /** 分类标识；空串表示收起。 */
-export type StatusTab = "queue" | "interaction" | "sub_sessions" | "";
+export type StatusTab = "queue" | "interaction" | "sub_sessions" | "shells" | "";
 /** 分类图标、名称与数量。 */
 export interface StatusPillLabelProps {
   /** 仅作视觉提示的图标。 */ icon: ReactNode;
