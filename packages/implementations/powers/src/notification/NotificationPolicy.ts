@@ -3,7 +3,7 @@
  * 内部 Child、Task、Memory 等交付仍由所属主体负责。Session/Group 以整个会话为关注事项，
  * 业务 Power 以自己的稳定业务对象键为事项；Turn/Run 历史保留在原来源。
  */
-import { is_main_session, read_session_delegation_depth } from "@downcity/type";
+import { read_session_delegation_depth } from "@downcity/type";
 import type { SessionDescriptor, SessionTurnCommittedHookValue } from "@downcity/type";
 import type { PowerNotificationInput, PowerNotificationTarget, PowerNotificationResolution } from "@downcity/city/power";
 import { notification_target_key } from "./NotificationIdentity.js";
@@ -13,11 +13,16 @@ function is_work_main(descriptor: SessionDescriptor): boolean {
   return descriptor.type === "work" && descriptor.kind === "work" && read_session_delegation_depth(descriptor) === 1;
 }
 
+/** 普通 Chat 的回复由 Session 发布；群组与外部渠道继续由各自的交付入口负责。 */
+function is_session_chat(descriptor: SessionDescriptor): boolean {
+  return descriptor.type === "chat" && descriptor.kind !== "group" && descriptor.kind !== "channel";
+}
+
 /** 提交事实只决定一次关注事项更新；停止和内部执行不会产生重复交付。 */
 export function session_notification(agent_id: string, descriptor: SessionDescriptor | undefined, event: SessionTurnCommittedHookValue, session_title?: string): PowerNotificationInput | undefined {
-  if (!descriptor || event.status === "stopped" || !(is_main_session(descriptor) || is_work_main(descriptor))) return;
+  if (!descriptor || event.status === "stopped" || !(is_session_chat(descriptor) || is_work_main(descriptor))) return;
   const failed = event.status === "failed";
-  const reply = is_main_session(descriptor) && !failed;
+  const reply = is_session_chat(descriptor) && !failed;
   const target: PowerNotificationTarget = { kind: "agent_session", agent_id, session_id: event.session_id, type: descriptor.type, session_kind: descriptor.kind };
   const body = event.result.text.trim() || event.result.error?.trim() || "";
   // 通知围绕来源会话命名；交付内容只作为正文，不承担标题语义。

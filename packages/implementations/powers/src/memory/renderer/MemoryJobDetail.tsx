@@ -4,7 +4,7 @@
  * 每次展示一条变更，正文按字符分段、证据分页；当前段随所属页面滚动，不创建内部纵向滚动。
  */
 import { useState } from "react";
-import type { PowerMainviewComponentProps } from "@downcity/city/power/react";
+import type { PowerPageComponentProps } from "@downcity/city/power/react";
 import type { MemoryJobDetail, MemoryJobChangeDetail } from "../types/MemoryJob.js";
 
 /** 差异组件只接收已授权的详情与宿主 UI。 */
@@ -12,7 +12,7 @@ interface MemoryJobChangesProps {
   /** 独立详情接口返回的固定差异与真实提交状态。 */
   detail: MemoryJobDetail;
   /** 宿主提供的界面组件，不接触 Memory Provider。 */
-  ui: PowerMainviewComponentProps["ui"];
+  ui: PowerPageComponentProps["ui"];
 }
 
 const TEXT_PAGE_SIZE = 1800;
@@ -100,7 +100,7 @@ function changed_span(before: string, after: string): { /** 两份正文相同�
 
 /** 纯文本分段展示固定正文，突出本段与另一份快照不同的部分。 */
 function render_snapshot(
-  ui: PowerMainviewComponentProps["ui"], label: string, content: string,
+  ui: PowerPageComponentProps["ui"], label: string, content: string,
   offset: number, set_offset: (offset: number) => void, changed_start: number, changed_end: number,
 ) {
   const { Button, Group, Inline, Row, Status } = ui.components;

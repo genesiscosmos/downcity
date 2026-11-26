@@ -8,7 +8,7 @@ import { assert_protocol_database } from "./session-v10-proof.mjs";
 
 import { exists } from "./session-v8-files.mjs";
 
-const rebuilt_tables = ["archive_operation_nodes", "archive_operations", "session_creation_keys", "sessions", "storage_metadata"];
+const rebuilt_tables = ["archive_operation_nodes", "archive_operations", "session_creation_keys", "session_configuration", "sessions", "storage_metadata"];
 
 /** `session-descriptor-v12` 批次发布的完整表、索引和触发器摘要。 */
 const descriptor_v12_schema_sha256 = "6b11e4460158a5bb169ac806ab3b354d3f320461033ecd82388dcfa176add763";
@@ -50,7 +50,8 @@ export function convert_session(row, runtime) {
 
 /** 单记录包与整根数据库使用相同的字段投影，保留配置和 Composer 边界。 */
 export function convert_record(record, runtime) {
-  return { ...record, metadata: convert_session(record.metadata, runtime),
+  const { model_binding: _model_binding, ...configuration } = record.configuration;
+  return { ...record, configuration, metadata: convert_session(record.metadata, runtime),
     messages: record.messages.map(convert_message), message_parts: record.message_parts.map(convert_part) };
 }
 
@@ -108,6 +109,10 @@ function verify_descriptor_archive_hashes(database) {
 /** 过渡版已经转换输入 actor 和归档字段；只投影版本及 Session 描述。 */
 function project_descriptor_source(table, row) {
   if (table === "storage_metadata") return { ...row, format_version: 13 };
+  if (table === "session_configuration") {
+    const { model_binding: _model_binding, ...configuration } = row;
+    return configuration;
+  }
   if (table !== "sessions") return row;
   const { descriptor, ...record } = row;
   const { type, kind, ...relations } = JSON.parse(descriptor);
@@ -122,6 +127,10 @@ function project_source(database, runtime) {
   return (table, row) => {
     if (table === "storage_metadata") return { ...row, format_version: 13 };
     if (table === "sessions") return convert_session(row, runtime);
+    if (table === "session_configuration") {
+      const { model_binding: _model_binding, ...configuration } = row;
+      return configuration;
+    }
     if (table === "messages") return convert_message(row);
     if (table === "message_parts") return convert_part(row);
     if (table === "archive_operation_nodes") return convert_archive_node(row);

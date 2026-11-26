@@ -45,7 +45,7 @@
 | canonical Message | 已有 part_id、sequence、Message revision | 沿用身份、排序与同步 |
 | Power ActionResult.messages | 支持 role=agent 与 Agent 内容 | 接通 Power Part 校验与追加 |
 | SQLite 消息存储 | JSON 内容与类型、角色约束 | 升级约束、Codec 与原生迁移 |
-| Power Renderer | 已有 sidebar、mainview、config | 增加 message 插槽 |
+| Power Renderer | 提供完整 page 与独立 config | 增加 message 插槽 |
 | Desktop 消息投影 | 最后一个活动块划分过程与正文 | 保证 Power 内容持续可见 |
 | 文本渲染 | 使用 Streamdown | 保留文字路径，Power 独立分发 |
 | Session Interaction | 属于 Tool 执行期间的等待响应 | 不承担长期界面生命周期 |
@@ -190,7 +190,7 @@ Presentation 的服务端目录定义与浏览器组件实现必须分离。服�
 
 ## 8. Renderer 插槽与宿主
 
-PowerRendererDefinition 增加可选 message 插槽。只定义 message 的 Renderer 合法，不要求 sidebar 或 mainview。
+PowerRendererDefinition 增加可选 message 插槽。只定义 message 的 Renderer 合法，独立于 `page` 与 `config`。
 
 输入只包含实际需要的内容：canonical Power Part、Session / Message 身份、主题及布局约定。通用宿主可提供命名明确的视图状态存取与提交对话端口，不暴露 Agent、Shell、文件系统或任意 Power 调用句柄。
 

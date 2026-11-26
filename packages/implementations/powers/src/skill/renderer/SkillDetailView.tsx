@@ -1,7 +1,7 @@
 /** Skill 独立详情：仅根据宿主输入读取已安装正文，tab 生命周期由宿主管理。 */
 import { useEffect, useState } from "react";
 import type { PowerViewComponentProps } from "@downcity/city/power/react";
-import type { SkillMainviewReadResult } from "@/skill/types/SkillMainview.js";
+import type { SkillPageReadResult } from "@/skill/types/SkillPage.js";
 import { error_message } from "./SkillResources.js";
 import { Skill_document } from "./SkillDocument.js";
 
@@ -29,7 +29,7 @@ function Skill_detail({ input, power, ui }: PowerViewComponentProps) {
       return;
     }
     set_reading(true);
-    void power.invoke<SkillMainviewReadResult>("skill.read", { agent_id, skill_id }).then((result) => {
+    void power.invoke<SkillPageReadResult>("skill.read", { agent_id, skill_id }).then((result) => {
       if (disposed) return;
       if (!result.success) {
         // 业务失败说明正文已不可用；只有网络等调用异常才保留最近成功的正文。

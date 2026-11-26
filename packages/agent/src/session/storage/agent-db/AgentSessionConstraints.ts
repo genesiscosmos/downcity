@@ -33,35 +33,6 @@ BEGIN
   SELECT RAISE(ABORT, 'session identity is retired');
 END;
 
-CREATE TRIGGER sessions_main_archive AFTER UPDATE OF archived ON sessions
-WHEN NEW.archived = 1
-BEGIN
-  UPDATE agent_session_state SET main_session_id = NULL WHERE main_session_id = OLD.session_id;
-END;
-
-CREATE TRIGGER agent_session_state_valid_insert BEFORE INSERT ON agent_session_state
-WHEN NEW.main_session_id IS NOT NULL AND NOT EXISTS (
-  SELECT 1 FROM sessions WHERE session_id = NEW.main_session_id AND archived = 0
-    AND type = 'chat' AND kind = 'main'
-)
-BEGIN
-  SELECT RAISE(ABORT, 'invalid main Session pointer');
-END;
-
-CREATE TRIGGER agent_session_state_valid_update BEFORE UPDATE OF main_session_id ON agent_session_state
-WHEN NEW.main_session_id IS NOT NULL AND NOT EXISTS (
-  SELECT 1 FROM sessions WHERE session_id = NEW.main_session_id AND archived = 0
-    AND type = 'chat' AND kind = 'main'
-)
-BEGIN
-  SELECT RAISE(ABORT, 'invalid main Session pointer');
-END;
-
-CREATE TRIGGER agent_session_state_delete_forbidden BEFORE DELETE ON agent_session_state
-BEGIN
-  SELECT RAISE(ABORT, 'main Session state cannot be deleted');
-END;
-
 CREATE TRIGGER retired_session_ids_update_forbidden BEFORE UPDATE ON retired_session_ids
 BEGIN SELECT RAISE(ABORT, 'retired Session identity is immutable'); END;
 CREATE TRIGGER retired_session_ids_delete_forbidden BEFORE DELETE ON retired_session_ids

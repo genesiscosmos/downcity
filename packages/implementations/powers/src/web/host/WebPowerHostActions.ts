@@ -16,10 +16,10 @@ import type {
 } from "@/web/types/WebPower.js";
 import { public_config } from "@/web/host/WebPowerConfigActions.js";
 import type {
-  WebMainviewCapabilityStatus,
-  WebMainviewSessionsResult,
-  WebMainviewSnapshot,
-} from "@/web/types/WebMainview.js";
+  WebPageCapabilityStatus,
+  WebPageSessionsResult,
+  WebPageSnapshot,
+} from "@/web/types/WebPage.js";
 
 /** 一次解析所用的执行范围。 */
 interface ResolvedScope {
@@ -47,7 +47,7 @@ export function register_web_power_host_actions(context: PowerLifecycleContext):
  * 配置始终可读；能力状态是尽力而为的：宿主还没有 Agent 或 Workspace 时，环境变量无法解析，
  * 此时把能力标记为未知并给出说明，而不是让整个页面失败。
  */
-async function create_snapshot(context: PowerLifecycleContext): Promise<WebMainviewSnapshot> {
+async function create_snapshot(context: PowerLifecycleContext): Promise<WebPageSnapshot> {
   const scope = await resolve_first_scope(context);
   const status = scope
     ? await invoke_domain_action<WebPowerStatusResult>(context, scope, "status")
@@ -65,7 +65,7 @@ async function create_snapshot(context: PowerLifecycleContext): Promise<WebMainv
 }
 
 /** 列出当前浏览器 Provider 拥有的会话。 */
-async function list_sessions(context: PowerLifecycleContext): Promise<WebMainviewSessionsResult> {
+async function list_sessions(context: PowerLifecycleContext): Promise<WebPageSessionsResult> {
   const scope = await resolve_first_scope(context);
   if (!scope) {
     return { available: false, sessions: [], note: "尚未创建 Agent 与 Workspace。" };
@@ -138,7 +138,7 @@ function capability_status(
   kind: "search" | "document" | "browser",
   provider: string,
   status: WebPowerStatusResult | undefined,
-): WebMainviewCapabilityStatus {
+): WebPageCapabilityStatus {
   if (provider) {
     return { provider, available: true, note: "" };
   }

@@ -8,8 +8,6 @@
 export const SESSION_TYPE_CHAT = "chat";
 /** 工作 Session。 */
 export const SESSION_TYPE_WORK = "work";
-/** 本地 Agent 主对话入口。 */
-export const SESSION_KIND_MAIN = "main";
 /** 远程对话入口。 */
 export const SESSION_KIND_REMOTE = "remote";
 /** 消息渠道入口。 */
@@ -129,9 +127,4 @@ export function resolve_delegation_blocked_reason(descriptor: Partial<SessionDes
 /** 当前创建事实是否允许继续派发工作。 */
 export function can_delegate_work(descriptor: Partial<SessionDescriptor> | undefined): boolean {
   return resolve_delegation_blocked_reason(descriptor) === null;
-}
-
-/** 当前描述是否属于本地主会话入口。 */
-export function is_main_session(descriptor: Partial<SessionDescriptor> | undefined): boolean {
-  return descriptor?.type === "chat" && descriptor.kind === "main";
 }

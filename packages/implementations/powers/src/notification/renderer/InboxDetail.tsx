@@ -1,6 +1,6 @@
 /** Inbox 主页面事项：宿主唯一顶栏承载操作，标题、来源和内容共用阅读列；保留原交互与可见已读规则。 */
 import { useCallback, useEffect, useId, useRef, useState } from "react";
-import type { PowerMainviewComponentProps } from "@downcity/city/power/react";
+import type { PowerPageComponentProps } from "@downcity/city/power/react";
 import type { RespondSessionInteractionInput } from "@downcity/type";
 import type { InboxEntry } from "../types/Inbox.js";
 import type { NotificationRendererOptions } from "../types/NotificationRenderer.js";
@@ -9,23 +9,21 @@ import { full_time, has_private_questions } from "./InboxEntries.js";
 import { InboxIcon } from "./InboxIcon.js";
 import { InboxAvatar } from "./InboxAvatar.js";
 import { InboxAttention } from "./InboxAttention.js";
-import { InboxMainviewHeader } from "./InboxMainviewHeader.js";
 
 /**
  * 单项详情按稳定来源挂载，刷新保留原表单草稿；列表选择、返回确认和可见性由父级控制。
  * 交互仍复用宿主表单与提交入口，Store仅记录草稿和忙碌状态，不保存回答内容。
  */
-export function InboxEntryDetail({ entry, current, handled, store, options, props, next, choose, unavailable, on_close, can_read }: {
+export function InboxEntryDetail({ entry, current, handled, store, options, props, next, choose, unavailable, can_read }: {
   /** 来源暂时不可达时不将缺失请求误判为已解决。 */ unavailable: boolean;
   /** 稳定选择项；请求失效后也可继续说明原因。 */ entry: InboxEntry;
   /** 最新列表中仍存在的原项，缺失表示已在其他入口处理。 */ current?: InboxEntry;
   /** 当前界面是否成功完成了该交互。 */ handled: boolean;
   /** 共享展示状态。 */ store: InboxStore;
   /** 复用的宿主表单与导航。 */ options: NotificationRendererOptions;
-  /** 当前宿主接口，仍由原Session验证提交。 */ props: PowerMainviewComponentProps;
+  /** 当前宿主接口，仍由原Session验证提交。 */ props: Pick<PowerPageComponentProps, "power" | "ui">;
   /** 用户确认后选择的下一项。 */ next?: InboxEntry;
   /** 带草稿确认的选择动作。 */ choose: (entry: InboxEntry) => Promise<void>;
-  /** 关闭详情，由父级提供现有草稿确认。 */ on_close: () => Promise<void>;
   /** 只有实际可见的详情允许自动已读，由主视图控制。 */ can_read: boolean;
 }) {
   const { Page, Markdown, Button } = props.ui.components;
@@ -108,15 +106,7 @@ export function InboxEntryDetail({ entry, current, handled, store, options, prop
       : availability === "unknown" ? "来源身份未知或暂时不可达；已保留内容，无法确认是否可打开。" : "";
   const can_open = availability === "available" && (entry.pending ? !!options.open_interaction : !!entry.update?.target && !!options.open_notification);
   const busy = Boolean(store.get_snapshot().busy_key);
-  // 来源采用宿主标准图文按钮，与关闭操作一起放入 Inbox 页头右侧。
-  const actions = <div className="inbox-detail-actions">
-    {can_open ? <Button disabled={opening || busy} title="查看来源" on_click={() => void open()}>
-      <InboxIcon kind="source" />{opening ? "正在打开…" : "查看来源"}
-    </Button> : null}
-    <Button size="icon" disabled={busy} title="关闭详情" aria_label="关闭详情" on_click={() => void on_close()}><InboxIcon kind="close" /></Button>
-  </div>;
   return <>
-    <InboxMainviewHeader options={options} actions={actions} />
     <Page layout="detail"><article className="inbox-detail" aria-labelledby={title_id} data-inbox-content="">
     <div className="inbox-detail-content">
       <header className="inbox-detail-heading">
@@ -130,7 +120,19 @@ export function InboxEntryDetail({ entry, current, handled, store, options, prop
             </div>
             <time dateTime={new Date(active.created_at).toISOString()}>{full_time(active.created_at)}</time>
           </div>
+          {can_open ? options.render_source_action
+            ? options.render_source_action({ opening, disabled: opening || busy, on_click: () => void open() })
+            : <Button disabled={opening || busy} title="查看来源" on_click={() => void open()}><InboxIcon kind="source" />查看来源</Button>
+            : null}
         </div>
+        {entry.pending ? <details className="inbox-origin">
+          <summary>来源详情</summary>
+          <dl>
+            <dt>Agent</dt><dd>{active.source}</dd>
+            <dt>Session</dt><dd>{entry.pending.interaction.reference.session_id}</dd>
+            <dt>执行</dt><dd>{entry.pending.interaction.reference.turn_id}</dd>
+          </dl>
+        </details> : null}
       </header>
       <div className="inbox-detail-body downcity-writing-text">
         {source_notice ? <p className="inbox-detail-note" role="status">{source_notice}</p> : null}
@@ -159,14 +161,6 @@ export function InboxEntryDetail({ entry, current, handled, store, options, prop
           {active.update?.body?.trim() ? <Markdown text={active.update.body} /> : null}
           {read_error ? <p className="inbox-inline-error" role="status">暂未标为已读。<button type="button" onClick={() => void read(true)}>重试</button></p> : null}
         </div>}
-        {entry.pending ? <details className="inbox-origin">
-          <summary>来源详情</summary>
-          <dl>
-            <dt>Agent</dt><dd>{active.source}</dd>
-            <dt>Session</dt><dd>{entry.pending.interaction.reference.session_id}</dd>
-            <dt>执行</dt><dd>{entry.pending.interaction.reference.turn_id}</dd>
-          </dl>
-        </details> : null}
       </div>
     </div>
   </article></Page></>;

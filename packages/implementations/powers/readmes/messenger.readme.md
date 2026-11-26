@@ -22,4 +22,4 @@ Every final Channel Turn output enters Outbox through `session.turn_committed`, 
 
 Agent journals completion events and retries callback failures independently from model execution. Custom SDK hosts call `agent.resume_work()` after assembling agents, Powers, Workspaces, and subscriptions to restore pending callbacks. Application callbacks can use the same Hook and must deduplicate by `completion_id`.
 
-In Desktop, use the plus button in the Messengers Sidebar header to choose Telegram, Feishu/Lark, or QQ and create the corresponding Bot Account.
+In Desktop, use the add button on the Messengers page to choose Telegram, Feishu/Lark, or QQ and create the corresponding Bot Account.

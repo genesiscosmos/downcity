@@ -14,7 +14,7 @@ Chat Plugin 不属于 Agent。Agent 只拥有 Session 和 Turn；City 拥有唯�
 
 ## 2. 产品界面
 
-Chat Plugin 同时提供 Sidebar 和 Mainview，不再把 Bot Account 管理收缩在 Settings Config 页面。
+Messenger Power 提供完整 `page`，在 Mainview 组织 Bot Account 集合与管理操作；应用 Sidebar 保留 Powers 目录，账号详情与编辑在 BayBar 打开。
 
 ### 2.1 Sidebar
 
@@ -299,7 +299,7 @@ Agent Action 只能访问当前 Agent 拥有的 Conversation；不允许仅凭�
 
 ## 9. Desktop 状态刷新
 
-Host Action mutation 成功后调用 Renderer `ui.invalidate()`。Connector 状态、Access Request、Inbox/Outbox 失败等异步变化通过 Plugin Notification 与 revision 驱动 Sidebar/Mainview 刷新，不让 Renderer 直接订阅内部 Runtime 对象。
+Host Action mutation 成功后调用 Renderer `ui.invalidate()`。Connector 状态、Access Request、Inbox/Outbox 失败等异步变化通过 Plugin Notification 与 revision 驱动 page 与独立资源视图刷新，不让 Renderer 直接订阅内部 Runtime 对象。
 
 ## 10. 迁移原则
 
@@ -309,7 +309,7 @@ Host Action mutation 成功后调用 Renderer `ui.invalidate()`。Connector 状�
 2. 建立 ChatStore、Account、Conversation、Inbox、Outbox。
 3. 用 City 生命周期驱动 ChatRuntime，删除 `system()` 启动副作用。
 4. 将现有 Telegram、Feishu、QQ 实现收敛为 Account Connector。
-5. 建立 Sidebar/Mainview 和 Host Actions。
+5. 建立完整 page 和 Host Actions。
 6. 将 Access 从 Agent Action 移到 Host Action，并增加 Account 边界。
 7. 删除旧内存 Queue、Chat History 和全局单 Account 配置。
 8. 更新 Homepage 用户文档、测试、版本和构建产物。

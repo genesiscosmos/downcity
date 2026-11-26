@@ -1,13 +1,13 @@
 /** User、Agent、Workspace 复用的按条管理内容；沿用宿主共享组件与实际读取版本。 */
 import { useEffect, useState } from "react";
-import type { PowerMainviewComponentProps } from "@downcity/city/power/react";
+import type { PowerPageComponentProps } from "@downcity/city/power/react";
 import type { MemoryKind, MemoryRecord, MemoryReadResult, MemoryListResult, MemoryWriteResult, MemoryScopeType } from "../types/MemoryProtocol.js";
 import type { MemoryAgreementBudget } from "../types/MemoryManagement.js";
 import { memory_display_label } from "../runtime/MemorySchema.js";
 
 import type { MemoryRecordsViewProps } from "../types/MemoryRenderer.js";
 /** 保存失败保留草稿及旧版本，避免用最新版本机械覆盖。 */
-export function Memory_records_view({ power, ui, scope, kind, agent_id, workspace_id, initial_memory_id }: MemoryRecordsViewProps) {
+export function Memory_records_view({ power, ui, scope, kind, agent_id, workspace_id, initial_memory_id, initial_create = false }: MemoryRecordsViewProps) {
   const { Button, Callout, EmptyState, Field, Group, Inline, Input, LoadingState, Markdown, Row, Section, Status, Textarea, Toolbar } = ui.components;
   const [listing, set_listing] = useState<MemoryListResult>();
   const [query, set_query] = useState("");
@@ -20,7 +20,7 @@ export function Memory_records_view({ power, ui, scope, kind, agent_id, workspac
   const [history, set_history] = useState<MemoryRecord[]>([]);
   const [show_history, set_show_history] = useState(false);
   const [editing, set_editing] = useState(false);
-  const [creating, set_creating] = useState(false);
+  const [creating, set_creating] = useState(initial_create);
   const [edit_version, set_edit_version] = useState("");
   const [draft, set_draft] = useState("");
   const [draft_title, set_draft_title] = useState("");
@@ -81,9 +81,10 @@ export function Memory_records_view({ power, ui, scope, kind, agent_id, workspac
       content: draft, ...(kind === "knowledge" ? { title: draft_title } : {}),
     })}>{busy ? "保存中…" : "保存"}</Button><Button disabled={busy} on_click={() => { set_editing(false); set_creating(false); }}>取消</Button></Inline>
   </Section>;
+  if (initial_create) return <>{error ? <Callout tone="danger">{error}</Callout> : null}{creating ? editor : <EmptyState title="编辑已结束" action={<Button on_click={() => { set_creating(true); set_draft(""); set_draft_title(""); reset_request(); }}>继续新增</Button>} />}</>;
   if (selected_id) return <>
     <Toolbar title={record ? memory_display_label(record) : noun} actions={<Inline>
-      <Button disabled={busy} on_click={() => { set_selected_id(""); set_editing(false); set_error(""); }}>返回</Button>
+      {!initial_memory_id ? <Button disabled={busy} on_click={() => { set_selected_id(""); set_editing(false); set_error(""); }}>返回</Button> : null}
       <Button disabled={busy} on_click={() => set_revision((value) => value + 1)}>刷新</Button>
       {record ? <><Button disabled={busy || editing} on_click={() => { set_edit_version(record.version); set_draft(record.content); set_draft_title(record.kind === "knowledge" ? record.title : ""); set_editing(true); reset_request(); }}>修改</Button>
         <Button disabled={busy || editing} on_click={() => void ui.confirm({ title: `删除这条${noun}？`, description: "退出普通召回与约定加载，保留审计历史。", action: "删除", destructive: true }).then((confirmed) => {
@@ -101,11 +102,11 @@ export function Memory_records_view({ power, ui, scope, kind, agent_id, workspac
   return <>
     {kind === "agreement" && budget ? <Status>{budget.total} 条约定 · 约 {budget.estimated_tokens} tokens</Status> : null}
     <Toolbar actions={<Inline><Button disabled={busy || loading} on_click={() => set_revision((value) => value + 1)}>刷新</Button>
-      <Button disabled={busy || creating} on_click={() => { set_creating(true); set_draft(""); set_draft_title(""); reset_request(); }}>新增{noun}</Button></Inline>} />
+      <Button disabled={busy || creating} on_click={() => ui.open_view({ view_id: "memory_detail", resource_key: `create:${scope}:${agent_id ?? workspace_id ?? "user"}:${kind}`, title: `新增${noun}`, input: { ...routing, kind, create: true } })}>新增{noun}</Button></Inline>} />
     <Field label={`搜索${noun}`}><Input value={query} on_value_change={(value) => { set_query(value); set_offset(0); }} /></Field>
     {error ? <Callout tone="danger">{error}</Callout> : null}{creating ? editor : null}
     {loading ? <LoadingState label="正在读取…" /> : listing?.items.length ? <Group>{listing.items.map((item) => <Row key={item.memory_id} label={item.label}
-      on_click={() => { if (!creating) { set_selected_id(item.memory_id); set_editing(false); set_error(""); } }} />)}</Group> : <EmptyState title={`还没有${noun}`} size="compact" />}
+      on_click={() => { if (!creating) ui.open_view({ view_id: "memory_detail", resource_key: `${scope}:${agent_id ?? workspace_id ?? "user"}:${item.memory_id}`, title: item.label, input: { ...routing, kind, memory_id: item.memory_id } }); }} />)}</Group> : <EmptyState title={`还没有${noun}`} size="compact" />}
     {!query && listing && listing.total > 30 ? <Inline><Button disabled={!offset} on_click={() => set_offset(Math.max(0, offset - 30))}>上一页</Button>
       <Status>{offset + 1}–{offset + listing.items.length} / {listing.total}</Status><Button disabled={offset + 30 >= listing.total} on_click={() => set_offset(offset + 30)}>下一页</Button></Inline> : null}
   </>;

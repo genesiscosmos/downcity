@@ -104,17 +104,27 @@ export interface NotificationAttentionDisplay {
   label: string;
 }
 
+/** 来源按钮的展示状态；宿主复用自身控件，导航与草稿确认仍由 Inbox 持有。 */
+export interface NotificationSourceAction {
+  /** 打开来源正在进行时为 true；按钮保留稳定文案并展示加载图标。 */
+  opening: boolean;
+  /** 打开来源或提交响应时禁用按钮，阻止重复操作。 */
+  disabled: boolean;
+  /** 经过草稿确认的来源导航动作；不向宿主授予独立业务权限。 */
+  on_click: () => void;
+}
+
 /** 宿主可选注入现有 Interaction 控件、Agent 头像及专用私密传输。 */
 export interface NotificationRendererOptions {
-  /** 主页面的宿主顶栏；由宿主提供窗口拖拽与侧栏避让，Inbox 传入当前事项的来源按钮和关闭操作。未提供时使用通用顶栏。 */
-  render_mainview_header?: (actions?: ReactNode) => ReactNode;
+  /** 身份行右侧的来源操作；宿主可复用状态面板按钮，未提供时使用标准图文按钮。 */
+  render_source_action?: (action: NotificationSourceAction) => ReactNode;
   /** 用户明确查看时打开原Session；只传引用，不提供新执行权限。 */
   open_interaction?: (item: NotificationInteractionItem) => Promise<void>;
   /** 用户明确查看时打开通知关联的结果或业务页面。 */
   open_notification?: (item: NotificationItem) => Promise<void>;
   /** 仅为 can_respond 为 true 的原请求挂载表单；控件提交时须标明是否包含私密问题。 */
   render_interaction?: (item: NotificationInteractionItem, respond: (input: RespondSessionInteractionInput, private_question?: boolean) => Promise<void>, display: NotificationInteractionDisplay) => ReactNode;
-  /** 由受信宿主解析真实 Agent 头像；list 为 32px 侧栏头像，detail 为 18px 来源行；不暴露本地路径或加载策略。 */
+  /** 由受信宿主解析真实 Agent 头像；list 为 32px 列表头像，detail 为 18px 来源行；不暴露本地路径或加载策略。 */
   render_agent_avatar?: (agent_id: string, size: "list" | "detail") => ReactNode;
   /** 复用宿主 Rail 的状态映射与语义配色；未提供时使用中性展示。 */
   render_attention?: (display: NotificationAttentionDisplay) => ReactNode;

@@ -27,7 +27,7 @@ export async function allocate_session_id(
   throw new Error("Unable to allocate a unique Session ID after 100 attempts");
 }
 
-/** 生成永久 UUIDv4；独立 Session 与集合、主会话共享同一生成规则。 */
+/** 生成永久 UUIDv4；独立 Session 与集合共享同一生成规则。 */
 export function generate_session_id(): string {
   return random_uuid();
 }

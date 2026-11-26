@@ -1,5 +1,5 @@
 /**
- * Power Renderer 的设计令牌与侧栏结构守卫。
+ * Power Renderer 的设计令牌与资源列表结构守卫。
  *
  * ## 为什么需要它
  *
@@ -8,7 +8,7 @@
  * 于是那一整套收敛在 Power 里全都不成立：字号写成任意值、弱化文字叠透明度、圆角用命名档位，
  * 还有手搭的空态。
  *
- * 后果不是“不好看”，而是**同一个侧栏里出现两套字号与两套弱化程度**——
+ * 后果不是“不好看”，而是**同一个资源列表里出现两套字号与两套弱化程度**——
  * Messenger 的 Bot Account 列表和它自己的空态说的不是同一种视觉语言，
  * 而用户一眼就能看出“这两个不是一个东西”。
  *
@@ -37,11 +37,11 @@ function strip_comments(source) {
   return source.replace(/\/\*[\s\S]*?\*\//g, "").split("\n").map((line) => line.replace(/\/\/.*$/, "")).join("\n");
 }
 
-/** 取出 `sidebar: function ...` 到 `mainview: function ...` 之间的一段（同一文件同时导出两个插槽）。 */
-function sidebar_section(source) {
-  const start = source.indexOf("sidebar: function");
+/** 提取完整资源集合中的内容，检查其行高与副文本。 */
+function list_section(source) {
+  const start = source.search(/<List[\s>]/);
   if (start === -1) return "";
-  const end = source.indexOf("mainview: function", start);
+  const end = source.indexOf("</List>", start);
   return source.slice(start, end === -1 ? undefined : end);
 }
 
@@ -71,43 +71,43 @@ test("Power Renderer 不出现被收敛掉的令牌写法", () => {
 });
 
 /**
- * 侧栏的行必须用宿主的行组件。
+ * 资源列表的行必须用宿主的行组件。
  *
  * 自己拼 `<div>` + `min-h-*` 就等于长出了第二套行高与内边距，
- * 而那正是 desktop 侧栏刚收敛掉的东西。
+ * 而那正是 desktop 资源列表刚收敛掉的东西。
  */
-test("Power 侧栏的行只用注入的行组件", () => {
+test("Power 资源列表的行只用注入的行组件", () => {
   const violations = [];
   for (const file of collect_renderers(powers_root)) {
     const source = strip_comments(fs.readFileSync(file, "utf8"));
-    const sidebar = sidebar_section(source);
-    if (!sidebar) continue;
+    const list = list_section(source);
+    if (!list) continue;
     const relative = path.relative(powers_root, file);
-    for (const match of sidebar.matchAll(/className="[^"]*\bmin-h-(?:7|8|9|10|11|12)\b[^"]*"/g)) {
+    for (const match of list.matchAll(/className="[^"]*\bmin-h-(?:7|8|9|10|11|12)\b[^"]*"/g)) {
       violations.push(`${relative} → ${match[0]}`);
     }
   }
-  assert.deepEqual(violations, [], `Power 侧栏自己写了行高，请改用 SidebarItem / SidebarTreeItem：\n  ${violations.join("\n  ")}`);
+  assert.deepEqual(violations, [], `Power 资源列表自己写了行高，请改用 ListItem / TreeItem：\n  ${violations.join("\n  ")}`);
 });
 
 /**
- * 侧栏里的“行外副文本”必须走宿主组件 `SidebarSubText`。
+ * 资源列表里的“行外副文本”必须走宿主组件 `ListHint`。
  *
  * 这条不是风格偏好：副文本的左缘要对齐到同级行的文字线，字号与颜色要取宿主令牌。
  * 自己拼一个 `<div>` 时这三件事都会各自决定——三个不同的左内边距就是这么来的，
  * 而它们各自“看起来都对”，只因为它们分别对齐了不同的东西。
  */
-test("侧栏的副文本走宿主注入的 SidebarSubText", () => {
+test("资源列表的副文本走宿主注入的 ListHint", () => {
   const violations = [];
   for (const file of collect_renderers(powers_root)) {
     const source = strip_comments(fs.readFileSync(file, "utf8"));
-    const sidebar = sidebar_section(source);
-    if (!sidebar) continue;
+    const list = list_section(source);
+    if (!list) continue;
     const relative = path.relative(powers_root, file);
     // 副文本的识别特征：小字号（2xs / 3xs）+ 弱化色，且是裸 <div>。
-    for (const match of sidebar.matchAll(/<div className="[^"]*(?:text-2xs|text-3xs)[^"]*"/g)) {
+    for (const match of list.matchAll(/<div className="[^"]*(?:text-2xs|text-3xs)[^"]*"/g)) {
       violations.push(`${relative} → ${match[0].slice(0, 100)}`);
     }
   }
-  assert.deepEqual(violations, [], `侧栏里出现了手搭的副文本，请改用 SidebarSubText：\n  ${violations.join("\n  ")}`);
+  assert.deepEqual(violations, [], `资源列表里出现了手搭的副文本，请改用 ListHint：\n  ${violations.join("\n  ")}`);
 });

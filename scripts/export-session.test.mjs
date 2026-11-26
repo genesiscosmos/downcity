@@ -36,11 +36,11 @@ function fixture(context) {
     fs.mkdirSync(attachments, { recursive: true });
     const attachment = path.join(attachments, "fixture.txt"); fs.writeFileSync(attachment, 'attachment-' + index);
     fs.writeFileSync(path.join(path.dirname(attachments), '.owned-attachments.json'), JSON.stringify({ format_version: 2, agent_id: 'sample', session_id: storage_id, files: ['fixture.txt'] }), { mode: 0o600 });
-    const key = Number(database.prepare(`INSERT INTO sessions(session_id,category,origin,timezone,title,archived,archived_at,message_count,revision,created_at,updated_at)
-      VALUES(?,'chat',?,'UTC',?,?,?,1,1,1,2)`).run(storage_id,
-      JSON.stringify({ category: "chat", type: "agent" }), 'record-' + index, index < 2 ? 1 : 0, index < 2 ? 3 : null).lastInsertRowid);
-    database.prepare("UPDATE session_configuration SET system_snapshot=?,model_binding=? WHERE session_key=?")
-      .run('system-' + index, JSON.stringify({ default_model_id: null }), key);
+    const key = Number(database.prepare(`INSERT INTO sessions(session_id,type,kind,relations,timezone,title,archived,archived_at,message_count,revision,created_at,updated_at)
+      VALUES(?,'chat','desktop','{}','UTC',?,?,?,1,1,1,2)`).run(storage_id,
+      'record-' + index, index < 2 ? 1 : 0, index < 2 ? 3 : null).lastInsertRowid);
+    database.prepare("UPDATE session_configuration SET system_snapshot=? WHERE session_key=?")
+      .run('system-' + index, key);
     database.prepare("INSERT INTO messages(session_key,message_id,sequence,role,created_at,updated_at) VALUES(?,'message',1,'user',1,2)").run(key);
     database.prepare("INSERT INTO message_parts(session_key,part_id,message_id,sequence,type,content,created_at,updated_at) VALUES(?,'file','message',1,'file',?,1,2)")
       .run(key, JSON.stringify({ media_type: "text/plain", url: attachment }));
@@ -139,9 +139,9 @@ test('unfinished subtree archive cannot be exported without its persisted plan',
   const item = fixture(context);
   const database = new DatabaseSync(item.database_path);
   const operation_id = random_uuid();
-  database.prepare("INSERT INTO archive_operations(operation_id,root_session_id,category,fingerprint,created_at) VALUES(?,?,'chat',?,1)")
+  database.prepare("INSERT INTO archive_operations(operation_id,root_session_id,type,fingerprint,created_at) VALUES(?,?,'chat',?,1)")
     .run(operation_id, item.ids[0], 'a'.repeat(64));
-  database.prepare("INSERT INTO archive_operation_nodes(operation_id,position,session_id,category,origin_type) VALUES(?,1,?,'chat','agent')")
+  database.prepare("INSERT INTO archive_operation_nodes(operation_id,position,session_id,type,kind) VALUES(?,1,?,'chat','desktop')")
     .run(operation_id, item.ids[0]); database.close();
   await assert.rejects(export_session(item.input, runtime), /pending_archive_conflict/);
   assert.equal(fs.existsSync(item.input.package_path), false);

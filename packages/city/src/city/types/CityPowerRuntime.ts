@@ -62,7 +62,7 @@ export interface CityPowerRecord {
   readonly logger: Logger;
   /** Power 初始化与释放共享的 City 级稳定上下文。 */
   readonly lifecycle_context: PowerLifecycleContext;
-  /** Sidebar/Mainview 业务 action。 */
+  /** Power 页面及业务视图使用的 action。 */
   readonly host_actions: Map<string, PowerHostAction>;
   /** Power 唯一配置 action。 */
   readonly config_actions: Map<string, PowerConfigAction>;

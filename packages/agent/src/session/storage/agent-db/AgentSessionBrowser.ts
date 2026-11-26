@@ -17,6 +17,8 @@ import { acquire_agent_session_storage } from "./AgentSessionRuntime.js";
 import { agent_session_read_view, project_agent_session_record } from "./AgentSessionReadView.js";
 import { resolve_prompt_request_identity } from "../../loop/SessionTurnHandles.js";
 import { read_session_completion } from "../AgentPendingReferences.js";
+import type { AgentVariables } from "@/types/agent/AgentVariables.js";
+import { assert_agent_variable_key } from "./AgentVariables.js";
 
 /** 独立读租约可长于执行器生命周期，dispose 返回资源关闭的真实 Promise。 */
 export class AgentSessionBrowser {
@@ -27,20 +29,23 @@ export class AgentSessionBrowser {
 
   constructor(private readonly options: AgentSessionBrowserOptions) {}
 
+  /** 通用 Agent 变量的只读租约视图；不装配执行器、不解释宿主键，也不创建缺失的库。 */
+  readonly variables: Pick<AgentVariables, "get"> = {
+    get: async (key) => {
+      assert_agent_variable_key(key);
+      const lease = await this.collection_connection();
+      if (!lease) return undefined;
+      const result = await lease.read<{ value: string | null }>({ command: "variable_get", key });
+      return result.value === null ? undefined : JSON.parse(result.value);
+    },
+  };
+
   /** 按不可变记录身份读取，不猜测逻辑地址；调用方必须检查返回视图的归档状态。 */
   async get_record(session_id: string): Promise<SessionReadView> {
     if (!/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/iu.test(session_id)) throw new Error("session_validation_error");
     const lease = await this.connection();
     const record = await lease.read<AgentSessionRecord>({ command: "record", session_id });
     return agent_session_read_view(lease, this.options.agent_id, record);
-  }
-
-  /** 只读持久主指针；空根不创建数据库或会话。 */
-  async main(): Promise<SessionReadView | null> {
-    const lease = await this.collection_connection();
-    if (!lease) return null;
-    const record = await lease.read<AgentSessionRecord | null>({ command: "main" });
-    return record ? agent_session_read_view(lease, this.options.agent_id, record) : null;
   }
 
   async categories(archived = false): Promise<string[]> {

@@ -111,7 +111,7 @@ export interface AgentOptions {
    * 为 Session Power start 动作显式指定的项目 Workspace ID 提供运行时实例。
    *
    * 由宿主持有项目目录并校验目标；Agent 不查询 City registry。
-   * 未提供时不支持通过 session.start 派发项目工作，禁止继承主会话的私有目录。
+   * 未提供时不支持通过 session.start 派发项目工作，禁止继承调用会话的私有目录。
    */
   resolve_work_workspace?: (workspace_id: string) => Promise<WorkspaceRuntime>;
 

@@ -1,6 +1,6 @@
 /** 正式版本与过渡版 v12→v13 离线入口；显式停写后才允许发布或恢复。 */
 import { parse_arguments } from "./migrate-session-sqlite-v12.mjs";
-import { load_runtime } from "./lib/session-runtime.mjs";
+import { load_runtime } from "./lib/session-v13-runtime.mjs";
 import { load_runtime as load_historical } from "./lib/session-v12-runtime.mjs";
 import * as migration from "./lib/session-v13-migration.mjs";
 import { diagnostic } from "./lib/session-v8-files.mjs";

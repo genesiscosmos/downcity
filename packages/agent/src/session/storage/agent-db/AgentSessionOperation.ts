@@ -25,7 +25,6 @@ export function agent_session_operation_hash(operation: AgentSessionWriteCommand
   switch (operation.command) {
     case "archive_prepare": return storage_digest({ command: "archive_prepare", ...operation.input, type: normalize_session_type(operation.input.type) });
     case "ensure_creation": return storage_digest({ command: "ensure_creation", input: { ...operation.input, ...normalize_session_descriptor(operation.input) } });
-    case "ensure_main": return storage_digest({ command: "ensure_main", input: operation.input });
     case "create": return storage_digest({ command: "create", input: { ...operation.input, ...normalize_session_descriptor(operation.input) } });
     case "archive": return storage_digest({ command: "archive", address: operation.address, archived_at: operation.archived_at });
     case "remove": return storage_digest({ command: "remove", address: operation.address });

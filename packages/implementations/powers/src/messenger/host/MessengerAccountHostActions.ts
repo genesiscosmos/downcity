@@ -268,7 +268,7 @@ export function register_messenger_account_host_actions(
   });
 }
 
-/** 创建 Sidebar 和 Mainview 共享的 Account 列表快照。 */
+/** 创建 资源列表和详情 共享的 Account 列表快照。 */
 async function create_snapshot(
   context: PowerLifecycleContext,
   runtime: MessengerRuntime,

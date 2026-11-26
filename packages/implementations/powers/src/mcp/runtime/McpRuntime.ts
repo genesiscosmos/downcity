@@ -255,7 +255,7 @@ export class McpRuntime {
     return { success: true, server_id, tool_count: runtime.tools.length, tools: runtime.tools.slice(0, 20).map((tool) => tool.name) };
   }
 
-  /** 显式刷新连接；配置页与 Mainview 使用同一目录。 */
+  /** 显式刷新连接；配置页与资源详情 使用同一目录。 */
   private async reload_config(input: PowerJsonValue | undefined): Promise<PowerJsonObject> {
     await this.refresh_connections(input === undefined ? undefined : read_server_id(input));
     return as_json(await this.server_files().read());

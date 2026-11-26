@@ -11,8 +11,7 @@ export function create_power_registration(power) {
   return {
     readme: import.meta.filename,
     has_config: false,
-    has_sidebar: false,
-    has_mainview: false,
+    has_page: false,
     power,
   };
 }

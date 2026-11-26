@@ -710,7 +710,7 @@ test("Inbox仅管理通知阅读状态，响应回到原Interaction且通知重�
   } finally { power.dispose(); await scope.files.dispose?.(); fs.rmSync(root, { recursive: true, force: true }); }
 });
 
-test("Inbox两个插槽共享查询，刷新保留选择并阻止旧快照回退已处理状态", async () => {
+test("Inbox订阅共享查询，刷新保留选择并阻止旧快照回退已处理状态", async () => {
   const pending = (id) => ({ agent_id: "a", agent_name: "Agent", interaction: { can_respond: true,
     reference: { session_category: "work", session_id: "s", turn_id: "t", interaction_id: id },
     interaction: { status: "pending", request: { title: id, type: "question", payload: { questions: [] }, created_at: 1 } },
@@ -736,7 +736,7 @@ test("Inbox两个插槽共享查询，刷新保留选择并阻止旧快照回退
     return await new Promise((accept) => { resolve = accept; });
   } };
   const store = new InboxStore();
-  const release_sidebar = store.attach(gateway);
+  const release_list = store.attach(gateway);
   const release_main = store.attach(gateway);
   try {
     assert.equal(calls, 1);
@@ -779,13 +779,13 @@ test("Inbox两个插槽共享查询，刷新保留选择并阻止旧快照回退
     const removed_snapshot = { ...cleared_snapshot, revision: 4, interactions: [] };
     const refresh_removed = store.refresh(); resolve(removed_snapshot); await refresh_removed;
     assert.equal(store.get_snapshot().selected.key, selected.key);
-    release_sidebar();
+    release_list();
     const still_active = store.refresh(); resolve(snapshot); await still_active;
     release_main();
     const final_calls = calls;
     await store.refresh();
     assert.equal(calls, final_calls);
-  } finally { release_sidebar(); release_main(); }
+  } finally { release_list(); release_main(); }
 });
 
 test("Inbox贯通真实Agent提问、原地回答和Work完成更新", async () => {

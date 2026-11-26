@@ -17,9 +17,9 @@ function write_power_source(root, input = {}) {
   const version = input.version ?? "1.0.0";
   const description = input.description ?? "Example Power for configuration tests.";
   const main = input.main === null ? undefined : input.main ?? "dist/main.js";
-  const renderer_input = input.renderer === null ? undefined : input.renderer ?? "dist/mainview.js";
+  const renderer_input = input.renderer === null ? undefined : input.renderer ?? "dist/page.js";
   const renderer = typeof renderer_input === "string"
-    ? { entry: renderer_input, capabilities: { sidebar: true, mainview: true, config: true } }
+    ? { entry: renderer_input, capabilities: { page: true, config: true } }
     : renderer_input;
   const readme_path = input.readme_path === null ? undefined : input.readme_path ?? "README.md";
   fs.writeFileSync(
@@ -62,7 +62,7 @@ export default {
   if (renderer) {
     const renderer_path = path.join(root, renderer.entry);
     fs.mkdirSync(path.dirname(renderer_path), { recursive: true });
-    fs.writeFileSync(renderer_path, input.renderer_source ?? "export default { sidebar: function ExampleSidebar() { return null; }, mainview: function ExampleMainview() { return null; }, config: function ExampleConfig() { return null; } };\n");
+    fs.writeFileSync(renderer_path, input.renderer_source ?? "export default { page: function example_page() { return null; }, config: function example_config() { return null; } };\n");
   }
   if (input.source_config) {
     fs.writeFileSync(path.join(root, "config.toml"), input.source_config);
@@ -229,13 +229,13 @@ test("第三方 Power 使用 definition ID 目录和统一入口协议", async (
     const installed = await installer.install_power(power_source);
     assert.equal(installed.id, "example");
     assert.equal(installed.main, "dist/main.js");
-    assert.deepEqual(installed.renderers, { "downcity.desktop.react.v1": { entry: "dist/mainview.js", capabilities: { sidebar: true, mainview: true, config: true } } });
+    assert.deepEqual(installed.renderers, { "downcity.desktop.react.v1": { entry: "dist/page.js", capabilities: { page: true, config: true } } });
     assert.equal(installed.readme, "README.md");
     assert.match(installed.integrity, /^sha256-[a-f0-9]{64}$/u);
     const power_dir = path.join(platform_root, "powers", "example");
     assert.equal(fs.existsSync(path.join(power_dir, "power.json")), true);
     assert.equal(fs.existsSync(path.join(power_dir, "dist", "main.js")), true);
-    assert.equal(fs.existsSync(path.join(power_dir, "dist", "mainview.js")), true);
+    assert.equal(fs.existsSync(path.join(power_dir, "dist", "page.js")), true);
     assert.equal(fs.existsSync(path.join(power_dir, "artifact")), false);
     assert.equal(fs.existsSync(path.join(power_dir, "src")), false);
     assert.equal(fs.existsSync(path.join(power_dir, "package.json")), true);
@@ -442,7 +442,7 @@ test("Power 安装拒绝内置 ID、非法清单与逃逸入口", async () => {
     write_power_source(power_source, { main: "dist/main.ts" });
     await assert.rejects(() => installer.install_power(power_source), /main must use .js or .mjs/u);
 
-    write_power_source(power_source, { renderer: "dist/mainview.html" });
+    write_power_source(power_source, { renderer: "dist/page.html" });
     await assert.rejects(() => installer.install_power(power_source), /renderer\.entry must use .js or .mjs/u);
 
     write_power_source(power_source, { main: null, renderer: null });
@@ -555,27 +555,23 @@ test("内建 Power Catalog 暴露统一运行与 Renderer 能力", async () => {
     assert.equal(chat.power_id, "chat");
     assert.equal(chat.source, "builtin");
     assert.equal(chat.has_main, true);
-    // Chat 现在自己提供 Mainview（Channel 管理界面），配置改由 Mainview 承担。
-    // 这两个值随 BuiltinPowerTypes 的注册表变化，断言必须与那份注册表一致。
+    // Chat 在完整业务页面内提供 Channel 管理，与内置注册表保持一致。
     assert.equal(chat.has_config, false);
-    assert.equal(chat.has_mainview, true);
+    assert.equal(chat.has_page, true);
     const memory = await catalog.resolve_power_catalog_item("memory");
     assert.equal(memory.has_main, true);
     assert.equal(memory.has_config, false);
-    // Memory 现在自带 Mainview（浏览、详情与写入），与 BuiltinPowerTypes 一致。
-    assert.equal(memory.has_sidebar, true);
-    assert.equal(memory.has_mainview, true);
+    // Memory 页面提供浏览、详情与写入。
+    assert.equal(memory.has_page, true);
     const web = await catalog.resolve_power_catalog_item("web");
     assert.equal(web.has_main, true);
     assert.equal(web.has_config, false);
-    // Web 的配置在 Sidebar + Mainview 工作区内完成，不再有独立 Config 面板。
-    assert.equal(web.has_sidebar, true);
-    assert.equal(web.has_mainview, true);
+    // Web 在完整业务页面内配置，不提供独立 Config 面板。
+    assert.equal(web.has_page, true);
     const skill = await catalog.resolve_power_catalog_item("skill");
     assert.equal(skill.has_main, true);
     assert.equal(skill.has_config, false);
-    assert.equal(skill.has_sidebar, true);
-    assert.equal(skill.has_mainview, true);
+    assert.equal(skill.has_page, true);
     const result = spawnSync(process.execPath, [path.resolve("bin/downcity.js"), "power", "list"], {
       encoding: "utf8",
       env: { ...process.env, NO_COLOR: "1" },
@@ -595,7 +591,7 @@ test("内建 Power Catalog 暴露统一运行与 Renderer 能力", async () => {
  *
  * 它断言的是 `registration.power.get_channel_id / getQueueWorkerConfig /
  * resolveChannelAccount`——这三个方法全仓已不存在（Power 改为通过 City 持有的配置与
- * Mainview 装配，不再由 Power 实例暴露 channel 读取方法）。
+ * Page 装配，不再由 Power 实例暴露 channel 读取方法）。
  * 该能力现由 `@downcity/powers` 自己的 `scripts/chat-channel-config.test.mjs`
  *（`pnpm -C packages/implementations/powers test:chat-config`）覆盖，因此不再在这里重复。
  */

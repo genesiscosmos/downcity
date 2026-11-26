@@ -17,8 +17,8 @@
 | 2 | Workspace 行右端的「新建对话」加号按钮 | `layouts/sidebar/NewChatRow.tsx` |
 | 3 | 树行（根 / 会话） | `layouts/sidebar/WorkspaceSessionList.tsx` |
 | 4 | 设置条目 | `layouts/sidebar/SettingsSidebarPanel.tsx` |
-| 5 | 注入给 Power 的 `SidebarItem` | `features/power/lib/PowerRendererComponents.tsx` |
-| 6 | 注入给 Power 的 `SidebarTreeItem` | 同上 |
+| 5 | 注入给 Power 的 `ListItem` | `features/power/lib/PowerRendererComponents.tsx` |
+| 6 | 注入给 Power 的 `TreeItem` | 同上 |
 | 7 | （已删除的）空态与加载态 | 分散在 1 / 3 两处 |
 
 它们各自决定行高（28 / 32 / 40 / 44 / 48）、圆角（`item` / `control`）、
@@ -47,8 +47,8 @@ settings  [图标 16] 名称                   ← 设置行：比 default 高�
 
 | 变体 | 行首槽 | 行高 | 文字线 | 用在哪 |
 | --- | --- | --- | --- | --- |
-| `agent` | 32（头像；图标 16 居中） | 44 / 48 | **96** | Agents 主体行、Power 条目、注入的 `SidebarItem` |
-| `default` | 无 / 16 / 32 | **32** | **56** / 80 / 96（带 32 槽）/ 100（树，+12×depth） | 会话行、新建行、Workspace 会话树、注入的 `SidebarTreeItem` |
+| `agent` | 32（头像；图标 16 居中） | 44 / 48 | **96** | Agents 主体行、Power 条目、注入的 `ListItem` |
+| `default` | 无 / 16 / 32 | **32** | **56** / 80 / 96（带 32 槽）/ 100（树，+12×depth） | 会话行、新建行、Workspace 会话树、注入的 `TreeItem` |
 | `settings` | 16 | **40** | **80** | 设置导航 |
 
 **只有这三档，没有第四个出口。** 新增一种行时先回答「它是身份行、条目行，还是设置行」，
@@ -142,15 +142,17 @@ Workspace 会话树不占行首槽：它的行首是 24px 的箭头按钮（`tre
 
 ---
 
-### 2.8 Power 工作区侧栏：适配层渲染同一个行
+### 2.8 我的目录与完整业务页面
 
-功能型 Power 不再有「全部 Power」的目录面板——每个功能型 Power 自己就是一级入口，
-它的侧栏由 Power 用注入的 `SidebarItem` / `SidebarTreeItem` 组合而成，
-适配层直接渲染同一个 `SidebarItem`，因此它和内置面板共用行高、文字线与选中态。
-
-这条路径证明了一件更容易被忽略的事：**几何只能有一个来源**。
-只要适配层自己拼 `<div>`、自己写字号与圆角，同一个 Power 在它自己的侧栏里
-就会与宿主面板分叉（本轮之前就是这么做的）。
+底栏固定为 **Chat、Work、我的**（英文 **Me**），分别对应 `⌘/Ctrl + 1–3`。
+我的侧栏包含 Powers 与设置两个分组；打开任一 Power 或设置页时，持续保留同一目录和三个底栏入口。
+Powers 分组统一列出 Notification、Task 和其他有工作页面或配置的 Power，分组标题右侧的加号用于添加扩展。
+Notification 行显示可响应待处理请求与未读失败的合计数字，我的入口汇总各 Power 的未读提示。
+设置分组依次提供我的账户、用量、模型、通用、外观、聊天、City Remote、快捷键。
+选择 Power 后在 Mainview 挂载其完整单一 `page`，仅提供 Config 时直接打开配置；设置内容同样在 Mainview 打开。
+Power 自己组织业务导航、集合、筛选与页面布局；资源详情和编辑在 BayBar 打开。
+页面复用宿主 `Page`、`List`、`ListSection`、`ListItem`、`TreeItem`、`ListHint` 与 `CreateMenu`。
+通用行组件由宿主适配到共享行实现，沿用相同的行高、文字线和选中态。
 
 ## 三、各面板如何使用
 
@@ -179,8 +181,8 @@ Workspace 会话树不占行首槽：它的行首是 24px 的箭头按钮（`tre
 | --- | --- | --- |
 | Agents | `SidebarItem variant="agent"`；行首是头像，点击进 profile / 配置 | `SidebarHeader`「Agents」+ 加号菜单；空态 = 图标 + 「暂无聊天主体」+ 建立按钮 |
 | Works | `SidebarItem variant="default"` + 树形箭头 / `indent`；根行右端是「新建对话」图标按钮 + 菜单，叶子行首是归属头像（`tree.leading`） | 空态 = 图标 + 「还没有 Workspace」+ 「添加 Workspace」 |
-| Power 工作区 | 由 Power 用 `ui.Sidebar` / `SidebarItem`（`agent`）/ `SidebarTreeItem`（`default` + 32）组合——**适配层直接渲染同一个 `SidebarItem`** | 缺失插槽 / 错误由宿主渲染 |
-| 设置 | `SidebarItem variant="settings"` + 分组标签 | 返回动作是 Header 右侧的图标按钮，与其它面板同位置 |
+| Power 页面 | `Page` 组织完整业务界面，集合使用通用 `ListItem` / `TreeItem`，应用 Sidebar 保留我的目录 | 页面加载与错误由宿主和 Power 按各自边界呈现 |
+| 设置 | 我的侧栏设置分组使用 `SidebarItem variant="settings"` | 设置内容在 Mainview 打开，同一目录与三个底栏入口持续可见 |
 
 **会话行不带行首槽**：它没有头像也没有图标，放了会把文字从 56 推到 80/96。
 它的归属是**树行的行首列**（`tree.leading`，与根节点的展开箭头同格），因此文字线不变；
@@ -301,7 +303,7 @@ Workspace A  [▶ 24]─4─名称    ＋  ⋯
 | B1 | 行首槽收敛为 0 / 16 / 32；行变体收敛为 3 个；面板标题与分组标签统一到 56；文件与文件夹图标同列 | 中（见 §7.1） |
 | B2 | 会话行等三种卡片内行去掉行首图标，文字回到 56；空描述不占第二行（行高 48 → 44）；描述 10px → 11px | 中（见 §7.1） |
 | B3 | 字号角色补进 `desktop-type-scale-design.md` §4.1；新增 `sidebar_row_contract.test.ts` | 零 |
-| B4 | **行变成组件**（`SidebarItem` / `SidebarRow` / …），调用点不再拼 DOM；Power 注入的 Sidebar 组件改为适配层，与目录页共用同一个行 | 零（结构） |
+| B4 | **行变成组件**（`SidebarItem` / `SidebarRow` / …），调用点不再拼 DOM；Power 注入的通用列表组件改为适配层，与目录页共用同一个行 | 零（结构） |
 | B5 | **树形行收敛为 `tree` 参数**；修掉目录行 `<button>` 嵌 `<button>`；缩进步长回到 12 | 中（见 §7.1） |
 | B6 | 树行改回与会话行同一套壳；箭头恢复 `size-6` 原样式；图标回到名字所在的按钮里 | 中（见 §7.1） |
 | B7 | 卡片下半的 8px 拆成两层（面板 4 + 行 4）：底色缩回卡片内 4、文字离底色左缘 4，文字线不变 | 小（见 §7.1） |
@@ -352,7 +354,7 @@ Workspace A  [▶ 24]─4─名称    ＋  ⋯
    菜单入口的图标在跑会话时变旋转、待处理时变问号，
    不应出现“状态图形 + 菜单”两个并列的东西。
 5. 树形行里点箭头只切换、点名称只打开（根）/ 只打开会话（叶子），两者不互相触发。
-6. **Power 工作区侧栏**：注入的 `SidebarItem` 应与 Agents 主体行同一档（行高、文字线、选中底色），
+6. **Power 页面集合**：注入的 `ListItem` 应与 Agents 主体行同一档（行高、文字线、选中底色），
    确认它读起来与宿主面板是同一个东西。
 7. 设置条目 40 高、会话树 32 高：确认「略高」读起来是呼吸而不是错位。
 8. （已随展开卡片删除）
@@ -486,7 +488,7 @@ div（列，relative：把手定位基准 + 调用方的测量锚点）
 Workspace A  [▶ 24]─4─名称                    ⏳  ⋯   根：箭头 + 名称 + 菜单（状态落在它上面）
   └ 会话标题                  Agent 名  ⋯     叶子：缩进 12，标题 + 归属 + 菜单
 
-[▶ 24]─4─[📁 16]─4─名称                       注入的 SidebarTreeItem：箭头 + 图标
+[▶ 24]─4─[📁 16]─4─名称                       注入的 TreeItem：箭头 + 图标
 
 每层：外层包裹 marginLeft +12，行盒 w-full
       行盒左缘 12×depth，**右缘始终等于容器右缘**（不溢出）
@@ -495,7 +497,7 @@ Workspace A  [▶ 24]─4─名称                    ⏳  ⋯   根：箭头 + 
 ```
 
 - **Workspace 会话树没有图标**：会话身份由标题与尾随的 Agent 名表达，再加一个图标只会
-  多制造一条文字线，因此它的文字线是 80（叶子 92）。注入的 `SidebarTreeItem` 有图标，
+  多制造一条文字线，因此它的文字线是 80（叶子 92）。注入的 `TreeItem` 有图标，
   文字线才是 100。两者都不是新基准——树行就是 `default` 行，只是行首多了箭头（和图标）。
 - **缩进作用在行盒上，不是内容上**：用 `marginLeft` 而不是 `paddingLeft`。
   padding 只把内容往右推，行盒仍从面板左缘开始——于是选中 / hover 的底色会从一个比节点
@@ -676,7 +678,7 @@ Chat 的 Bot Account 列表和它自己的空态说的不是同一种视觉语�
 它把三件事收进宿主：左缘对齐到同级行的文字线（带 `indent` 时按层进）、字号 `2xs`、弱化色 `muted-foreground`。
 Power 不再自己拼 `<div>`——那是上面那三个内边距值的来源。
 
-**`SidebarTreeItem` 的数字 `trailing` 由适配层包成计数胶囊**：
+**`TreeItem` 的数字 `trailing` 由适配层包成计数胶囊**：
 
 ```tsx
 trailing={workspace.skills.length}   // 只交出一个数
@@ -691,12 +693,11 @@ trailing={workspace.skills.length}   // 只交出一个数
 1. 字号只能取语义档位，不得写任意值；
 2. 弱化文字只有一档，不得叠透明度；
 3. 圆角用角色名，不得用 Tailwind 命名档位；
-4. **侧栏的行只用注入的行组件**（不得自己写 `min-h-*`）；
-5. **侧栏的副文本走 `SidebarSubText`**（不得手搭小字号 `<div>`）。
+4. **Power 集合的行只用注入的 `ListItem` / `TreeItem`**（不得自己写 `min-h-*`）；
+5. **Power 集合的提示走 `ListHint`**（不得手搭小字号 `<div>`）。
 
 入口：`pnpm -C packages/implementations/powers run test:renderer`。
 
-> 第 4、5 条只扫每个 renderer 文件的 `sidebar:` 一段：同一个文件同时导出 mainview，
-> 而 mainview 里的正文说明不受此限。
+> Power 页面内的集合使用注入的通用列表组件；正文使用页面与内容组件。
 
 ---

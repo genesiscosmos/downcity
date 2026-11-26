@@ -8,11 +8,12 @@ import { AgentSessionDatabase } from "./AgentSessionDatabase.js";
 import { AgentSessionCatalog } from "./AgentSessionCatalog.js";
 import { AgentSessionMessages } from "./AgentSessionMessages.js";
 import { AgentSessionConfiguration } from "./AgentSessionConfiguration.js";
+import { read_agent_variable, mutate_agent_variable } from "./AgentVariables.js";
 import { read_session_input_versions } from "./AgentSessionInputVersions.js";
 
 /** Writer 命令集合用于 Reader 防线，不能依赖 TypeScript 在运行时阻止写入。 */
 export function is_agent_session_write_command(operation: AgentSessionReadCommand | AgentSessionWriteCommand): boolean {
-  return ["ensure_creation", "ensure_main", "create", "archive", "remove", "append", "update", "truncate", "configure", "checkpoint_insert", "archive_prepare", "archive_node"].includes(operation.command);
+  return ["ensure_creation", "variable_mutate", "create", "archive", "remove", "append", "update", "truncate", "configure", "checkpoint_insert", "archive_prepare", "archive_node"].includes(operation.command);
 }
 
 /** 分发单个语义命令；所有数据库工作同步结束后返回。 */
@@ -22,8 +23,8 @@ export function execute_agent_session_command(owner: AgentSessionDatabase, opera
   const configuration = new AgentSessionConfiguration(owner);
   switch (operation.command) {
     case "ensure_creation": return catalog.ensure_creation(operation.operation_id, operation.input);
-    case "main": return catalog.main();
-    case "ensure_main": return catalog.ensure_main(operation.operation_id, operation.input);
+    case "variable_get": return read_agent_variable(owner, operation.key);
+    case "variable_mutate": return mutate_agent_variable(owner, operation.input);
     case "archive_plan": return new AgentArchivePlans(owner).read(operation.operation_id);
     case "archive_prepare": {
       new AgentArchivePlans(owner).prepare(operation.input);

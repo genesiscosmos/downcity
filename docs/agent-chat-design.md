@@ -1,6 +1,8 @@
-# Session 角色与 Workspace 能力重设计
+# Session 角色与 Workspace 能力历史设计
 
-> 状态：设计稿，待实施
+> 状态：历史设计资料，不作为当前 SDK 契约或实施清单。
+>
+> 当前 Session 使用 `id / type / kind`，默认 Chat 的选择属于宿主。SDK 提供通用 `agent.variables`；Desktop 使用 `desktop.main_chatroom` 管理入口。当前接口请参阅 homepage 的 Agent SDK Session 管理文档。本文保留原始设计推导，不能据此恢复默认会话 API 或身份规则。
 >
 > 适用范围：`@downcity/agent`、`@downcity/city` 调用点、`@downcity/powers`、`private/apps/desktop`、`packages/cli`、homepage `agent-sdk-docs`
 >

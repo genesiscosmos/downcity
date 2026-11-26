@@ -54,7 +54,7 @@ export {
 export type { SessionRemovalEvent } from "./types/agent/SessionRemoval.js";
 export type { SessionCallback, SessionCallbackInput, SessionCallbackHandler, SessionCallbacks } from "./types/agent/SessionCallback.js";
 export type { AgentWorkHost } from "./types/agent/AgentWorkHost.js";
-export type { AgentSessionInput } from "./types/agent/AgentSessionInput.js";
+export type { AgentVariables, AgentVariableValue } from "./types/agent/AgentVariables.js";
 export type { SessionWorkContract } from "./types/agent/SessionWork.js";
 export { bound_json, json_bytes, HISTORY_PAGE_MAX_BYTES } from "./model/messages/BoundedJson.js";
 export type { SessionBackgroundInput, SessionBackgroundReceipt } from "./types/session/SessionBackgroundInput.js";

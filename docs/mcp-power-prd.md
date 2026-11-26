@@ -60,7 +60,7 @@ headers = { "X-Client" = "downcity" }
 
 ### Desktop 编辑与刷新
 
-保留 Sidebar、Mainview、Config 三个界面。Sidebar 与 Mainview 展示 Server、连接状态、工具和错误；编辑器读取真实 Server 文件，逐 Server 明确保存或删除。保存提交该文件，删除移除该文件，不能以保存整个 Server 集合的方式覆盖其他定义。
+完整 page 在 Mainview 展示 Server 集合与连接状态，Server 工具、错误和编辑在 BayBar 打开，Config 独立；编辑器读取真实 Server 文件，逐 Server 明确保存或删除。保存提交该文件，删除移除该文件，不能以保存整个 Server 集合的方式覆盖其他定义。
 
 普通手动文件编辑可通过 Config 重新读取发现：重新扫描 `servers` 目录中的外部新增、修改和删除，不执行 Server。Mainview 刷新会连接 Server，不能描述为只扫描文件。每个文件独立解析和校验；错误必须带文件定位并隔离到该 Server，其他合法文件继续可用。必须拒绝同时设置或同时缺失 `command`、`url` 的定义，不能静默切换模式。目录扫描、保存、删除失败要明确报告，不能表示为保存成功或空列表。
 
@@ -82,7 +82,7 @@ Server 描述、Schema 与结果都是外部数据，不能转为 Agent 指令�
 
 1. 默认及自定义宿主 `config.path` 都定位正确的全局 `servers` 目录；不同 Agent、Workspace 读取同一份定义，不创建私有副本。
 2. 验证扁平 stdio、HTTP 文件及默认值；同时设置或同时缺失 `command`、`url` 均失败。旧 `config.servers` 不读取、不自动迁移。
-3. Desktop 的 Sidebar、Mainview、Config 正常；每个 Server 的真实文件保存、删除可持久化，外部新增、修改、删除经 Config 重新读取正确反映。原文 `expected_content` 不匹配时拒绝修改，防止过期覆盖。坏文件与失败连接不会阻断其他合法 Server。
+3. Desktop 的完整 page、BayBar 资源视图与 Config 正常；每个 Server 的真实文件保存、删除可持久化，外部新增、修改、删除经 Config 重新读取正确反映。原文 `expected_content` 不匹配时拒绝修改，防止过期覆盖。坏文件与失败连接不会阻断其他合法 Server。
 4. 通过 `servers → tools → call` 完成真实 stdio 和真实 HTTP MCP Server 调用，保留原始工具名称并校验 JSON Schema；调用无额外 MCP 审批，元数据仍为 write。初始化、定义读取、单文件保存只扫描，不执行 Server；显式测试、Mainview 刷新连接或首次 `tools`/`call` 才连接。已知隐式安装运行器和包管理安装执行入口被拒绝；先走已有审批安装，再使用已安装可执行程序，卸载同样走已有审批流程。
 5. 验证错误、取消、超时、截断以及连接释放；变更、停用、删除和关闭不遗留对应连接或子进程。
 6. 测试报告必须分别列出静态检查、模拟 HTTP 测试、真实 MCP Server 互操作、Electron 实机操作的实际结果。模拟 HTTP 只能证明所覆盖的本地请求行为，不能等同于真实 MCP Server、stdio 进程生命周期或 Electron 界面验收。未执行项明确标注未验证。
@@ -381,7 +381,7 @@ export interface McpHttpTransportConfig {
 3. 新增的走 `add`，工具清单变化的走 `refresh`，被删除或停用的走 `remove`。
 4. 未出现在快照里的 server 视为连接失败，保留上一次的投影 Power 不做变动，避免一次网络抖动把工具面清空。
 
-投影 Power 的注册项需要 `CityPowerRegistration` 的完整字段：`readme` 指向 `mcp` 自己的用户文档，`has_config` / `has_sidebar` / `has_mainview` 全为 `false`。它既不是内建注册也不是已安装 Power，因此不会出现在 Desktop 的 Power catalog 里（`PowerController.list` 只合并 builtin 与 installed），用户不会在设置界面看到一堆由 server 派生的条目。模型侧仍然能看到它，因为 Agent 的工具集来自 `city.power_tools`，与 catalog 是两条路径。
+投影 Power 的注册项需要 `CityPowerRegistration` 的完整字段：`readme` 指向 `mcp` 自己的用户文档，`has_config` / `has_page` 全为 `false`。它既不是内建注册也不是已安装 Power，因此不会出现在 Desktop 的 Power catalog 里（`PowerController.list` 只合并 builtin 与 installed），用户不会在设置界面看到一堆由 server 派生的条目。模型侧仍然能看到它，因为 Agent 的工具集来自 `city.power_tools`，与 catalog 是两条路径。
 
 工具面变化在下一个 Step 生效。City 在 `add` / `refresh` / `remove` 后都会 `publish_surface_change`，`Agent.resolve_tools` 下一次求值即拿到新工具集，不需要重启，也不需要重启会话。
 
@@ -443,7 +443,7 @@ Desktop 侧还有一层：`initialize_desktop_powers` 用 `Promise.allSettled` �
 
 ## 6. Desktop 体验
 
-新增 `mcp` 的配置界面，参照 Web Power Renderer 的组织方式（`web/renderer/WebPowerRenderer.tsx`、`WebGeneralView.tsx` 与 `web/renderer/WebPowerShared.ts`）：视图只组合 `ui.components`，不写样式类名，数据通过 `power.invoke` 读写。UI 能力只有 config：`has_config: true`，`has_sidebar: false`，`has_mainview: false`。`PowerRendererHost` 的校验允许「只有 config」这一形态（仅当 sidebar / config / message 全缺时才报错），静态清单与实际导出必须一致。
+新增 `mcp` 的配置界面，参照 Web Power Renderer 的组织方式（`web/renderer/WebPowerRenderer.tsx`、`WebGeneralView.tsx` 与 `web/renderer/WebPowerShared.ts`）：视图只组合 `ui.components`，不写样式类名，数据通过 `power.invoke` 读写。UI 能力只有 config：`has_config: true`，`has_page: false`。`PowerRendererHost` 的校验允许「只有 config」这一形态（根据 page、config、agent_config、views、activity、input 与消息能力验证定义），静态清单与实际导出必须一致。
 
 - server 列表：标题、传输类型、启用开关、连接状态、工具数量、最近错误。
 - 新增与编辑：ID、传输表单（stdio 的 command / args / env / cwd，HTTP 的 url / headers）、信任级别、超时与结果上限、工具过滤。
@@ -484,7 +484,7 @@ packages/implementations/powers/src/mcp/types/McpProjection.ts          # 投影
 - `packages/city/src/city/types/CityPower.ts` 与 `packages/city/src/city/power/CityPowerRuntime.ts`：新增 `CityPowers.refresh`。
 - `packages/city/src/power/types/PowerRuntime.ts`：`PowerAction` 新增 `approval`。
 - `packages/city/src/power/core/PowerActionExecution.ts`：审批与 JSON Schema 校验接入统一流水线。
-- `packages/implementations/powers/src/builtin/BuiltinPowerTypes.ts`：增加 `mcp` 注册项（`has_config: true`，无 Sidebar 与 Mainview）。
+- `packages/implementations/powers/src/builtin/BuiltinPowerTypes.ts`：增加 `mcp` 注册项（`has_config: true`，`has_page: false`）。
 - `packages/implementations/powers/src/renderers.ts`：增加 `mcp` 渲染器。
 - `packages/implementations/powers/package.json`：增加 `./mcp` 导出与 `@modelcontextprotocol/client` 依赖。
 - `packages/implementations/powers/readmes/mcp.readme.md` 用户文档。

@@ -4,7 +4,7 @@
 export interface AgentArchivePlanInput {
   /** 原操作UUID，重入必须复用，不能换ID自动重放。 */
   operation_id: string;
-  /** 根的永久 UUID，重入不得指向重建后的主会话。 */
+  /** 根的永久 UUID，重入不得指向其他会话。 */
   session_id: string;
   /** 根所属分类，规范化后与原计划相等。 */
   type: string;
@@ -30,7 +30,7 @@ export interface AgentArchivePlanNode {
 export interface AgentArchivePlan {
   /** 原操作UUID，不与单节点事务receipt混用。 */
   operation_id: string;
-  /** 原根永久 UUID，主会话重建不改变已冻结的目标。 */
+  /** 原根永久 UUID，宿主选择变化不改变已冻结的目标。 */
   root_session_id: string;
   /** 原根分类。 */
   type: string;

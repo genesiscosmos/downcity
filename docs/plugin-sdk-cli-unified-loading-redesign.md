@@ -70,10 +70,10 @@ class GithubPlugin extends Plugin {
 第三方 `plugin.json` 可以声明：
 
 - `main`：默认导出一个 Plugin 实例。
-- `renderer`：声明成对的 Sidebar/Mainview 和独立 Config 插槽。
+- `renderer`：声明完整 `page` 页面和独立 `config` 能力。
 - `readme`、`icon`、版本与安装来源。
 
-Renderer 的 Sidebar/Mainview 使用 `plugin.invoke()`，Config 使用 `config.invoke()`。Renderer 不获得 Desktop controller、Node、Electron 或配置存储对象。
+Renderer 的 `page` 使用 `power.invoke()`，Config 使用 `config.invoke()`。Renderer 不获得 Desktop controller、Node、Electron 或配置存储对象。
 
 ## 6. 失败语义
 

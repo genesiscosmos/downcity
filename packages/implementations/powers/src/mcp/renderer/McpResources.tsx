@@ -5,7 +5,7 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { PowerConfigComponentProps, PowerMainviewComponentProps } from "@downcity/city/power/react";
+import type { PowerConfigComponentProps, PowerViewComponentProps } from "@downcity/city/power/react";
 import type { McpServerFilesView as McpConfigSnapshotView } from "@/mcp/types/McpServerFiles.js";
 import type { McpStatusResult as McpRendererStatusView } from "@/mcp/types/Mcp.js";
 import type {
@@ -14,8 +14,8 @@ import type {
   McpConfigTestView,
 } from "@/mcp/types/McpRenderer.js";
 
-/** MCP 资源详情输入；导航由统一 Skill Sidebar 持有。 */
-export interface McpResourceDetailProps extends PowerMainviewComponentProps {
+/** MCP 资源详情输入；导航由统一 Skill 资源列表 持有。 */
+export interface McpResourceDetailProps extends Pick<PowerViewComponentProps, "power" | "ui"> {
   /** 当前选中的全局 MCP Server ID。 */
   readonly server_id: string;
 }

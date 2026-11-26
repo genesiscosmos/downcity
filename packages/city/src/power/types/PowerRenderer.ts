@@ -1,5 +1,5 @@
 /**
- * Power Sidebar、Mainview、Config、Agent Profile、独立视图、Message 与宿主 UI 注入协议。
+ * Power Page、Config、Agent Profile、独立视图、Message 与宿主 UI 注入协议。
  *
  * Agent Profile 通过可选 agent_config 声明单个页签。宿主按已启用 Power 收集，
  * 为页签 ID 添加 Power 命名空间，并注入当前 Agent、业务网关与统一 UI。
@@ -29,7 +29,7 @@ export interface PowerConfigGateway {
   ): Promise<Result>;
 }
 
-/** Power Sidebar 与 Mainview 共享的宿主导航。 */
+/** Power Page 使用的宿主导航。 */
 export interface PowerRendererNavigation {
   /** 当前 Power 工作区的 JSON 路由状态。 */
   readonly route: PowerJsonObject;
@@ -79,7 +79,7 @@ export interface PowerRendererSelectOption {
 
 /** Page 布局属性。 */
 export interface PowerRendererPageProps {
-  /** 页面内的全部 Mainview 内容。 */
+  /** 完整页面内的全部业务内容。 */
   readonly children: ReactNode;
   /** 正文布局：默认采用页面留白，detail 让共享详情框架持有全部内容留白；滚动视口始终贴合面板。 */
   readonly layout?: "page" | "detail";
@@ -131,23 +131,23 @@ export interface PowerRendererActivityDetailPanelProps {
   readonly children: ReactNode;
 }
 
-/** Power Sidebar 根布局属性。 */
-export interface PowerRendererSidebarProps {
-  /** Sidebar 内的全部导航内容。 */
+/** 通用列表根布局属性；可在完整页面内组合导航与业务列表。 */
+export interface PowerRendererListProps {
+  /** 列表内的全部内容。 */
   readonly children: ReactNode;
 
-  /** 由宿主渲染到 Sidebar Header 右侧的业务操作。 */
+  /** 列表顶部的业务操作。 */
   readonly actions?: ReactNode;
 
-  /** 固定在 Header 下方、滚动列表之外的搜索或筛选控件，与列表共用左右对齐线。 */
+  /** 固定在操作区下方、滚动列表之外的搜索或筛选控件，与列表共用左右对齐线。 */
   readonly toolbar?: ReactNode;
 
-  /** 固定在侧栏底部、独立于内容滚动区的次要入口，如设置。 */
+  /** 固定在列表底部、独立于内容滚动区的次要入口，如设置。 */
   readonly footer?: ReactNode;
 }
 
-/** Power Sidebar 分区属性。 */
-export interface PowerRendererSidebarSectionProps {
+/** 通用列表分区属性。 */
+export interface PowerRendererListSectionProps {
   /** 分区的用户可见名称。 */
   readonly label?: ReactNode;
 
@@ -159,15 +159,11 @@ export interface PowerRendererSidebarSectionProps {
 }
 
 /**
- * Power Sidebar 行外副文本属性。
+ * 通用列表的行外说明属性。
  *
- * 用于「正在读取…」「暂无执行记录」「还没有 Workspace」这类挂在行旁边、不可点的说明。
- *
- * **必须用它，而不是自己拼一个 `<div>` 配字号与颜色**：它的左缘会对齐到同级行的文字线，
- * 字号与颜色取宿主语义令牌。自己写会在同一个侧栏里出现第二套字号与第二套弱化程度，
- * 而这两件事用户一眼就能看出“不是一个东西”。
+ * 用于加载、空态等不可点击的说明；左缘对齐同级行文字，字号与颜色使用宿主语义令牌。
  */
-export interface PowerRendererSidebarSubTextProps {
+export interface PowerRendererListHintProps {
   /**
    * 与同级行相同的缩进层数。
    *
@@ -180,8 +176,8 @@ export interface PowerRendererSidebarSubTextProps {
   readonly children: ReactNode;
 }
 
-/** Power Sidebar 导航项属性。 */
-export interface PowerRendererSidebarItemProps {
+/** 通用列表项属性。 */
+export interface PowerRendererListItemProps {
   /** 资源类型；提供时使用宿主单行资源样式与对应单色图标，省略时使用常规导航行。 */
   readonly resource_kind?: "skill" | "mcp";
 
@@ -213,8 +209,8 @@ export interface PowerRendererSidebarItemProps {
   readonly on_select: () => void;
 }
 
-/** Power Sidebar 树中的一个节点。 */
-export interface PowerRendererSidebarTreeItemProps {
+/** 通用树列表中的一个节点。 */
+export interface PowerRendererTreeItemProps {
   /** 树节点的用户可见名称。 */
   readonly label: ReactNode;
 
@@ -285,8 +281,8 @@ export interface PowerRendererItemMenuProps {
   readonly reveal_on_hover?: boolean;
 }
 
-/** Power Sidebar Header 创建菜单属性。 */
-export interface PowerRendererSidebarCreateMenuProps {
+/** 列表操作区的统一创建菜单属性。 */
+export interface PowerRendererCreateMenuProps {
   /** 加号按钮的无障碍名称与悬浮提示。 */
   readonly label: string;
 
@@ -410,7 +406,7 @@ export interface PowerRendererTabsProps {
   /** 用户切换 Tab 时的回调。 */
   readonly on_value_change: (value: string) => void;
 
-  /** 导航外观；segmented 使用紧凑胶囊，适合 Sidebar Header 中的资源类型切换。 */
+  /** 导航外观；segmented 使用紧凑胶囊，适合列表操作区中的资源类型切换。 */
   readonly variant?: "line" | "segmented";
 }
 
@@ -621,21 +617,21 @@ export interface PowerRendererStatusDotProps {
 
 /** 宿主注入的稳定 UI 组件集合。 */
 export interface PowerRendererUiComponents {
-  /** Power Sidebar 根布局。 */
-  readonly Sidebar: (props: PowerRendererSidebarProps) => ReactNode;
-  /** Power Sidebar 的标准分区。 */
-  readonly SidebarSection: (props: PowerRendererSidebarSectionProps) => ReactNode;
-  /** Power Sidebar 的标准导航项。 */
-  readonly SidebarItem: (props: PowerRendererSidebarItemProps) => ReactNode;
-  /** Power Sidebar 的标准树节点。 */
-  readonly SidebarTreeItem: (props: PowerRendererSidebarTreeItemProps) => ReactNode;
-  /** Power Sidebar 的行外副文本（「正在读取…」这类不可点的说明）。 */
-  readonly SidebarSubText: (props: PowerRendererSidebarSubTextProps) => ReactNode;
+  /** 通用列表根布局，持有操作区、工具栏、滚动内容与底部入口。 */
+  readonly List: (props: PowerRendererListProps) => ReactNode;
+  /** 通用列表的标准分区。 */
+  readonly ListSection: (props: PowerRendererListSectionProps) => ReactNode;
+  /** 通用列表的标准项。 */
+  readonly ListItem: (props: PowerRendererListItemProps) => ReactNode;
+  /** 通用列表的标准树节点。 */
+  readonly TreeItem: (props: PowerRendererTreeItemProps) => ReactNode;
+  /** 列表的行外说明，如加载提示与空态。 */
+  readonly ListHint: (props: PowerRendererListHintProps) => ReactNode;
   /** Item 的统一操作菜单。 */
   readonly ItemMenu: (props: PowerRendererItemMenuProps) => ReactNode;
-  /** Sidebar Header 中由加号触发的统一创建菜单。 */
-  readonly SidebarCreateMenu: (props: PowerRendererSidebarCreateMenuProps) => ReactNode;
-  /** Mainview 页面根布局。 */
+  /** 列表操作区中由加号触发的统一创建菜单。 */
+  readonly CreateMenu: (props: PowerRendererCreateMenuProps) => ReactNode;
+  /** 完整页面根布局。 */
   readonly Page: (props: PowerRendererPageProps) => ReactNode;
   /** 消息活动与 Inbox 共用的有序条目容器。 */
   readonly Activity: (props: PowerRendererActivityProps) => ReactNode;
@@ -706,7 +702,7 @@ export interface PowerRendererUi {
   /** 当前 Power 功能界面的宿主刷新版本。 */
   readonly revision: number;
 
-  /** 通知同一 Power 的 Sidebar 与 Mainview 重新读取业务快照。 */
+  /** 通知同一 Power 的业务界面重新读取业务快照。 */
   invalidate(): void;
 
   /** 在宿主管理的独立 tab 中打开所属 Power 的视图，不改变工作区或配置路由。 */
@@ -722,27 +718,12 @@ export interface PowerRendererUi {
   readonly components: PowerRendererUiComponents;
 }
 
-/** Power Sidebar 接收的属性。 */
-export interface PowerSidebarComponentProps {
+/** Power 完整业务页面接收的属性。 */
+export interface PowerPageComponentProps {
   /** 已绑定当前 Power 的业务 action 网关。 */
   readonly power: PowerActionGateway;
 
-  /** 与 Mainview 共享且由宿主持有的路由。 */
-  readonly navigation: PowerRendererNavigation;
-
-  /** 当前 Power 命名空间内的只读未读通知。 */
-  readonly notifications: readonly PowerRendererNotification[];
-
-  /** 宿主提供的反馈能力和 UI 组件。 */
-  readonly ui: PowerRendererUi;
-}
-
-/** Power Mainview 接收的属性。 */
-export interface PowerMainviewComponentProps {
-  /** 已绑定当前 Power 的业务 action 网关。 */
-  readonly power: PowerActionGateway;
-
-  /** 与 Sidebar 共享且由宿主持有的路由。 */
+  /** 由宿主持有的当前 Power 页面路由。 */
   readonly navigation: PowerRendererNavigation;
 
   /** 当前 Power 命名空间内的只读未读通知。 */
@@ -761,21 +742,16 @@ export interface PowerConfigComponentProps {
   readonly ui: PowerRendererUi;
 }
 
-/** Power 自己拥有的业务 Sidebar 组件。 */
-export type PowerSidebarComponent = (
-  props: PowerSidebarComponentProps,
-) => ReactNode;
-
-/** Power 自己拥有的业务主界面组件。 */
-export type PowerMainviewComponent = (
-  props: PowerMainviewComponentProps,
+/** Power 自己拥有的完整业务页面组件。 */
+export type PowerPageComponent = (
+  props: PowerPageComponentProps,
 ) => ReactNode;
 
 /** Agent 配置页签接收的属性；Agent 身份由宿主提供，业务操作由所属 Power 校验。 */
 export interface PowerAgentConfigComponentProps {
   /** 当前正在配置的 Agent 稳定标识。 */
   readonly agent_id: string;
-  /** 已绑定所属 Power 的业务 action 网关，与 Mainview 使用相同的执行入口。 */
+  /** 已绑定所属 Power 的业务 action 网关，与 Page 使用相同的执行入口。 */
   readonly power: PowerActionGateway;
   /** 宿主提供的反馈能力、刷新版本与统一 UI 组件。 */
   readonly ui: PowerRendererUi;
@@ -796,6 +772,8 @@ export interface PowerAgentConfigDefinition {
 
 /** 独立视图属性；资源由业务输入指定，Power 身份与 tab 生命周期由宿主持有。 */
 export interface PowerViewComponentProps {
+  /** 宿主实际展示该资源视图；保留挂载的隐藏标签为 false。省略时按可见处理。 */
+  readonly visible?: boolean;
   /** 打开视图时的 JSON 输入，包含读取目标资源所需的业务参数。 */
   readonly input: PowerJsonObject;
   /** 已绑定所属 Power 的业务 action 网关。 */
@@ -885,11 +863,8 @@ export interface PowerRendererDefinition {
   /** 操作过程的纯文本描述与按需挂载的详情；允许单独注册。 */
   readonly activity?: import("./PowerActivityRenderer.js").PowerActivityRenderer;
 
-  /** Power 工作区左侧的业务导航；必须与 Mainview 同时声明。 */
-  readonly sidebar?: PowerSidebarComponent;
-
-  /** Power 工作区右侧的业务主界面；必须与 Sidebar 同时声明。 */
-  readonly mainview?: PowerMainviewComponent;
+  /** Power 在宿主中呈现的完整业务页面；允许独立注册。 */
+  readonly page?: PowerPageComponent;
 
   /** 设置中心内由宿主绑定当前 Power 的独立配置界面。 */
   readonly config?: PowerConfigComponent;

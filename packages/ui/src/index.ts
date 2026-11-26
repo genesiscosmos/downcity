@@ -24,6 +24,8 @@ export { format_model_reasoning, format_default_model_reasoning, get_default_mod
 export { is_text_model } from "./lib/model/model_selection";
 export { StatusPanel } from "./components/status-panel/StatusPanel";
 export { StatusPanelHeader } from "./components/status-panel/StatusPanelHeader";
+export { StatusPanelButton } from "./components/status-panel/status-panel-button";
+export type { StatusPanelButtonProps } from "./types/status-panel-button";
 export { MessageQueue } from "./components/status-panel/MessageQueue";
 export { QueuedMessageResources } from "./components/status-panel/QueuedMessageResources";
 export { PendingInteractionArea } from "./components/status-panel/PendingInteractionArea";

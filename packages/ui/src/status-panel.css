@@ -213,26 +213,56 @@
 .interaction-answer-list dt { color: var(--muted-foreground); }
 .interaction-answer-list dd { margin: 0.15rem 0 0; white-space: pre-wrap; overflow-wrap: anywhere; }
 
-/* 独立 Input 表单明确声明页面展示参数；默认聊天表单沿用自身紧凑尺寸。 */
+/* Inbox 页面表单独立声明几何；所有规则限定 input，不改变聊天与 StatusPanel。 */
 .interaction-card[data-presentation="input"] {
-  --interaction-gap: 18px;
-  --interaction-option-gap: 4px;
-  --interaction-option-content-gap: 10px;
-  --interaction-option-padding: 10px 12px;
-  font-size: 13px;
-  line-height: 1.8;
+  --interaction-gap: 1rem;
+  --interaction-option-gap: 0.25rem;
+  --interaction-option-content-gap: 0.5rem;
+  --interaction-option-padding: 0.5rem;
 }
-.interaction-card[data-presentation="input"] .interaction-card-header,
-.interaction-card[data-presentation="input"] .interaction-card-actions { align-items: center; }
-.interaction-card[data-presentation="input"] .question-prompt { font-size: 13px; line-height: 1.8; }
-.interaction-card[data-presentation="input"] .question-option-description { margin-top: 3px; font-size: 12px; line-height: 1.7; }
-.interaction-card[data-presentation="input"] .question-option > .interaction-choice { margin-top: 0.25rem; }
-.interaction-card[data-presentation="input"] .approval-card-message { margin: 0; font-size: 13px; line-height: 1.9; }
-.interaction-card[data-presentation="input"] .interaction-command { padding: 14px 16px; background: var(--surface-subtle); border-radius: var(--radius-control, 0.375rem); font-size: 12px; line-height: 1.8; }
-.interaction-card[data-presentation="input"] .interaction-approval-actions { justify-content: flex-end; gap: 8px; }
-.interaction-card[data-presentation="input"] .interaction-card-actions { flex-wrap: wrap; }
-.interaction-card[data-presentation="input"] .interaction-card-actions > label { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.interaction-card[data-presentation="input"] .interaction-card-actions {
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.5rem;
+}
+/* Inbox 审批沿用 StatusPanel Interaction 按钮，操作组从左侧开始。 */
+.interaction-card[data-presentation="input"] .interaction-approval-actions { justify-content: flex-start; gap: 0.25rem; }
+.interaction-card[data-presentation="input"] .question-option {
+  grid-template-columns: 1rem minmax(0, 1fr);
+  min-height: 2rem;
+  cursor: pointer;
+  transition: background-color 120ms ease-out;
+}
+.interaction-card[data-presentation="input"] .interaction-choice {
+  width: 1rem;
+  height: 1rem;
+  margin: 0.0625rem 0 0;
+}
+.interaction-card[data-presentation="input"] .question-option-label { font-weight: 500; }
+.interaction-card[data-presentation="input"] .question-option-description { margin-top: 0.125rem; }
+.interaction-card[data-presentation="input"] .question-option:has(input:checked):not(:has(input:disabled)):hover { background: var(--interaction-active); }
+.interaction-card[data-presentation="input"] .question-option:has(input:disabled) { cursor: default; opacity: 0.5; }
+.interaction-card[data-presentation="input"] .question-option:has(input:disabled):hover { background: transparent; }
+.interaction-card[data-presentation="input"] .question-option:has(input:disabled:checked):hover { background: var(--interaction-selected); }
+.interaction-card[data-presentation="input"] .question-text-input,
+.interaction-card[data-presentation="input"] .interaction-note-input {
+  min-width: 0;
+  border-radius: var(--radius-control, 0.375rem);
+  padding: 0.5rem 0.75rem;
+  font-size: var(--text-xs);
+  line-height: 1rem;
+}
+.interaction-card[data-presentation="input"] input.question-text-input,
+.interaction-card[data-presentation="input"] .interaction-note-input { height: 2rem; }
+.interaction-card[data-presentation="input"] textarea.question-text-input { min-height: 6rem; resize: vertical; line-height: 1.5; }
+.interaction-card[data-presentation="input"] .question-text-input:focus-visible,
+.interaction-card[data-presentation="input"] .interaction-note-input:focus-visible { box-shadow: 0 0 0 2px color-mix(in srgb, var(--ring) 30%, transparent); }
+.interaction-card[data-presentation="input"] .interaction-error { margin: 0; color: var(--destructive); font-size: var(--text-2xs, 0.6875rem); overflow-wrap: anywhere; }
+.interaction-card[data-presentation="input"] .interaction-command { padding: 0.75rem; background: var(--surface-subtle); border-radius: var(--radius-control, 0.375rem); }
 .interaction-command-standalone { margin: 0; max-height: 320px; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; }
+@media (prefers-reduced-motion: reduce) {
+  .interaction-card[data-presentation="input"] .question-option { transition: none; }
+}
 
 /** StatusPanel 的交互表单：6px 外侧留白与列表一致，表单保留滚动及独立内容排版。 */
 .pending-interaction-area {

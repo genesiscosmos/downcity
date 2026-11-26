@@ -1,5 +1,5 @@
 /** Resource projections keep canonical sharing separate from source-owned navigation and reads. */
-import type { SkillMainviewSnapshot } from "@/skill/types/SkillMainview.js";
+import type { SkillPageSnapshot } from "@/skill/types/SkillPage.js";
 
 /** A distinct physical Skill with one stable, validated source used for navigation and reads. */
 export interface SkillResource {
@@ -22,7 +22,7 @@ export interface SkillResource {
 }
 
 /** Prefer the home entry for shared directories; preserve all independent Agent copies. */
-export function collect_skills(snapshot?: SkillMainviewSnapshot): SkillResource[] {
+export function collect_skills(snapshot?: SkillPageSnapshot): SkillResource[] {
   const resources = new Map<string, SkillResource>();
   for (const skill of snapshot?.available ?? []) {
     if (!resources.has(skill.resource_id)) resources.set(skill.resource_id, {
@@ -39,8 +39,8 @@ export function collect_skills(snapshot?: SkillMainviewSnapshot): SkillResource[
   return [...resources.values()].sort((left, right) => left.name.localeCompare(right.name) || left.route_id.localeCompare(right.route_id));
 }
 
-/** Resolve the selected source even if another alias becomes the preferred sidebar entry. */
-export function find_skill_resource(snapshot: SkillMainviewSnapshot | undefined, route_id: string): SkillResource | undefined {
+/** Resolve the selected source even if another alias becomes the preferred list entry. */
+export function find_skill_resource(snapshot: SkillPageSnapshot | undefined, route_id: string): SkillResource | undefined {
   const listed = collect_skills(snapshot).find((skill) => skill.route_id === route_id);
   if (listed || !snapshot) return listed;
   for (const skill of snapshot.available) if (skill_route_id(null, skill.id) === route_id) {

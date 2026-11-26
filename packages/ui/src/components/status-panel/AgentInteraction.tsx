@@ -83,12 +83,21 @@ function ApprovalCard({ part, respond, presentation, external_heading }: AgentIn
     {detail ? execute_code || presentation === "input"
       ? <pre className="interaction-command interaction-command-standalone">{detail}</pre>
       : <details className="interaction-command"><summary aria-label={translate("chat:attachment.show_details")}><code>{detail}</code></summary><pre>{detail}</pre></details> : null}
-    <Input className="approval-note-input" aria-label={translate("chat:activity.additional_note")} placeholder={translate("chat:activity.additional_note_placeholder")} disabled={Boolean(submitting)} value={note} onChange={(event) => set_note(event.target.value)} />
-    <footer className={presentation === "input" ? "interaction-card-actions interaction-approval-actions" : "interaction-navigation"}>
-      <StatusPanelButton variant="primary" size={presentation === "input" ? "action" : "chat-action"} className="min-w-24 justify-start px-2.5" disabled={Boolean(submitting)} onClick={() => void submit("approved")}>{submitting === "approve" ? <TbLoader2 aria-hidden="true" className="animate-spin" /> : <TbCheck aria-hidden="true" />}{translate("chat:activity.allow")}</StatusPanelButton>
-      <StatusPanelButton size={presentation === "input" ? "action" : "chat-action"} className="min-w-24 justify-start px-2.5" disabled={Boolean(submitting)} onClick={() => void submit("denied")}>{submitting === "deny" ? <TbLoader2 aria-hidden="true" className="animate-spin" /> : <TbX aria-hidden="true" />}{translate("chat:activity.deny")}</StatusPanelButton>
-    </footer>
-    {submit_error ? <p role="alert" className="text-2xs text-destructive">{submit_error}</p> : null}
+    {presentation === "input" ? <>
+      <InteractionNote value={note} disabled={Boolean(submitting)} set_value={set_note} />
+      {submit_error ? <p role="alert" className="interaction-error">{submit_error}</p> : null}
+      <footer className="interaction-card-actions interaction-approval-actions">
+        <StatusPanelButton variant="primary" size="chat-action" disabled={Boolean(submitting)} aria-busy={submitting === "approve"} onClick={() => void submit("approved")}>{submitting === "approve" ? <TbLoader2 aria-hidden="true" className="animate-spin" /> : <TbCheck aria-hidden="true" />}{translate("chat:activity.allow")}</StatusPanelButton>
+        <StatusPanelButton size="chat-action" disabled={Boolean(submitting)} aria-busy={submitting === "deny"} onClick={() => void submit("denied")}>{submitting === "deny" ? <TbLoader2 aria-hidden="true" className="animate-spin" /> : <TbX aria-hidden="true" />}{translate("chat:activity.deny")}</StatusPanelButton>
+      </footer>
+    </> : <>
+      <Input className="approval-note-input" aria-label={translate("chat:activity.additional_note")} placeholder={translate("chat:activity.additional_note_placeholder")} disabled={Boolean(submitting)} value={note} onChange={(event) => set_note(event.target.value)} />
+      <footer className="interaction-navigation">
+        <StatusPanelButton variant="primary" size="chat-action" disabled={Boolean(submitting)} onClick={() => void submit("approved")}>{submitting === "approve" ? <TbLoader2 aria-hidden="true" className="animate-spin" /> : <TbCheck aria-hidden="true" />}{translate("chat:activity.allow")}</StatusPanelButton>
+        <StatusPanelButton size="chat-action" disabled={Boolean(submitting)} onClick={() => void submit("denied")}>{submitting === "deny" ? <TbLoader2 aria-hidden="true" className="animate-spin" /> : <TbX aria-hidden="true" />}{translate("chat:activity.deny")}</StatusPanelButton>
+      </footer>
+      {submit_error ? <p role="alert" className="text-2xs text-destructive">{submit_error}</p> : null}
+    </>}
   </section>;
 }
 
@@ -144,10 +153,13 @@ function QuestionCard({ part, respond, answer_placeholder, presentation, externa
       </nav> : null}
     </header> : null}
     <QuestionField question={question} placeholder={answer_placeholder} value={answers[question.question_id]} disabled={submitting} labelled_by={prompt_id} set_value={(value) => set_answers((current) => ({ ...current, [question.question_id]: value }))} />
-    {submit_error ? <p role="alert" className="text-2xs text-destructive">{submit_error}</p> : null}
+    {presentation === "input" && !private_question ? <InteractionNote value={note} disabled={submitting} set_value={set_note} /> : null}
+    {submit_error ? <p role="alert" className={presentation === "input" ? "interaction-error" : "text-2xs text-destructive"}>{submit_error}</p> : null}
     <footer className="interaction-card-actions">
-      {!private_question ? <InteractionNote value={note} disabled={submitting} set_value={set_note} /> : null}
-      <StatusPanelButton variant="primary" size={presentation === "input" ? "action" : "chat-action"} type="submit" disabled={!current_complete || submitting}>{submitting ? <TbLoader2 className="animate-spin" /> : null}{translate(submitting ? "chat:activity.submitting" : last ? "chat:activity.submit" : "chat:activity.next")}</StatusPanelButton>
+      {presentation !== "input" && !private_question ? <InteractionNote value={note} disabled={submitting} set_value={set_note} /> : null}
+      {presentation === "input"
+        ? <StatusPanelButton variant="primary" size="action" type="submit" disabled={!current_complete || submitting} aria-busy={submitting}>{submitting ? <TbLoader2 aria-hidden="true" className="animate-spin" /> : last ? <TbCheck aria-hidden="true" /> : <TbChevronRight aria-hidden="true" />}{translate(last ? "chat:activity.submit" : "chat:activity.next")}</StatusPanelButton>
+        : <StatusPanelButton variant="primary" size="chat-action" type="submit" disabled={!current_complete || submitting}>{submitting ? <TbLoader2 className="animate-spin" /> : null}{translate(submitting ? "chat:activity.submitting" : last ? "chat:activity.submit" : "chat:activity.next")}</StatusPanelButton>}
     </footer>
   </form>;
 }
@@ -169,7 +181,7 @@ export function QuestionField({ question, value, disabled, labelled_by, set_valu
   })}</fieldset>;
 }
 
-/** 普通问题的可选补充说明，使用常显单行输入框与提交按钮并排展示。 */
+/** 可选补充说明由展示上下文决定位置；Inbox 独占一行，聊天保留原操作栏布局。 */
 function InteractionNote({ value, disabled, set_value }: InteractionNoteProps) {
   const translate = use_control_translation();
   return <Input className="interaction-note-input" aria-label={translate("chat:activity.additional_note")} placeholder={translate("chat:activity.additional_note_placeholder")} disabled={disabled} value={value} onChange={(event) => set_value(event.target.value)} />;

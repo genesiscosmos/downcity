@@ -1,8 +1,8 @@
 /**
- * Agent 范围 Session 数据库的正式 v13 schema。
+ * Agent 范围 Session 数据库的正式 v14 schema。
  *
  * sessions 是目录唯一事实源；canonical、配置和 Composer 数据通过内部 session_key
- * 关联。session_id 是永久 UUID，主会话由同库持久指针选择，归档不会改变身份。
+ * 关联。session_id 是永久 UUID，归档不会改变身份；宿主状态保存在通用变量中。
  * 存储拥有者、宿主门禁与离线工具共用本模块的版本规则，不自动升级历史数据库。
  */
 import type { DatabaseSync } from "node:sqlite";
@@ -10,7 +10,7 @@ import { AGENT_ARCHIVE_PLAN_SCHEMA_SQL } from "./AgentArchivePlanSchema.js";
 import { AGENT_SESSION_CONSTRAINTS_SQL } from "./AgentSessionConstraints.js";
 
 /** 与每 Session v7 分库明确区分的 Agent DB 格式。 */
-export const AGENT_SESSION_SCHEMA_VERSION = 13;
+export const AGENT_SESSION_SCHEMA_VERSION = 14;
 
 /** 校验版本、目录结构和数据库拥有者；只读调用绝不初始化数据库。 */
 export function assert_agent_session_schema(database: DatabaseSync, agent_id: string): void {
@@ -31,7 +31,7 @@ export const AGENT_SESSION_SCHEMA_SQL = `
 CREATE TABLE storage_metadata (
   singleton_id INTEGER PRIMARY KEY CHECK (singleton_id = 1),
   agent_id TEXT NOT NULL CHECK (length(trim(agent_id)) > 0),
-  format_version INTEGER NOT NULL CHECK (format_version = 13),
+  format_version INTEGER NOT NULL CHECK (format_version = 14),
   generation TEXT NOT NULL CHECK (length(generation) = 36),
   cursor_secret BLOB NOT NULL CHECK (length(cursor_secret) = 32),
   created_at INTEGER NOT NULL,
@@ -66,11 +66,10 @@ CREATE TABLE sessions (
   CHECK ((archived = 0 AND archived_at IS NULL) OR (archived = 1 AND archived_at IS NOT NULL))
 ) STRICT;
 
-CREATE TABLE agent_session_state (
-  singleton_id INTEGER PRIMARY KEY CHECK (singleton_id = 1),
-  main_session_id TEXT REFERENCES sessions(session_id) ON DELETE SET NULL
+CREATE TABLE agent_variables (
+  key TEXT PRIMARY KEY CHECK (length(trim(key)) > 0),
+  value TEXT NOT NULL CHECK (json_valid(value))
 ) STRICT;
-INSERT INTO agent_session_state(singleton_id) VALUES (1);
 
 -- 已删除身份继续占用；业务创建和单记录导入均不能复活旧会话。
 CREATE TABLE retired_session_ids (

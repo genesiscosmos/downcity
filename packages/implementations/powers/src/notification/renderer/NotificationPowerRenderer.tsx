@@ -1,31 +1,27 @@
-/**
- * Notification Power 的 Inbox：侧栏选择事项，主区域展示单项详情与处理表单。
- * Canonical Interaction 的生命周期归原 Session；这里只查询、展示和转发用户响应。
- * Desktop 注入现有表单与专用私密传输，不改变通用 PowerRenderer 协议。
- */
+/** Notification 完整资源列表；受信宿主表单只在独立详情视图挂载。 */
+import { useState } from "react";
 import { define_power_renderer } from "@downcity/city/power/react";
 import { NOTIFICATION_ACTIVITY_RENDERER } from "@/builtin/renderer/BuiltinActivity.js";
 import type { PowerRendererDefinition } from "@downcity/city/power/react";
 import type { NotificationRendererOptions } from "../types/NotificationRenderer.js";
 import { InboxStore } from "./InboxStore.js";
-import { InboxSidebar } from "./InboxSidebar.js";
-import { InboxMainview } from "./InboxMainview.js";
+import { Inbox_page } from "./InboxPage.js";
+import { Inbox_detail_view } from "./InboxDetailView.js";
 
-/** 提供给普通宿主的 Inbox；Desktop 使用工厂注入原有 Interaction 控件。 */
+/** 普通宿主使用标准只读与响应适配。 */
 export const NOTIFICATION_POWER_RENDERER = create_notification_power_renderer();
 
-/** 创建具有宿主表单适配能力的 Inbox；不持有 Session 或私密答案。 */
+/** 每个详情 tab 独立持有选择和草稿状态，防止多 tab 相互切换表单。 */
 export function create_notification_power_renderer(options: NotificationRendererOptions = {}): PowerRendererDefinition {
-  const store = new InboxStore();
   return define_power_renderer({
     activity: NOTIFICATION_ACTIVITY_RENDERER,
-    sidebar: function NotificationSidebar(props) {
-      return <InboxSidebar {...props} store={store} options={options} />;
+    page: function notification_page(props) {
+      const [store] = useState(() => new InboxStore());
+      return <Inbox_page {...props} store={store} options={options} />;
     },
-    mainview: function NotificationMainview(props) {
-      return <InboxMainview {...props} store={store} options={options} />;
-    },
+    views: [{ id: "inbox_detail", label: "Inbox", component: function notification_detail(props) {
+      const [store] = useState(() => new InboxStore());
+      return <Inbox_detail_view {...props} store={store} options={options} />;
+    } }],
   });
 }
-
-

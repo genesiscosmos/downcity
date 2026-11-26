@@ -2,7 +2,7 @@
  * 单个 Web 能力的配置与状态视图。
  *
  * 一屏回答三件事：这个能力现在能不能用、用哪一家 Provider、这家需要什么参数。
- * Provider 的选择在侧栏，这里不重复；开关与参数在这里，因为它们是这个能力自己的状态。
+ * Provider、开关与参数在同一页面中编辑。
  *
  * 保存只提交本能力的字段，因此不会覆盖其它能力未保存的输入。
  */
@@ -16,13 +16,14 @@ import type {
   WebCredentialTarget,
 } from "@/web/types/WebPowerConfig.js";
 import type {
-  WebMainviewSessionsResult,
-  WebMainviewSnapshot,
-} from "@/web/types/WebMainview.js";
+  WebPageSessionsResult,
+  WebPageSnapshot,
+} from "@/web/types/WebPage.js";
 import {
   CAPABILITY_ORDER,
   DEFAULT_PROVIDER,
   PROVIDER_FIELD,
+  PROVIDER_OPTIONS,
   capability_description,
   is_capability_enabled,
   to_config_patch_json,
@@ -98,11 +99,11 @@ export interface WebCapabilityViewProps {
 /** 渲染一个能力的配置与状态。 */
 export function WebCapabilityView({ power, ui, capability }: WebCapabilityViewProps) {
   const {
-    Button, Callout, EmptyState, Group, Inline, Input, Link, LoadingState, Page, Row, Section,
-    Status, Switch, Toolbar,
+    Button, Callout, EmptyState, Group, Inline, Input, Link, LoadingState, Stack, Row, Section,
+    Status, Switch, Select, Toolbar,
   } = ui.components;
-  const [snapshot, set_snapshot] = useState<WebMainviewSnapshot>();
-  const [sessions, set_sessions] = useState<WebMainviewSessionsResult>();
+  const [snapshot, set_snapshot] = useState<WebPageSnapshot>();
+  const [sessions, set_sessions] = useState<WebPageSessionsResult>();
   const [draft, set_draft] = useState<CapabilityDraft>();
   const [loading, set_loading] = useState(true);
   const [saving, set_saving] = useState(false);
@@ -114,12 +115,12 @@ export function WebCapabilityView({ power, ui, capability }: WebCapabilityViewPr
     set_loading(true);
     set_error("");
     try {
-      const next = await power.invoke<WebMainviewSnapshot>("web.snapshot");
+      const next = await power.invoke<WebPageSnapshot>("web.snapshot");
       set_snapshot(next);
       // 后台会话变化只更新事实，保留用户正在编辑的配置。
       set_draft((current) => reset_draft || !current ? draft_from(next.config) : current);
       set_sessions(capability === "browser"
-        ? await power.invoke<WebMainviewSessionsResult>("web.sessions")
+        ? await power.invoke<WebPageSessionsResult>("web.sessions")
         : undefined);
     } catch (reason) {
       set_error(to_error_message(reason));
@@ -218,6 +219,14 @@ export function WebCapabilityView({ power, ui, capability }: WebCapabilityViewPr
     }
   };
 
+  /** Provider 切换只提交本能力字段，保留正在输入的其它参数。 */
+  const select_provider = async (value: string) => {
+    set_saving(true); set_error("");
+    try { await power.invoke("web.config.save", to_config_patch_json({ [PROVIDER_FIELD[capability]]: value })); ui.invalidate(); }
+    catch (reason) { set_error(to_error_message(reason)); }
+    finally { set_saving(false); }
+  };
+
   /**
    * 打开服务商控制台。
    *
@@ -235,7 +244,7 @@ export function WebCapabilityView({ power, ui, capability }: WebCapabilityViewPr
 
   const meta = CAPABILITY_ORDER.find((item) => item.key === capability);
   if (loading && !snapshot) return <LoadingState label="正在读取 Web 配置…" />;
-  if (!snapshot || !draft) return <Page><Callout tone="danger">{error || "无法读取 Web 配置"}</Callout></Page>;
+  if (!snapshot || !draft) return <Stack><Callout tone="danger">{error || "无法读取 Web 配置"}</Callout></Stack>;
 
   const config = snapshot.config;
   const enabled = is_capability_enabled(config, capability);
@@ -247,7 +256,8 @@ export function WebCapabilityView({ power, ui, capability }: WebCapabilityViewPr
     : capability === "document" && config.document_provider === "deepseek";
   const show_cdp = capability === "browser" && config.browser_provider === "cdp";
 
-  return <Page>
+  return <Stack>
+    <Row label="Provider" trailing={<Select value={String(config[PROVIDER_FIELD[capability]])} disabled={saving} options={[...PROVIDER_OPTIONS[capability], { value: "disabled", label: "关闭" }]} on_value_change={(value) => void select_provider(value)} />} />
     {error ? <Callout tone="danger">{error}</Callout> : null}
     <Toolbar
       title={meta?.label ?? capability}
@@ -361,5 +371,5 @@ export function WebCapabilityView({ power, ui, capability }: WebCapabilityViewPr
             trailing={<Status>{`第 ${session.observation_generation} 代`}</Status>}
           />)}</Group>}
     </Section> : null}
-  </Page>;
+  </Stack>;
 }

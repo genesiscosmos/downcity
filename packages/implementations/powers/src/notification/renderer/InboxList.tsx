@@ -1,5 +1,5 @@
 /** Inbox 收件预览：来源与时间为首行，事项标题及可选摘要顺序阅读，复用宿主行和菜单。 */
-import type { PowerSidebarComponentProps } from "@downcity/city/power/react";
+import type { PowerPageComponentProps } from "@downcity/city/power/react";
 import type { InboxEntry } from "../types/Inbox.js";
 import { full_time, relative_time } from "./InboxEntries.js";
 import { InboxAvatar } from "./InboxAvatar.js";
@@ -14,12 +14,12 @@ export function InboxList({ entries, selected_key, busy, choose, update_notifica
   /** 普通通知动作正在进行，防止重复整理。 */ busy: boolean;
   /** 经过草稿离开确认的详情选择动作。 */ choose: (entry: InboxEntry) => Promise<void>;
   /** 由共享 Store 执行的版本化通知动作。 */ update_notifications: (operation: "read" | "clear", entry: InboxEntry) => Promise<void>;
-  /** 宿主提供统一侧栏行、菜单和基础控件。 */ props: PowerSidebarComponentProps;
+  /** 宿主提供统一侧栏行、菜单和基础控件。 */ props: PowerPageComponentProps;
 }) {
-  const { SidebarItem, ItemMenu } = props.ui.components;
+  const { ListItem, ItemMenu } = props.ui.components;
   return <>{entries.map((entry) => {
     const needs_attention = entry.unread && (!entry.pending || entry.pending.interaction.can_respond);
-    return <div className="inbox-list-row" key={entry.key}><SidebarItem
+    return <div className="inbox-list-row" key={entry.key}><ListItem
     label={<span className="inbox-list-meta"><span title={entry.source}>{entry.source}</span><time dateTime={new Date(entry.created_at).toISOString()} title={full_time(entry.created_at)}>{relative_time(entry.created_at)}</time></span>}
     description={<span className="inbox-item-preview">
       <span className="inbox-item-title" data-unread={needs_attention} title={entry.title}>{entry.title}</span>

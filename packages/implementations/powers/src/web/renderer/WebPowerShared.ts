@@ -5,15 +5,15 @@
  * - 侧栏按能力分组：能力是可展开的分支，Provider 是它下面的叶子。
  * - 「关闭」不是一种 Provider，因此不在 Provider 列表里；开关属于能力本身。
  * - 配置是 Power 级的单一存储，route 只保存当前能力，不携带执行范围。
- * - Sidebar 与 Mainview 共享同一份能力与 Provider 常量，避免两处各写一份选项。
+ * - 资源页与详情 共享同一份能力与 Provider 常量，避免两处各写一份选项。
  */
 
 import type { PowerJsonObject, PowerJsonValue } from "@downcity/city/power";
 import type {
   WebCapability,
-  WebMainviewCapabilityStatus,
+  WebPageCapabilityStatus,
   WebProviderCapability,
-} from "@/web/types/WebMainview.js";
+} from "@/web/types/WebPage.js";
 import type { WebConfigPatch, WebConfigView } from "@/web/types/WebPowerConfig.js";
 
 /** 一个可选的 Provider。 */
@@ -216,7 +216,7 @@ export function capability_tag(
 }
 
 /** 返回能力当前的可用性或选择说明。 */
-export function capability_description(capability: WebMainviewCapabilityStatus): string {
+export function capability_description(capability: WebPageCapabilityStatus): string {
   return capability.available ? capability.provider : capability.note;
 }
 

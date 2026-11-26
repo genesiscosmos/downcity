@@ -1,10 +1,10 @@
 /** Memory Power 配置页：知识后端、语义处理和后台整理分别归属，Profile 独立管理。 */
 import { useEffect, useState } from "react";
-import type { PowerMainviewComponentProps } from "@downcity/city/power/react";
+import type { PowerPageComponentProps } from "@downcity/city/power/react";
 import type { MemoryConfigSnapshot } from "../types/MemoryManagement.js";
 
-/** Sidebar 和 Provider 页共用无范围的状态读取契约，卸载后忽略迟到响应。 */
-export function use_memory_config({ power, ui }: Pick<PowerMainviewComponentProps, "power" | "ui">) {
+/** 资源列表和 Provider 页共用无范围的状态读取契约，卸载后忽略迟到响应。 */
+export function use_memory_config({ power, ui }: Pick<PowerPageComponentProps, "power" | "ui">) {
   const [snapshot, set_snapshot] = useState<MemoryConfigSnapshot>();
   const [error, set_error] = useState("");
   useEffect(() => {
@@ -27,13 +27,13 @@ export function provider_state_label(state: string): string {
 }
 
 /** 默认 Provider 页只展示真实可用能力和当前配置边界。 */
-export function memory_config_view(props: PowerMainviewComponentProps) {
+export function memory_config_view(props: PowerPageComponentProps) {
   const { ui } = props;
-  const { Button, Callout, Group, Inline, LoadingState, Page, Row, Status, Toolbar } = ui.components;
+  const { Button, Callout, Group, Inline, LoadingState, Stack, Row, Status, Toolbar } = ui.components;
   const { snapshot, error } = use_memory_config(props);
-  if (!snapshot) return <Page>{error
+  if (!snapshot) return <Stack>{error
     ? <Callout tone="danger">{error}</Callout>
-    : <LoadingState label="正在读取 Memory 配置…" />}</Page>;
+    : <LoadingState label="正在读取 Memory 配置…" />}</Stack>;
   const { status } = snapshot.knowledge;
   const capabilities = [
     ["保存知识", status.capabilities.remember], ["检索知识", status.capabilities.recall],
@@ -41,7 +41,7 @@ export function memory_config_view(props: PowerMainviewComponentProps) {
     ["遗忘知识", status.capabilities.forget], ["事务提交", status.capabilities.transactions],
   ] as const;
   const storage = status.details?.storage_adapter;
-  return <Page>
+  return <Stack>
     <Toolbar title="设置" description="知识后端与记忆处理" actions={<Inline>
       <Button on_click={ui.invalidate}>刷新</Button>
     </Inline>} />
@@ -70,5 +70,5 @@ export function memory_config_view(props: PowerMainviewComponentProps) {
     <Group label="自动整理">
       <Row label="用户记忆" description="通过明确保存与修订维护；后台整理不会自动写入用户记忆。" />
     </Group>
-  </Page>;
+  </Stack>;
 }

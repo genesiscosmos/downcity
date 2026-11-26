@@ -11,7 +11,7 @@ async function fixture(generate = async () => ({ text: "result" })) {
   const workspace = new Workspace({ id: "project", path: process.cwd() });
   const city = new City({ workspaces: [workspace] });
   const agent = city.agents.add(new Agent({ id: "owner", model }));
-  const main = await agent.session();
+  const main = await agent.sessions.create({ type: "chat", kind: "conversation" });
   const tool = city.power_tools.session;
   assert.ok(tool, "City registers Session Power");
   const context = { agent_id: agent.id, agent_name: agent.name, agent_description: "", agent_instructions: [], session_id: main.id, session_origin: main.origin, turn_id: "caller-turn", tool_call_id: "call" };

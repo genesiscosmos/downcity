@@ -16,8 +16,7 @@ export function list_power_catalog(): PowerCatalogItem[] {
       description: registration.power.description,
       source: "builtin" as const,
       has_main: true,
-      has_sidebar: registration.has_sidebar,
-      has_mainview: registration.has_mainview,
+      has_page: registration.has_page,
       has_config: registration.has_config,
     };
   });
@@ -30,8 +29,7 @@ export function list_power_catalog(): PowerCatalogItem[] {
     source: "installed" as const,
     source_label: power.source,
     has_main: Boolean(power.main),
-    has_sidebar: select_power_renderer(power.renderers, DESKTOP_RENDERER_PROTOCOLS)?.binding.capabilities?.sidebar === true,
-    has_mainview: select_power_renderer(power.renderers, DESKTOP_RENDERER_PROTOCOLS)?.binding.capabilities?.mainview === true,
+    has_page: select_power_renderer(power.renderers, DESKTOP_RENDERER_PROTOCOLS)?.binding.capabilities?.page === true,
     has_config: select_power_renderer(power.renderers, DESKTOP_RENDERER_PROTOCOLS)?.binding.capabilities?.config === true,
   }));
   return [...builtin_items, ...installed_items]

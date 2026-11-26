@@ -56,7 +56,7 @@ test("Session 继承 Agent 当前模型，Agent 改模不需要 Session 配置",
   const next_model = { id: "next-model", stream: async () => new ReadableStream() };
   const agent = new Agent({ id: "model-agent", model: first_model });
   try {
-    const session = await agent.session();
+    const session = await agent.sessions.create({ type: "chat", kind: "test" });
     assert.equal(session.get("model"), first_model);
     agent.reconfigure({ model: next_model });
     assert.equal(session.get("model"), next_model);

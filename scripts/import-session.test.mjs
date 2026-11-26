@@ -34,8 +34,8 @@ async function fixture(context, archived = false, origin_uuid = null) {
   const attachment_path = path.join(path.dirname(source.filename), 'session-files', storage_id, 'attachments/file.txt');
   fs.mkdirSync(path.dirname(attachment_path), { recursive: true }); fs.writeFileSync(attachment_path, 'owned bytes');
   fs.writeFileSync(path.join(path.dirname(path.dirname(attachment_path)), '.owned-attachments.json'), JSON.stringify({ format_version: 2, agent_id: 'sample', session_id: storage_id, files: ['file.txt'] }), { mode: 0o600 });
-  const key = Number(source.database.prepare(`INSERT INTO sessions(session_id,category,origin,timezone,archived,archived_at,message_count,created_at,updated_at)
-    VALUES(?,'chat',?,'UTC',?,?,1,1,2)`).run(storage_id, JSON.stringify({ category: 'chat', type: 'agent' }), archived ? 1 : 0, archived ? 3 : null).lastInsertRowid);
+  const key = Number(source.database.prepare(`INSERT INTO sessions(session_id,type,kind,relations,timezone,archived,archived_at,message_count,created_at,updated_at)
+    VALUES(?,'chat','desktop','{}','UTC',?,?,1,1,2)`).run(storage_id, archived ? 1 : 0, archived ? 3 : null).lastInsertRowid);
   source.database.prepare('UPDATE session_configuration SET system_snapshot=? WHERE session_key=?').run('original system', key);
   source.database.prepare("INSERT INTO messages(session_key,message_id,sequence,role,origin_session_id,origin_message_id,created_at,updated_at) VALUES(?,'m1',1,'user',?,?,1,2)")
     .run(key, origin_uuid, origin_uuid ? 'source-message' : null);
@@ -84,7 +84,7 @@ test('imports full exact record and copied attachments, replays original receipt
   assert.equal(database.prepare('PRAGMA foreign_key_check').all().length, 0); database.close();
 });
 
-test('permanent UUID conflicts across states refuse overwrite; other UUID imports preserve the main pointer', async context => {
+test('permanent UUID conflicts across states refuse overwrite; other UUID imports preserve host variables', async context => {
   const item = await fixture(context);
   await import_session(item.input, runtime);
   await assert.rejects(import_session({ ...item.input, operation_id: random_uuid(), batch_path: path.join(item.directory, 'new-batch') }, runtime), /session_id_conflict/);
@@ -92,13 +92,13 @@ test('permanent UUID conflicts across states refuse overwrite; other UUID import
     const second = await fixture(context, archived);
     const database = new DatabaseSync(second.target.filename);
     const main_id = random_uuid();
-    database.prepare(`INSERT INTO sessions(session_id,category,origin,timezone,created_at,updated_at) VALUES(?,'chat',?,'UTC',1,2)`)
-      .run(main_id, JSON.stringify({ category: 'chat', type: 'agent' }));
-    database.prepare('UPDATE agent_session_state SET main_session_id=?').run(main_id); database.close();
+    database.prepare(`INSERT INTO sessions(session_id,type,kind,relations,timezone,created_at,updated_at) VALUES(?,'chat','desktop','{}','UTC',1,2)`)
+      .run(main_id);
+    database.prepare('INSERT INTO agent_variables(key,value) VALUES(?,?)').run('desktop.main_chatroom', JSON.stringify(main_id)); database.close();
     await import_session(second.input, runtime);
     assert.equal(target_record(second).metadata.archived, archived ? 1 : 0);
     const reader = new DatabaseSync(second.target.filename, { readOnly: true });
-    assert.equal(reader.prepare('SELECT main_session_id FROM agent_session_state').get().main_session_id, main_id); reader.close();
+    assert.equal(JSON.parse(reader.prepare('SELECT value FROM agent_variables WHERE key=?').get('desktop.main_chatroom').value), main_id); reader.close();
   }
 });
 

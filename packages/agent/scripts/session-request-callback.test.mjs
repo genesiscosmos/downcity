@@ -27,7 +27,7 @@ test("两个同时提交的独立工作只有一个获得 Session；执行完成
   const model = new MockModelClient({ id: "lock-model", generate: async () => { await gate.promise; return { text: "done" }; } });
   const agent = new Agent({ id: "lock-agent", model });
   try {
-    const session = await agent.session();
+    const session = await agent.sessions.create({ type: "chat", kind: "conversation" });
     const [first, second] = await Promise.allSettled([
       session.prompt({ actor: user, query: "first", request_id: "first" }),
       session.prompt({ actor: { kind: "runtime", namespace: "test", object_id: "other" }, query: "second", request_id: "second" }),
@@ -53,7 +53,7 @@ test("callback 名称和参数随请求保存，失败仅重试该请求的 call
     received.resolve(input);
   } } });
   try {
-    const session = await agent.session();
+    const session = await agent.sessions.create({ type: "chat", kind: "conversation" });
     const turn = await session.prompt({ actor: user, request_id: "review-123", query: "review", callback: { name: "review_completed", data: { review_id: "123" } } });
     await turn.finished;
     const before_retry = model_calls;
@@ -77,7 +77,7 @@ test("重建 City 后按保存的 callback 名称和参数恢复，不重跑任�
   const model = new MockModelClient({ id: "m", generate: async () => { calls++; return { text: "saved result" }; } });
   const first_city = new City({ storage: new LocalStorageProvider(root) });
   const first = first_city.agents.add(new Agent({ id: "persistent", model, callbacks: { saved: async () => { throw new Error("Offline"); } } }));
-  const session = await first.session();
+  const session = await first.sessions.create({ type: "chat", kind: "conversation" });
   await (await session.prompt({ actor: user, request_id: "r", query: "work", callback: { name: "saved", data: { job_id: 7 } } })).finished;
   await first.completions.settle();
   await first_city.close();
@@ -100,7 +100,7 @@ test("未知 callback 或缺少 request_id 在执行模型前拒绝", async () =
   let calls = 0;
   const agent = new Agent({ id: "validation", model: new MockModelClient({ id: "m", generate: async () => { calls++; return { text: "done" }; } }) });
   try {
-    const session = await agent.session();
+    const session = await agent.sessions.create({ type: "chat", kind: "conversation" });
     await assert.rejects(session.prompt({ actor: user, query: "review", callback: { name: "missing" } }), /requires request_id/);
     await assert.rejects(session.prompt({ actor: user, request_id: "r", query: "review", callback: { name: "missing" } }), /Unknown Session callback/);
     assert.equal(calls, 0);
@@ -116,7 +116,7 @@ test("同对象可补充占用中的工作，同名 callback 的两个请求独�
     entered.resolve(); await gate.promise; return { text: "done" };
   } }), callbacks: { saved: async (input) => { deliveries.push(input); if (deliveries.length === 2) accepted.resolve(); } } });
   try {
-    const session = await agent.session();
+    const session = await agent.sessions.create({ type: "chat", kind: "conversation" });
     const first = await session.prompt({ actor: user, request_id: "a", query: "first", callback: { name: "saved", data: "a" } });
     await entered.promise;
     const second_task = session.prompt({ actor: user, request_id: "b", query: "more", callback: { name: "saved", data: "b" } });
@@ -135,13 +135,13 @@ test("停止旧对象后用户可接管，迟到 callback 仍绑定旧 Turn stop
   const callback_gate = deferred();
   const received = deferred();
   let calls = 0;
-  const actor = { kind: "session", agent_id: "source", workspace_id: null, session_id: "A", category: "chat" };
+  const actor = { kind: "session", agent_id: "source", workspace_id: null, session_id: "A", type: "chat" };
   const agent = new Agent({ id: "takeover", model: new MockModelClient({ id: "m", generate: async () => {
     if (++calls === 1) await model_gate.promise;
     return { text: "result" };
   } }), callbacks: { saved: async (input) => { await callback_gate.promise; received.resolve(input); } } });
   try {
-    const session = await agent.session();
+    const session = await agent.sessions.create({ type: "chat", kind: "conversation" });
     const old = await session.prompt({ actor, query: "work", request_id: "old", callback: { name: "saved" } });
     await assert.rejects(session.prompt({ actor: user, query: "take over" }), SessionBusyError);
     await assert.rejects(session.stop("different-turn"), /Turn changed/);

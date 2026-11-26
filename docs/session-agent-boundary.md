@@ -1,6 +1,8 @@
-# Session 与 Agent 边界权威定义
+# Session 与 Agent 边界历史审计
 
-> 状态：当前实现的权威边界定义（冻结参数面、来源分区与身份规则、能力边界矩阵）
+> 状态：2026-10-21 的历史审计资料，不是当前 API 或身份规则的权威定义。
+>
+> 当前 SDK 使用 `id / type / kind`，提供 Session 集合与通用 `agent.variables`。默认 Chat 的创建、选择和失效修复由宿主管理；SDK 不提供主 Session 策略。当前使用方式以 homepage Agent SDK 文档和包导出类型为准。本文原始证据与行号仅供追溯，不作为实施清单。
 >
 > 适用范围：`@downcity/type`、`@downcity/agent`、`@downcity/city`、`@downcity/powers`、`downcity` CLI、`private/apps/desktop`、`private/apps/chrome-extension`
 >

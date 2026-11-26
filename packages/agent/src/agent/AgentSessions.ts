@@ -34,7 +34,6 @@ import type { SessionStore } from "@/types/store/SessionStore.js";
 import type { SessionStorage } from "@/types/store/SessionStorage.js";
 import { normalize_session_descriptor, normalize_session_type, SESSION_TYPE_WORK, SESSION_KIND_WORK } from "@downcity/type";
 import type { SessionContextResolution } from "@/types/agent/SessionContext.js";
-import { create_main_session_descriptor } from "@/agent/AgentSessionIdentity.js";
 
 type AgentSessionsOptions = {
   /** 宿主完整 Turn 租约；回调只在执行入口触发。 */
@@ -151,8 +150,6 @@ export class AgentSessions implements AgentSessionsContract<AgentSession> {
     return () => { this.release_listeners.delete(listener); };
   }
 
-  /** Agent 会话创建链；并发调用共享同一创建过程，避免产生第二条。 */
-  private agent_session_creation_chain: Promise<void> = Promise.resolve();
 
   constructor(options: AgentSessionsOptions) {
     this.agent_id = options.agent_id;
@@ -325,72 +322,6 @@ export class AgentSessions implements AgentSessionsContract<AgentSession> {
       );
     }
     return session.get_runtime_port();
-  }
-
-  /**
-   * 取用 Agent 自己那条会话；不存在时创建。
-   *
-   * 关键点（中文）
-   * - 当前会话由持久 main_session_id 指针选择，永久 UUID 与 Agent ID 独立。
-   * - 空指针通过显式 ensure_main 事务创建；读取不会推断或建立会话。
-   * - 同一进程内并发调用会收敛到同一个创建过程，不会产生第二条。
-   * - 被归档或删除后，下一次调用自然重建一条。
-   * - Workspace 仅用于首次创建；已有会话的资源由宿主通过 get 注入同 ID Workspace 恢复。
-   */
-  async self(input?: { workspace?: WorkspaceRuntime }): Promise<AgentSession> {
-    const current = await this.resolve_session_context().store.read_main();
-    const key = current ? this.session_cache_key(current.session_id, "chat") : "main-pointer";
-    return await this.lifecycle.access(() => this.open_self(input), [key]);
-  }
-
-  /** 生命周期保护内恢复或创建 Agent 主会话。 */
-  private async open_self(input?: { /** 首次创建使用的 Workspace 实例。 */ workspace?: WorkspaceRuntime }): Promise<AgentSession> {
-    const existing = await this.find_agent_session();
-    if (existing) return existing;
-    return await this.run_agent_session_creation(async () => {
-      const cached = await this.find_agent_session();
-      if (cached) return cached;
-      const descriptor = create_main_session_descriptor();
-      const context = this.resolve_session_context({
-        ...normalize_session_descriptor(descriptor),
-        creating: true,
-        ...(input?.workspace ? { workspace: input.workspace } : {}),
-      });
-      const storage = await context.store.ensure_main(context.workspace_id);
-      const session_id = storage.session_id;
-      const metadata = await storage.read_metadata();
-      const workspace = context.get_workspace();
-      if (workspace && workspace.id !== metadata.workspace_id) throw new Error("session_workspace_immutable");
-      const session = this.get_or_create_session({ session_id, ...normalize_session_descriptor(descriptor), workspace, workspace_id: metadata.workspace_id, inherit_workspace: false, storage });
-      await session.initialize();
-      await this.notify_created(session);
-      return session;
-    });
-  }
-
-  /**
-   * 尝试恢复已存在的 Agent 会话；不存在或已失效时返回空。
-   *
-   * 关键点（中文）：查找不切换目录，宿主负责注入恢复后的 Workspace 实例。
-   */
-  private async find_agent_session(): Promise<AgentSession | undefined> {
-    const descriptor = create_main_session_descriptor();
-    const context = this.resolve_session_context({ ...normalize_session_descriptor(descriptor) });
-    const current = await context.store.read_main();
-    return current ? await this.get(current.session_id, descriptor.type) : undefined;
-  }
-
-  /** 串行化 Agent 会话创建；失败时释放链，使下一次调用可以重试。 */
-  private async run_agent_session_creation(
-    create: () => Promise<AgentSession>,
-  ): Promise<AgentSession> {
-    const previous = this.agent_session_creation_chain;
-    const operation = previous.then(create, create);
-    this.agent_session_creation_chain = operation.then(
-      () => undefined,
-      () => undefined,
-    );
-    return await operation;
   }
 
   /**
@@ -686,9 +617,6 @@ export class AgentSessions implements AgentSessionsContract<AgentSession> {
     return await this.resolve_session_context().store.read_session(session_id, type);
   }
 
-  /** 只读当前主会话，不恢复执行器；显式 self() 才确保创建。 */
-  async read_main() { return await this.resolve_session_context().store.read_main(); }
-
   /** 只读查询明确记录的小字段；不创建 Session 或恢复执行环境。 */
   async read_metadata(addresses: readonly import("@/types/agent/SessionMetadata.js").SessionMetadataAddress[]) {
     return await this.resolve_session_context().store.read_metadata(addresses);
@@ -747,7 +675,7 @@ export class AgentSessions implements AgentSessionsContract<AgentSession> {
     return await this.resolve_session_context().store.read_archived_session(session_id);
   }
 
-  /** 永久删除一条归档记录，稳定身份避免误删重建后的活动主会话。 */
+  /** 永久删除一条归档记录，稳定身份避免误删其他活动会话。 */
   async remove_archived(session_id: string): Promise<boolean> {
     const result = await this.lifecycle.clean_archive(() => this.resolve_session_context().store.remove_archived_session(session_id));
     this.notify_directory_changed();

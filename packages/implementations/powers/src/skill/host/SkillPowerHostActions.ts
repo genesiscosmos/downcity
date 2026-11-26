@@ -18,14 +18,14 @@ import { assert_safe_agent_id, create_skill_root_context } from "@/skill/runtime
 import type { SkillRootContext } from "@/skill/runtime/Paths.js";
 import type { SkillSummary } from "@/skill/types/SkillCommand.js";
 import type {
-  SkillMainviewAvailableItem,
-  SkillMainviewItem,
-  SkillMainviewLinkInput,
-  SkillMainviewMutationResult,
-  SkillMainviewReadInput,
-  SkillMainviewRemoveInput,
-  SkillMainviewSnapshot,
-} from "@/skill/types/SkillMainview.js";
+  SkillPageAvailableItem,
+  SkillPageItem,
+  SkillPageLinkInput,
+  SkillPageMutationResult,
+  SkillPageReadInput,
+  SkillPageRemoveInput,
+  SkillPageSnapshot,
+} from "@/skill/types/SkillPage.js";
 
 /** 宿主动作运行所需的稳定路径事实。 */
 export interface SkillPowerHostRuntime {
@@ -87,13 +87,13 @@ export function register_skill_power_host_actions(
 /**
  * 读取全部 Agent 及其已绑定 Skill，以及用户目录里可关联的 Skill。
  *
- * 关键点（中文）：Sidebar 与 Mainview 共用这一份快照；写操作后重算同一份结果，
+ * 关键点（中文）：资源页与详情 共用这一份快照；写操作后重算同一份结果，
  * 因此关联状态随操作一起刷新。
  */
 async function create_snapshot(
   context: PowerLifecycleContext,
   runtime: SkillPowerHostRuntime,
-): Promise<SkillMainviewSnapshot> {
+): Promise<SkillPageSnapshot> {
   const agents = await context.system.list_agents();
   const views = await Promise.all(agents.map(async (agent) => ({
     agent_id: agent.agent_id,
@@ -132,19 +132,19 @@ function list_home_skills(runtime: SkillPowerHostRuntime): SkillSummary[] {
 function list_agent_skills(
   runtime: SkillPowerHostRuntime,
   agent_id: string,
-): SkillMainviewItem[] {
+): SkillPageItem[] {
   return listSkills({
     scope: "agent",
     context: create_agent_context(runtime, agent_id),
     options: resolveSkillPowerOptions(),
-  }).skills.map(to_mainview_item);
+  }).skills.map(to_page_item);
 }
 
 /** 重新发现后读取一个 Skill，避免信任 Renderer 传入的本地路径。 */
 async function read_skill(
   context: PowerLifecycleContext,
   runtime: SkillPowerHostRuntime,
-  input: SkillMainviewReadInput,
+  input: SkillPageReadInput,
 ) {
   const root = create_agent_context(runtime, input.agent_id);
   const options = resolveSkillPowerOptions();
@@ -165,8 +165,8 @@ async function read_skill(
 async function link_skill(
   context: PowerLifecycleContext,
   runtime: SkillPowerHostRuntime,
-  input: SkillMainviewLinkInput,
-): Promise<SkillMainviewMutationResult> {
+  input: SkillPageLinkInput,
+): Promise<SkillPageMutationResult> {
   const skill = list_home_skills(runtime).find((item) => item.id === input.skill_id);
   if (!skill) {
     return {
@@ -202,8 +202,8 @@ async function link_skill(
 async function remove_skill(
   context: PowerLifecycleContext,
   runtime: SkillPowerHostRuntime,
-  input: SkillMainviewRemoveInput,
-): Promise<SkillMainviewMutationResult> {
+  input: SkillPageRemoveInput,
+): Promise<SkillPageMutationResult> {
   const exists = list_agent_skills(runtime, input.agent_id)
     .some((skill) => skill.id === input.skill_id);
   if (!exists) {
@@ -263,7 +263,7 @@ function create_home_context(runtime: SkillPowerHostRuntime): SkillRootContext {
 }
 
 /** 把内部摘要投影为已绑定列表条目。 */
-function to_mainview_item(skill: SkillSummary): SkillMainviewItem {
+function to_page_item(skill: SkillSummary): SkillPageItem {
   return {
     ...resource_identity(skill),
     id: skill.id,
@@ -279,7 +279,7 @@ function to_mainview_item(skill: SkillSummary): SkillMainviewItem {
 function to_available_item(
   skill: SkillSummary,
   linked_agent_ids: string[],
-): SkillMainviewAvailableItem {
+): SkillPageAvailableItem {
   return {
     ...resource_identity(skill),
     id: skill.id,
@@ -325,7 +325,7 @@ function read_record(value: PowerJsonValue | undefined): Record<string, PowerJso
 }
 
 /** 解析 read 输入。 */
-function read_read_input(input: PowerJsonValue | undefined): SkillMainviewReadInput {
+function read_read_input(input: PowerJsonValue | undefined): SkillPageReadInput {
   const record = read_record(input);
   return {
     agent_id: read_required_string(input, "agent_id"),
@@ -336,7 +336,7 @@ function read_read_input(input: PowerJsonValue | undefined): SkillMainviewReadIn
 }
 
 /** 解析关联输入。 */
-function read_link_input(input: PowerJsonValue | undefined): SkillMainviewLinkInput {
+function read_link_input(input: PowerJsonValue | undefined): SkillPageLinkInput {
   return {
     agent_id: read_required_string(input, "agent_id"),
     skill_id: read_required_string(input, "skill_id"),
@@ -344,7 +344,7 @@ function read_link_input(input: PowerJsonValue | undefined): SkillMainviewLinkIn
 }
 
 /** 解析删除输入。 */
-function read_remove_input(input: PowerJsonValue | undefined): SkillMainviewRemoveInput {
+function read_remove_input(input: PowerJsonValue | undefined): SkillPageRemoveInput {
   return {
     agent_id: read_required_string(input, "agent_id"),
     skill_id: read_required_string(input, "skill_id"),

@@ -66,7 +66,7 @@ export class ExtensionPlatform {
   async renderer_resource(power_id: string, protocol_id: string, generation: string, resource: string): Promise<Response> { return await this.require_runtime().renderer_resource(power_id, protocol_id, generation, resource); }
 
   /** UI 动作必须携带该页面的原运行代次，不允许旧页面调用新实例。 */
-  async invoke_renderer(power_id: string, protocol_id: string, generation: string, surface: "mainview" | "config", action: string, input?: import("../../power/index.js").PowerJsonValue) { return await this.require_runtime().invoke_renderer(power_id, protocol_id, generation, surface, action, input); }
+  async invoke_renderer(power_id: string, protocol_id: string, generation: string, surface: "page" | "config", action: string, input?: import("../../power/index.js").PowerJsonValue) { return await this.require_runtime().invoke_renderer(power_id, protocol_id, generation, surface, action, input); }
 
   /** 项目恢复只发布每个扩展自己的 Town 来源，不恢复全局当前连接。 */
   async restore(): Promise<void> { await this.manager.restore(); }

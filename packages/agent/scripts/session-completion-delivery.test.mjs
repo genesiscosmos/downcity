@@ -71,7 +71,7 @@ test("写前日志失败不得确认成功；恢复存储后原 request_id 可�
       if (file_path.startsWith("completions/")) throw new Error("Journal disk unavailable");
       return await write(file_path, ...args);
     };
-    const session = await agent.session();
+    const session = await agent.sessions.create({ type: "chat", kind: "conversation" });
     const turn = await session.prompt({ actor: { kind: "user", user_id: "local" }, query: "review", request_id: "stable-request" });
     await assert.rejects(turn.finished, /could not be persisted/);
     assert.equal((await session.messages()).items.filter((message) => message.role === "agent").at(-1).state, "streaming");
@@ -97,7 +97,7 @@ test("canonical 终态后的日志确认失败仍可补发，幂等输入不重�
       if (file_path.startsWith("completions/") && ++writes > 1) throw new Error("Acknowledgement disk unavailable");
       return await write(file_path, ...args);
     };
-    const session = await agent.session();
+    const session = await agent.sessions.create({ type: "chat", kind: "conversation" });
     const result = await (await session.prompt({ actor: { kind: "user", user_id: "local" }, query: "review", request_id: "stable-request" })).finished;
     assert.equal(result.success, true);
     const before_retry = model_calls;
@@ -123,7 +123,7 @@ test("写前提交后 canonical 收口中断，重建 Agent 后复用结果且�
     await prepare(...args);
     throw new Error("Simulated interruption after write-ahead commit");
   };
-  const original = await first.session();
+  const original = await first.sessions.create({ type: "chat", kind: "conversation" });
   const initial = await original.prompt({ actor: { kind: "user", user_id: "local" }, query: "review", request_id: "stable-request" });
   await assert.rejects(initial.finished, /could not be persisted/);
   await first_city.close();
@@ -139,7 +139,7 @@ test("写前提交后 canonical 收口中断，重建 Agent 后复用结果且�
     assert.equal(event.result.success, true);
     assert.equal(event.messages.filter((message) => message.role === "agent").at(-1).state, "done");
     assert.ok(event.messages.every((message) => message.parts.every((part) => part.type !== "error" || part.code !== "runtime_interrupted")));
-    const restored = await second.session();
+    const restored = await second.sessions.get(original.id, "chat");
     const result = await (await restored.prompt({ actor: { kind: "user", user_id: "local" }, query: "review", request_id: "stable-request" })).finished;
     assert.equal(result.success, true);
     assert.equal(result.turn_id, initial.id);
@@ -187,7 +187,7 @@ test("关闭会取消 callback，即使业务忽略信号也不阻塞 City.close
     await blocked.promise;
   })));
   try {
-    const session = await agent.session();
+    const session = await agent.sessions.create({ type: "chat", kind: "conversation" });
     await (await session.prompt({ actor: { kind: "user", user_id: "local" }, query: "review" })).finished;
     await within(entered.promise);
     await within(city.close());
@@ -224,7 +224,7 @@ test("Chat Turn 已结束后结果继续交付，临时恢复失败不会重跑�
   const delivered = deferred();
   try {
     await city.powers.settled();
-    const parent = await caller.session();
+    const parent = await caller.sessions.create({ type: "chat", kind: "conversation" });
     const caller_turn = await parent.prompt({ request_id: "original", query: "start independent work" });
     await caller_turn.finished;
     const delegations = worker.resolve_delegations();
@@ -276,7 +276,7 @@ test("停止Chat只结束当前回复，已派Main继续并交付", async () => 
   } }) }));
   try {
     await city.powers.settled();
-    const chat = await caller.session();
+    const chat = await caller.sessions.create({ type: "chat", kind: "conversation" });
     chat.dispose_title_generation();
     chat.subscribe((mutation) => { if (mutation.variant === "turn" && mutation.type === "finish" && mutation.status === "completed") delivered.resolve(); });
     const turn = await chat.prompt({ query: "start work", request_id: "chat-work" });
@@ -398,7 +398,7 @@ test("已接收后台续轮重建后明确收口中断，保留结果并释放�
   let model_calls = 0;
   const agent = new Agent({ id: "background-recovery", model: create_model(() => { model_calls++; }) });
   try {
-    const session = await agent.session();
+    const session = await agent.sessions.create({ type: "chat", kind: "conversation" });
     const storage = await agent.sessions.read_session_storage(session.id, "chat");
     const turn_id = "interrupted-background-turn";
     await storage.create_message({
@@ -426,7 +426,7 @@ test("后台完成使用稳定身份接收，并发重投不重复执行模型",
   let calls = 0;
   const agent = new Agent({ id: "background-agent", model: create_model(() => { calls++; }) });
   try {
-    const session = await agent.session();
+    const session = await agent.sessions.create({ type: "chat", kind: "conversation" });
     session.dispose_title_generation();
     const original = await session.prompt({ query: "start", request_id: "original" });
     await original.finished;
@@ -451,7 +451,7 @@ test("停止后的Shell结果不唤醒，独立Main仍可向Chat交付", async (
     return { text: "result" };
   } }) });
   try {
-    const session = await agent.session();
+    const session = await agent.sessions.create({ type: "chat", kind: "conversation" });
     session.dispose_title_generation();
     const original = await session.prompt({ query: "start", request_id: "original" });
     await within(entered.promise);

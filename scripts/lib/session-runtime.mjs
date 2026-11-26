@@ -19,13 +19,16 @@ const city_source = path.join(public_root, "packages/city/src/");
 
 /** Import only pure runtime modules, with source-local aliases and TS transformation. */
 export async function load_runtime(agent_database = true, protocol = "current", filesystem = false) {
-  if (!["current", "historical-v9", "historical-v10", "historical-v11", "historical-v12"].includes(protocol)) throw new Error("offline_runtime_protocol_invalid");
+  if (!["current", "historical-v9", "historical-v10", "historical-v11", "historical-v12", "historical-v13"].includes(protocol)) throw new Error("offline_runtime_protocol_invalid");
   const historical_version = protocol === "current" ? undefined : Number(protocol.slice("historical-v".length));
   // City 的错误类使用 TS 参数属性；由已安装编译器转换，避免依赖 Node 的实验转换模式。
   const typescript = agent_database ? create_require(path.join(city_source, "offline.cjs"))("typescript") : undefined;
   const hook = register_hooks({
     resolve(specifier, context, next_resolve) {
       const parent_path = context.parentURL?.startsWith("file:") ? file_url_to_path(context.parentURL) : "";
+      if (parent_path.startsWith(path.join(public_root, "scripts/fixtures/")) && specifier === "zod") {
+        return { url: path_to_file_url(create_require(path.join(agent_source, "offline.cjs")).resolve("zod")).href, shortCircuit: true };
+      }
       if ([agent_source, type_source, city_source].some(root => parent_path.startsWith(root))) {
         let target;
         if (specifier.startsWith("@/")) target = path.join(parent_path.startsWith(city_source) ? city_source : agent_source, specifier.slice(2));
@@ -52,31 +55,34 @@ export async function load_runtime(agent_database = true, protocol = "current", 
   });
   try {
     const load = relative => import(path_to_file_url(path.join(agent_source, relative)).href);
+    const frozen_version = historical_version === 13 ? 13 : 12;
+    const frozen = name => import(new URL(`../fixtures/session-v${frozen_version}/${name}.mjs`, import.meta.url));
     const modules = await Promise.all([
       historical_version
         ? import(new URL(`../fixtures/session-v${historical_version}/codec.mjs`, import.meta.url))
         : load("session/storage/SessionStorageCodec.ts"),
-      historical_version ? import(new URL("../fixtures/session-v12/stable-prefix.mjs", import.meta.url)) : load("session/messages/SessionStablePrefix.ts"),
-      historical_version ? import(new URL("../fixtures/session-v12/prompt-actor.mjs", import.meta.url)) : load("types/sdk/SessionPromptActor.ts"),
+      historical_version ? frozen("stable-prefix") : load("session/messages/SessionStablePrefix.ts"),
+      historical_version ? frozen("prompt-actor") : load("types/sdk/SessionPromptActor.ts"),
       load("session/storage/SessionMessagePreview.ts"),
       load("session/loop/SessionInputFacts.ts"),
     ]);
     if (agent_database) modules.push(...await Promise.all([
-      historical_version ? import(new URL("../fixtures/session-v12/schema.mjs", import.meta.url)) : load("session/storage/agent-db/AgentSessionSchema.ts"),
+      historical_version ? frozen("schema") : load("session/storage/agent-db/AgentSessionSchema.ts"),
       load("session/storage/agent-db/AgentSessionFileLease.ts"),
-      load("session/storage/ModelBindingCodec.ts"),
+      import(new URL("../fixtures/session-v12/model-binding.mjs", import.meta.url)),
       protocol === "historical-v9"
         ? import(new URL("../fixtures/session-v9/result-reference.mjs", import.meta.url))
-        : historical_version ? import(new URL("../fixtures/session-v12/result-reference.mjs", import.meta.url)) : load("model/results/ResultReference.ts"),
+        : historical_version ? frozen("result-reference") : load("model/results/ResultReference.ts"),
       protocol === "historical-v9"
         ? import(new URL("../fixtures/session-v9/result-disclosure.mjs", import.meta.url))
-        : historical_version ? import(new URL("../fixtures/session-v12/result-disclosure.mjs", import.meta.url)) : load("model/results/ResultDisclosure.ts"),
+        : historical_version ? frozen("result-disclosure") : load("model/results/ResultDisclosure.ts"),
       import(path_to_file_url(path.join(city_source, "local/resources/RootLease.ts")).href),
       historical_version ? import(new URL(`../fixtures/session-v${historical_version}/readiness.mjs`, import.meta.url)) : import(path_to_file_url(path.join(city_source, "local/resources/SessionStorageReadiness.ts")).href),
-      historical_version ? import(new URL("../fixtures/session-v12/origin.mjs", import.meta.url)) : import(path_to_file_url(path.join(type_source, "types/session/SessionDescriptor.ts")).href),
+      historical_version ? frozen(historical_version === 13 ? "descriptor" : "origin") : import(path_to_file_url(path.join(type_source, "types/session/SessionDescriptor.ts")).href),
       import(path_to_file_url(path.join(type_source, "types/workspace/AttachmentPolicy.ts")).href),
     ]));
     if (filesystem) modules.push(await import(path_to_file_url(path.join(city_source, "workspace/LocalFileSystem.ts")).href));
+    if (historical_version) modules.push(await import(new URL("../fixtures/session-v13/message-stable-prefix.mjs", import.meta.url)));
     const runtime = Object.assign({}, ...modules);
     if (historical_version && agent_database) {
       runtime.AGENT_SESSION_SCHEMA_VERSION = historical_version;

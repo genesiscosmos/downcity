@@ -5,7 +5,6 @@
  * - Agent 不绑定 Workspace；`workspace` 只是创建 Session 时的默认目录，可在会话中切换。
  * - 能力与 Transport 由容器持有，Agent 只收下容器在绑定时推送的能力，不持有容器引用。
  * - Session 由 AgentSessions 统一持有；Workspace 只在单个 Session 创建或恢复时提供。
- * - Agent 自己那条会话由 `session()` 暴露；它是一条普通 Session。
  */
 import { normalize_agent_role } from "@downcity/type";
 import { safe_error_diagnostic } from "@/utils/logger/SafeErrorDiagnostic.js";
@@ -37,7 +36,6 @@ import { recover_background_sessions } from "@/agent/SessionBackgroundRecovery.j
 import { AgentSessionStorageError } from "@/session/storage/agent-db/AgentSessionErrors.js";
 import { LocalSessionDelegationStore } from "@/agent/LocalSessionDelegationStore.js";
 import type { AgentWorkHost } from "@/types/agent/AgentWorkHost.js";
-import type { AgentSessionInput } from "@/types/agent/AgentSessionInput.js";
 import type { AgentSession } from "@/types/agent/SessionActor.js";
 
 /** SDK Agent 主体。 */
@@ -69,6 +67,12 @@ export class Agent {
   /** Agent 面向用户的 Session 创建入口。 */
   readonly sessions: AgentSessionCollection;
 
+  /** 宿主定义的 Agent 级 JSON 状态，与 Session 共用存储生命周期。 */
+  get variables(): import("@/types/agent/AgentVariables.js").AgentVariables {
+    if (this.dispose_promise) throw new Error("Agent is disposing");
+    return this.resolve_storage().sessions.variables;
+  }
+
   /** 当前 Agent 所有 Session 的交互查询、实时订阅和响应入口。 */
   readonly interactions: AgentInteractionCollection;
   /** 交互集合实现；持有 Agent 级观察订阅，不复制 pending 事实。 */
@@ -93,10 +97,8 @@ export class Agent {
   private custom_hooks: ToolHookSet;
 
   /**
-   * Agent 会话可用的会话工具；延迟创建并复用。
-   *
-   * 关键点（中文）：工具只依赖 SessionWork 协议，不从 ToolCallContext 回查主体；
-   * 它们只在 Agent 主会话和 Channel 会话里注册。
+   * Agent 持有的工作调度服务；延迟创建并复用。
+   * 工作服务通过 SessionWork 协议提供，不从 ToolCallContext 回查主体。
    */
   /** 当前 Agent 的工作端口，跨主体调用仍由目标 Agent 持有自己的会话与记录。 */
   private session_work?: SessionWork;
@@ -296,18 +298,6 @@ export class Agent {
   /** 返回 Agent 指令快照。 */
   get_instructions(): readonly string[] {
     return [...this.instruction];
-  }
-
-  /**
-   * 取用 Agent 自己那条会话，不存在时先建立。
-   *
-   * 关键点（中文）
-   * - 它就是一条普通 Session：工作区能力、set/get、消息、审批与其他会话完全一致。
-   * - 不接收 Workspace：归属在创建时确定，恢复资源通过 sessions.get 注入同 ID 实例。
-   */  async session(input?: AgentSessionInput): Promise<AgentSession> {
-    return await this.session_manager.self(
-      input?.workspace ? { workspace: input.workspace } : undefined,
-    );
   }
 
   /** 返回 Agent 级日志器。 */

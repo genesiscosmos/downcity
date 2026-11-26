@@ -3,7 +3,7 @@
  * independent from DB, disclosure, ResultRef and attachment ownership versions.
  * Historical packages are accepted only by explicit isolated offline converters.
  */
-export const transfer_schema_version = 13;
+export const transfer_schema_version = 14;
 export const transfer_package_version = 3;
 export const transfer_batch_version = 3;
 

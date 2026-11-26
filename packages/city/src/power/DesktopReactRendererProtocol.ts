@@ -8,7 +8,5 @@ export const DESKTOP_RENDERER_PROTOCOLS: readonly string[] = Object.freeze([DESK
 /** 校验 Desktop 自己的可选插槽标记，其他协议不调用此校验器。 */
 export function validate_desktop_renderer_capabilities(value: unknown): void {
   if (value === undefined) return;
-  if (!value || typeof value !== "object" || Array.isArray(value) || Object.entries(value).some(([key, flag]) => !["sidebar", "mainview", "config", "message"].includes(key) || typeof flag !== "boolean")) throw new Error("Desktop Renderer capabilities require boolean slot flags");
-  const capabilities = value as Record<string, unknown>;
-  if (Boolean(capabilities.sidebar) !== Boolean(capabilities.mainview)) throw new Error("Desktop Renderer sidebar and mainview must be declared together");
+  if (!value || typeof value !== "object" || Array.isArray(value) || Object.entries(value).some(([key, flag]) => !["page", "config", "message"].includes(key) || typeof flag !== "boolean")) throw new Error("Desktop Renderer capabilities require boolean slot flags");
 }

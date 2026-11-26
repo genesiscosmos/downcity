@@ -47,11 +47,11 @@ export type {
 } from "./web/types/WebPower.js";
 export type {
   WebCapability,
-  WebMainviewCapabilityStatus,
-  WebMainviewSession,
-  WebMainviewSessionsResult,
-  WebMainviewSnapshot,
-} from "./web/types/WebMainview.js";
+  WebPageCapabilityStatus,
+  WebPageSession,
+  WebPageSessionsResult,
+  WebPageSnapshot,
+} from "./web/types/WebPage.js";
 export type {
   WebConfigPatch,
   WebConfigTestInput,

@@ -346,7 +346,7 @@ function error_message(error: unknown): string {
 /** 统一直接 Power 与注册项输入。 */
 function normalize_registration(input: CityPowerInput): CityPowerRegistration {
   if ("power" in input) return input;
-  return { power: input, readme: "", has_config: false, has_sidebar: false, has_mainview: false };
+  return { power: input, readme: "", has_config: false, has_page: false };
 }
 
 /** 拒绝空的生命周期标识。 */

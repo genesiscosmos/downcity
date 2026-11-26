@@ -5,6 +5,7 @@
  * 记录状态。只读浏览不构造执行器。历史分库仅用于检测待迁移，不读取旧 canonical。
  */
 import path from "node:path";
+import { AgentVariableStore } from "./AgentVariableStore.js";
 import { isDeepStrictEqual as is_deep_strict_equal } from "node:util";
 import { randomUUID as random_uuid } from "node:crypto";
 import { normalize_session_descriptor, normalize_session_type } from "@downcity/type";
@@ -23,6 +24,8 @@ import { decode_session_record } from "./AgentSessionRelations.js";
 
 /** SessionStorage 视图连接同 Agent 的共享数据库。 */
 export class AgentSessionStore implements SessionStore {
+  /** 变量与 Session 共用唯一写租约；不持有独立连接或生命周期。 */
+  readonly variables = new AgentVariableStore(() => this.connection());
   private lease?: Promise<AgentSessionRuntimeLease>;
   private reader?: Promise<AgentSessionRuntimeLease>;
   private readonly sessions = new Map<string, AgentSessionStorage>();
@@ -30,29 +33,6 @@ export class AgentSessionStore implements SessionStore {
   private readonly memory_scope = random_uuid();
 
   constructor(private readonly options: AgentSessionStoreOptions) {}
-
-  /** 读取主指针只返回持久视图，缺失的新文件根不隐式初始化。 */
-  async read_main() {
-    try {
-      const lease = await this.read_connection();
-      const row = await lease.read<AgentSessionRecord | null>({ command: "main" });
-      return row ? agent_session_read_view(lease, this.options.agent_id, row) : null;
-    } catch (error) {
-      if (error instanceof Error && error.message === "session_storage_not_found") return null;
-      throw error;
-    }
-  }
-
-  /** 候选与操作 UUID 在派发前固定；未知确认交由原 receipt 核对。 */
-  async ensure_main(workspace_id?: string): Promise<AgentSessionStorage> {
-    const lease = await this.connection();
-    const selected = await lease.write<{ session_id: string }>("main", {
-      command: "ensure_main", operation_id: random_uuid(),
-      input: { session_id: random_uuid(), timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-        created_at: Date.now(), ...(workspace_id ? { workspace_id } : {}) },
-    });
-    return await this.open_session(selected.session_id, "chat");
-  }
 
   /** 业务幂等键与候选 UUID 一起提交；不会从业务键推导会话身份。 */
   async ensure_creation(creation_key: string, descriptor: SessionDescriptor, workspace_id?: string): Promise<AgentSessionStorage> {

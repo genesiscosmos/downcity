@@ -15,7 +15,7 @@ Each Agent owns `~/.downcity/agents/<agent-id>/skills`. A skill is a directory c
 
 ## Desktop
 
-The Skill Power Sidebar lists individual resources in Skills and MCP groups. Select a resource to inspect its contents or connection status. MCP server files are managed through the Power's configuration page.
+The Skill Power page provides searchable Skills and MCP resource lists. Open a resource in an independent tab to inspect its contents or connection status. MCP server files are managed through the Power's configuration page.
 
 The Skills tab in Agent Profile manages that Agent's skills and MCP server assignments. Link a skill from the user catalog, remove an assigned skill, or enable an MCP server for that Agent. MCP tools require an explicit Agent assignment.
 

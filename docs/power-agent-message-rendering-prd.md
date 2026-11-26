@@ -26,7 +26,7 @@ Power 的 Action 可以直接生成一个 Agent Message Part。该 Part 由所�
 | public/packages/type/src/types/session/SessionContent.ts | Agent 内容支持 text、file、data | 增加 power 内容协议 |
 | public/packages/type/src/types/session/SessionMessage.ts | canonical Part 具有 part_id、sequence、可选 step_id | 增加 Agent Power Part |
 | public/packages/agent/src/session/storage/SessionStorageSchema.ts | message_parts.content 保存 JSON；类型与角色存在数据库约束 | 更新约束、编解码与存储迁移 |
-| public/packages/city/src/power/types/PowerRenderer.ts | Renderer 插槽为 sidebar、mainview、config | 增加 message 插槽 |
+| public/packages/city/src/power/types/PowerRenderer.ts | Renderer 提供完整 page 与独立 config | 增加 message 插槽 |
 | public/packages/implementations/powers/src/renderers.ts | 官方 Power ID 到 Renderer 的注册映射 | 注册 diagram 消息渲染器 |
 | private/apps/desktop/src/renderer/features/chat/lib/message/agent_message_projection.ts | 单层消息投影；data 当前主要展示文件改动 | 增加 Power 内容投影与分发 |
 
@@ -121,7 +121,7 @@ Action 执行失败时返回问题，不发布成功内容 Part。产物生成�
 
 ## 7. Power Renderer 插槽
 
-在 PowerRendererDefinition 中增加可选 message 组件。仅声明 message 的 Power 是合法定义，不要求同时提供 sidebar 或 mainview。
+在 PowerRendererDefinition 中增加可选 message 组件。仅声明 message 的 Power 是合法定义，独立于 `page` 与 `config`。
 
 宿主根据 Part.power_id 找到已注册 Power Renderer，并调用其 message 组件。
 

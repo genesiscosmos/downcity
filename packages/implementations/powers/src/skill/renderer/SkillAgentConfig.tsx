@@ -2,7 +2,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { PowerAgentConfigComponentProps } from "@downcity/city/power/react";
 import type { PowerJsonObject } from "@downcity/city/power";
-import type { SkillMainviewSnapshot, SkillMainviewMutationResult, SkillMainviewItem } from "@/skill/types/SkillMainview.js";
+import type { SkillPageSnapshot, SkillPageMutationResult, SkillPageItem } from "@/skill/types/SkillPage.js";
 import { error_message } from "./SkillResources.js";
 /** Reset editor state only when the host selects a different Agent. */
 export function skill_agent_config(props: PowerAgentConfigComponentProps) {
@@ -12,7 +12,7 @@ export function skill_agent_config(props: PowerAgentConfigComponentProps) {
 /** Resource assignment editor scoped exclusively to the Agent provided by the host. */
 function Skill_agent_editor({ agent_id, power, ui }: PowerAgentConfigComponentProps) {
   const { Page, Section, Group, Row, Button, Switch, Input, Callout, LoadingState, EmptyState } = ui.components;
-  const [snapshot, set_snapshot] = useState<SkillMainviewSnapshot>();
+  const [snapshot, set_snapshot] = useState<SkillPageSnapshot>();
   const [filter, set_filter] = useState("");
   const [busy, set_busy] = useState(false);
   const busy_ref = useRef(false);
@@ -24,7 +24,7 @@ function Skill_agent_editor({ agent_id, power, ui }: PowerAgentConfigComponentPr
   const [error, set_error] = useState("");
   useEffect(() => {
     let disposed = false;
-    void power.invoke<SkillMainviewSnapshot>("skill.snapshot").then((next) => {
+    void power.invoke<SkillPageSnapshot>("skill.snapshot").then((next) => {
       if (!disposed) { set_snapshot(next); set_error(""); }
     }).catch((reason) => { if (!disposed) set_error(error_message(reason)); });
     return () => { disposed = true; };
@@ -36,7 +36,7 @@ function Skill_agent_editor({ agent_id, power, ui }: PowerAgentConfigComponentPr
     set_busy(true);
     set_error("");
     try {
-      const result = await power.invoke<SkillMainviewMutationResult>(action_id, { ...payload, agent_id });
+      const result = await power.invoke<SkillPageMutationResult>(action_id, { ...payload, agent_id });
       if (!result.operation_success) throw new Error(result.error || "操作失败");
       if (mounted_ref.current) set_snapshot(result);
       ui.invalidate();
@@ -47,7 +47,7 @@ function Skill_agent_editor({ agent_id, power, ui }: PowerAgentConfigComponentPr
       if (mounted_ref.current) set_busy(false);
     }
   };
-  const remove_skill = async (item: SkillMainviewItem) => {
+  const remove_skill = async (item: SkillPageItem) => {
     if (!await ui.confirm({ title: `移除 ${item.name}？`, description: item.is_link ? "移除该 Agent 的关联。" : "从该 Agent 目录永久删除此 Skill。", action: "移除", destructive: true })) return;
     await mutate("skill.remove", { skill_id: item.id });
   };

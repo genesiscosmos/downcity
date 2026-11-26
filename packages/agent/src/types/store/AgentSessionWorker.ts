@@ -9,8 +9,10 @@ import type { AgentSessionAppendMessage, AgentSessionMessagePageInput, AgentSess
 
 /** 仅读取 canonical 事实的命令。 */
 export type AgentSessionReadCommand = {
-  /** 只读当前主会话指针；为空返回 null，绝不创建。 */
-  command: "main";
+  /** 读取 Agent 范围的 JSON 文本；null 表示键缺失。 */
+  command: "variable_get";
+  /** 宿主定义的完整变量键。 */
+  key: string;
 } | {
   /** 批量精确查询小字段，不加载正文、配置或全量目录。 */
   command: "metadata";
@@ -90,19 +92,17 @@ export type AgentSessionReadCommand = {
 
 /** 在单写连接中执行的短事务命令。 */
 export type AgentSessionWriteCommand = {
+  /** 共享 Agent DB 的通用变量短事务。 */
+  command: "variable_mutate";
+  /** 已编码 JSON 与 operation receipt 身份。 */
+  input: import("./AgentVariables.js").AgentVariableMutation;
+} | {
   /** 原子选择业务创建键所关联的永久 UUID。 */
   command: "ensure_creation";
   /** 重入和未知确认都使用原操作 UUID。 */
   operation_id: string;
   /** 完整来源、候选 UUID 与独立业务键。 */
   input: import("./AgentSessionDatabase.js").AgentSessionEnsureCreationInput;
-} | {
-  /** 显式单事务确保主会话；不同并发候选收敛为同一指针。 */
-  command: "ensure_main";
-  /** 本次确认身份；重入保留原 UUID。 */
-  operation_id: string;
-  /** 新会话候选及首次创建信息；已有主会话不被重绑。 */
-  input: import("./AgentSessionDatabase.js").AgentSessionEnsureMainInput;
 } | {
   /** 创建或取得原持久化计划，返回小型确认。 */
   command: "archive_prepare";

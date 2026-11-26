@@ -99,7 +99,7 @@ test("真实 Agent 重启扫描已完成后台轮次不再装配执行器", asyn
   let preparations = 0;
   const agent = new Agent({ id: "completed-background", prepare_work_session: async () => { preparations++; } });
   try {
-    const session = await agent.session();
+    const session = await agent.sessions.create({ type: "chat", kind: "conversation" });
     const storage = await agent.sessions.read_session_storage(session.id, "chat");
     const turn_id = "completed-background-turn";
     await storage.create_message(background_input(session.id, turn_id));
@@ -118,7 +118,7 @@ test("后台完成日志先落盘而 canonical Message 尚未关闭时仍恢复�
   let preparations = 0;
   const agent = new Agent({ id: "prepared-background", prepare_work_session: async () => { preparations++; } });
   try {
-    const session = await agent.session();
+    const session = await agent.sessions.create({ type: "chat", kind: "conversation" });
     const storage = await agent.sessions.read_session_storage(session.id, "chat");
     const turn_id = "prepared-background-turn";
     await storage.create_message(background_input(session.id, turn_id));

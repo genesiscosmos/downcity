@@ -272,8 +272,7 @@ export interface PowerDefinition {
 export interface CityPowerRegistration {
   /** 用户文档绝对路径。 */ readonly readme: string;
   /** 是否提供与工作区分离的设置中心 Config 面板。 */ readonly has_config: boolean;
-  /** 是否提供 Sidebar。 */ readonly has_sidebar: boolean;
-  /** 是否提供 Mainview。 */ readonly has_mainview: boolean;
+  /** 是否提供完整业务页面。 */ readonly has_page: boolean;
   /** City 持有的唯一 PowerDefinition 实例。 */ readonly power: PowerDefinition;
 }
 

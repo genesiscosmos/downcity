@@ -6,8 +6,8 @@
  */
 import type { DatabaseSync, SQLInputValue } from "node:sqlite";
 import { assert_session_id } from "../../SessionIdentity.js";
-import { is_main_session, normalize_session_descriptor, normalize_session_type, normalize_session_kind } from "@downcity/type";
-import type { AgentSessionAddress, AgentSessionConfigurationRow, AgentSessionCreateRecord, AgentSessionListQuery, AgentSessionRecord, AgentSessionRecordPage, AgentSessionEnsureMainInput, AgentSessionEnsureCreationInput } from "@/types/store/AgentSessionDatabase.js";
+import { normalize_session_descriptor, normalize_session_type, normalize_session_kind } from "@downcity/type";
+import type { AgentSessionAddress, AgentSessionConfigurationRow, AgentSessionCreateRecord, AgentSessionListQuery, AgentSessionRecord, AgentSessionRecordPage, AgentSessionEnsureCreationInput } from "@/types/store/AgentSessionDatabase.js";
 import { AgentSessionDatabase } from "./AgentSessionDatabase.js";
 import { decode_agent_session_cursor, encode_agent_session_cursor, storage_digest } from "./AgentSessionCursor.js";
 import { decode_session_record, encode_session_relations } from "./AgentSessionRelations.js";
@@ -22,23 +22,6 @@ export class AgentSessionCatalog {
     assert_session_id(input.session_id);
     return this.owner.write(operation_id, { command: "create", input: { ...input, ...normalize_session_descriptor(descriptor) } }, database => {
       this.insert(database, { ...input, ...normalize_session_descriptor(descriptor) });
-      return { session_id: input.session_id };
-    });
-  }
-
-  /** 只读当前指针，不创建会话、不扫描来源来猜选。 */
-  main(): AgentSessionRecord | null {
-    return this.owner.read(database => this.read_main(database));
-  }
-
-  /** 单写事务中先读取指针，再创建和发布；并发候选只选中一条。 */
-  ensure_main(operation_id: string, input: AgentSessionEnsureMainInput): { session_id: string } {
-    assert_session_id(input.session_id);
-    return this.owner.write(operation_id, { command: "ensure_main", input }, database => {
-      const current = this.read_main(database);
-      if (current) return { session_id: current.session_id };
-      this.insert(database, { ...input, ...normalize_session_descriptor({ type: "chat", kind: "main" }) });
-      database.prepare("UPDATE agent_session_state SET main_session_id = ? WHERE singleton_id = 1").run(input.session_id);
       return { session_id: input.session_id };
     });
   }
@@ -64,17 +47,6 @@ export class AgentSessionCatalog {
         .run(descriptor.type, input.creation_key, input.session_id);
       return { session_id: input.session_id };
     });
-  }
-
-  private read_main(database: DatabaseSync): AgentSessionRecord | null {
-    const state = database.prepare("SELECT main_session_id FROM agent_session_state WHERE singleton_id = 1").get();
-    if (!state) throw new Error("session_main_pointer_invalid");
-    if (state.main_session_id === null) return null;
-    const row = database.prepare("SELECT * FROM sessions WHERE session_id = ?").get(state.main_session_id) as unknown as AgentSessionRecord | undefined;
-    if (!row || row.archived || !is_main_session(decode_session_record(row))) {
-      throw new Error("session_main_pointer_invalid");
-    }
-    return row;
   }
 
   private insert(database: DatabaseSync, input: AgentSessionCreateRecord): void {
@@ -153,7 +125,7 @@ export class AgentSessionCatalog {
     });
   }
 
-  /** 归档保留永久身份；触发器在同事务清除匹配的主会话指针。 */
+  /** 归档保留永久身份，只更新记录状态。 */
   archive(operation_id: string, address: AgentSessionAddress, archived_at: number): { session_id: string } {
     if (address.archived) throw new Error("session_already_archived");
     return this.owner.write(operation_id, { command: "archive", address, archived_at }, (database) => {

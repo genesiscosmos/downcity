@@ -22,11 +22,8 @@ export interface PowerCatalogItem {
   /** Power 是否提供统一 City 运行入口。 */
   has_main: boolean;
 
-  /** Power 是否提供专属 Sidebar。 */
-  has_sidebar: boolean;
-
-  /** Power 是否提供业务 Mainview。 */
-  has_mainview: boolean;
+  /** Power 是否提供完整业务页面。 */
+  has_page: boolean;
 
   /** Power 是否提供与工作区分离的设置中心 Config 面板。 */
   has_config: boolean;

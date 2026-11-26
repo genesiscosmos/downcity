@@ -31,7 +31,7 @@ export interface InboxEntry {
   update?: NotificationItem;
 }
 
-/** Sidebar和Mainview共用的只读快照。 */
+/** 资源页和详情共用的只读快照。 */
 export interface InboxState {
   /** 最近一次成功读取的原业务快照。 */
   data?: NotificationListResult;

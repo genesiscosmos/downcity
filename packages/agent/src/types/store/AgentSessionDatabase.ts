@@ -83,18 +83,6 @@ export interface AgentSessionEnsureCreationInput extends AgentSessionCreateRecor
   creation_key: string;
 }
 
-/** 显式确保主会话的事务输入；来源由存储固定为 chat/agent。 */
-export interface AgentSessionEnsureMainInput {
-  /** 事务尚未选中主会话时使用的新 UUIDv4，不从 Agent ID 派生。 */
-  session_id: string;
-  /** 首次创建时的时区；已有主会话不更改配置。 */
-  timezone: string;
-  /** 首次创建时间戳毫秒，重入保持原值。 */
-  created_at: number;
-  /** 首次创建的可选 Workspace；已有指针不重新绑定。 */
-  workspace_id?: string;
-}
-
 /** 列表过滤输入，必须经过归一化后绑定游标。 */
 export interface AgentSessionListQuery {
   /** 唯一来源分类。 */

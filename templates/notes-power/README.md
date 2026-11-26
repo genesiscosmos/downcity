@@ -1,10 +1,10 @@
 # Notes Power
 
-一个只读的第三方 Power 源码模板。一个后端实例向 Desktop 提供一条演示笔记，前端复用宿主 Sidebar、Page、Group 和 Row。
+一个只读的第三方 Power 源码模板。一个后端实例向 Desktop 提供一条演示笔记，前端复用宿主 Page、Group 和 Row。
 
 | 协议 | 状态 |
 | --- | --- |
-| `downcity.desktop.react.v1` | 已实现 Sidebar 与 Mainview，可由当前 Desktop 加载 |
+| `downcity.desktop.react.v1` | 已实现完整 Page，可由当前 Desktop 加载 |
 | `acme.web.react.v1` | 仅演示静态声明，Downcity 无适配器；入口不编译、不执行 |
 
 文件入口为 `downcity.ts`；业务位于 `src/notes_power.ts`，纯数据类型位于 `shared/notes_contract.ts`，各宿主 UI 在 `ui/<host>/` 中。

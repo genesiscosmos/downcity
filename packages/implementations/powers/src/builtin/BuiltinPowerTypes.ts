@@ -2,7 +2,7 @@
  * Downcity 官方 City Power 注册集合。
  *
  * 每个官方 Power 直接提供一个唯一实例；City 持有实例生命周期，Desktop 使用同一
- * Power 实例在 start 阶段直接装配 Mainview/Config action。
+ * Power 实例在 start 阶段直接装配 Page/Config action。
  */
 
 import { fileURLToPath } from "node:url";
@@ -49,43 +49,37 @@ export function create_builtin_power_registrations(input: {
     {
       readme: builtin_readme_path("notification"),
       has_config: false,
-      has_sidebar: true,
-      has_mainview: true,
+      has_page: true,
       power: new NotificationPower({ on_changed: input.on_notification_changed }),
     },
     {
       readme: builtin_readme_path("presentation"),
       has_config: false,
-      has_sidebar: false,
-      has_mainview: false,
+      has_page: false,
       power: new PresentationPower(),
     },
     {
       readme: builtin_readme_path("skill"),
       has_config: true,
-      has_sidebar: true,
-      has_mainview: true,
+      has_page: true,
       power: new SkillPower(),
     },
     {
       readme: builtin_readme_path("task"),
       has_config: false,
-      has_sidebar: false,
-      has_mainview: false,
+      has_page: false,
       power: task_power,
     },
     {
       readme: builtin_readme_path("messenger"),
       has_config: false,
-      has_sidebar: true,
-      has_mainview: true,
+      has_page: true,
       power: new MessengerPower(),
     },
     {
       readme: builtin_readme_path("memory"),
       has_config: false,
-      has_sidebar: true,
-      has_mainview: true,
+      has_page: true,
       power: new MemoryPower({ platform_root_path: input.platform_root_path, on_changed: input.on_memory_changed,
         resolve_model_binding: model_host?.memory,
         dreaming: { read_signals: async () => (await task_power.read_facts()).map(memory_task_signal) },
@@ -94,15 +88,13 @@ export function create_builtin_power_registrations(input: {
     {
       readme: builtin_readme_path("web"),
       has_config: false,
-      has_sidebar: true,
-      has_mainview: true,
+      has_page: true,
       power: new WebPower(),
     },
     {
       readme: builtin_readme_path("email"),
       has_config: false,
-      has_sidebar: true,
-      has_mainview: true,
+      has_page: true,
       power: new EmailPower(),
     },
   ];

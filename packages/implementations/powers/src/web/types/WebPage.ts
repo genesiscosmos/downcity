@@ -22,7 +22,7 @@ export type WebCapability = "search" | "document" | "browser" | "general";
 export type WebProviderCapability = Exclude<WebCapability, "general">;
 
 /** 一个能力区的状态。 */
-export interface WebMainviewCapabilityStatus {
+export interface WebPageCapabilityStatus {
   /** 当前实际生效的 Provider 名称；不可用时为空。 */
   readonly provider: string;
 
@@ -34,7 +34,7 @@ export interface WebMainviewCapabilityStatus {
 }
 
 /** Web 工作区一次读取返回的完整快照。 */
-export interface WebMainviewSnapshot {
+export interface WebPageSnapshot {
   /** 已脱敏的配置，用于渲染各能力的 Provider 选择与参数。 */
   readonly config: WebConfigView;
 
@@ -46,20 +46,20 @@ export interface WebMainviewSnapshot {
   readonly config_path: string;
 
   /** 搜索能力状态。 */
-  readonly search: WebMainviewCapabilityStatus;
+  readonly search: WebPageCapabilityStatus;
 
   /** 网页读取能力状态。 */
-  readonly document: WebMainviewCapabilityStatus;
+  readonly document: WebPageCapabilityStatus;
 
   /** 浏览器能力状态。 */
-  readonly browser: WebMainviewCapabilityStatus;
+  readonly browser: WebPageCapabilityStatus;
 
   /** Provider 返回的非致命警告。 */
   readonly warnings: string[];
 }
 
 /** 一个活跃浏览器会话的摘要。 */
-export interface WebMainviewSession {
+export interface WebPageSession {
   /** session 稳定标识。 */
   readonly session_id: string;
 
@@ -74,12 +74,12 @@ export interface WebMainviewSession {
 }
 
 /** 列出浏览器会话的结果。 */
-export interface WebMainviewSessionsResult {
+export interface WebPageSessionsResult {
   /** 当前是否已配置浏览器能力。 */
   readonly available: boolean;
 
   /** 当前仍由 Provider 拥有的会话。 */
-  readonly sessions: WebMainviewSession[];
+  readonly sessions: WebPageSession[];
 
   /** 不可用时或读取失败时的说明。 */
   readonly note: string;

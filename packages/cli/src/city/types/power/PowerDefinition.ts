@@ -26,7 +26,7 @@ export interface ResolvedPowerSource {
 /** 来源目录 `power.json` 必须声明的可安装 Power 包。 */
 export interface PowerPackageDefinition extends Omit<
   LocalPowerDefinition,
-  "has_main" | "has_sidebar" | "has_mainview" | "has_config"
+  "has_main" | "has_page" | "has_config"
 > {
   /** 文件协议版本。 */
   schema_version: 1;

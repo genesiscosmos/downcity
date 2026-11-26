@@ -83,7 +83,7 @@ test("Task TOML 保存模型对象并恢复原始 ID；同名不同来源不能�
     client.binding_id = "saved-account";
     const local_reference = city.town.models.register({ source_id: "original", client });
     const agent = city.agents.add(new Agent({ id: "agent", model: city.town.models.client(local_reference) }));
-    await city.powers.add({ power: new AuthorizationPower(), readme: import.meta.filename, has_config: false, has_sidebar: false, has_mainview: false });
+    await city.powers.add({ power: new AuthorizationPower(), readme: import.meta.filename, has_config: false, has_page: false });
     const session = await agent.sessions.create_execution_session({ workspace, workspace_id: workspace.id, type: "work", kind: "task", execution_profile_id: TASK_EXECUTION_PROFILE.id, execution_profile_version: TASK_EXECUTION_PROFILE.version });
     await authorize_task_session(host.storage, { ...task, model: local_reference }, session.id);
     assert.equal((await (await session.prompt({ query: "authorized Task" })).finished).success, true);

@@ -1,6 +1,7 @@
-/** Messenger Power 的 Bot Account Sidebar 与管理 Mainview。 */
+/** Messenger 完整账号资源列表与独立管理视图。 */
 
 import { useEffect, useRef, useState } from "react";
+import type { PowerPageComponentProps, PowerViewComponentProps } from "@downcity/city/power/react";
 import type { PowerJsonValue } from "@downcity/city/power";
 import { define_power_renderer } from "@downcity/city/power/react";
 import { MESSENGER_ACTIVITY_RENDERER } from "@/builtin/renderer/BuiltinActivity.js";
@@ -14,11 +15,14 @@ const create_route = (provider: MessengerProvider) => ({ view: "create", provide
 /** Messenger Power Renderer 定义。 */
 export const MESSENGER_POWER_RENDERER = define_power_renderer({
   activity: MESSENGER_ACTIVITY_RENDERER,
-  sidebar: function MessengerPowerSidebar({ power, navigation, ui }) {
-    const { Callout, EmptyState, LoadingState, Sidebar, SidebarCreateMenu, SidebarItem, SidebarSection, Status } = ui.components;
+  page: function messenger_page({ power, ui }) {
+    const { Callout, EmptyState, LoadingState, Page, List, CreateMenu, ListItem, ListSection, Status } = ui.components;
     const [snapshot, set_snapshot] = useState<MessengerDesktopSnapshot>();
     const [error, set_error] = useState("");
-    const selected_account_id = read_route(navigation.route.account_id);
+    const [query, set_query] = useState("");
+    const [provider_filter, set_provider_filter] = useState("");
+    const { Input, Select, Inline } = ui.components;
+    const open_account = (input: { /** 账号身份；创建时省略。 */ account_id?: string; /** 管理页签。 */ view: string; /** 创建账号的平台。 */ provider?: MessengerProvider }, title: string) => ui.open_view({ view_id: "account", resource_key: input.account_id ?? `create:${input.provider}`, title, input });
 
     useEffect(() => {
       let disposed = false;
@@ -31,30 +35,39 @@ export const MESSENGER_POWER_RENDERER = define_power_renderer({
       return () => { disposed = true; clearInterval(timer); };
     }, [power, ui.revision]);
 
-    const create_menu = <SidebarCreateMenu label="添加 Bot Account" actions={provider_options().map((provider) => ({
+    const create_menu = <CreateMenu label="添加 Bot Account" actions={provider_options().map((provider) => ({
       action_id: provider.value,
       label: provider.label,
-      on_select: () => navigation.navigate(create_route(provider.value)),
+      on_select: () => open_account(create_route(provider.value), "添加 Bot Account"),
     }))} />;
 
-    return <Sidebar actions={create_menu}>
-      <SidebarSection label="Bot Accounts">
-        {snapshot?.accounts.map((account) => <SidebarItem
+    return <Page><List actions={create_menu} toolbar={<Inline><Input type="search" value={query} placeholder="搜索 Bot Accounts…" on_value_change={set_query} /><Select value={provider_filter} options={[{ value: "", label: "全部平台" }, ...provider_options()]} on_value_change={set_provider_filter} /></Inline>}>
+      <ListSection label="Bot Accounts">
+        {snapshot?.accounts.filter((account) => (!provider_filter || account.provider === provider_filter) && `${account.name} ${account.account_id}`.toLowerCase().includes(query.trim().toLowerCase())).map((account) => <ListItem
           key={account.account_id}
           label={account.name}
           description={provider_label(account.provider)}
           trailing={<Status tone={status_tone(account.connection_state)}>{status_label(account.connection_state)}</Status>}
-          active={selected_account_id === account.account_id}
-          on_select={() => navigation.navigate(account_route(account.account_id))}
+          on_select={() => open_account(account_route(account.account_id), account.name)}
         />)}
         {!snapshot ? <LoadingState label="正在读取 Messengers…" /> : null}
         {snapshot && snapshot.accounts.length === 0 ? <EmptyState size="compact" title="还没有 Bot Account" /> : null}
-      </SidebarSection>
+      </ListSection>
       {error ? <Callout tone="danger">{error}</Callout> : null}
-    </Sidebar>;
+    </List></Page>;
   },
 
-  mainview: function MessengerPowerMainview({ power, navigation, ui }) {
+  views: [{ id: "account", label: "Bot Account", component: messenger_account_view }],
+});
+
+/** 每个账号 tab 持有自己的页签与创建流程，不影响列表筛选。 */
+function messenger_account_view({ input, power, ui }: PowerViewComponentProps) {
+  const [route, set_route] = useState(input);
+  return <Messenger_account_content power={power} ui={ui} navigation={{ route, navigate: set_route }} />;
+}
+
+/** 独立账号管理内容，包含配置、路由、授权及活动。 */
+function Messenger_account_content({ power, navigation, ui }: Pick<PowerPageComponentProps, "power" | "navigation" | "ui">) {
     const { Button, Callout, EmptyState, Group, Inline, Input, LoadingState, Page, Row, Section, Select, Stack, Status, Switch, Tabs, Toolbar } = ui.components;
     const account_id = read_route(navigation.route.account_id);
     const view = read_route(navigation.route.view) || "overview";
@@ -187,7 +200,7 @@ export const MESSENGER_POWER_RENDERER = define_power_renderer({
         .catch(() => undefined);
     };
 
-    if (!snapshot) return <LoadingState label="正在读取 Messenger 工作区…" />;
+    if (!snapshot) return error ? <Page><Callout tone="danger">{error}</Callout></Page> : <LoadingState label="正在读取 Messenger 工作区…" />;
     const agent_options = snapshot.agents.map((agent) => ({ value: agent.agent_id, label: agent.name }));
     if (view === "create") {
       const save = async () => {
@@ -250,7 +263,7 @@ export const MESSENGER_POWER_RENDERER = define_power_renderer({
     }
 
     if (!account_id || !detail) {
-      return <Page><EmptyState title="选择一个 Bot Account" description="从左侧选择现有 Bot，或者使用 Messengers 标题栏中的加号添加 Bot Account。" /></Page>;
+      return <Page><EmptyState title="选择一个 Bot Account" description="在 Messengers 页面选择或添加 Bot Account。" /></Page>;
     }
 
     const account = detail.account;
@@ -355,8 +368,8 @@ export const MESSENGER_POWER_RENDERER = define_power_renderer({
         {detail.activity.length ? <Group>{detail.activity.map((activity) => <Row key={activity.activity_id} label={activity.type} description={new Date(activity.created_at).toLocaleString()} />)}</Group> : <EmptyState title="暂无 Activity" />}
       </Section> : null}
     </Page>;
-  },
-});
+}
+
 
 /** 返回一个新建 Account 的空草稿。 */
 function empty_draft(provider: MessengerProvider = "telegram"): MessengerAccountDraft {

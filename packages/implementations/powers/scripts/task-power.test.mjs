@@ -32,8 +32,7 @@ function create_task_registration(power) {
     title: "Task",
     readme: import.meta.filename,
     has_config: false,
-    has_sidebar: false,
-    has_mainview: false,
+    has_page: false,
     power,
   };
 }

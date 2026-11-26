@@ -1,5 +1,5 @@
 /**
- * Skill Power Mainview 与宿主 action 之间的 JSON 协议。
+ * Skill Power 资源页面 与宿主 action 之间的 JSON 协议。
  *
  * 关键点（中文）
  * - 页面分两层：全局目录（用户目录里的 Skill）与单个 Agent（已绑定的 Skill）。
@@ -10,7 +10,7 @@
 import type { McpServerStatus } from "@/mcp/types/Mcp.js";
 
 /** Safe global MCP summary; connection credentials stay in config actions. */
-export interface SkillMainviewMcpServer extends McpServerStatus {
+export interface SkillPageMcpServer extends McpServerStatus {
   /** User-visible title from the global definition, falling back to its ID. */
   readonly title: string;
   /** Whether the global definition permits connections. */
@@ -20,7 +20,7 @@ export interface SkillMainviewMcpServer extends McpServerStatus {
 }
 
 /** Host-resolved identity shared by entries pointing at the same real directory. */
-export interface SkillMainviewResource {
+export interface SkillPageResource {
   /** Opaque identity derived from the canonical directory; never accepted as a read path. */
   readonly resource_id: string;
   /** Installed entry's absolute directory path, for source display only. */
@@ -28,7 +28,7 @@ export interface SkillMainviewResource {
 }
 
 /** 功能页展示的一条 Agent 已绑定 Skill。 */
-export interface SkillMainviewItem extends SkillMainviewResource {
+export interface SkillPageItem extends SkillPageResource {
   /**
    * Skill 的稳定目录 ID。
    */
@@ -66,7 +66,7 @@ export interface SkillMainviewItem extends SkillMainviewResource {
 /**
  * 用户目录中一条可关联的 Skill。
  */
-export interface SkillMainviewAvailableItem extends SkillMainviewResource {
+export interface SkillPageAvailableItem extends SkillPageResource {
   /**
    * Skill 的稳定目录 ID。
    */
@@ -95,7 +95,7 @@ export interface SkillMainviewAvailableItem extends SkillMainviewResource {
 /**
  * 一个 Agent 及其已绑定的 Skill。
  */
-export interface SkillMainviewAgent {
+export interface SkillPageAgent {
   /**
    * Agent 的稳定 ID。
    */
@@ -109,7 +109,7 @@ export interface SkillMainviewAgent {
   /**
    * 该 Agent 私有目录中发现的 Skill。
    */
-  readonly skills: SkillMainviewItem[];
+  readonly skills: SkillPageItem[];
 
   /** Explicit MCP allowlist; missing global definitions remain visible by ID for removal. */
   readonly mcp_server_ids: string[];
@@ -118,9 +118,9 @@ export interface SkillMainviewAgent {
 /**
  * Skill 功能页刷新得到的完整快照。
  *
- * 说明（中文）：全局目录与全部 Agent 一次读全，Sidebar 与 Mainview 共用同一份数据。
+ * 说明（中文）：全局目录与全部 Agent 一次读全，资源页与详情 共用同一份数据。
  */
-export interface SkillMainviewSnapshot {
+export interface SkillPageSnapshot {
   /**
    * 表示本次快照已经完整生成。
    */
@@ -129,21 +129,21 @@ export interface SkillMainviewSnapshot {
   /**
    * 宿主登记的全部 Agent 及其 Skill。
    */
-  readonly agents: SkillMainviewAgent[];
+  readonly agents: SkillPageAgent[];
 
   /**
    * 用户目录中可关联的 Skill。
    */
-  readonly available: SkillMainviewAvailableItem[];
+  readonly available: SkillPageAvailableItem[];
 
   /** Global MCP definitions with safe live state and assignment summaries. */
-  readonly mcp_servers: SkillMainviewMcpServer[];
+  readonly mcp_servers: SkillPageMcpServer[];
 }
 
 /**
  * 读取一个 Skill 的输入。
  */
-export interface SkillMainviewReadInput {
+export interface SkillPageReadInput {
   /** 当前聊天绑定的宿主 Workspace 标识，仅允许在登记的 Workspace 中发现项目技能。 */
   readonly workspace_id?: string;
   /** lookup 生产头中的路径；只有与重新发现的同 ID 技能路径一致时才可读取。 */
@@ -162,7 +162,7 @@ export interface SkillMainviewReadInput {
 /**
  * 读取一个 Skill 的结果。
  */
-export interface SkillMainviewReadResult {
+export interface SkillPageReadResult {
   /**
    * 是否成功定位并读取 Skill。
    */
@@ -182,7 +182,7 @@ export interface SkillMainviewReadResult {
 /**
  * 关联一个用户目录 Skill 的输入。
  */
-export interface SkillMainviewLinkInput {
+export interface SkillPageLinkInput {
   /**
    * 目标 Agent 稳定 ID。
    */
@@ -197,7 +197,7 @@ export interface SkillMainviewLinkInput {
 /**
  * 移除一个 Agent Skill 的输入。
  */
-export interface SkillMainviewRemoveInput {
+export interface SkillPageRemoveInput {
   /**
    * 目标 Agent 稳定 ID。
    */
@@ -212,7 +212,7 @@ export interface SkillMainviewRemoveInput {
 /**
  * Skill 关联或移除后的结果。
  */
-export interface SkillMainviewMutationResult extends SkillMainviewSnapshot {
+export interface SkillPageMutationResult extends SkillPageSnapshot {
   /**
    * 本次写操作是否成功完成。
    */

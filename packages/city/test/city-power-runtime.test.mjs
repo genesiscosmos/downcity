@@ -389,8 +389,7 @@ test("City initializes one Power instance and disposes it on close", async () =>
   const registration = {
     readme: import.meta.filename,
     has_config: false,
-    has_sidebar: true,
-    has_mainview: true,
+    has_page: true,
     power: make_power({
       name: "main-test",
       title: "Main Test",
@@ -430,8 +429,7 @@ test("City waits for an active Power host action before disposal", async () => {
     powers: [{
       readme: import.meta.filename,
       has_config: false,
-      has_sidebar: true,
-      has_mainview: false,
+      has_page: true,
       power: make_power({
         name: "host-lease",
         title: "Host Lease",
@@ -498,8 +496,7 @@ test("City config actions use the Power-owned config store", async () => {
     powers: [{
       readme: import.meta.filename,
       has_config: true,
-      has_sidebar: false,
-      has_mainview: false,
+      has_page: false,
       power: make_power({
         name: "config-main",
         title: "Config Main",

@@ -26,15 +26,6 @@ export interface AgentGetSessionOptions {
 
 /** Agent 公开的 Session 创建入口。 */
 export interface AgentSessionCollection {
-  /**
-   * 打开 Agent 自己的那段对话；不存在时创建。
-   *
-   * 关键点（中文）：它就是一条普通 Session，角色由 `type = "chat"`、`kind = "main"` 表达；
-   * 一个 Agent 至多一条，被归档或删除后下一次调用自然重建。
-   */
-  /** 返回 Agent 自己的那条会话；不存在时创建。 */
-  self(options?: AgentGetSessionOptions): Promise<AgentSession>;
-
   /** 在指定 Workspace 中创建一个属于当前 Agent 的 Session。 */
   create(options?: AgentCreateSessionOptions): Promise<AgentSession>;
 
@@ -82,9 +73,6 @@ export interface AgentSessionCollection {
 
   /** 按永久 UUID 读取活动历史；分类仅用于一致性校验，不恢复执行器。 */
   read(session_id: string, type?: string): Promise<import("../store/SessionReadView.js").SessionReadView>;
-
-  /** 只读当前主会话指针；空值不创建会话或执行器。 */
-  read_main(): Promise<import("../store/SessionReadView.js").SessionReadView | null>;
 
   /** 按输入顺序批量读取最多 100 条精确元数据；不存在为 null，存储失败继续抛出。 */
   read_metadata(addresses: readonly import("@/types/agent/SessionMetadata.js").SessionMetadataAddress[]): Promise<(import("@/types/agent/SessionMetadata.js").SessionMetadataResult | null)[]>;

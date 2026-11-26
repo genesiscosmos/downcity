@@ -14,14 +14,11 @@ import type { AgentInteraction } from "@/types/agent/AgentInteractions.js";
 
 /** 一个 Agent 所属全部 Session 的持久化入口。 */
 export interface SessionStore {
+  /** 共享 Agent DB 的通用 JSON 变量，无 Session 外键或业务键解释。 */
+  readonly variables: import("../agent/AgentVariables.js").AgentVariables;
+
   /** 为一个新 Session 创建稳定持久化视图；完整来源只在创建时由调用方提供。 */
   create_session(session_id: string, descriptor: SessionDescriptor, workspace_id?: string, title?: string): SessionStorage;
-
-  /** 只读当前主会话；尚未建立返回 null，不创建库或会话。 */
-  read_main(): Promise<SessionReadView | null>;
-
-  /** 显式单事务确保主会话存在，并返回同一个永久身份的存储视图。 */
-  ensure_main(workspace_id?: string): Promise<SessionStorage>;
 
   /** 持久业务创建键关联新 UUID；归档和删除不允许以原键复活或改选。 */
   ensure_creation(creation_key: string, descriptor: SessionDescriptor, workspace_id?: string): Promise<SessionStorage>;

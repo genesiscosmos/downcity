@@ -1,12 +1,11 @@
 /**
- * Email Power 工作区入口。侧栏复用宿主账号导航，主区组合邮件与账号设置。
+ * Email Power 工作区入口。完整账号列表打开独立邮件与设置视图。
  * 所有业务动作显式使用用户选择的 Agent；Desktop 通过工厂注入原生 Chat 导航。
  */
 import { useEffect, useState } from "react";
 import { define_power_renderer } from "@downcity/city/power/react";
 import type {
-  PowerMainviewComponentProps,
-  PowerSidebarComponentProps,
+  PowerPageComponentProps,
 } from "@downcity/city/power/react";
 import type {
   EmailAgentSnapshot,
@@ -23,17 +22,17 @@ function route_text(value: unknown): string {
   return typeof value === "string" ? value : "";
 }
 
-/** 账号侧栏只展示配置，不触发联网收取，也不自行推断连接状态。 */
-function email_sidebar({ power, navigation, ui }: PowerSidebarComponentProps) {
+/** 账号列表只展示配置，不触发联网收取，也不自行推断连接状态。 */
+function email_page({ power, navigation, ui }: PowerPageComponentProps) {
   const {
     Button,
     Callout,
     EmptyState,
     LoadingState,
-    Sidebar,
-    SidebarCreateMenu,
-    SidebarItem,
-    SidebarSection,
+    Page, List, Input,
+    CreateMenu,
+    ListItem,
+    ListSection,
   } = ui.components;
   const [snapshot, set_snapshot] = useState<EmailConfigSnapshot>();
   const [error, set_error] = useState("");
@@ -53,52 +52,36 @@ function email_sidebar({ power, navigation, ui }: PowerSidebarComponentProps) {
       disposed = true;
     };
   }, [power, ui.revision, revision]);
-  const creating = navigation.route.view === "create";
-  const account_id =
-    route_text(navigation.route.account_id) ||
-    (creating ? "" : (snapshot?.accounts[0]?.id ?? ""));
+  const [query, set_query] = useState("");
   const agent_id = route_text(navigation.route.agent_id);
+  const open_account = (account_id: string, title: string, view = "inbox") => ui.open_view({
+    view_id: "email_account", resource_key: account_id || "create", title,
+    input: { account_id, agent_id, view },
+  });
   return (
-    <Sidebar
+    <Page><List
       actions={
-        <SidebarCreateMenu
+        <CreateMenu
           label="添加邮箱"
           actions={[
             {
               action_id: "create",
               label: "添加邮箱",
               on_select: () =>
-                navigation.navigate({ view: "create", agent_id }),
+                open_account("", "添加邮箱", "create"),
             },
           ]}
         />
       }
-      footer={
-        account_id ? (
-          <SidebarItem
-            label="邮箱设置"
-            active={navigation.route.view === "settings"}
-            on_select={() =>
-              navigation.navigate({ account_id, agent_id, view: "settings" })
-            }
-          />
-        ) : undefined
-      }
+      toolbar={<Input type="search" value={query} placeholder="搜索邮箱…" on_value_change={set_query} />}
     >
-      <SidebarSection label="邮箱账号">
-        {snapshot?.accounts.map((account) => (
-          <SidebarItem
+      <ListSection label="邮箱账号">
+        {snapshot?.accounts.filter((account) => `${account.label} ${account.address}`.toLowerCase().includes(query.trim().toLowerCase())).map((account) => (
+          <ListItem
             key={account.id}
             label={account.label}
             description={account.address}
-            active={
-              !creating &&
-              navigation.route.view !== "settings" &&
-              account_id === account.id
-            }
-            on_select={() =>
-              navigation.navigate({ account_id: account.id, agent_id })
-            }
+            on_select={() => open_account(account.id, account.label)}
           />
         ))}
         {!snapshot && !error ? (
@@ -107,7 +90,7 @@ function email_sidebar({ power, navigation, ui }: PowerSidebarComponentProps) {
         {snapshot && !snapshot.accounts.length ? (
           <EmptyState size="compact" title="还没有邮箱账号" />
         ) : null}
-      </SidebarSection>
+      </ListSection>
       {error ? (
         <Callout tone="danger">
           {error}
@@ -116,17 +99,17 @@ function email_sidebar({ power, navigation, ui }: PowerSidebarComponentProps) {
           </Button>
         </Callout>
       ) : null}
-    </Sidebar>
+    </List></Page>
   );
 }
 
-/** 主视图先选执行身份，再挂载该身份和账号拥有的邮箱工作区。 */
-function EmailMainview({
+/** 独立账号视图先选执行身份，再挂载该身份和账号拥有的邮箱工作区。 */
+function Email_account_content({
   power,
   navigation,
   ui,
   options,
-}: PowerMainviewComponentProps & {
+}: Pick<PowerPageComponentProps, "power" | "navigation" | "ui"> & {
   /** 宿主注入的 Chat 导航，普通只读 Renderer 可以省略。 */
   options?: EmailRendererOptions;
 }) {
@@ -134,7 +117,7 @@ function EmailMainview({
     Button,
     Callout,
     EmptyState,
-    Field,
+    Field, Inline,
     LoadingState,
     Page,
     Select,
@@ -218,7 +201,7 @@ function EmailMainview({
     (agent) => agent.agent_id === agent_id,
   );
   const scope_control = (
-    <Field label="执行 Agent">
+    <Inline><Button on_click={() => navigation.navigate({ account_id, agent_id, view: "settings" })}>邮箱设置</Button><Field label="执行 Agent">
       <Select
         value={selected_agent ? agent_id : ""}
         options={[
@@ -232,7 +215,7 @@ function EmailMainview({
           navigation.navigate({ account_id, agent_id: value })
         }
       />
-    </Field>
+    </Field></Inline>
   );
   return selected_agent ? (
     <EmailInbox
@@ -262,10 +245,11 @@ function EmailMainview({
 export function create_email_power_renderer(options?: EmailRendererOptions) {
   return define_power_renderer({
     activity: EMAIL_ACTIVITY_RENDERER,
-    sidebar: email_sidebar,
-    mainview: function email_mainview(props) {
-      return <EmailMainview {...props} options={options} />;
-    },
+    page: email_page,
+    views: [{ id: "email_account", label: "Email", component: function email_account_view({ input, power, ui }) {
+      const [route, set_route] = useState(input);
+      return <Email_account_content power={power} ui={ui} navigation={{ route, navigate: set_route }} options={options} />;
+    } }],
   });
 }
 

@@ -17,7 +17,7 @@ import type {
 import type { PowerJsonObject, PowerJsonValue } from "./Json.js";
 import type { PowerNotificationPublisher } from "./PowerNotification.js";
 
-/** Power 注册的一个 Sidebar/Mainview 业务动作。 */
+/** Power 注册的一个页面业务动作。 */
 export interface PowerHostAction {
   /** Power 内稳定且唯一的动作 ID。 */
   readonly id: string;
@@ -272,7 +272,7 @@ export interface PowerSelf {
   background<TResult>(operation: () => Promise<TResult>): Promise<TResult>;
   /** 当前 Power 的稳定 ID。 */
   readonly id: string;
-  /** 注册一个供 Sidebar/Mainview 调用的业务动作。 */
+  /** 注册一个供 Power 页面及业务视图调用的业务动作。 */
   action(action: PowerHostAction): void;
   /** 注册一个供 Config 调用的配置动作。 */
   config_action(action: PowerConfigAction): void;

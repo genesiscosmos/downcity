@@ -47,7 +47,7 @@ Desktop 已经存在一个占位意义上的"命令面板"，但它是残缺的�
 | 不做 | 原因 |
 | --- | --- |
 | 快捷键注册表（shortcut registry）、作用域、优先级、可发现目录 | 这是独立且更大的概念。Desktop 当前的键盘处理集中在 `DesktopShell` 的一个 capture 监听器里，重构它会牵动业务页面的键位语义。见 6.6。 |
-| Plugin 通过贡献点注册命令 | Desktop 的 Plugin 目前只提供 Sidebar / Mainview / Config / MCP，没有 UI 贡献点（`ui.use("command.palette")` 这类接口在 Desktop 不存在）。先建立宿主命令，再设计贡献协议。 |
+| Plugin 通过贡献点注册命令 | Desktop 的 Plugin 目前只提供 Page / Config / MCP，没有 UI 贡献点（`ui.use("command.palette")` 这类接口在 Desktop 不存在）。先建立宿主命令，再设计贡献协议。 |
 | 会话的跨 Workspace 全量搜索 | 会话数量无上界，且需要跨 Workspace 聚合与异步读取。P0 只做"当前 Workspace 的会话"。 |
 | 使用频率排序（MRU / 最近使用） | 没有真实使用数据就无法校准衰减策略；确定性的顺序可预测、可测试、可解释。先不做。 |
 | 拼音 / 首字母搜索 | 需要词典依赖（体积 + 维护）。P0 对中文使用子串匹配，并把它作为已知限制记录在 13.1。 |
@@ -126,7 +126,7 @@ private/apps/desktop/src/renderer/
 
 ### 2.3 直接照搬会出问题的地方
 
-1. **目录与命名系统不同。** duobox 用 camelCase（`closeOnRun`、`currentSpaceId`），Desktop 的领域类型与 props 一律 snake_case（`has_sidebar`、`workspace_id`、`open_create_agent`）。照搬会立即破坏仓库的一致性规则。本文档统一使用 snake_case。
+1. **目录与命名系统不同。** duobox 用 camelCase（`closeOnRun`、`currentSpaceId`），Desktop 的领域类型与 props 一律 snake_case（`has_page`、`workspace_id`、`open_create_agent`）。照搬会立即破坏仓库的一致性规则。本文档统一使用 snake_case。
 2. **依赖不同。** duobox 面板建立在 `cmdk` + `@/components/ui/command` 之上；Desktop 两者都没有。要么新增依赖，要么自建列表语义。见 1.4 与 13.6。
 3. **store 体系不同。** duobox 用 zustand 承载 `activePalette` / `commandPage` / `query`；Desktop 的等价物是 `use_store`。但面板状态只有一个消费者，引入 store 是多余概念。P0 用 `useState`，并在关闭时复位。
 4. **错误出口不同。** duobox 有 `toast`；Desktop 只有全局错误条，且没有对外的写入 action。必须补 `report_error`，否则命令失败会静默。
@@ -215,7 +215,7 @@ const command_group_order = ["navigation", "goto", "create", "chat", "appearance
 | `nav.open-chat` | 打开 Chat | ⌘1 | `set_sidebar_mode("chat")` | 总是 |
 | `nav.open-workspace` | 打开 Workspace | ⌘2 | `set_sidebar_mode("workspace")` | 总是 |
 | `nav.open-plugins` | 打开 Plugins | ⌘3 | `set_sidebar_mode("plugins")` | 总是 |
-| `nav.open-plugin-view` | 打开 Plugin… | — | 进入 `plugins` 子页面 | 存在 `has_sidebar && has_mainview` 的 Plugin |
+| `nav.open-plugin-view` | 打开 Plugin… | — | 进入 `plugins` 子页面 | 存在 `has_page` 的 Plugin |
 | `nav.toggle-sidebar` | 显示侧栏 / 隐藏侧栏 | ⌘B | `shell.toggle_sidebar()` | 总是 |
 | `nav.open-settings` | 打开设置 | ⌘, | `open_settings("user")` | 总是 |
 | `nav.back-from-settings` | 返回上一个页面 | Esc | `close_settings()` | `selection.kind === "settings"` |

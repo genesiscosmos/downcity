@@ -100,8 +100,7 @@ export class LocalPowerLoader {
     return {
       readme: resolve_power_path(power_root, definition.readme),
       has_config: renderer?.config === true,
-      has_sidebar: renderer?.sidebar === true,
-      has_mainview: renderer?.mainview === true,
+      has_page: renderer?.page === true,
       power,
     };
   }

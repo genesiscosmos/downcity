@@ -287,9 +287,9 @@ Workspace 是 GroupSession 的执行资源，随后由成员 AgentSession 使用
 Plugin 可以独立提供两类可选能力：
 
 - `main`：统一导出 City Plugin 实例、生命周期与宿主管理 actions。
-- `renderer`：单文件 React ESM，默认导出三个固定插槽中的可选组合：成对出现的 `sidebar + mainview` 业务工作区，以及独立的 `config` 配置界面。
+- `renderer`：按宿主协议声明的 React ESM 入口，默认导出完整 `page` 业务页面；`config`、`agent_config`、资源 `views`、`activity`、`input` 和消息 `view` 独立声明。
 
-这些能力属于同一个 Plugin ID，不再引入 Agent Plugin 身份或 contributions DSL。Sidebar + Mainview 与 Config 是语义固定、彼此分离的产品界面，不构成任意扩展点系统。SDK 用户也可以不经过安装协议，直接把 Plugin 模块交给 City。
+这些能力属于同一个 Plugin ID，不再引入 Agent Plugin 身份或 contributions DSL。`page` 与 `config` 是独立界面能力。`PowerRendererDefinition.page?: PowerPageComponent` 接收 `{ power, navigation, notifications, ui }`，注册能力为 `has_page`，页面 action surface 为 `page`。完整页面使用 `Page`；集合复用 `List`、`ListSection`、`ListItem`、`TreeItem`、`ListHint` 与 `CreateMenu`。SDK 用户也可以不经过安装协议，直接把 Plugin 模块交给 City。
 
 Plugin 执行实例可以提供：
 
@@ -322,7 +322,7 @@ Task 时，交付目标固定记录原始 `agent_id`、`workspace_id`、`origin_
 scheduler 同步失败时必须分别报告两个事实。释放 scheduler、timer 与已受理执行时，单项失败不能中断其他
 资源收口，最终统一聚合错误。
 
-Plugin 只有一个实例和一套 City 生命周期，不再存在独立 main 对象。Plugin 在 `initialize(PluginLifecycleContext)` 中注册宿主管理 action 与 Config action，并初始化自己拥有的 City 级长期资源；`dispose` 负责统一释放。初始化失败的 Plugin 不能进入执行 Registry，但 City 必须保留不可执行的错误快照；显式 `add()` 继续返回失败，由宿主隔离该 Plugin 并继续启动其他主体。宿主的 Plugins 导航始终列出完整 Plugin Catalog，并展示失败 Plugin 的状态和错误；点击任意 Plugin 都进入描述、README 与可选 Config 详情。声明 Sidebar + Mainview 的功能型 Plugin 另外动态贡献一级导航入口，点击后左侧切换为 Plugin Sidebar，主区域渲染 Plugin Mainview，两者共享宿主持有的 JSON route，并通过 Plugin 级 action gateway 调用宿主管理 action。Config 只在 Plugin Catalog 详情出现，使用独立 gateway；City 在 Config action 调用时注入该 Plugin 的唯一配置存储。Renderer 是受信任本地 UI 代码，由宿主提供 React runtime、主题与 `ui.components`，但不注入 Desktop controller、Node 或 Electron 对象。
+Plugin 只有一个实例和一套 City 生命周期，不再存在独立 main 对象。Plugin 在 `initialize(PluginLifecycleContext)` 中注册宿主管理 action 与 Config action，并初始化自己拥有的 City 级长期资源；`dispose` 负责统一释放。初始化失败的 Plugin 不能进入执行 Registry，但 City 必须保留不可执行的错误快照；显式 `add()` 继续返回失败，由宿主隔离该 Plugin 并继续启动其他主体。宿主的 Powers 目录持续保留在应用 Sidebar，列出带完整 page 或 Config 的 Power。选择后在 Mainview 挂载 Power 自己组织的完整 page，资源详情和编辑通过 `ui.open_view` 在 BayBar 打开。页面通过 Power 级 action gateway 调用宿主管理 action。Config 使用独立 gateway；City 在 Config action 调用时注入该 Plugin 的唯一配置存储。Renderer 是受信任本地 UI 代码，由宿主提供 React runtime、主题与 `ui.components`，但不注入 Desktop controller、Node 或 Electron 对象。
 
 ### 4.6 Agent 定义的本地事实源
 
@@ -463,7 +463,7 @@ Downcity 的安全边界负责防止意外逃逸、路径混乱和未审批的�
 
 - 连接外部系统，持有账号、凭据、长连接或后台 Worker。
 - 需要安装协议、README、icon 或第三方可替换的实现。
-- 需要 Sidebar / Mainview / Config 这类产品界面。
+- 需要 Page / Config 这类产品界面。
 - 需要参与 `plugin↔plugin` 扩展点（例如 messenger 的 `augmentInbound`）。
 
 当前实现：`context`（`env`、`sandbox`、`workspaces`、`usage` 四个动作组）、`ai`（`image`、`sound`）、`agent` 是 City Power；messenger、task、memory、skill、web 是 Plugin。

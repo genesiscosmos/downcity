@@ -8,7 +8,7 @@
 import { useCallback, useEffect, useState } from "react";
 import type { PowerActionGateway, PowerRendererUi } from "@downcity/city/power/react";
 import type { WebConfigPatch, WebConfigTestResult } from "@/web/types/WebPowerConfig.js";
-import type { WebMainviewSnapshot } from "@/web/types/WebMainview.js";
+import type { WebPageSnapshot } from "@/web/types/WebPage.js";
 import { to_config_patch_json, to_error_message } from "@/web/renderer/WebPowerShared.js";
 
 /** 通用视图的本地编辑状态。 */
@@ -30,9 +30,9 @@ export interface WebGeneralViewProps {
 /** 渲染跨能力的通用配置。 */
 export function WebGeneralView({ power, ui }: WebGeneralViewProps) {
   const {
-    Button, Callout, Group, Inline, Input, LoadingState, Page, Row, Section, Toolbar,
+    Button, Callout, Group, Inline, Input, LoadingState, Stack, Row, Section, Toolbar,
   } = ui.components;
-  const [snapshot, set_snapshot] = useState<WebMainviewSnapshot>();
+  const [snapshot, set_snapshot] = useState<WebPageSnapshot>();
   const [draft, set_draft] = useState<GeneralDraft>();
   const [loading, set_loading] = useState(true);
   const [saving, set_saving] = useState(false);
@@ -42,7 +42,7 @@ export function WebGeneralView({ power, ui }: WebGeneralViewProps) {
     set_loading(true);
     set_error("");
     try {
-      const next = await power.invoke<WebMainviewSnapshot>("web.snapshot");
+      const next = await power.invoke<WebPageSnapshot>("web.snapshot");
       set_snapshot(next);
       set_draft({
         timeout_ms: next.config.timeout_ms,
@@ -90,9 +90,9 @@ export function WebGeneralView({ power, ui }: WebGeneralViewProps) {
   };
 
   if (loading && !snapshot) return <LoadingState label="正在读取 Web 配置…" />;
-  if (!snapshot || !draft) return <Page><Callout tone="danger">{error || "无法读取 Web 配置"}</Callout></Page>;
+  if (!snapshot || !draft) return <Stack><Callout tone="danger">{error || "无法读取 Web 配置"}</Callout></Stack>;
 
-  return <Page>
+  return <Stack>
     {error ? <Callout tone="danger">{error}</Callout> : null}
     <Toolbar
       title="通用"
@@ -138,5 +138,5 @@ export function WebGeneralView({ power, ui }: WebGeneralViewProps) {
         />
       </Group>
     </Section>
-  </Page>;
+  </Stack>;
 }

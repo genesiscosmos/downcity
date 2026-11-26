@@ -81,9 +81,10 @@ export class ExtensionHost implements ExtensionRuntime {
   }
 
   /** UI 动作在检查代次与执行之间持有同一门禁，防止迟到调用进入新运行。 */
-  async invoke_renderer(power_id: string, protocol_id: string, generation: string, surface: "mainview" | "config", action_id: string, input?: import("../../power/index.js").PowerJsonValue) {
+  async invoke_renderer(power_id: string, protocol_id: string, generation: string, surface: "page" | "config", action_id: string, input?: import("../../power/index.js").PowerJsonValue) {
     const view = this.power_catalog().find((item) => item.power_id === power_id && item.generation === generation && item.selected_renderer?.protocol_id === protocol_id);
     if (!view) throw new ExtensionFailure("renderer_generation_expired", "This extension page has been replaced or removed; reopen it", "load");
+    if (surface !== "page" && surface !== "config") throw new ExtensionFailure("renderer_surface_invalid", "Renderer action surface must be page or config", "load");
     const release = this.acquire(view.extension_id, `renderer-action:${power_id}`);
     try { return surface === "config" ? await this.options.city.powers.invoke_config(power_id, action_id, input) : await this.options.city.powers.invoke(power_id, action_id, input); }
     finally { release(); }

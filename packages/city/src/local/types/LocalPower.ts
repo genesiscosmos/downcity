@@ -20,10 +20,8 @@ export interface LocalPowerDefinition {
   icon?: string;
   /** Power 是否提供统一 main 运行入口。 */
   has_main: boolean;
-  /** Power 是否提供专属 Sidebar。 */
-  has_sidebar: boolean;
-  /** Power 是否提供业务 Mainview。 */
-  has_mainview: boolean;
+  /** Power 是否提供完整业务页面。 */
+  has_page: boolean;
   /** Power 是否提供与工作区分离的设置中心 Config 面板。 */
   has_config: boolean;
 }
@@ -58,7 +56,7 @@ export interface LocalPowerLoadResult {
 /** powers/<power_id>/power.json 中的第三方 Power 定义。 */
 export interface LocalInstalledPowerDefinition extends Omit<
   LocalPowerDefinition,
-  "has_main" | "has_sidebar" | "has_mainview" | "has_config"
+  "has_main" | "has_page" | "has_config"
 > {
   /** 文件协议版本。 */
   schema_version: 1;

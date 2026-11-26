@@ -37,9 +37,9 @@ export function insert_record(database, record) {
   insert(database, "sessions", record.metadata);
   const session_key = Number(database.prepare("SELECT session_key FROM sessions WHERE session_id=?").get(record.metadata.session_id).session_key);
   const config = record.configuration;
-  if (Object.keys(config).sort().join(",") !== "approval_mode,execution_profile,model_binding,system_snapshot") fail("transfer_configuration_invalid");
-  database.prepare("UPDATE session_configuration SET model_binding=?,approval_mode=?,execution_profile=?,system_snapshot=? WHERE session_key=?")
-    .run(config.model_binding, config.approval_mode, config.execution_profile, config.system_snapshot, session_key);
+  if (Object.keys(config).sort().join(",") !== "approval_mode,execution_profile,system_snapshot") fail("transfer_configuration_invalid");
+  database.prepare("UPDATE session_configuration SET approval_mode=?,execution_profile=?,system_snapshot=? WHERE session_key=?")
+    .run(config.approval_mode, config.execution_profile, config.system_snapshot, session_key);
   const creation_key = config.execution_profile ? JSON.parse(config.execution_profile).creation_key : undefined;
   if (creation_key !== undefined) database.prepare("INSERT INTO session_creation_keys(type,creation_key,session_id) VALUES(?,?,?)")
     .run(record.metadata.type, creation_key, record.metadata.session_id);
@@ -59,7 +59,8 @@ export function validate_record(record, agent_id, runtime) {
 /** 显式离线转换复用记录校验；历史 runtime 必须由调用方的冻结 loader 提供。 */
 export function validate_protocol_record(record, agent_id, runtime) {
   if (runtime.AGENT_SESSION_SCHEMA_VERSION < 13) return validate_historical_record(record, agent_id, runtime);
-  assert_transfer_runtime(runtime);
+  // 显式离线转换允许冻结 v13 校验；当前导入入口仍先经 assert_transfer_runtime 门禁。
+  if (![13, 14].includes(runtime.AGENT_SESSION_SCHEMA_VERSION)) fail("transfer_runtime_version_mismatch");
   if (!record || Object.keys(record).sort().join(",") !== "composer_checkpoints,configuration,message_parts,messages,metadata"
     || !uuid_pattern.test(record.metadata?.session_id ?? "") || !record_tables.every(table => Array.isArray(record[table]))) fail("transfer_record_invalid");
   if (record.metadata.message_count !== record.messages.length) fail("transfer_count_invalid");
@@ -67,7 +68,6 @@ export function validate_protocol_record(record, agent_id, runtime) {
   if (!relations || typeof relations !== "object" || Array.isArray(relations)
     || "type" in relations || "kind" in relations) fail("transfer_relations_invalid");
   runtime.restore_session_descriptor({ ...relations, type: record.metadata.type, kind: record.metadata.kind }, record.metadata.type);
-  if (record.configuration.model_binding) runtime.decode_model_binding(record.configuration.model_binding);
   const message_ids = new Set(record.messages.map(message => message.message_id));
   if (record.message_parts.some(part => !message_ids.has(part.message_id))) fail("transfer_part_orphan");
   for (const message of record.messages) {

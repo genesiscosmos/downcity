@@ -93,7 +93,7 @@ test("Renderer 子路径统一导出 React Surface registry", async () => {
   for (const renderer of Object.values(renderers.BUILTIN_POWER_RENDERERS)) {
     assert.equal(typeof renderer, "object");
     assert.equal(
-      (typeof renderer.sidebar === "function" && typeof renderer.mainview === "function")
+      typeof renderer.page === "function"
         || typeof renderer.config === "function"
         || typeof renderer.view === "function"
         || typeof renderer.activity?.describe === "function",

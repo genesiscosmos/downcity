@@ -31,14 +31,14 @@ canonical Tool 记录保留原始输入供审阅。进入模型历史和压缩�
 
 ## Renderer 注册
 
-Renderer ESM 默认导出 `PowerRendererDefinition`。`message` 可以独立存在，不要求 Sidebar、Mainview 或 Config。
+Renderer ESM 默认导出 `PowerRendererDefinition`，消息正文组件使用 `view`。`capabilities.message` 声明此能力，可独立于 `page` 与 `config`。
 
 ```tsx
 import { createElement } from "react";
 import { define_power_renderer } from "@downcity/city/power/react";
 
 export default define_power_renderer({
-  message: ({ part }) => {
+  view: ({ part }) => {
     if (part.schema_version !== 1) throw new Error("Unsupported example schema");
     return createElement("p", null, part.fallback_text);
   },
@@ -49,12 +49,11 @@ export default define_power_renderer({
 
 ```json
 {
-  "renderer": {
-    "entry": "renderer.js",
-    "sidebar": false,
-    "mainview": false,
-    "config": false,
-    "message": true
+  "renderers": {
+    "downcity.desktop.react.v1": {
+      "entry": "renderer.js",
+      "capabilities": { "page": false, "config": false, "message": true }
+    }
   }
 }
 ```

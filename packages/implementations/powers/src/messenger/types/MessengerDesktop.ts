@@ -1,4 +1,4 @@
-/** Messenger Power Desktop Sidebar/Mainview 使用的序列化 View 类型。 */
+/** Messenger Power Desktop 资源页面与详情 使用的序列化 View 类型。 */
 
 import type { PowerHostAgent } from "@downcity/city/power";
 import type { MessengerAccountView } from "./MessengerAccount.js";

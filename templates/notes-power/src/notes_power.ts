@@ -14,7 +14,7 @@ export class NotesPower extends Power {
   readonly renderers = {
     "downcity.desktop.react.v1": {
       entry: "./ui/desktop/renderer.tsx",
-      capabilities: { sidebar: true, mainview: true, config: false },
+      capabilities: { page: true, config: false },
     },
     // 示例协议尚无 Downcity 适配器，仅保留声明，不编译或执行。
     "acme.web.react.v1": {

@@ -30,7 +30,7 @@ export interface AgentListSessionsInput {
   /**
    * 分类内按角色过滤；省略时返回该分类的全部会话。
    *
-   * 用于区分同一分类下的不同角色，例如在 `chat` 分类里只看 Agent 主会话。
+   * 用于区分同一分类下的不同角色，由调用方按用途筛选。
    */
   kind?: string;
   /**
