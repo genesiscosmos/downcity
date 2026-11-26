@@ -104,6 +104,7 @@ test("Group decision selects responders and receives the whole completed round",
       return { answers: input.questions.map((question) => ({
         question_id: question.id,
         value: calls.length === 1,
+        probability: 0.9,
       })) };
     },
   };
@@ -119,6 +120,11 @@ test("Group decision selects responders and receives the whole completed round",
   await wait_for_group_idle(session);
   assert.deepEqual(RecordingSession.created.map((entry) => entry.agent_id), ["architect", "reviewer"]);
   assert.equal(calls.length, 2);
+  assert.deepEqual(calls[0].questions.map((question) => JSON.parse(question.id)), [
+    ["architect", "relevance"], ["architect", "response_need"],
+    ["reviewer", "relevance"], ["reviewer", "response_need"],
+  ]);
+  assert.deepEqual(calls[1].questions.map((question) => question.id), ["architect", "reviewer"]);
   const first_state = JSON.parse(calls[0].state.text);
   assert.equal(first_state.group.instruction, "交付可靠的软件变更");
   assert.equal(first_state.pending_messages.length, 1);
@@ -128,20 +134,20 @@ test("Group decision selects responders and receives the whole completed round",
   await city.close();
 });
 
-test("Empty member selection ends without any Agent reply", async () => {
+test("Idle user input selects one fallback member and empty auto selection ends", async () => {
   RecordingSession.created = [];
   const city = new City();
   const agent = new Agent({ id: "empty-agent", session_class: RecordingSession });
   city.agents.add(agent);
   const group = new Group({ id: "empty-group", members: [agent], model: {
-    decision: async (input) => ({ answers: input.questions.map(({ id }) => ({ question_id: id, value: false })) }),
+    decision: async (input) => ({ answers: input.questions.map(({ id }) => ({ question_id: id, value: false, probability: 0.9 })) }),
   } });
   city.groups.add(group);
   const session = await group.sessions.create();
   await session.prompt({ query: "已经完成" });
   await wait_for_group_idle(session);
-  assert.deepEqual(RecordingSession.created, []);
-  assert.equal((await session.messages()).length, 1);
+  assert.deepEqual(RecordingSession.created.map((entry) => entry.agent_id), ["empty-agent"]);
+  assert.deepEqual((await session.messages()).map((message) => message.sender_type), ["user", "agent"]);
   await city.close();
 });
 
@@ -186,7 +192,7 @@ test("Decision failures and incomplete answers stop dispatch without implicit fa
   const models = [
     { decision: async () => { throw new Error("decision unavailable"); } },
     { decision: async () => ({ answers: [] }) },
-    { decision: async () => ({ answers: [{ question_id: "known", value: "true" }] }) },
+    { decision: async (input) => ({ answers: input.questions.map(({ id }) => ({ question_id: id, value: "true", probability: 0.9 })) }) },
   ];
   for (const model of models) {
     RecordingSession.created = [];

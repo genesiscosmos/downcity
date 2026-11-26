@@ -68,7 +68,6 @@ export type {
   AgentHttpBinding,
   AgentHttpListenOptions,
 } from "./city/transport/types/AgentHttpBinding.js";
-export type { AgentHttpRuntimeOptions } from "./city/transport/types/AgentHttpRuntime.js";
 export type { CityHttpRuntimeOptions } from "./city/transport/types/CityHttpRuntime.js";
 export type { CityAgentHttpExtension } from "./city/transport/types/CityHttpRuntime.js";
 export type {
@@ -77,4 +76,3 @@ export type {
 } from "./city/transport/types/AgentRpcBinding.js";
 export type { AgentRpcRuntimeOptions } from "./city/transport/types/AgentRpcRuntime.js";
 export type { CityRpcRuntimeOptions } from "./city/transport/types/CityRpcRuntime.js";
-export type { AgentSessionModelResolver } from "./city/transport/types/AgentSessionModelResolver.js";

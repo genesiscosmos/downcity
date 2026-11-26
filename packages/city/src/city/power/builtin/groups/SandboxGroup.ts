@@ -12,7 +12,7 @@ import { z } from "zod";
 import type { WorkspaceSandboxMount } from "@downcity/type/shell";
 import { judge_workspace_path_access } from "@/workspace/file/PathAccessRule.js";
 import { translate_sandbox_path } from "@/workspace/file/SandboxPathTranslation.js";
-import type { CityPowerContext } from "@/city/types/CityPowerContext.js";
+import type { PowerContext } from "@/power/types/PowerContext.js";
 import type {
   CityToolPathExplanation,
   CityToolSandbox,
@@ -31,9 +31,9 @@ class GetSandboxAction extends CityAction {
 
   protected async run(
     _args: Record<string, never>,
-    context: CityPowerContext,
+    context: PowerContext,
   ): Promise<CityToolSandbox> {
-    const snapshot = context.sandbox;
+    const snapshot = context.workspace?.shell?.describe_sandbox() ?? null;
     if (!snapshot) {
       return {
         available: false,
@@ -77,9 +77,9 @@ class ListMountsAction extends CityAction {
 
   protected async run(
     _args: Record<string, never>,
-    context: CityPowerContext,
+    context: PowerContext,
   ): Promise<{ mounts: readonly WorkspaceSandboxMount[] }> {
-    return { mounts: context.sandbox?.mounts ?? [] };
+    return { mounts: context.workspace?.shell?.describe_sandbox()?.mounts ?? [] };
   }
 }
 
@@ -110,16 +110,17 @@ class ExplainPathAction extends CityAction<z.infer<typeof explain_path_input>> {
 
   protected async run(
     args: z.infer<typeof explain_path_input>,
-    context: CityPowerContext,
+    context: PowerContext,
   ): Promise<CityToolPathExplanation> {
-    if (!context.workspace_path) throw new Error("Path access checks require a Workspace");
-    const mounts = context.sandbox?.mounts ?? [];
+    if (!context.workspace) throw new Error("Path access checks require a Workspace");
+    const snapshot = context.workspace?.shell?.describe_sandbox() ?? null;
+    const mounts = snapshot?.mounts ?? [];
     const resolved = translate_sandbox_path({
       target_path: args.path,
       mounts,
     });
     const verdict = judge_workspace_path_access({
-      root_path: context.workspace_path,
+      root_path: context.workspace.path,
       target_path: resolved.host_path,
     });
     // 关键点（中文）：Workspace 词法边界是文件工具的可达范围，先回答它；
@@ -140,7 +141,7 @@ class ExplainPathAction extends CityAction<z.infer<typeof explain_path_input>> {
       intent: args.intent,
       resolved_path: verdict.resolved_path,
       mounts,
-      snapshot: context.sandbox,
+      snapshot,
     });
     // 关键点（中文）：输入是沙箱内路径时必须告知已做翻译，
     // 否则模型会把「宿主路径可达」误读成「沙箱路径本身可达」。

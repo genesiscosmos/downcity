@@ -2,8 +2,8 @@
  * @file 验证 RemoteAgent 通过 RPC 控制 Session。
  *
  * 关键点（中文）
- * - RemoteAgent 只传递 model_id，模型实例由 Agent Server 宿主解析。
- * - 远程 Session 只验证模型配置转发。
+ * - Session 继承所属 Agent 模型，远程配置只接受安全策略。
+ * - 独立 Session 模型参数在解析边界拒绝，不创建模型覆盖。
  */
 
 import assert from "node:assert/strict";
@@ -14,6 +14,7 @@ import path from "node:path";
 import test from "node:test";
 import { Agent } from "@downcity/agent";
 import { RemoteAgent, Workspace } from "@downcity/city";
+import { resolve_remote_session_set_input } from "../bin/city/transport/session/RemoteSessionConfig.js";
 import { AgentRPC } from "../bin/city/transport/rpc/AgentRPC.js";
 
 const network_tests_enabled = process.env.DOWNCITY_RUN_NETWORK_TESTS === "1";
@@ -50,81 +51,24 @@ async function send_rpc_request(port, request) {
   });
 }
 
-test("RPC resolves model_id through the host and queues compact", {
-  skip: !network_tests_enabled,
-}, async () => {
-  const project_root = await fs.mkdtemp(
-    path.join(os.tmpdir(), "downcity-server-session-model-"),
-  );
-  const model = {
-    modelId: "host-model",
-    provider: "test",
-  };
-  const agent = new Agent({
-    id: "rpc_model_agent",
-    model,
-  });
-  const workspace = new Workspace({ id: "rpc_model_workspace", path: project_root, data_root_path: path.join(project_root, "data") });
-  let resolved_model_id = "";
-  const rpc = new AgentRPC(agent, workspace, {
-    resolve_session_model: (model_id) => {
-      resolved_model_id = model_id;
-      return {
-        modelId: model_id,
-        provider: "test",
-      };
-    },
-  });
-  const port = await reserve_port();
-  const remote_agent = new RemoteAgent({
-    url: `rpc://127.0.0.1:${port}`,
-  });
+test("Session 继承 Agent 当前模型，Agent 改模不需要 Session 配置", async () => {
+  const first_model = { id: "first-model", stream: async () => new ReadableStream() };
+  const next_model = { id: "next-model", stream: async () => new ReadableStream() };
+  const agent = new Agent({ id: "model-agent", model: first_model });
   try {
-    await rpc.listen({ host: "127.0.0.1", port });
-    const session = await remote_agent.sessions.create({
-      session_id: "rpc-model-session",
-    });
-    const initial_info = await session.get_info();
-    assert.equal("modelId" in initial_info, false);
-    assert.equal(initial_info.model_label, "host-model");
-    await session.set({ model_id: "selected-model" });
-    assert.equal(resolved_model_id, "selected-model");
-    assert.equal((await session.get_info()).model_label, "selected-model");
-  } finally {
-    await remote_agent.close();
-    await rpc.close();
-    await agent.dispose();
-    await fs.rm(project_root, { recursive: true, force: true });
-  }
+    const session = await agent.session();
+    assert.equal(session.get("model"), first_model);
+    agent.reconfigure({ model: next_model });
+    assert.equal(session.get("model"), next_model);
+    assert.equal((await session.get_info()).model_label, "next-model");
+    await assert.rejects(session.set({ model: first_model }), /configure the Agent model/);
+  } finally { await agent.dispose(); }
 });
 
-test("RPC rejects remote model switching when the host has no resolver", {
-  skip: !network_tests_enabled,
-}, async () => {
-  const project_root = await fs.mkdtemp(
-    path.join(os.tmpdir(), "downcity-server-model-resolver-required-"),
-  );
-  const agent = new Agent({
-    id: "rpc_model_resolver_required_agent",
-    model: { modelId: "host-model", provider: "test" },
-  });
-  const workspace = new Workspace({ id: "resolver_workspace", path: project_root, data_root_path: path.join(project_root, "data") });
-  const rpc = new AgentRPC(agent, workspace);
-  const port = await reserve_port();
-  const remote_agent = new RemoteAgent({ url: `rpc://127.0.0.1:${port}` });
-  try {
-    await rpc.listen({ host: "127.0.0.1", port });
-    const session = await remote_agent.sessions.create({ session_id: "resolver-required" });
-    await assert.rejects(
-      session.set({ model_id: "selected-model" }),
-      /model switching is not configured by the host/,
-    );
-  } finally {
-    await remote_agent.close();
-    await rpc.close();
-    await agent.dispose();
-    await fs.rm(project_root, { recursive: true, force: true });
-  }
+test("远程 Session 配置只接受安全策略并拒绝独立模型参数", async () => {
+  assert.deepEqual(await resolve_remote_session_set_input({ config: { security: { approval_mode: "ask" } } }), { security: { approval_mode: "ask" } });
+  await assert.rejects(resolve_remote_session_set_input({ config: { model: { downtown: "source", id: "model" } } }), /configure the Agent model/);
+  await assert.rejects(resolve_remote_session_set_input({ config: {} }), /requires security/);
 });
 
 test("internal RPC 让宿主重新加载 Workspace Env", {

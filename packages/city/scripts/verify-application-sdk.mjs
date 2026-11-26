@@ -4,7 +4,7 @@ import { PublicApplication } from '../bin/application/PublicApplication.js';
 import { create_core_objects } from '../bin/application/CoreObjects.js';
 import { compile_cell } from '../bin/city/power/builtin/runtime/engine/CompileCell.js';
 
-const application = new PublicApplication([...create_core_objects(Object.freeze({}), 'build'), {
+const application = new PublicApplication([...create_core_objects(), {
   name: 'verification',
   contract: z.object({ echo: z.function({ input: [z.object({ value: z.string() }).strict()], output: z.string() }).describe('Build-only public interface.') }),
   authorize: () => undefined,

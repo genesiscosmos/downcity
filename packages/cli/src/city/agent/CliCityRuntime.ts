@@ -23,7 +23,6 @@ import {
   create_cli_workspace,
   create_cli_power_loader,
   reload_cli_workspace_env,
-  resolve_cli_agent_model,
 } from "@/city/runtime/AgentAssembly.js";
 import { resolve_local_city_id, RootLease, resolve_resource_root, ResourceCoordinator, ManagementChannel, MANAGEMENT_VERSION, get_root_identity, assert_session_storage_ready, type ResourceService } from "@downcity/city/local";
 import { read_city_host_state } from "@downcity/city";
@@ -182,8 +181,6 @@ export class CliCityRuntime {
           } catch { return false; }
           finally { auth.close(); }
         },
-        resolve_session_model: async ({ model }) =>
-          await resolve_cli_agent_model(model, city.town),
         create_agent_extension: ({ agent, workspace, powers, sdk_router }) => {
           const auth_service = new AuthService({
             agent_id: agent.id,
@@ -220,8 +217,6 @@ export class CliCityRuntime {
       rpc: {
         instance_id: host_instance_id,
         shutdown: () => { process.kill(process.pid, "SIGTERM"); },
-        resolve_session_model: async ({ model }) =>
-          await resolve_cli_agent_model(model, city.town),
         reload_workspace_env: async ({ workspace }) => {
           const env = reload_cli_workspace_env(workspace.path, data.root_path);
           workspace.set_env(env);

@@ -121,7 +121,6 @@ export class CityRPC {
           if (!agent) throw new Error(`Agent not found: ${agent_id}`);
           const sessions = agent.sessions;
           const powers = this.runtime_access.power_scope(agent_id, workspace_id);
-          const resolve_session_model = this.runtime_options.resolve_session_model;
           const reload_workspace_env = this.runtime_options.reload_workspace_env;
           return {
             instance_id: this.runtime_options.instance_id,
@@ -137,13 +136,6 @@ export class CityRPC {
               resolve_system_messages: async (input) =>
                 await agent.resolve_system_messages(workspace, input),
             }),
-            resolve_session_model: resolve_session_model
-              ? async (model) => await resolve_session_model({
-                  agent,
-                  workspace,
-                  model,
-                })
-              : undefined,
             reload_workspace_env: reload_workspace_env
               ? async () => await reload_workspace_env({
                   agent,

@@ -8,6 +8,7 @@
  * - 不拥有 Message、Turn 或 Store 生命周期。
  */
 
+import { read_model_context_window } from "@downcity/type";
 import { model_input_digest } from "../runner/SessionModelInput.js";
 import { build_model_step_call } from "@/model/ModelStepCall.js";
 import type { JsonValue, ModelClient, AgentTool as Tool, SessionHookContextBlock, SessionTurnContextHookValue, ToolCallContext, WorkspaceRuntime } from "@downcity/type";
@@ -24,7 +25,7 @@ import type { SessionDerivedStore } from "@/types/store/SessionStorage.js";
 import { is_action_result, SESSION_HOOK_POINTS, session_call_context, read_session_call_context } from "@downcity/type";
 import { max_request_media_bytes } from "@downcity/type/workspace";
 import { measure_request } from "@/session/runner/RequestBudget.js";
-import { run_pipeline_point } from "@/session/input/SessionHookRunner.js";
+import { run_guard_point, run_pipeline_point } from "@/session/input/SessionHookRunner.js";
 import { normalize_power_system_blocks, resolve_session_power_system_blocks } from "@/session/input/SessionSystem.js";
 import { to_system_messages } from "./composer/ComposerAssembly.js";
 import { resolve_model_client } from "@/model/DeferredModelClient.js";
@@ -105,9 +106,10 @@ export class StepInput {
     turn_context: SessionTurnContext,
     advance_count: number,
   ): Promise<SessionStepExecutionInput> {
+    await this.assert_model(turn_context.model, turn_context);
     // 首轮先冻结基础 system，再运行动态 Turn hook；hook 读到的版本标记与模型相同。
-    await this.read_frozen_system();
-    let compose_input = await this.gather(turn_context, advance_count);
+    await this.read_frozen_system(turn_context.model);
+    let compose_input = await this.gather(turn_context.model, turn_context, advance_count);
     const model = compose_input.state.model;
     if (!model) throw new Error("requires a configured model.");
     turn_context.step.commit({
@@ -121,7 +123,7 @@ export class StepInput {
     const checkpoint_updates = compose_input.state.power_context_blocks.filter(block => block.checkpoint_block);
     if (checkpoint_updates.length && initial_budget.input_budget !== null && initial_budget.estimated_input_tokens > initial_budget.input_budget) {
       await this.refresh_context_snapshot(checkpoint_updates);
-      compose_input = await this.gather(turn_context, advance_count);
+      compose_input = await this.gather(turn_context.model, turn_context, advance_count);
       compose_input = { ...compose_input, state: { ...compose_input.state, power_context_blocks: compose_input.state.power_context_blocks.filter(block => !checkpoint_updates.some(update => update.source_power === block.source_power && update.name === block.name)) } };
       composed = await this.options.composer.compose(compose_input);
       frozen = this.apply_frozen_system(composed);
@@ -135,10 +137,10 @@ export class StepInput {
         ? { context_window: compose_input.state.model_context_window }
         : {}),
     };
-    const configured_model = this.options.get_model();
+    const configured_model = turn_context.model;
     const configured_tools = Object.entries(this.options.get_tools()).map(([name, tool]) => ({ name, execute: tool.execute, is_available: tool.is_available }));
     const config_digest = () => model_input_digest({
-      model_id: this.options.get_model()?.id, timezone: this.options.get_timezone(),
+      model_id: configured_model?.id, timezone: this.options.get_timezone(),
       workspace: this.options.get_workspace_path(), env: this.read_workspace_env(), instruction: this.instruction_blocks(),
       tools: build_model_step_call([], [], this.options.get_tools() as Record<string, BoundAgentTool>).tools,
     });
@@ -148,7 +150,7 @@ export class StepInput {
       const current_tools = this.options.get_tools();
       if (configured_tools.some(tool => current_tools[tool.name]?.execute !== tool.execute
         || current_tools[tool.name]?.is_available !== tool.is_available)
-        || this.options.get_model() !== configured_model || config_digest() !== original_config) {
+        || config_digest() !== original_config) {
         throw new Error("Model or tool configuration changed; start a new request");
       }
     };
@@ -162,6 +164,7 @@ export class StepInput {
     const power_blocks = structuredClone(turn_context.step.power_context_blocks);
     const user_messages = structuredClone(turn_context.input.user_messages());
     const rebind_retry = async (context: SessionTurnContext): Promise<SessionStepExecutionInput> => {
+      if (context.model !== configured_model) throw new Error("Agent model changed; start a new request");
       if (powers.length) set_turn_prompt_powers(context, powers);
       context.step.commit(structuredClone(step_state));
       await context.step.resolve_power_context_blocks(async () => structuredClone(power_blocks));
@@ -171,20 +174,31 @@ export class StepInput {
     return { ...request, rebind_retry, tools: this.bind_turn_context_to_tools(tools, turn_context, media_tokens) };
   }
 
+  /** 在使用已捕获的模型前校验执行授权；守卫只能拒绝，不能选择或替换模型。 */
+  async assert_model(model: ModelClient | undefined, turn?: SessionTurnContext): Promise<void> {
+    const actual = await resolve_model_client(model);
+    const workspace_env = Object.freeze({ ...this.read_workspace_env() });
+    await run_guard_point({
+      hooks: this.options.get_hooks(), point_name: SESSION_HOOK_POINTS.model_execution,
+      value: { model_id: actual?.id ?? null, model_reference: actual?.model_reference ? { ...actual.model_reference } : null, binding_id: actual?.binding_id ?? null },
+      context: turn ? this.create_tool_call_context(turn, { tool_call_id: "", messages: [] }) : this.create_session_call_context(workspace_env),
+    });
+  }
+
   /** 只持久化基础 system 快照，动态摘要继续从 Composer 派生状态读取。 */
-  async snapshot(): Promise<void> {
+  async snapshot(model?: ModelClient): Promise<void> {
     await this.run_mutation(async () => {
-      await this.write_snapshot(await this.read_frozen_system());
+      await this.write_snapshot(await this.read_frozen_system(model));
     });
   }
 
   /** 使用 Agent 当前 instruction 与 Power 刷新基础 system，不固化动态摘要。 */
-  async syncshot(): Promise<void> {
+  async syncshot(model?: ModelClient): Promise<void> {
     await this.run_mutation(async () => {
       await this.initialize();
       const should_persist = await this.options.store.has_instruction();
       const composed = await this.options.composer.compose(
-        await this.gather(undefined, 0, true),
+        await this.gather(model, undefined, 0, true),
       );
       const next_blocks = resolve_composed_system_blocks(composed);
 
@@ -196,10 +210,10 @@ export class StepInput {
   }
 
   /** 预览当前模型 system：冻结的基础指令加本次 Composer 动态上下文。 */
-  async read_system(): Promise<AgentSessionSystemSnapshot> {
+  async read_system(model?: ModelClient): Promise<AgentSessionSystemSnapshot> {
     await this.initialize();
     const composed = await this.options.composer.compose(
-      await this.gather(undefined, 0),
+      await this.gather(model, undefined, 0),
     );
     return {
       session_id: this.options.session_id,
@@ -258,6 +272,7 @@ export class StepInput {
 
   /** 采集当前 Step 的宿主事实，交给 Composer 组装。 */
   private async gather(
+    selected_model: ModelClient | undefined,
     turn_context: SessionTurnContext | undefined,
     advance_count: number,
     refresh_system = false,
@@ -341,14 +356,13 @@ export class StepInput {
       if (tool.is_available && !await tool.is_available(call_context)) delete tools[name];
     }
     // 执行时先恢复完整客户端，预算与 Composer 不能使用只有 ID 的占位模型。
-    const selected_model = this.options.get_model();
     const model = turn_context ? await resolve_model_client(selected_model) : selected_model;
     return {
       session: this.identity(),
       attachment_root: this.options.store.attachments.root_path,
       state: {
         model,
-        model_context_window: this.options.get_model_context_window(),
+        model_context_window: read_model_context_window(model),
         env: workspace_env,
         systems: Object.freeze(
           instruction_system_blocks.map((block) => block.content),
@@ -375,10 +389,10 @@ export class StepInput {
   }
 
   /** 读取或首次捕获基础快照；持久化入口不能从包含动态上下文的预览反推快照。 */
-  private async read_frozen_system(): Promise<AgentSessionSystemBlock[]> {
+  private async read_frozen_system(model?: ModelClient): Promise<AgentSessionSystemBlock[]> {
     await this.initialize();
     if (!this.frozen_blocks) {
-      const composed = await this.options.composer.compose(await this.gather(undefined, 0));
+      const composed = await this.options.composer.compose(await this.gather(model, undefined, 0));
       this.frozen_blocks = resolve_composed_system_blocks(composed);
     }
     return this.frozen_blocks.map((block) => ({ ...block }));

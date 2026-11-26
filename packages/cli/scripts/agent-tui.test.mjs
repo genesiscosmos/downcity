@@ -22,7 +22,6 @@ import { StreamingUIController } from "../bin/city/agent/tui/controllers/Streami
 import { ApprovalPanelComponent } from "../bin/city/agent/tui/dialogs/ApprovalDialog.js";
 import { QuestionPanelComponent } from "../bin/city/agent/tui/dialogs/QuestionDialog.js";
 import { SecurityPolicyPanelComponent } from "../bin/city/agent/tui/dialogs/SecurityPolicyDialog.js";
-import { ModelPickerComponent } from "../bin/city/agent/tui/dialogs/ModelPicker.js";
 import { SessionPickerComponent } from "../bin/city/agent/tui/dialogs/SessionPicker.js";
 import { dispatchSlashCommand } from "../bin/city/agent/tui/commands/dispatch.js";
 import { resolveSlashCommandInput } from "../bin/city/agent/tui/commands/resolve.js";
@@ -186,7 +185,6 @@ test("config slash command 请求外层打开 Agent 配置", async () => {
     async show_session_picker() {},
     async open_agent_configuration() { calls.push("configure"); },
     show_security_policy_picker() {},
-    async select_model() {},
     async stop() {},
   }, intent);
   assert.deepEqual(calls, ["configure"]);
@@ -992,11 +990,11 @@ test("执行期间保留安全策略命令并阻止破坏性 Slash 命令", () =
   );
   assert.equal(
     resolveSlashCommandInput({ input: "/model", is_streaming: true }).kind,
-    "blocked",
+    "message",
   );
   assert.equal(
     resolveSlashCommandInput({ input: "/model selected-model", is_streaming: false }).kind,
-    "builtin",
+    "message",
   );
 });
 
@@ -1034,27 +1032,6 @@ test("Security Policy 选择器直接提交 canonical SessionApprovalMode", () =
   assert.equal(cancelled, true);
 });
 
-test("Model Picker 支持搜索、当前模型标识和 model_id 提交", () => {
-  let selected_model_id;
-  const picker = new ModelPickerComponent({
-    choices: [
-      { model: { downtown: "test", id: "fast" }, name: "Fast", modalities: ["text"] },
-      { model: { downtown: "test", id: "quality" }, name: "Quality", modalities: ["text", "stream"] },
-    ],
-    current_model_label: "Fast",
-    on_select: (model_id) => {
-      selected_model_id = model_id;
-    },
-    on_cancel: () => {},
-  });
-
-  assert.match(plain(picker.render(72)).join("\n"), /Fast.*current/);
-  for (const character of "quality") picker.handleInput(character);
-  assert.match(plain(picker.render(72)).join("\n"), /Search: quality/);
-  picker.handleInput("\r");
-  assert.deepEqual(selected_model_id, { downtown: "test", id: "quality" });
-  assert.ok(picker.render(32).every((line) => visibleWidth(line) <= 32));
-});
 
 test("内联槽位空闲时不占高度并把输入转交给下方面板", () => {
   const slot = new InlinePanelSlotComponent();

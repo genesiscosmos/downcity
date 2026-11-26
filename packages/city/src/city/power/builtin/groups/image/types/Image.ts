@@ -4,7 +4,7 @@
  * 关键点（中文）
  * - 这里只定义图片能力对模型与 City 图片服务的最低层协议，不绑定任意上游 provider。
  * - 图片成功结果使用 Downtown AI Action 消息协议，由动作本地化后返回文件路径。
- * - 字段保持 JSON 可序列化，便于通过工具输入与 ActionResult 传递。
+ * - 工具输入输出保持 JSON 可序列化；内部本地化输入持有统一 PowerContext，不作为工具数据传递。
  */
 
 import type { AIActionMessage } from "@downcity/downtown";
@@ -143,13 +143,8 @@ export interface ImageResultOutput {
 
 /** 图片结果本地化输入。 */
 export interface ImageResultStorageInput {
-  /** 当前 capability 执行上下文。 */
-  context: {
-    /** 当前 capability 在当前 Agent 范围内的私有文件端口。 */
-    files: import("@/workspace/index.js").FileSystem;
-    /** 当前 Turn 取消信号。 */
-    abort_signal?: AbortSignal;
-  };
+  /** 当前 Power 调用上下文，私有文件端口与取消信号沿调用传递。 */
+  context: import("@/power/types/PowerContext.js").PowerContext;
   /** 当前图片任务 ID，用于划分稳定的本地结果目录。 */
   job_id: string;
   /** Downtown 返回的原始 AI Action 消息。 */

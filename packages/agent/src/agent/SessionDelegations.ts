@@ -64,11 +64,8 @@ export class SessionDelegations implements SessionDelegationPort {
       throw new Error("Session work requires an Agent and Session Turn tool call identity");
     }
     // 先校验项目，非法派发不能留下等待恢复的记录。
-    const workspace = await this.options.resolve_workspace(workspace_id);
-    if (input.model) {
-      if (!this.options.validate_model) throw new Error("Session model selection is not configured by the host");
-      await this.options.validate_model(input.model, workspace);
-    }
+    await this.options.resolve_workspace(workspace_id);
+
     const delegation_id = createHash("sha256")
       .update(JSON.stringify([caller.agent_id, caller.type, caller.session_id, caller.turn_id, caller.execution_id, caller.tool_call_id]))
       .digest("hex");
@@ -79,7 +76,6 @@ export class SessionDelegations implements SessionDelegationPort {
       followup,
       workspace_id,
       query,
-      ...(input.model ? { model: input.model } : {}),
       ...(input.title?.trim() ? { title: input.title.trim() } : {}),
       execution_state: "pending",
       delivery_state: "pending",
@@ -237,9 +233,7 @@ export class SessionDelegations implements SessionDelegationPort {
       const session = record.followup
         ? await this.options.get_work_session(record.work_session_id)
         : await this.options.ensure_work_session(record.work_session_id, workspace, child_depth, create_work_descriptor(record.caller));
-      const parent = record.model ? undefined : await this.options.get_parent_session(record.caller);
-      if (parent?.get("model")) await session.set({ model: parent.get("model") }, { persist_action: false });
-      await this.options.prepare_session(session, record.model);
+      await this.options.prepare_session(session);
       if (record.title && record.execution_state === "pending") await session.rename(record.title);
       return session;
     })();

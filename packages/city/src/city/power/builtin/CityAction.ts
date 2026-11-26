@@ -12,10 +12,14 @@
 import type { z } from "zod";
 import type { SessionApprovalRequestInput } from "@downcity/type";
 import { assert_public_execution_input, redact_public_value } from "@/power/core/PowerPrivateValues.js";
-import type {
-  CityPowerContext,
-  CityActionErrorCode,
-} from "@/city/types/CityPowerContext.js";
+import type { PowerContext } from "@/power/types/PowerContext.js";
+
+/** city 动作可预期的失败码；用于区分模型可自行纠正与不可重试的情况。 */
+export type CityActionErrorCode =
+  | "not_found"
+  | "unsupported_action"
+  | "invalid_args"
+  | "internal";
 
 /** city 动作可预期的运行时错误。 */
 export class CityActionError extends Error {
@@ -55,7 +59,7 @@ export interface AnyCityAction {
   /** 是否在执行前请求调用方审批；只对消耗额度或高风险动作开启。 */
   readonly approval?: boolean;
   /** 执行动作；入参未经类型收窄，由动作自己做 schema 校验。 */
-  execute(raw_args: unknown, context: CityPowerContext): Promise<unknown>;
+  execute(raw_args: unknown, context: PowerContext, action_id: string): Promise<unknown>;
 }
 
 /** city 动作的通用基类。 */
@@ -91,7 +95,7 @@ export abstract class CityAction<TArgs = Record<string, never>> implements AnyCi
   readonly args_schema?: z.ZodTypeAny;
 
   /** 执行动作；成功返回数据，失败抛 `CityActionError`。 */
-  protected abstract run(args: TArgs, context: CityPowerContext): Promise<unknown>;
+  protected abstract run(args: TArgs, context: PowerContext): Promise<unknown>;
 
   /**
    * 公开执行入口。
@@ -100,11 +104,11 @@ export abstract class CityAction<TArgs = Record<string, never>> implements AnyCi
    * - 先按 schema 归一化入参，再交给具体的 `run`，保证校验不被某个动作漏掉。
    * - 声明 `approval` 的动作在这里统一请求审批；拒绝或无人响应时不执行 `run`。
    */
-  async execute(raw_args: unknown, context: CityPowerContext): Promise<unknown> {
-    assert_public_execution_input(raw_args, context.interactions);
+  async execute(raw_args: unknown, context: PowerContext, action_id: string): Promise<unknown> {
+    assert_public_execution_input(raw_args, context.call.interactions);
     const args = this.parse_args(raw_args);
     if (this.approval) {
-      const approval = context.interactions.approval;
+      const approval = context.call.interactions.approval;
       if (!approval) {
         throw new CityActionError({
           code: "internal",
@@ -112,19 +116,19 @@ export abstract class CityAction<TArgs = Record<string, never>> implements AnyCi
         });
       }
       // 审批必须归属到真实的模型工具调用；无工具身份的入口（HTTP/RPC）不能凭空批准。
-      if (!context.tool_call_id) {
+      if (!context.call.tool_call_id) {
         throw new CityActionError({
           code: "internal",
           message: `Action "${this.action}" requires approval, but this call has no Tool Call identity.`,
         });
       }
       const decision = await approval.request(redact_public_value<SessionApprovalRequestInput>({
-        turn_id: context.turn_id || "",
-        tool_call_id: context.tool_call_id,
-        tool_name: context.action_id,
+        turn_id: context.turn?.id ?? "",
+        tool_call_id: context.call.tool_call_id,
+        tool_name: action_id,
         description: this.description,
         payload: { operation: "tool", validated_input: args as never },
-      }, context.interactions));
+      }, context.call.interactions));
       if (!decision.approved) {
         throw new CityActionError({
           code: "internal",

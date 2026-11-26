@@ -41,11 +41,13 @@ export interface AgentSessionCollection {
   /** 宿主注册专用执行配置；不暴露为模型或远程 Session action。 */
   register_execution_profile(profile: import("./SessionExecutionProfile.js").SessionExecutionProfile): () => void;
 
-  /** 宿主幂等创建专用 Session；显式配置完整替换 Agent 的默认能力。 */
+  /** 宿主幂等创建受执行约束管理的 Session；配置仅替换明确提供的能力。 */
   create_execution_session(input: import("./SessionExecutionProfile.js").SessionExecutionProfileSelection & SessionDescriptor & {
 
-    /** 只作为范围元数据的 Workspace 标识。 */
+    /** 创建时固定的 Workspace 标识，也可只作为范围元数据。 */
     workspace_id?: string;
+    /** 显式注入同 ID 的项目资源；省略时不授予 Workspace 能力。 */
+    workspace?: WorkspaceRuntime;
   }): Promise<AgentSession>;
 
   /** 按持久化请求身份读取完成写前日志，不依赖内存 Promise。 */

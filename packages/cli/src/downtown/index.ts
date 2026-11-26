@@ -1,10 +1,10 @@
 #!/usr/bin/env node
 
 /**
- * downtown CLI 根命令装配模块。
+ * downtown / town CLI 根命令装配模块。
  *
  * 关键点（中文）
- * - `downtown` 是 Downtown 管理器，负责部署与服务资源。
+ * - `downtown`（别名 `town`）是 Downtown 管理器，负责部署与服务资源。
  * - 默认无参数时打开交互式 Downtown 管理界面。
  * - 本模块承载 Downtown commander 根命令，`src/index.ts` 只负责按命令名分发。
  */
@@ -54,6 +54,7 @@ export async function run_downtown_cli(): Promise<void> {
 
   program
     .name("downtown")
+    .alias("town")
     .description(t({
       zh: "Downcity Downtown CLI — 管理 Downtown 与服务资源",
       en: "Downcity Downtown CLI — manage Downtown and service resources",

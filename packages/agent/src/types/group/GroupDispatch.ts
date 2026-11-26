@@ -33,6 +33,8 @@ export interface GroupDispatchTurnRecord {
   readonly message_id: string;
   /** 当前调度需要一起判断的新增 GroupMessage 标识。 */
   readonly pending_message_ids: readonly string[];
+  /** 当前用户批次是否包含空闲到达消息，供审计解释兜底资格。 */
+  readonly require_response?: boolean;
   /** 当前调度 Turn 的生命周期状态。 */
   readonly status: GroupDispatchTurnStatus;
   /** 调度成功后已经校验并持久化的成员投递决定。 */
@@ -65,6 +67,8 @@ export interface GroupDispatchInput {
   readonly group: DispatchGroupProfile;
   /** 本次调度由用户消息还是自动传播触发。 */
   readonly trigger: DispatchTrigger;
+  /** 本批是否包含无成员执行或等待交互时到达的用户输入。 */
+  readonly require_response?: boolean;
   /** 当前调度所围绕的 GroupMessage。 */
   readonly current_message: GroupMessage;
   /** 当前调度需要一起判断的新增 GroupMessage。 */

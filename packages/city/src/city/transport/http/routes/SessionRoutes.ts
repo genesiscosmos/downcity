@@ -22,7 +22,6 @@ import type { RemotePromptInput } from "@/types/remote/PromptPowerTransport.js";
 import { register_archived_session_routes } from "./ArchivedSessionRoutes.js";
 import { register_prompt_power_routes } from "./PromptPowerRoutes.js";
 import type { RespondSessionInteractionInput } from "@downcity/agent";
-import type { AgentHttpRuntimeOptions } from "@/city/transport/types/AgentHttpRuntime.js";
 import { resolve_remote_session_set_input } from "@/city/transport/session/RemoteSessionConfig.js";
 
 const NDJSON_CONTENT_TYPE = "application/x-ndjson; charset=utf-8";
@@ -37,7 +36,6 @@ export function register_sdk_session_routes(
   app: Hono,
   sessions: AgentSessionCollection,
   workspace?: WorkspaceRuntime,
-  runtime_options: AgentHttpRuntimeOptions = {},
 ): void {
   register_archived_session_routes(app, sessions);
   const get_type = (input: unknown): string => String(input || SESSION_TYPE_WORK).trim() || SESSION_TYPE_WORK;
@@ -383,7 +381,6 @@ export function register_sdk_session_routes(
         c.req.query("type"),
       );
       const body = await c.req.json().catch(() => null) as {
-        model?: unknown;
         security?: { approval_mode?: unknown };
         options?: {
           persist_action?: unknown;
@@ -399,10 +396,7 @@ export function register_sdk_session_routes(
           error: "security.approval_mode must be ask or always-allow",
         }, 400);
       }
-      const model = body?.model;
-      if (model !== undefined && !is_model_reference(model)) {
-        return c.json({ success: false, error: "model must contain a source and original id" }, 400);
-      }
+      if (body && "model" in body) return c.json({ success: false, error: "Configure the Agent model" }, 400);
       const persist_action = body?.options?.persist_action;
       const publish_mutation = body?.options?.publish_mutation;
       if (persist_action !== undefined && typeof persist_action !== "boolean") {
@@ -418,12 +412,10 @@ export function register_sdk_session_routes(
         }, 400);
       }
       const remote_input: RemoteSessionSetInput = {
-        ...(model ? { model } : {}),
         ...(mode ? { security: { approval_mode: mode } } : {}),
       };
       const input = await resolve_remote_session_set_input({
         config: remote_input,
-        resolve_session_model: runtime_options.resolve_session_model,
       });
       await session.set(
         input,

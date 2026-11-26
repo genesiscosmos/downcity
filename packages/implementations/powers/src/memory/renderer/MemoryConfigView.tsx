@@ -62,7 +62,8 @@ export function memory_config_view(props: PowerMainviewComponentProps) {
       </> : null}
     </Group>
     <Group label="记忆处理">
-      <Row label="记忆处理模型" description={snapshot.processing.model?.id || "跟随执行 Agent 的默认模型"} />
+      <Row label="执行 Agent" description={snapshot.processing.execution_agent_id || "使用请求所属 Agent"} />
+      <Row label="模型配置" description="在执行 Agent 设置中选择模型。" />
       <Row label="处理方式" description="专用 Memory Session 提炼与修订，提交结果由 Power 确认。" />
       <Row label="核心记忆" description="当前有效持续约定的完整投影，新会话加载，已有会话逐轮更正。" />
     </Group>

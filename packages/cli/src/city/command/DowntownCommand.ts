@@ -11,7 +11,7 @@ import type { DowntownOptions } from "../types/DowntownCommand.js";
 
 /** 将完整 CLI 子命令装配到 City 根。 */
 export function register_downtown_command(program: Command): void {
-  const downtown = program.command("downtown").description("Manage independent Downtown connections and resources");
+  const downtown = program.command("towns").description("Manage independent Downtown connections and resources");
   register_downtown_service_commands(downtown);
   const common = (command: Command) => command.option("--root <path>", "City data root").option("--json", "Output JSON");
   common(downtown.command("add <url>").description("Add a persistent service connection"))

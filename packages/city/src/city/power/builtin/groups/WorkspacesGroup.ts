@@ -7,7 +7,7 @@
  * - `get` 与 `list` 共用同一个摘要构造，避免两处口径漂移。
  */
 
-import type { CityPowerContext } from "@/city/types/CityPowerContext.js";
+import type { PowerContext, PowerWorkspaceHandle } from "@/power/types/PowerContext.js";
 import type { CityToolWorkspaceSummary } from "@/city/types/CityPowerData.js";
 import { CityAction, CityActionError } from "@/city/power/builtin/CityAction.js";
 import { CityActionGroup } from "@/city/power/builtin/CityActionGroup.js";
@@ -15,14 +15,14 @@ import { z } from "zod";
 
 /** 把 Workspace 投影为模型可读摘要。 */
 function describe_workspace(
-  context: CityPowerContext,
-  workspace: CityPowerContext["workspaces"][number],
+  context: PowerContext,
+  workspace: PowerWorkspaceHandle,
 ): CityToolWorkspaceSummary {
   return {
     workspace_id: workspace.id,
     name: String(workspace.name || workspace.id),
     path: workspace.path,
-    is_current: workspace.id === context.workspace_id,
+    is_current: workspace.id === (context.workspace?.id ?? null),
   };
 }
 
@@ -34,10 +34,10 @@ class ListWorkspacesAction extends CityAction {
 
   protected async run(
     _args: Record<string, never>,
-    context: CityPowerContext,
+    context: PowerContext,
   ): Promise<{ workspaces: CityToolWorkspaceSummary[] }> {
     return {
-      workspaces: context.workspaces.map((workspace) => describe_workspace(context, workspace)),
+      workspaces: context.city.workspaces.list().map((workspace) => describe_workspace(context, workspace)),
     };
   }
 }
@@ -61,14 +61,14 @@ class GetWorkspaceAction extends CityAction<z.infer<typeof get_workspace_input>>
 
   protected async run(
     args: z.infer<typeof get_workspace_input>,
-    context: CityPowerContext,
+    context: PowerContext,
   ): Promise<{ workspace: CityToolWorkspaceSummary }> {
-    const workspace = context.workspaces.find((item) => item.id === args.workspace_id);
+    const workspace = context.city.workspaces.get(args.workspace_id);
     if (!workspace) {
       throw new CityActionError({
         code: "not_found",
         message: `Workspace not visible in this City: ${args.workspace_id}.`,
-        detail: { current_workspace_id: context.workspace_id },
+        detail: { current_workspace_id: (context.workspace?.id ?? null) },
       });
     }
     return { workspace: describe_workspace(context, workspace) };

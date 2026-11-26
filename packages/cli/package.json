@@ -6,7 +6,8 @@
   "bin": {
     "city": "./bin/downcity.js",
     "downcity": "./bin/downcity.js",
-    "downtown": "./bin/downtown.js"
+    "downtown": "./bin/downtown.js",
+    "town": "./bin/downtown.js"
   },
   "files": [
     "bin/",

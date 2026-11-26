@@ -3,6 +3,18 @@ import type { PowerActivityDescription } from "../types/PowerActivityRenderer.js
 
 /** 键为精确 action；四个阶段的数组依次为中文、英文，不拼通用完成前缀。 */
 export const action_sentences: Readonly<Record<string, Record<PowerActivityDescription["tone"], readonly [string, string]>>> = {
+  "help": {
+    running: ["正在查找公开接口", "Finding public interfaces"],
+    complete: ["已获取公开接口", "Retrieved public interfaces"],
+    failed: ["未能获取公开接口", "Could not retrieve public interfaces"],
+    waiting: ["等待你允许查找公开接口", "Waiting for permission to find public interfaces"],
+  },
+  "execute": {
+    running: ["正在执行脚本", "Executing script"],
+    complete: ["已执行脚本", "Executed script"],
+    failed: ["脚本执行失败", "Script execution failed"],
+    waiting: ["等待你批准执行脚本", "Waiting for permission to execute script"],
+  },
   "env.get": {
     running: ["正在获取当前身份和工作目录", "Getting current identity and working directory"],
     complete: ["已获取当前身份和工作目录", "Retrieved current identity and working directory"],

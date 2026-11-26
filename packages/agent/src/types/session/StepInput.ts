@@ -5,7 +5,7 @@
  * Message、Store、Model 或 Power 生命周期。
  */
 
-import type { ModelClient, AgentTool as Tool, SessionDescriptor, ToolHookSet, WorkspaceRuntime, SessionCallContext } from "@downcity/type";
+import type { AgentTool as Tool, SessionDescriptor, ToolHookSet, WorkspaceRuntime, SessionCallContext } from "@downcity/type";
 import type { AgentSessionSystemBlock } from "@/types/agent/SessionTypes.js";
 import type { SessionStorage } from "@/types/store/SessionStorage.js";
 import type { SessionComposer } from "@/types/session/SessionComposer.js";
@@ -44,10 +44,6 @@ export interface StepInputOptions extends SessionCallContext {
   get_instruction_system_blocks: () => AgentSessionSystemBlock[];
   /** 在每个 Step 检查点读取当前生效的扩展处理器集合。 */
   get_hooks: () => ToolHookSet;
-  /** 读取当前 Session 实际使用的模型。 */
-  get_model: () => ModelClient | undefined;
-  /** 读取当前模型声明的上下文窗口。 */
-  get_model_context_window: () => number | undefined;
   /** 读取当前 Session 的创建时间戳。 */
   get_created_at: () => number;
   /** 读取当前 Session 的参考时区。 */

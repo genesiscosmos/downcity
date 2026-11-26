@@ -5,12 +5,11 @@
  * - 模型侧工具名是 `ai`；动作 id 由组名拼成，与拆分前完全一致：
  *   `image.*`、`sound.*`。
  * - 这些动作会消耗额度或写文件，各自动作自行声明 `access` 与 `approval`。
- * - 能力来自 City 持有的 Downtown；未配置时动作返回 `unsupported_action`，不伪造结果。
+ * - 能力由 PowerContext.city.town 的受限模型路由提供；路由未配置时返回 `unsupported_action`。
  */
 
 import type { CityActionGroup } from "@/city/power/builtin/CityActionGroup.js";
 import { CityGroupPower } from "@/city/power/builtin/CityGroupPower.js";
-import type { CityGroupPowerOptions } from "@/city/power/builtin/CityGroupPower.js";
 import { ImageGroup } from "@/city/power/builtin/groups/image/ImageGroup.js";
 import { SoundGroup } from "@/city/power/builtin/groups/sound/SoundGroup.js";
 
@@ -21,11 +20,8 @@ export class AiPower extends CityGroupPower {
   readonly description =
     "City-owned generation models: image generation and speech recognition/synthesis.";
 
-  constructor(options: CityGroupPowerOptions) {
-    super({
-      groups: create_ai_action_groups(),
-      options,
-    });
+  constructor() {
+    super(create_ai_action_groups());
   }
 }
 

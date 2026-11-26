@@ -254,17 +254,8 @@ export class CityHTTP {
         }
       }
 
-      const resolve_session_model = this.runtime_options.resolve_session_model;
       const powers = this.runtime_access.power_scope(agent_id, workspace_id);
-      const sdk_router = new AgentHTTP({ agent, workspace, powers }, {
-        resolve_session_model: resolve_session_model
-          ? async (model) => await resolve_session_model({
-              agent,
-              workspace,
-              model,
-            })
-          : undefined,
-      }).router();
+      const sdk_router = new AgentHTTP({ agent, workspace, powers }).router();
       const extension = this.runtime_options.create_agent_extension?.({
         agent,
         workspace,

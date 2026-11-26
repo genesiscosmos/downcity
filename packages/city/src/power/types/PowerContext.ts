@@ -17,6 +17,7 @@ import type { PowerNotificationPublisher } from "./PowerNotification.js";
 import type { PowerCall } from "./PowerCall.js";
 import type { StepSnapshot } from "./StepSnapshot.js";
 import type { PowerActionResult, PowerSnapshot } from "./PowerRuntime.js";
+import type { PowerSessionAddress, PowerSessionArchiveInput, PowerSessionArchiveResult, PowerSessionListInput, PowerSessionMetadata, PowerSessionPage } from "./PowerSessionManagement.js";
 
 /** Power 可以写入的日志等级。 */
 export type PowerLogLevel = "debug" | "info" | "warn" | "error" | "action";
@@ -115,6 +116,14 @@ export interface PowerSessionHandle extends SessionDescriptor {
 
 /** Power 可调用的 Agent Session 集合。 */
 export interface PowerSessionCollection {
+  /** 分页读取活动会话元数据；不恢复执行器，可按 Workspace 过滤。 */
+  list(input?: PowerSessionListInput): Promise<PowerSessionPage>;
+  /** 读取活动或已归档会话元数据，不恢复执行器。 */
+  metadata(input: PowerSessionAddress): Promise<PowerSessionMetadata>;
+  /** 重命名活动会话；归档会话拒绝写入。 */
+  rename(input: PowerSessionAddress & { /** 新的用户可见标题。 */ readonly title: string }): Promise<{ /** 已持久化的标题。 */ title: string }>;
+  /** 归档空闲会话及其后代；运行、排队或当前执行中的节点由领域服务拒绝。 */
+  archive(input: PowerSessionArchiveInput): Promise<PowerSessionArchiveResult>;
   /** 创建属于当前 Agent 的 Session。 */
   create(input?: {
     /** 可选 Session 来源。 */
@@ -123,11 +132,8 @@ export interface PowerSessionCollection {
     readonly kind?: string;
     /** 可信宿主记录的派生关系。 */
     readonly parent?: SessionDescriptor["parent"];
-    /** 可选来源 Session；新 Session 会继承其模型选择。 */
-    readonly inherit_model_from?: {
-      /** 来源 Session 稳定标识。 */ readonly session_id: string;
-      /** 来源 Session 的持久化分区。 */ readonly type?: string;
-    };
+    /** 只允许选择当前 Power 已登记的执行约束；不包含模型配置。 */
+    readonly execution_profile?: { /** 配置标识。 */ id: string; /** 精确版本。 */ version: number };
   }): Promise<PowerSessionHandle>;
   /** 恢复属于当前 Agent 的 Session。 */
   get(session_id: string, type?: string): Promise<PowerSessionHandle>;
@@ -135,6 +141,14 @@ export interface PowerSessionCollection {
   runtime(session_id: string, type?: string): PowerSessionHandle;
   /** 永久删除一个 Session。 */
   remove(session_id: string, type?: string): Promise<boolean>;
+}
+
+/** Agent 默认模型的非秘密描述；自定义客户端可以没有可持久化来源。 */
+export interface PowerAgentModel {
+  /** 模型客户端的运行时标识，用于展示当前执行模型。 */
+  readonly id: string;
+  /** 可持久化的来源及原始模型标识；自定义客户端未声明来源时为 null。 */
+  readonly reference: import("@downcity/type").ModelReference | null;
 }
 
 /** Power 可直接调用的 Agent 受限句柄。 */
@@ -147,16 +161,22 @@ export interface PowerAgentHandle {
   readonly role?: readonly string[];
   /** Agent 能力描述。 */
   readonly description: string;
+  /** 当前 Agent 默认模型的标识与来源；未配置时为 null，不暴露模型客户端。 */
+  readonly model: PowerAgentModel | null;
   /** 当前 Agent 静态指令快照。 */
   readonly instructions: readonly string[];
   /** 当前 Agent 持有的 Session 集合端口。 */
   readonly sessions: PowerSessionCollection;
+  /** Agent 的工作委派服务；服务按可信调用身份检查创建者、层级和父子关系。 */
+  readonly work: import("@downcity/agent").SessionWorkContract;
 }
 
 /** Power 可直接使用的 Workspace 受限句柄。 */
 export interface PowerWorkspaceHandle {
   /** Workspace 稳定标识。 */
   readonly id: string;
+  /** Workspace 用户可见名称。 */
+  readonly name: string;
   /** Workspace 绝对根目录。 */
   readonly path: string;
   /** Workspace 可选 Shell 端口。 */
@@ -208,6 +228,22 @@ export interface PowerCityPowers {
 
 /** Power 可直接调用的 City 受限句柄。 */
 export interface PowerCityHandle {
+  /** 当前 City 的稳定标识。 */
+  readonly id: string;
+  /** City 的 Agent 目录；每次访问均从 City 的当前索引解析。 */
+  readonly agents: {
+    /** 读取指定 Agent 的调用句柄；不存在时返回 null。 */
+    get(agent_id: string): PowerAgentHandle | null;
+    /** 列出当前 City 可见的 Agent 句柄。 */
+    list(): readonly PowerAgentHandle[];
+  };
+  /** City 的 Workspace 目录；当前工作区便捷引用也来自该目录。 */
+  readonly workspaces: {
+    /** 读取指定 Workspace 的调用句柄；不存在时返回 null。 */
+    get(workspace_id: string): PowerWorkspaceHandle | null;
+    /** 列出当前 City 可见的 Workspace 句柄。 */
+    list(): readonly PowerWorkspaceHandle[];
+  };
   /** City 的受限 Town 模型与 Service 路由；不暴露连接或身份管理。 */
   readonly town?: PowerTown;
   /** 当前调用绑定的 City Power 端口。 */

@@ -6,11 +6,9 @@
  * - Message 持久化统一交给 `SessionMessages`，这里仅读取 Message 快照更新 metadata。
  * - 不负责 Turn 编排、Message 创建或 Action 生命周期。
  */
-import { same_model } from "@downcity/type";
-import { read_model_context_window, read_model_label, type ModelClient, normalize_session_descriptor } from "@downcity/type";
+import { read_model_label, type ModelClient, normalize_session_descriptor } from "@downcity/type";
 import { normalize_session_title, resolve_system_timezone } from "@/session/storage/Metadata.js";
 import { ensure_session_title } from "@/session/loop/SessionTitle.js";
-import type { AgentSessionConfigSnapshot } from "@/types/agent/SessionTypes.js";
 import type { SessionLocalState } from "@/types/session/SessionLocalState.js";
 import { generate_id } from "@/utils/Id.js";
 import type { Logger } from "@/utils/logger/Logger.js";
@@ -28,8 +26,6 @@ export function create_session_local_state(input: {
   fallback_workspace_path: string;
 }): SessionLocalState {
   return {
-    session_config: {},
-    effective_session_config: {},
     configured_approval_mode: "ask",
     ...(input.workspace ? { current_workspace: input.workspace } : {}),
     fallback_workspace_path: input.fallback_workspace_path,
@@ -37,14 +33,6 @@ export function create_session_local_state(input: {
     timezone: resolve_system_timezone(),
     initialize_promise: null,
   };
-}
-
-/** Session 模型配置写入结果。 */
-export interface SessionModelSetResult {
-  /** 已包含最新运行时模型实例的 configured 快照。 */
-  config: AgentSessionConfigSnapshot;
-  /** 持久化模型身份是否发生真实变化。 */
-  changed: boolean;
 }
 
 /**
@@ -73,7 +61,6 @@ export class SessionState {
   private readonly store: SessionStorage;
   private readonly state: SessionLocalState;
   private readonly logger: Logger;
-  private readonly get_model: SessionStateOptions["get_model"];
   private readonly publish_event: SessionStateOptions["publish_event"];
   private readonly title_task: SessionTitleTask;
   private metadata_mutation_chain: Promise<void> = Promise.resolve();
@@ -86,21 +73,11 @@ export class SessionState {
     this.store = options.store;
     this.state = options.state;
     this.logger = options.logger;
-    this.get_model = options.get_model;
     this.publish_event = options.publish_event;
     this.title_task = new SessionTitleTask({
       session_id: this.session_id,
       logger: this.logger,
     });
-  }
-
-  /**
-   * 读取当前 session 配置快照。
-   */
-  get_config(): AgentSessionConfigSnapshot {
-    return {
-      ...this.state.session_config,
-    };
   }
 
   /** 读取当前 Session 已接受的 Shell 审批模式。 */
@@ -147,12 +124,6 @@ export class SessionState {
         // 初始化与中断消息恢复并行，保留恢复提交已推进的活动时间。
         this.state.updated_at = Math.max(this.state.updated_at ?? 0, metadata.updated_at ?? created_at);
         this.state.title = normalize_session_title(metadata.title);
-        this.state.session_config = {
-          ...(metadata.model_label ? { model_label: metadata.model_label } : {}),
-        };
-        this.state.effective_session_config = {
-          ...this.state.session_config,
-        };
         this.state.configured_approval_mode = metadata.approval_mode || "ask";
       })();
     }
@@ -177,43 +148,11 @@ export class SessionState {
   /**
    * 在 prompt 执行前确保当前 session 已可运行。
    */
-  async ensure_runnable(): Promise<void> {
+  async ensure_runnable(model: ModelClient | undefined): Promise<void> {
     await this.ensure_ready_for_execution();
-    if (!this.get_model()) {
-      throw Object.assign(new Error("Session requires an explicit model selection; historical labels cannot reconstruct a model ID. Select a Session model before execution."), { code: "session_model_required" });
+    if (!model) {
+      throw Object.assign(new Error("Agent model is not configured. Configure the Agent model before execution."), { code: "agent_model_required" });
     }
-  }
-
-  /**
-   * 写入当前 session 配置。
-   */
-  async set_model(model: ModelClient): Promise<SessionModelSetResult> {
-    const next_model_label = read_model_label(model);
-    const binding = await this.store.read_model_binding();
-    const next_model_reference = model.model_reference;
-    const changed = next_model_label !== this.state.session_config.model_label
-      || (next_model_reference
-        ? !same_model(binding?.model, next_model_reference)
-        : this.state.session_config.model?.id !== model.id);
-    const next_config: AgentSessionConfigSnapshot = {
-      ...this.state.session_config,
-      model,
-      model_label: next_model_label,
-      model_context_window: read_model_context_window(model),
-    };
-    // 即使展示名未变化，也必须保存稳定 ID；旧历史明确选择后才获得可恢复模型。
-    if (next_model_reference) await this.store.write_model_binding({ model: next_model_reference });
-    if (changed) {
-      await this.run_metadata_mutation(async () => {
-        const metadata = await this.store.read_metadata();
-        await this.store.write_metadata({
-          ...metadata,
-          ...(next_model_label ? { model_label: next_model_label } : {}),
-        });
-      });
-    }
-    this.state.session_config = next_config;
-    return { config: next_config, changed };
   }
 
   /** 接受并持久化当前 Session 的 Shell 审批模式。 */
@@ -271,15 +210,8 @@ export class SessionState {
       || this.state.fallback_workspace_path;
   }
 
-  /** 在 Session Step 检查点提交模型配置。 */
-  apply_model_config(config: AgentSessionConfigSnapshot): void {
-    this.state.effective_session_config = {
-      ...config,
-    };
-  }
-
   /** 异步调度首条用户消息的 Session 标题生成。 */
-  schedule_title_generation(): void {
+  schedule_title_generation(model: ModelClient | undefined): void {
     this.title_task.schedule(async (signal) => {
       const before_metadata = await this.store.read_metadata();
       if (String(before_metadata.title || "").trim()) return;
@@ -291,8 +223,8 @@ export class SessionState {
         session_id: this.session_id,
         store: this.store,
         messages: [first_user_message],
-        model: this.get_model(),
-        model_label: this.state.session_config.model_label,
+        model,
+        model_label: read_model_label(model),
         logger: this.logger,
         generate: true,
         signal,

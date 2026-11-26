@@ -24,6 +24,7 @@ export interface AgentMessageContentProps {
   /** 消息稳定标识。 */ message_id: string;
   /** canonical 顺序的展示块。 */ blocks: readonly AgentMessageBlock[];
   /** 当前消息是否正在生成。 */ streaming: boolean;
+  /** 正文自适应平滑，默认开启；停止或失败时可关闭并立即显示完整内容，历史及导出不播放。 */ smooth?: boolean;
   /** 正文后的操作栏。 */ actions?: ReactNode;
   /** 替换业务块展示；undefined 使用 SDK 默认行为，null 显式隐藏。 */ render_block?(block: Exclude<AgentMessageBlock, { type: "text" | "error" | "file" }>): ReactNode;
   /** 当前可恢复的错误 Part；来自 Session 当前运行态。 */ retry_error_part_id?: string;

@@ -1,6 +1,5 @@
 /** Memory 处理编排：持久化请求、受限 Session 计算、幂等提交；模型最终文字不代表记忆已保存。 */
 import { same_model } from "@downcity/type";
-import type { ModelReference } from "@downcity/type";
 import type { PowerLifecycleContext } from "@downcity/city/power";
 import type { MemoryProvider } from "../types/MemoryProtocol.js";
 import type { MemoryJob, MemoryJobInput } from "../types/MemoryJob.js";
@@ -20,11 +19,9 @@ export interface MemoryCoordinatorOptions {
   provider: MemoryProvider;
   /** 本 Power 的内部处理账本。 */
   jobs: MemoryJobStore;
-  /** 可选的专用模型选择，创建后由 Session 固定实际身份。 */
-  model?: ModelReference;
-  /** 配置明确确认的授权来源；只用于新 Job，不能更新已保存的 Job。 */
-  binding_id?: string;
-  /** 提交时读取所属 Agent 默认模型或专用模型；缺省且配置不完整时保持需要配置。 */
+  /** 已登记的专用执行 Agent；不提供模型覆盖。 */
+  execution_agent_id?: string;
+  /** 提交与执行时校验同一执行 Agent 的模型来源和授权。 */
   resolve_model_binding?: MemoryModelResolver;
   /** 自动 Job 每次开始前核对持久开关；普通显式请求不受影响。 */
   can_run_background?: (job: MemoryJob) => Promise<boolean>;
@@ -74,16 +71,11 @@ export class MemoryCoordinator {
     if (input.scope === "workspace" && input.memory_kind === "agreement") throw new Error("Workspace supports Knowledge only");
     // 幂等重送不重新选择账号；同 request key 的既有 Job 永远保留提交时基线。
     const existing = await this.options.jobs.read(memory_job_identity(input));
-    const configured = input.model !== undefined || input.binding_id !== undefined
-      ? input : this.options.model && this.options.binding_id
-        ? { model: this.options.model, binding_id: this.options.binding_id }
-        : !existing ? await this.options.resolve_model_binding?.(input.access, this.options.model) : undefined;
-    if (!existing && this.options.model !== undefined && input.model === undefined
-      && configured?.model !== undefined && !same_model(configured.model, this.options.model)) {
-      throw new Error("memory_model_configuration_required: host resolved a different configured model");
-    }
+    const execution_agent_id = existing ? existing.execution_agent_id ?? existing.access.agent_id : input.execution_agent_id ?? this.options.execution_agent_id ?? input.access.agent_id;
+    const configured = existing ? undefined : await this.options.resolve_model_binding?.(execution_agent_id);
+    if (!existing && input.model && (!same_model(input.model, configured?.model) || input.binding_id !== configured?.binding_id)) throw new Error("memory_model_configuration_required: execution Agent does not match the requested baseline");
     const baseline = existing ? { model: existing.model, binding_id: existing.binding_id } : configured;
-    const job = await this.options.jobs.create({ ...input, model: baseline?.model, binding_id: baseline?.binding_id });
+    const job = await this.options.jobs.create({ ...input, execution_agent_id, model: baseline?.model, binding_id: baseline?.binding_id });
     if (["queued", "retry_wait", "running", "committing"].includes(job.status)) this.schedule(job.job_id, job.kind === "dream");
     return job;
   }
@@ -163,6 +155,9 @@ export class MemoryCoordinator {
     const { host } = this.options;
     // 每次执行和跨 attempt 都只校验 Job 自有基线；提交回执修复可在上方无模型完成。
     const baseline = require_memory_model(job);
+    const execution_agent_id = job.execution_agent_id ?? job.access.agent_id;
+    const current = await this.options.resolve_model_binding?.(execution_agent_id);
+    if (!current || !same_model(current.model, baseline.model) || current.binding_id !== baseline.binding_id) throw new Error("memory_model_binding_changed: execution Agent changed; retry preserves the confirmed baseline");
     const model = this.options.host.town?.models.client(baseline.model, { binding_id: baseline.binding_id });
     if (!model || !same_model(model.model_reference, baseline.model) || model.binding_id !== baseline.binding_id) {
       throw Object.assign(new Error("Memory Job model authorization is unavailable or changed"), { code: "memory_model_binding_changed" });
@@ -170,8 +165,8 @@ export class MemoryCoordinator {
     if (!job.session_id) {
       const attempt = job.attempt + 1;
       const session = await host.system.create_agent_session({
-        agent_id: job.access.agent_id, workspace_id: job.access.workspace_id, inherit_workspace: false,
-        execution_profile_id: "memory", execution_profile_version: MEMORY_SESSION_PROFILE_VERSION, model_id: baseline.model.id, model_reference: baseline.model, binding_id: baseline.binding_id,
+        agent_id: execution_agent_id, workspace_id: job.access.workspace_id, inherit_workspace: false,
+        execution_profile_id: "memory", execution_profile_version: MEMORY_SESSION_PROFILE_VERSION,
         creation_key: `memory:${job.job_id}:${attempt}`,
         type: "work", kind: MEMORY_SESSION_KIND,
       });
@@ -184,19 +179,18 @@ export class MemoryCoordinator {
     const session_id = job.session_id!;
     const request_id = `memory:${job.job_id}:${job.attempt}`;
     let state = await host.system.read_agent_session({
-      agent_id: job.access.agent_id, type: "work", session_id, request_id,
+      agent_id: execution_agent_id, type: "work", session_id, request_id,
     });
-    if (!same_model(state.execution_profile?.model_reference, baseline.model) || state.execution_profile?.binding_id !== baseline.binding_id) {
-      throw Object.assign(new Error("Memory Session identity does not match the persisted Job baseline"), { code: "memory_model_binding_changed" });
-    }
+    if (state.execution_profile?.id !== "memory" || state.execution_profile.version !== MEMORY_SESSION_PROFILE_VERSION
+      || state.execution_profile.creation_key !== `memory:${job.job_id}:${job.attempt}`) throw new Error("Memory Session execution identity differs from the Job");
     if (state.status === "running") {
       const deadline = Date.now() + 120_000;
       while (state.status === "running" && Date.now() < deadline && !this.stopped) {
         await new Promise<void>((resolve) => setTimeout(resolve, 500));
-        state = await host.system.read_agent_session({ agent_id: job.access.agent_id, type: "work", session_id, request_id });
+        state = await host.system.read_agent_session({ agent_id: execution_agent_id, type: "work", session_id, request_id });
       }
       if (state.status === "running") {
-        await host.system.stop_agent_session({ agent_id: job.access.agent_id, type: "work", session_id });
+        await host.system.stop_agent_session({ agent_id: execution_agent_id, type: "work", session_id });
         throw new Error("Memory Session exceeded the recovery processing budget");
       }
     }
@@ -205,7 +199,7 @@ export class MemoryCoordinator {
       if (!state.result?.success) throw new Error(state.result?.error ?? "Memory Session failed");
     } else {
       const turn = await host.system.prompt_agent_session({
-        agent_id: job.access.agent_id, session_id, type: "work", request_id,
+        agent_id: execution_agent_id, session_id, type: "work", request_id,
         actor: { kind: "runtime", namespace: "memory", object_id: job.job_id },
         query: "Process the bound Memory Job using memory_sources. Stage supported changes or explicitly skip; the host alone commits.",
       });
@@ -218,7 +212,7 @@ export class MemoryCoordinator {
         ]);
         if (!result.success) throw new Error(result.error ?? "Memory Session failed");
       } catch (error) {
-        await host.system.stop_agent_session({ agent_id: job.access.agent_id, type: "work", session_id, turn_id: turn.turn_id });
+        await host.system.stop_agent_session({ agent_id: execution_agent_id, type: "work", session_id, turn_id: turn.turn_id });
         throw error;
       } finally { if (timer) clearTimeout(timer); }
     }

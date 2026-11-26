@@ -5,6 +5,7 @@
  * 与 Message 收口才通过一次 SQLite 事务提交稳定快照。数据库不承担流事件日志职责。
  * 运行投影由本模块构造并转交缓存拥有；更新只替换变化的 Part，共享的旧 Parts
  * 始终只读。外部 Part 输入及订阅 Mutation 分别隔离，delta 不复制整条 Message。
+ * Part、delta 与持久化快照共用单调递增的 revision；内存更新不触发数据库写入。
  */
 
 import { generate_id } from "@/utils/Id.js";
@@ -45,8 +46,7 @@ export class SessionAgentMessageState {
   /**
    * 只在内存中创建或替换一个 Part，并立即发布实时完整 Part。
    *
-   * 内容未变化时不发布：Tool 的 ready 状态会被模型事件与输入校验先后置为同一值，
-   * 无条件下发会产生同 revision、同内容的重复 Mutation。
+   * 内容未变化时不递增版本或发布：Tool 的 ready 状态可能被模型事件与输入校验重复设置。
    */
   project_part(message_id: string, part: SessionAgentMessagePart): void {
     const current = this.require_writable_agent(message_id);
@@ -58,6 +58,7 @@ export class SessionAgentMessageState {
     if (part.sequence <= current.stable_part_sequence) throw new Error(`Stable Agent Part cannot change: ${part.part_id}`);
     const projected: SessionAgentMessage = {
       ...current,
+      revision: current.revision + 1,
       updated_at: Date.now(),
       parts: (existing
         ? current.parts.map((item) => item.part_id === part.part_id ? structuredClone(part) : item)
@@ -70,7 +71,7 @@ export class SessionAgentMessageState {
         session_id: this.session_id,
         message_id,
         ...(current.turn_id ? { turn_id: current.turn_id } : {}),
-        revision: current.revision,
+        revision: projected.revision,
         created_at: projected.updated_at,
         part: structuredClone(part),
       }),
@@ -91,6 +92,7 @@ export class SessionAgentMessageState {
     let matched = false;
     const projected: SessionAgentMessage = {
       ...current,
+      revision: current.revision + 1,
       updated_at: Date.now(),
       parts: current.parts.map((part) => {
         if (part.part_id !== part_id) return part;
@@ -119,7 +121,7 @@ export class SessionAgentMessageState {
       variant: "delta" as const,
       message_id,
       ...(current.turn_id ? { turn_id: current.turn_id } : {}),
-      revision: current.revision,
+      revision: projected.revision,
       session_id: this.session_id,
       created_at: projected.updated_at,
       part_id,
@@ -197,7 +199,7 @@ export class SessionAgentMessageState {
     });
   }
 
-  /** 丢弃当前未提交 Step 投影，并向订阅方恢复最近持久化快照。 */
+  /** 丢弃未提交 Step，并用更高版本持久化和发布恢复快照，使订阅方可以覆盖已显示的草稿。 */
   async rollback_projection(message_id: string): Promise<void> {
     await this.enqueue_write(message_id, async () => {
       this.invalid_projections.add(message_id);
@@ -205,7 +207,17 @@ export class SessionAgentMessageState {
       if (!persisted || persisted.role !== "agent") {
         throw new Error(`Persisted Agent Message not found: ${message_id}`);
       }
-      this.options.cache.accept(persisted);
+      const restored: SessionAgentMessage = {
+        ...persisted,
+        revision: Math.max(persisted.revision, this.options.cache.get(message_id)?.revision ?? 0) + 1,
+        updated_at: Date.now(),
+      };
+      await this.options.store.update_message({
+        message: restored,
+        expected_revision: persisted.revision,
+        changed_parts: [],
+      });
+      this.options.cache.accept(restored);
       this.invalid_projections.delete(message_id);
     });
   }
@@ -466,7 +478,7 @@ export class SessionAgentMessageState {
         next_parts,
         options?.held_by_writer ?? this.options.cache.is_held(message_id),
       ),
-      revision: persisted.revision + 1,
+      revision: Math.max(persisted.revision, this.options.cache.get(message_id)?.revision ?? 0) + 1,
       updated_at: committed_at,
       stable_part_sequence: options?.advance_stable_prefix
         ? resolve_stable_part_sequence(next_parts, persisted.stable_part_sequence)

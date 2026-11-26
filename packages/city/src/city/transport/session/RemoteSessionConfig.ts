@@ -3,33 +3,17 @@
  *
  * 负责把 transport 上可序列化的配置转换为本地 Session 输入；模型目录仍由宿主拥有。
  */
-import { is_model_reference } from "@downcity/type";
 import type {
   AgentSessionSetInput,
   RemoteSessionSetInput,
 } from "@downcity/agent";
-import type { AgentSessionModelResolver } from "@/city/transport/types/AgentSessionModelResolver.js";
 
 /** 把远程配置输入解析为本地 Session 可执行输入。 */
 export async function resolve_remote_session_set_input(input: {
   /** 远程 transport 收到的可序列化配置。 */
   config: RemoteSessionSetInput;
-  /** 宿主提供的模型解析能力。 */
-  resolve_session_model?: AgentSessionModelResolver;
 }): Promise<AgentSessionSetInput> {
-  const model = input.config.model;
-  if (model !== undefined && !is_model_reference(model)) throw new Error("remote session.set requires a complete model reference");
-  if (!model && !input.config.security) {
-    throw new Error("remote session.set requires model or security");
-  }
-  if (model && !input.resolve_session_model) {
-    throw new Error("Remote Session model switching is not configured by the host");
-  }
-  const resolved_model = model
-    ? await input.resolve_session_model?.(model)
-    : undefined;
-  return {
-    ...(resolved_model ? { model: resolved_model } : {}),
-    ...(input.config.security ? { security: input.config.security } : {}),
-  };
+  if ("model" in input.config) throw new Error("agent_model_owned: configure the Agent model");
+  if (!input.config.security) throw new Error("remote session.set requires security");
+  return { security: input.config.security };
 }

@@ -51,12 +51,6 @@ export const BUILTIN_SLASH_COMMANDS: readonly SlashCommand[] = [
     availability: "always",
   },
   {
-    name: "model",
-    aliases: ["models"],
-    description: "Choose the current Session model (/model [model-id])",
-    availability: "idle-only",
-  },
-  {
     name: "attach",
     aliases: ["file"],
     description: "Open the system file picker and attach files to the next message",

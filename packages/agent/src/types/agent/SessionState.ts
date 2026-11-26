@@ -28,7 +28,7 @@ export interface AgentSessionStateValues {
   /** 当前 Session 持久化的 Workspace 标识；创建时无归属才为 undefined。 */
   workspace_id: string | undefined;
 
-  /** 当前 Session 使用的运行时模型实例。 */
+  /** 所属 Agent 当前配置的模型投影；不表示活动 Turn 正在使用的模型，执行事实应读取消息。 */
   model: ModelClient | undefined;
 
   /** 当前模型的轻量可读标签。 */

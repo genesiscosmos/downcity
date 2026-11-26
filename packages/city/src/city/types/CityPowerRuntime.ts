@@ -20,6 +20,8 @@ import type { StorageProvider } from "@/workspace/index.js";
 
 /** City Power Runtime 创建参数。 */
 export interface CityPowerRuntimeOptions {
+  /** 拥有当前运行时的 City 稳定标识。 */
+  readonly city_id: string;
   /** City 为 Power 私有数据提供的底层存储。 */
   readonly storage: StorageProvider;
   /** City 提供的受限 Town 模型与 Service 路由；执行时由 Town 验证来源绑定。 */

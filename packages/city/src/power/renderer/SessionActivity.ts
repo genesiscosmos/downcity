@@ -1,5 +1,5 @@
 /**
- * Session Power 的只读 activity：会话快照、工作指令、消息、历史 Part 与待响应事项。
+ * Session Power 的只读 activity：工作指令、消息、历史 Part 与待响应事项。
  * 所有事实只来自本次 tool.output.data；不查询实时状态，不提供回复、批准或控制按钮。
  * 折叠阶段只判断业务字段是否存在，正文归一化与格式化在展开时进行。
  */
@@ -10,19 +10,6 @@ import { createElement as create_element, type ReactNode } from "react";
 import type { PowerActivityProps, PowerActivityRenderer, PowerActivityDescription } from "../types/PowerActivityRenderer.js";
 import { action_id, activity_tone, failure_text, input_args, is_chinese, output_data, record_items, record_value, short_text, text_value } from "./Activity.js";
 
-
-/** 快照状态只描述目标当时的状态，idle 不代表工作成功。 */
-const state_labels: Readonly<Record<string, readonly [string, string]>> = {
-  running: ["运行中", "Running"], waiting_for_user: ["等待用户", "Waiting for user"],
-  idle: ["空闲", "Idle"], started: ["已启动", "Started"], stopped: ["已停止", "Stopped"],
-  resolved: ["已响应", "Resolved"], denied: ["已拒绝", "Denied"], submitted: ["等待继续", "Waiting to continue"],
-};
-
-/** 仅检查可读的会话事实，只有技术标识的结果不可展开。 */
-function has_session(value: unknown): boolean {
-  const session = record_value(value);
-  return Boolean(text_value(session.title) || text_value(session.preview_text));
-}
 
 /** 仅展示可读回复说明；未知 payload 不序列化。 */
 function has_response(props: PowerActivityProps): boolean {
@@ -77,8 +64,8 @@ function describe_session(props: PowerActivityProps): PowerActivityDescription {
     title: title[chinese ? 0 : 1], resource,
     summary: resource?.label || (is_list ? undefined : short_text(target.title) || short_text(args.title)),
     tone,
-    has_detail: !is_list && Boolean(text_value(args.query) || has_response(props) || has_session(data.session)
-      || has_messages || has_history_text(data) || has_pending || text_value(data.failure) || failure_text(props)),
+    has_detail: !is_list && Boolean(text_value(args.query) || text_value(data.failure) || failure_text(props)
+      || has_response(props) || has_messages || has_history_text(data) || has_pending),
   };
 }
 
@@ -92,18 +79,6 @@ function text_block(text: string, mono = false): ReactNode {
 /** 独立语义段落，不附加空占位区域。 */
 function section(title: string, children: ReactNode): ReactNode {
   return create_element("section", { className: "space-y-2" }, create_element("p", { className: "font-medium" }, title), children);
-}
-
-/** 展示单条会话的事实与快照状态。 */
-function session_snapshot(session: Record<string, unknown>, chinese: boolean, index: number): ReactNode {
-  const state = text_value(session.state) || text_value(session.status);
-  const state_label = state_labels[state]?.[chinese ? 0 : 1] || state;
-  const count = session.pending_interaction_count;
-  return create_element("article", { key: `${text_value(session.session_id)}:${index}`, className: "space-y-1 border-l border-border pl-2" },
-    create_element("p", { className: "font-medium" }, short_text(session.title) || (chinese ? "未命名会话" : "Untitled session")),
-    state_label ? create_element("p", { className: "text-muted-foreground" }, state_label) : null,
-    text_value(session.preview_text) ? text_block(text_value(session.preview_text)) : null,
-    typeof count === "number" && Number.isFinite(count) && count > 0 ? create_element("p", { className: "text-muted-foreground" }, chinese ? `${count} 个待响应事项` : `${count} pending ${count === 1 ? "interaction" : "interactions"}`) : null);
 }
 
 /** 历史正文仅展示可读文本，不显示片段、消息标识与工具 JSON。 */
@@ -122,14 +97,14 @@ function session_detail(props: PowerActivityProps) {
   const args = input_args(props);
   const data = output_data(props);
   const chinese = is_chinese(props.locale);
-  const sessions = has_session(data.session) ? [record_value(data.session)] : [];
+  // 创建动作由外层描述与资源名称提供上下文，详情直接展示工作指令。
+  const is_start = action_id(props) === "start";
   const messages = record_items(data.messages).filter(message => text_value(message.text));
   const pending = record_items(data.pending_interactions).filter(item => text_value(item.title) || text_value(item.description));
   const response = has_response(props) ? text_value(args.note) : "";
   const failure = text_value(data.failure);
   return create_element("div", { className: "space-y-3" },
-    sessions.length ? section(chinese ? "会话快照" : "Session snapshot", sessions.map((session, index) => session_snapshot(session, chinese, index))) : null,
-    text_value(args.query) ? section(chinese ? "工作指令" : "Instruction", text_block(text_value(args.query))) : null,
+    text_value(args.query) ? (is_start ? text_block(text_value(args.query)) : section(chinese ? "工作指令" : "Instruction", text_block(text_value(args.query)))) : null,
     response ? section(chinese ? "回复内容" : "Response", text_block(response)) : null,
     messages.length ? section(chinese ? "最近消息" : "Recent messages", messages.map((message, index) => create_element("div", { key: index, className: "space-y-1 border-l border-border pl-2" },
       create_element("p", { className: "text-muted-foreground" }, text_value(message.role) === "user" ? (chinese ? "用户" : "User") : text_value(message.role) === "agent" ? "Agent" : text_value(message.role)),

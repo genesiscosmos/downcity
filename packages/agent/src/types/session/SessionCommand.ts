@@ -24,7 +24,7 @@ export interface SessionCommand {
   /** Prompt 或 Retry 要求复用的稳定 Turn ID。 */
   turn_id?: string;
   /** Command 出队后执行的完整行为。 */
-  execute: () => Promise<void>;
+  execute: (turn?: import("@/types/turn/SessionTurnContext.js").SessionTurnContext) => Promise<void>;
   /** Session stop 时取消该 Command 的可选行为；未提供时 Command 继续保留。 */
   cancel?: () => void;
   /** Command 成功执行后需要持久化的完成信息；未提供时静默完成。 */

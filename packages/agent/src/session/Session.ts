@@ -7,11 +7,11 @@
  * - 内部使用 `SessionMessages` 管理 SQLite 中的 canonical Message 聚合。
  */
 
-import { type ModelClient, read_model_context_window, type AgentTool as Tool, normalize_session_descriptor, session_call_context } from "@downcity/type";
+import { type ModelClient, read_model_context_window, read_model_label, type AgentTool as Tool, normalize_session_descriptor, session_call_context } from "@downcity/type";
 import { submit_with_execution_lease } from "./SessionExecutionLease.js";
 import { SessionMessages } from "@/session/messages/SessionMessages.js";
 import { resolve_model_client } from "@/model/DeferredModelClient.js";
-import type { AgentSessionConfigSnapshot, AgentSessionForkInput, AgentSessionInfo, AgentSessionStatus, AgentSessionSetInput, AgentSessionSetOptions, AgentSessionSystemSnapshot } from "@/types/agent/SessionTypes.js";
+import type { AgentSessionForkInput, AgentSessionInfo, AgentSessionStatus, AgentSessionSetInput, AgentSessionSetOptions, AgentSessionSystemSnapshot } from "@/types/agent/SessionTypes.js";
 import type { AgentSession } from "@/types/agent/SessionActor.js";
 import { create_runtime_session_port } from "@/session/storage/RuntimeSessionPort.js";
 import type { SessionPort } from "@/types/session/SessionPort.js";
@@ -94,7 +94,8 @@ export class Session implements AgentSession {
   /** 当前执行面生效的审批模式；在 Step 检查点从 configured 同步。 */
   private effective_approval_mode: SessionApprovalMode = "ask";
   private readonly local_state: SessionLocalState;
-  private readonly get_agent_model: SessionOptions["get_agent_model"];
+  /** 所属 Agent 是模型配置唯一事实源，执行模型由 Turn 自己捕获。 */
+  private readonly agent: SessionOptions["agent"];
   private readonly get_hooks: SessionOptions["get_hooks"];
   /** fork 保持同一 Agent 的可靠完成写前端口。 */
   private readonly completions: SessionOptions["completions"];
@@ -143,7 +144,7 @@ export class Session implements AgentSession {
       return options.acquire_execution?.() ?? (() => {});
     };
     this.logger = options.logger;
-    this.get_agent_model = options.get_agent_model;
+    this.agent = options.agent;
     this.get_hooks = options.get_hooks;
     this.completions = options.completions;
     this.child_work = options.child_work;
@@ -196,8 +197,6 @@ export class Session implements AgentSession {
       get_instruction_system_blocks: this.get_instruction_system_blocks,
       get_hooks: this.get_hooks,
       get_workspace: () => this.local_state.current_workspace,
-      get_model: () => this.get_model(),
-      get_model_context_window: () => this.get_model_context_window(),
       get_created_at: () => this.local_state.created_at,
       get_timezone: () => this.local_state.timezone,
       logger: this.logger,
@@ -210,22 +209,22 @@ export class Session implements AgentSession {
       store: this.store,
       state: this.local_state,
       logger: this.logger,
-      get_model: () => this.get_model(),
       publish_event: (event) => {
         this.events.publish(event);
       },
     });
     this.session_loop = new SessionLoop({
       acquire_execution: this.acquire_execution,
+      agent: this.agent,
       completions: options.completions,
       child_work: this.child_work,
       session_id: this.id,
       ...session_call_context(this),
       get_workspace_path: () => this.get_workspace_path(),
       step_input: this.step_input,
-      advance_context: async (trigger, signal) => await this.advance_context(trigger, signal),
-      maintain_context: async () => {
-        await this.advance_context("usage_pressure");
+      advance_context: async (trigger, model, signal) => await this.advance_context(trigger, model, signal),
+      maintain_context: async (turn) => {
+        await this.advance_context("usage_pressure", turn.model, turn.lifecycle.abort_signal);
       },
       state: this.state,
       events: this.events,
@@ -272,7 +271,7 @@ export class Session implements AgentSession {
    * - 多个 system block 按原顺序合并为一个 Markdown 文档。
    */
   async snapshot(): Promise<void> {
-    await this.step_input.snapshot();
+    await this.step_input.snapshot(this.agent.model);
   }
 
   /**
@@ -285,7 +284,7 @@ export class Session implements AgentSession {
    */
   async syncshot(): Promise<void> {
     this.session_loop.model_retry.notify_input();
-    await this.step_input.syncshot();
+    await this.step_input.syncshot(this.agent.model);
   }
 
   /**
@@ -302,11 +301,11 @@ export class Session implements AgentSession {
       case "workspace_id":
         return this.workspace_id as AgentSessionStateValues[K];
       case "model":
-        return this.get_selected_model() as AgentSessionStateValues[K];
+        return this.agent.model as AgentSessionStateValues[K];
       case "model_label":
-        return this.state.get_config().model_label as AgentSessionStateValues[K];
+        return read_model_label(this.agent.model) as AgentSessionStateValues[K];
       case "model_context_window":
-        return this.state.get_config().model_context_window as AgentSessionStateValues[K];
+        return read_model_context_window(this.agent.model) as AgentSessionStateValues[K];
       case "approval_mode":
         return this.state.get_approval_mode() as AgentSessionStateValues[K];
       case "title":
@@ -333,9 +332,8 @@ export class Session implements AgentSession {
   ): Promise<void> {
     if (this.assert_execution_profile) throw new Error("execution_profile_immutable: configuration belongs to the host");
     if ("workspace" in input || "workspace_id" in input) throw new Error("session_workspace_immutable");
-    if (!input.model && !input.security) {
-      throw new Error("session.set requires model or security");
-    }
+    if ("model" in input) throw new Error("agent_model_owned: configure the Agent model");
+    if (!input.security) throw new Error("session.set requires security");
     const requested_approval_mode = input.security?.approval_mode;
     if (
       requested_approval_mode !== undefined &&
@@ -354,33 +352,12 @@ export class Session implements AgentSession {
         "session.set publish_mutation requires persist_action",
       );
     }
-    const model_result = input.model
-      ? await this.state.set_model(input.model)
-      : undefined;
     const next_approval_mode = requested_approval_mode;
     const security_changed = next_approval_mode !== undefined
       ? await this.state.set_approval_mode(next_approval_mode)
       : false;
-    if (!model_result && !security_changed) return;
-    if (model_result?.changed && publish_mutation) {
-      this.events.publish({
-        mutation_id: generate_id(),
-        variant: "session",
-        type: "config",
-        session_id: this.id,
-        created_at: Date.now(),
-        ...(model_result.config.model_label
-          ? { model_label: model_result.config.model_label }
-          : {}),
-        ...(typeof model_result.config.model_context_window === "number"
-          ? { model_context_window: model_result.config.model_context_window }
-          : {}),
-      });
-    }
+    if (!security_changed) return;
     const changed_fields = [
-      ...(model_result?.changed
-        ? [`model: ${String(model_result.config.model_label || "configured")}`]
-        : []),
       ...(security_changed
         ? [`security.approval_mode: ${String(next_approval_mode)}`]
         : []),
@@ -397,7 +374,6 @@ export class Session implements AgentSession {
     this.session_loop.enqueue_command({
       kind: "maintenance",
       execute: async () => {
-        if (model_result) this.state.apply_model_config(model_result.config);
         if (security_changed && next_approval_mode) {
           this.effective_approval_mode = next_approval_mode;
         }
@@ -417,9 +393,9 @@ export class Session implements AgentSession {
     return await new Promise<boolean>((resolve, reject) => {
       this.session_loop.enqueue_command({
         kind: "maintenance",
-        execute: async () => {
+        execute: async (turn) => {
           try {
-            resolve(await this.advance_context("manual"));
+            resolve(await this.advance_context("manual", turn ? turn.model : this.agent.model, turn?.lifecycle.abort_signal));
           } catch (error) {
             reject(error);
           }
@@ -580,7 +556,7 @@ export class Session implements AgentSession {
 
   /** 读取当前 Session 详情与当前活动投影。 */
   async get_info(): Promise<AgentSessionInfo> {
-    return await read_session_information({ store: this.store, model: this.get_selected_model(),
+    return await read_session_information({ store: this.store, model: this.agent.model,
       project_root: this.get_workspace_path(), agent_id: this.agent_id,
       session_id: this.id, executing: this.is_executing(),
     });
@@ -593,7 +569,6 @@ export class Session implements AgentSession {
 
   /** 仅装配原 Workspace 的执行资源，不写入 metadata 或发布归属变更。 */
   restore_workspace(workspace: WorkspaceRuntime): void {
-    if (this.assert_execution_profile) throw new Error("execution_profile_immutable: Workspace capabilities cannot be attached");
     if (!workspace?.id || workspace.id !== this.workspace_id) throw new Error("session_workspace_immutable");
     if (workspace === this.local_state.current_workspace) return;
     if (this.has_live_execution()) throw new Error("session_busy: cannot replace Workspace resources during execution");
@@ -614,7 +589,7 @@ export class Session implements AgentSession {
    * 读取当前 session 生效的 system 快照。
    */
   async system(): Promise<AgentSessionSystemSnapshot> {
-    return await this.step_input.read_system();
+    return await this.step_input.read_system(this.agent.model);
   }
 
   /** 原 Turn、接收及收尾仍有效时保护资源；当前 failed 或等待也必须可停止。 */
@@ -653,13 +628,6 @@ export class Session implements AgentSession {
       : messages;
     const forked = await this.create_fork_session(await this.allocate_session_id());
     await forked.initialize();
-    const model_binding = await this.store.read_model_binding();
-    if (model_binding) await forked.store.write_model_binding(model_binding);
-    const session_config = this.state.get_config();
-    if (session_config.model) {
-      const forked_model = await forked.state.set_model(session_config.model);
-      forked.state.apply_model_config(forked_model.config);
-    }
     const approval_mode = this.state.get_approval_mode();
     await forked.state.set_approval_mode(approval_mode);
     forked.effective_approval_mode = approval_mode;
@@ -711,7 +679,6 @@ export class Session implements AgentSession {
       session_id: this.id,
       ...normalize_session_descriptor(this),
       get_workspace_id: () => this.workspace_id,
-      get_model: () => this.get_model(),
       messages: async () => await this.session_messages.list_history_messages(),
       prompt: async (input) => await this.prompt(input),
       stop: async (expected_turn_id, expected_message) => await this.stop(expected_turn_id, expected_message),
@@ -804,7 +771,7 @@ export class Session implements AgentSession {
       get_instruction_system_blocks: this.get_instruction_system_blocks,
       get_workspace: () => this.local_state.current_workspace,
       get_hooks: this.get_hooks,
-      get_agent_model: this.get_agent_model,
+      agent: this.agent,
       composer: this.composer,
     });
   }
@@ -830,15 +797,16 @@ export class Session implements AgentSession {
    * 写入派生边界后记为 completed，抛错时记为 failed，整个生命周期复用同一个 Action。
    * Composer 判定没有可推进区间时返回 false；手动请求记录反馈，自动推进不产生空 Action。
    */
-  private async advance_context(trigger: SessionContextAdvanceTrigger, abort_signal?: AbortSignal): Promise<boolean> {
+  private async advance_context(trigger: SessionContextAdvanceTrigger, selected_model: ModelClient | undefined, abort_signal?: AbortSignal): Promise<boolean> {
     const turn_id = this.session_loop.current_turn_id();
     const action_id = `context-compaction:${this.id}:${generate_id()}`;
     try {
-      const model = await resolve_model_client(this.get_model());
+      await this.step_input.assert_model(selected_model);
+      const model = await resolve_model_client(selected_model);
       const advanced = await this.composer.advance_context({
         session: this.step_input.identity(),
         model,
-        context_window: this.get_model_context_window(), abort_signal,
+        context_window: read_model_context_window(model), abort_signal,
         history: await this.store.list_messages(),
         derived: this.store.derived_store(this.composer.name),
         trigger,
@@ -930,33 +898,6 @@ export class Session implements AgentSession {
       }    }
   }
 
-  /**
-   * 返回当前 Session 实际使用的模型实例。
-   *
-   * 解析顺序固定为 Session 覆盖模型，其次回退到 Agent 模型。
-   */
-  get_model(): ModelClient | undefined {
-    return this.get_selected_model();
-  }
-
-  /** 按 Session 优先、Agent 兜底规则读取当前配置的 ModelClient。 */
-  private get_selected_model(): ModelClient | undefined {
-    return (
-      this.local_state.effective_session_config.model ||
-      this.local_state.session_config.model ||
-      this.get_agent_model()
-    );
-  }
-
-  /** 读取当前有效模型对应的上下文窗口。 */
-  private get_model_context_window(): number | undefined {
-    return (
-      this.local_state.effective_session_config.model_context_window ||
-      this.local_state.session_config.model_context_window ||
-      read_model_context_window(this.get_selected_model())
-    );
-  }
-
   /** 追加外部 User Message，并统一触发 Metadata 与标题更新。 */
   private async append_external_user_message(
     input: AppendExternalSessionUserMessageInput,
@@ -966,7 +907,7 @@ export class Session implements AgentSession {
       input,
     );
     if (!appended) return;
-    this.state.schedule_title_generation();
+    this.state.schedule_title_generation(this.agent.model);
   }
 
   /** 追加外部 Assistant Message，并统一提交 Metadata。 */

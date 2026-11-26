@@ -125,10 +125,11 @@ install_downcity_cli_globally() {
     resolved_source_dir="$(cd "$source_dir" && pwd -P)"
     if [[ "$resolved_package_dir" == "$resolved_source_dir" ]]; then
       chmod +x "$source_dir/bin/downcity.js" "$source_dir/bin/downtown.js"
-      rm -f "$global_bin/$legacy_command" "$global_bin/city" "$global_bin/downcity" "$global_bin/downtown" "$global_bin/downfed" "$global_bin/fed" 2>/dev/null || true
+      rm -f "$global_bin/$legacy_command" "$global_bin/city" "$global_bin/downcity" "$global_bin/downtown" "$global_bin/town" "$global_bin/downfed" "$global_bin/fed" 2>/dev/null || true
       ln -s "../lib/node_modules/downcity/bin/downcity.js" "$global_bin/city"
       ln -s "../lib/node_modules/downcity/bin/downcity.js" "$global_bin/downcity"
       ln -s "../lib/node_modules/downcity/bin/downtown.js" "$global_bin/downtown"
+      ln -s "../lib/node_modules/downcity/bin/downtown.js" "$global_bin/town"
       return 0
     fi
   fi
@@ -164,8 +165,9 @@ install_downcity_cli_globally() {
 
   chmod +x "$package_dir/bin/downcity.js" "$package_dir/bin/downtown.js"
 
-  rm -f "$global_bin/$legacy_command" "$global_bin/city" "$global_bin/downcity" "$global_bin/downtown" "$global_bin/downfed" "$global_bin/fed" 2>/dev/null || true
+  rm -f "$global_bin/$legacy_command" "$global_bin/city" "$global_bin/downcity" "$global_bin/downtown" "$global_bin/town" "$global_bin/downfed" "$global_bin/fed" 2>/dev/null || true
   ln -s "../lib/node_modules/downcity/bin/downcity.js" "$global_bin/city"
   ln -s "../lib/node_modules/downcity/bin/downcity.js" "$global_bin/downcity"
   ln -s "../lib/node_modules/downcity/bin/downtown.js" "$global_bin/downtown"
+  ln -s "../lib/node_modules/downcity/bin/downtown.js" "$global_bin/town"
 }

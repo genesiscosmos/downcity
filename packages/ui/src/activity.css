@@ -316,15 +316,9 @@
 
 @media (prefers-reduced-motion: reduce) { .activity-tool-row.is-running > .activity-tool-summary :is(.activity-tool-icon,.activity-tool-state,.activity-tool-identity), .activity-tool-input-caret { animation: none; } }
 
-/* Input 摘要使用轻底色胶囊；展开正文留在胶囊外，沿用 Tool 的详情布局。 */
-.activity-tool-row.is-incoming > .activity-tool-summary {
-  align-self: flex-start;
-  box-sizing: border-box;
-  width: fit-content;
-  max-width: 100%;
-  padding: 0.16rem 0.5rem;
-  border-radius: 999px;
-  background: var(--surface-subtle);
+/* Input 摘要沿用 Tool 的无背景标题行与间距，标题加粗以突出输入来源。 */
+.activity-tool-row.is-incoming > .activity-tool-summary .activity-tool-identity {
+  font-weight: 600;
 }
 .activity-input-icon {
   display: inline-flex;

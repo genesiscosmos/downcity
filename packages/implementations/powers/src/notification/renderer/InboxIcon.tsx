@@ -2,7 +2,7 @@
 import type { InboxEntry } from "../types/Inbox.js";
 
 /** 图标只辅助文字，不独立传达审批或状态。 */
-export function InboxIcon({ kind }: { /** 当前项目语义，空态使用inbox。 */ kind: InboxEntry["kind"] | "inbox" | "check" | "failure" | "agent" | "close" }) {
+export function InboxIcon({ kind }: { /** 当前项目语义，空态使用inbox。 */ kind: InboxEntry["kind"] | "inbox" | "check" | "failure" | "agent" | "close" | "source" }) {
   const paths = {
     inbox: "M4 4h16v15H4z M4 12h5l1 3h4l1-3h5",
     agent: "M5 21V10a7 7 0 0114 0v11l-3-2-4 2-4-2z M9 10v1 M15 10v1",
@@ -12,6 +12,7 @@ export function InboxIcon({ kind }: { /** 当前项目语义，空态使用inbox
     update: "M6 3h9l4 4v14H6z M14 3v5h5 M9 12h7 M9 16h5",
     check: "M5 12l4 4L19 6",
     close: "M6 6l12 12 M18 6L6 18",
+    source: "M14 3h7v7 M21 3L10 14 M10 3H5a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-5",
     failure: "M12 3L2 21h20z M12 9v5 M12 17v.1",
   };
   return <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d={paths[kind]} /></svg>;

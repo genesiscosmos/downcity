@@ -127,7 +127,11 @@ export class SessionLoop {
   readonly execution: SessionExecutionState;
   private readonly acquire_execution?: () => () => void;
 
+  /** Agent 定义是模型唯一来源；Turn 创建后执行只依赖其上下文。 */
+  private readonly agent: SessionLoopOptions["agent"];
+
   constructor(options: SessionLoopOptions) {
+    this.agent = options.agent;
     this.acquire_execution = options.acquire_execution;
     this.session_id = String(options.session_id || "").trim();
     this.completions = options.completions;
@@ -193,8 +197,9 @@ export class SessionLoop {
       execute: async active_turn => {
         void active_turn.deferred_finished.promise.then(finished.resolve, finished.reject);
         void active_turn.deferred_finished.promise.then(release, release);
+        await this.step_input?.assert_model(active_turn.turn_context?.model, active_turn.turn_context ?? undefined);
         await (active_turn.turn_context!.output.assistant as SessionAssistantOutputAdapter).resume_message();
-        await this.state.ensure_runnable();
+        await this.state.ensure_runnable(active_turn.turn_context?.model);
         return await this.execute_prompt_turn({ active_turn });
       },
       release: active_turn => {
@@ -375,7 +380,7 @@ export class SessionLoop {
     if (is_agent_session_prompt_input_empty(input)) {
       throw new Error("session.prompt requires a non-empty query");
     }
-    await this.state.ensure_runnable();
+    await this.state.ensure_ready_for_execution();
     input.abort_signal?.throwIfAborted();
     if (this.stopping || stop_generation !== this.stop_generation) throw new Error(QUEUED_PROMPT_CANCELLED_MESSAGE);
     const request_identity = resolve_prompt_request_identity(this.session_id, input.request_id);
@@ -606,15 +611,19 @@ export class SessionLoop {
         created_at: Date.now(),
       });
 
-      await run_with_execution_lease(this.acquire_execution, async () => {
-        try { await this.execute_command(command); }
-        catch (error) { await this.fail_active_turn(active_turn, error); }
-        finally {
-          active_turn.replay = undefined;
-          if (!this.internal_inputs.get(active_turn.turn_id)?.has_pending()) this.internal_inputs.delete(active_turn.turn_id);
-        }
-      });
-      await settle_session_turn(this.turn_completion_options(), active_turn);
+      try {
+        await run_with_execution_lease(this.acquire_execution, async () => {
+          try { await this.execute_command(command); }
+          catch (error) { await this.fail_active_turn(active_turn, error); }
+          finally {
+            active_turn.replay = undefined;
+            if (!this.internal_inputs.get(active_turn.turn_id)?.has_pending()) this.internal_inputs.delete(active_turn.turn_id);
+          }
+        });
+        await settle_session_turn(this.turn_completion_options(), active_turn);
+      } finally {
+        active_turn.turn_context = null;
+      }
       this.execution.publish();
     }
   }
@@ -665,7 +674,7 @@ export class SessionLoop {
 
   /** 执行 Command，并尽力持久化其声明的 canonical 完成信息。 */
   private async execute_command(command: SessionCommand): Promise<void> {
-    await command.execute();
+    await command.execute(this.active_turn?.turn_context ?? undefined);
     const completion = command.completion;
     if (!completion) return;
     await persist_command_completion({ completion, turn_id: this.current_turn_id(), session_id: this.session_id,
@@ -694,7 +703,7 @@ export class SessionLoop {
         if (persisted_message) return persisted_message.input;
         const fact = await persist_prompt_input({ prompt: input, turn_context, messages: this.messages,
           project_root: this.get_workspace_path(), identity, assert_receivable });
-        this.state.schedule_title_generation();
+        this.state.schedule_title_generation(this.require_active_turn().turn_context?.model);
         return fact;
       },
       accepted: () => {
@@ -719,6 +728,8 @@ export class SessionLoop {
       if (persisted_message?.meta?.powers !== undefined) {
         throw new Error("Caller Power execution was interrupted; automatic replay is unavailable");
       }
+      await this.state.ensure_runnable(turn_context.model);
+      await this.step_input?.assert_model(turn_context.model, turn_context);
       await receive(false);
       const result = await this.execute_prompt_turn({ active_turn });
       const final_result = await complete_session_turn(
@@ -838,7 +849,7 @@ export class SessionLoop {
       await finalize_session_execution(this.turn_completion_options(), input.active_turn, result,
         this.get_workspace_path(), async () => {
           await this.drain_queued_maintenance_commands();
-          if (result.compact_required) await this.maintain_context();
+          if (result.compact_required) await this.maintain_context(turn_context);
         });
 
       return {
@@ -914,6 +925,7 @@ export class SessionLoop {
     });
     this.internal_inputs.set(active_turn.turn_id, internal_input);
     return create_session_turn_context({
+      model: this.agent.model,
       turn_id: active_turn.turn_id,
       execution_id: active_turn.execution_id,
       session_id: this.session_id,

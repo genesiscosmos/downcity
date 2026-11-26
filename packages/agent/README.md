@@ -133,7 +133,7 @@ src/
 
 - `src/remote/transports/` 放 HTTP、RPC transport 及其内部客户端；RPC Server 与 HTTP gateway 由上游宿主管理
 - Agent、Session 与 Group 统一持有宿主传入的 `ModelClient`；City 返回的 `CityModel` 在该协议上额外提供目录与展示元数据
-- Session 可通过 `session.set({ model })` 覆盖，执行时固定按 Session 模型、Agent 模型的顺序解析，并直接通过统一的 `ModelClient` 协议调用
+- 模型由 Agent 定义，Session 在每个 Turn 开始时继承 Agent 当前模型；Turn 内保持一致，修改从下一轮生效，并通过统一的 `ModelClient` 协议调用
 
 - `src/types/`
   - 跨模块、跨包共享协议类型

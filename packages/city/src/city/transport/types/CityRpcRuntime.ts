@@ -5,7 +5,6 @@
  * 多 Agent 的运行时配置复制成第二份事实源。
  */
 
-import type { AgentSessionModelResolver } from "@/city/transport/types/AgentSessionModelResolver.js";
 import type { ModelReference } from "@downcity/type";
 import type { Agent } from "@downcity/agent";
 import type { WorkspaceRuntime } from "@/workspace/index.js";
@@ -17,15 +16,6 @@ export interface CityRpcRuntimeOptions {
   /** 处理宿主关闭请求；调用方负责安排实际进程退出。 */
   shutdown?: () => void | Promise<void>;
 
-  /** 为指定 Agent 创建远程 Session 所需的模型解析器。 */
-  resolve_session_model?: (input: {
-    /** 当前请求已经解析出的 Agent 实例。 */
-    readonly agent: Agent;
-    /** 当前请求已经进入的 Workspace 实例。 */
-    readonly workspace: WorkspaceRuntime;
-    /** 远程 Session 请求指定的结构化模型引用。 */
-    readonly model: ModelReference;
-  }) => ReturnType<AgentSessionModelResolver>;
 
   /** 从事实源重新加载指定 Agent 的 Workspace Env。 */
   reload_workspace_env?: (input: {

@@ -9,6 +9,9 @@
 
 /** Session 运行时的 Hook point 目录。 */
 export const SESSION_HOOK_POINTS = Object.freeze({
+  /** 使用模型前校验捕获的来源和授权；guard 只能拒绝执行，不能替换模型。 */
+  model_execution: "session.model_execution",
+
   /** 建立 Session system snapshot 时允许 Hook 追加命名 blocks。 */
   system_context: "session.system_context",
 

@@ -102,7 +102,7 @@ export function emit_downtown_status(options?: { as_json?: boolean }): void {
     ],
     note: state.has_user_token
       ? undefined
-      : "Run `city downtown login` to sign in."
+      : "Run `city towns login <url>` to sign in."
   });
 }
 
@@ -224,7 +224,7 @@ export async function run_downtown_join_command(params: {
     title: "downtown joined",
     data: {
       downtown_url,
-      fix: "Run `city downtown login` to sign in as a user.",
+      fix: "Run `city towns login <url>` to sign in as a user.",
     },
   });
 }
@@ -242,7 +242,7 @@ export async function run_downtown_use_command(params: {
       title: "city use failed",
       data: {
         error: "No downtown matched the input",
-        fix: "Run `city downtown list` to inspect available downtowns.",
+        fix: "Run `city towns list` to inspect available downtowns.",
       },
     });
     return;
@@ -263,7 +263,7 @@ export async function run_downtown_use_command(params: {
       downtown_url: server.downtown_url,
       source: server.source,
       has_user_session: server.has_user_session,
-      fix: server.has_user_session ? undefined : "Run `city downtown login` to sign in as a user.",
+      fix: server.has_user_session ? undefined : "Run `city towns login <url>` to sign in as a user.",
     },
   });
 }

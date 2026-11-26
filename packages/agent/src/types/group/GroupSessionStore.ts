@@ -29,6 +29,8 @@ export interface GroupSessionHistoryMeta {
   readonly member_session_ids?: Readonly<Record<string, string>>;
   /** 尚未消费的用户消息和整轮回复 ID；执行中的输入保留到整轮交接，重启从同一集合恢复。 */
   readonly pending_message_ids?: readonly string[];
+  /** pending_message_ids 的用户消息子集：消息到达时无成员执行或等待交互，消费前保留至少一位回应的兜底资格。 */
+  readonly idle_response_message_ids?: readonly string[];
 }
 
 /** 单个 GroupSession 的持久化数据视图。 */

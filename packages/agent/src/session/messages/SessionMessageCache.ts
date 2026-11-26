@@ -3,7 +3,7 @@
  *
  * 缓存只保留「被未收口 writer 持有」的 Agent Message；终态历史始终读取 Store。
  * 本模块同时拥有对外发布形状的唯一判断——调用方只提交完整快照，由这里决定发整条
- * Message 还是只发发生变化的 Part。
+ * Message 还是只发一个变化的 Part；一次提交只发布一个消息版本，避免多 Part 共用版本。
  *
  * 抽出它的原因是打破 SessionMessages 与 Agent Message 运行时之间的双向依赖：
  * 两者都只单向依赖本模块，不再需要互相回指的闭包。
@@ -188,7 +188,8 @@ type SessionMessageChange =
  *
  * Part Mutation 是「按 part_id 替换」，既无法让消费方建立一条尚不存在的 Message，
  * 也无法表达 Part 消失。所以首次出现、User Message、state 收口与 Part 被移除都必须
- * 整条发布；其余情况只发布发生变化的 Part，不重传整条会话。
+ * 整条发布。单个 Part 变化只发 Part；多个 Part 变化发布完整消息，保证一个 revision
+ * 对应一次可完整应用的消息变化。没有内容或 envelope 变化时无需发布。
  */
 function project_message_change(
   previous: SessionMessage | undefined,
@@ -206,9 +207,6 @@ function project_message_change(
   ) {
     return { variant: "message" };
   }
-  return {
-    variant: "part",
-    message,
-    parts: resolve_changed_agent_parts(previous.parts, message.parts),
-  };
+  const parts = resolve_changed_agent_parts(previous.parts, message.parts);
+  return parts.length > 1 ? { variant: "message" } : { variant: "part", message, parts };
 }

@@ -160,7 +160,7 @@ export class CliTownHost {
   private create_auth_adapter(): TownAuthAdapter {
     return {
       login: async (context, input) => {
-        if (input.provider !== "cli-exchange") throw new ResourceError("validation_error", "Use city downtown login for CLI sign in", 2);
+        if (input.provider !== "cli-exchange") throw new ResourceError("validation_error", "Use city towns login <url> for CLI sign in", 2);
         const credentials = require_credentials(input.input?.credentials);
         const connection = this.require_connection(context.connection.downtown_id);
         if (input.input?.revision !== connection.revision || connection.url !== context.connection.endpoint_url) throw new ResourceError("dependency_conflict", "Service connection changed during sign in", 4);

@@ -158,7 +158,6 @@ export async function handle_sdk_session_rpc_request(params: {
       const session = await get_session(request.params.session_id, request.params.type);
       const input = await resolve_remote_session_set_input({
         config: request.params.input,
-        resolve_session_model: options.resolve_session_model,
       });
       await session.set(input, request.params.options);
       write_success(request.id, { queued: true });

@@ -19,10 +19,8 @@ import {
   type AgentChatSessionSummaryView,
   type AgentChatTransportOptions,
 } from "@/city/agent/AgentChatTypes.js";
-import { listPlatformModelChoices } from "@/city/runtime/city-model/ExecutionModelBinding.js";
 import { ResourceClient } from "../resources/ResourceClient.js";
 import { resource_chat_sessions } from "../resources/ChatSessions.js";
-import type { AgentChatModelChoice } from "@/city/types/AgentChatModel.js";
 
 /**
  * 远端访问目标。
@@ -112,17 +110,6 @@ export async function createAgentSessionReader(params: {
   const remote_agent = new RemoteAgent({ url: target.url });
   const sessions = resource_chat_sessions(new ResourceClient(), agent_id, remote_agent.sessions);
   return { sessions, close: async () => await remote_agent.close() };
-}
-
-/** 读取当前用户可用于 Chat Session 的模型目录。 */
-export async function listAgentChatModelChoices(): Promise<AgentChatModelChoice[]> {
-  const choices = await listPlatformModelChoices();
-  return choices.map((choice) => ({
-    model: choice.model.model,
-    name: choice.model.name || choice.model.id,
-    source_name: choice.model.source_name,
-    modalities: choice.model.modalities.map((modality) => String(modality)),
-  }));
 }
 
 /** chat Session 列表默认拉取上限。 */

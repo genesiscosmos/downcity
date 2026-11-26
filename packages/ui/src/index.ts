@@ -189,6 +189,7 @@ export { Alert, AlertDescription, AlertTitle } from "./components/alert";
 export { AlertDialog, AlertDialogClose, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "./components/alert-dialog";
 export { Avatar, AvatarFallback, AvatarImage } from "./components/avatar";
 export { Badge, badgeVariants } from "./components/badge";
+export type { BadgeProps } from "./types/badge";
 export {
   Card,
   CardAction,

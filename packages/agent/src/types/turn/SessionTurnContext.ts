@@ -7,7 +7,7 @@
  * - 可变状态只能通过行为方法更新，消费者不能直接操作内部数组、lease 或 callback。
  */
 
-import type { ToolEffect, SessionInputContent, SessionUserMessage, SessionAgentContent, SessionInteractionPort, SessionDescriptor, SessionHookContextBlock, ModelRequestFailureNotice, SessionCallContext } from "@downcity/type";
+import type { ModelClient, ToolEffect, SessionInputContent, SessionUserMessage, SessionAgentContent, SessionInteractionPort, SessionDescriptor, SessionHookContextBlock, ModelRequestFailureNotice, SessionCallContext } from "@downcity/type";
 import type { SessionAssistantOutput, SessionAssistantResultBatch } from "@/types/turn/SessionAssistantOutput.js";
 import type { AgentSessionActionCallback, AgentSessionActionEvent } from "@/types/sdk/AgentSessionAction.js";
 
@@ -23,6 +23,8 @@ export type SessionTurnInputInput = Omit<SessionInputContent, "input_id"> & {
  * 该类型只服务 SDK 内部装配，不代表另一种运行上下文。
  */
 export interface SessionTurnContextInit extends SessionCallContext {
+  /** Turn 开始时从所属 Agent 读取的模型；后续 Agent 重配不改变本次执行依赖。 */
+  model?: ModelClient;
   /** 当前执行所属的 Session 标识。 */
   session_id: string;
 
@@ -67,6 +69,8 @@ export interface SessionTurnContextInit extends SessionCallContext {
  * 一个 Session Turn 的执行上下文中台。
  */
 export interface SessionTurnContext {
+  /** 本轮唯一的模型执行依赖，整个 Turn 和本轮压缩共用；没有模型的恢复收口可以为空。 */
+  readonly model: ModelClient | undefined;
   /** 当前运行的稳定身份与项目归属。 */
   readonly session: SessionDescriptor & {
     /** 当前执行所属的 Session 标识。 */

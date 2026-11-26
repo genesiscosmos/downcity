@@ -1,6 +1,5 @@
 /** Memory Job 的非秘密模型身份；提交时捕获，跨重试保持不变。 */
 import type { ModelReference } from "@downcity/type";
-import type { MemoryAccessContext } from "./MemoryAccess.js";
 
 /** 可以安全保存到 Job 的精确模型来源。 */
 export interface MemoryModelBinding {
@@ -10,10 +9,8 @@ export interface MemoryModelBinding {
   binding_id: string;
 }
 
-/** 可信宿主按 Job 所属 Agent/Workspace 读取默认或已配置模型，不执行模型请求。 */
+/** 可信宿主读取已选执行 Agent 的模型定义，不选择模型，也不执行模型请求。 */
 export type MemoryModelResolver = (
-  /** Job 的固定执行范围。 */
-  access: MemoryAccessContext,
-  /** 配置指定的模型；缺省时读取所属 Agent 默认模型。 */
-  model?: ModelReference,
+  /** 已登记执行 Agent；只读取其当前配置。 */
+  agent_id: string,
 ) => Promise<MemoryModelBinding | undefined>;

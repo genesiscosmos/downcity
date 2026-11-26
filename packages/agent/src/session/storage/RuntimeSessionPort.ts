@@ -25,7 +25,6 @@ export interface CreateRuntimeSessionPortParams extends SessionDescriptor {
   /** 从 Session 读取当前项目，不持有过期目录副本。 */
   get_workspace_id: () => string | undefined;
   /** 获取当前 Session 优先解析后的运行时模型实例。 */
-  get_model: SessionPort["get_model"];
   /** 读取全部 canonical Session Message。 */
   messages: SessionPort["messages"];
   /**
@@ -70,7 +69,6 @@ export function create_runtime_session_port(
     id: params.session_id,
     ...normalize_session_descriptor(params),
     get workspace_id() { return params.get_workspace_id(); },
-    get_model: () => params.get_model(),
     messages: async () => await params.messages(),
     prompt: async (input) => {
       await params.ensure_ready_for_execution();

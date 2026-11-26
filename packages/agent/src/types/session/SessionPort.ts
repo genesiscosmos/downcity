@@ -6,7 +6,7 @@
  * - 不暴露具体 Session class，也不包含 Session 集合管理能力。
  */
 
-import type { ModelClient, SessionAgentContent, SessionUserContent, SessionMessage, SessionMutationSubscriber, SessionMutationUnsubscribe, SessionDescriptor } from "@downcity/type";
+import type { SessionAgentContent, SessionUserContent, SessionMessage, SessionMutationSubscriber, SessionMutationUnsubscribe, SessionDescriptor } from "@downcity/type";
 import type { AgentSessionPromptInput } from "@/types/sdk/AgentSessionPrompt.js";
 import type { AgentSessionStopResult } from "@/types/sdk/AgentSessionStop.js";
 import type { AgentSessionTurnHandle } from "@/types/sdk/AgentSessionTurn.js";
@@ -20,9 +20,6 @@ export interface SessionPort extends SessionDescriptor {
 
   /** 当前执行项目标识；切换工作区后读取最新值。 */
   readonly workspace_id?: string;
-
-  /** 获取当前 Session 优先解析后的运行时模型实例。 */
-  get_model(): ModelClient | undefined;
 
   /** 读取全部 canonical Session Message。 */
   messages(): Promise<SessionMessage[]>;

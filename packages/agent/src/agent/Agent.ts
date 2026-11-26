@@ -7,9 +7,9 @@
  * - Session 由 AgentSessions 统一持有；Workspace 只在单个 Session 创建或恢复时提供。
  * - Agent 自己那条会话由 `session()` 暴露；它是一条普通 Session。
  */
-import { normalize_agent_role, same_model } from "@downcity/type";
+import { normalize_agent_role } from "@downcity/type";
 import { safe_error_diagnostic } from "@/utils/logger/SafeErrorDiagnostic.js";
-import type { CityRuntime, ModelReference, ModelClient, AgentTool as Tool, StorageProvider, ToolCallContext, ToolHookSet, WorkspaceRuntime, SessionTurnCommittedHookValue, SessionSystemMessage } from "@downcity/type";
+import type { CityRuntime, ModelClient, AgentTool as Tool, StorageProvider, ToolCallContext, ToolHookSet, WorkspaceRuntime, SessionTurnCommittedHookValue, SessionSystemMessage } from "@downcity/type";
 import { create_instruction_system_blocks, normalize_instruction_input } from "@/agent/AgentInstructions.js";
 import type { AgentOptions, AgentSessionConstructor } from "@/types/agent/AgentOptions.js";
 import type { AgentBehavior } from "@/types/agent/AgentBehavior.js";
@@ -108,7 +108,6 @@ export class Agent {
   private completions?: SessionCompletions;
   /** 宿主负责恢复模型与消息订阅的幂等装配入口。 */
   private readonly prepare_work_session: AgentOptions["prepare_work_session"];
-  private readonly resolve_work_model: AgentOptions["resolve_work_model"];
 
   /** Agent 释放状态。 */
   private dispose_promise?: Promise<void>;
@@ -137,7 +136,6 @@ export class Agent {
     this.workspace = options.workspace;
     this.resolve_work_workspace = options.resolve_work_workspace;
     this.prepare_work_session = options.prepare_work_session;
-    this.resolve_work_model = options.resolve_work_model;
     this.instruction = normalize_instruction_input(options.instruction);
     this.session_class = options.session_class;
     this.session_composer = options.session_composer;
@@ -171,12 +169,7 @@ export class Agent {
       get_agent_description: () => this.agent_description,
       logger: this.logger,
       get_instruction: () => [...this.get_instructions()],
-      get_agent_model: () => this.model,
-      resolve_model: async (model, workspace) => {
-        if (this.model && same_model(this.model.model_reference, model)) return this.model;
-        if (!this.resolve_work_model) throw new Error(`Host cannot restore Session model: ${model.id}`);
-        return await this.resolve_work_model(model, workspace);
-      },
+      agent: this,
       observe_session: (session) => this.interaction_collection.observe_session(session),
       session_class: this.session_class,
       session_composer: this.session_composer,
@@ -609,13 +602,8 @@ export class Agent {
     const storage = this.resolve_storage();
     const resolve_workspace = async (workspace_id: string): Promise<WorkspaceRuntime> =>
       await this.resolve_project_workspace(workspace_id);
-    const prepare_session = async (session: AgentSession, model?: ModelReference): Promise<void> => {
-      await this.prepare_work_session?.(session, model);
-      if (model) {
-        if (!this.resolve_work_model) throw new Error("Session model selection is not configured by the host");
-        const workspace = session.workspace_id ? await this.resolve_project_workspace(session.workspace_id) : undefined;
-        await session.set({ model: await this.resolve_work_model(model, workspace) });
-      }
+    const prepare_session = async (session: AgentSession): Promise<void> => {
+      await this.prepare_work_session?.(session);
     };
     this.delegations = new SessionDelegations({
       agent_id: this.id,
@@ -624,10 +612,6 @@ export class Agent {
       ensure_work_session: async (session_id, workspace, delegation_depth, child_descriptor) =>
         await this.session_manager.ensure_work_session(session_id, workspace, delegation_depth, child_descriptor),
       prepare_session,
-      validate_model: async (model, workspace) => {
-        if (!this.resolve_work_model) throw new Error("Session model selection is not configured by the host");
-        await this.resolve_work_model(model, workspace);
-      },
       get_work_session: async (session_id) => await this.restore_work_session(session_id, SESSION_TYPE_WORK),
       get_parent_session: async (caller) => {
         const parent_agent = this.resolve_work_agent(caller.agent_id);

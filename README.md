@@ -38,7 +38,7 @@ Downcity provides a reusable runtime for Agents, models, tools, tasks, memory, a
 - Manage Agent identities and registered Workspaces independently in the user-level Downcity data directory.
 - Use `downcity on`, `downcity status`, and `downcity off` to manage the CLI City host. Agents share the host lifecycle.
 - Create Sessions, send messages, and inspect history through the CLI or SDK.
-- Use `downcity downtown` to manage independent Downtown connections and discover models and services.
+- Use `downcity towns` to manage independent Downtown connections and discover models and services.
 - Combine Workspace file/Shell tools with built-in and application-defined Powers.
 
 ## Platform Support
@@ -63,7 +63,7 @@ npm install -g downcity
 pnpm add -g downcity
 ```
 
-Install Node.js and npm (or pnpm) first. The package exposes `downcity` (alias `city`) and the Downtown server manager, `downtown`:
+Install Node.js and npm (or pnpm) first. The package exposes `downcity` (alias `city`) and the Downtown server manager, `downtown` (alias `town`). `town` and `downtown` share the same entry point; `town deploy` is equivalent to `downtown deploy`:
 
 ```bash
 downcity --version
@@ -76,21 +76,21 @@ Upgrade with `npm install -g downcity@latest`. Use `downtown --help` for server 
 You need an accessible Downtown server with a model available to your account. Replace the example URL with your server address:
 
 ```bash
-downcity downtown add https://your-downtown.example.com --name primary
-downcity downtown list
+downcity towns add https://your-downtown.example.com --name primary
+downcity towns list
 ```
 
-Replace `CONNECTION_ID` below with the connection ID returned above. Sign-in is interactive and applies to that connection:
+Use the same server URL to sign in. Sign-in is interactive and applies to that connection:
 
 ```bash
-downcity downtown login CONNECTION_ID
-downcity downtown models
-downcity downtown services
+downcity towns login https://your-downtown.example.com
+downcity towns models
+downcity towns services
 ```
 
 ### 3. Register a Workspace and create an Agent
 
-Run this inside your project. Replace `MODEL_ID` with the exact `model_id` from `downcity downtown models`:
+Run this inside your project. Replace `MODEL_ID` with the exact `model_id` from `downcity towns models`:
 
 ```bash
 downcity workspace register .

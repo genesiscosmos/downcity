@@ -1,4 +1,4 @@
-/** Inbox 侧栏列表：复用宿主双行条目，状态统一显示在每项菜单按钮内部。 */
+/** Inbox 收件预览：来源与时间为首行，事项标题及可选摘要顺序阅读，复用宿主行和菜单。 */
 import type { PowerSidebarComponentProps } from "@downcity/city/power/react";
 import type { InboxEntry } from "../types/Inbox.js";
 import { full_time, relative_time } from "./InboxEntries.js";
@@ -19,9 +19,12 @@ export function InboxList({ entries, selected_key, busy, choose, update_notifica
   const { SidebarItem, ItemMenu } = props.ui.components;
   return <>{entries.map((entry) => {
     const needs_attention = entry.unread && (!entry.pending || entry.pending.interaction.can_respond);
-    return <SidebarItem key={entry.key}
-    label={<span className="inbox-item-title" data-unread={needs_attention} title={entry.title}>{entry.title}</span>}
-    description={<span className="inbox-list-meta"><span title={entry.source}>{entry.source}</span><time dateTime={new Date(entry.created_at).toISOString()} title={full_time(entry.created_at)}>{relative_time(entry.created_at)}</time></span>}
+    return <div className="inbox-list-row" key={entry.key}><SidebarItem
+    label={<span className="inbox-list-meta"><span title={entry.source}>{entry.source}</span><time dateTime={new Date(entry.created_at).toISOString()} title={full_time(entry.created_at)}>{relative_time(entry.created_at)}</time></span>}
+    description={<span className="inbox-item-preview">
+      <span className="inbox-item-title" data-unread={needs_attention} title={entry.title}>{entry.title}</span>
+      {entry.summary && entry.summary !== entry.title ? <span className="inbox-item-summary">{entry.summary}</span> : null}
+    </span>}
     leading={<InboxAvatar entry={entry} size="list" options={options} />}
     active={selected_key === entry.key}
     on_select={() => void choose(entry)}
@@ -33,6 +36,6 @@ export function InboxList({ entries, selected_key, busy, choose, update_notifica
           { action_id: "clear_update", label: "清除此通知", separator_before: !entry.unread, disabled: busy, on_select: () => update_notifications("clear", entry) },
         ] : []),
       ]} />}
-    />;
+    /></div>;
   })}</>;
 }

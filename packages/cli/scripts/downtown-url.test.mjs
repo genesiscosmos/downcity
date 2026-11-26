@@ -15,7 +15,7 @@ const cli = fileURLToPath(new URL("../bin/downcity.js", import.meta.url));
 test("登记、改名、移除和恢复只需 URL，普通输出隐藏内部身份", async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), "downtown-url-"));
   const environment = { ...process.env, DOWNCITY_DOWNTOWN_URL: "", DOWNCITY_USER_TOKEN: "" };
-  const call = async (...args) => (await execute(process.execPath, [cli, "downtown", ...args, "--root", root], { env: environment })).stdout;
+  const call = async (...args) => (await execute(process.execPath, [cli, "towns", ...args, "--root", root], { env: environment })).stdout;
   try {
     const first = await call("add", "HTTPS://EXAMPLE.COM:443/", "--name", "Team");
     assert.equal(first.includes("downtown_id"), false);
@@ -30,7 +30,7 @@ test("登记、改名、移除和恢复只需 URL，普通输出隐藏内部身�
     const restored = JSON.parse(await call("list", "--json")).items;
     assert.equal(restored[0].name, "Renamed");
     assert.equal(restored[0].downtown_id, list[0].downtown_id);
-    const help = (await execute(process.execPath, [cli, "downtown", "call", "--help"], { env: environment })).stdout;
+    const help = (await execute(process.execPath, [cli, "towns", "call", "--help"], { env: environment })).stdout;
     assert.match(help, /--downtown <url>/);
     assert.doesNotMatch(help, /--connection/);
   } finally { await rm(root, { recursive: true, force: true }); }

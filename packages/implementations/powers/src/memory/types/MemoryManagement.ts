@@ -40,8 +40,8 @@ export interface MemoryConfigSnapshot {
   };
   /** Power 自身的处理配置，切换知识后端不改变其归属。 */
   processing: {
-    /** 初始化时固定的 Memory Session 模型；省略时跟随执行 Agent 默认模型。 */
-    model?: ModelReference;
+    /** 已登记的专用执行 Agent；省略时使用请求所属 Agent。 */
+    execution_agent_id?: string;
   };
 }
 

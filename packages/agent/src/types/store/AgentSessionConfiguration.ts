@@ -2,7 +2,6 @@
  * Agent DB 中拆分配置及 Composer checkpoint 的可序列化写协议。
  * 明确 null 与省略语义，避免 JSON IPC 将 undefined 误当作清空设置。
  */
-import type { SessionModelBinding } from "./SessionModelBinding.js";
 import type { SessionExecutionProfileReference } from "../agent/SessionExecutionProfile.js";
 
 /** 一次 configured 值提交，身份、计数和来源不允许由调用方覆盖。 */
@@ -21,8 +20,6 @@ export interface AgentSessionConfigurationUpdate {
   timezone?: string;
   /** 省略保留，null 恢复未显式设置。 */
   approval_mode?: "ask" | "always-allow" | null;
-  /** 省略保留，显式覆盖仍记录可靠模型身份。 */
-  model_binding?: SessionModelBinding;
   /** 省略保留，已有非空引用仅接受语义同值重入。 */
   execution_profile?: SessionExecutionProfileReference;
   /** 省略保留，null 移除显式快照；非空内容不得隐式截断。 */

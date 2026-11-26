@@ -84,7 +84,6 @@ export async function create_cli_agent(input: {
     instruction: input.config.instruction || behavior.instruction,
     model: model ?? behavior.model,
     tools: { ...tools, ...behavior.tools },
-    resolve_work_model: async (model) => await resolve_cli_agent_model(model, input.town),
   });
 }
 

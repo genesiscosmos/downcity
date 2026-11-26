@@ -3,8 +3,8 @@
  *
  * 关键点（中文）
  * - 三个动作：`image.models`、`image.create`、`image.result`；写文件或消耗额度的动作声明为 write。
- * - 图片 AI 通过 Town 统一模型 ID 路由；本地图片读取以当前 Workspace 为根。
- * - `result` 把远端图片落到动作组私有目录，只返回本地路径，不注入 Agent 消息。
+ * - 图片 AI 通过 PowerContext.city.town 按结构化模型引用路由；本地图片读取以当前 Workspace 为根。
+ * - `result` 把远端图片落到当前 Power 私有目录，只返回本地路径，不注入 Agent 消息。
  */
 import { downtown_model_schema } from "../../model-reference.js";
 import { same_model } from "@downcity/type";
@@ -12,7 +12,7 @@ import { z } from "zod";
 import { setTimeout as wait_for_poll } from "node:timers/promises";
 import type { PowerJsonValue } from "@/power/index.js";
 import type { PowerTown } from "@/power/types/PowerTown.js";
-import type { CityPowerContext } from "@/city/types/CityPowerContext.js";
+import type { PowerContext } from "@/power/types/PowerContext.js";
 import type {
   ImageCreateInput,
   ImageJobCreateResult,
@@ -42,11 +42,11 @@ const DEFAULT_POLL_MS = 1_500;
 const MAX_WAIT_MS = 10 * 60_000;
 
 /** 图片仅使用受限 Town 路由；无路由时明确失败，不回退到单连接。 */
-function require_image_models(context: CityPowerContext): PowerTown["models"] {
-  if (!context.town) {
+function require_image_models(context: PowerContext): PowerTown["models"] {
+  if (!context.city.town) {
     throw new CityActionError({ code: "unsupported_action", message: "image actions require City Town model routing." });
   }
-  return context.town.models;
+  return context.city.town.models;
 }
 
 /** 判断任务状态是否为终态。 */
@@ -68,7 +68,7 @@ function clamp_wait_ms(value: number): number {
 
 /** 拉取一次任务状态并校验。 */
 async function fetch_job_once(
-  context: CityPowerContext,
+  context: PowerContext,
   job_id: string,
 ): Promise<ImageJobResult> {
   const current = await require_image_models(context)
@@ -82,7 +82,7 @@ async function fetch_job_once(
 
 /** 查询任务状态，必要时阻塞等待到终态。 */
 async function read_job_result(
-  context: CityPowerContext,
+  context: PowerContext,
   input: { job_id: string; until_done?: boolean; max_wait_ms?: number; poll_interval_ms?: number },
 ): Promise<ImageJobResult> {
   const first = await fetch_job_once(context, input.job_id);
@@ -117,7 +117,7 @@ class ImageModelsAction extends CityAction {
 
   protected async run(
     _args: Record<string, never>,
-    context: CityPowerContext,
+    context: PowerContext,
   ): Promise<ReturnType<typeof normalize_image_models>> {
     const catalog = await require_image_models(context).list({ modality: "image", signal: context.abort_signal });
     const models = catalog.items as ImageModel[];
@@ -169,14 +169,14 @@ class ImageCreateAction extends CityAction<z.infer<typeof image_create_input>> {
 
   protected async run(
     args: z.infer<typeof image_create_input>,
-    context: CityPowerContext,
+    context: PowerContext,
   ): Promise<ImageJobCreateResult> {
     const models = require_image_models(context);
     // 本地文件解析可能异步；先捕获用户选定模型的身份，发送时由 Town 再次核验。
     const binding_id = models.client(args.model).binding_id;
     const payload = normalize_image_payload({ ...args, model: args.model.id } as PowerJsonValue);
     const resolved = await normalize_image_create_input({
-      workspace_path: context.workspace_path,
+      workspace_path: context.workspace?.path ?? null,
       payload: payload as ImageCreateInput,
     });
     const { model: _model, ...input } = resolved;
@@ -222,7 +222,7 @@ class ImageResultAction extends CityAction<z.infer<typeof image_result_input>> {
 
   protected async run(
     args: z.infer<typeof image_result_input>,
-    context: CityPowerContext,
+    context: PowerContext,
   ): Promise<ImageResultOutput> {
     const normalized = normalize_image_result_input(args as PowerJsonValue);
     const current = await read_job_result(context, normalized);
@@ -236,10 +236,7 @@ class ImageResultAction extends CityAction<z.infer<typeof image_result_input>> {
       return { job_id: current.job_id, status: current.status, files: [] };
     }
     const localized = await localize_image_result({
-      context: {
-        files: context.files,
-        ...(context.abort_signal ? { abort_signal: context.abort_signal } : {}),
-      },
+      context,
       job_id: current.job_id,
       result: current.result,
     });

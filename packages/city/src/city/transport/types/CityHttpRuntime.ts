@@ -5,7 +5,6 @@
  * Agent HTTP router，避免路由层理解本地 Store 的实现。
  */
 
-import type { AgentSessionModelResolver } from "@/city/transport/types/AgentSessionModelResolver.js";
 import type { Agent } from "@downcity/agent";
 import type { AgentPowerRuntime } from "@/power/types/PowerExecutionRuntime.js";
 import type { WorkspaceRuntime } from "@/workspace/index.js";
@@ -41,15 +40,6 @@ export interface CityHttpRuntimeOptions {
     /** 待访问的 Agent。 */ readonly agent: Agent;
     /** 原始请求，供宿主使用现有认证策略。 */ readonly request: Request;
   }) => boolean | Promise<boolean>;
-  /** 为指定 Agent 创建远程 Session 所需的模型解析器。 */
-  resolve_session_model?: (input: {
-    /** 当前请求已经解析出的 Agent 实例。 */
-    readonly agent: Agent;
-    /** 当前请求已经进入的 Workspace 实例。 */
-    readonly workspace: WorkspaceRuntime;
-    /** 远程 Session 请求指定的结构化模型引用。 */
-    readonly model: ModelReference;
-  }) => ReturnType<AgentSessionModelResolver>;
 
   /** 为一个 Agent 组合 Auth、控制台和应用专属路由。 */
   create_agent_extension?: (input: {

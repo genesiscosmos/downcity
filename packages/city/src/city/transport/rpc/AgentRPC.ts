@@ -71,7 +71,6 @@ export class AgentRPC {
           sessions: this.session_collection,
           workspace: this.workspace,
           get_agent_context: undefined,
-          resolve_session_model: this.runtime_options.resolve_session_model,
           reload_workspace_env: this.runtime_options.reload_workspace_env,
         });
         return {

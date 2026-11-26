@@ -7,12 +7,12 @@ import type { AgentSessionInfo } from "@/types/agent/SessionTypes.js";
 import type { SessionInformationInput } from "@/types/session/SessionInformation.js";
 import { build_session_info } from "./storage/SessionInfoProjection.js";
 
-/** 存储标签优先；不以显示标签推导模型身份。 */
+/** 运行时详情投影当前继承模型；历史消息里的模型事实独立保留。 */
 export async function read_session_information(input: SessionInformationInput): Promise<AgentSessionInfo> {
   const metadata = await input.store.read_metadata();
-  const model_label = String(metadata.model_label || read_model_label(input.model) || "").trim();
+  const model_label = read_model_label(input.model);
   return build_session_info({ agent_id: input.agent_id,
     session_id: input.session_id, executing: input.executing,
-    metadata: { ...metadata, ...(model_label ? { model_label } : {}) },
+    metadata: { ...metadata, model_label },
   });
 }

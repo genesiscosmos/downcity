@@ -18,7 +18,7 @@ import path from "node:path";
 import fs from "node:fs/promises";
 import { DatabaseSync } from "node:sqlite";
 import { MockModelClient } from "../../agent/scripts/ModelClientMock.mjs";
-import { Agent } from "@downcity/agent";
+import { Agent, DefaultSessionComposer } from "@downcity/agent";
 import { City } from "../bin/index.js";
 import { LocalStorageProvider, Workspace } from "@downcity/city";
 /** Locate only this test's isolated Agent database; session_id selects its configuration row. */
@@ -517,7 +517,7 @@ test("empty Session snapshot suppresses Agent instruction after restart", async 
   }
 });
 
-test("running session model changes apply with steer at the next Session step", async () => {
+test("Agent model changes preserve every Step of the active Turn and apply next Turn", async () => {
   const agent_path = await fs.mkdtemp(
     path.join(os.tmpdir(), "downcity-session-step-boundary-"),
   );
@@ -556,9 +556,14 @@ test("running session model changes apply with steer at the next Session step", 
       }),
     },
   });
+  const compact_models = [];
+  class ModelBoundaryComposer extends DefaultSessionComposer {
+    async advance_context(input) { compact_models.push(input.model?.id); return false; }
+  }
   const agent = new Agent({
     id: "session_step_boundary_agent",
     model: old_model,
+    session_composer: new ModelBoundaryComposer(),
   });
   const workspace = new Workspace({ id: "test_workspace", path: agent_path, data_root_path: path.join(agent_path, "data") });
   const city = new City({ workspaces: [workspace] });
@@ -570,7 +575,6 @@ test("running session model changes apply with steer at the next Session step", 
       workspace,
       session_id: "session_step_boundary_session",
     });
-    await session.set({ model: old_model });
     const mutations = [];
     const unsubscribe = session.subscribe((mutation) => {
       mutations.push(mutation);
@@ -578,10 +582,10 @@ test("running session model changes apply with steer at the next Session step", 
     const first_turn = await session.prompt({ actor: { kind: "user", user_id: "local" }, query: "first" });
     await old_model_started.promise;
 
-    await session.set({
-      model: new_model,
-      security: { approval_mode: "always-allow" },
-    });
+    agent.reconfigure({ model: new_model });
+    assert.equal(session.get("model"), new_model); // 配置展示直接读取 Agent，执行仍属于旧 Turn。
+    const compact = session.compact();
+    await session.set({ security: { approval_mode: "always-allow" } });
     const steer_turn_promise = session.prompt({ actor: { kind: "user", user_id: "local" }, query: "continue" });
     assert.deepEqual(model_calls, ["old-model"]);
 
@@ -590,7 +594,11 @@ test("running session model changes apply with steer at the next Session step", 
     assert.equal((await first_turn.finished).success, true);
     assert.equal(steer_turn.id, first_turn.id);
     assert.equal((await steer_turn.finished).success, true);
-    assert.deepEqual(model_calls, ["old-model", "new-model"]);
+    assert.deepEqual(model_calls, ["old-model", "old-model"]);
+    await compact;
+    assert.deepEqual(compact_models, ["old-model"]);
+    assert.equal((await (await session.prompt({ query: "next Turn" })).finished).success, true);
+    assert.deepEqual(model_calls, ["old-model", "old-model", "new-model"]);
 
     const messages = await session.messages();
     const model_actions = read_action_records(messages.items).filter(
@@ -598,19 +606,10 @@ test("running session model changes apply with steer at the next Session step", 
         message.type === "action" &&
         message.title === "Session configuration updated" &&
         message.description ===
-          "model: new-model; security.approval_mode: always-allow",
+          "security.approval_mode: always-allow",
     );
     assert.equal(model_actions.length, 1);
     assert.equal(model_actions[0].state, "completed");
-    assert.equal(
-      mutations.some(
-        (mutation) =>
-          mutation.variant === "session" &&
-          mutation.type === "config" &&
-          mutation.model_label === "new-model",
-      ),
-      true,
-    );
     assert.equal(
       read_action_mutations(mutations).some(
         (mutation) =>
@@ -619,7 +618,7 @@ test("running session model changes apply with steer at the next Session step", 
           mutation.message.state === "completed" &&
           mutation.message.title === "Session configuration updated" &&
           mutation.message.description ===
-            "model: new-model; security.approval_mode: always-allow",
+            "security.approval_mode: always-allow",
       ),
       true,
     );
@@ -782,7 +781,7 @@ test("session set options independently control Action persistence and Mutation 
     });
 
     await session.set(
-      { model: first_model },
+      { security: { approval_mode: "ask" } },
       { persist_action: false, publish_mutation: false },
     );
     assert.equal((await (await session.prompt({ actor: { kind: "user", user_id: "local" }, query: "first" })).finished).success, true);
@@ -797,7 +796,7 @@ test("session set options independently control Action persistence and Mutation 
 
     mutations.splice(0, mutations.length);
     await session.set(
-      { model: second_model },
+      { security: { approval_mode: "always-allow" } },
       { publish_mutation: false },
     );
     assert.equal((await (await session.prompt({ actor: { kind: "user", user_id: "local" }, query: "second" })).finished).success, true);
@@ -805,7 +804,7 @@ test("session set options independently control Action persistence and Mutation 
       read_action_records((await session.messages()).items).some(
         (message) =>
           message.type === "action" &&
-          message.description === "model: set-options-second-model",
+          message.description === "security.approval_mode: always-allow",
       ),
       true,
     );
@@ -823,7 +822,7 @@ test("session set options independently control Action persistence and Mutation 
         message.type === "action" &&
         message.title === "Session configuration updated",
     ).length;
-    await session.set({ model: second_model });
+    await session.set({ security: { approval_mode: "always-allow" } });
     assert.equal((await (await session.prompt({ actor: { kind: "user", user_id: "local" }, query: "duplicate" })).finished).success, true);
     assert.equal(
       read_action_records((await session.messages()).items).filter(
@@ -877,7 +876,6 @@ test("restored Session rebinds the same model without emitting a configuration M
     const session = await first_agent.sessions.create({ workspace });
     session_id = session.id;
     await session.set({
-      model: create_model(),
       security: { approval_mode: "always-allow" },
     });
     assert.equal((await (await session.prompt({ actor: { kind: "user", user_id: "local" }, query: "persist" })).finished).success, true);
@@ -911,7 +909,6 @@ test("restored Session rebinds the same model without emitting a configuration M
     });
 
     await session.set({
-      model: create_model(),
       security: { approval_mode: "always-allow" },
     });
     assert.equal((await (await session.prompt({ actor: { kind: "user", user_id: "local" }, query: "restore" })).finished).success, true);
@@ -970,7 +967,6 @@ test("config remains effective when its action message cannot be persisted", asy
       workspace,
       session_id: "config_action_observability_session",
     });
-    await session.set({ model: old_model });
     const initial_turn = await session.prompt({ actor: { kind: "user", user_id: "local" }, query: "initialize model" });
     assert.equal((await initial_turn.finished).success, true);
     model_calls.splice(0, model_calls.length);
@@ -982,7 +978,7 @@ test("config remains effective when its action message cannot be persisted", asy
       throw new Error("action store unavailable");
     };
 
-    await session.set({ model: new_model });
+    agent.reconfigure({ model: new_model });
     const turn = await session.prompt({ actor: { kind: "user", user_id: "local" }, query: "use configured model" });
     assert.equal((await turn.finished).success, true);
     assert.deepEqual(model_calls, ["new"]);

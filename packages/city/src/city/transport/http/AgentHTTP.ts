@@ -23,7 +23,6 @@ import type {
   AgentHttpBinding,
   AgentHttpListenOptions,
 } from "@/city/transport/types/AgentHttpBinding.js";
-import type { AgentHttpRuntimeOptions } from "@/city/transport/types/AgentHttpRuntime.js";
 
 const DEFAULT_HTTP_HOST = "127.0.0.1";
 
@@ -47,32 +46,29 @@ export class AgentHTTP {
   private readonly workspace?: WorkspaceRuntime;
   private readonly powers?: AgentPowerRuntime;
   private readonly session_collection: AgentSessionCollection;
-  private readonly runtime_options: AgentHttpRuntimeOptions;
   private cached_router: Hono | null = null;
   private cached_server: AgentHttpServerHandle | null = null;
 
   constructor(
-    agent_or_workspace: Agent | { agent: Agent; workspace: WorkspaceRuntime; powers: AgentPowerRuntime },
-    workspace_or_options?: WorkspaceRuntime | AgentHttpRuntimeOptions,
-    runtime_options: AgentHttpRuntimeOptions = {},
+    agent_or_workspace: Agent | {
+      /** 路由服务的本地 Agent。 */
+      agent: Agent;
+      /** 当前路由引用的 Workspace。 */
+      workspace: WorkspaceRuntime;
+      /** 当前路由的 Power 执行范围。 */
+      powers: AgentPowerRuntime;
+    },
+    workspace?: WorkspaceRuntime,
   ) {
-    if (workspace_or_options && "id" in workspace_or_options && "path" in workspace_or_options) {
-      const agent = "agent" in agent_or_workspace ? agent_or_workspace.agent : agent_or_workspace;
-      this.agent = agent;
-      this.workspace = workspace_or_options;
-      this.powers = "agent" in agent_or_workspace
-        ? agent_or_workspace.powers
-        : undefined;
-      this.session_collection = agent.sessions;
-      this.runtime_options = runtime_options;
-      return;
+    if ("agent" in agent_or_workspace) {
+      this.agent = agent_or_workspace.agent;
+      this.workspace = agent_or_workspace.workspace;
+      this.powers = agent_or_workspace.powers;
+    } else {
+      this.agent = agent_or_workspace;
+      this.workspace = workspace;
     }
-      const entry = agent_or_workspace as { agent?: Agent; workspace?: WorkspaceRuntime; powers?: AgentPowerRuntime };
-      this.agent = entry.agent || agent_or_workspace as Agent;
-      this.workspace = entry.workspace;
-      this.powers = entry.powers;
-      this.session_collection = this.agent.sessions;
-    this.runtime_options = (workspace_or_options as AgentHttpRuntimeOptions | undefined) ?? {};
+    this.session_collection = this.agent.sessions;
   }
 
   /**
@@ -85,9 +81,7 @@ export class AgentHTTP {
   router(): Hono {
     if (this.cached_router) return this.cached_router;
     const router = new Hono();
-    register_sdk_session_routes(router, this.session_collection, this.workspace, {
-      resolve_session_model: this.runtime_options.resolve_session_model,
-    });
+    register_sdk_session_routes(router, this.session_collection, this.workspace);
     register_sdk_interaction_routes(router, this.agent);
     if (this.powers) register_runtime_routes(router, this.powers);
     this.cached_router = router;

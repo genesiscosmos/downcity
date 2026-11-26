@@ -6,6 +6,7 @@
  */
 
 import { nanoid } from "nanoid";
+import { find_idle_fallback_member } from "@/group/IdleFallbackSelection.js";
 import type {
   GroupDispatchInput,
   GroupDispatchResult,
@@ -13,8 +14,11 @@ import type {
   GroupDispatchTurnRecord,
 } from "@/types/group/GroupDispatch.js";
 import type {
+  DispatchBooleanDecision,
   DispatchDecision,
+  DispatchMemberDecision,
   DispatchMemberProfile,
+  DispatchTrigger,
 } from "@/types/group/DispatchStrategy.js";
 import type { GroupSessionDataStore } from "@/types/group/GroupSessionStore.js";
 
@@ -80,6 +84,7 @@ export class GroupDispatchRuntime {
       trigger: input.trigger,
       message_id: input.current_message.id,
       pending_message_ids: input.pending_messages.map((message) => message.id),
+      require_response: input.trigger === "user" && input.require_response === true,
       status: "queued",
       created_at,
       updated_at: created_at,
@@ -148,7 +153,7 @@ export class GroupDispatchRuntime {
       });
       abort_controller.signal.throwIfAborted();
       if (this.stopping || this.disposed) throw new GroupDispatchStoppedError();
-      const decision = normalize_dispatch_decision(strategy_decision, input.members);
+      const decision = normalize_dispatch_decision(strategy_decision, input.members, input.trigger, input.require_response === true);
       await store.append_dispatch_turn({
         ...queued_turn,
         status: "completed",
@@ -213,6 +218,8 @@ export class GroupDispatchRuntime {
 function normalize_dispatch_decision(
   decision: DispatchDecision,
   members: readonly DispatchMemberProfile[],
+  trigger: DispatchTrigger,
+  require_response: boolean,
 ): DispatchDecision {
   if (!Array.isArray(decision?.member_ids)) throw new Error("Group dispatch requires member_ids");
   const valid_member_ids = new Set(members.map((member) => member.agent_id));
@@ -229,15 +236,51 @@ function normalize_dispatch_decision(
     for (const member_decision of decision.member_decisions) {
       if (!valid_member_ids.has(member_decision.agent_id) || audited_ids.has(member_decision.agent_id)
         || typeof member_decision.selected !== "boolean"
-        || member_decision.selected !== selected_ids.has(member_decision.agent_id)) {
+        || member_decision.selected !== selected_ids.has(member_decision.agent_id)
+        || member_decision.trigger !== trigger
+        || !has_consistent_member_factors(member_decision)) {
         throw new Error(`Group dispatch has inconsistent member decision: ${member_decision.agent_id}`);
       }
       audited_ids.add(member_decision.agent_id);
     }
     if (audited_ids.size !== valid_member_ids.size) throw new Error("Group dispatch omitted a member decision");
+    // 始终按配置顺序重建兜底，审计数组重排不能改变同分成员的选择。
+    const decisions_by_id = new Map(decision.member_decisions.map((item) => [item.agent_id, item]));
+    const ordered_decisions = members.map((member) => decisions_by_id.get(member.agent_id)!);
+    const fallback_member_id = find_idle_fallback_member(ordered_decisions, trigger === "user" && require_response);
+    for (const item of ordered_decisions) {
+      if (item.trigger !== "user") continue;
+      const is_fallback = item.agent_id === fallback_member_id;
+      const passes_threshold = item.relevance.true_probability > 0.5 && item.response_need.true_probability > 0.5;
+      if ((item.idle_fallback !== undefined && item.idle_fallback !== true)
+        || (item.idle_fallback === true) !== is_fallback
+        || item.selected !== (passes_threshold || is_fallback)) {
+        throw new Error(`Group dispatch has inconsistent idle fallback: ${item.agent_id}`);
+      }
+    }
   }
   return {
     member_ids: [...selected_ids],
     ...(decision.member_decisions ? { member_decisions: decision.member_decisions } : {}),
   };
+}
+
+/** 默认审计必须能由所记因子重建选择结果，避免写入与实际执行矛盾的记录。 */
+function has_consistent_member_factors(decision: DispatchMemberDecision): boolean {
+  if (decision.trigger === "auto") {
+    return is_valid_boolean_decision(decision.continuation, false)
+      && decision.selected === decision.continuation.value;
+  }
+  return is_valid_boolean_decision(decision.relevance, true)
+    && is_valid_boolean_decision(decision.response_need, true);
+}
+
+/** 同时验证原始结论、置信度和还原概率；用户因子不接受缺失置信度。 */
+function is_valid_boolean_decision(decision: DispatchBooleanDecision | undefined, probability_required: boolean): boolean {
+  if (!decision || typeof decision.value !== "boolean") return false;
+  if (decision.probability === undefined) {
+    return !probability_required && decision.true_probability === undefined;
+  }
+  return Number.isFinite(decision.probability) && decision.probability >= 0 && decision.probability <= 1
+    && decision.true_probability === (decision.value ? decision.probability : 1 - decision.probability);
 }

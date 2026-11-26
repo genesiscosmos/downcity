@@ -54,8 +54,6 @@ export interface AgentSessionRecord {
 export interface AgentSessionConfigurationRow {
   /** 配置所属内部 Session 主键。 */
   session_key: number;
-  /** 模型绑定 JSON 或 unknown；缺失时不猜测历史 ID。 */
-  model_binding: string | null;
   /** configured 审批模式。 */
   approval_mode: "ask" | "always-allow" | null;
   /** 不可变执行配置引用 JSON。 */

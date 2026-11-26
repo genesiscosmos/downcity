@@ -10,7 +10,6 @@
 
 import type { CityActionGroup } from "@/city/power/builtin/CityActionGroup.js";
 import { CityGroupPower } from "@/city/power/builtin/CityGroupPower.js";
-import type { CityGroupPowerOptions } from "@/city/power/builtin/CityGroupPower.js";
 import { EnvGroup } from "@/city/power/builtin/groups/EnvGroup.js";
 import { SandboxGroup } from "@/city/power/builtin/groups/SandboxGroup.js";
 import { UsageGroup } from "@/city/power/builtin/groups/UsageGroup.js";
@@ -28,11 +27,8 @@ export class ContextPower extends CityGroupPower {
     "Runtime identity, Workspace, sandbox facts and token usage; execute JavaScript/TypeScript "
     + "against the public downcity application SDK. Discover mounted objects with help first.";
 
-  constructor(options: CityGroupPowerOptions, private readonly runtime: RuntimeService) {
-    super({
-      groups: create_context_action_groups(),
-      options,
-    });
+  constructor(private readonly runtime: RuntimeService) {
+    super(create_context_action_groups());
     this.actions.help = create_help_action(runtime);
     this.actions.execute = create_execute_action(runtime);
   }

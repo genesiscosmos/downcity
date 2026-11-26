@@ -15,6 +15,7 @@ import { normalize_session_descriptor, read_session_call_context } from "@downci
 
 /** SessionTurnContext 的唯一内置实现。 */
 class DefaultSessionTurnContext implements SessionTurnContext {
+  readonly model: SessionTurnContext["model"];
   readonly session: SessionTurnContext["session"];
   readonly interactions: SessionTurnContext["interactions"];
 
@@ -55,6 +56,7 @@ class DefaultSessionTurnContext implements SessionTurnContext {
       execution_id: init.execution_id ?? randomUUID(),
       ...(project_root ? { project_root } : {}),
     });
+    this.model = init.model;
     this.interactions = init.interactions;
 
     this.upstream_abort_signal = init.abort_signal;

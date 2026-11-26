@@ -37,7 +37,7 @@ Downcity 为 Agent、模型、工具、任务、记忆和权限提供一套可�
 - 在用户级 Downcity 数据目录中独立管理 Agent 身份与已登记的 Workspace。
 - 通过 `downcity on`、`downcity status`、`downcity off` 管理 CLI City 宿主，Agent 共享宿主生命周期。
 - 通过 CLI 或 SDK 创建 Session、发送消息和查看历史。
-- 通过 `downcity downtown` 管理独立的 Downtown 连接，发现模型与服务。
+- 通过 `downcity towns` 管理独立的 Downtown 连接，发现模型与服务。
 - 将 Workspace 的文件/Shell 工具与内建、自定义 Power 组合使用。
 
 ## 平台支持
@@ -62,7 +62,7 @@ npm install -g downcity
 pnpm add -g downcity
 ```
 
-请先安装 Node.js 和 npm（或 pnpm）。安装包提供 `downcity`（别名 `city`）和 Downtown 服务端管理命令 `downtown`：
+请先安装 Node.js 和 npm（或 pnpm）。安装包提供 `downcity`（别名 `city`）和 Downtown 服务端管理命令 `downtown`（别名 `town`）。`town` 与 `downtown` 共用入口，`town deploy` 等价于 `downtown deploy`：
 
 ```bash
 downcity --version
@@ -75,21 +75,21 @@ downcity --version
 你需要一个可访问的 Downtown 服务端，且账户有可用模型。将示例 URL 替换成你的服务地址：
 
 ```bash
-downcity downtown add https://your-downtown.example.com --name primary
-downcity downtown list
+downcity towns add https://your-downtown.example.com --name primary
+downcity towns list
 ```
 
-将下面的 `CONNECTION_ID` 替换成上一步返回的连接 ID。登录通过交互完成，仅作用于该连接：
+使用同一个服务端 URL 登录。登录通过交互完成，仅作用于该连接：
 
 ```bash
-downcity downtown login CONNECTION_ID
-downcity downtown models
-downcity downtown services
+downcity towns login https://your-downtown.example.com
+downcity towns models
+downcity towns services
 ```
 
 ### 3. 登记 Workspace 并创建 Agent
 
-在项目目录执行，将 `MODEL_ID` 替换成 `downcity downtown models` 返回的完整 `model_id`：
+在项目目录执行，将 `MODEL_ID` 替换成 `downcity towns models` 返回的完整 `model_id`：
 
 ```bash
 downcity workspace register .

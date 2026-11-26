@@ -7,7 +7,6 @@
 import { isDeepStrictEqual as is_deep_strict_equal } from "node:util";
 import type { AgentSessionConfigurationUpdate, AgentSessionCheckpointInsert } from "@/types/store/AgentSessionConfiguration.js";
 import type { ContextCheckpointRow } from "@/types/session/ContextCheckpoint.js";
-import { decode_model_binding } from "../ModelBindingCodec.js";
 import { decode_session_message, type SessionMessagePartRow, type SessionMessageRow } from "../SessionStorageCodec.js";
 import { group_context_units } from "../../input/composer/ContextStableUnits.js";
 import { AgentSessionCatalog } from "./AgentSessionCatalog.js";
@@ -30,7 +29,6 @@ export class AgentSessionConfiguration {
         && !is_deep_strict_equal(input.execution_profile, JSON.parse(configuration.execution_profile))) {
         throw new Error("session_execution_profile_conflict");
       }
-      if (input.model_binding !== undefined) decode_model_binding(JSON.stringify(input.model_binding));
       if (input.system_snapshot !== undefined && input.system_snapshot !== null && !input.system_snapshot.trim()) {
         throw new Error("session_system_snapshot_empty");
       }
@@ -39,9 +37,8 @@ export class AgentSessionConfiguration {
         .run(input.title === undefined ? record.title : input.title,
           input.model_label === undefined ? record.model_label : input.model_label,
           input.timezone ?? record.timezone, record.session_key);
-      database.prepare(`UPDATE session_configuration SET model_binding = ?, approval_mode = ?, execution_profile = ?, system_snapshot = ?
+      database.prepare(`UPDATE session_configuration SET approval_mode = ?, execution_profile = ?, system_snapshot = ?
         WHERE session_key = ?`).run(
-        input.model_binding === undefined ? configuration.model_binding : JSON.stringify(input.model_binding),
         input.approval_mode === undefined ? configuration.approval_mode : input.approval_mode,
         input.execution_profile === undefined ? configuration.execution_profile : JSON.stringify(input.execution_profile),
         input.system_snapshot === undefined ? configuration.system_snapshot : input.system_snapshot,

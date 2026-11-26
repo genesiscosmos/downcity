@@ -75,6 +75,8 @@ export interface SessionPromptLookupOptions {
 
 /** SessionLoop 构造参数。 */
 export interface SessionLoopOptions extends SessionCallContext {
+  /** 所属 Agent 的权威模型定义，只在 Turn 创建时读取一次。 */
+  agent: Pick<import("@/agent/Agent.js").Agent, "model">;
   /** Turn 实际执行（包括恢复）的宿主租约，覆盖完整收尾。 */
   acquire_execution?: () => () => void;
   /** Turn 终态前的可靠写前日志；省略时只提供普通 Session Hook。 */
@@ -103,10 +105,11 @@ export interface SessionLoopOptions extends SessionCallContext {
    */
   step_input?: StepInput;
   /** Turn 结束后按需推进 Composer 派生上下文。 */
-  maintain_context: () => Promise<void>;
+  maintain_context: (turn: SessionTurnContext) => Promise<void>;
   /** 请求推进派生上下文；Provider 上下文超限时由执行器调用。 */
   advance_context: (
     trigger: SessionContextAdvanceTrigger,
+    model: import("@downcity/type").ModelClient | undefined,
     signal?: AbortSignal,
   ) => Promise<boolean>;
   /** 当前 Session 的配置与 Metadata 状态。 */

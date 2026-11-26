@@ -26,9 +26,9 @@ async function management_access(host: PowerLifecycleContext, raw: unknown): Pro
 /** 管理包装有且仅有 routing 与 payload，两层都严格校验。 */
 const envelope_schema = z.object({ routing: management_schema, payload: z.unknown() }).strict();
 /** 仅注册可信宿主 action，不提供可由模型选择的 management 来源类型。 */
-export function register_memory_management_actions(host: PowerLifecycleContext, provider: MemoryProvider, model?: ModelReference): void {
+export function register_memory_management_actions(host: PowerLifecycleContext, provider: MemoryProvider, execution_agent_id?: string): void {
   const records = new MemoryRecords(provider);
-  host.power.action({ id: "memory.config.snapshot", run: async () => ({ knowledge: { status: await provider.inspect() }, processing: { model } }) as unknown as PowerJsonValue });
+  host.power.action({ id: "memory.config.snapshot", run: async () => ({ knowledge: { status: await provider.inspect() }, processing: { execution_agent_id } }) as unknown as PowerJsonValue });
   host.power.action({ id: "memory.scopes", run: async () => {
     const [agents, workspaces] = await Promise.all([host.system.list_agents(), host.system.list_workspaces()]);
     return { agents: agents.map(({ agent_id, name }) => ({ agent_id, name })), workspaces: workspaces.map(({ workspace_id, name }) => ({ workspace_id, name })) };

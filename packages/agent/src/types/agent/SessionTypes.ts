@@ -6,7 +6,7 @@
  * - session actor 方法接口拆到 `SessionActor.ts`。
  */
 
-import type { ModelReference, ModelClient, SessionApprovalMode, SessionDescriptor } from "@downcity/type";
+import type { ModelClient, SessionApprovalMode, SessionDescriptor } from "@downcity/type";
 import type { SessionSystemBlock, SessionSystemBlockSource } from "@downcity/type/session";
 
 /**
@@ -73,15 +73,6 @@ export interface AgentListSessionsInput {
  */
 export interface AgentSessionSetInput {
   /**
-   * 当前 session 默认模型实例。
-   *
-   * 关键点（中文）
-   * - SDK 只接受宿主已经解析完成的运行时模型实例。
-   * - 模型选择、ID 与持久化全部由宿主负责。
-   */
-  model?: ModelClient;
-
-  /**
    * 当前 Session 的安全策略。
    *
    * 关键点（中文）
@@ -121,9 +112,6 @@ export interface AgentSessionSecurityConfig {
 
 /** 远程 Session 可序列化的动态配置输入。 */
 export interface RemoteSessionSetInput {
-  /** 当前远程 Session 使用的 Downtown 与原始模型 ID。 */
-  model?: ModelReference;
-
   /** 当前远程 Session 的安全策略。 */
   security?: AgentSessionSecurityConfig;
 }
@@ -144,18 +132,6 @@ export type AgentSessionStatus = import("@downcity/type").SessionRuntimeSnapshot
   occupied_by?: import("../sdk/SessionPromptActor.js").SessionPromptActor | null;
   /** 当前 Session 的安全状态。 */
   security: AgentSessionSecurityStatus;
-}
-
-/**
- * Session 当前配置快照。
- */
-export interface AgentSessionConfigSnapshot {
-  /** 当前 session 绑定的默认模型实例。 */
-  model?: ModelClient;
-  /** 当前模型的轻量可读标签。 */
-  model_label?: string;
-  /** 当前模型支持的总上下文窗口长度，单位为 token。 */
-  model_context_window?: number;
 }
 
 /**

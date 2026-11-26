@@ -7,7 +7,7 @@ npm install -g downcity
 downcity -v
 ```
 
-安装后会得到 `city` / `downcity` 与 `downtown` 两个相互独立的工具：
+安装后会得到 `city` / `downcity` 与 `downtown` / `town` 两组命令。`town` 与 `downtown` 共用入口，所有子命令和选项一致，`town deploy` 等价于 `downtown deploy`：
 
 - `city` 是本机 Agent 宿主。CLI 通过数据库 Adapter 和 Repository 读取配置，显式创建 Agent，再由 City 按 ID 统一转发 HTTP/RPC。
 - `downtown` 是 Downtown Server Manager；TUI 用于注册和管理 Server，项目命令读取当前目录的 `downtown.toml`，项目配置只支持 TOML，不兼容 JSON 配置。Local Node.js 和 Cloudflare Workers 都通过 `downtown deploy` 部署。
@@ -161,16 +161,16 @@ CLI 与 Desktop 在同一 root 下互斥持有执行权，资源命令连接经�
 
 CLI City 只维护一个 daemon，并分别监听一个 HTTP 端口和一个原生 TCP RPC 端口。两种协议都按 `agent_id` 路由，不为每个 Agent 分配独立端口。
 
-Downtown 连接与独立账户凭据保存在当前 City root 的本地数据库中。使用连接 ID 显式选择服务：
+Downtown 连接与独立账户凭据保存在当前 City root 的本地数据库中。使用已登记的 Downtown URL 显式选择服务：
 
 ```sh
-city downtown add https://base.downcity.ai --name Official
-city downtown list
-city downtown login <connection_id>
-city downtown whoami <connection_id>
-city downtown models --connection <connection_id>
-city downtown services --connection <connection_id>
-city downtown logout <connection_id>
+city towns add https://base.downcity.ai --name Official
+city towns list
+city towns login https://base.downcity.ai
+city towns whoami https://base.downcity.ai
+city towns models --downtown https://base.downcity.ai
+city towns services --downtown https://base.downcity.ai
+city towns logout https://base.downcity.ai
 ```
 
-每条连接独立登录，模型和服务保留来源 ID；不设置全局当前连接。账户用量由原 Downtown 记录，City 的来源标签不授予权限。独立的 `downtown deploy` 管理服务端部署，`city downtown` 管理 City 连接。
+每条连接独立登录，模型和服务保留来源 ID；不设置全局当前连接。账户用量由原 Downtown 记录，City 的来源标签不授予权限。独立的 `downtown deploy` 管理服务端部署，`city towns` 管理 City 连接。

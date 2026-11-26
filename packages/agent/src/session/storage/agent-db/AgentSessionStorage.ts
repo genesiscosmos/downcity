@@ -15,11 +15,9 @@ import type { SessionHistoryMeta } from "@/types/store/SessionHistoryMeta.js";
 import type { AgentSessionRecord, AgentSessionConfigurationRow } from "@/types/store/AgentSessionDatabase.js";
 import type { AgentSessionMessagePage, AgentSessionMessageCommit } from "@/types/store/AgentSessionMessages.js";
 import type { AgentSessionStorageOptions } from "@/types/store/AgentSessionStorage.js";
-import type { SessionModelBinding } from "@/types/store/SessionModelBinding.js";
 import type { SessionExecutionProfileReference } from "@/types/agent/SessionExecutionProfile.js";
 import type { AgentSessionConfigurationUpdate } from "@/types/store/AgentSessionConfiguration.js";
 import { LocalSessionAttachmentStore } from "../LocalSessionAttachmentStore.js";
-import { decode_model_binding } from "../ModelBindingCodec.js";
 import { resolve_system_timezone } from "../Metadata.js";
 import { decode_session_record } from "./AgentSessionRelations.js";
 
@@ -109,11 +107,7 @@ export class AgentSessionStorage implements SessionStorage {
       approval_mode: metadata.approval_mode ?? null });
   }
 
-  async read_model_binding(): Promise<SessionModelBinding | undefined> {
-    const row = await this.configuration();
-    return row.model_binding ? decode_model_binding(row.model_binding) : undefined;
-  }
-  async write_model_binding(binding: SessionModelBinding): Promise<void> { await this.configure({ model_binding: binding }); }
+
   async bind_execution_profile(reference: SessionExecutionProfileReference): Promise<void> { await this.configure({ execution_profile: reference }); }
   async has_instruction(): Promise<boolean> { return (await this.read_instruction()) !== null; }
   async read_instruction(): Promise<string | null> { return (await this.configuration()).system_snapshot; }

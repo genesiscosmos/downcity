@@ -1,8 +1,7 @@
 /**
  * 宿主执行配置注册表与精确恢复校验。
- * 注册项只由可信宿主传入，缺失配置、版本或模型均拒绝运行。
+ * 注册项只由可信宿主传入，缺失配置或版本时拒绝运行。
  */
-import { same_model } from "@downcity/type";
 import type { ResolvedSessionExecutionProfile, SessionExecutionProfile, SessionExecutionProfileContext, SessionExecutionProfileReference, SessionExecutionProfileSelection } from "@/types/agent/SessionExecutionProfile.js";
 
 /** Agent 持有的可信配置注册表，不暴露为模型工具。 */
@@ -29,7 +28,7 @@ export class SessionExecutionProfiles {
     }
   }
 
-  /** 创建或恢复时解析完整资源；恢复必须保持实际模型身份。 */
+  /** 创建或恢复时解析能力和限制，不参与 Agent 模型定义。 */
   async resolve(
     selection: SessionExecutionProfileSelection,
     context: SessionExecutionProfileContext,
@@ -38,32 +37,15 @@ export class SessionExecutionProfiles {
     const profile = this.profiles.get(this.key(selection.execution_profile_id, selection.execution_profile_version));
     if (!profile) throw new Error(`execution_profile_unavailable: ${selection.execution_profile_id}@${selection.execution_profile_version}`);
     const creation_key = persisted ? persisted.creation_key : selection.creation_key;
-    const resources = await profile.resolve({ ...context, creation_key,
-      model_id: persisted?.model_id ?? selection.model_id,
-      model_reference: persisted?.model_reference ?? selection.model_reference,
-      binding_id: persisted ? persisted.binding_id : selection.binding_id });
-    const model_id = resources.model?.id;
-    if (!model_id?.trim()) throw new Error("execution_profile_model_missing: actual model identity required");
-    const binding_id = resources.model.binding_id;
-    if (binding_id !== undefined && (typeof binding_id !== "string" || !binding_id.trim())) {
-      throw new Error("execution_profile_binding_invalid: opaque non-empty binding required");
-    }
-    if ((persisted || selection.binding_id !== undefined)
-      && binding_id !== (persisted ? persisted.binding_id : selection.binding_id)) {
-      throw Object.assign(new Error("Execution profile model authorization requires explicit confirmation"), { code: "session_model_binding_changed" });
-    }
-    if (!persisted && selection.model_reference && !same_model(resources.model.model_reference, selection.model_reference)) throw new Error("execution_profile_model_changed: selected model source must be preserved");
-    if (persisted && (model_id !== persisted.model_id || !same_model(resources.model.model_reference, persisted.model_reference))) throw new Error("execution_profile_model_changed: restore requires the persisted model");
-    if (!resources.composer || !Array.isArray(resources.instruction) || !resources.tools || !resources.hooks) {
-      throw new Error("execution_profile_resources_invalid: instruction, composer, tools and hooks required");
+    const resources = await profile.resolve({ ...context, creation_key });
+    if ("model" in resources) throw new Error("agent_model_owned: execution profiles cannot provide a model");
+    if (resources.instruction !== undefined && !Array.isArray(resources.instruction)) {
+      throw new Error("execution_profile_resources_invalid: instruction must be an array");
     }
     return {
       reference: {
         id: profile.id,
         version: profile.version,
-        model_id,
-        ...(resources.model.model_reference ? { model_reference: resources.model.model_reference } : {}),
-        ...(binding_id !== undefined ? { binding_id } : {}),
         ...(creation_key ? { creation_key } : {}),
       },
       resources,

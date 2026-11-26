@@ -98,7 +98,6 @@ CREATE INDEX sessions_workspace_list ON sessions(workspace_id, type, kind, archi
 
 CREATE TABLE session_configuration (
   session_key INTEGER PRIMARY KEY REFERENCES sessions(session_key) ON DELETE CASCADE,
-  model_binding TEXT CHECK (model_binding IS NULL OR (json_valid(model_binding) AND json_type(model_binding) = 'object')),
   approval_mode TEXT CHECK (approval_mode IS NULL OR approval_mode IN ('ask', 'always-allow')),
   execution_profile TEXT CHECK (execution_profile IS NULL OR (json_valid(execution_profile) AND json_type(execution_profile) = 'object')),
   system_snapshot TEXT

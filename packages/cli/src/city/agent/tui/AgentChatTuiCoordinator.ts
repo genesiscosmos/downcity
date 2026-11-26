@@ -21,7 +21,6 @@ import { MessageListComponent } from "@/city/agent/tui/components/MessageList.js
 import { QueuedInputQueue } from "@/city/agent/tui/controllers/QueuedInputQueue.js";
 import { StreamingUIController } from "@/city/agent/tui/controllers/StreamingUI.js";
 import { ChatSessionSubscription } from "@/city/agent/tui/controllers/ChatSessionSubscription.js";
-import { ChatModelController } from "@/city/agent/tui/controllers/ChatModelController.js";
 import { ChatSecurityController } from "@/city/agent/tui/controllers/ChatSecurityController.js";
 import { SessionPickerComponent } from "@/city/agent/tui/dialogs/SessionPicker.js";
 import { ApprovalPanelComponent } from "@/city/agent/tui/dialogs/ApprovalDialog.js";
@@ -72,7 +71,6 @@ export class AgentChatTuiCoordinator {
   private readonly message_list: MessageListComponent;
   private readonly streaming_ui: StreamingUIController;
   private readonly session_subscription: ChatSessionSubscription;
-  private readonly model_controller: ChatModelController;
   private readonly security_controller: ChatSecurityController;
   private readonly editor: ChatEditorComponent;
   private readonly queued_messages: QueuedMessagesComponent;
@@ -128,9 +126,6 @@ export class AgentChatTuiCoordinator {
       show_security_policy_picker: () => {
         this.show_security_policy_picker();
       },
-      select_model: async (model_id) => {
-        await this.select_model(model_id);
-      },
       stop: async () => {
         await this.stop();
       },
@@ -180,19 +175,6 @@ export class AgentChatTuiCoordinator {
       remote_agent: options.remote_agent,
       on_snapshot: (snapshot) => this.apply_session_snapshot(snapshot),
       on_mutation: (mutation) => this.apply_session_mutation(mutation),
-    });
-    this.model_controller = new ChatModelController({
-      get_session: () => this.session_subscription.session,
-      get_current_model_label: () => this.app_state.model_label,
-      on_status: (message) => {
-        this.add_status_message(message);
-        this.request_render();
-      },
-      on_error: (message) => {
-        this.add_error_message(message);
-        this.request_render();
-      },
-      on_close: () => this.hide_command_panel(),
     });
     this.security_controller = new ChatSecurityController({
       get_session: () => this.session_subscription.session,
@@ -747,23 +729,6 @@ export class AgentChatTuiCoordinator {
     });
     this.command_panel.show(picker);
     this.tui.setFocus(this.command_panel as Component);
-    this.request_render();
-  }
-
-  /** 打开模型选择器或按显式 ID 切换当前 Session 模型。 */
-  private async select_model(model_id?: string): Promise<void> {
-    if (!this.can_open_command_panel()) return;
-    this.command_panel_loading = true;
-    try {
-      const picker = await this.model_controller.open(model_id);
-      if (!picker || this.stopped || this.interaction_panel.is_active) return;
-      this.command_panel.show(picker);
-      this.tui.setFocus(this.command_panel as Component);
-    } catch (error) {
-      this.add_error_message(`Failed to update Session model: ${this.format_error(error)}`);
-    } finally {
-      this.command_panel_loading = false;
-    }
     this.request_render();
   }
 

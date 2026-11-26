@@ -16,14 +16,12 @@ export interface TaskModelTarget {
   agent_id: string;
   /** 执行 Workspace 的稳定 ID。 */
   workspace_id: string;
-  /** 可继承模型的固定来源 Session；缺省时读取执行 Agent 默认模型。 */
+  /** 交付身份的范围校验；模型始终读取执行 Agent 定义。 */
   delivery_session?: TaskDeliverySession;
 }
 
 /** 补充普通 Power 句柄未暴露的模型读取和绑定；由可信宿主注入。 */
 export interface TaskModelHost {
-  /** 读取来源 Session 的已确认模型，或执行 Agent 默认模型；不得补全来源不明的历史。 */
+  /** 读取执行 Agent 已确认的模型；不得补全来源不明的历史。 */
   read(target: TaskModelTarget): Promise<TaskModelBinding | undefined>;
-  /** 将精确模型和 binding 绑定到新 Session，校验来源有效后原子持久化；不得只比较模型 ID。 */
-  bind(target: TaskModelTarget, session_id: string, binding: TaskModelBinding): Promise<void>;
 }

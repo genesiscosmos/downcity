@@ -6,7 +6,7 @@
  * - session 的数据结构、history/system payload 放在 `SessionTypes.ts`。
  */
 
-import type { AgentCreateSessionInput, AgentArchiveSessionInput, AgentArchiveSessionsInput, AgentArchiveSessionResult, AgentArchiveSessionsResult, AgentCleanArchiveResult, AgentListSessionsInput, AgentSessionConfigSnapshot, AgentSessionForkInput, AgentSessionInfo, AgentSessionSetInput, AgentSessionSetOptions, AgentSessionStatus, AgentSessionSummaryPage, AgentSessionSystemSnapshot, RemoteSessionSetInput } from "@/types/agent/SessionTypes.js";
+import type { AgentCreateSessionInput, AgentArchiveSessionInput, AgentArchiveSessionsInput, AgentArchiveSessionResult, AgentArchiveSessionsResult, AgentCleanArchiveResult, AgentListSessionsInput, AgentSessionForkInput, AgentSessionInfo, AgentSessionSetInput, AgentSessionSetOptions, AgentSessionStatus, AgentSessionSummaryPage, AgentSessionSystemSnapshot, RemoteSessionSetInput } from "@/types/agent/SessionTypes.js";
 import type { SessionMutationSubscriber, SessionMutationUnsubscribe, RespondSessionInteractionInput, SessionInteractionResult, SessionInteractionRequest, ListSessionMessagesInput, SessionMessagePage, WorkspaceRuntime, SessionDescriptor } from "@downcity/type";
 import type { AgentSessionPromptInput } from "@/types/sdk/AgentSessionPrompt.js";
 import type { AgentSessionStopResult } from "@/types/sdk/AgentSessionStop.js";

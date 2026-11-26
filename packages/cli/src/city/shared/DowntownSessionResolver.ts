@@ -55,10 +55,10 @@ export class DowntownSessionResolver {
     const warnings: string[] = [];
 
     if (!downtown_url) {
-      throw new Error("Downtown URL is required. Run `city downtown use` or set DOWNCITY_DOWNTOWN_URL.");
+      throw new Error("Downtown URL is required. Set DOWNCITY_DOWNTOWN_URL or select a connection with `city towns`.");
     }
     if (require_user_token && !user_token) {
-      throw new Error("Downtown user token is required. Run `city downtown login` first.");
+      throw new Error("Downtown user token is required. Run `city towns login <url>` first.");
     }
     if (env_user_token && selected_session?.user_id) {
       warnings.push("DOWNCITY_USER_TOKEN overrides the saved Downtown session.");
@@ -107,7 +107,7 @@ export class DowntownSessionResolver {
       verify_user: false,
     });
     if (!user.user_token) {
-      throw new Error("Downtown user token is required. Run `city downtown login` first.");
+      throw new Error("Downtown user token is required. Run `city towns login <url>` first.");
     }
     const downtown = new Downtown({ url: user.downtown_url, user_token: user.user_token, resolve_user_token: shared_user_token_resolver(user.downtown_url, user.session_id) });
     const verified_user = input.verify_user === false ? user : await this.verify_current_user(user, user.user_id, downtown);
@@ -144,14 +144,14 @@ export class DowntownSessionResolver {
     const result = await downtown.user.current();
     const token_user_id = read_string(result.user.user_id);
     if (!token_user_id) {
-      throw new Error("Downtown user token resolved without a user_id. Run `city downtown login` again.");
+      throw new Error("Downtown user token resolved without a user_id. Run `city towns login <url>` again.");
     }
     if (session_user_id && !user.env_overrides.user_token && session_user_id !== token_user_id) {
       throw new Error([
         "Downtown session user does not match the authenticated token.",
         `session=${session_user_id}`,
         `token=${token_user_id}`,
-        "Run `city downtown logout` and then `city downtown login`.",
+        "Run `city towns logout <url>` and then `city towns login <url>`.",
       ].join(" "));
     }
 

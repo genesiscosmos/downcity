@@ -5,6 +5,7 @@
  * Agent 与 Workspace 只作为 Task 定义中的执行目标，在触发瞬间进入对应动态上下文。
  */
 
+import { task_execution_hooks, TASK_EXECUTION_PROFILE } from "./runtime/TaskSessionAuthorization.js";
 import { TaskNotificationDispatcher } from "./runtime/TaskNotificationDispatcher.js";
 import { randomUUID } from "node:crypto";
 import type { TaskGenerateInput, TaskGenerateResult } from "./types/TaskGenerate.js";
@@ -58,6 +59,9 @@ export class TaskPower extends Power {
 
   /** Power 用户可见说明。 */
   readonly description = "Manages reusable tasks and their trigger runtime.";
+
+  /** Task 运行时的授权限制，独立于任务管理工具是否可用。 */
+  readonly hooks = task_execution_hooks(() => this.require_lifecycle_context());
 
   /** Task system 文本不承担 scheduler 启动副作用。 */
   readonly system = async (_context: PowerContext): Promise<string> =>
@@ -335,6 +339,7 @@ export class TaskPower extends Power {
   async initialize(context: PowerLifecycleContext): Promise<void> {
     context.abort_signal.throwIfAborted();
     this.lifecycle_context = context;
+    context.system.register_execution_profile({ ...TASK_EXECUTION_PROFILE, resolve: () => ({}) });
     const definitions = new TaskDefinitionRepository(
       context.storage,
       this.executions,

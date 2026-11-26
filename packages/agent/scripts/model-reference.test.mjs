@@ -20,15 +20,17 @@ test("来源经过 JSON 恢复仍能解析，账号不匹配时拒绝", async ()
   await assert.rejects(invalid.resolve(), { code: "session_model_binding_changed" });
 });
 
-test("后台执行配置首次创建与恢复均固定结构化模型来源", async () => {
+test("后台执行配置只持有能力与限制，不持有模型定义或模型快照", async () => {
   const profiles = new SessionExecutionProfiles();
-  let selected = model;
-  profiles.register({ id: "test", version: 1, resolve: async () => ({ instruction: [], composer: {}, tools: {}, hooks: {}, model: selected }) });
-  const selection = { execution_profile_id: "test", execution_profile_version: 1, model_reference: reference, binding_id: "account" };
+  const resources = { instruction: [], composer: {}, tools: {}, hooks: {} };
+  let resolved_context;
+  profiles.register({ id: "test", version: 1, resolve: async context => { resolved_context = context; return resources; } });
+  const selection = { execution_profile_id: "test", execution_profile_version: 1, creation_key: "job:test" };
   const context = { agent_id: "agent", session_id: "session", type: "work", kind: "test" };
   const first = await profiles.resolve(selection, context);
-  assert.deepEqual(first.reference.model_reference, reference);
-  selected = { ...model, model_reference: { downtown: "second", id: model.id } };
-  await assert.rejects(profiles.resolve(selection, context), /selected model source/);
-  await assert.rejects(profiles.resolve(selection, context, JSON.parse(JSON.stringify(first.reference))), /persisted model/);
+  assert.deepEqual(first.reference, { id: "test", version: 1, creation_key: "job:test" });
+  assert.equal("model" in first.resources, false);
+  assert.equal("default_model" in resolved_context, false);
+  const restored = await profiles.resolve(selection, context, JSON.parse(JSON.stringify(first.reference)));
+  assert.deepEqual(restored.reference, first.reference);
 });

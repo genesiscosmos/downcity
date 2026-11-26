@@ -14,7 +14,7 @@ import { format_downtown_service } from "../shared/DowntownAccessOutput.js";
 import { create_downtown_id } from "@downcity/city";
 import type { ServiceOptions } from "../types/DowntownCommand.js";
 
-/** 将服务访问加入已有 city downtown 命令组，不建立平行连接管理。 */
+/** 将服务访问加入 city towns 命令组，复用连接管理。 */
 export function register_downtown_service_commands(downtown: Command): void {
   const options = (command: Command) => command.requiredOption("--downtown <url>", "Registered Downtown URL")
     .option("--root <path>", "City data root").option("--json", "Complete discovery JSON; call bodies remain exact bytes");

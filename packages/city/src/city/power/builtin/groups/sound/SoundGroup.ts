@@ -3,7 +3,7 @@
  *
  * 关键点（中文）
  * - 三个动作：`sound.models`、`sound.asr`、`sound.tts`；读模型是 read，转写与合成是 write。
- * - 语音 AI 经 Town 统一模型 ID 路由；本地音频读取以当前 Workspace 为根。
+ * - 语音 AI 通过 PowerContext.city.town 按结构化模型引用路由；本地音频读取以当前 Workspace 为根。
  * - `tts` 只返回已落盘的本地音频路径，不注入 Agent 消息。
  * - `asr` 同时服务模型调用与其它 power 的程序化调用（例如 chat 入站音频自动转写），
  *   因此不再需要单独的非模型侧动作或 `invoke` 入口。
@@ -14,7 +14,7 @@ import { z } from "zod";
 import type { PowerJsonValue } from "@/power/index.js";
 import type { PowerTown } from "@/power/types/PowerTown.js";
 import type { TownModelEntry, TownModelList } from "@/town/types/TownModels.js";
-import type { CityPowerContext } from "@/city/types/CityPowerContext.js";
+import type { PowerContext } from "@/power/types/PowerContext.js";
 import type {
   SoundAsrResult,
   SoundModel,
@@ -34,15 +34,15 @@ import { CityAction, CityActionError } from "@/city/power/builtin/CityAction.js"
 import { CityActionGroup } from "@/city/power/builtin/CityActionGroup.js";
 
 /** 语音动作仅使用 Town，不能隐式切换 Downtown 或账户。 */
-function require_sound_models(context: CityPowerContext): PowerTown["models"] {
-  if (!context.town) {
+function require_sound_models(context: PowerContext): PowerTown["models"] {
+  if (!context.city.town) {
     throw new CityActionError({ code: "unsupported_action", message: "sound actions require City Town model routing." });
   }
-  return context.town.models;
+  return context.city.town.models;
 }
 
 /** 只读取实际支持语音能力的模型，保留每个来源失败状态。 */
-async function list_models(context: CityPowerContext): Promise<TownModelList> {
+async function list_models(context: PowerContext): Promise<TownModelList> {
   const catalog = await require_sound_models(context).list({ signal: context.abort_signal });
   return { ...catalog, items: catalog.items.filter((entry) => entry.modalities.includes("asr") || entry.modalities.includes("tts")) };
 }
@@ -81,14 +81,14 @@ function resolve_model(
 
 /** 执行一次语音识别。 */
 async function transcribe_audio(
-  context: CityPowerContext,
+  context: PowerContext,
   payload: PowerJsonValue | undefined,
 ): Promise<SoundAsrResult> {
   const reference = payload && typeof payload === "object" && !Array.isArray(payload) ? payload.model : undefined;
   const selected = resolve_model("asr", reference, await list_models(context));
   const input = normalize_asr_input({ ...(payload as object), model: selected.id });
   const resolved = await resolve_asr_input({
-    workspace_path: context.workspace_path,
+    workspace_path: context.workspace?.path ?? null,
     payload: { ...input, model: selected.id },
   });
   const { model: _model, ...business_input } = resolved;
@@ -102,7 +102,7 @@ async function transcribe_audio(
 
 /** 执行一次语音合成。 */
 async function synthesize_speech(
-  context: CityPowerContext,
+  context: PowerContext,
   payload: PowerJsonValue | undefined,
 ): Promise<SoundTtsOutput> {
   const reference = payload && typeof payload === "object" && !Array.isArray(payload) ? payload.model : undefined;
@@ -134,7 +134,7 @@ class SoundModelsAction extends CityAction<z.infer<typeof sound_models_input>> {
 
   protected async run(
     args: z.infer<typeof sound_models_input>,
-    context: CityPowerContext,
+    context: PowerContext,
   ): Promise<ReturnType<typeof normalize_sound_models>> {
     const capability = normalize_models_input(args as PowerJsonValue);
     const catalog = await list_models(context);
@@ -182,7 +182,7 @@ class AsrAction extends CityAction<z.infer<typeof sound_asr_input>> {
 
   protected async run(
     args: z.infer<typeof sound_asr_input>,
-    context: CityPowerContext,
+    context: PowerContext,
   ): Promise<SoundAsrResult> {
     return await transcribe_audio(context, args as PowerJsonValue);
   }
@@ -217,7 +217,7 @@ class TtsAction extends CityAction<z.infer<typeof sound_tts_input>> {
 
   protected async run(
     args: z.infer<typeof sound_tts_input>,
-    context: CityPowerContext,
+    context: PowerContext,
   ): Promise<SoundTtsOutput> {
     return await synthesize_speech(context, args as PowerJsonValue);
   }

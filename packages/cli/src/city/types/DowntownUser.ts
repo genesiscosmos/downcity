@@ -3,7 +3,7 @@
  *
  * 关键点（中文）
  * - 这些类型描述 CLI 当前通过 Downtown 使用的 Downtown 用户身份。
- * - 环境变量覆盖与 `city downtown login` 保存的 Session 会归一到同一个身份结构。
+ * - 环境变量覆盖与 `city towns login` 保存的 Session 会归一到同一个身份结构。
  */
 
 /**
@@ -79,7 +79,7 @@ export interface ResolveDowntownUserInput {
   env?: NodeJS.ProcessEnv | Record<string, string | undefined>;
 
   /**
-   * 是否允许环境变量覆盖 `city downtown login` 保存的 Session。
+   * 是否允许环境变量覆盖 `city towns login` 保存的 Session。
    */
   allow_env_override?: boolean;
 

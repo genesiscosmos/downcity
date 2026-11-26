@@ -1,4 +1,4 @@
-/** Desktop 活动的共享分组：推理切断分组，等待优先于失败，收起时不挂载日志。 */
+/** 活动共享分组：推理切断分组，摘要跟随最后一条可见记录，收起时不挂载日志。 */
 import { Fragment } from "react";
 import type { AgentActivityPart } from "../types/chat-blocks";
 import type { ActivityFlowProps } from "../types/activity-flow";
@@ -18,8 +18,7 @@ export function ActivityFlow({ parts, summarize, render_item, render_group }: Ac
   return <Activity class_name="agent-process-body">{groups.map(group => {
     if (group.length === 1) return <Fragment key={group[0].part_id}>{render_item(group[0])}</Fragment>;
     const rows = group.map(summarize);
-    const latest = [...rows].reverse();
-    const summary = latest.find(row => row.tone === "waiting") ?? latest.find(row => row.tone === "failed") ?? rows[rows.length - 1];
+    const summary = rows[rows.length - 1];
     const props: ActivityRowProps = {
       ...summary, item_id: group[0].part_id,
       badge: `+${group.length - 1}`,

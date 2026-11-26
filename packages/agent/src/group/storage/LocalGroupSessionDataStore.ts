@@ -316,6 +316,10 @@ function assert_dispatch_turn(value: GroupDispatchTurnRecord): void {
   ) {
     throw new Error(`Invalid Group dispatch pending messages: ${value.dispatch_id}`);
   }
+  if (value.require_response !== undefined && (typeof value.require_response !== "boolean"
+    || (value.trigger === "auto" && value.require_response))) {
+    throw new Error(`Invalid Group dispatch response requirement: ${value.dispatch_id}`);
+  }
   if (!dispatch_turn_statuses.has(value.status)) {
     throw new Error(`Invalid Group dispatch status: ${String(value.status)}`);
   }

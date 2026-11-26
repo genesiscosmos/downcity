@@ -54,7 +54,7 @@ import type {
   SessionStepExecutionInput,
   SessionTurnExecutionResult,
 } from "@/types/session/SessionExecution.js";
-import type { SessionAgentMessagePart } from "@downcity/type";
+import type { ModelClient, SessionAgentMessagePart } from "@downcity/type";
 import { SESSION_APPROVAL_RESPONSE_SCHEMA } from "@downcity/type";
 import { create_session_agent_content_part } from "@/session/messages/SessionAgentContent.js";
 import { generate_id } from "@/utils/Id.js";
@@ -83,6 +83,7 @@ export interface SessionExecutorOptions {
    */
   advance_context: (
     trigger: SessionContextAdvanceTrigger,
+    model: ModelClient | undefined,
     signal?: AbortSignal,
   ) => Promise<boolean>;
 }
@@ -127,7 +128,6 @@ export class SessionExecutor implements SessionExecutorPort {
   private readonly session_id: string;
   private readonly logger: Logger;
   private readonly is_context_limit: SessionExecutorOptions["is_context_limit"];
-  private readonly context_retry: ContextRetry;
   /** 单次执行防重入锁，退出执行后立即释放。 */
   private entered = false;
   private readonly retry_control?: SessionModelRetryControl;
@@ -141,14 +141,7 @@ export class SessionExecutor implements SessionExecutorPort {
     if (!this.session_id) {
       throw new Error("SessionExecutor requires a non-empty session_id");
     }
-    this.context_retry = new ContextRetry({
-      session_id: this.session_id,
-      advance_context: async (error, signal) =>
-        this.is_context_limit(error)
-          ? await options.advance_context("provider_context_limit", signal)
-          : false,
-      logger: this.logger,
-    });
+
   }
 
   /**
@@ -167,7 +160,13 @@ export class SessionExecutor implements SessionExecutorPort {
     const checkpoint: SessionStepCheckpoint = input.checkpoint ?? { step_count: 0, tool_call_count: 0,
       tool_result_count: 0, assistant_parts: [], advance_count: 0, compact_required: false };
     try {
-      return await this.context_retry.execute_with_retry({
+      const context_retry = new ContextRetry({
+        session_id: this.session_id,
+        advance_context: async (error, signal) => this.is_context_limit(error)
+          ? await this.advance_context("provider_context_limit", input.turn_context.model, signal) : false,
+        logger: this.logger,
+      });
+      return await context_retry.execute_with_retry({
         signal: input.turn_context.lifecycle.abort_signal, checkpoint,
         execute_turn: async (advance_count, advance_context) =>
           await this.run_tool_loop({
@@ -237,7 +236,7 @@ export class SessionExecutor implements SessionExecutorPort {
         if (!input.has_initial_step()) await input.turn_context.input.checkpoint();
         const step_input = input.take_initial_step() ?? await fit_request({
           resolve: input.resolve_step_input,
-          advance: () => this.advance_context("request_budget", input.turn_context.lifecycle.abort_signal),
+          advance: () => this.advance_context("request_budget", input.turn_context.model, input.turn_context.lifecycle.abort_signal),
           signal: input.turn_context.lifecycle.abort_signal,
           report: diagnostic => this.logger.log("info", "[agent] context.request_budget", { session_id, ...diagnostic }),
         });
@@ -577,7 +576,7 @@ export class SessionExecutor implements SessionExecutorPort {
       turn_context: input.turn_context,
       step_input: await fit_request({
         resolve: async () => ({ ...await input.resolve_step_input(), tools: {} }),
-        advance: () => this.advance_context("request_budget", input.turn_context.lifecycle.abort_signal),
+        advance: () => this.advance_context("request_budget", input.turn_context.model, input.turn_context.lifecycle.abort_signal),
         signal: input.turn_context.lifecycle.abort_signal,
         report: diagnostic => this.logger.log("info", "[agent] context.request_budget", { session_id: this.session_id, ...diagnostic }),
       }),

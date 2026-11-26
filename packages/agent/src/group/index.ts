@@ -12,6 +12,8 @@ export type {
   DispatchGroupProfile,
   DispatchMemberProfile,
   DispatchMemberDecision,
+  DispatchBooleanDecision,
+  DispatchFactorDecision,
   DispatchTrigger,
   DispatchStrategy,
   DecisionDispatchStrategyOptions,

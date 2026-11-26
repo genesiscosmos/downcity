@@ -5,12 +5,14 @@ import os from 'node:os';
 import path from 'node:path';
 import { z } from 'zod';
 import { Agent } from '@downcity/agent';
+import { Workspace } from '../bin/index.js';
 import { AgentRepository } from '../bin/local/repositories/AgentRepository.js';
 import { AgentResources } from '../bin/local/resources/AgentResources.js';
 import { ResourceCoordinator } from '../bin/local/resources/ResourceCoordinator.js';
 import { create_agent_profiles } from '../bin/application/AgentProfiles.js';
 import { PublicApplication } from '../bin/application/PublicApplication.js';
 import { create_core_objects } from '../bin/application/CoreObjects.js';
+import { create_power_city_directory } from '../bin/city/power/PowerCityBridge.js';
 import { RuntimeService } from '../bin/city/power/builtin/runtime/RuntimeService.js';
 import { ContextPower } from '../bin/city/power/builtin/ContextPower.js';
 import { SessionRuntimePool } from '../bin/city/power/builtin/runtime/SessionRuntimePool.js';
@@ -21,6 +23,14 @@ const root_path = await fs.mkdtemp(path.join(os.tmpdir(), 'downcity-public-objec
 let runtime;
 const agents = new AgentRepository(root_path);
 const target = new Agent({ id: 'fixture_poet', name: 'Fixture Poet' });
+const caller = new Agent({ id: 'fixture_caller', name: 'Fixture Caller' });
+const fixture_workspace = new Workspace({ id: 'fixture_workspace', path: root_path });
+const other_workspace = new Workspace({ id: 'other_workspace', path: root_path });
+const caller_session = await caller.sessions.create({ type: 'chat', kind: 'main' });
+const directory = create_power_city_directory({ access: {
+  get_agent: id => id === caller.id ? caller : id === target.id ? target : null,
+  list_agents: () => [caller, target], list_workspaces: () => [fixture_workspace, other_workspace],
+} });
 let invalidations = 0;
 let approvals = 0;
 let decision = 'approve';
@@ -43,7 +53,7 @@ const interactions = {
     return { approved: decision !== 'deny', auto_approved: decision === 'auto' };
   } },
 };
-const context = { agent: { id: 'fixture_caller' }, session: { id: 'fixture_session', type: 'chat' }, turn: { id: 'fixture_turn' }, call: { tool_call_id: 'fixture_call', interactions }, logger: { info: async () => undefined } };
+const context = { city: { id: 'fixture', ...directory }, agent: directory.agents.get(caller.id), session: { id: caller_session.id, type: 'chat' }, turn: { id: 'fixture_turn' }, call: { tool_call_id: 'fixture_call', interactions }, logger: { info: async () => undefined } };
 const guard = (call, agent_id) => {
   assert.equal(call.context.agent.id, 'fixture_caller');
   if (!live || agent_id === 'forbidden') throw new Error('permission_denied: fixture caller or target unavailable');
@@ -60,12 +70,12 @@ try {
     added_method: z.function({ input: [z.object({}).strict()], output: z.string() }).describe('A new method on a mounted public object.'),
     slow: z.function({ input: [z.object({}).strict()], output: z.string() }),
   }), authorize: call => guard(call), bind: () => ({ echo: input => input.value, added_method: () => 'automatically bound', slow: async () => { slow_started?.(); return await new Promise(resolve => { unblock_slow = resolve; }); } }) };
-  const objects = [...create_core_objects(Object.freeze({}), 'fixture'), create_agent_profiles(() => resources, guard), fixture];
+  const objects = [...create_core_objects(), create_agent_profiles(() => resources, guard), fixture];
   const application = new PublicApplication(objects);
   assert.match(application.declarations, /profile/);
   assert(application.help({ query: 'profile.update' }).symbols.length);
   runtime = new RuntimeService(objects, { authorize: (_symbol, _input, call) => guard(call) });
-  const power = new ContextPower({ access: {}, files_for: () => { throw new Error('Unexpected private storage access'); } }, runtime);
+  const power = new ContextPower(runtime);
   const action = power.actions.execute;
   const discover = async (payload = {}, overrides = {}) => await execute_power_action({
     power_name: 'context', action_name: 'help', action: power.actions.help, payload,
@@ -89,7 +99,9 @@ try {
     assert((await discover({ symbol: 'agents.get().profile' })).data.symbols.length > 0);
     assert.equal(root_help.data.symbols.length, 12);
     assert.equal(root_help.data.next_cursor, 12);
-    assert.equal((await discover({ cursor: 12 })).data.next_cursor, null);
+    let help_cursor = root_help.data.next_cursor;
+    while (help_cursor !== null) help_cursor = (await discover({ cursor: help_cursor })).data.next_cursor;
+    assert.equal(help_cursor, null);
     assert.deepEqual((await discover({ cursor: 1000 })).data.symbols, []);
     for (const payload of [{ query: 'a', symbol: 'b' }, { cursor: -1 }, { cursor: 0.5 }, { cursor: '12' }, { query: 'x'.repeat(201) }, { symbol: 'x'.repeat(201) }, { code: 'return 1;' }, { agent_id: 'forbidden' }, null]) {
       assert.equal((await discover(payload)).success, false, JSON.stringify(payload));
@@ -132,6 +144,22 @@ try {
   assert.equal(invalid_runtime_input.data.calls[0].status, 'failed');
   assert.equal((await run('return 1;', { payload: { approved: true } })).success, false);
   console.log('PASS exact script approval, denial/auto-approval blocked, generated types/help/bindings, JS runtime validation');
+
+  // 使用真实内存 Session Store 核对脚本桥接与宿主服务读到同一归档事实。
+  const managed_session = await caller.sessions.create({ workspace: fixture_workspace });
+  const untouched_session = await caller.sessions.create({ workspace: other_workspace });
+  const selected = value(await run(`const self = await downcity.city.agents.get({agent_id:'fixture_caller'}); return await self.sessions.list({workspace_id:'fixture_workspace',limit:1});`));
+  assert.deepEqual(selected.items.map(item => item.id), [managed_session.id]);
+  assert.equal(context.agent, context.city.agents.get(caller.id));
+  assert.equal(value(await run('return await downcity.city.get({});')).id, context.city.id);
+  const archived = value(await run(`const self = await downcity.city.agents.get({agent_id:'fixture_caller'}); const session = await self.sessions.get({session_id:'${managed_session.id}',type:'work'}); return await session.archive({});`));
+  assert.equal(archived.status, 'archived');
+  assert.equal((await caller.sessions.read_archived(managed_session.id)).archived, true);
+  assert.equal((await caller.sessions.read(untouched_session.id)).archived, false);
+  assert.equal((await run(`const other = await downcity.city.agents.get({agent_id:'fixture_poet'}); return await other.sessions.list({});`)).success, false);
+  const archived_metadata = value(await run(`const session = await downcity.agent.sessions.get({session_id:'${managed_session.id}',type:'work'}); return await session.get({});`));
+  assert.equal(archived_metadata.archived, true);
+  console.log('PASS shared City/PowerContext identity, Workspace filtering, real Session archive/readback and cross-Agent management denial');
 
   const before = approvals;
   const updated = value(await run(`const poet = await downcity.agents.get({agent_id:'fixture_poet'});
@@ -215,5 +243,6 @@ return {result, profile:await poet.profile.get(), directory:await downcity.agent
   await runtime?.dispose();
   if (runtime) await assert.rejects(runtime.help({}, context), /host_unavailable/);
   await target.dispose();
+  await caller.dispose();
   await fs.rm(root_path, { recursive: true, force: true });
 }

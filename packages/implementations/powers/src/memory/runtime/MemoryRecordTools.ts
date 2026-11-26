@@ -34,7 +34,7 @@ export function create_memory_session_tools(options: MemorySessionToolOptions, j
   const bind_job = async (context: ToolCallContext): Promise<MemoryJob> => {
     if (context.session_type !== "work" || context.session_kind !== MEMORY_SESSION_KIND) throw new Error("Memory tool requires a Memory Session");
     const job = await options.jobs.read(job_id);
-    if (!job || job.access.agent_id !== context.agent_id || job.session_id !== context.session_id || job.status !== "running") throw new Error("Memory Session does not own this active Job");
+    if (!job || (job.execution_agent_id ?? job.access.agent_id) !== context.agent_id || job.session_id !== context.session_id || job.status !== "running") throw new Error("Memory Session does not own this active Job");
     return job;
   };
   const assert_record = (job: MemoryJob, memory_id: string): void => {

@@ -41,7 +41,8 @@ import {
   create_power_context,
   freeze_power_config,
 } from "@/power/core/PowerContext.js";
-import { create_power_session_collection, create_power_session_handle } from "@/city/power/PowerSessionBridge.js";
+import { create_power_session_handle } from "@/city/power/PowerSessionBridge.js";
+import { create_power_city_directory } from "./PowerCityBridge.js";
 import { register_power_http_routes } from "@/power/core/PowerHttpRoutes.js";
 import { CityExecutionProfiles } from "./CityExecutionProfiles.js";
 import { assert_power_session_owner, create_power_session_host } from "./CityPowerSessionHost.js";
@@ -192,32 +193,22 @@ export class CityPowerRuntime implements PowerRuntimeHost {
     });
     // 只向 Power 交付普通资源能力；来源身份由 Town 在执行时校验。
     const town = this.options.town ? create_power_town(this.options.town) : undefined;
+    const directory = create_power_city_directory({ access: this.options.runtime_access, workspace, assert_execution_profile: (id, version) => this.execution_profiles.assert_owner(power_id, id, version) });
+    const city = Object.freeze({ id: this.options.city_id, ...directory, ...(town ? { town } : {}), powers: this.powers_for(site) });
     return create_power_context({
-      host: this,
-      site,
-      agent_id,
-      agent_name: agent.name,
-      agent_role: agent.role,
-      agent_description: agent.description,
-      ...(workspace ? { workspace } : {}),
+      city,
+      agent: directory.agents.get(agent_id)!,
+      ...(workspace ? { workspace: directory.workspaces.get(workspace.id)! } : {}),
       data_path: power_storage.root_path,
       data_root_path: this.options.storage.root_path,
       data_files: power_storage.files,
-      ...(workspace?.shell ? { shell: workspace.shell } : {}),
-      sessions: create_power_session_collection({
-        get_sessions: () => agent.sessions,
-        workspace,
-      }),
       session: this.resolve_session_handle(agent, site),
       ...(site.turn_id ? { turn: Object.freeze({ id: site.turn_id, execution_id: site.execution_id, abort_signal: call.abort_signal }) } : {}),
       snapshot: this.resolve_snapshot(site, workspace, agent),
       call,
       config: freeze_power_config(this.options.host?.config?.(power_id).get() ?? {}),
       logger: agent.get_logger(),
-      town,
       notifications: this.notifications.publisher({ source_kind: "power", power_id, agent_id }),
-      get_workspace_env: () => workspace?.get_env() ?? {},
-      get_instructions: () => agent.get_instructions(),
     });
   }
 

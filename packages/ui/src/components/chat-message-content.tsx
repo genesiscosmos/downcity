@@ -3,6 +3,7 @@ import { Fragment, useRef, useState } from "react";
 import { AlertTriangle, File, RefreshCw } from "lucide-react";
 import { is_messenger_runtime_context_tag } from "@downcity/type";
 import { MarkdownView } from "./markdown/MarkdownView";
+import { AgentText } from "./markdown/AgentText";
 import { Button } from "./button";
 import { render_message_parts } from "./chat-parts";
 import { is_chat_reference_tag } from "./chat-input/session-reference";
@@ -12,7 +13,7 @@ import { agent_message_actions_group_class_name, agent_message_content_class_nam
 import type { AgentMessageBlock, AgentMessageContentProps, UserMessageContentProps } from "../types/chat-blocks";
 
 /** 完整 Agent 正文：宿主可替换业务块，SDK 始终拥有文本、错误与重试生命周期。 */
-export function AgentMessageContent({ message_id, blocks, streaming, actions, render_block, retry_error_part_id, show_errors = true, retry_message, can_retry = false, retry_label = "Retry", file_label = "File", on_respond_interaction, render_interaction }: AgentMessageContentProps) {
+export function AgentMessageContent({ message_id, blocks, streaming, smooth = true, actions, render_block, retry_error_part_id, show_errors = true, retry_message, can_retry = false, retry_label = "Retry", file_label = "File", on_respond_interaction, render_interaction }: AgentMessageContentProps) {
   const pending_ref = useRef(false);
   const [pending, set_pending] = useState(false);
   const [error, set_error] = useState<string>();
@@ -23,8 +24,9 @@ export function AgentMessageContent({ message_id, blocks, streaming, actions, re
     catch (reason) { set_error(reason instanceof Error ? reason.message : String(reason)); }
     finally { pending_ref.current = false; set_pending(false); }
   };
+  const smooth_text = smooth && !blocks.some(block => block.type === "error");
   const render = (block: AgentMessageBlock) => {
-    if (block.type === "text") return <div data-chat-selectable-message data-chat-message-id={message_id} data-chat-message-role="agent" className="min-h-[1lh]"><MarkdownView layout="embedded" text={block.part.text} mode={streaming && block.part.state === "streaming" ? "streaming" : "static"} /></div>;
+    if (block.type === "text") return <div data-chat-selectable-message data-chat-message-id={message_id} data-chat-message-role="agent" className="min-h-[1lh]"><AgentText text={block.part.text} streaming={streaming && block.part.state === "streaming"} smooth={smooth_text} /></div>;
     if (block.type === "file") return <a href={block.part.url} className="agent-message-resource" target="_blank" rel="noreferrer"><File aria-hidden /><span>{block.part.filename || file_label}</span></a>;
     if (block.type === "error") {
       if (!show_errors) return null;

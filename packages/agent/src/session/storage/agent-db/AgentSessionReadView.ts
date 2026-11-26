@@ -10,7 +10,6 @@ import type { SessionReadView } from "@/types/store/SessionReadView.js";
 import type { SessionHistoryMeta } from "@/types/store/SessionHistoryMeta.js";
 import type { AgentSessionSummary } from "@/types/agent/SessionTypes.js";
 import type { SessionMessage } from "@downcity/type";
-import { decode_model_binding } from "../ModelBindingCodec.js";
 import { collect_pending_interactions } from "../SessionInteractionReader.js";
 import { decode_session_record } from "./AgentSessionRelations.js";
 
@@ -48,7 +47,6 @@ export function agent_session_read_view(lease: AgentSessionRuntimeLease, agent_i
       await assert_record();
       const config = await lease.read<AgentSessionConfigurationRow>({ command: "configuration", session_id: row.session_id });
       return { system_snapshot: config.system_snapshot,
-        ...(config.model_binding ? { model_binding: decode_model_binding(config.model_binding) } : {}),
         ...(config.approval_mode ? { approval_mode: config.approval_mode } : {}),
         ...(config.execution_profile ? { execution_profile: JSON.parse(config.execution_profile) } : {}),
       };

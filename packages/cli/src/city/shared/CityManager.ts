@@ -3,7 +3,7 @@
  *
  * 关键点（中文）
  * - 裸 `city` 直接打开 Agent 列表，不保留额外的 City Dashboard。
- * - 全局 Power 与语言管理放在 Agents 首页的设置分组；服务连接通过 city downtown 显式操作。
+ * - 全局 Power 与语言管理放在 Agents 首页的设置分组；服务连接通过 city towns 显式操作。
  * - CLI City daemon 生命周期继续由显式根命令拥有。
  */
 

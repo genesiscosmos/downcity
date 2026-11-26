@@ -123,7 +123,7 @@ export interface CityToolAgentSummary {
   readonly agent_id: string;
   /** Agent 用户可见名称。 */
   readonly name: string;
-  /** Agent 默认模型标识；未配置为 null。 */
+  /** Agent 默认模型的结构化来源与原始标识；未配置为 null。 */
   readonly model: import("@downcity/type").ModelReference | null;
   /** 是否是当前正在运行的 Agent。 */
   readonly is_current: boolean;

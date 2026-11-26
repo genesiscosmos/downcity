@@ -7,7 +7,8 @@
  * - Composer 仍然是 Session 级能力，不向 Agent 的执行策略层泄漏。
  */
 
-import type { ModelClient, AgentTool as Tool, ToolHookSet, WorkspaceRuntime, SessionDescriptor } from "@downcity/type";
+import type { Agent } from "@/agent/Agent.js";
+import type { AgentTool as Tool, ToolHookSet, WorkspaceRuntime, SessionDescriptor } from "@downcity/type";
 import type { SessionChildWork } from "./SessionChildWork.js";
 import type { SessionCompletionPort } from "@/types/agent/SessionCompletion.js";
 import type { AgentSession } from "@/types/agent/SessionActor.js";
@@ -146,8 +147,8 @@ export interface SessionOptions extends SessionDescriptor {
   /** 在每个 Step 检查点读取当前生效的扩展处理器集合。 */
   get_hooks: () => ToolHookSet;
 
-  /** 读取 Agent 当前持有的运行时模型实例。 */
-  get_agent_model: () => ModelClient | undefined;
+  /** 所属 Agent 的权威定义，Turn 在开始时读取其 model。 */
+  agent: Pick<Agent, "model">;
 
   /**
    * 当前 Session 使用的 Composer。

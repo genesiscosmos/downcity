@@ -195,9 +195,8 @@ export class MemoryPower extends Power {
     await this.provider.initialize();
     context.abort_signal.throwIfAborted();
     const config = context.config.get();
-    const model = this.options.model ?? (is_model_reference(config.model) ? config.model : undefined);
-    const binding_id = this.options.binding_id ?? (typeof config.binding_id === "string" ? config.binding_id : undefined);
-    register_memory_management_actions(context, this.provider, model);
+    const execution_agent_id = this.options.execution_agent_id ?? (typeof config.execution_agent_id === "string" ? config.execution_agent_id : undefined);
+    register_memory_management_actions(context, this.provider, execution_agent_id);
     this.profile_runtime = new MemoryProfile(this.provider);
     const jobs = new MemoryJobStore(path.join(context.storage.path, "processing"));
     const signals = new MemorySignalStore(path.join(platform_root, "memory", "dreaming"));
@@ -205,7 +204,7 @@ export class MemoryPower extends Power {
     this.coordinator = new MemoryCoordinator({ host: context, provider: this.provider,
       jobs,
       can_run_background: async (job) => await can_run_memory_background(signals, maintenance_owner_id, job),
-      model, binding_id,
+      execution_agent_id,
       resolve_model_binding: this.options.resolve_model_binding,
     });
     this.delivery = new MemoryDelivery(jobs, new MemoryDeliveryStore(path.join(context.storage.path, "delivery")),

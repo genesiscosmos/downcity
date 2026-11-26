@@ -1,10 +1,8 @@
 /** Session 管理用例；地址固定为 Agent/type/完整 ID，纯浏览不恢复 executor 或改目录。 */
-import { same_model } from "@downcity/type";
 import path from "node:path";
 import fs from "node:fs/promises";
 import { randomUUID } from "node:crypto";
 import { AgentSessionBrowser, type AgentSession, type AgentSessionInfo } from "@downcity/agent";
-import { read_saved_session_model } from "./SavedSessionModel.js";
 import type { SessionReadView } from "@downcity/agent";
 import type { ResourceDependencies } from "./types.js";
 import { require_agent_id, require_resource_value, require_workspace_id, ResourceError } from "./ResourceError.js";
@@ -57,10 +55,7 @@ export class SessionResources {
     const view = await this.read_view(input);
     const metadata = { ...view.metadata, id: view.session_id };
     const cached = view.archived ? undefined : this.dependencies.host?.city.agents.get(agent_id)?.sessions.peek(session_id, type);
-    const configuration = await this.browser(agent_id).configuration(view.session_id);
-    const model_binding = configuration.model_binding ? JSON.parse(configuration.model_binding) as import("@downcity/agent").SessionModelBinding : undefined;
-    const saved_model_id = !view.archived && this.dependencies.workspaces ? read_saved_session_model(this.dependencies.root_path, agent_id, metadata, this.dependencies.immutable) : undefined;
-    return { session: { ...project_session(metadata, view.archived, agent_id), model_binding: model_binding ?? null, saved_model_override: saved_model_id ?? null, model_selection_required: !(model_binding?.model ?? saved_model_id) }, runtime: await this.observe(cached), pending_interaction_count: (await view.interactions()).length };
+    return { session: project_session(metadata, view.archived, agent_id), runtime: await this.observe(cached), pending_interaction_count: (await view.interactions()).length };
   }
 
   /** canonical Message 页；直接贯通 SDK 解码，不展开附件。 */
@@ -91,13 +86,7 @@ export class SessionResources {
       const workspace = await host.resolve_workspace(workspace_config);
       const session = await agent.sessions.get(session_id, type, { workspace });
       await host.prepare_session?.(agent_id, session);
-      const model_binding = await this.browser(agent_id).model_binding(session_id, type);
-      const saved_model_id = !model_binding?.model ? read_saved_session_model(this.dependencies.root_path, agent_id, { ...view.metadata, id: view.session_id }, false) : undefined;
-      if (saved_model_id && !same_model(session.get("model")?.model_reference, saved_model_id)) {
-        const model = await host.resolve_model(saved_model_id);
-        if (model) await session.set({ model }, { persist_action: false });
-      }
-      if (!session.get("model")) throw new ResourceError("validation_error", "Select a Session model explicitly before sending; historical model labels cannot reconstruct its original default", 2);
+      if (!session.get("model")) throw new ResourceError("validation_error", "Configure the Agent model before sending", 2);
       const handle = await session.prompt({ query: input.message as string, request_id });
       this.invalidate(agent_id);
       return { session, handle };

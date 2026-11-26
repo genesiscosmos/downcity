@@ -9,7 +9,7 @@
  */
 
 import { normalize_agent_role } from "@downcity/type";
-import type { CityPowerContext } from "@/city/types/CityPowerContext.js";
+import type { PowerContext, PowerAgentHandle } from "@/power/types/PowerContext.js";
 import type { CityToolAgentSummary } from "@/city/types/CityPowerData.js";
 import { CityAction, CityActionError } from "@/city/power/builtin/CityAction.js";
 import { CityActionGroup } from "@/city/power/builtin/CityActionGroup.js";
@@ -19,16 +19,16 @@ import type { CityCreateAgent } from "@/city/types/CityCreateAgent.js";
 
 /** 把 Agent 投影为模型可读摘要。 */
 function describe_agent(
-  context: CityPowerContext,
-  agent: CityPowerContext["agents"][number],
+  context: PowerContext,
+  agent: PowerAgentHandle,
 ): CityToolAgentSummary {
   return {
     agent_id: agent.id,
     name: String(agent.name || agent.id),
-    ...(agent.role ? { role: agent.role } : {}),
+    ...(agent.role ? { role: [...agent.role] } : {}),
     description: agent.description,
-    model: agent.model?.model_reference ?? null,
-    is_current: agent.id === context.agent_id,
+    model: agent.model?.reference ?? null,
+    is_current: agent.id === context.agent.id,
   };
 }
 
@@ -40,9 +40,9 @@ class ListAgentsAction extends CityAction {
 
   protected async run(
     _args: Record<string, never>,
-    context: CityPowerContext,
+    context: PowerContext,
   ): Promise<{ agents: CityToolAgentSummary[] }> {
-    return { agents: context.agents.map((agent) => describe_agent(context, agent)) };
+    return { agents: context.city.agents.list().map((agent) => describe_agent(context, agent)) };
   }
 }
 
@@ -70,7 +70,7 @@ class CreateAgentAction extends CityAction<z.infer<typeof create_agent_input>> {
 
   protected async run(
     args: z.infer<typeof create_agent_input>,
-    context: CityPowerContext,
+    context: PowerContext,
   ): Promise<{ agent: CityToolAgentSummary }> {
     if (!this.create_agent) {
       throw new CityActionError({
@@ -79,7 +79,14 @@ class CreateAgentAction extends CityAction<z.infer<typeof create_agent_input>> {
       });
     }
     const agent = await this.create_agent(args);
-    return { agent: describe_agent(context, agent) };
+    const agent_handle = context.city.agents.get(agent.id);
+    if (!agent_handle) {
+      throw new CityActionError({
+        code: "internal",
+        message: `Created Agent is not registered in this City: ${agent.id}.`,
+      });
+    }
+    return { agent: describe_agent(context, agent_handle) };
   }
 }
 

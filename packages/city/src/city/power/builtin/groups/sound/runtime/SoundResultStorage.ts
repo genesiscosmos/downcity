@@ -1,12 +1,12 @@
 /**
  * TTS 标准媒体消息的本地落地。
- * 远端 URL 与内联音频写入 sound 私有目录，结果只含本地路径；
+ * 远端 URL 与内联音频通过 PowerContext.storage.files 写入当前 Power 私有目录，结果只含本地路径；
  * 下载、大小校验或写入失败立即报错，不把远端 URL/base64 伪装为本地文件。
  */
 import path from "node:path";
 import { createHash } from "node:crypto";
 import { outbound_http_fetch } from "@/http/OutboundHttp.js";
-import type { CityPowerContext } from "@/city/types/CityPowerContext.js";
+import type { PowerContext } from "@/power/types/PowerContext.js";
 import type { SoundTtsOutput, SoundTtsResult } from "../types/Sound.js";
 
 const MAX_AUDIO_BYTES = 50 * 1024 * 1024;
@@ -40,7 +40,7 @@ async function read_audio_response(response: Response): Promise<Buffer> {
 }
 
 /** 将每个音频 part 存为稳定的私有文件；不信任远端本地路径或文件名作为宿主路径。 */
-export async function localize_sound_result(context: CityPowerContext, result: SoundTtsResult): Promise<SoundTtsOutput> {
+export async function localize_sound_result(context: PowerContext, result: SoundTtsResult): Promise<SoundTtsOutput> {
   const files: string[] = [];
   for (const part of result.parts) {
     if (part.type !== "file" || !part.media_type?.startsWith("audio/")) continue;
@@ -62,9 +62,9 @@ export async function localize_sound_result(context: CityPowerContext, result: S
     context.abort_signal?.throwIfAborted();
     const digest = createHash("sha256").update(bytes).digest("hex");
     const extension = AUDIO_EXTENSIONS[part.media_type.toLowerCase()] ?? ".bin";
-    const absolute_path = context.files.resolve_path("sound", "results", `${digest}${extension}`);
-    await context.files.ensure_directory(path.dirname(absolute_path));
-    await context.files.write_file_atomically(absolute_path, bytes);
+    const absolute_path = context.storage.files.resolve_path("sound", "results", `${digest}${extension}`);
+    await context.storage.files.ensure_directory(path.dirname(absolute_path));
+    await context.storage.files.write_file_atomically(absolute_path, bytes);
     files.push(absolute_path);
   }
   return { files };

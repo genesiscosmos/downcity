@@ -1,18 +1,26 @@
-/** Inbox 展示样式：行与页面骨架归宿主，仅定义来源元信息、单列阅读内容和紧凑状态。 */
+/**
+ * Inbox 事项与阅读页布局。侧栏行、菜单、表单和 Markdown 沿用宿主组件与主题。
+ * 主页面只保留一个宿主顶栏；标题、来源和正文同列，正文由宿主单独滚动。
+ */
 .inbox-workspace { display: flex; flex: 1; flex-direction: column; min-width: 0; min-height: 0; color: var(--foreground); }
 .inbox-workspace:focus, .inbox-sidebar-items:focus { outline: none; }
+.inbox-workspace-placeholder { display: flex; flex: 1; align-items: center; justify-content: center; min-width: 0; padding: 2rem 1.5rem; }
 .inbox-sidebar-items { display: flex; flex: 1; flex-direction: column; min-width: 0; }
 /* 占满宿主滚动区的剩余高度，空态沿两个轴居中；列表仍由宿主统一滚动。 */
 .inbox-sidebar-placeholder { display: flex; flex: 1; align-items: center; justify-content: center; min-width: 0; padding-block: 1.5rem; }
 .inbox-empty-icon { display: inline-flex; width: 1.25rem; height: 1.25rem; }
 .inbox-empty-icon > svg { width: 100%; height: 100%; }
 /* 分组标题与条目左缘共线，数量保持次要层级，组内行距由宿主 comfortable 规格提供。 */
-.inbox-group-label { display: flex; align-items: baseline; gap: .5rem; padding-block: .375rem .25rem; font-size: var(--text-xs, .75rem); font-weight: 500; line-height: var(--text-xs--line-height, 1rem); color: var(--muted-foreground); }
+.inbox-group-label { display: flex; align-items: baseline; justify-content: space-between; gap: .5rem; padding-block: .5rem .25rem; font-size: var(--text-xs, .75rem); font-weight: 500; line-height: var(--text-xs--line-height, 1rem); color: var(--muted-foreground); }
 .inbox-group-label > span { font-size: var(--text-2xs, .6875rem); font-weight: 400; font-variant-numeric: tabular-nums; }
-.inbox-item-title { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 400; }
+/* 用宿主可组合的文字槽展示预览，行高随真实内容增长，不复制选中或菜单样式。 */
+.inbox-list-row { min-width: 0; }
+.inbox-item-title { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; white-space: normal; overflow-wrap: anywhere; font-size: var(--text-xs, .75rem); font-weight: 400; line-height: 1.5; color: var(--foreground); }
 .inbox-item-title[data-unread="true"] { font-weight: 500; }
-/* 来源与时间紧凑相邻，沿用宿主副文字字号和颜色，长名称为完整时间让出空间。 */
-.inbox-list-meta { display: flex; align-items: baseline; gap: .5rem; min-width: 0; max-width: 100%; }
+.inbox-item-preview { display: flex; flex-direction: column; gap: .125rem; min-width: 0; width: 100%; }
+.inbox-item-summary { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 1; overflow: hidden; white-space: normal; overflow-wrap: anywhere; line-height: 1.5; }
+/* 来源与时间在首行两端对齐，以次要颜色让事项标题保持主要阅读层级。 */
+.inbox-list-meta { display: flex; align-items: baseline; justify-content: space-between; gap: .75rem; min-width: 0; max-width: 100%; font-size: var(--text-2xs, .6875rem); font-weight: 400; color: var(--muted-foreground); }
 .inbox-list-meta > span:first-child { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .inbox-list-meta > time { flex-shrink: 0; white-space: nowrap; font-variant-numeric: tabular-nums; }
 .inbox-avatar { display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; color: var(--muted-foreground); }
@@ -21,19 +29,46 @@
 .inbox-avatar > :is(svg, img) { width: 100%; height: 100%; }
 .inbox-attention-dot { display: inline-block; flex: 0 0 6px; width: 6px; height: 6px; border-radius: 50%; }
 .inbox-attention-neutral { background: var(--muted-foreground); }
-.inbox-detail-status { display: inline-flex; align-items: center; gap: 6px; }
-.inbox-source { display: inline-flex; align-items: center; gap: 7px; }
-/* ActivityHeader 持有描述和操作，ActivityDetailPanel 持有正文排版；此处只定义业务内容。 */
-.inbox-detail-note { color: var(--muted-foreground); }
-.inbox-origin { color: var(--muted-foreground); }
+/* Desktop 提供真实 MainViewHeader；通用宿主也只渲染一层固定页头。 */
+.inbox-page-header { display: flex; flex: none; align-items: center; justify-content: space-between; gap: 1rem; min-height: 2.5rem; padding-inline: 1rem; font-size: var(--text-xs, .75rem); background: var(--background); }
+.inbox-detail { display: flex; flex: 1; flex-direction: column; min-width: 0; }
+.inbox-detail-actions { display: flex; flex-shrink: 0; align-items: center; gap: .25rem; }
+/* 标题、发件身份和正文左对齐；阅读列不会在不同内容状态之间左右跳动。 */
+.inbox-detail-content { box-sizing: border-box; width: 100%; max-width: 56rem; min-width: 0; padding: 2rem 2.5rem 4rem; }
+.inbox-detail-heading { display: flex; flex-direction: column; gap: 1.25rem; margin-bottom: 2rem; }
+.inbox-detail-heading h1 { margin: 0; font-size: var(--text-2xl, 1.5rem); font-weight: 500; line-height: 1.4; overflow-wrap: anywhere; }
+.inbox-detail-byline { display: flex; align-items: center; gap: .75rem; min-width: 0; }
+.inbox-detail-sender { display: flex; flex: 1; flex-direction: column; gap: .125rem; min-width: 0; }
+.inbox-detail-identity { display: flex; flex-wrap: wrap; align-items: baseline; gap: .375rem .75rem; min-width: 0; }
+.inbox-source { display: block; min-width: 0; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--text-xs, .75rem); }
+.inbox-detail-sender > time { font-size: var(--text-2xs, .6875rem); color: var(--muted-foreground); font-variant-numeric: tabular-nums; }
+.inbox-detail-status { display: inline-flex; flex: none; align-items: center; gap: .375rem; font-size: var(--text-2xs, .6875rem); color: var(--muted-foreground); }
+.inbox-detail-body { display: flex; flex-direction: column; gap: 1.5rem; min-width: 0; font-size: var(--text-sm, .875rem); }
+.inbox-detail-note { margin: 0; color: var(--muted-foreground); font-size: var(--text-xs, .75rem); }
+.inbox-form, .inbox-result { min-width: 0; }
+/* 错误摘要直接使用阅读正文；长错误标识自然换行，不包整栏灰底或固定高度面板。 */
+.inbox-result { overflow-wrap: anywhere; }
+.inbox-result > .inbox-inline-error { margin-top: 1rem; }
+.inbox-origin { margin-top: .5rem; font-size: var(--text-2xs, .6875rem); color: var(--muted-foreground); }
 .inbox-origin summary { cursor: pointer; width: fit-content; }
+.inbox-origin summary:focus-visible { outline: 2px solid var(--ring); outline-offset: 4px; }
 .inbox-origin dl { display: grid; grid-template-columns: 60px minmax(0, 1fr); gap: .5rem .75rem; margin-top: .75rem; }
-.inbox-origin dd { overflow-wrap: anywhere; font-family: var(--font-mono); }
-.inbox-resolution { display: flex; gap: .75rem; align-items: flex-start; }
+.inbox-origin dd { margin: 0; overflow-wrap: anywhere; font-family: var(--font-mono); }
+.inbox-resolution { display: flex; gap: .75rem; align-items: flex-start; padding-block: .5rem; }
+.inbox-resolution p { margin: 0; }
+.inbox-resolution h2 { line-height: 1.5; }
 .inbox-resolution > svg { width: 20px; height: 20px; flex-shrink: 0; color: var(--muted-foreground); }
 .inbox-resolution h2 { margin: 0 0 .25rem; font-size: inherit; font-weight: 500; }
 .inbox-resolution p { color: var(--muted-foreground); }
 .inbox-resolution button { margin-top: .75rem; }
-.inbox-inline-error button { text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
 .inbox-inline-error { color: var(--destructive); }
-.inbox-inline-error button { margin-left: 8px; }
+.inbox-inline-error button { margin-left: .5rem; text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
+.inbox-refresh-notice { display: inline-flex; flex-wrap: wrap; align-items: center; gap: .5rem; }
+/* 窄主视图按自身可用宽度调整，避免侧栏展开时仍套用宽屏正文留白。 */
+.inbox-workspace { container-type: inline-size; }
+@container (max-width: 32rem) {
+  .inbox-detail-content { padding: 1.5rem 1rem 3rem; }
+  .inbox-detail-heading { gap: 1rem; margin-bottom: 1.5rem; }
+  .inbox-detail-byline { flex-wrap: wrap; }
+  .inbox-detail-status { max-width: 100%; overflow-wrap: anywhere; }
+}

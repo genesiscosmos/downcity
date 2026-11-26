@@ -1,4 +1,4 @@
-/** Inbox 事项侧栏：标题菜单固定使用省略号，事项状态由各行菜单与详情展示。 */
+/** Inbox 事项侧栏：按关注与通知组织内容预览，统一承载整理操作、读取重试和列表焦点。 */
 import { useEffect, useRef } from "react";
 import type { PowerSidebarComponentProps } from "@downcity/city/power/react";
 import type { NotificationRendererOptions } from "../types/NotificationRenderer.js";
@@ -15,7 +15,7 @@ export function InboxSidebar({ store, options, ...props }: PowerSidebarComponent
   /** 与详情共用的宿主头像和关注状态适配。 */ options: NotificationRendererOptions;
 }) {
   const { state, choose } = use_inbox(store, props);
-  const { Sidebar, SidebarSection, SidebarSubText, ItemMenu, EmptyState, LoadingState } = props.ui.components;
+  const { Sidebar, SidebarSection, SidebarSubText, ItemMenu, EmptyState, LoadingState, Button } = props.ui.components;
   const data = state.data;
   const list_region = useRef<HTMLDivElement>(null);
   const previous_selection = useRef(state.selected?.key);
@@ -42,11 +42,12 @@ export function InboxSidebar({ store, options, ...props }: PowerSidebarComponent
     ]} />
   }>
     <div ref={list_region} tabIndex={-1} className="inbox-sidebar-items" role="region" aria-label="收件箱事项">
+      {state.error && data ? <SidebarSubText><span className="inbox-refresh-notice" role="status">内容暂未更新<Button on_click={() => void store.refresh()}>重试</Button></span></SidebarSubText> : null}
       {state.update_error ? <SidebarSubText><span className="inbox-inline-error" role="alert" title={state.update_error}>通知整理失败，请重试。</span></SidebarSubText> : null}
       {state.loading || !data || !entries.length ? <div className="inbox-sidebar-placeholder" role="status">
         {state.loading ? <LoadingState label="正在读取收件箱…" />
-          : !data ? <EmptyState size="compact" title="暂时无法读取" description="再次点击 Inbox 重试" icon={<span className="inbox-empty-icon"><InboxIcon kind="failure" /></span>} />
-            : <EmptyState size="compact" title="暂无通知" icon={<span className="inbox-empty-icon"><InboxIcon kind="inbox" /></span>} />}
+          : !data ? <EmptyState size="compact" title="暂时无法读取" action={<Button on_click={() => void store.refresh()}>重试</Button>} icon={<span className="inbox-empty-icon"><InboxIcon kind="failure" /></span>} />
+            : <EmptyState size="compact" title="暂无事项" icon={<span className="inbox-empty-icon"><InboxIcon kind="inbox" /></span>} />}
       </div> : groups.filter((group) => group.entries.length).map((group) => <SidebarSection key={group.key} spacing="comfortable" label={<span className="inbox-group-label">{group.label}{group.count > 0 ? <span>{group.count}</span> : null}</span>}>
         <InboxList entries={group.entries} selected_key={state.selected?.key} busy={busy} choose={choose} update_notifications={update_notifications} props={props} options={options} />
       </SidebarSection>)}

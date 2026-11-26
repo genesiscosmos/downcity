@@ -22,7 +22,7 @@ export async function listPlatformModelChoices(root?: string): Promise<PlatformM
 
 /** 裸 ID 和缺失来源要求用户显式选择目录条目，不猜测某一 Downtown。 */
 export async function assertPlatformModelReady(model_id: ModelReference): Promise<void> {
-  if (!(await listPlatformModelChoices()).some((choice) => same_model(choice.value, model_id))) throw new Error("Model requires explicit selection from city downtown models");
+  if (!(await listPlatformModelChoices()).some((choice) => same_model(choice.value, model_id))) throw new Error("Model requires explicit selection from city towns models");
 }
 
 /** 命令行输入不承担路由编码；同名模型要求通过交互目录明确选择。 */

@@ -2,12 +2,13 @@
  * Group 成员选择协议与决策模型策略。
  *
  * 每次只选择本轮需要并行回复的成员。整轮执行结束后再次判断，空集合表示回到空闲。
- * 用户消息按回复概率抽样：40% 以下不回复，40%–75% 线性映射到 0–100%，75% 以上必回复。
- * 自动接力保留布尔判定，避免概率抽样延长已完成的协作。
+ * 用户轮优先选择双因子 true 概率均严格大于 50% 的成员；空闲输入无人达标时兜底一位。
+ * 自动接力保留保守的布尔判定。所有选择均为确定性规则，不做随机抽样。
  * 决策模型不生成任务指令、阶段计划或聊天文本；成员根据共享对话自行执行。
  */
 
 import type { GroupMessage } from "@/types/group/Group.js";
+import { find_idle_fallback_member } from "@/group/IdleFallbackSelection.js";
 
 /** 本次成员选择的触发来源。 */
 export type DispatchTrigger = "user" | "auto";
@@ -38,27 +39,52 @@ export interface DispatchMemberProfile {
 export interface DispatchDecision {
   /** 本轮需要回复的成员 ID；不重复，空数组表示结束本次协作。 */
   readonly member_ids: readonly string[];
-  /** 默认策略逐成员的概率和抽样记录；自定义策略可省略。 */
+  /** 默认策略逐成员的因子判断和选择记录；自定义策略可省略。 */
   readonly member_decisions?: readonly DispatchMemberDecision[];
 }
 
-/** 单个成员的决策与抽样事实，用于解释选中或未选中的原因。 */
-export interface DispatchMemberDecision {
+/** 布尔判断的审计事实；自动接力允许模型省略置信度。 */
+export interface DispatchBooleanDecision {
+  /** 模型对当前问题返回的原始布尔结论。 */
+  readonly value: boolean;
+  /** 所选 value 的置信度，范围为 0–1；模型未提供时省略。 */
+  readonly probability?: number;
+  /** 问题为 true 的概率：value 为 false 时取 1 - probability；无置信度时省略。 */
+  readonly true_probability?: number;
+}
+
+/** 用户轮单个因子的完整判断，必须提供概率供确定性门槛使用。 */
+export interface DispatchFactorDecision extends DispatchBooleanDecision {
+  /** 模型对原始布尔结论的置信度，范围为 0–1。 */
+  readonly probability: number;
+  /** 还原后的 true 概率，必须严格大于 0.5 才通过该因子。 */
+  readonly true_probability: number;
+}
+
+/** 逐成员的确定性选择记录；触发类型决定所需的审计因子。 */
+export type DispatchMemberDecision = {
   /** 本次判定对应的群成员 ID。 */
   readonly agent_id: string;
-  /** 决策模型原始布尔结论。 */
-  readonly value: boolean;
-  /** 模型对所选布尔结论的置信度；未提供时省略。 */
-  readonly probability?: number;
-  /** 从布尔结论和置信度还原的回复概率；未提供置信度时省略。 */
-  readonly reply_probability?: number;
-  /** 本轮实际使用的回复率；自动轮次为布尔结论对应的 0 或 1。 */
-  readonly selection_probability: number;
-  /** 仅在概率介于 0 与 1 之间时生成的随机数，范围为 [0, 1)。 */
-  readonly random_value?: number;
-  /** 本轮是否选中该成员。 */
+  /** 用户消息触发，分别判断相关性和本轮回应需要。 */
+  readonly trigger: "user";
+  /** 当前话题与成员能力、身份或正在参与的对话是否相关。 */
+  readonly relevance: DispatchFactorDecision;
+  /** 用户此刻是否期待该成员回应，或该成员是否仍有必要回应。 */
+  readonly response_need: DispatchFactorDecision;
+  /** 两项 true 概率均严格大于 0.5，或该成员被空闲兜底选中时为 true。 */
   readonly selected: boolean;
-}
+  /** 仅在用户空闲输入且全员未达阈值时，为确定性兜底选中的成员标记 true。 */
+  readonly idle_fallback?: true;
+} | {
+  /** 本次判定对应的群成员 ID。 */
+  readonly agent_id: string;
+  /** 成员回复触发，仅处理必要接力。 */
+  readonly trigger: "auto";
+  /** 是否有必要交接或明确未完成的已授权工作；按原始布尔结论执行。 */
+  readonly continuation: DispatchBooleanDecision;
+  /** 与 continuation.value 一致，不应用用户轮的概率门槛。 */
+  readonly selected: boolean;
+};
 
 /** 一次成员选择所需的共享对话快照。 */
 export interface DispatchInput {
@@ -66,6 +92,8 @@ export interface DispatchInput {
   readonly group: DispatchGroupProfile;
   /** 本次由用户消息还是完整的一轮成员回复触发。 */
   readonly trigger: DispatchTrigger;
+  /** 本批含在无成员执行或等待交互时到达的用户消息；默认策略无人达标时至少选一位。自定义策略自行处理此约束。 */
+  readonly require_response?: boolean;
   /** 当前批次最新用户消息；自动轮次为批次最后一条成员消息。 */
   readonly current_message: GroupMessage;
   /** 当前新增批次之前的共享对话。 */
@@ -88,11 +116,11 @@ export interface DispatchStrategy {
 export interface GroupDecisionInput {
   /** JSON 序列化的群聊上下文；不包含成员工具或执行权限。 */
   readonly state: { /** 状态载荷类型。 */ type: "text"; /** 完整判定上下文。 */ text: string };
-  /** 每个成员一个是否需要回复的布尔问题。 */
+  /** 用户轮每个成员两个因子问题；自动轮每个成员一个接力问题。 */
   readonly questions: Array<{
-    /** 对应成员的稳定 Agent ID。 */ id: string;
+    /** 问题稳定标识；用户轮由成员 ID 与因子编码，自动轮为成员 ID。 */ id: string;
     /** 成员选择只需要布尔判断。 */ type: "boolean";
-    /** 判断当前成员是否需要实质回复的要求。 */ instructions: string;
+    /** 当前因子或自动接力的布尔判定要求。 */ instructions: string;
   }>;
 }
 
@@ -100,9 +128,9 @@ export interface GroupDecisionInput {
 export interface GroupDecisionResult {
   /** 必须恰好覆盖输入的全部问题。 */
   readonly answers: readonly {
-    /** 被回答问题的成员 ID。 */ readonly question_id: string;
+    /** 必须与输入 questions 中某个问题的 id 完全一致。 */ readonly question_id: string;
     /** boolean 问题的值；策略拒绝非布尔值。 */ readonly value: unknown;
-    /** 所选 value 的置信度，范围为 0–1；用户消息调度必须提供，false 时用 1 - probability 还原回复概率。 */
+    /** 所选 value 的置信度，范围为 0–1；用户轮两个因子均必须提供，false 时用 1 - probability 还原 true 概率。 */
     readonly probability?: number;
   }[];
 }
@@ -130,6 +158,7 @@ export class DecisionDispatchStrategy implements DispatchStrategy {
   async decide_dispatch(input: DispatchInput): Promise<DispatchDecision> {
     if (!this.model) throw new Error("Group requires a configured decision model for dispatch");
     input.abort_signal.throwIfAborted();
+    const questions = input.members.flatMap((member) => create_member_questions(member, input.trigger));
     const result = await this.model.decision({
       state: {
         type: "text",
@@ -138,7 +167,8 @@ export class DecisionDispatchStrategy implements DispatchStrategy {
           members: input.members,
           current_message: input.current_message,
           priorities: "最新用户请求优先于群聊长期目标。问候、确认在线和身份询问只需简短回应，不授权开发、创建文档或启动新工作。群成员仅限 members 中的成员。",
-          recent_speaker_ids: [...new Set(input.pending_messages.filter((message) => message.sender_type === "agent").map((message) => message.sender_id))],
+          conversation_rules: "无 @ 的群内提问默认面向全群，按成员能力、身份和对话参与关系判断相关性。你俩、继续、再来一次等指代继承最近相关对话的参与者，不要求重新点名。问候、闲聊和游戏也可以需要回应，不要求提供新知识。",
+          recent_speaker_ids: [...new Set([...input.history.slice(-20), ...input.pending_messages].filter((message) => message.sender_type === "agent").map((message) => message.sender_id))],
           latest_user_message: input.pending_messages.filter((message) => message.sender_type === "user").at(-1)
             ?? input.history.filter((message) => message.sender_type === "user").at(-1),
           history: input.history.slice(-20),
@@ -146,16 +176,10 @@ export class DecisionDispatchStrategy implements DispatchStrategy {
           trigger: input.trigger,
         }),
       },
-      questions: input.members.map((member) => ({
-        id: member.agent_id,
-        type: "boolean",
-        instructions: `本轮是否应该由成员 ${member.name} (${member.agent_id}) 回复当前群聊？成员能力：${member.description || "未提供"}。可同时选择多个成员。${input.trigger === "user"
-          ? "本轮由用户新消息触发。用户对该成员的直接提问、点名或 @、问候、确认在线、澄清和与成员能力相关的请求，都应选择 true，即使回复只是简短确认。仅当消息与该成员无关、已经被充分回答、明显重复，或用户明确不需要回复时选择 false。"
-          : "本轮由成员回复触发，默认选择 false。只有用户明确请求的工作尚未完成，且新增回复明确向该成员交接必要工作、提出该成员需要回答的问题，或该成员有明确尚未完成的已授权任务时，才选择 true。成员刚回复过时，继续选中自己必须有明确未完成工作，不能因为自己的泛泛邀请、计划、可继续做、询问用户需求而继续。问候、确认在线、介绍成员、等待用户提供需求、已有回答充分时，所有成员选择 false。群聊长期目标不构成自行开启工作的授权。"}`,
-      })),
+      questions,
     }, input.abort_signal);
     input.abort_signal.throwIfAborted();
-    const expected_ids = new Set(input.members.map((member) => member.agent_id));
+    const expected_ids = new Set(questions.map((question) => question.id));
     const answers = new Map<string, GroupDecisionResult["answers"][number]>();
     for (const answer of result.answers) {
       if (!expected_ids.has(answer.question_id) || answers.has(answer.question_id) || typeof answer.value !== "boolean") {
@@ -169,28 +193,76 @@ export class DecisionDispatchStrategy implements DispatchStrategy {
       }
       answers.set(answer.question_id, answer);
     }
-    if (answers.size !== expected_ids.size) throw new Error("Group decision omitted a member");
+    if (answers.size !== expected_ids.size) throw new Error("Group decision omitted a question");
     const member_decisions: DispatchMemberDecision[] = input.members.map((member) => {
-      const answer = answers.get(member.agent_id)!;
-      const value = answer.value as boolean;
-      // probability 是所选结论的置信度，不能把高置信度的 false 当作高回复概率。
-      const reply_probability = answer.probability === undefined ? undefined
-        : value ? answer.probability : 1 - answer.probability;
-      const selection_probability = input.trigger === "auto" ? Number(value)
-        : Math.max(0, Math.min(1, (reply_probability! - 0.4) / (0.75 - 0.4)));
-      const random_value = selection_probability > 0 && selection_probability < 1 ? Math.random() : undefined;
-      return {
-        agent_id: member.agent_id,
-        value,
-        ...(answer.probability !== undefined ? { probability: answer.probability, reply_probability } : {}),
-        selection_probability,
-        ...(random_value !== undefined ? { random_value } : {}),
-        selected: selection_probability === 1 || (random_value !== undefined && random_value < selection_probability),
-      };
+      if (input.trigger === "user") {
+        const relevance = read_factor_decision(answers.get(factor_question_id(member.agent_id, "relevance"))!);
+        const response_need = read_factor_decision(answers.get(factor_question_id(member.agent_id, "response_need"))!);
+        return {
+          agent_id: member.agent_id,
+          trigger: "user",
+          relevance,
+          response_need,
+          selected: relevance.true_probability > 0.5 && response_need.true_probability > 0.5,
+        };
+      }
+      const continuation = read_boolean_decision(answers.get(member.agent_id)!);
+      return { agent_id: member.agent_id, trigger: "auto", continuation, selected: continuation.value };
     });
+    const fallback_member_id = find_idle_fallback_member(member_decisions, input.trigger === "user" && input.require_response === true);
+    const final_decisions = member_decisions.map((decision) => decision.trigger === "user" && decision.agent_id === fallback_member_id
+      ? { ...decision, selected: true, idle_fallback: true as const }
+      : decision);
     return {
-      member_ids: member_decisions.filter((decision) => decision.selected).map((decision) => decision.agent_id),
-      member_decisions,
+      member_ids: final_decisions.filter((decision) => decision.selected).map((decision) => decision.agent_id),
+      member_decisions: final_decisions,
     };
   }
+}
+
+/** 无歧义地编码成员与因子，成员 ID 含分隔符时也不会冲突。 */
+function factor_question_id(agent_id: string, factor: "relevance" | "response_need"): string {
+  return JSON.stringify([agent_id, factor]);
+}
+
+/** 用户轮分开询问两个因子；自动轮只询问是否有必要接力。 */
+function create_member_questions(member: DispatchMemberProfile, trigger: DispatchTrigger): GroupDecisionInput["questions"] {
+  const identity = `成员 ${member.name} (${member.agent_id})；角色：${member.role?.join("、") || "未提供"}；能力：${member.description || "未提供"}。`;
+  if (trigger === "auto") {
+    return [{
+      id: member.agent_id,
+      type: "boolean",
+      instructions: `本轮是否应该由该成员继续回复当前群聊？${identity}可同时选择多个成员。本轮由成员回复触发，默认选择 false。只有用户明确请求的工作尚未完成，且新增回复明确向该成员交接必要工作、提出该成员需要回答的问题，或该成员有明确尚未完成的已授权任务时，才选择 true。成员刚回复过时，继续选中自己必须有明确未完成工作，不能因为自己的泛泛邀请、计划、可继续做、询问用户需求而继续。问候、确认在线、介绍成员、等待用户提供需求、已有回答充分时，所有成员选择 false。群聊长期目标不构成自行开启工作的授权。`,
+    }];
+  }
+  return [{
+    id: factor_question_id(member.agent_id, "relevance"),
+    type: "boolean",
+    instructions: `当前用户消息是否与该成员相关？${identity}仅判断相关性，与是否还需要回应分开。能力、身份或正在参与的对话任一相关即可为 true，不限于专业任务。无 @ 的群内提问默认面向全群，按成员能力、身份和对话参与关系判断，不把未点名当作无关。面向全群的问候、闲聊和游戏对适用成员也相关；直接点名或 @ 与该成员相关。你俩、继续、再来一次继承最近相关对话的参与者，结合历史识别对象，不要求重新 @。明显与该成员无关时为 false。`,
+  }, {
+    id: factor_question_id(member.agent_id, "response_need"),
+    type: "boolean",
+    instructions: `用户此刻是否期待该成员回应，或该成员是否仍有必要回应？${identity}仅判断本轮回应需要，与话题是否相关分开。用户直接提问、面向群里的意见征询、问候、确认在线、澄清、继续请求、必要交接和未完成的已授权回应都可以为 true。无 @ 的群内提问默认面向全群；你俩、继续、再来一次继承最近相关对话的参与者。问候、闲聊和游戏不要求有新知识贡献，简短确认或继续参与即可。历史中上一轮已完成不表示用户本轮的继续请求也已完成。当前请求已经被充分回答、只会重复已有回答、用户明确只问其他成员或明确无需回应时为 false。群聊长期目标不构成新工作的授权。`,
+  }];
+}
+
+/** 在严格校验答案后还原 true 概率；置信度始终针对所选布尔结论。 */
+function read_boolean_decision(answer: GroupDecisionResult["answers"][number]): DispatchBooleanDecision {
+  const value = answer.value as boolean;
+  return {
+    value,
+    ...(answer.probability !== undefined ? {
+      probability: answer.probability,
+      true_probability: value ? answer.probability : 1 - answer.probability,
+    } : {}),
+  };
+}
+
+/** 用户轮的两个因子必须都有有效置信度，不对缺失值补默认概率。 */
+function read_factor_decision(answer: GroupDecisionResult["answers"][number]): DispatchFactorDecision {
+  const decision = read_boolean_decision(answer);
+  if (decision.probability === undefined || decision.true_probability === undefined) {
+    throw new Error(`Missing Group factor probability: ${answer.question_id}`);
+  }
+  return { value: decision.value, probability: decision.probability, true_probability: decision.true_probability };
 }

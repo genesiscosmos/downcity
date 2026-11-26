@@ -110,7 +110,7 @@ export class AgentSessionCatalog {
 
   /** 配置单独读取，禁止让大 system snapshot 阻塞列表和消息请求。 */
   configuration(session_id: string): AgentSessionConfigurationRow {
-    const row = this.owner.database.prepare(`SELECT configuration.* FROM session_configuration AS configuration
+    const row = this.owner.database.prepare(`SELECT configuration.session_key, configuration.approval_mode, configuration.execution_profile, configuration.system_snapshot FROM session_configuration AS configuration
       JOIN sessions USING (session_key) WHERE session_id = ?`).get(session_id);
     if (!row) throw new Error("session_not_found");
     return row as unknown as AgentSessionConfigurationRow;

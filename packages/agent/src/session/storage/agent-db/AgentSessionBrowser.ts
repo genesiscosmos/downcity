@@ -17,7 +17,6 @@ import { acquire_agent_session_storage } from "./AgentSessionRuntime.js";
 import { agent_session_read_view, project_agent_session_record } from "./AgentSessionReadView.js";
 import { resolve_prompt_request_identity } from "../../loop/SessionTurnHandles.js";
 import { read_session_completion } from "../AgentPendingReferences.js";
-import { decode_model_binding } from "../ModelBindingCodec.js";
 
 /** 独立读租约可长于执行器生命周期，dispose 返回资源关闭的真实 Promise。 */
 export class AgentSessionBrowser {
@@ -77,11 +76,6 @@ export class AgentSessionBrowser {
     return await (await this.connection()).read({ command: "configuration", session_id });
   }
 
-  async model_binding(session_id: string, type: string) {
-    const view = await this.get(session_id, type);
-    const config = await this.configuration(view.session_id);
-    return config.model_binding ? decode_model_binding(config.model_binding) : undefined;
-  }
 
   /** canonical 接收事实在同一个精确活动记录中读取，不恢复执行。 */
   async receipt(session_id: string, type: string, request_id: string) {

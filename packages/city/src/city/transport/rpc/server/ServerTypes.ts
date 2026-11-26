@@ -13,7 +13,6 @@ import type { PowerSnapshot } from "@/power/index.js";
 import type { WorkspaceRuntime } from "@/workspace/index.js";
 import type { SessionSystemMessage } from "@downcity/type";
 import type { RpcEventFrame } from "@/city/transport/types/RpcProtocol.js";
-import type { AgentSessionModelResolver } from "@/city/transport/types/AgentSessionModelResolver.js";
 
 /**
  * RPC server 启动参数。
@@ -31,8 +30,6 @@ export interface RpcServerStartOptions {
   workspace?: WorkspaceRuntime;
   /** 当前请求对应的 Agent 执行能力。 */
   get_agent_context?: () => RpcAgentContext;
-  /** 将远程模型 ID 解析为当前宿主可执行的模型实例。 */
-  resolve_session_model?: AgentSessionModelResolver;
   /** 由宿主重新加载并提交 Workspace Env 的能力。 */
   reload_workspace_env?: () => Record<string, string> | Promise<Record<string, string>>;
   /** 按请求选择 Agent 级 handler 依赖；CityRPC 使用该入口完成多 Agent 路由。 */
@@ -55,8 +52,6 @@ export interface RpcRequestHandlerOptions {
   workspace?: WorkspaceRuntime;
   /** 当前请求对应的 Agent 执行能力。 */
   get_agent_context?: () => RpcAgentContext;
-  /** 将远程模型 ID 解析为当前宿主可执行的模型实例。 */
-  resolve_session_model?: AgentSessionModelResolver;
   /** 由宿主重新加载并提交 Workspace Env 的能力。 */
   reload_workspace_env?: () => Record<string, string> | Promise<Record<string, string>>;
   /** 返回 City 宿主身份；仅 CityRPC 提供。 */

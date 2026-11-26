@@ -8,46 +8,31 @@
  * - 嵌套 power 调用沿用本次调用的来源身份，因此组合 power 不会丢掉交互能力。
  */
 
-import type { PowerTown } from "@/power/types/PowerTown.js";
-import type { FileSystem, WorkspaceRuntime, WorkspaceShell } from "@/workspace/index.js";
+import type { FileSystem } from "@/workspace/index.js";
 import type {
   PowerJsonObject,
   PowerJsonValue,
   PowerNotificationPublisher,
-  PowerSessionCollection,
   PowerSessionHandle,
 } from "@/power/index.js";
-import type { PowerLogger } from "@/power/types/PowerContext.js";
+import type { PowerAgentHandle, PowerCityHandle, PowerLogger, PowerWorkspaceHandle } from "@/power/types/PowerContext.js";
 import type { PowerCall } from "@/power/types/PowerCall.js";
-import type { PowerCallSite, PowerRuntimeHost } from "@/power/types/PowerCallSite.js";
 import type { StepSnapshot } from "@/power/types/StepSnapshot.js";
 import { PowerContext } from "@/power/types/PowerContext.js";
 import { redact_public_value } from "./PowerPrivateValues.js";
 
 /** PowerContext 构造输入；全部字段都已由容器解析完成。 */
 export interface CreatePowerContextInput {
-  /** 容器运行时端口；用于 `city.powers` 的嵌套调用与查询。 */
-  readonly host: PowerRuntimeHost;
-  /** 本次调用的来源身份；嵌套调用沿用它。 */
-  readonly site: PowerCallSite;
-  /** 当前 Agent 稳定标识。 */
-  readonly agent_id: string;
-  /** 当前 Agent 用户可见名称。 */
-  readonly agent_name?: string;
-  /** 当前 Agent 可选身份与角色列表快照。 */
-  readonly agent_role?: readonly string[];
-  /** 当前 Agent 能力描述。 */
-  readonly agent_description?: string;
-  /** 当前 Workspace 运行时引用；无项目会话时为空。 */
-  readonly workspace?: WorkspaceRuntime;
+  /** City 为本次调用提供的统一领域能力。 */
+  readonly city: PowerCityHandle;
+  /** 从 City 目录绑定的当前 Agent 句柄。 */
+  readonly agent: PowerAgentHandle;
+  /** 从 City 目录绑定的当前 Workspace 句柄。 */
+  readonly workspace?: PowerWorkspaceHandle;
   /** 当前 Power 私有数据根路径。 */
   readonly data_path: string;
   /** 当前 Power 私有数据文件端口。 */
   readonly data_files: FileSystem;
-  /** 当前 Workspace 可选 Shell。 */
-  readonly shell?: WorkspaceShell;
-  /** 当前 Agent 的 Session 集合端口。 */
-  readonly sessions: PowerSessionCollection;
   /** 当前调用所属 Session 句柄；非 Session 调用时为空。 */
   readonly session?: PowerSessionHandle;
   /** 当前调用所属 Turn 句柄；非 Turn 调用时为空。 */
@@ -62,43 +47,16 @@ export interface CreatePowerContextInput {
   readonly config: PowerJsonObject;
   /** 当前执行范围日志器。 */
   readonly logger: PowerLogger;
-  /** 本次动作可使用的 Town 资源路由；不捕获全局当前账户。 */
-  readonly town?: PowerTown;
   /** 当前 Power 通知端口。 */
   readonly notifications?: PowerNotificationPublisher;
-  /** 延迟读取 Workspace env；读当前值，与快照不同。 */
-  readonly get_workspace_env: () => Readonly<Record<string, string>>;
-  /** 延迟读取 Agent instruction；读当前值，与快照不同。 */
-  readonly get_instructions: () => readonly string[];
 }
 
 /** 把已解析的值装成一次调用的 PowerContext。 */
 export function create_power_context(input: CreatePowerContextInput): PowerContext {
   return new PowerContext({
-    city: {
-      ...(input.town ? { town: input.town } : {}),
-      powers: input.host.powers_for(input.site),
-    },
-    agent: {
-      id: input.agent_id,
-      name: String(input.agent_name || input.agent_id).trim() || input.agent_id,
-      ...(input.agent_role?.length ? { role: [...input.agent_role] } : {}),
-      description: String(input.agent_description || "").trim(),
-      get instructions() {
-        return input.get_instructions();
-      },
-      sessions: input.sessions,
-    },
-    ...(input.workspace ? {
-      workspace: {
-        id: input.workspace.id,
-        path: input.workspace.path,
-        ...(input.shell ? { shell: input.shell } : {}),
-        get env() {
-          return input.get_workspace_env();
-        },
-      },
-    } : {}),
+    city: input.city,
+    agent: input.agent,
+    ...(input.workspace ? { workspace: input.workspace } : {}),
     ...(input.session ? { session: input.session } : {}),
     ...(input.turn ? { turn: input.turn } : {}),
     snapshot: input.snapshot,

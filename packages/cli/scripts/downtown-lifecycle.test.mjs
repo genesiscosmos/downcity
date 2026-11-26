@@ -85,7 +85,7 @@ test("City 登录无需来源或产品注册参数", () => {
   try {
     const output = execFileSync(
       process.execPath,
-      [cli_path, "--lang", "en", "downtown", "login", "--help"],
+      [cli_path, "--lang", "en", "towns", "login", "--help"],
       { encoding: "utf8", env: { ...process.env, DC_PLATFORM_ROOT: platform_root } },
     );
     assert.doesNotMatch(output, /--bureau-id/u);

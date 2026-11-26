@@ -3,11 +3,11 @@
  *
  * 关键点（中文）
  * - 只回答「我现在是谁、在哪、用什么模型、现在几点」这类自身环境问题。
- * - 全部字段来自当前执行上下文，不读取文件系统、不访问网络。
+ * - 身份读取统一上下文，时间在查询时生成，不读取文件系统、不访问网络。
  */
 
-import { format_date_in_timezone } from "@downcity/type";
-import type { CityPowerContext } from "@/city/types/CityPowerContext.js";
+import { format_date_in_timezone, resolve_runtime_timezone } from "@downcity/type";
+import type { PowerContext } from "@/power/types/PowerContext.js";
 import type { CityToolEnv } from "@/city/types/CityPowerData.js";
 import { CityAction } from "@/city/power/builtin/CityAction.js";
 import { CityActionGroup } from "@/city/power/builtin/CityActionGroup.js";
@@ -22,20 +22,22 @@ class GetEnvAction extends CityAction {
 
   protected async run(
     _args: Record<string, never>,
-    context: CityPowerContext,
+    context: PowerContext,
   ): Promise<CityToolEnv> {
+    const timezone = resolve_runtime_timezone();
+    const now = new Date();
     return {
-      agent_id: context.agent_id,
-      agent_name: context.agent_name,
-      session_id: context.session_id,
-      turn_id: context.turn_id,
-      workspace_id: context.workspace_id,
-      workspace_name: context.workspace_name,
-      workspace_path: context.workspace_path,
-      model_id: context.model_id,
-      timezone: context.timezone,
-      now: context.now.toISOString(),
-      current_date: format_date_in_timezone(context.now, context.timezone),
+      agent_id: context.agent.id,
+      agent_name: context.agent.name,
+      session_id: context.session?.id ?? null,
+      turn_id: context.turn?.id ?? null,
+      workspace_id: context.workspace?.id ?? null,
+      workspace_name: context.workspace?.name ?? null,
+      workspace_path: context.workspace?.path ?? null,
+      model_id: context.agent.model?.id ?? null,
+      timezone,
+      now: now.toISOString(),
+      current_date: format_date_in_timezone(now, timezone),
     };
   }
 }

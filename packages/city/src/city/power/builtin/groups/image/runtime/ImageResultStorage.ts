@@ -2,7 +2,7 @@
  * Image capability 生成结果本地化。
  *
  * 关键点（中文）
- * - 远端 URL 与内联 data URL 都会落到当前 capability 私有目录，动作只返回本地路径。
+ * - 远端 URL 与内联 data URL 都会落到当前 Power 私有目录，动作只返回本地路径。
  * - File Part 的 `url` 最终是稳定的本地绝对路径，模型上下文里不出现 base64 载荷。
  * - 单张图片本地化失败会记录可观察错误；内联载荷失败时清空 `url` 而不是回填原始
  *   data URL，否则超大 base64 会进入模型上下文并撑爆窗口。
@@ -35,12 +35,12 @@ const MEDIA_TYPE_EXTENSIONS: Record<string, string> = {
   "image/webp": ".webp",
 };
 
-/** 当前 capability 的文件端口。 */
+/** 图片本地化使用的统一 Power 上下文。 */
 type ImageFiles = ImageResultStorageInput["context"];
 
 /** 结果落盘路径解析输入。 */
 interface ResultPathInput {
-  /** 当前 capability 执行上下文。 */
+  /** 当前 Power 执行上下文。 */
   context: ImageFiles;
   /** 当前图片任务 ID，用于划分稳定的本地结果目录。 */
   job_id: string;
@@ -136,7 +136,7 @@ function parse_data_url(url: string): ParsedDataUrl {
   };
 }
 
-/** 计算图片结果在当前 capability 私有目录中的绝对路径。 */
+/** 计算图片结果在当前 Power 私有目录中的绝对路径。 */
 function resolve_result_path(input: ResultPathInput): string {
   const extension = resolve_extension({
     media_type: input.media_type,
@@ -146,7 +146,7 @@ function resolve_result_path(input: ResultPathInput): string {
   const job_segment = to_safe_segment(input.job_id, "job");
   const filename = `image_${String(input.part_index + 1).padStart(2, "0")}${extension}`;
   const relative_path = path.posix.join("image", "results", job_segment, filename);
-  return input.context.files.resolve_path(...relative_path.split("/"));
+  return input.context.storage.files.resolve_path(...relative_path.split("/"));
 }
 
 /** 把图片字节原子写入指定绝对路径。 */
@@ -155,8 +155,8 @@ async function write_image_file(
   absolute_path: string,
   bytes: Buffer,
 ): Promise<void> {
-  await context.files.ensure_directory(path.dirname(absolute_path));
-  await context.files.write_file_atomically(absolute_path, bytes);
+  await context.storage.files.ensure_directory(path.dirname(absolute_path));
+  await context.storage.files.write_file_atomically(absolute_path, bytes);
 }
 
 /** 读取响应体，并强制上限，避免异常大文件占满磁盘。 */
@@ -212,7 +212,7 @@ async function persist_remote_image(input: {
     filename: read_part_filename(input.part),
     source_url: input.source_url,
   });
-  if (await input.context.files.path_exists(absolute_path)) {
+  if (await input.context.storage.files.path_exists(absolute_path)) {
     await response.body?.cancel();
     return absolute_path;
   }
@@ -238,7 +238,7 @@ async function persist_inline_image(input: {
     // 扩展名推断不能依赖 data URL 本身，因此只用已解析出的 MIME 类型。
     source_url: "",
   });
-  if (await input.context.files.path_exists(absolute_path)) return absolute_path;
+  if (await input.context.storage.files.path_exists(absolute_path)) return absolute_path;
   await write_image_file(input.context, absolute_path, parsed.bytes);
   return absolute_path;
 }

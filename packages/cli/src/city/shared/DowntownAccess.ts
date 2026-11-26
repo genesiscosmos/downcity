@@ -102,7 +102,7 @@ export async function execute_downtown_access(command: "services" | "service" | 
     if (!action || action.kind !== "action") throw new TypeError("Action is not registered in this service; native routes are not supported by call.");
     const needs_auth = action.auth.length > 0;
     if (options.admin && !target.admin_token) throw new TypeError("No administrator session for this Downtown. Sign in with downtown first.");
-    if (!options.admin && needs_auth && !target.user_token && !target.session_id) throw new TypeError("No user session for this Downtown. Run city downtown login first.");
+    if (!options.admin && needs_auth && !target.user_token && !target.session_id) throw new TypeError("No user session for this Downtown. Run city towns login <url> first.");
     const raw = await read_downtown_input(options.input, controller.signal);
     const request = downtown_action_request(action, raw, controller.signal);
     const access = options.admin ? downtown.admin : downtown.user;

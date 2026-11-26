@@ -125,6 +125,8 @@ export interface MemoryJob {
   memory_kind: MemoryKind;
   /** 本次允许的有界原始来源。 */
   sources: MemoryJobSource[];
+  /** 提交时固定的执行 Agent；模型配置属于该 Agent，目标记忆范围仍由 access 决定。 */
+  execution_agent_id?: string;
   /** 提交时固定的精确执行模型；历史缺失时必须先配置，重试不得捕获当前模型。 */
   model?: ModelReference;
   /** 提交时确认的非秘密持久授权来源；与 model 配对并跨 attempt 保留。 */
@@ -156,7 +158,7 @@ export interface MemoryJob {
 }
 
 /** 创建请求时由应用服务提供的不可变输入。 */
-export type MemoryJobInput = Pick<MemoryJob, "request_key" | "kind" | "instruction" | "access" | "scope" | "memory_kind" | "sources" | "memory_id" | "expected_version" | "input_scope_version" | "inventory" | "model" | "binding_id">;
+export type MemoryJobInput = Pick<MemoryJob, "request_key" | "kind" | "instruction" | "access" | "scope" | "memory_kind" | "sources" | "memory_id" | "expected_version" | "input_scope_version" | "inventory" | "execution_agent_id" | "model" | "binding_id">;
 
 /** 对调用方公开的最小处理状态，不泄露来源正文。 */
 export interface MemoryJobView {
@@ -174,6 +176,8 @@ export interface MemoryJobView {
   agent_id: string;
   /** 项目范围，若有。 */
   workspace_id?: string;
+  /** 持有处理 Session 的执行 Agent，与记忆目标 Agent 可以不同。 */
+  execution_agent_id?: string;
   /** 当前尝试关联的工作 Session。 */
   session_id?: string;
   /** 提交产生的记忆 ID。 */
@@ -199,6 +203,7 @@ export function memory_job_view(job: MemoryJob): MemoryJobView {
   return {
     job_id: job.job_id, kind: job.kind, status: job.status, scope: job.scope, memory_kind: job.memory_kind,
     agent_id: job.access.agent_id, workspace_id: job.access.workspace_id,
+    execution_agent_id: job.execution_agent_id ?? job.access.agent_id,
     session_id: job.session_id, memory_ids: job.memory_ids,
     detail: job.error ?? job.skip_reason, created_at: job.created_at, updated_at: job.updated_at,
   };

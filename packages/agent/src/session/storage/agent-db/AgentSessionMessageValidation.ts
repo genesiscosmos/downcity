@@ -41,7 +41,8 @@ export function validate_agent_db_message(message: SessionMessage, session_id: s
 export function validate_agent_db_update(current: SessionMessage, input: AgentSessionUpdateMessage): void {
   const next = input.message;
   if (current.revision !== input.expected_revision) throw new Error("session_message_revision_conflict");
-  if (next.revision !== input.expected_revision + 1 || current.session_id !== next.session_id
+  // 流式变化只递增内存版本，检查点落库允许跳号；并发写入仍由 expected_revision 精确校验。
+  if (next.revision <= input.expected_revision || current.session_id !== next.session_id
     || current.message_id !== next.message_id || current.sequence !== next.sequence
     || current.role !== next.role || current.created_at !== next.created_at
     || !is_deep_strict_equal(current.origin, next.origin)) throw new Error("session_message_identity_immutable");

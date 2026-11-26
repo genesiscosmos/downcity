@@ -137,6 +137,7 @@ export class City implements CityRuntime {
       has_action: (action_id) => this.has_city_action(action_id),
     });
     this.power_runtime = new CityPowerRuntime({
+      city_id: this.city_id,
       storage: this.storage,
       town: this.town,
       runtime_access: this.runtime_access,
@@ -144,7 +145,7 @@ export class City implements CityRuntime {
     });
     this.powers = this.power_runtime.public_api;
     this.context_runtime = new RuntimeService([
-      ...create_core_objects(this.runtime_access, this.city_id, options.runtime?.assert_resource_access),
+      ...create_core_objects(options.runtime?.assert_resource_access),
       ...(options.runtime?.application_objects ?? []),
     ], { authorize: async (path, input, call) => {
       const context = call.context;
@@ -152,7 +153,7 @@ export class City implements CityRuntime {
       if (context.workspace) options.runtime?.assert_resource_access?.(context.agent.id, context.workspace.id);
       await options.runtime?.application_policy?.authorize(path, input, call);
     } });
-    // City 领域 Power 与 Shell 走同一条注册路径；特权依赖在这里注入。
+    // City 内置 Power 与 Shell 走同一条注册路径，统一从调用上下文读取领域服务。
     for (const power of this.create_city_powers(options.runtime?.create_agent)) {
       void this.powers.add(power).catch(() => undefined);
     }
@@ -223,16 +224,11 @@ export class City implements CityRuntime {
   /**
    * 创建 City 自有的领域 power。
    *
-   * 关键点（中文）：City 领域 Power 共享同一份特权依赖；动作组私有文件按 Agent + 组名隔离，
-   * 因此组在 power 之间搬迁不会改变落盘路径。
+   * 关键点（中文）：领域能力统一由 PowerContext 提供；构造时只注入宿主创建与运行器服务，
+   * 文件资源统一使用当前 Agent/Power 的 storage.files。
    */
   private create_city_powers(create_agent?: CityRuntimeOptions["create_agent"]): Power[] {
-    const options = {
-      access: this.runtime_access,
-      files_for: (agent_id: string, group_id: string) =>
-        this.storage.open_scope(["agents", agent_id, "powers", group_id]).files,
-    };
-    return [new ContextPower(options, this.context_runtime), new AiPower(options), new AgentPower(options, create_agent), new SessionPower(options)];
+    return [new ContextPower(this.context_runtime), new AiPower(), new AgentPower(create_agent), new SessionPower()];
   }
 
   /**

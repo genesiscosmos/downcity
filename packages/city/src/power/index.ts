@@ -40,6 +40,7 @@ export type { PowerInteractionHost, PowerInteractionReference, PowerInteractionR
 
 export type {
   PowerAgentHandle,
+  PowerAgentModel,
   PowerCityHandle,
   PowerCityPowers,
   PowerContext,
@@ -56,6 +57,7 @@ export type {
   PowerTurnHandle,
   PowerWorkspaceHandle,
 } from "./types/PowerContext.js";
+export type { PowerSessionAddress, PowerSessionArchiveInput, PowerSessionArchiveResult, PowerSessionListInput, PowerSessionMetadata, PowerSessionPage } from "./types/PowerSessionManagement.js";
 
 export type {
   AnyPowerActionResult,

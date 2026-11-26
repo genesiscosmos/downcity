@@ -52,6 +52,14 @@ export function assert_group_session_metadata(
     && (!Array.isArray(value.pending_message_ids) || value.pending_message_ids.some((id) => !is_identifier(id)))) {
     throw new Error(`Invalid GroupSession metadata pending_message_ids: ${session_id}`);
   }
+  if (value.idle_response_message_ids !== undefined) {
+    const pending_ids = new Set(Array.isArray(value.pending_message_ids) ? value.pending_message_ids : []);
+    if (!Array.isArray(value.idle_response_message_ids)
+      || value.idle_response_message_ids.some((id) => !is_identifier(id) || !pending_ids.has(id))
+      || new Set(value.idle_response_message_ids).size !== value.idle_response_message_ids.length) {
+      throw new Error(`Invalid GroupSession metadata idle_response_message_ids: ${session_id}`);
+    }
+  }
 }
 
 /** JSON 对象不包含 null 或数组。 */

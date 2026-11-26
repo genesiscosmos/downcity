@@ -106,6 +106,8 @@ export interface NotificationAttentionDisplay {
 
 /** 宿主可选注入现有 Interaction 控件、Agent 头像及专用私密传输。 */
 export interface NotificationRendererOptions {
+  /** 主页面的宿主顶栏；由宿主提供窗口拖拽与侧栏避让，Inbox 传入当前事项的来源按钮和关闭操作。未提供时使用通用顶栏。 */
+  render_mainview_header?: (actions?: ReactNode) => ReactNode;
   /** 用户明确查看时打开原Session；只传引用，不提供新执行权限。 */
   open_interaction?: (item: NotificationInteractionItem) => Promise<void>;
   /** 用户明确查看时打开通知关联的结果或业务页面。 */

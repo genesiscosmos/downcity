@@ -184,10 +184,8 @@ export interface MemoryPowerOptions {
   readonly on_changed?: import("./MemoryChange.js").MemoryChangeHandler;
   /** 后台知识整理配置；默认关闭。 */
   dreaming?: import("./MemoryDream.js").MemoryDreamOptions;
-  /** Job 提交时固定的专用模型。 */
-  model?: ModelReference;
-  /** 非秘密持久计费授权。 */
-  binding_id?: string;
+  /** 已登记的专用执行 Agent；省略时使用请求所属 Agent，模型由该 Agent 定义持有。 */
+  execution_agent_id?: string;
   /** 仅用于新 Job 的可信模型解析器。 */
   resolve_model_binding?: import("./MemoryModelBinding.js").MemoryModelResolver;
   /** 宿主注入的统一记录后端。 */

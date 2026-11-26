@@ -47,13 +47,6 @@ export interface SlashCommandHost {
   /** 展示当前 Session 的安全策略选择器。 */
   show_security_policy_picker(): void;
 
-  /**
-   * 打开模型选择器或直接切换当前 Session 模型。
-   *
-   * @param model_id 可选的模型 ID；为空时打开选择器。
-   */
-  select_model(model_id?: string): Promise<void>;
-
   /** 停止 TUI。 */
   stop(): Promise<void>;
 }

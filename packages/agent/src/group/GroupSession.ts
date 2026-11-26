@@ -66,6 +66,12 @@ export class GroupSession implements GroupSessionContract {
   private readonly interaction_sessions = new Map<string, AgentSession>();
   private readonly member_running_counts = new Map<string, number>();
   private readonly pending_message_ids = new Set<string>();
+  /** 消息到达时空闲的用户输入；随 pending 检查点消费与恢复。 */
+  private readonly idle_response_message_ids = new Set<string>();
+  /** 成员生成或等待输入都算忙；恢复后的 Session 也由 runtime 事件维护。 */
+  private readonly busy_member_ids = new Set<string>();
+  /** 从成员准备到整轮完成始终持有，覆盖运行态空隙与审批等待。 */
+  private member_round_active = false;
   private store?: GroupSessionDataStore;
   private dispatch_loop_promise: Promise<void> | null = null;
   private stop_promise: Promise<void> | null = null;
@@ -115,6 +121,10 @@ export class GroupSession implements GroupSessionContract {
     for (const message_id of metadata.pending_message_ids || []) {
       if (message_ids.has(message_id)) this.pending_message_ids.add(message_id);
     }
+    const user_message_ids = new Set(this.messages_by_id.filter((message) => message.sender_type === "user").map((message) => message.id));
+    for (const message_id of metadata.idle_response_message_ids || []) {
+      if (this.pending_message_ids.has(message_id) && user_message_ids.has(message_id)) this.idle_response_message_ids.add(message_id);
+    }
     const member_session_ids = metadata.member_session_ids || {};
     const valid_member_session_ids: Record<string, string> = {};
     for (const [agent_id, session_id] of Object.entries(member_session_ids)) {
@@ -128,7 +138,9 @@ export class GroupSession implements GroupSessionContract {
         this.member_sessions.set(agent_id, session);
         this.member_session_ids.set(agent_id, session.id);
         this.subscribe_member_session(agent_id, session);
-        this.set_member_running(agent_id, (await session.status()).state === "running");
+        const status = await session.status();
+        if (status.state === "running" || status.state === "waiting_input") this.busy_member_ids.add(agent_id);
+        this.set_member_running(agent_id, status.state === "running");
         valid_member_session_ids[agent_id] = session.id;
       } catch {
         // 成员已被删除或 Session 不再匹配时清理映射，继续恢复共享对话。
@@ -147,11 +159,14 @@ export class GroupSession implements GroupSessionContract {
     const text = String(input?.query || "").trim();
     if (!text) throw new Error("group_session.prompt requires a non-empty query");
     const turn_id = `group-turn-${nanoid(12)}`;
+    // 必须在首个 await 前记录到达时状态；等决策开始时，上一轮可能已经结束。
+    const requires_idle_response = !this.member_round_active && this.busy_member_ids.size === 0 && this.interaction_sessions.size === 0;
     this.input_revision += 1;
     this.dispatch_runtime.supersede();
     await this.run_state_mutation(async () => {
       const message = await this.append_message({ sender_type: "user", sender_id: "user", text, turn_id });
       this.pending_message_ids.add(message.id);
+      if (requires_idle_response) this.idle_response_message_ids.add(message.id);
       await this.persist_dispatch_checkpoint();
     });
     this.request_dispatch();
@@ -237,8 +252,11 @@ export class GroupSession implements GroupSessionContract {
     ]);
     await this.state_mutation_chain;
     if (this.dispatch_loop_promise) await this.dispatch_loop_promise.catch(() => undefined);
+    this.busy_member_ids.clear();
+    this.interaction_sessions.clear();
     await this.run_state_mutation(async () => {
       this.pending_message_ids.clear();
+      this.idle_response_message_ids.clear();
       await this.persist_dispatch_checkpoint();
     });
   }
@@ -257,7 +275,9 @@ export class GroupSession implements GroupSessionContract {
     this.member_sessions.clear();
     this.member_session_promises.clear();
     this.member_running_counts.clear();
+    this.busy_member_ids.clear();
     this.pending_message_ids.clear();
+    this.idle_response_message_ids.clear();
   }
 
   /** 唯一调度循环的入口；输入落盘或恢复只唤醒此处，不创建独立用户执行链。 */
@@ -321,9 +341,14 @@ export class GroupSession implements GroupSessionContract {
         repeated_paths.add(dispatch_key);
         round_count += 1;
         // 从版本检查到启动本轮没有异步间隙；之后的新输入统一等待本轮结束。
-        const outputs = await this.run_dispatch_round(dispatch.decision, message, context_messages, pending_messages, turn_id, dispatch.dispatch_id);
-        if (this.stop_requested || this.disposed) return;
-        await this.complete_dispatch_batch(pending_messages, outputs);
+        this.member_round_active = dispatch.decision.member_ids.length > 0;
+        try {
+          const outputs = await this.run_dispatch_round(dispatch.decision, message, context_messages, pending_messages, turn_id, dispatch.dispatch_id);
+          if (this.stop_requested || this.disposed) return;
+          await this.complete_dispatch_batch(pending_messages, outputs);
+        } finally {
+          this.member_round_active = false;
+        }
       } catch (error) {
         if (this.stop_requested || this.disposed || error instanceof GroupDispatchStoppedError) return;
         if (error instanceof GroupDispatchSupersededError || revision !== this.input_revision) continue;
@@ -341,7 +366,10 @@ export class GroupSession implements GroupSessionContract {
     outputs: readonly GroupMessage[],
   ): Promise<void> {
     await this.run_state_mutation(async () => {
-      for (const message of consumed_messages) this.pending_message_ids.delete(message.id);
+      for (const message of consumed_messages) {
+        this.pending_message_ids.delete(message.id);
+        this.idle_response_message_ids.delete(message.id);
+      }
       for (const message of outputs) this.pending_message_ids.add(message.id);
       await this.persist_dispatch_checkpoint();
     });
@@ -360,6 +388,7 @@ export class GroupSession implements GroupSessionContract {
         ...(this.instruction ? { instruction: this.instruction } : {}),
       },
       trigger,
+      require_response: trigger === "user" && pending_messages.some((item) => this.idle_response_message_ids.has(item.id)),
       current_message: message,
       pending_messages,
       history: this.messages_by_id.filter((item) => !pending_ids.has(item.id)),
@@ -517,6 +546,8 @@ export class GroupSession implements GroupSessionContract {
     this.member_session_unsubscribes.get(agent_id)?.();
     this.member_session_unsubscribes.set(agent_id, session.subscribe((mutation) => {
       if (mutation.variant === "session" && mutation.type === "runtime") {
+        if (mutation.state === "running" || mutation.state === "waiting_input") this.busy_member_ids.add(agent_id);
+        else this.busy_member_ids.delete(agent_id);
         this.set_member_running(agent_id, mutation.state === "running", mutation.active_turn_id);
       }
       if (mutation.variant !== "part" || mutation.type !== "tool") return;
@@ -564,6 +595,7 @@ export class GroupSession implements GroupSessionContract {
       "Response constraints:",
       `- 只代表成员 ${agent.id} 自己发言。`,
       "- 最新用户请求优先于群聊长期目标；先直接回应当前问题，避免重复已有回复。",
+      "- 无 @ 的群内提问默认面向全群；你俩、继续、再来一次继承最近相关对话的参与者。用户本轮要求继续时，不把上一轮已完成当作本轮已完成。问候、闲聊和游戏也可以简短回应，不要求新增知识。",
       "- 问候、确认在线或询问角色时简短回应；这些消息不授权检查目录、创建文档、写代码或启动开发。",
       "- 自动轮次仅处理用户已授权任务中明确尚未完成的工作或其他成员的必要交接；自己的邀请、计划或向用户询问需求不构成继续工作的理由。缺少用户需求时等待用户。",
       "- 群成员仅以以上名单为准；City 的全部 Agent 列表不是本群名单，不凭名单推断成员在线或执行状态。",
@@ -634,7 +666,10 @@ export class GroupSession implements GroupSessionContract {
 
   /** 保存尚未消费的输入；执行期间本轮输入仍在集合中，重启可重新判断。 */
   private async persist_dispatch_checkpoint(): Promise<void> {
-    if (this.store) await this.store.update_metadata({ pending_message_ids: [...this.pending_message_ids] });
+    if (this.store) await this.store.update_metadata({
+      pending_message_ids: [...this.pending_message_ids],
+      idle_response_message_ids: [...this.idle_response_message_ids],
+    });
   }
 
   /** 发布 Group 阶段和成员运行态。 */

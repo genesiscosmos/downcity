@@ -151,12 +151,6 @@ export interface PowerHostSystem extends PowerInteractionHost {
     readonly execution_profile_id?: string;
     /** 专用配置精确版本；选择专用配置时必填。 */
     readonly execution_profile_version?: number;
-    /** 首次模型选择；恢复时以持久化的实际模型身份为准。 */
-    readonly model_id?: string;
-    /** 精确来源引用；不能仅靠同名模型恢复。 */
-    readonly model_reference?: import("@downcity/type").ModelReference;
-    /** Job 创建时已确认的模型授权来源；后台执行不可在排队后默用当前账户。 */
-    readonly binding_id?: string;
     /** 稳定 attempt 创建键；同键重试找回原 Session。 */
     readonly creation_key?: string;
     /** 新 Session 的业务类型、入口用途及创建关系。 */

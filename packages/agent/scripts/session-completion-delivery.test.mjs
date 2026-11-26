@@ -237,7 +237,14 @@ test("Chat Turn 已结束后结果继续交付，临时恢复失败不会重跑�
     parent.subscribe((mutation) => {
       if (mutation.variant === "turn" && mutation.type === "finish") delivered.resolve();
     });
-    const receipt = await delegations.spawn({ workspace_id: "project", query: "review" }, { agent_id: caller.id, session_id: parent.id, origin: parent.origin, turn_id: caller_turn.id, tool_call_id: "call" });
+    const parent_message = (await parent.messages()).items.find(message => message.role === "agent" && message.turn_id === caller_turn.id);
+    const receipt = await delegations.spawn({ workspace_id: "project", query: "review" }, {
+      agent_id: caller.id, session_id: parent.id, type: parent.type, kind: parent.kind,
+      turn_id: caller_turn.id, execution_id: parent_message.execution_id, tool_call_id: "call",
+    });
+    const child = await worker.sessions.get(receipt.session_id, "work");
+    assert.equal(child.get("model"), worker.model);
+    assert.notEqual(child.get("model"), parent.get("model"));
     await delegations.settle();
     const before_retry = worker_calls;
     await within((async () => {
