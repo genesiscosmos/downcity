@@ -14,8 +14,8 @@ export function memory_result_recipient(context: PowerContext): MemoryResultReci
 
 /** 完成事件使用有界状态摘要，不将来源正文复制到原聊天。 */
 function render_memory_result(job: MemoryJob): string {
-  const payload = { job_id: job.job_id, kind: job.kind, status: job.status, target: job.target,
-    mode: job.mode, memory_ids: job.memory_ids ?? [],
+  const payload = { job_id: job.job_id, kind: job.kind, status: job.status, scope: job.scope,
+    memory_kind: job.memory_kind, memory_ids: job.memory_ids ?? [],
     note: job.status === "succeeded" ? "Memory changes were committed."
       : job.status === "skipped" ? "No memory changes were made."
       : "Memory processing failed; do not claim these changes were saved. Inspect job_status for details.",

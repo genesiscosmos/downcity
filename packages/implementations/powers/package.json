@@ -1,6 +1,6 @@
 {
   "name": "@downcity/powers",
-  "version": "1.5.27",
+  "version": "1.5.28",
   "type": "module",
   "description": "Downcity 内建 power 集合包",
   "files": [
@@ -72,7 +72,7 @@
     "test:exports": "pnpm build && node --test scripts/power-subpaths.test.mjs",
     "test:renderer": "node --test scripts/power-renderer-tokens.test.mjs",
     "test:presentation": "pnpm build && node --test scripts/presentation-components.test.mjs scripts/presentation-markdown.test.mjs",
-    "test:memory": "pnpm build && node --test scripts/memory-power.test.mjs scripts/memory-web-host-actions.test.mjs",
+    "test:memory": "pnpm build && node --test scripts/memory-power.test.mjs scripts/memory-records-boundaries.test.mjs scripts/memory-web-host-actions.test.mjs",
     "test:skill": "pnpm build && node --test scripts/skill-power.test.mjs",
     "test:task": "pnpm build && node --test scripts/task-power.test.mjs",
     "test:web": "pnpm build && node --experimental-test-module-mocks --test scripts/web-power.test.mjs scripts/web-data-providers.test.mjs scripts/memory-web-host-actions.test.mjs scripts/playwright-browser-provider.test.mjs",

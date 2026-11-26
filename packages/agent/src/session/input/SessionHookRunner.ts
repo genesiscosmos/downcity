@@ -7,7 +7,7 @@
  * 关键点（中文）
  * - pipeline 变换值，guard 抛错即中断，effect 只产生副作用。
  * - 没有处理器时返回原值，调用方不需要判断检查点是否存在。
- * - 处理器失败不向上抛出：内容贡献是增强，不应阻断 Session 主链路。
+ * - 普通贡献失败隔离；必需上下文 SESSION_CONTEXT_REQUIRED 必须传播，防止缺失约束后继续调用模型。
  */
 
 import type {
@@ -47,6 +47,7 @@ export async function run_pipeline_point<TValue extends JsonValue>(input: {
     try {
       current = await handler(current, input.context);
     } catch (error) {
+      if (error && typeof error === "object" && "code" in error && error.code === "SESSION_CONTEXT_REQUIRED") throw error;
       await input.on_error?.(input.point_name, error);
     }
   }

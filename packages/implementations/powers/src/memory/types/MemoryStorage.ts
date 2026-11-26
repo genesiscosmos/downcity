@@ -27,13 +27,16 @@ export interface MemoryStorageAdapter {
   /** 判断指定逻辑 key 是否存在。 */
   has(key: string): Promise<boolean>;
 
+  /** 只检查前缀内是否有条目，不读取正文；空前缀指 Adapter 根，排除其自有 .locks。缺失返回 false，链接和读取异常必须抛出。 */
+  has_entries(prefix: string): Promise<boolean>;
+
   /** 读取指定逻辑 key；不存在时返回空。 */
   read(key: string): Promise<string | null>;
 
   /** 原子创建或替换指定逻辑 key 的完整内容。 */
   write(key: string, content: string): Promise<void>;
 
-  /** 列出指定逻辑前缀下的全部文本条目。 */
+  /** 列出指定逻辑前缀下的全部文本条目；空前缀指物理根，排除根目录自有 .locks。 */
   list(prefix: string): Promise<MemoryStorageEntry[]>;
 
   /** 删除指定逻辑 key；不存在时保持幂等。 */

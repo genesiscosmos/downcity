@@ -1,530 +1,163 @@
-/**
- * MemoryPower Provider 与本地 Adapter 回归测试。
- *
- * 关键点（中文）
- * - MemoryPower 只委托 Provider，不读取 Workspace 文件。
- * - Builtin Provider 读取 manifest 有效记录，knowledge remember 每次独立提交。
- * - 只公开 memory_id/citation，不泄漏物理路径。
- * - File Adapter 始终把逻辑 key 限制在独占根目录。
- */
-
+/** Memory 统一入口集成：只用合成根目录、伪宿主及确定性事务，不运行真实模型或用户数据迁移。 */
 import assert from "node:assert/strict";
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
-import {
-  BuiltinMemoryProvider,
-  FileMemoryStorageAdapter,
-  MemoryPower,
-  create_memory_import_changeset,
-  get_default_file_memory_root_path,
-} from "@downcity/powers/memory";
-import { SESSION_HOOK_POINTS } from "@downcity/agent";
+import { MemoryPower, BuiltinMemoryProvider, FileMemoryStorageAdapter, preview_memory_migration, memory_migration_preview_hash, publish_memory_migration } from "@downcity/powers/memory";
+import { MemoryProfile } from "../bin/memory/runtime/MemoryAgreementProjection.js";
+import { build_profile_updates, mark_profile_snapshot } from "../bin/memory/runtime/MemoryContext.js";
+import { MemoryJobStore } from "../bin/memory/storage/MemoryJobStore.js";
+import { create_memory_session_tools } from "../bin/memory/runtime/MemoryRecordTools.js";
+import { management_memory_sources } from "../bin/memory/application/MemorySourceBinding.js";
+import { MEMORY_SESSION_KIND } from "../bin/memory/types/MemorySession.js";
+import { resolve_session_power_system_blocks } from "../../../agent/bin/session/input/SessionSystem.js";
+import { StepInput } from "../../../agent/bin/session/input/StepInput.js";
+import { fit_request } from "../../../agent/bin/session/runner/RequestBudget.js";
 
-/** 创建测试使用的最小 Agent 访问上下文。 */
-function create_access(workspace_id, session_id, agent_id = "memory_test_agent") {
-  return {
-    agent_id,
-    workspace_id,
-    ...(session_id ? { session_id } : {}),
-    city_memory_available: false,
-  };
-}
-
-/** 创建符合公开协议的最小 PowerContext。 */
-function create_power_context(agent_id = "memory_test_agent") {
-  return {
-    city: {
-      powers: {
-        get: () => null,
-        snapshots: () => [],
-        run_action: async () => ({ success: false }),
-        pipeline: async (_point_name, value) => value,
-        effect: async () => {},
-      },
-    },
-    agent: {
-      id: agent_id,
-      name: agent_id,
-      description: "",
-      instructions: [],
-      sessions: {},
-    },
-    workspace: {
-      id: "shared-workspace",
-      path: "/workspace",
-      files: {},
-      env: {},
-    },
-    profile: { id: "default", config: {} },
-    storage: { path: "/memory", files: {} },
-    logger: {
-      log: async () => {},
-      debug: () => {},
-      info: () => {},
-      warn: () => {},
-      error: () => {},
-    },
-    abort_signal: new AbortController().signal,
-  };
-}
-
-/** 创建 MemoryPower 生命周期测试使用的最小 City 上下文。 */
-function create_start_context(storage_path) {
-  return {
-    abort_signal: new AbortController().signal,
-    storage: { path: storage_path, files: {} },
-    config: { path: "", get: () => ({}), set: async () => {} },
-    power: { id: "memory", action() {}, config_action() {} },
-    logger: { log: async () => {}, debug() {}, info() {}, warn() {}, error() {} },
-    notifications: { publish: async () => {}, dismiss: async () => {} },
-    system: {
-      register_execution_profile: () => () => {},
-      list_agents: async () => [],
-      list_workspaces: async () => [],
-      invoke_agent_power: async () => ({}),
-      open_external: async () => {},
-      show_item_in_folder: async () => {},
-      write_clipboard_text: async () => {},
-    },
-  };
-}
-
-/** Seed a versioned record through the explicit transaction contract. */
-async function create_knowledge_fixture(provider, input) {
-  const commit_id = crypto.randomUUID();
-  const receipt = await provider.transactions.commit({
-    access: input.access, target: input.target, commit_id,
-    changes: [{ operation: "create", content: input.content, topic: input.topic, memory_type: input.memory_type,
-      source_refs: [{ source_id: commit_id, source_type: "manual", role: "request", label: input.source }] }],
-  });
-  return { memory_id: receipt.changes[0].memory_id, mode: "created" };
-}
-
-test("Builtin Provider 把 Memory 数据写入独立 Adapter 根而不是 Workspace", async (context) => {
-  const temporary_root = await fs.mkdtemp(path.join(os.tmpdir(), "downcity-memory-"));
-  context.after(async () => await fs.rm(temporary_root, { recursive: true, force: true }));
-  const workspace_path = path.join(temporary_root, "workspace");
-  const memory_root = path.join(temporary_root, "agent-data", "memory");
-  await fs.mkdir(workspace_path, { recursive: true });
-  const provider = new BuiltinMemoryProvider({
-    storage: new FileMemoryStorageAdapter({ root_path: memory_root }),
-  });
-  await provider.initialize();
-
-  const remembered = await create_knowledge_fixture(provider, {
-    access: create_access("memory_test_workspace"),
-    target: "agent",
-    content: "The user prefers concise answers.",
-    topic: "user-preferences",
-    memory_type: "preference",
-    source: "explicit user statement",
-  });
-  assert.match(remembered.memory_id, /^agent\/memory_test_agent\/wiki\/[a-f0-9]{64}$/);
-  assert.equal(remembered.mode, "created");
-  const manifest_path = path.join(memory_root, "agent", "memory_test_agent", "runtime", "knowledge", "current.json");
-  const manifest = JSON.parse(await fs.readFile(manifest_path, "utf8"));
-  assert.equal(manifest.records[remembered.memory_id].validity, "active");
-  assert.equal(await fs.access(path.join(workspace_path, ".downcity", "memory")).then(() => true).catch(() => false), false);
-
-  const recalled = await provider.recall({
-    access: create_access("memory_test_workspace"),
-    query: "concise answers",
-    min_score: 0.1,
-  });
-  assert.equal(recalled.items[0]?.memory.memory_id, remembered.memory_id);
-  assert.deepEqual(recalled.items[0]?.memory.owner, {
-    kind: "agent",
-    agent_id: "memory_test_agent",
-  });
-  assert.deepEqual(recalled.items[0]?.memory.subject, {
-    kind: "agent",
-    agent_id: "memory_test_agent",
-  });
-  assert.match(recalled.items[0]?.memory.citation || "", /^memory:\/\/builtin\//);
-  assert.equal(JSON.stringify(recalled).includes(memory_root), false);
-
-  const read = await provider.read({
-    access: create_access("memory_test_workspace"),
-    memory_id: remembered.memory_id,
-  });
-  assert.match(read.memory?.content || "", /concise answers/);
-  assert.deepEqual(read.memory?.subject, {
-    kind: "agent",
-    agent_id: "memory_test_agent",
-  });
-
-  const second_memory = await create_knowledge_fixture(provider, {
-    access: create_access("memory_test_workspace", "session-that-must-not-own-memory"),
-    target: "agent",
-    content: "The user also prefers structured results.",
-    topic: "user-preferences",
-    memory_type: "preference",
-    source: "second explicit user statement",
-  });
-  const updated_read = await provider.read({
-    access: create_access("memory_test_workspace"),
-    memory_id: remembered.memory_id,
-  });
-  assert.notEqual(second_memory.memory_id, remembered.memory_id);
-  assert.equal(updated_read.memory?.source_refs.length, 1);
-  assert.equal(updated_read.memory?.content, "The user prefers concise answers.");
-  const second_read = await provider.read({
-    access: create_access("memory_test_workspace"),
-    memory_id: second_memory.memory_id,
-  });
-  assert.equal(second_read.memory?.content, "The user also prefers structured results.");
-  assert.equal(second_read.memory?.subject.kind, "agent");
-  assert.equal(second_read.memory?.source_refs.length, 1);
-
-  await assert.rejects(provider.read({
-    access: { agent_id: "another_agent", city_memory_available: false },
-    memory_id: remembered.memory_id,
-  }), /outside the current access context/);
-  const forgotten = await provider.forget({
-    access: create_access("memory_test_workspace"),
-    memory_id: remembered.memory_id,
-  });
-  assert.equal(forgotten.forgotten, true);
-  assert.equal((await provider.read({
-    access: create_access("memory_test_workspace"),
-    memory_id: remembered.memory_id,
-  })).memory, null);
-  await provider.dispose();
-});
-
-test("File Adapter 拒绝目录穿越并由 Memory Power 定义默认路径", async (context) => {
-  const temporary_root = await fs.mkdtemp(path.join(os.tmpdir(), "downcity-memory-key-"));
-  context.after(async () => await fs.rm(temporary_root, { recursive: true, force: true }));
-  const adapter = new FileMemoryStorageAdapter({ root_path: temporary_root });
-  await adapter.initialize();
-  await assert.rejects(adapter.write("../outside.md", "blocked"), /Invalid Memory storage key/);
-  await assert.rejects(adapter.read("wiki/../../outside.md"), /Invalid Memory storage key/);
-  if (process.platform !== "win32") {
-    const outside_root = path.join(path.dirname(temporary_root), `${path.basename(temporary_root)}-outside`);
-    await fs.mkdir(outside_root, { recursive: true });
-    context.after(async () => await fs.rm(outside_root, { recursive: true, force: true }));
-    await fs.symlink(outside_root, path.join(temporary_root, "linked"), "dir");
-    await assert.rejects(
-      adapter.write("linked/outside.md", "blocked"),
-      /contains symbolic link/,
-    );
-  }
-  const provider = new BuiltinMemoryProvider({ storage: adapter });
-  await provider.initialize();
-  await assert.rejects(provider.read({
-    access: create_access("memory_test_workspace"),
-    memory_id: "agent/memory_test_agent/wiki/invalid.name",
-  }), /Invalid memory_id/);
-  assert.equal(
-    get_default_file_memory_root_path({
-      platform_root_path: "/platform-root",
-      agent_id: "memory_test_agent",
-    }),
-    path.join("/platform-root", "agents", "memory_test_agent", "memory"),
-  );
-  await provider.dispose();
-});
-
-test("Builtin Provider 在 initialize 阶段延迟创建 City 共享 Adapter", async (context) => {
-  const temporary_root = await fs.mkdtemp(path.join(os.tmpdir(), "downcity-memory-factory-"));
-  context.after(async () => await fs.rm(temporary_root, { recursive: true, force: true }));
-  let create_count = 0;
-  const provider = new BuiltinMemoryProvider({
-    create_storage() {
-      create_count += 1;
-      return new FileMemoryStorageAdapter({
-        root_path: path.join(temporary_root, `adapter-${create_count}`),
-      });
-    },
-  });
-  assert.equal(create_count, 0);
-  await provider.initialize();
-  assert.equal(create_count, 1);
-  await provider.dispose();
-  await provider.initialize();
-  assert.equal(create_count, 2);
-  await provider.dispose();
-});
-
-test("MemoryPower 使用显式运行时目录并公开完整 Action", async (context) => {
-  const platform_root = await fs.mkdtemp(path.join(os.tmpdir(), "downcity-memory-platform-"));
-  context.after(async () => await fs.rm(platform_root, { recursive: true, force: true }));
-  const memory_root = path.join(platform_root, "powers", "memory");
-  const power = new MemoryPower({ platform_root_path: platform_root });
-  const power_context = create_power_context();
-  await power.initialize(create_start_context(memory_root));
-  const result = await power.actions.remember.execute({
-    context: power_context,
-    input: {
-      content: "Remember this",
-      target: "agent",
-      topic: "test",
-      memory_type: "fact",
-    },
-    power_name: "memory",
-    action_name: "remember",
-  });
-  assert.equal(result.success, true);
-  assert.match(result.data.memory_id, /\/wiki\/[a-f0-9]{64}$/);
-  // Agent 私有 manifest 落在独立根，逻辑前缀不进入物理路径。
-  const manifest_path = path.join(platform_root, "agents", "memory_test_agent", "memory", "runtime", "knowledge", "current.json");
-  const manifest = JSON.parse(await fs.readFile(manifest_path, "utf8"));
-  assert.equal(manifest.records[result.data.memory_id].memory.content, "Remember this");
-  assert.equal("files" in power_context, false);
-  assert.deepEqual(Object.keys(power.actions).sort(), [
-    "digest",
-    "forget",
-    "job_detail",
-    "job_status",
-    "jobs",
-    "list",
-    "optimize",
-    "read",
-    "remember",
-    "retry",
-    "revise",
-    "search",
-    "status",
-  ]);
-  await power.dispose();
-});
-
-test("Builtin Provider 只枚举 manifest 有效记录，旧 Markdown 需显式导入", async (context) => {
-  const memory_root = await fs.mkdtemp(path.join(os.tmpdir(), "downcity-memory-list-"));
-  context.after(async () => await fs.rm(memory_root, { recursive: true, force: true }));
-  const storage = new FileMemoryStorageAdapter({ root_path: memory_root });
+async function start(context, use_builtin_routing = false) {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "downcity-memory-integration-"));
+  context.after(async () => await fs.rm(root, { recursive: true, force: true }));
+  const storage = new FileMemoryStorageAdapter({ root_path: path.join(root, "data") });
   const provider = new BuiltinMemoryProvider({ storage });
-  await provider.initialize();
-  const access = create_access("memory_list_workspace");
-  const legacy_id = "agent/memory_test_agent/wiki/legacy";
-  await storage.write(`${legacy_id}.md`, "Legacy note awaiting explicit import.");
-  assert.equal((await provider.read({ access, memory_id: legacy_id })).memory, null);
-  assert.equal((await provider.list({ access })).total, 0);
-  await create_knowledge_fixture(provider, {
-    access,
-    target: "agent",
-    content: "User prefers concise answers.",
-    topic: "user-preferences",
-    memory_type: "preference",
-  });
-  await create_knowledge_fixture(provider, {
-    access,
-    target: "agent",
-    content: "Deploy uses the native sandbox backend.",
-    topic: "deploy-notes",
-    memory_type: "decision",
-  });
+  const actions = new Map();
+  const host = { abort_signal: new AbortController().signal, data_root_path: root, storage: { path: path.join(root, "host"), files: {} },
+    config: { get: () => ({}), set: async () => {}, path: "" },
+    power: { action: (action) => actions.set(action.id, action), config_action() {} },
+    logger: { log: async () => {}, debug() {}, warn() {}, error() {}, info() {} },
+    system: { register_execution_profile: () => () => {}, list_agents: async () => [{ agent_id: "synthetic_agent", name: "Synthetic" }],
+      list_workspaces: async () => [{ workspace_id: "project", name: "Project" }] } };
+  const power = new MemoryPower({ ...(use_builtin_routing ? {} : { provider }), platform_root_path: root });
+  await power.initialize(host); context.after(async () => await power.dispose());
+  return { root, storage, provider: power.provider, power, actions };
+}
+async function activate(storage, type, id) {
+  const scope = { type, id };
+  const prefix = type === "agent" ? `agent/${id}` : `${type}/${Buffer.from(id).toString("hex")}`;
+  const preview = preview_memory_migration(scope, [], []);
+  await publish_memory_migration({ storage, scope_prefix: prefix, preview, expected_preview_hash: memory_migration_preview_hash(preview), authorization: "explicit_management_migration", confirmed_empty: true, with_write_barrier: async (publish) => await publish() });
+}
 
-  const listed = await provider.list({ access });
-  assert.equal(listed.provider, "builtin");
-  assert.equal(listed.total, 2);
-  assert.equal(listed.items.some((item) => item.is_evidence), false);
-  assert.equal(listed.items.every((item) => item.subject.kind === "agent"), true);
-  assert.equal(listed.subject_counts.agent, listed.total);
-  assert.equal(listed.subject_counts.city, 0);
-  assert.equal(listed.items.some((item) => item.title === "user-preferences"), true);
-
-  const filtered = await provider.list({
-    access,
-    memory_types: ["decision"],
-  });
-  assert.equal(filtered.items.length, 1);
-  assert.equal(filtered.items[0].memory_type, "decision");
-  // 过滤只影响 items，subject_counts 仍描述未过滤前的可读总量。
-  assert.equal(filtered.subject_counts.agent, listed.total);
-
-  const paged = await provider.list({ access, limit: 1, offset: 1 });
-  assert.equal(paged.items.length, 1);
-  assert.equal(paged.total, listed.total);
-  assert.notEqual(paged.items[0].memory_id, listed.items[0].memory_id);
-
-  // 来源保存在记录内；include_evidence 不会把原始 Markdown 加入有效集合。
-  const with_evidence = await provider.list({ access, include_evidence: true });
-  assert.equal(with_evidence.total, listed.total);
-  const imported = await provider.commit(create_memory_import_changeset({
-    access, target: "agent", commit_id: "explicit-legacy-import",
-    records: [{
-      memory_id: legacy_id, content: "Legacy note awaiting explicit import.",
-      memory_type: "fact", source_refs: [], metadata: { title: "legacy" },
-    }],
-  }));
-  assert.equal(imported.changes[0].memory_id, legacy_id);
-  const imported_read = await provider.read({ access, memory_id: legacy_id });
-  assert.equal(imported_read.memory.content, "Legacy note awaiting explicit import.");
-  assert.equal(imported_read.memory.source_refs[0].source_type, "legacy_import");
-  assert.equal((await provider.list({ access })).total, 3);
-  await provider.dispose();
+test("host User and Agent both manage individual records with current version and authenticated source", async (context) => {
+  const { storage, actions } = await start(context);
+  await activate(storage, "user", "local"); await activate(storage, "agent", "synthetic_agent");
+  for (const routing of [{ scope: "user" }, { scope: "agent", agent_id: "synthetic_agent" }]) {
+    const saved = await actions.get("memory.remember").run({ routing, payload: { scope: routing.scope, kind: "agreement", content: `条件 ${routing.scope}`, request_id: `create-${routing.scope}` } });
+    assert.equal(saved.status, "committed"); assert.equal(saved.record.kind, "agreement"); assert.equal("title" in saved.record, false);
+    assert.equal(saved.record.sources[0].source_type, "management_input");
+    const current = await actions.get("memory.read").run({ routing, payload: { memory_id: saved.record.memory_id } });
+    const update = { memory_id: current.memory.memory_id, expected_version: current.memory.version, content: `更正 ${routing.scope}`, request_id: `update-${routing.scope}` };
+    const receipt = await actions.get("memory.update").run({ routing, payload: update });
+    assert.equal(receipt.status, "committed");
+    assert.deepEqual(await actions.get("memory.update").run({ routing, payload: update }), receipt);
+    await assert.rejects(actions.get("memory.update").run({ routing, payload: { ...update, request_id: "stale" } }), /version changed/);
+    const list = await actions.get("memory.list").run({ routing, payload: { kind: "agreement" } });
+    assert.equal(list.items.length, 1);
+    await assert.rejects(actions.get("memory.list").run({ routing, payload: { topic: "legacy" } }));
+  }
+  await assert.rejects(actions.get("memory.list").run({ routing: { scope: "agent", agent_id: "foreign" }, payload: {} }), /unavailable/);
 });
 
-test("MemoryPower system 仅含说明，Profile hooks 不自动召回知识", async (context) => {
-  const platform_root = await fs.mkdtemp(path.join(os.tmpdir(), "downcity-memory-hooks-"));
-  context.after(async () => await fs.rm(platform_root, { recursive: true, force: true }));
-  const memory_root = path.join(platform_root, "powers", "memory");
-  const power = new MemoryPower({ platform_root_path: platform_root });
-  const power_context = create_power_context();
-  await power.initialize(create_start_context(memory_root));
-  await power.actions.remember.execute({
-    context: power_context,
-    input: {
-      content: "The project prefers concise answers.",
-      target: "agent",
-      topic: "project-overview",
-      memory_type: "preference",
-    },
-    power_name: "memory",
-    action_name: "remember",
-  });
-
-  const usage = await power.system(power_context);
-  assert.match(usage, /Memory actions usage|Preferred flow/);
-  assert.doesNotMatch(usage, /prefers concise answers/);
-
-  const system_hook = power.hooks.pipeline[SESSION_HOOK_POINTS.system_context][0];
-  const turn_value = await system_hook({
-    context: power_context,
-    power: "memory",
-    value: {
-      session_id: "session-1",
-      turn_id: "turn-1",
-      user_messages: [{ message_id: "user-1", text: "concise answers" }],
-      blocks: [],
-    },
-  });
-  // 核心 Profile 为空时，system 快照不加入 knowledge 正文。
-  assert.equal(turn_value.blocks.length, 0);
-
-  const turn_hook = power.hooks.pipeline[SESSION_HOOK_POINTS.turn_context][0];
-  const updated_turn = await turn_hook({
-    context: power_context,
-    power: "memory",
-    value: { blocks: [], system_blocks: [] },
-  });
-  // 空快照与空 Profile 相同，无需每轮重复注入空更正。
-  assert.deepEqual(updated_turn.blocks, []);
-
-  await power.dispose();
+test("unmigrated material blocks system and turn hooks, and required errors survive Session fallback", async (context) => {
+  const { power, storage } = await start(context);
+  await storage.write("user/6c6f63616c/runtime/knowledge/current.json", "{}");
+  const runtime = { agent: { id: "synthetic_agent" }, workspace: { id: "project" }, session: { kind: "chat" } };
+  const system_hook = power.hooks.pipeline["session.system_context"][0];
+  const turn_hook = power.hooks.pipeline["session.turn_context"][0];
+  for (const hook of [system_hook, turn_hook]) {
+    await assert.rejects(hook({ context: runtime, value: { blocks: [], system_blocks: [] } }), (error) => error.code === "SESSION_CONTEXT_REQUIRED" && String(error.cause).includes("MIGRATION_REQUIRED"));
+  }
+  await assert.rejects(resolve_session_power_system_blocks({ session_id: "synthetic", hooks: { guard: {}, effect: {}, pipeline: { "session.system_context": [(value, context) => system_hook({ value, context })] } }, context: runtime }), /Memory context unavailable/);
 });
 
-test("Workspace 记忆在项目内跨 Agent 可见，私有与跨项目记忆隔离", async (context) => {
-  const temporary_root = await fs.mkdtemp(path.join(os.tmpdir(), "downcity-memory-city-"));
-  context.after(async () => await fs.rm(temporary_root, { recursive: true, force: true }));
-  const platform_root = path.join(temporary_root, "platform");
-  const city_root = path.join(temporary_root, "city-memory");
-  const power = new MemoryPower({ platform_root_path: platform_root });
-  const first_context = create_power_context("agent_a");
-  const second_context = create_power_context("agent_b");
-  await power.initialize(create_start_context(city_root));
-
-  const private_memory = await power.actions.remember.execute({
-    context: first_context,
-    input: {
-      content: "This Agent learned to run typecheck first.",
-      target: "agent",
-      topic: "project-overview",
-      memory_type: "procedure",
-    },
-    power_name: "memory",
-    action_name: "remember",
-  });
-  assert.equal(private_memory.success, true);
-  assert.match(private_memory.data.memory_id, /^agent\/agent_a\/wiki\/[a-f0-9]{64}$/);
-
-  const shared_memory = await power.actions.remember.execute({
-    context: first_context,
-    input: {
-      content: "This Workspace always uses pnpm.",
-      target: "current_workspace",
-      topic: "project-overview",
-      memory_type: "decision",
-    },
-    power_name: "memory",
-    action_name: "remember",
-  });
-  assert.equal(shared_memory.success, true);
-  assert.match(shared_memory.data.memory_id, /^workspace\/[a-f0-9]+\/wiki\/[a-f0-9]{64}$/);
-
-  const shared_read = await power.actions.read.execute({
-    context: second_context,
-    input: { memory_id: shared_memory.data.memory_id },
-    power_name: "memory", action_name: "read",
-  });
-  assert.equal(shared_read.success, true);
-  assert.match(shared_read.data.memory.content, /always uses pnpm/);
-  const other_workspace = create_power_context("agent_b");
-  other_workspace.workspace.id = "another-workspace";
-  const isolated = await power.actions.read.execute({
-    context: other_workspace,
-    input: { memory_id: shared_memory.data.memory_id },
-    power_name: "memory", action_name: "read",
-  });
-  assert.equal(isolated.success, false);
-
-  const cross_agent_read = await power.actions.read.execute({
-    context: second_context,
-    input: { memory_id: private_memory.data.memory_id },
-    power_name: "memory",
-    action_name: "read",
-  });
-  assert.equal(cross_agent_read.success, false);
-  assert.match(cross_agent_read.error, /outside the current access context/);
-
-  await power.dispose();
+test("first-use empty scopes allow system and turn hooks including unregistered internal main", async (context) => {
+  const { power, provider } = await start(context, true);
+  for (const workspace_id of ["project", "agent-main:synthetic_agent", "group-main:synthetic_group"]) {
+    const runtime = { agent: { id: "synthetic_agent" }, workspace: { id: workspace_id }, session: { kind: "chat" } };
+    for (const hook of [power.hooks.pipeline["session.system_context"][0], power.hooks.pipeline["session.turn_context"][0]]) {
+      await hook({ context: runtime, value: { blocks: [], system_blocks: [] } });
+    }
+    assert.equal((await provider.read_version({ access: { agent_id: "synthetic_agent", workspace_id, city_memory_available: true }, scope: "workspace" })).scope_version, "0");
+  }
 });
 
-/** An opaque backend ID must not determine scope authorization. */
-test("Memory Session authorizes structured ownership with opaque backend IDs", async () => {
-  const { create_memory_session_tools } = await import("../bin/memory/runtime/MemorySessionTools.js");
-  const { MEMORY_SESSION_KIND } = await import("../bin/memory/types/MemorySession.js");
-  const access = create_access("project");
-  const record = { memory_id: "external:uuid:123", version: "v1", memory_type: "fact", content: "before",
-    owner: { kind: "agent", agent_id: access.agent_id }, subject: { kind: "agent", agent_id: access.agent_id },
-    source_refs: [], observed_at: "2026-01-01T00:00:00.000Z" };
-  const foreign = { ...record, memory_id: `agent/${access.agent_id}/wiki/looks-local`, owner: { kind: "agent", agent_id: "foreign" } };
-  const job = { job_id: "job", session_id: "session", status: "running", access, target: "agent", mode: "knowledge", kind: "revise",
-    memory_id: record.memory_id, sources: [{ source_id: "original", agent_id: access.agent_id, category: "manual", role: "user", text: "after" }] };
-  let staged;
-  const provider = {
-    recall: async () => ({ items: [record, foreign].map((memory) => ({ memory, score: 1, snippet: memory.content })) }),
-    read: async ({ memory_id }) => ({ memory_id, memory: memory_id === record.memory_id ? record : foreign }),
-  };
-  const tools = create_memory_session_tools({ provider, jobs: { read: async (job_id) => job_id === job.job_id ? job : null, stage: async (_id, _session, value) => { staged = value; } } }, job.job_id);
-  const context = { agent_id: access.agent_id, session_id: job.session_id, session_descriptor: { type: "work", kind: MEMORY_SESSION_KIND } };
-  await assert.rejects(tools.memory_query.execute({ query: "fact" }, { ...context, session_id: "foreign" }), /does not own/);
-  const recalled = await tools.memory_query.execute({ query: "fact" }, context);
-  assert.deepEqual(recalled.items.map((item) => item.memory.memory_id), [record.memory_id]);
-  assert.equal((await tools.memory_read.execute({ memory_id: record.memory_id }, context)).memory.version, "v1");
-  await assert.rejects(tools.memory_read.execute({ memory_id: foreign.memory_id }, context), /bound memory/);
-  job.kind = "digest";
-  await assert.rejects(tools.memory_read.execute({ memory_id: foreign.memory_id }, context), /outside the Job target/);
-  job.kind = "revise";
-  await tools.memory_stage.execute({ changes: [{ operation: "update", memory_id: record.memory_id, expected_version: "v1",
-    topic: "fact", content: "after", source_ids: ["original"], source_excerpts: [{ source_id: "original", excerpt: "after" }] }] }, context);
-  assert.equal(staged.changes[0].memory_id, record.memory_id);
-  assert.equal(staged.change_details[0].before.content, "before");
+test("default builtin composition protects an external User Profile while a new Agent scope stays independent", async (context) => {
+  const { root, power, provider } = await start(context, true);
+  await fs.mkdir(path.join(root, "user"), { recursive: true });
+  await fs.writeFile(path.join(root, "user/PROFILE.md"), "synthetic legacy rule");
+  const access = { agent_id: "synthetic_agent", workspace_id: "agent-main:synthetic_agent", city_memory_available: true };
+  assert.equal((await provider.read_version({ access, scope: "agent" })).scope_version, "0");
+  const hook = power.hooks.pipeline["session.system_context"][0];
+  await assert.rejects(hook({ context: { agent: { id: access.agent_id }, workspace: { id: access.workspace_id }, session: { kind: "chat" } }, value: { blocks: [], system_blocks: [] } }), /Memory context unavailable/);
+  await assert.rejects(fs.stat(path.join(root, "user/memory/runtime/records/current.json")), { code: "ENOENT" });
 });
 
-/** Unsupported transaction guarantees must fail before a model or Job is started. */
-test("Read-only Knowledge Provider rejects transactional work without affecting Profile", async (context) => {
-  const { MemoryCoordinator } = await import("../bin/memory/application/MemoryCoordinator.js");
-  const { require_memory_transactions } = await import("../bin/memory/application/MemoryKnowledge.js");
-  let created = 0;
-  const provider = { name: "read-only", capabilities: { transactions: false } };
-  const coordinator = new MemoryCoordinator({ provider, jobs: { create: async () => { created++; return { job_id: "profile", status: "skipped" }; } } });
-  assert.throws(() => require_memory_transactions(provider), /does not support transactional/);
-  await assert.rejects(coordinator.submit({ mode: "knowledge", kind: "digest" }), /does not support transactional/);
-  assert.equal(created, 0);
-  assert.equal((await coordinator.submit({ mode: "profile", kind: "profile_optimize" })).job_id, "profile");
-  const root = await fs.mkdtemp(path.join(os.tmpdir(), "downcity-memory-injected-"));
-  context.after(() => fs.rm(root, { recursive: true, force: true }));
-  let initialized = false;
-  let disposed = false;
-  const injected = { ...provider, initialize: async () => { initialized = true; }, dispose: async () => { disposed = true; } };
-  const power = new MemoryPower({ platform_root_path: root, provider: injected });
-  await power.initialize(create_start_context(path.join(root, "power")));
-  assert.equal(power.provider, injected);
-  assert.equal(initialized, true);
-  await power.dispose();
-  assert.equal(disposed, true);
+test("full projection exceeds old truncation limits, deletion explicitly retires frozen ID/version", async (context) => {
+  const { storage, provider } = await start(context);
+  await activate(storage, "user", "local"); await activate(storage, "agent", "synthetic_agent");
+  const access = { agent_id: "synthetic_agent", city_memory_available: true };
+  const rules = Array.from({ length: 4 }, (_, index) => ({ operation: "create", kind: "agreement", content: `${index}: ${"完整条件".repeat(2000)}`, sources: management_memory_sources(`op-${index}`, { input: `rule-${index}` }) }));
+  const receipt = await provider.commit({ access, scope: "agent", commit_id: "large-profile", changes: rules });
+  const profile = new MemoryProfile(provider);
+  const frozen = await profile.context_block({ scope: "agent", agent_id: access.agent_id });
+  assert.ok(frozen.content.length > 32000); assert.ok(frozen.content.includes(rules[3].content));
+  const removed = receipt.changes[0].record;
+  await provider.commit({ access, scope: "agent", commit_id: "remove-rule", changes: [{ operation: "delete", memory_id: removed.memory_id, expected_version: removed.version, sources: management_memory_sources("delete-op", {}) }] });
+  const updates = await build_profile_updates(profile, access.agent_id, [{ source: "power", name: "memory/core/agent", content: mark_profile_snapshot(frozen) }]);
+  const update = updates.find((block) => block.name === "memory/update/agent");
+  assert.ok(update.content.includes(removed.memory_id)); assert.ok(!update.checkpoint_block.content.includes(removed.content));
+  assert.equal(update.checkpoint_block.position, "after_instruction");
+});
+
+test("preflight budget refuses impossible complete system instead of compacting away constraints", async () => {
+  let advanced = 0;
+  const step = { model: { id: "synthetic", context_window: 10000 }, system: [{ role: "system", content: "完整约束".repeat(10000) }], messages: [], tools: {}, context_window: 10000 };
+  await assert.rejects(fit_request({ resolve: async () => step, advance: async () => { advanced++; return true; }, signal: new AbortController().signal, report: async () => {} }), /fixed system\/tools/);
+  assert.equal(advanced, 0);
+});
+
+test("Job staging binds original sources, actual read version and declared kind; no Profile staging exists", async (context) => {
+  const { root, storage, provider } = await start(context);
+  await activate(storage, "agent", "synthetic_agent");
+  const jobs = new MemoryJobStore(path.join(root, "synthetic-jobs")); await jobs.initialize(); context.after(async () => await jobs.dispose());
+  const source = management_memory_sources("job-evidence", { content: "以后保留完整条件" })[0];
+  const input = { request_key: "same", kind: "digest", access: { agent_id: "synthetic_agent", city_memory_available: true }, scope: "agent", memory_kind: "agreement",
+    instruction: "retain", model: { downtown: "synthetic", id: "model" }, binding_id: "binding", sources: [{ source_id: source.source_id, agent_id: "synthetic_agent", category: "chat", role: "user", text: source.excerpt, bound_source: source }] };
+  const job = await jobs.create(input);
+  assert.equal((await jobs.create({ ...input, sources: [{ ...input.sources[0], bound_source: { ...source, captured_at: new Date().toISOString() } }] })).job_id, job.job_id);
+  await jobs.update(job.job_id, { status: "running", session_id: "memory-synthetic" });
+  const tools = create_memory_session_tools({ jobs, provider }, job.job_id);
+  assert.equal(tools.memory_stage_profile, undefined);
+  const runtime = { agent_id: "synthetic_agent", session_id: "memory-synthetic", session_type: "work", session_kind: MEMORY_SESSION_KIND };
+  await assert.rejects(tools.memory_stage.execute({ changes: [] }, runtime));
+  await tools.memory_sources.execute({}, runtime);
+  const change = { operation: "create", kind: "agreement", content: "以后保留完整条件", source_ids: [source.source_id], source_excerpts: [{ source_id: source.source_id, excerpt: source.excerpt }] };
+  await assert.rejects(tools.memory_stage.execute({ changes: [change] }, runtime), /prior search/);
+  await assert.rejects(tools.memory_stage.execute({ changes: [{ ...change, operation: "update", memory_id: "foreign", expected_version: "fake", kind: undefined }] }, runtime));
+  await tools.memory_query.execute({ query: "agreement" }, runtime);
+  await assert.rejects(tools.memory_stage.execute({ changes: [{ ...change, source_excerpts: [{ source_id: source.source_id, excerpt: "fabricated quote" }] }] }, runtime), /exactly match/);
+  const staged = await tools.memory_stage.execute({ changes: [change] }, runtime);
+  assert.equal(staged.committed, false);
+  const current = await jobs.read(job.job_id);
+  const { memory_job_changes } = await import("../bin/memory/application/MemoryJobCommit.js");
+  const receipt = await provider.commit({ access: input.access, scope: "agent", commit_id: `job:${job.job_id}`, changes: memory_job_changes(current) });
+  assert.equal(receipt.changes[0].record.kind, "agreement");
+  assert.equal(receipt.changes[0].record.sources[0].role, "user");
+  await assert.rejects(tools.memory_stage.execute({ changes: [change] }, runtime), /one outcome/);
+
+});
+
+
+test("generic context checkpoint preserves frozen ordering and rejects cross-Power replacement", async () => {
+  let written;
+  const instance = { frozen_blocks: [
+    { source: "instruction", name: "identity", content: "identity" },
+    { source: "power", name: "example/core", content: "old constraints", position: "after_instruction" },
+    { source: "session", name: "context", content: "session" },
+  ], write_snapshot: async (blocks) => { written = blocks; } };
+  await StepInput.prototype.refresh_context_snapshot.call(instance, [{ source_power: "example", name: "update", content: "new", trust_level: "reference",
+    checkpoint_block: { source: "power", name: "example/core", content: "complete current constraints", position: "before_session" } }]);
+  assert.deepEqual(written.map(block => block.name), ["identity", "example/core", "context"]);
+  assert.equal(written[1].position, "after_instruction"); assert.equal(written[1].content, "complete current constraints");
+  await assert.rejects(StepInput.prototype.refresh_context_snapshot.call(instance, [{ source_power: "foreign", checkpoint_block: { source: "power", name: "example/core", content: "forged" } }]), /ownership/);
 });

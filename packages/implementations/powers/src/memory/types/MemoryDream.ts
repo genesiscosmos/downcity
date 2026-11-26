@@ -8,7 +8,7 @@ export interface MemoryDreamScope {
   /** 可选来源项目，不赋予项目共享权限。 */
   workspace_id?: string;
   /** 首期只允许 Agent 私有或有明确共享授权的 Workspace 长期知识。 */
-  target: "agent" | "current_workspace";
+  scope: "agent" | "workspace";
 }
 
 export interface MemorySignalInput extends MemoryDreamScope {

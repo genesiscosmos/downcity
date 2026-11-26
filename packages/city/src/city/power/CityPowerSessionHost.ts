@@ -11,7 +11,7 @@ import type { CityExecutionProfiles } from "./CityExecutionProfiles.js";
 
 /** 创建和读取端口的明确子集；其余交互端口由既有 Runtime 持有。 */
 export type CityPowerSessionHost = Pick<PowerHostSystem,
-  "register_execution_profile" | "create_agent_session" | "read_agent_session" | "read_agent_session_messages" | "stop_agent_session" | "deliver_agent_session_result">;
+  "register_execution_profile" | "create_agent_session" | "read_agent_session" | "read_agent_session_messages" | "read_agent_session_message" | "stop_agent_session" | "deliver_agent_session_result">;
 
 /** 后台结果只接受宿主路由与 JSON 数据，不接受模型执行权限或新 Turn 策略。 */
 const session_result_schema = z.object({
@@ -94,6 +94,15 @@ export function create_power_session_host(power_id: string, access: CityPowerRun
       const state = await agent.sessions.read_execution_state(input.session_id, input.type, input);
       return { session_id: input.session_id, executing: agent.sessions.runtime(input.session_id, input.type).is_executing(),
         ...(metadata.execution_profile ? { execution_profile: metadata.execution_profile } : {}), ...state };
+    },
+    read_agent_session_message: async (input) => {
+      const agent = require_agent(access, input.agent_id);
+      const max_bytes = bounded_integer(input.max_bytes, 256 * 1024, 1024 * 1024, "max_bytes");
+      const storage = await agent.sessions.read_session_storage(input.session_id, input.type);
+      const message = await storage.read_message(input.message_id);
+      if (!message) return null;
+      if (message.session_id !== input.session_id || Buffer.byteLength(JSON.stringify(message), "utf8") > max_bytes) throw new Error("session_message_budget_or_identity_invalid");
+      return message as unknown as import("@/power/types/Json.js").PowerJsonObject;
     },
     read_agent_session_messages: async (input) => {
       const agent = require_agent(access, input.agent_id);

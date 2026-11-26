@@ -15,7 +15,7 @@ interface MemoryJobsPage {
 /** Records are bound to their owning user or Agent, with no project filter. */
 interface MemoryJobsProps extends Pick<PowerMainviewComponentProps, "power" | "ui"> {
   /** Owning category; the main page defaults to user records. */
-  target?: "user" | "agent";
+  scope?: "user" | "agent";
   /** Required when displaying a specific Agent's records. */
   agent_id?: string;
   /** Agent Profile 内嵌时复用宿主页容器，避免重复 Page 布局。 */
@@ -28,11 +28,11 @@ const STATUS_LABELS: Record<MemoryJobView["status"], string> = {
   succeeded: "已提交", skipped: "无需变更", failed: "失败",
 };
 const KIND_LABELS: Record<MemoryJobView["kind"], string> = {
-  digest: "会话提炼", revise: "记忆修订", profile_optimize: "核心记忆整理", dream: "后台整理",
+  digest: "会话提炼", revise: "记忆修订", optimize: "核心记忆整理", dream: "后台整理",
 };
 
 /** One records view shared by the user page and the fixed Agent page. */
-export function MemoryJobs({ power, ui, target = "user", agent_id, embedded = false }: MemoryJobsProps) {
+export function MemoryJobs({ power, ui, scope = "user", agent_id, embedded = false }: MemoryJobsProps) {
   const { Button, Callout, EmptyState, Group, Inline, LoadingState, Page, Row, Section, Status, Toolbar } = ui.components;
   const [page, set_page] = useState<MemoryJobsPage>();
   const [offset, set_offset] = useState(0);
@@ -43,7 +43,7 @@ export function MemoryJobs({ power, ui, target = "user", agent_id, embedded = fa
   const [detail, set_detail] = useState<MemoryJobDetail>();
   const [reading, set_reading] = useState(false);
   const [busy, set_busy] = useState(false);
-  const input = { target, ...(target === "agent" && agent_id ? { agent_id } : {}) };
+  const input = { scope, ...(scope === "agent" && agent_id ? { agent_id } : {}) };
 
   useEffect(() => {
     let disposed = false;
@@ -52,7 +52,7 @@ export function MemoryJobs({ power, ui, target = "user", agent_id, embedded = fa
     set_error("");
     const load = async () => {
       try {
-        if (target === "agent" && !agent_id) throw new Error("请在 Agent 页面查看它的处理记录");
+        if (scope === "agent" && !agent_id) throw new Error("请在 Agent 页面查看它的处理记录");
         const result = await power.invoke<MemoryJobsPage>("memory.records.list", { ...input, offset, limit: PAGE_SIZE });
         if (disposed) return;
         set_page(result);
@@ -68,7 +68,7 @@ export function MemoryJobs({ power, ui, target = "user", agent_id, embedded = fa
     };
     void load();
     return () => { disposed = true; if (timer) clearTimeout(timer); };
-  }, [agent_id, target, offset, power, revision, ui.revision]);
+  }, [agent_id, scope, offset, power, revision, ui.revision]);
 
   useEffect(() => {
     if (!selected_id) { set_detail(undefined); return; }
@@ -87,7 +87,7 @@ export function MemoryJobs({ power, ui, target = "user", agent_id, embedded = fa
     };
     void load();
     return () => { disposed = true; if (timer) clearTimeout(timer); };
-  }, [agent_id, target, power, selected_id, revision, ui.revision]);
+  }, [agent_id, scope, power, selected_id, revision, ui.revision]);
 
   /** 重试只重新提交原 Job；返回状态不等同于提交成功。 */
   const retry = async (job_id: string) => {
@@ -143,7 +143,7 @@ export function MemoryJobs({ power, ui, target = "user", agent_id, embedded = fa
 
 /** 用名称和知识归属解释记录，只有目录缺失时退回稳定标识。 */
 function job_scope_label(job: MemoryJobView): string {
-  return job.target === "user" ? "用户记忆" : "Agent 私有记忆";
+  return job.scope === "user" ? "用户记忆" : "Agent 私有记忆";
 }
 
 /** 将宿主失败转换为可读文本，不把错误视为空列表。 */

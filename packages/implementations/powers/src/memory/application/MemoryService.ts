@@ -1,14 +1,17 @@
 /** Memory 领域应用服务：普通动作直接提交，语义处理提交 Job，统一检查处理状态的访问范围。 */
 import type { PowerContext, PowerLifecycleContext } from "@downcity/city/power";
-import type { MemoryProvider, MemoryRememberInput, MemoryReviseInput } from "../types/Memory.js";
-import type { MemoryAccessContext, MemoryWriteTarget } from "../types/MemoryAccess.js";
+import type { MemoryProvider, MemoryDigestInput, MemoryKind, MemoryScopeType, MemoryReviseInput } from "../types/MemoryProtocol.js";
+import type { MemoryAccessContext } from "../types/MemoryAccess.js";
 import type { MemoryJob, MemoryJobView, MemoryJobDetail, MemoryJobInput } from "../types/MemoryJob.js";
 import { memory_job_view } from "../types/MemoryJob.js";
 import { MemoryJobStore, memory_job_identity } from "../storage/MemoryJobStore.js";
 import { MemoryCoordinator } from "./MemoryCoordinator.js";
-import { explicit_memory_source, memory_request_hash, read_memory_sources } from "./MemorySources.js";
+import { memory_request_hash, read_memory_sources } from "./MemorySources.js";
 import { MemoryDelivery, memory_result_recipient } from "./MemoryDelivery.js";
-import { memory_record_target, require_memory_transactions } from "./MemoryKnowledge.js";
+import { require_memory_transactions } from "./MemoryKnowledge.js";
+
+import { MemoryRecords } from "./MemoryRecords.js";
+import { bind_memory_sources } from "./MemorySourceBinding.js";
 
 /** Power 唯一持有的记忆业务服务。 */
 export class MemoryService {
@@ -31,61 +34,49 @@ export class MemoryService {
     return memory_job_view(await this.coordinator.submit(input));
   }
 
-  /** 显式新增保留原意，不让模型把指令改写成用户原话。 */
-  async remember(context: PowerContext, access: MemoryAccessContext, input: Omit<MemoryRememberInput, "access">) {
-    const source = explicit_memory_source(context, input.content);
-    const receipt = await require_memory_transactions(this.provider).commit({
-      access, target: input.target, commit_id: `explicit:${source.source_id}:${input.target}`,
-      changes: [{ operation: "create", content: input.content, topic: input.topic, memory_type: input.memory_type,
-        allow_recreation: true,
-        source_refs: [{ source_id: source.source_id, source_type: "manual", agent_id: source.agent_id,
-          category: source.category, session_id: source.session_id, role: "request", label: input.source }],
-      }],
-    });
-    return { target: input.target, mode: "knowledge", status: "created", memory_id: receipt.changes[0]!.memory_id,
-      version: receipt.changes[0]!.version, activation: "on_recall", location: "wiki" };
+  /** 从明确 canonical 窗口提炼一种内容。 */
+  async digest(context: PowerContext, access: MemoryAccessContext, input: MemoryDigestInput): Promise<MemoryJobView> {
+    if (input.scope === "workspace" && input.kind === "agreement") throw new Error("Workspace supports Knowledge only");
+    const sources = await read_memory_sources(context, this.host, input.session_id, input.type, input.max_messages ?? 30);
+    return await this.submit(context, { kind: "digest", access, scope: input.scope, memory_kind: input.kind, sources,
+      instruction: "Extract only supported durable information of the bound kind. Preserve observations, conditions, evidence and limitations. An explicit user agreement requires original user evidence.",
+      request_key: memory_request_hash(["digest-records-v2", input, sources.map(source => source.source_id)]) });
   }
-
-  /** 原始会话按分类和消息边界指定；不把末尾文本直接归档成长期知识。 */
-  async digest(context: PowerContext, access: MemoryAccessContext, input: {
-    /** 指定来源会话。 */ session_id: string;
-    /** 来源 Session 类型。 */ type: string;
-    /** 本次来源消息预算。 */ max_messages: number;
-    /** 唯一写入目标。 */ target: MemoryWriteTarget;
-  }): Promise<MemoryJobView> {
-    const sources = await read_memory_sources(context, this.host, input.session_id, input.type, input.max_messages);
-    return await this.submit(context, {
-      kind: "digest", access, target: input.target, mode: "knowledge", sources,
-      instruction: "Extract supported goals, constraints, decision reasons, strategies and verified lessons useful to future decisions. Keep observations and unresolved questions only when clearly valuable and labeled as such. Do not store transient task status or assistant proposals as accepted decisions.",
-      request_key: memory_request_hash(["digest-v2", input.session_id, input.type, sources]),
-    });
-  }
-
-  /** 自然语言更正必须经专用 Session，既有内容不会被追加一段修改指令。 */
+  /** revise 固定原对象、版本、来源、范围和种类。 */
   async revise(context: PowerContext, access: MemoryAccessContext, input: Omit<MemoryReviseInput, "access">): Promise<MemoryJobView> {
-    require_memory_transactions(this.provider);
-    const current = await this.provider.read({ access, memory_id: input.memory_id });
-    if (!current.memory) throw new Error("Memory not found");
-    if (current.memory.memory_id !== input.memory_id) throw new Error("Memory provider returned a different record");
-    const target = memory_record_target(current.memory, access);
-    const source = explicit_memory_source(context, JSON.stringify({ instruction: input.instruction, evidence: input.evidence }));
-    return await this.submit(context, {
-      kind: "revise", access, target, mode: "knowledge", memory_id: input.memory_id, sources: [source],
-      instruction: input.instruction,
-      request_key: memory_request_hash([source.source_id, input.memory_id, current.memory.version]),
-    });
+    const current = await new MemoryRecords(this.provider).read_current(access, input.memory_id, input.expected_version);
+    const sources = await bind_memory_sources(context, input, input.source_refs, true, this.host);
+    return await this.submit(context, { kind: "revise", access, scope: current.scope.type, memory_kind: current.kind,
+      memory_id: current.memory_id, expected_version: current.version, sources: sources.map(source => ({ source_id: source.source_id,
+        agent_id: access.agent_id, category: context.session?.type ?? "request", session_id: context.session?.id,
+        role: source.role, text: source.excerpt ?? JSON.stringify(input), bound_source: source })),
+      instruction: input.instruction, request_key: memory_request_hash(["revise-records-v2", input, current.version]) });
   }
-
-  /** 显式请求整理当前核心记忆，来源固定为本次读取的 Profile 版本。 */
-  async optimize_profile(context: PowerContext, access: MemoryAccessContext, target: "user" | "agent", profile: { content: string; version: string }): Promise<MemoryJobView> {
-    if (!profile.content.trim()) throw new Error("Profile is empty");
-    const source = { source_id: `profile:${memory_request_hash([target, target === "agent" ? access.agent_id : "user", profile.version])}`,
-      agent_id: access.agent_id, category: "work", role: "request" as const, text: profile.content };
-    return await this.submit(context, {
-      kind: "profile_optimize", access, target, mode: "profile", sources: [source],
-      instruction: "Consolidate duplicates and apply explicit corrections already present. Preserve all still-applicable agreements, conditions, negations, uncertainty, and source markers. Do not infer new preferences. Use exact nonoverlapping edits; skip if no safe improvement exists.",
-      request_key: memory_request_hash(["profile-optimize-v1", target, profile.version]),
-    });
+  /** 明确整理同 scope 的一种内容，旧对象只用于去重及保留来源，不能成为新独立证据。 */
+  async optimize(context: PowerContext, access: MemoryAccessContext, input: { scope: MemoryScopeType; kind: MemoryKind }): Promise<MemoryJobView> {
+    if (input.scope === "workspace" && input.kind === "agreement") throw new Error("Workspace supports Knowledge only");
+    const transactions = require_memory_transactions(this.provider);
+    const before = await transactions.read_version({ access, scope: input.scope });
+    const sources: import("../types/MemoryJob.js").MemoryJobSource[] = [];
+    const inventory: { memory_id: string; version: string }[] = [];
+    for (let offset = 0;;) {
+      const page = await this.provider.list({ access, scope: input.scope, kind: input.kind, limit: 500, offset });
+      for (const record of page.items) inventory.push({ memory_id: record.memory_id, version: record.version });
+      if (inventory.length > 500) throw new Error("OPTIMIZE_BUDGET_EXCEEDED: select an explicitly bounded consolidation workflow");
+      for (const record of page.items) for (const source of record.sources) {
+        if (!source.excerpt || sources.some(item => item.source_id === source.source_id)) continue;
+        sources.push({ source_id: source.source_id, agent_id: access.agent_id, category: "existing_source", role: source.role, text: source.excerpt, bound_source: source });
+      }
+      offset += page.items.length;
+      if (offset >= page.total) break;
+      if (!page.items.length) throw new Error("Incomplete scope read");
+    }
+    if (!sources.length) throw new Error("No retained original sources available for safe consolidation");
+    const after = await transactions.read_version({ access, scope: input.scope });
+    if (before.scope_version !== after.scope_version) throw new Error("VERSION_CONFLICT");
+    return await this.submit(context, { kind: "optimize", access, scope: input.scope, memory_kind: input.kind, sources, inventory, input_scope_version: before.scope_version,
+      instruction: "Preserve every still-applicable condition, negation and authorization limit. Read all objects before merging; invalidate merged originals in the same transaction. Existing records are not independent new evidence. Do not infer new preferences or move scope/kind.",
+      request_key: memory_request_hash(["optimize-records-v2", input, before.scope_version]) });
   }
 
   /** 内部请求不会因同属 City 就向所有 Agent 公开。 */

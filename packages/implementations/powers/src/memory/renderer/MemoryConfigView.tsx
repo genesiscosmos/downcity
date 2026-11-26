@@ -64,7 +64,7 @@ export function memory_config_view(props: PowerMainviewComponentProps) {
     <Group label="记忆处理">
       <Row label="记忆处理模型" description={snapshot.processing.model?.id || "跟随执行 Agent 的默认模型"} />
       <Row label="处理方式" description="专用 Memory Session 提炼与修订，提交结果由 Power 确认。" />
-      <Row label="核心记忆" description="User 与 Agent Profile 由 Downcity 独立管理，构建会话上下文时读取。" />
+      <Row label="核心记忆" description="当前有效持续约定的完整投影，新会话加载，已有会话逐轮更正。" />
     </Group>
     <Group label="自动整理">
       <Row label="用户记忆" description="通过明确保存与修订维护；后台整理不会自动写入用户记忆。" />

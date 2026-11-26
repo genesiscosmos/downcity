@@ -64,7 +64,7 @@ export function normalize_power_system_blocks(
  * 关键点（中文）
  * - 只有一个入口：`session.system_context` pipeline。扩展能力不再有独立的
  *   `system()` 通道，因此不需要判断「静态说明写哪里」。
- * - 处理器失败降级为空集合，不阻断 Session 主链路。
+ * - 普通扩展失败可降级；SESSION_CONTEXT_REQUIRED 表示完整约束不可用，必须阻止模型调用。
  */
 export async function resolve_session_power_system_blocks(
   input: ResolveSessionPowerSystemBlocksInput,
@@ -85,6 +85,7 @@ export async function resolve_session_power_system_blocks(
       (output as unknown as SessionSystemContextHookValue)?.blocks,
     );
   } catch (error) {
+    if (error && typeof error === "object" && "code" in error && error.code === "SESSION_CONTEXT_REQUIRED") throw error;
     await input.on_error?.(error);
     return [];
   }

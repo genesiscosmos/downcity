@@ -42,7 +42,7 @@ function normalize_storage_key(input: string): string {
 }
 
 /** 递归列出目录中的全部普通文件。 */
-async function list_files_recursively(directory_path: string): Promise<string[]> {
+async function list_files_recursively(directory_path: string, exclude_root_locks = false): Promise<string[]> {
   const entries = await readdir(directory_path, { withFileTypes: true }).catch(
     (error: NodeJS.ErrnoException) => {
       if (error.code === "ENOENT") return [];
@@ -51,6 +51,7 @@ async function list_files_recursively(directory_path: string): Promise<string[]>
   );
   const files: string[] = [];
   for (const entry of entries) {
+    if (exclude_root_locks && entry.name === ".locks" && entry.isDirectory()) continue;
     const entry_path = path.join(directory_path, entry.name);
     if (entry.isDirectory()) {
       files.push(...await list_files_recursively(entry_path));
@@ -101,7 +102,9 @@ export class FileMemoryStorageAdapter implements MemoryStorageAdapter {
 
   /** 初始化独占根目录。 */
   async initialize(): Promise<void> {
+    await this.assert_root_directory();
     await mkdir(this.root_path, { recursive: true });
+    await this.assert_root_directory();
   }
 
   /** 判断逻辑 key 是否存在。 */
@@ -113,6 +116,28 @@ export class FileMemoryStorageAdapter implements MemoryStorageAdapter {
         throw error;
       },
     );
+  }
+
+  /** 元数据探针包含临时文件、未知条目和历史，不使用会过滤材料的正文 list。 */
+  async has_entries(prefix: string): Promise<boolean> {
+    if (prefix) await this.assert_no_symbolic_links(prefix, true);
+    else await this.assert_root_directory();
+    const target_path = prefix ? this.resolve_key(prefix) : this.root_path;
+    const stats = await lstat(target_path).catch((error: NodeJS.ErrnoException) => {
+      if (error.code === "ENOENT") return null;
+      throw error;
+    });
+    if (!stats) return false;
+    if (stats.isSymbolicLink()) throw new Error("Memory storage probe contains symbolic link");
+    if (!stats.isDirectory()) return true;
+    const entries = await readdir(target_path, { withFileTypes: true });
+    for (const entry of entries) {
+      if (entry.isSymbolicLink()) throw new Error("Memory storage probe contains symbolic link");
+      // 锁数据库属于 Adapter 自身，只在实际根排除；范围内部同名文件仍是材料。
+      if (!prefix && entry.name === ".locks" && entry.isDirectory()) continue;
+      if (!entry.isDirectory() || await this.has_entries(prefix ? `${prefix}/${entry.name}` : entry.name)) return true;
+    }
+    return false;
   }
 
   /** 读取逻辑 key；不存在时返回空。 */
@@ -148,10 +173,11 @@ export class FileMemoryStorageAdapter implements MemoryStorageAdapter {
 
   /** 列出逻辑前缀下的全部文本条目。 */
   async list(prefix: string): Promise<MemoryStorageEntry[]> {
-    const normalized_prefix = normalize_storage_key(prefix);
-    await this.assert_no_symbolic_links(normalized_prefix, true);
-    const prefix_path = this.resolve_key(normalized_prefix);
-    const files = await list_files_recursively(prefix_path);
+    const normalized_prefix = prefix ? normalize_storage_key(prefix) : "";
+    if (normalized_prefix) await this.assert_no_symbolic_links(normalized_prefix, true);
+    else await this.assert_root_directory();
+    const prefix_path = normalized_prefix ? this.resolve_key(normalized_prefix) : this.root_path;
+    const files = await list_files_recursively(prefix_path, !normalized_prefix);
     const entries = await Promise.all(files.map(async (file_path) => ({
       key: path.relative(this.root_path, file_path).replace(/\\/g, "/"),
       content: await readFile(file_path, "utf8"),
@@ -218,11 +244,21 @@ export class FileMemoryStorageAdapter implements MemoryStorageAdapter {
     return resolved_path;
   }
 
+  /** 根自身不可为链接或普通文件；缺失由首次初始化创建，其余错误原样传播。 */
+  private async assert_root_directory(): Promise<void> {
+    const stats = await lstat(this.root_path).catch((error: NodeJS.ErrnoException) => {
+      if (error.code === "ENOENT") return null;
+      throw error;
+    });
+    if (stats && (!stats.isDirectory() || stats.isSymbolicLink())) throw new Error("Memory storage root must be a directory, not a symbolic link");
+  }
+
   /** 拒绝 root 内部通过符号链接把逻辑 key 重定向到其他物理位置。 */
   private async assert_no_symbolic_links(
     key: string,
     include_target: boolean,
   ): Promise<void> {
+    await this.assert_root_directory();
     const segments = normalize_storage_key(key).split("/");
     const segment_count = include_target ? segments.length : Math.max(0, segments.length - 1);
     let current_path = this.root_path;

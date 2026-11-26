@@ -4,7 +4,7 @@ import type { MemoryJob } from "../types/MemoryJob.js";
 
 /** 每次执行前重新读取开关，已关闭范围不得开始新的后台计算。 */
 export async function can_run_memory_background(store: Pick<MemorySignalStore, "read">, owner_id: string, job: MemoryJob): Promise<boolean> {
-  if (job.kind !== "dream" || job.mode !== "knowledge" || job.target === "user") return false;
-  const ledger = await store.read({ agent_id: job.access.agent_id, workspace_id: job.access.workspace_id, target: job.target });
+  if (job.kind !== "dream" || job.memory_kind !== "knowledge" || job.scope === "user") return false;
+  const ledger = await store.read({ agent_id: job.access.agent_id, workspace_id: job.access.workspace_id, scope: job.scope });
   return ledger.enabled && ledger.batches.some((batch) => batch.job_id === job.job_id && batch.owner_id === owner_id);
 }

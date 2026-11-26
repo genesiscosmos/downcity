@@ -1,84 +1,78 @@
 # Memory
 
-MemoryPower owns User/Agent Core Memory and searchable knowledge. One platform data root has one local user (`local`), independent of Downtown login accounts. City UserRepository owns user/user.json. MemoryPower handles requests, scope checks and durable commits; dedicated work/memory Sessions perform extraction, revision and Profile consolidation.
+MemoryPower owns persistent Agreements and searchable Knowledge. One platform data root has one local user (`local`), independent of Downtown login accounts. City owns base user information; Memory owns record semantics, sources, processing and durable commits.
 
 ## Flow
 
-Core Profiles are captured in the Session system snapshot. On each turn, MemoryPower compares the frozen versions with current Profiles and supplies bounded reference updates when they differ. New Sessions and syncshot load the full current Profiles. Updates never rewrite canonical messages or grant permissions.
+Agreement and Knowledge share one canonical record store. Agreement has a complete content field and no title; Knowledge requires an independent title and content. User and Agent Agreements generate the Profile context. Knowledge is searched and read when needed. Profile is a derived view, not a separate writable document.
 
-Ordinary Sessions call the public actions. Semantic operations create persisted Memory Jobs and dedicated Sessions with a fixed model, memory-only tools, bounded sources and a processing budget. These Sessions do not inherit the Agent's business instructions, Skills, Workspace tools or ordinary completion delivery. Their output is staged; only the host's validated commit establishes success. There is no automatic per-turn capture or Profile optimization. Background knowledge consolidation is explicitly enabled per scope and disabled by default.
+New Sessions and syncshot load the complete current Agreement projection. Each turn compares its frozen baseline with current records and explicitly replaces outdated bindings. Required-memory loading failures must stop the model call; they must not silently omit agreements. Saving and loading into a Session are separate outcomes.
+
+Ordinary actions use deterministic commits. Semantic actions create a bounded Memory Job, then a dedicated work/memory Session reviews fixed sources and stages changes. The host validates and commits; the model's final text is not a commit receipt. Background consolidation is disabled by default.
 
 ## Memory selection and evidence
 
-Select memory for expected future usefulness: enduring goals and stable constraints, decision reasons, strategies and verified lessons that can change future choices or avoid repeated investigation. Skip routine logs, temporary progress and state readily available from the environment; short-term next steps belong in Task or Session context. Keep Profile concise and focused on persistent agreements, with detailed experience and project knowledge in searchable knowledge.
+Select memory for expected future usefulness: enduring goals and stable constraints, decision reasons, strategies and verified lessons that can change future choices or avoid repeated investigation. Skip routine logs, temporary progress and state readily available from the environment; short-term next steps belong in Task or Session context. Keep Agreements concise; put detailed experience and project information in searchable Knowledge.
 
 When learning from success or failure, distinguish observations, explanations and verified rules. The business Agent should test explanations when authorized and practical, then retain the rule, verification evidence, applicable conditions and limitations. A successful retry, human acceptance or an exact quote alone does not establish causation. Repeated references are not new evidence. An untested explanation must not become a verified lesson; retain labeled observations or unresolved questions only when clearly useful, without accumulating speculation. Explicit user preferences and agreements require no experimental verification.
 
-The dedicated Memory Session reviews only the support in provided sources, including claimed verification; it does not perform business experiments. Narrow or skip unsupported conclusions, preserve counterevidence and uncertainty, and do not treat existing memories as independent corroboration. Source and commit checks establish traceability and storage consistency, not semantic truth. Explicit remember directly saves submitted content; the calling Agent is responsible for its selection and wording.
+Explicit source selection currently accepts canonical text Parts and already-disclosed plain-text tool model_output. Structured folded results, undisclosed complete tool output, attachments and binary content are rejected rather than treated as observed evidence.
+
+The dedicated Memory Session reviews only the support in provided sources, including claimed verification; it does not perform business experiments. Narrow or skip unsupported conclusions, preserve counterevidence and uncertainty, and do not treat existing memories as independent corroboration. Explicit credential patterns are rejected in record text and captured source text, including automatically captured user input. This guard does not classify all sensitive information; keep unrelated private material out of selected evidence. Source and commit checks establish traceability and storage consistency, not semantic truth. Explicit remember directly saves submitted content; the calling Agent is responsible for its selection and wording.
+
+Use the canonical `memory_id` returned by tools: `agent/<agent_id>/wiki/<opaque_id>`, `user/<hex_user_id>/wiki/<opaque_id>` or `workspace/<hex_workspace_id>/wiki/<opaque_id>`. Preserve the complete ID without URI prefixes, leading slashes or whitespace. A returned `memory:...@version#L...` citation is a body reference, not a record ID. Reads, updates, forgetting, revisions and management history share the same validation.
 
 ## remember
 
-- content: required non-empty text.
-- target: user, agent or current_workspace.
-- mode: profile or knowledge; default knowledge.
-- topic, memory_type, source: optional knowledge organization, type and evidence label.
-
-Profile supports user and agent. User Profile applies across local Agents; Agent Profile applies only to that Agent. Workspace Profile is rejected. Appending is immediate and returns profile_id. Knowledge mode creates a separate versioned record with request provenance, returning memory_id and version. Topic is an organization hint, not an overwrite address.
+Create an Agreement:
 
 ```json
-{"target":"user","mode":"profile","content":"Before the main answer, remind me to speak English and briefly correct my expressions."}
+{"scope":"agent","kind":"agreement","content":"Ask for confirmation before changing multiple modules."}
 ```
 
-Use `target`, never `scope`, in remember payloads. Persistent behavior changes should explicitly choose mode profile; omitting mode still defaults to searchable knowledge. Only successful tool results establish that saving completed.
+Create Knowledge:
 
-Committed writes return target, mode, status, activation and location, plus profile_id or memory_id. Profile returns status=saved and activation=next_turn_or_new_session; knowledge returns status=created and activation=on_recall. Ordinary knowledge read/revise/forget do not accept profile_id. User/Agent knowledge management does not require a Workspace; project writes do.
+```json
+{"scope":"workspace","kind":"knowledge","title":"Configuration snapshot boundary","content":"A turn uses one fixed configuration snapshot. Check the current implementation before relying on a specific reload path."}
+```
+
+`scope`, `kind` and `content` are required. Knowledge also requires `title`; Agreement forbids it. Scope is user, agent or workspace. Workspace supports Knowledge only. Optional `source_refs` select authorized canonical message Parts; the host captures roles, locations and excerpts. Optional `request_id` binds a replayable request. Titles are not unique keys and never select records for overwrite.
+
+The host supplies memory_id, resolved scope, version, state, sources, created_at and updated_at. An Agreement requires traceable user input or authenticated management input. Request provenance alone is not a user agreement. Content format and budgets are shared across ordinary actions, management and Memory Session staging.
+
+A successful write returns status=committed or unchanged, operation, request_id, commit_id, committed_at and record. Record state is active, invalidated or deleted and does not express verification. Agreement activation is next_turn_or_new_session; Knowledge activation is on_recall. A delete receipt omits the removed body.
 
 ## Profile maintenance
 
-Request Profile consolidation with `optimize {target: "user" | "agent"}`. The dedicated Memory Session stages exact nonoverlapping edits against a read version, preserving applicable agreements and source markers. The Profile service validates and applies them under a scope lock with a recoverable receipt. Within the same request scope, repeated optimization of the same Profile version uses a stable source identity and reuses the Job. Profile files and knowledge manifests are separate transactions.
+Use read to obtain the full record and version. update requires memory_id, expected_version and complete replacement content; Knowledge also requires the complete title. Scope and kind cannot change through update. forget requires memory_id and expected_version; state may be invalidated or deleted, defaulting to deleted. Neither state remains in ordinary read/list/search or the Agreement projection.
 
-`digest` requires session_id, category (chat/work), and target; max_messages defaults to 30 and is limited to 100. It extracts supported durable knowledge from bounded canonical text. Within the same request scope, the captured sources and extraction policy determine deduplication; unrelated knowledge changes do not create another digest request. `revise` requires memory_id and instruction, with optional evidence. Digest, revise and optimize return a Job view rather than immediate saving confirmation.
+list and search accept optional scope and kind. Search indexes Knowledge title and body separately; body citations preserve their original lines and record version. Agreement labels are deterministic summaries of content. Knowledge labels always use title.
 
-Use `jobs` to list processing records, `job_status {job_id}` to read state, and `retry {job_id}` to retry a failed explicit request. Retry automatic batches from background management, where scope quotas and cooldown still apply. Lists and status return `MemoryJobView` without source text. Only succeeded confirms a commit; skipped means no change. Pending or failed changes do not establish that memory took effect. Failed processing never silently archives source text as knowledge.
+digest requires session_id, type (chat/work), scope and kind, with an optional bounded max_messages. revise requires memory_id, expected_version and instruction, with optional evidence/source_refs. optimize explicitly consolidates one scope and kind. These actions return asynchronous Jobs. Only succeeded with a durable receipt confirms committed changes; skipped means no changes. Pending or failed changes are not saved records.
 
-Call `job_detail {job_id}` to inspect `{job: MemoryJobView, changes: MemoryJobChangeDetail[]}`. This separate read endpoint checks the current Job's Agent/Workspace scope, using the same scope checks as job_status. It returns the authorized source excerpts persisted for that request; lists and status contain no source text. Changes include operation, topic, optional memory ID, the actual read version for existing content, fixed before/after snapshots, capture time and exact source excerpts from the authorized input. Source roles and available Session/message identifiers are retained, and partial excerpts are marked. Creates have `before: null`; invalidation preserves text and marks it invalidated. Profile snapshots cover the exact edited regions and refer to the full Profile's read version. Details describe this operation even if current content later changes. Records without captured snapshots return `changes: []`; current content is never used to reconstruct a missing historical snapshot.
+The dedicated Session has one memory_stage tool for both kinds. It reads sources, searches before creating, and reads exact records and versions before updating or invalidating. Every staged change cites authorized original material. Consolidation preserves applicable agreements, conditions and evidence; it does not move records across scopes or turn Knowledge into Agreements.
 
-Session calls to digest, revise and optimize subscribe the original calling Session and Turn to the eventual succeeded, skipped or failed result. Digest's source Session is not used as the feedback recipient. A separate durable outbox persists completion summaries without source text and handles them idempotently. The result is injected only while the original Turn can receive it. If that Turn has ended, the result remains available in processing records; no new Turn starts automatically. `delivery_status=delivered` records injection; `delivery_status=saved` records retention without injection. Both finish delivery, so saved results are not retried for injection. Delivery failures retry with backoff without changing the memory commit status. Management-page requests have no chat recipient. Use processing records to check the result when needed, avoid repeated polling, and avoid duplicating a saving confirmation already delivered for the Job.
+jobs and job_status omit source text. job_detail shows captured before/after, labels, actual read versions and source excerpts, rather than reconstructing history from current data. retry keeps the original sources, scope, model and authorization binding. Automatic batches are retried through their scope management.
 
-Host actions: memory.user_read/user_update delegate base information to City. memory.profile_read/profile_edit/profile_delete/profile_status accept target=user or target=agent plus agent_id. Edit/delete require the read version. The Memory management page includes processing records, status, results and failed-job retries. Selecting a record loads job_detail with the selected Agent and Workspace. It shows one change at a time, divides long text into sections with differences highlighted, paginates source excerpts, and distinguishes committed changes from unconfirmed plans.
+The original calling Session/Turn receives a completion summary only while it can accept one. Otherwise the result remains in processing records, without starting another turn. delivery_status describes result delivery, not memory commit status. Delivery retries never repeat the memory commit.
 
 ## Background consolidation
 
-Open Memory's background consolidation page, select an Agent, Workspace and knowledge target, then explicitly enable that exact scope. Default switches are off. Automatic commits support Agent private knowledge and explicitly shareable Workspace knowledge only; neither Profile nor User knowledge is changed automatically. Explicit actions remain independent of these switches.
+Trusted host APIs explicitly enable one Agent, Workspace context and scope combination. Automatic batches write only private Agent Knowledge or explicitly shareable Workspace Knowledge. They never write Agreements or User Knowledge and do not scan private Session history.
 
-Trusted sources are corrections typed directly on the page and, in the official Power assembly, Task accept facts and revise facts with explicit feedback. Task publishes facts atomically with work state, capturing output text, roles, fingerprint and read range. Execution success and Turn completion are not human acceptance. Task facts default to the original Agent's private knowledge. Project-shared corrections require an explicit sharing submission. No private Session-history scan occurs. Memory Sessions, generated changes and completion feedback are excluded as new original sources.
+Inputs are explicit corrections and persisted Task acceptance/revision facts with explicit feedback. Execution success, opening a result and ending a turn are not human acceptance. Generated memories and processing feedback are not fresh original evidence.
 
-Maintenance checks run every five minutes, including durable intake and commit-receipt reconciliation while automatic computation is disabled. Empty queues make no model calls. A batch fixes one Agent, target and knowledge mode: at most 4 facts, 16 sources and 32,000 characters. Each scope reserves at most 2 computations per UTC day, including retries, at least 10 minutes apart. Normal attempts retain a 120-second bound and a Job allows at most 3 attempts. Quotas count computations, not monetary costs. Explicit requests take priority at Job boundaries; active computations and atomic commits are not preempted. Disabling stops new computation while preserving queued input.
+Maintenance checks run every five minutes. A batch has at most four facts, sixteen sources and 32,000 characters. Each scope reserves at most two computations per UTC day, including retries, at least ten minutes apart. Attempts have a 120-second bound and a Job permits at most three attempts. Empty queues make no model calls. Explicit requests take priority at Job boundaries.
 
-The page shows scope state, accepted sequence, continuous processed watermark, backlog, quota/cooldown deferrals, errors, source boundaries, batches and corresponding Job states. Only succeeded with a commit receipt or an explicit skipped outcome marks input processed. Failures, unreadable sources and deferrals remain pending; earlier unfinished facts block the continuous watermark. Failed batches require explicit retry under the same switch, cooldown and quotas. Automatic work has no chat recipient: committed does not establish delivery.
-
-Host actions, not ordinary model tools:
-
-- `memory.dream.status`: agent_id, optional workspace_id, target=agent/current_workspace.
-- `memory.dream.configure`: the same scope plus enabled.
-- `memory.dream.correction`: the same scope plus a client UUID event_id, ISO occurred_at, content and workspace_share_allowed. Preserve all parameters when retrying. Returns received, not processed or committed.
-- `memory.dream.retry`: the same scope plus batch_id.
-
-The official Power assembly connects the reliable Task source. Standalone MemoryPower construction may supply `dreaming.read_signals`, a trusted replayable reader returning `MemorySignalInput[]`; management-page corrections remain available without that callback. Shared platform ledgers deduplicate events and batches across local Cities. Each batch stays bound to its original City's private Job; another City does not take it over. Preserve that City's processing data for recovery. Task deletion archives command facts before deleting the Task aggregate. Task deletion and forgetting do not erase every source copy. Automatic commits never receive allow_recreation authorization; exact-content suppression does not guarantee semantic suppression.
+Host management actions are memory.dream.status, memory.dream.configure, memory.dream.correction and memory.dream.retry. They bind the actual Agent/Workspace identity and scope; ordinary model tools do not configure background permissions. Failed or deferred inputs remain pending. Automatic work has no chat recipient.
 
 ## Storage and configuration
 
-```text
-<platform-root>/user/user.json
-<platform-root>/user/PROFILE.md
-<platform-root>/user/memory/runtime/knowledge/current.json
-<platform-root>/agents/<agent_id>/PROFILE.md
-<platform-root>/agents/<agent_id>/memory/runtime/knowledge/current.json
-<shared-memory-root>/workspaces/<encoded-id>/runtime/knowledge/current.json
-<platform-root>/memory/dreaming/scopes/<scope-hash>.json
-```
+Each scope has one canonical records manifest, immutable record versions, source snapshots, history, suppression information and durable commit receipts. Agreement and Knowledge use the same transaction boundary. Profile, list labels and search chunks are rebuildable projections. Logical memory IDs do not describe physical paths.
 
-User knowledge is stored once and read by local Agents. Agent knowledge remains private; Workspace knowledge stays project-isolated. Memory IDs are logical references. Old per-user directories and Agent wiki preferences are not automatically migrated.
+Mutations check the read version and use a scope lock. Same-request replay returns its fixed receipt; reusing a request key with different content fails. Exact duplicates can return unchanged. Similar wording is not sufficient for semantic deduplication.
+
+Forgetting removes a record from active use but does not erase original Sessions, Job inputs, retained history or backups. Exact-content suppression cannot guarantee suppression of semantic paraphrases. Recreating forgotten content requires explicit current user authorization.
 
 ```ts
 const memory_power = new MemoryPower({
@@ -88,6 +82,10 @@ const memory_power = new MemoryPower({
 });
 ```
 
-Use a confirmed catalog entry for `selected`. Power configuration accepts a structured `model` and its `binding_id` for new Memory Sessions; otherwise the owning Agent's default model is selected and fixed for that Session. Channel authorization remains the host's responsibility. Switching Downtown accounts does not switch User memory.
+New Jobs bind their model and service authorization when submitted. Account switches do not rewrite an existing Job's binding or silently change retry billing. The host controls channel access; switching Downtown accounts does not change the single local User.
 
-Knowledge commits publish records, validity and receipts in a single scope manifest. Deleted content leaves normal read/list/search; an exact normalized-content fingerprint prevents identical reconstruction. Semantic paraphrases are not guaranteed to be suppressed. Original Sessions, Job source copies and retained history are not erased by forget. Existing Markdown is retained but requires explicit SDK import with create_memory_import_changeset before it enters the active store.
+On first use, the builtin provider prepares each scope resolved from the trusted access context. If its manifest is absent, it rechecks the scope under the same cross-process lock used for record commits. Only a scope with no stored or legacy material receives a `confirmed_empty` manifest at scope version `0`. This applies to User, new Agents, ordinary Workspaces and internal main Workspaces. Existing manifests are read without replacement; each required scope is checked independently.
+
+The empty check uses metadata, including external User/Agent Profile files, Profile ledgers and backups, scope history, suppression data, unfinished publications and known legacy Memory directories. It does not scan private Session history or load document bodies. Symlinks, corrupt manifests and access failures fail explicitly. Storage adapters must implement `has_entries` without filtering temporary or unknown files. A host storing legacy material outside the adapter must supply `BuiltinMemoryProviderOptions.legacy_scope_probe`.
+
+A scope with legacy material and no manifest fails with `MEMORY_MIGRATION_REQUIRED`. The SDK exports preview_memory_migration, memory_migration_preview_hash and publish_memory_migration accept explicitly supplied materials and reviewed mappings, require complete history/suppression preservation and a trusted write barrier, and do not collect a live data root automatically. Preview and review all existing records before activation; preserve original text, missing-source information, stable IDs and forgotten states. Unresolved agreement coverage or titles block activation. Running a migration, restarting a service and deploying require their own authorization.

@@ -3,10 +3,10 @@
  *
  * 关键点（中文）
  * - 只负责 query 分词、内容切片和相关性评分。
- * - 不读取 Store，不处理 owner/subject 权限，也不持有运行时状态。
+ * - 不读取 Store，不处理 范围授权，也不持有运行时状态。
  */
 
-import type { MemoryRecord } from "@/memory/types/Memory.js";
+import type { MemoryRecord } from "@/memory/types/MemoryProtocol.js";
 import type { BuiltinMemoryChunk } from "@/memory/types/BuiltinMemoryProvider.js";
 
 const CHUNK_MAX_CHARS = 1_600;

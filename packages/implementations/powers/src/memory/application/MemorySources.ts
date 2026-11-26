@@ -1,21 +1,14 @@
-/** 将显式输入及 canonical 消息转换为有界证据，保留角色和消息定位，不读取物理会话路径。 */
-import { createHash, randomUUID } from "node:crypto";
+/** 将 canonical 消息转换为有界证据，保留角色和消息定位，不读取物理会话路径。 */
+import { createHash } from "node:crypto";
 import type { PowerContext, PowerJsonObject, PowerLifecycleContext } from "@downcity/city/power";
 import type { MemoryJobSource } from "../types/MemoryJob.js";
+import { assert_memory_text_safe } from "../runtime/MemorySensitiveText.js";
+import { capture_memory_source } from "./MemorySourceBinding.js";
 import { MEMORY_SESSION_KIND } from "../types/MemorySession.js";
 
 /** 为内容和来源边界生成稳定幂等标识。 */
 export function memory_request_hash(value: unknown): string {
   return createHash("sha256").update(JSON.stringify(value)).digest("hex");
-}
-
-/** 显式写入请求作为请求证据，不能假称为用户原话。 */
-export function explicit_memory_source(context: PowerContext, content: string): MemoryJobSource {
-  return {
-    source_id: `request:${memory_request_hash([context.agent.id, context.session?.id, context.call?.tool_call_id ?? context.turn?.id ?? randomUUID(), content])}`,
-    agent_id: context.agent.id, category: context.session?.type ?? "work",
-    session_id: context.session?.id, role: "request", text: content,
-  };
 }
 
 /** 从真实会话中读取一段明确有界的原始文本；Memory 处理 Session 不允许再次摄取。 */
@@ -34,26 +27,26 @@ export async function read_memory_sources(
   const page = await host.system.read_agent_session_messages({
     agent_id: context.agent.id, session_id, type, limit: max_messages, max_bytes: 256_000,
   });
-  const sources = page.messages.flatMap((raw_message) => {
+  const sources: MemoryJobSource[] = page.messages.flatMap((raw_message) => {
     const message = raw_message as unknown as PowerJsonObject;
     if (message.role !== "user" && message.role !== "agent") return [];
-    const parts = Array.isArray(message.parts) ? message.parts : [];
-    const text = parts.flatMap((part) => {
-      if (!part || typeof part !== "object" || Array.isArray(part) || part.type !== "text" || typeof part.text !== "string") return [];
-      return [part.text];
-    }).join("\n").trim();
-    const message_id = typeof message.message_id === "string" ? message.message_id : typeof message.id === "string" ? message.id : "";
-    if (!message_id || !text) return [];
-    return [{
-      source_id: `message:${memory_request_hash([context.agent.id, type, session_id, message_id])}`,
-      agent_id: context.agent.id, category: type, session_id, message_id,
-      role: message.role, text,
-    } satisfies MemoryJobSource];
+    const meta = message.meta as PowerJsonObject | undefined;
+    const actor = meta?.from as PowerJsonObject | undefined;
+    const role = message.role === "agent" ? "agent" as const : actor?.kind === "user" ? "user" as const : "request" as const;
+    return (Array.isArray(message.parts) ? message.parts : []).flatMap((part) => {
+      if (!part || typeof part !== "object" || Array.isArray(part) || part.type !== "text" || typeof part.text !== "string" || !part.text.trim()) return [];
+      if (typeof part.part_id !== "string" || typeof message.message_id !== "string") throw new Error("Canonical source has no Part identity");
+      if (Array.from(part.text).length > 12000) throw new Error("SOURCE_BUDGET_EXCEEDED: select a smaller source window");
+      const bound_source = capture_memory_source({ source_type: "session_message", role, excerpt: part.text, locator: {
+        agent_id: context.agent.id, session_type: type, session_id, message_id: message.message_id, part_id: part.part_id, field: "text",
+        start_offset: 0, end_offset: part.text.length,
+      }, note: "One complete text Part in an explicitly selected bounded Session window" }, part.text);
+      return [{ source_id: bound_source.source_id, agent_id: context.agent.id, category: type, session_id,
+        message_id: message.message_id, role, text: part.text, bound_source }];
+    });
   });
   if (!sources.length) throw new Error("Source Session has no readable canonical text messages");
   if (sources.reduce((count, source) => count + source.text.length, 0) > 64_000) throw new Error("Source exceeds 64000 characters; choose a smaller message window");
-  if (sources.some((source) => /\b(?:password|secret|api[_ -]?key|access[_ -]?token)\b\s*[:=]|-----BEGIN [A-Z ]+PRIVATE KEY-----|\bsk-[a-z0-9_-]{12,}\b/iu.test(source.text))) {
-    throw new Error("Source contains potential credentials; select non-sensitive messages");
-  }
+  for (const source of sources) assert_memory_text_safe(source.text);
   return sources;
 }

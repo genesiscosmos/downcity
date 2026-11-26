@@ -2,15 +2,14 @@
 import { same_model } from "@downcity/type";
 import type { ModelReference } from "@downcity/type";
 import type { PowerLifecycleContext } from "@downcity/city/power";
-import type { MemoryProvider } from "../types/Memory.js";
+import type { MemoryProvider } from "../types/MemoryProtocol.js";
 import type { MemoryJob, MemoryJobInput } from "../types/MemoryJob.js";
 import { MEMORY_SESSION_KIND } from "../types/MemorySession.js";
 import { MemoryJobStore, memory_job_identity } from "../storage/MemoryJobStore.js";
 import { require_memory_model } from "./MemoryModelBinding.js";
 import type { MemoryModelResolver } from "../types/MemoryModelBinding.js";
-import type { MemoryProfile } from "../runtime/MemoryProfile.js";
 import { require_memory_transactions } from "./MemoryKnowledge.js";
-import type { ProfileScope } from "../types/Profile.js";
+import { memory_job_changes } from "./MemoryJobCommit.js";
 import { register_memory_session_profile, MEMORY_SESSION_PROFILE_VERSION } from "../runtime/MemorySession.js";
 
 /** 处理生命周期的受限依赖。 */
@@ -19,8 +18,6 @@ export interface MemoryCoordinatorOptions {
   host: PowerLifecycleContext;
   /** 确定性记忆提交与查询。 */
   provider: MemoryProvider;
-  /** 核心记忆文件管理。 */
-  profile: Pick<MemoryProfile, "read" | "edit" | "read_mutation_receipt">;
   /** 本 Power 的内部处理账本。 */
   jobs: MemoryJobStore;
   /** 可选的专用模型选择，创建后由 Session 固定实际身份。 */
@@ -31,12 +28,6 @@ export interface MemoryCoordinatorOptions {
   resolve_model_binding?: MemoryModelResolver;
   /** 自动 Job 每次开始前核对持久开关；普通显式请求不受影响。 */
   can_run_background?: (job: MemoryJob) => Promise<boolean>;
-}
-
-/** 将已绑定的 Job 目标转换为核心记忆范围。 */
-export function memory_job_profile_scope(job: MemoryJob): ProfileScope {
-  if (job.target === "current_workspace") throw new Error("Workspace does not support Profile mode");
-  return job.target === "user" ? { target: "user" } : { target: "agent", agent_id: job.access.agent_id };
 }
 
 /** 每个 Power 实例单路计算，提交仍由 Provider 检查跨实例并发。 */
@@ -69,7 +60,6 @@ export class MemoryCoordinator {
     await this.options.jobs.initialize();
     this.unregister = register_memory_session_profile(this.options.host, {
       jobs: this.options.jobs, provider: this.options.provider,
-      read_profile: async (job) => await this.options.profile.read(memory_job_profile_scope(job)),
     });
     for (const job of await this.options.jobs.list()) {
       if (job.kind !== "dream" && ["queued", "running", "committing", "retry_wait"].includes(job.status)) this.schedule(job.job_id, false);
@@ -79,8 +69,9 @@ export class MemoryCoordinator {
   /** 先保存请求再调度；调用方得到的是 accepted，而非 saved。 */
   async submit(input: MemoryJobInput): Promise<MemoryJob> {
     if (this.stopped) throw new Error("Memory Coordinator is stopping");
-    if (input.kind === "dream" && (input.mode !== "knowledge" || input.target === "user")) throw new Error("Automatic memory only supports Agent/Workspace knowledge");
-    if (input.mode === "knowledge") require_memory_transactions(this.options.provider);
+    if (input.kind === "dream" && (input.memory_kind !== "knowledge" || input.scope === "user")) throw new Error("Automatic memory only supports Agent/Workspace knowledge");
+    require_memory_transactions(this.options.provider);
+    if (input.scope === "workspace" && input.memory_kind === "agreement") throw new Error("Workspace supports Knowledge only");
     // 幂等重送不重新选择账号；同 request key 的既有 Job 永远保留提交时基线。
     const existing = await this.options.jobs.read(memory_job_identity(input));
     const configured = input.model !== undefined || input.binding_id !== undefined
@@ -99,8 +90,8 @@ export class MemoryCoordinator {
 
   /** 即使自动开关关闭，也可根据已有提交回执补齐终态；此路径绝不发起新提交。 */
   async reconcile_committed(job: MemoryJob): Promise<MemoryJob> {
-    if (job.mode !== "knowledge" || job.status === "skipped") return job;
-    const receipt = await require_memory_transactions(this.options.provider).read_commit_receipt({ access: job.access, target: job.target, commit_id: `job:${job.job_id}` });
+    if (job.status === "skipped") return job;
+    const receipt = await require_memory_transactions(this.options.provider).read_commit_receipt({ access: job.access, scope: job.scope, commit_id: `job:${job.job_id}` });
     if (!receipt && job.status === "succeeded") throw new Error("Memory succeeded Job has no matching commit receipt");
     if (!receipt || job.status === "succeeded") return job;
     await this.commit(job);
@@ -110,13 +101,11 @@ export class MemoryCoordinator {
   /** 人工重试失败请求，保留原身份与证据。 */
   async retry(job: MemoryJob): Promise<MemoryJob> {
     if (job.status !== "failed") throw new Error("Only failed Memory Jobs can be retried");
-    const committed = job.mode === "profile"
-      ? await this.options.profile.read_mutation_receipt(memory_job_profile_scope(job), `job:${job.job_id}`)
-      : await require_memory_transactions(this.options.provider).read_commit_receipt({ access: job.access, target: job.target, commit_id: `job:${job.job_id}` });
+    const committed = await require_memory_transactions(this.options.provider).read_commit_receipt({ access: job.access, scope: job.scope, commit_id: `job:${job.job_id}` });
     if (!committed) require_memory_model(job);
     const updated = await this.options.jobs.update(job.job_id, {
       status: committed ? "committing" : "queued",
-      ...(committed ? {} : { session_id: undefined, turn_id: undefined, changes: undefined, change_details: undefined, scope_version: undefined, profile_edits: undefined, profile_version: undefined }),
+      ...(committed ? {} : { session_id: undefined, turn_id: undefined, changes: undefined, change_details: undefined, scope_version: undefined }),
       skip_reason: undefined, error: undefined,
     });
     this.schedule(job.job_id, job.kind === "dream");
@@ -188,9 +177,9 @@ export class MemoryCoordinator {
       });
       job = await this.options.jobs.update(job.job_id, { status: "running", attempt, session_id: session.session_id });
     }
-    if (job.mode === "knowledge" && job.scope_version === undefined) {
-      const version = await require_memory_transactions(this.options.provider).read_version({ access: job.access, target: job.target });
-      job = await this.options.jobs.update(job.job_id, { scope_version: version.scope_version });
+    if (job.scope_version === undefined) {
+      const version = await require_memory_transactions(this.options.provider).read_version({ access: job.access, scope: job.scope });
+      job = await this.options.jobs.update(job.job_id, { scope_version: job.input_scope_version ?? version.scope_version });
     }
     const session_id = job.session_id!;
     const request_id = `memory:${job.job_id}:${job.attempt}`;
@@ -236,48 +225,26 @@ export class MemoryCoordinator {
     job = await this.options.jobs.read(job.job_id);
     if (!job) throw new Error("Memory Job disappeared");
     if (job.skip_reason) { await this.options.jobs.update(job.job_id, { status: "skipped" }); return; }
-    if (!job.changes?.length && !job.profile_edits?.edits.length) throw new Error("Memory Session completed without a staged outcome");
+    if (!job.changes?.length) throw new Error("Memory Session completed without a staged outcome");
     job = await this.options.jobs.update(job.job_id, { status: "committing" });
     await this.commit(job);
   }
 
   /** 回执与记忆原子发布；Job 状态丢失时可以用相同键重读。 */
   private async commit(job: MemoryJob): Promise<void> {
-    if (job.kind === "dream" && (job.mode !== "knowledge" || job.target === "user")) throw new Error("Invalid automatic memory target");
+    if (job.kind === "dream" && (job.memory_kind !== "knowledge" || job.scope === "user")) throw new Error("Invalid automatic memory scope");
     const commit_id = `job:${job.job_id}`;
-    if (job.mode === "profile") {
-      const scope = memory_job_profile_scope(job);
-      const existing = await this.options.profile.read_mutation_receipt(scope, commit_id);
-      if (!existing) {
-        if (!job.profile_version || !job.profile_edits?.edits.length) throw new Error("Profile change set was not staged");
-        await this.options.profile.edit(scope, job.profile_version, job.profile_edits.edits, {
-          source_key: commit_id, source_refs: job.profile_edits.source_ids,
-        });
-      }
-      await this.options.jobs.update(job.job_id, { status: "succeeded", memory_ids: [], error: undefined });
-      return;
-    }
-    const scope = { access: job.access, target: job.target };
+    const scope = { access: job.access, scope: job.scope };
     const existing = await require_memory_transactions(this.options.provider).read_commit_receipt({ ...scope, commit_id });
     const receipt = existing ?? await require_memory_transactions(this.options.provider).commit({
       ...scope, commit_id, expected_scope_version: job.scope_version,
-      changes: (job.changes ?? []).map((change, index) => ({
-        operation: change.operation, memory_id: change.memory_id, expected_version: change.expected_version,
-        content: change.content, topic: change.topic, memory_type: change.memory_type,
-        source_refs: change.source_ids.map((source_id) => {
-          const source = job.sources.find((item) => item.source_id === source_id);
-          if (!source) throw new Error("Staged source is not permitted by this Job");
-          const evidence = job.change_details?.[index]?.sources.find((item) => item.source_id === source_id);
-          return { ...source, source_type: source.category === "task" ? "task" : source.role === "request" || source.category === "manual" ? "manual" : "session",
-            excerpt: evidence?.excerpt, locator: evidence ? `text-offset:${evidence.excerpt_start}` : undefined };
-        }).map(({ text: _text, ...source }) => source),
-      })),
+      changes: memory_job_changes(job),
     });
     await this.options.jobs.update(job.job_id, {
-      status: "succeeded", memory_ids: receipt.changes.map((change) => change.memory_id), error: undefined,
+      status: "succeeded", memory_ids: receipt.changes.map((change) => change.record.memory_id), error: undefined,
       change_details: job.change_details?.map((detail, index) => ({ ...detail,
-        memory_id: receipt.changes[index]?.memory_id ?? detail.memory_id,
-        after: { ...detail.after, version: receipt.changes[index]?.version ?? detail.after.version },
+        memory_id: receipt.changes[index]?.record.memory_id ?? detail.memory_id,
+        after: { ...detail.after, version: receipt.changes[index]?.record.version ?? detail.after.version },
       })),
     });
   }

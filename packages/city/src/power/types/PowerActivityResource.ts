@@ -49,7 +49,16 @@ export type PowerActivityResource =
     /** 知识的 memory_id；profile_id、job_id 不属于此资源。 */
     readonly memory_id: string;
     /** 明确的知识读取作用域；实际 Agent／Workspace 由可信宿主绑定。 */
-    readonly scope: "agent" | "city";
+    readonly scope: "agent" | "user" | "workspace";
+    /** 对象内容种类，详情使用同一种名称。 */
+    readonly kind: "agreement" | "knowledge";
     /** 本次记录中的可读主题。 */
+    readonly label: string;
+  } | {
+    /** 固定 Memory Job 详情，不用 job_id 冒充对象 ID。 */
+    readonly type: "memory_job";
+    /** 已授权 Job 的稳定身份。 */
+    readonly job_id: string;
+    /** 本次操作的可读名称。 */
     readonly label: string;
   };

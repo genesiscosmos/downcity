@@ -1,7 +1,7 @@
 /** Memory 内部处理请求、来源边界与暂存结果；Job 不属于用户 Task。 */
 import type { ModelReference } from "@downcity/type";
-import type { MemoryAccessContext, MemoryWriteTarget } from "./MemoryAccess.js";
-import type { MemoryType } from "./Memory.js";
+import type { MemoryAccessContext, MemoryScopeType } from "./MemoryAccess.js";
+import type { MemoryKind, MemorySource } from "./MemoryProtocol.js";
 
 /** 有界、带身份的原始消息证据。 */
 export interface MemoryJobSource {
@@ -16,27 +16,29 @@ export interface MemoryJobSource {
   /** 原始消息 ID；非消息输入可省略。 */
   message_id?: string;
   /** 证据角色，不能将 Agent 建议升级为用户表述。 */
-  role: "user" | "agent" | "request";
+  role: MemorySource["role"];
   /** 原始事实与固定读取区间的定位说明，自动来源提交后保留以供回查。 */
   label?: string;
   /** 保存于请求中的有界原文，不作为系统指令。 */
   text: string;
+  /** 宿主固化的真实来源，缺失历史只允许只读审计。 */
+  bound_source?: MemorySource;
 }
 
 /** 模型提出的一条变更，实际范围由 Job 绑定。 */
 export interface MemoryPlannedChange {
   /** 新增、改写或使既有记录失效。 */
-  operation: "create" | "update" | "invalidate";
+  operation: "create" | "update" | "invalidate" | "delete";
   /** 更新目标 ID；新增时由宿主分配。 */
   memory_id?: string;
   /** 更新基于的内容版本；新增不提供。 */
   expected_version?: string;
   /** 记忆类型，默认 fact。 */
-  memory_type?: MemoryType;
+  kind?: MemoryKind;
   /** 可读主题。 */
-  topic: string;
+  title?: string;
   /** 新增或改写的完整内容。 */
-  content: string;
+  content?: string;
   /** 支持此变更的输入包来源 ID。 */
   source_ids: string[];
 }
@@ -45,10 +47,14 @@ export interface MemoryPlannedChange {
 export interface MemoryJobContentSnapshot {
   /** 当时读取或计划写入的原文；Profile 为精确编辑区域。 */
   content: string;
+  /** 当时记录的内容种类。 */
+  kind?: MemoryKind;
+  /** Knowledge 当时的真实标题，Agreement 不提供。 */
+  title?: string;
   /** 已读取正文的真实版本；尚未提交的新正文没有版本。 */
   version?: string;
   /** 知识记录当时或计划的有效状态；Profile 不使用此字段。 */
-  validity?: "active" | "invalidated" | "deleted";
+  state?: "active" | "invalidated" | "deleted";
 }
 
 /** 从 Job 已授权输入包中截取的原文证据，不重新读取来源。 */
@@ -76,11 +82,11 @@ export interface MemoryJobSourceExcerpt {
 /** 一条暂存变更的可审计差异；是否生效必须结合所属 Job 状态判断。 */
 export interface MemoryJobChangeDetail {
   /** 知识操作或 Profile 的精确区域替换。 */
-  operation: MemoryPlannedChange["operation"] | "profile_edit";
+  operation: MemoryPlannedChange["operation"];
   /** 知识目标标识；新建待宿主提交后补齐，Profile 不提供。 */
   memory_id?: string;
   /** 当前变更的人类可读主题。 */
-  topic: string;
+  label: string;
   /** 此变更基于的真实读取版本；新建不提供。 */
   expected_version?: string;
   /** 暂存前的固定原文；新建使用 null，不从当前版本回填。 */
@@ -100,17 +106,23 @@ export interface MemoryJob {
   /** 上层请求去重键，不包含未授权的自由范围。 */
   request_key: string;
   /** 处理类型。 */
-  kind: "digest" | "revise" | "profile_optimize" | "dream";
+  kind: "digest" | "revise" | "optimize" | "dream";
   /** 用户指定的处理目标，作为数据传给专用 Session。 */
   instruction: string;
   /** 创建时绑定的可信访问上下文。 */
   access: MemoryAccessContext;
   /** 本 Job 唯一允许写入的目标范围。 */
-  target: MemoryWriteTarget;
+  scope: MemoryScopeType;
   /** 需要修订的既有记忆 ID。 */
   memory_id?: string;
+  /** revise 固定已读版本。 */
+  expected_version?: string;
+  /** optimize 固定范围版本，不能在计算前重新捕获覆盖。 */
+  input_scope_version?: string;
+  /** optimize 明确目标清单，暂存前逐条读取。 */
+  inventory?: { /** 稳定对象身份。 */ memory_id: string; /** 已固定版本。 */ version: string }[];
   /** 是否操作核心记忆。 */
-  mode: "knowledge" | "profile";
+  memory_kind: MemoryKind;
   /** 本次允许的有界原始来源。 */
   sources: MemoryJobSource[];
   /** 提交时固定的精确执行模型；历史缺失时必须先配置，重试不得捕获当前模型。 */
@@ -131,20 +143,6 @@ export interface MemoryJob {
   changes?: MemoryPlannedChange[];
   /** 与 changes 或 Profile edits 同批暂存的固定差异；不表示已提交。 */
   change_details?: MemoryJobChangeDetail[];
-  /** Profile 精确编辑基于的完整原始正文版本；提交前必须再次校验。 */
-  profile_version?: string;
-  /** Profile 暂存结果及输入包来源，只供 Coordinator 校验后提交。 */
-  profile_edits?: {
-    /** 基于同一原始正文计算的精确编辑，不允许重叠或重复匹配。 */
-    edits: {
-      /** 必须在原始正文中恰好出现一次的文字。 */
-      old_text: string;
-      /** 用于替换匹配区域的新文字，可以为空。 */
-      new_text: string;
-    }[];
-    /** 支持整批编辑的已授权输入包来源编号。 */
-    source_ids: string[];
-  };
   /** 无需变更时的明确原因。 */
   skip_reason?: string;
   /** 成功提交产生的记忆 ID。 */
@@ -158,7 +156,7 @@ export interface MemoryJob {
 }
 
 /** 创建请求时由应用服务提供的不可变输入。 */
-export type MemoryJobInput = Pick<MemoryJob, "request_key" | "kind" | "instruction" | "access" | "target" | "mode" | "sources" | "memory_id" | "model" | "binding_id">;
+export type MemoryJobInput = Pick<MemoryJob, "request_key" | "kind" | "instruction" | "access" | "scope" | "memory_kind" | "sources" | "memory_id" | "expected_version" | "input_scope_version" | "inventory" | "model" | "binding_id">;
 
 /** 对调用方公开的最小处理状态，不泄露来源正文。 */
 export interface MemoryJobView {
@@ -169,9 +167,9 @@ export interface MemoryJobView {
   /** 当前处理状态。 */
   status: MemoryJob["status"];
   /** 本次处理的目标范围。 */
-  target: MemoryWriteTarget;
+  scope: MemoryScopeType;
   /** 记忆使用方式。 */
-  mode: MemoryJob["mode"];
+  memory_kind: MemoryJob["memory_kind"];
   /** 发起处理的 Agent ID。 */
   agent_id: string;
   /** 项目范围，若有。 */
@@ -199,7 +197,7 @@ export interface MemoryJobDetail {
 /** 从内部 Job 导出不含证据内容的展示对象。 */
 export function memory_job_view(job: MemoryJob): MemoryJobView {
   return {
-    job_id: job.job_id, kind: job.kind, status: job.status, target: job.target, mode: job.mode,
+    job_id: job.job_id, kind: job.kind, status: job.status, scope: job.scope, memory_kind: job.memory_kind,
     agent_id: job.access.agent_id, workspace_id: job.access.workspace_id,
     session_id: job.session_id, memory_ids: job.memory_ids,
     detail: job.error ?? job.skip_reason, created_at: job.created_at, updated_at: job.updated_at,

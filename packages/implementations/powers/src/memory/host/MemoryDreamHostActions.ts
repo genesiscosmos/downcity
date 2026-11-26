@@ -5,7 +5,7 @@ import { MemoryDreaming } from "../application/MemoryDreaming.js";
 
 const scope_schema = z.object({
   agent_id: z.string().min(1), workspace_id: z.string().min(1).optional(),
-  target: z.enum(["agent", "current_workspace"]),
+  scope: z.enum(["agent", "workspace"]),
 });
 
 /** 不注册到普通模型 Action 集合，来源身份和 producer 只能由可信宿主接线提供。 */

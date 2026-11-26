@@ -28,54 +28,39 @@ import type {
 } from "@downcity/agent";
 import { SESSION_HOOK_POINTS } from "@downcity/type";
 import { z } from "zod";
-import {
-  forget_memory_action,
-  list_memory_action,
-  read_memory_action,
-  search_memory_action,
-  status_memory_action,
-} from "@/memory/Action.js";
 import { build_memory_power_system_text } from "@/memory/runtime/SystemProvider.js";
-import { MemoryProfile } from "@/memory/runtime/MemoryProfile.js";
+import { MemoryProfile } from "@/memory/runtime/MemoryAgreementProjection.js";
 import { MemoryJobStore } from "@/memory/storage/MemoryJobStore.js";
 import { MEMORY_SESSION_KIND } from "@/memory/types/MemorySession.js";
 import { MemoryDeliveryStore } from "@/memory/storage/MemoryDeliveryStore.js";
 import { MemoryDelivery } from "@/memory/application/MemoryDelivery.js";
 import { MemoryCoordinator } from "@/memory/application/MemoryCoordinator.js";
 import { MemoryService } from "@/memory/application/MemoryService.js";
-import { create_memory_job_actions } from "@/memory/application/MemoryJobActions.js";
+import { create_memory_actions } from "./application/MemoryActions.js";
 import { mark_profile_snapshot, build_profile_updates } from "@/memory/runtime/MemoryContext.js";
 import { UserRepository, LOCAL_USER_ID } from "@downcity/city/local";
 import type { ProfileScope } from "@/memory/types/Profile.js";
-import { register_profile_host_actions } from "@/memory/host/ProfileHostActions.js";
 import { createHash, randomUUID } from "node:crypto";
-import { BuiltinMemoryProvider } from "@/memory/providers/BuiltinMemoryProvider.js";
+import { BuiltinMemoryProvider } from "@/memory/providers/MemoryRecordsProvider.js";
 import {
   FileMemoryStorageAdapter,
   get_default_file_memory_root_path,
 } from "@/memory/adapters/FileMemoryStorageAdapter.js";
 import { MemoryStorageRouter } from "@/memory/adapters/MemoryStorageRouter.js";
+import { create_file_memory_legacy_probe } from "@/memory/storage/MemoryScopeLifecycle.js";
 
 import { resolve_memory_access } from "@/memory/runtime/AccessResolver.js";
-import { register_memory_power_host_actions } from "@/memory/host/MemoryPowerHostActions.js";
+import { register_memory_management_actions } from "@/memory/host/MemoryManagementActions.js";
 import type {
   MemoryPowerOptions,
   MemoryProvider,
-} from "@/memory/types/Memory.js";
+} from "@/memory/types/MemoryProtocol.js";
 
-import {
-  memory_type_schema, memory_write_target_schema, memory_subject_kind_schema,
-  parse_positive_integer, parse_non_negative_integer, parse_number,
-  read_body_object, read_string, read_optional_string, read_optional_number,
-  read_optional_boolean, read_optional_memory_type, read_memory_write_target,
-  read_optional_memory_type_list, read_optional_subject_kind_list,
-} from "./runtime/MemoryActionInput.js";
 import { MemorySignalStore } from "./storage/MemorySignalStore.js";
 import { MemoryDreaming } from "./application/MemoryDreaming.js";
 import { can_run_memory_background } from "./application/MemoryMaintenanceGate.js";
 import { register_memory_dream_host_actions } from "./host/MemoryDreamHostActions.js";
 import { register_memory_record_host_actions } from "./host/MemoryRecordHostActions.js";
-import { register_memory_user_knowledge_host_actions } from "./host/MemoryUserKnowledgeHostActions.js";
 
 /** Agent 长期记忆 Power。 */
 export class MemoryPower extends Power {
@@ -109,6 +94,8 @@ export class MemoryPower extends Power {
   private dreaming?: MemoryDreaming;
   /** 普通 Action 不直接调用模型，统一由应用服务处理。 */
   private service_instance?: MemoryService;
+  /** 当前生命周期绑定的有界来源宿主。 */
+  private host_context?: PowerLifecycleContext;
 
   /** 仅在 City 完成初始化后提供业务服务。 */
   private get service(): MemoryService {
@@ -160,24 +147,30 @@ export class MemoryPower extends Power {
   readonly hooks: PowerHooks = {
     pipeline: {
       [SESSION_HOOK_POINTS.system_context]: [async ({ context, value }) => {
+        try {
         const input = value as unknown as SessionSystemContextHookValue;
         if (context.session?.kind === MEMORY_SESSION_KIND) return value;
+        await this.provider.assert_ready(resolve_memory_access(context));
         const blocks = [...input.blocks];
-        const scopes: ProfileScope[] = [{ target: "user" }, { target: "agent", agent_id: context.agent.id }];
+        const scopes: ProfileScope[] = [{ scope: "user" }, { scope: "agent", agent_id: context.agent.id }];
         for (const scope of scopes) {
           try {
             const core = await this.profile_runtime?.context_block(scope);
             if (core) blocks.push({ source: "power", name: `memory/${core.name}`, content: mark_profile_snapshot(core),
-              position: scope.target === "agent" ? "after_instruction" : "before_session" });
-          } catch (error) { context.logger.warn("[memory] Profile unavailable", { target: scope.target, error: String(error) }); }
+              position: scope.scope === "agent" ? "after_instruction" : "before_session" });
+          } catch (error) { throw Object.assign(new Error(String(error)), { code: "SESSION_CONTEXT_REQUIRED" }); }
         }
         return { ...input, blocks } as unknown as PowerJsonValue;
+        } catch (cause) { throw Object.assign(new Error(`Memory context unavailable: ${String(cause)}`, { cause }), { code: "SESSION_CONTEXT_REQUIRED" }); }
       }],
       [SESSION_HOOK_POINTS.turn_context]: [async ({ context, value }) => {
         if (!this.profile_runtime || context.session?.kind === MEMORY_SESSION_KIND) return value;
+        try {
+        await this.provider.assert_ready(resolve_memory_access(context));
         const input = value as unknown as SessionTurnContextHookValue;
         const updates = await build_profile_updates(this.profile_runtime, context.agent.id, input.system_blocks ?? []);
         return { ...input, blocks: [...input.blocks, ...updates] } as unknown as PowerJsonValue;
+        } catch (cause) { throw Object.assign(new Error(`Memory context unavailable: ${String(cause)}`, { cause }), { code: "SESSION_CONTEXT_REQUIRED" }); }
       }],
     },
   };
@@ -185,6 +178,7 @@ export class MemoryPower extends Power {
   /** 启动当前 City 唯一的 Memory Provider，并注册界面管理 actions。 */
   async initialize(context: PowerLifecycleContext): Promise<void> {
     context.abort_signal.throwIfAborted();
+    this.host_context = context;
     const platform_root = this.platform_root_path ?? context.data_root_path;
     const users = new UserRepository(platform_root);
     users.get();
@@ -203,14 +197,13 @@ export class MemoryPower extends Power {
     const config = context.config.get();
     const model = this.options.model ?? (is_model_reference(config.model) ? config.model : undefined);
     const binding_id = this.options.binding_id ?? (typeof config.binding_id === "string" ? config.binding_id : undefined);
-    register_memory_power_host_actions(context, this.provider, model);
-    register_memory_user_knowledge_host_actions(context, this.provider);
-    this.profile_runtime = new MemoryProfile(context, platform_root, this.options.on_changed);
+    register_memory_management_actions(context, this.provider, model);
+    this.profile_runtime = new MemoryProfile(this.provider);
     const jobs = new MemoryJobStore(path.join(context.storage.path, "processing"));
     const signals = new MemorySignalStore(path.join(platform_root, "memory", "dreaming"));
     const maintenance_owner_id = createHash("sha256").update(context.storage.path).digest("hex");
     this.coordinator = new MemoryCoordinator({ host: context, provider: this.provider,
-      profile: this.profile_runtime, jobs,
+      jobs,
       can_run_background: async (job) => await can_run_memory_background(signals, maintenance_owner_id, job),
       model, binding_id,
       resolve_model_binding: this.options.resolve_model_binding,
@@ -223,7 +216,7 @@ export class MemoryPower extends Power {
     this.service_instance = new MemoryService(this.provider, jobs, this.coordinator, context, this.delivery);
     this.dreaming = new MemoryDreaming(context,
       signals, jobs, this.coordinator,
-      async (scope) => ({ agent_id: scope.agent_id, workspace_id: scope.workspace_id, city_memory_available: true, exclude_city: true }),
+      async (scope) => ({ agent_id: scope.agent_id, workspace_id: scope.workspace_id, city_memory_available: true }),
       this.options.dreaming);
     await this.coordinator.initialize();
     context.abort_signal.throwIfAborted();
@@ -232,7 +225,6 @@ export class MemoryPower extends Power {
     register_memory_dream_host_actions(context, this.dreaming);
     register_memory_record_host_actions(context, this.service, jobs, this.dreaming);
     this.delivery.initialize();
-    register_profile_host_actions(context, this.profile_runtime);
 
   }
 
@@ -251,470 +243,12 @@ export class MemoryPower extends Power {
     this.provider_instance = undefined;
   }
 
-  /** 访问当前本地使用者、Agent 与 Workspace，不依赖登录账户或消息身份回调。 */
-  private resolve_action_access(context: PowerContext) {
-    return resolve_memory_access(context);
-  }
+  /** SDK、CLI 与普通工具共用同一个动作集合。 */
+  readonly actions: PowerActions = create_memory_actions(() => this.provider, () => this.service, () => {
+    if (!this.host_context) throw new Error("Memory host unavailable");
+    return this.host_context;
+  });
 
-  /** Memory 对 Agent 暴露的稳定 Action 集合。 */
-  readonly actions: PowerActions = {
-    ...create_memory_job_actions(() => this.service, () => {
-      if (!this.profile_runtime) throw new Error("Memory Profile is unavailable");
-      return this.profile_runtime;
-    }),
-    status: create_action({
-      description: "Inspect the active Memory Provider and its capabilities.",
-      returns: "provider, state, capabilities, details, warnings",
-      access: "read",
-      input_schema: {
-        zod: z.object({}).passthrough(),
-        json_schema: { type: "object", additionalProperties: false, properties: {} },
-      },
-      examples: [{ title: "View Memory Provider status", payload: {} }],
-      command: {
-        description: "Inspect the active Memory Provider.",
-        map_input: () => ({}),
-      },
-      execute: async ({ context }) => await status_memory_action(
-        this.provider,
-        await this.resolve_action_access(context),
-      ),
-    }),
-
-    search: create_action({
-      description: "Recall scoped long-term memories for a focused query.",
-      returns: "memories(memory_id, type, content, scope, score, updated_at)",
-      access: "read",
-      input_schema: {
-        zod: z.object({
-          query: z.string(),
-          max_results: z.number().optional(),
-          min_score: z.number().optional(),
-          include_evidence: z.boolean().optional(),
-        }),
-        json_schema: {
-          type: "object",
-          additionalProperties: false,
-          required: ["query"],
-          properties: {
-            query: { type: "string", description: "Focused recall query." },
-            max_results: { type: "number", description: "Maximum result count." },
-            min_score: { type: "number", minimum: 0, maximum: 1 },
-            include_evidence: { type: "boolean", description: "Include raw evidence records." },
-          },
-        },
-      },
-      examples: [{ title: "Recall preferences", payload: { query: "user preferences" } }],
-      command: {
-        description: "Recall scoped long-term memories.",
-        configure(command: Command) {
-          command
-            .argument("<query>")
-            .option("--max-results <number>", "Maximum result count.", parse_positive_integer)
-            .option("--min-score <number>", "Minimum relevance score.", parse_number)
-            .option("--include-evidence", "Include raw evidence records.");
-        },
-        map_input({ args, opts }) {
-          return {
-            query: String(args[0] || ""),
-            ...(typeof opts.maxResults === "number" ? { max_results: opts.maxResults } : {}),
-            ...(typeof opts.minScore === "number" ? { min_score: opts.minScore } : {}),
-            ...(opts.includeEvidence === true ? { include_evidence: true } : {}),
-          };
-        },
-      },
-      execute: async ({ context, input }) => {
-        const body = read_body_object(input);
-        return await search_memory_action(
-          this.provider,
-          await this.resolve_action_access(context),
-          {
-          query: read_string(body, "query"),
-          max_results: read_optional_number(body, "max_results"),
-          min_score: read_optional_number(body, "min_score"),
-          include_evidence: read_optional_boolean(body, "include_evidence"),
-          },
-        );
-      },
-    }),
-
-    read: create_action({
-      description: "Read one exact memory by memory_id.",
-      returns: "memory(memory_id, type, content, scope, created_at, updated_at)",
-      access: "read",
-      input_schema: {
-        zod: z.object({
-          memory_id: z.string(),
-          from_line: z.number().optional(),
-          line_count: z.number().optional(),
-        }),
-        json_schema: {
-          type: "object",
-          additionalProperties: false,
-          required: ["memory_id"],
-          properties: {
-            memory_id: { type: "string", description: "Stable logical memory identifier." },
-            from_line: { type: "number", minimum: 1 },
-            line_count: { type: "number", minimum: 1 },
-          },
-        },
-      },
-      examples: [{
-        title: "Read a memory",
-        payload: { memory_id: "agent/cheng_xu_yuan/wiki/user-preferences" },
-      }],
-      command: {
-        description: "Read one exact memory.",
-        configure(command: Command) {
-          command
-            .argument("<memory_id>")
-            .option("--from-line <number>", "Starting line, 1-based.", parse_positive_integer)
-            .option("--line-count <number>", "Maximum line count.", parse_positive_integer);
-        },
-        map_input({ args, opts }) {
-          return {
-            memory_id: String(args[0] || ""),
-            ...(typeof opts.fromLine === "number" ? { from_line: opts.fromLine } : {}),
-            ...(typeof opts.lineCount === "number" ? { line_count: opts.lineCount } : {}),
-          };
-        },
-      },
-      execute: async ({ context, input }) => {
-        const body = read_body_object(input);
-        return await read_memory_action(
-          this.provider,
-          await this.resolve_action_access(context),
-          {
-          memory_id: read_string(body, "memory_id"),
-          from_line: read_optional_number(body, "from_line"),
-          line_count: read_optional_number(body, "line_count"),
-          },
-        );
-      },
-    }),
-
-    list: create_action({
-      description: "List scoped long-term memories without a query.",
-      returns: "provider, items(memory_id, memory_type, subject, title, snippet, observed_at, is_evidence), total, subject_counts",
-      access: "read",
-      input_schema: {
-        zod: z.object({
-          subject_kinds: z.array(memory_subject_kind_schema).optional(),
-          memory_types: z.array(memory_type_schema).optional(),
-          include_evidence: z.boolean().optional(),
-          limit: z.number().optional(),
-          offset: z.number().optional(),
-        }),
-        json_schema: {
-          type: "object",
-          additionalProperties: false,
-          properties: {
-            subject_kinds: {
-              type: "array",
-              items: { type: "string", enum: ["agent", "user", "workspace", "city"] },
-              description: "Restrict results to these memory subjects.",
-            },
-            memory_types: {
-              type: "array",
-              items: {
-                type: "string",
-                enum: ["fact", "preference", "decision", "episode", "procedure", "document"],
-              },
-              description: "Restrict results to these memory types.",
-            },
-            include_evidence: {
-              type: "boolean",
-              description: "Include raw evidence records.",
-            },
-            limit: { type: "number", minimum: 1, maximum: 500 },
-            offset: { type: "number", minimum: 0 },
-          },
-        },
-      },
-      examples: [{ title: "List stored memories", payload: { limit: 20 } }],
-      command: {
-        description: "List scoped long-term memories.",
-        configure(command: Command) {
-          command
-            .option("--subject <kind>", "Restrict to agent or city.")
-            .option("--memory-type <type>", "Restrict to one memory type.")
-            .option("--include-evidence", "Include raw evidence records.")
-            .option("--limit <number>", "Maximum result count.", parse_positive_integer)
-            .option("--offset <number>", "Skip the first N results.", parse_non_negative_integer);
-        },
-        map_input({ opts }) {
-          return {
-            ...(typeof opts.subject === "string" ? { subject_kinds: [opts.subject] } : {}),
-            ...(typeof opts.memoryType === "string" ? { memory_types: [opts.memoryType] } : {}),
-            ...(opts.includeEvidence === true ? { include_evidence: true } : {}),
-            ...(typeof opts.limit === "number" ? { limit: opts.limit } : {}),
-            ...(typeof opts.offset === "number" ? { offset: opts.offset } : {}),
-          };
-        },
-      },
-      execute: async ({ context, input }) => {
-        const body = read_body_object(input);
-        return await list_memory_action(
-          this.provider,
-          await this.resolve_action_access(context),
-          {
-            subject_kinds: read_optional_subject_kind_list(body),
-            memory_types: read_optional_memory_type_list(body),
-            include_evidence: read_optional_boolean(body, "include_evidence"),
-            limit: read_optional_number(body, "limit"),
-            offset: read_optional_number(body, "offset"),
-          },
-        );
-      },
-    }),
-
-    remember: create_action({
-      description: "Save memory using target (owner) and mode (usage). Persistent behavior or 'from now on' preferences use mode profile; facts and historical knowledge use mode knowledge. Cross-Agent user preferences target user; Agent-only agreements target agent. Never change target after a failed write without user approval.",
-      returns: "target, mode(profile|knowledge), status(saved|created), profile_id or memory_id, version?, activation, location",
-      access: "write",
-      input_schema: {
-        zod: z.object({
-          content: z.string().trim().min(1),
-          target: memory_write_target_schema.describe("Required owner: user, agent or current_workspace. Use target, not scope."),
-          topic: z.string().optional(),
-          memory_type: memory_type_schema.optional(),
-          source: z.string().optional(),
-          mode: z.enum(["profile", "knowledge"]).optional(),
-        }).strict(),
-        json_schema: {
-          type: "object",
-          additionalProperties: false,
-          required: ["content", "target"],
-          properties: {
-            content: { type: "string", description: "Content to remember." },
-            mode: { type: "string", enum: ["profile", "knowledge"], default: "knowledge", description: "profile: append persistent agreements to User or Agent PROFILE.md, captured when a new Session builds its system or an existing Session runs syncshot; supports target user or agent. knowledge: store searchable long-term knowledge." },
-            target: {
-              type: "string",
-              enum: ["current_workspace", "user", "agent"],
-              description:
-                "user is the single local owner shared across Agents; agent is private to the current Agent; current_workspace uses an isolated Workspace Store.",
-            },
-            topic: { type: "string", description: "Optional organization hint." },
-            memory_type: {
-              type: "string",
-              enum: ["fact", "preference", "decision", "episode", "procedure", "document"],
-            },
-            source: { type: "string", description: "Optional evidence label." },
-          },
-        },
-      },
-      examples: [{
-        title: "Save a persistent user preference across Agents",
-        payload: { target: "user", mode: "profile", content: "Before each main answer, remind me to speak English and briefly correct my English expressions." },
-      }, {
-        title: "Save an Agent-specific persistent agreement",
-        payload: { target: "agent", mode: "profile", content: "Ask for approval before making changes across multiple modules." },
-      }, {
-        title: "Save searchable project knowledge",
-        payload: {
-          content: "This Workspace always uses pnpm.",
-          target: "current_workspace",
-          mode: "knowledge",
-          topic: "project-overview",
-          memory_type: "decision",
-        },
-      }],
-      command: {
-        description: "Store a durable memory.",
-        configure(command: Command) {
-          command
-            .requiredOption("--content <text>", "Content to remember.")
-            .requiredOption("--target <target>", "current_workspace, user or agent.")
-            .option("--mode <mode>", "profile or knowledge.", "knowledge")
-            .option("--topic <topic>", "Optional organization hint.")
-            .option("--memory-type <type>", "Memory type.")
-            .option("--source <source>", "Optional evidence label.");
-        },
-        map_input({ opts }) {
-          return {
-            content: String(opts.content || ""),
-            target: String(opts.target || ""),
-            mode: String(opts.mode || "knowledge"),
-            ...(typeof opts.topic === "string" ? { topic: opts.topic } : {}),
-            ...(typeof opts.memoryType === "string" ? { memory_type: opts.memoryType } : {}),
-            ...(typeof opts.source === "string" ? { source: opts.source } : {}),
-          };
-        },
-      },
-      execute: async ({ context, input }) => {
-        const body = read_body_object(input);
-        if ("core" in body) return { success: false, error: "remember uses mode: profile or knowledge; core is not supported" };
-        const mode_result = z.enum(["profile", "knowledge"]).safeParse(body.mode ?? "knowledge");
-        if (!mode_result.success) return { success: false, error: "Invalid remember mode: expected profile or knowledge" };
-        if (mode_result.data === "profile") {
-          const target = read_memory_write_target(body);
-          if (target === "current_workspace") return { success: false, error: "Profile mode supports user or agent, not Workspace" };
-          const scope: ProfileScope = target === "user" ? { target } : { target: "agent", agent_id: context.agent.id };
-          if (!this.profile_runtime) return { success: false, error: "Memory Profile runtime is unavailable" };
-          try {
-            const content = read_string(body, "content").trim();
-            const source_key = createHash("sha256").update(JSON.stringify([context.agent.id, context.session?.id, context.call?.tool_call_id ?? context.turn?.id ?? randomUUID(), content])).digest("hex");
-            const current = await this.profile_runtime.read(scope);
-            await this.profile_runtime.append(scope, content, { source_key, source_refs: [
-              `request:${context.agent.id}:${context.session?.type ?? "work"}:${context.session?.id ?? "host"}:${context.turn?.id ?? source_key}`,
-            ] }, current.version);
-            const profile_id = target === "user" ? `user/${LOCAL_USER_ID}/profile` : `agent/${context.agent.id}/profile`;
-            return { success: true, data: { target, mode: "profile", status: "saved", profile_id, activation: "next_turn_or_new_session", location: "PROFILE.md" } };
-          } catch (error) { return { success: false, error: String(error) }; }
-        }
-        return await this.run_action(async () => await this.service.remember(context,
-          await this.resolve_action_access(context), {
-            content: read_string(body, "content"), target: read_memory_write_target(body),
-            topic: read_optional_string(body, "topic"), memory_type: read_optional_memory_type(body),
-            source: read_optional_string(body, "source"),
-          }));
-      },
-    }),
-
-    digest: create_action({
-      description: "Digest a canonical Session transcript into long-term memory.",
-      returns: "job_id, status(queued|running|succeeded|skipped|failed), session_id?, memory_ids?, detail?; queued is not saved",
-      access: "write",
-      input_schema: {
-        zod: z.object({
-          session_id: z.string(),
-          type: z.enum(["chat", "work"]),
-          target: memory_write_target_schema,
-          max_messages: z.number().int().min(1).max(100).optional(),
-        }),
-        json_schema: {
-          type: "object",
-          additionalProperties: false,
-          required: ["session_id", "type", "target"],
-          properties: {
-            session_id: { type: "string" },
-            type: { type: "string", enum: ["chat", "work"] },
-            target: { type: "string", enum: ["user", "agent", "current_workspace"] },
-            max_messages: { type: "number", minimum: 1, maximum: 100 },
-          },
-        },
-      },
-      examples: [{ title: "Digest a Session", payload: { session_id: "sess-1", type: "chat", target: "agent" } }],
-      command: {
-        description: "Digest a canonical Session transcript.",
-        configure(command: Command) {
-          command
-            .requiredOption("--session-id <session_id>", "Session identifier.")
-            .requiredOption("--type <type>", "chat or work.")
-            .requiredOption("--target <target>", "user, agent or current_workspace.")
-            .option("--max-messages <number>", "Maximum message count.", parse_positive_integer);
-        },
-        map_input({ opts }) {
-          return {
-            session_id: String(opts.sessionId || ""),
-            type: String(opts.type || ""),
-            target: String(opts.target || ""),
-            ...(typeof opts.maxMessages === "number" ? { max_messages: opts.maxMessages } : {}),
-          };
-        },
-      },
-      execute: async ({ context, input }) => {
-        const body = read_body_object(input);
-        return await this.run_action(async () => await this.service.digest(context,
-          await this.resolve_action_access(context), {
-            session_id: read_string(body, "session_id"), type: read_string(body, "type"),
-            target: read_memory_write_target(body), max_messages: read_optional_number(body, "max_messages") ?? 30,
-          }));
-      },
-    }),
-
-    revise: create_action({
-      description: "Revise one memory using new evidence.",
-      returns: "job_id, status, session_id?, memory_ids?, detail?; queued is not saved",
-      access: "write",
-      input_schema: {
-        zod: z.object({
-          memory_id: z.string(),
-          instruction: z.string(),
-          evidence: z.string().optional(),
-        }),
-        json_schema: {
-          type: "object",
-          additionalProperties: false,
-          required: ["memory_id", "instruction"],
-          properties: {
-            memory_id: { type: "string" },
-            instruction: { type: "string" },
-            evidence: { type: "string" },
-          },
-        },
-      },
-      examples: [{
-        title: "Revise a preference",
-        payload: {
-          memory_id: "agent/cheng_xu_yuan/wiki/user-preferences",
-          instruction: "Replace the old preference with the latest one.",
-        },
-      }],
-      command: {
-        description: "Revise one memory using new evidence.",
-        configure(command: Command) {
-          command
-            .argument("<memory_id>")
-            .requiredOption("--instruction <text>", "Revision instruction.")
-            .option("--evidence <text>", "New evidence.");
-        },
-        map_input({ args, opts }) {
-          return {
-            memory_id: String(args[0] || ""),
-            instruction: String(opts.instruction || ""),
-            ...(typeof opts.evidence === "string" ? { evidence: opts.evidence } : {}),
-          };
-        },
-      },
-      execute: async ({ context, input }) => {
-        const body = read_body_object(input);
-        return await this.run_action(async () => await this.service.revise(context,
-          await this.resolve_action_access(context), {
-            memory_id: read_string(body, "memory_id"), instruction: read_string(body, "instruction"),
-            evidence: read_optional_string(body, "evidence"),
-          }));
-      },
-    }),
-
-    forget: create_action({
-      description: "Delete or invalidate one memory by memory_id.",
-      returns: "memory_id, status",
-      access: "write",
-      input_schema: {
-        zod: z.object({ memory_id: z.string() }),
-        json_schema: {
-          type: "object",
-          additionalProperties: false,
-          required: ["memory_id"],
-          properties: { memory_id: { type: "string" } },
-        },
-      },
-      examples: [{
-        title: "Forget a memory",
-        payload: { memory_id: "agent/id_YWdlbnQ/wiki/obsolete" },
-      }],
-      command: {
-        description: "Delete or invalidate one memory.",
-        configure(command: Command) {
-          command.argument("<memory_id>");
-        },
-        map_input({ args }) {
-          return { memory_id: String(args[0] || "") };
-        },
-      },
-      execute: async ({ context, input }) => {
-        const body = read_body_object(input);
-        return await forget_memory_action(
-          this.provider,
-          await this.resolve_action_access(context),
-          {
-          memory_id: read_string(body, "memory_id"),
-          },
-        );
-      },
-    }),
-  };
 }
 
 /** 创建内建 Memory Provider，并把 Agent 私有根与共享根路由到不同物理目录。 */
@@ -736,6 +270,7 @@ function create_memory_provider(input: {
   return new BuiltinMemoryProvider({
     on_changed: input.on_changed,
     city_memory_available: true,
+    legacy_scope_probe: create_file_memory_legacy_probe(platform_root_path),
     storage: new MemoryStorageRouter({
       shared_storage: new FileMemoryStorageAdapter({ root_path: input.shared_root_path }),
       user_storage: new FileMemoryStorageAdapter({ root_path: path.join(platform_root_path, "user", "memory") }),

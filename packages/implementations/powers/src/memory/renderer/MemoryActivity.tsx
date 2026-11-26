@@ -1,10 +1,18 @@
 /** Memory 的调用、处理任务与提交结果分别投影；queued/running 永不冒充已保存。 */
+import { memory_display_label } from "../runtime/MemorySchema.js";
 import { memory_activity_resource } from "./MemoryActivityResource.js";
 import { action_sentences, memory_completion_sentence, preparing_sentence } from "./MemoryCopy.js";
 import { with_activity_error } from "@downcity/city/power/react";
 import type { PowerActivityDescription, PowerActivityProps, PowerActivityRenderer } from "@downcity/city/power/react";
 import { ActivityText, action_of, args_of, call_tone, chinese, data_of, error_of, items, preview, record, text } from "@/builtin/renderer/ActivityContent.js";
 
+
+/** 输入尚未提交时也复用展示标签投影；不把正文摘要写回 Knowledge 标题。 */
+function input_label(args: Record<string, unknown>): string {
+  if (typeof args.title === "string") return args.title;
+  if (typeof args.content === "string") return memory_display_label({ kind: "agreement", content: args.content });
+  return "";
+}
 
 /** job_detail 返回固定的变化快照，不重新读取当前记忆。 */
 function memory_body(props: PowerActivityProps): string {
@@ -17,7 +25,7 @@ function memory_body(props: PowerActivityProps): string {
     const before = text(record(change.before).content).slice(0, 12_000);
     const after = text(record(change.after).content).slice(0, 12_000);
     if (!before && !after) return "";
-    return [preview(change.topic), before ? `### ${zh ? "处理前" : "Before processing"}\n${before}` : "", after ? `### ${zh ? "处理后" : "After processing"}\n${after}` : ""].filter(Boolean).join("\n\n");
+    return [preview(change.label), before ? `### ${zh ? "处理前" : "Before processing"}\n${before}` : "", after ? `### ${zh ? "处理后" : "After processing"}\n${after}` : ""].filter(Boolean).join("\n\n");
   }).filter(Boolean).join("\n\n");
 }
 
@@ -31,8 +39,9 @@ function describe(props: PowerActivityProps): PowerActivityDescription {
   const job = action === "job_detail" ? record(data.job) : data;
   const status = text(job.status);
   let sentence = (action_sentences[action] ?? action_sentences.unknown)![tone];
-  if (tone === "complete" && ["remember", "digest", "revise", "optimize"].includes(action)) {
-    if (status === "succeeded" || action === "remember" && ["saved", "created"].includes(status)) sentence = memory_completion_sentence(action);
+  if (tone === "complete" && ["remember", "update", "digest", "revise", "optimize"].includes(action)) {
+    if (status === "succeeded" || ["remember", "update"].includes(action) && status === "committed") sentence = memory_completion_sentence(action);
+    else if (status === "unchanged") sentence = ["记忆内容未变", "Memory unchanged"];
     else if (status === "skipped") sentence = ["已检查记忆更新", "Checked memory updates"];
   }
   if (tone === "complete" && ["search", "list", "jobs"].includes(action) && Array.isArray(data.items)) {
@@ -45,14 +54,14 @@ function describe(props: PowerActivityProps): PowerActivityDescription {
       : empty_page ? ["已列出本页 0 条整理记录", "Listed 0 memory activity records on this page"] : ["已列出 0 条整理记录", "Listed 0 memory activity records"];
   }
   if (tone === "complete" && (action === "forget" && data.forgotten === false || action === "read" && data.memory === null)) sentence = ["未找到这条记忆", "Found no matching memory"];
-  if (tone === "complete" && action === "forget" && typeof data.forgotten !== "boolean") sentence = ["已处理忘记请求", "Processed memory removal request"];
+  if (tone === "complete" && action === "forget" && status === "committed") sentence = record(data.record).state === "invalidated" ? ["已撤销记忆", "Memory invalidated"] : ["已删除记忆", "Memory deleted"];
   if (tone === "waiting") sentence = (action_sentences[action] ?? action_sentences.unknown)!.waiting;
   if (props.tool.state === "input-streaming") sentence = preparing_sentence;
   const detail = action === "read" ? Boolean(text(record(data.memory).content).trim()) : action === "job_detail"
     ? items(data.changes).some(change => text(record(change.before).content).trim() || text(record(change.after).content).trim()) : false;
   const resource = memory_activity_resource(props);
   return { title: sentence[zh ? 0 : 1], tone, resource,
-    summary: resource?.label || (action === "search" ? preview(args.query) : preview(args.topic) || preview(args.title) || preview(record(data.memory).topic)),
+    summary: resource?.label || (action === "search" ? preview(args.query) : input_label(args)),
     has_detail: !["search", "list", "jobs", "status"].includes(action) && (detail || Boolean(error_of(props)) || ["job_status", "job_detail"].includes(action) && Boolean(status)) };
 }
 

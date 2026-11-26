@@ -228,6 +228,14 @@ export interface PowerHostSystem extends PowerInteractionHost {
     /** Session 的来源存储分区。 */
     readonly type: string;
   }): Promise<PowerHostWorkspace | undefined>;
+  /** 精确读取已选择消息，可用于保留已授权原始来源，不扫描整个会话。 */
+  read_agent_session_message(input: {
+    /** 真实所属 Agent。 */ readonly agent_id: string;
+    /** canonical Session 标识。 */ readonly session_id: string;
+    /** 存储分区。 */ readonly type: string;
+    /** 原始消息标识。 */ readonly message_id: string;
+    /** 整条返回消息的 UTF-8 字节预算，上限 1 MiB。 */ readonly max_bytes?: number;
+  }): Promise<PowerJsonObject | null>;
   /** 读取既有 Session 的 canonical 消息，供后台增量处理；不发起 turn。 */
   read_agent_session_messages(input: {
     /** Session 所属 Agent。 */

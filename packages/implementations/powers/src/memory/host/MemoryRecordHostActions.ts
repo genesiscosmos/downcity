@@ -14,7 +14,7 @@ import { memory_job_view } from "../types/MemoryJob.js";
 
 /** 缺省枚举全部可管理范围；空 Workspace 明确筛选无项目。 */
 const list_schema = z.object({
-  target: z.enum(["user", "agent"]).optional(),
+  scope: z.enum(["user", "agent"]).optional(),
   agent_id: z.string().trim().min(1).optional(),
   workspace_id: z.string().trim().optional(),
   limit: z.number().int().min(1).max(100).optional(),
@@ -38,7 +38,7 @@ export function register_memory_record_host_actions(
     ]);
     const agent_ids = new Set(agents.map((agent) => agent.agent_id));
     const workspace_ids = new Set(workspaces.map((workspace) => workspace.workspace_id));
-    return (job: MemoryJob, retry = false): boolean => !retry && job.target === "user"
+    return (job: MemoryJob, retry = false): boolean => !retry && job.scope === "user"
       || agent_ids.has(job.access.agent_id) && (job.access.workspace_id === undefined || workspace_ids.has(job.access.workspace_id));
   };
 
@@ -56,7 +56,7 @@ export function register_memory_record_host_actions(
     const filter = list_schema.parse(input ?? {});
     const can_manage = await read_permission();
     const records = (await jobs.list()).filter((job) => can_manage(job)
-      && (filter.target === undefined || job.target === filter.target)
+      && (filter.scope === undefined || job.scope === filter.scope)
       && (filter.agent_id === undefined || job.access.agent_id === filter.agent_id)
       && (filter.workspace_id === undefined || job.access.workspace_id === (filter.workspace_id || undefined)))
       .sort((left, right) => right.updated_at.localeCompare(left.updated_at) || left.job_id.localeCompare(right.job_id));

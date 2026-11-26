@@ -25,7 +25,7 @@ import { is_action_result, SESSION_HOOK_POINTS, session_call_context, read_sessi
 import { max_request_media_bytes } from "@downcity/type/workspace";
 import { measure_request } from "@/session/runner/RequestBudget.js";
 import { run_pipeline_point } from "@/session/input/SessionHookRunner.js";
-import { resolve_session_power_system_blocks } from "@/session/input/SessionSystem.js";
+import { normalize_power_system_blocks, resolve_session_power_system_blocks } from "@/session/input/SessionSystem.js";
 import { to_system_messages } from "./composer/ComposerAssembly.js";
 import { resolve_model_client } from "@/model/DeferredModelClient.js";
 
@@ -107,15 +107,25 @@ export class StepInput {
   ): Promise<SessionStepExecutionInput> {
     // 首轮先冻结基础 system，再运行动态 Turn hook；hook 读到的版本标记与模型相同。
     await this.read_frozen_system();
-    const compose_input = await this.gather(turn_context, advance_count);
+    let compose_input = await this.gather(turn_context, advance_count);
     const model = compose_input.state.model;
     if (!model) throw new Error("requires a configured model.");
     turn_context.step.commit({
       workspace_env: compose_input.state.env,
       agent_systems: compose_input.state.systems,
     });
-    const composed = await this.options.composer.compose(compose_input);
-    const frozen = this.apply_frozen_system(composed);
+    let composed = await this.options.composer.compose(compose_input);
+    let frozen = this.apply_frozen_system(composed);
+    // 必要上下文更新与冻结基线重复占用窗口时，在发送前检查点完整替换同源块。
+    const initial_budget = measure_request({ model, system: frozen.system, messages: frozen.messages, tools: frozen.tools as unknown as Record<string, BoundAgentTool>, context_window: compose_input.state.model_context_window });
+    const checkpoint_updates = compose_input.state.power_context_blocks.filter(block => block.checkpoint_block);
+    if (checkpoint_updates.length && initial_budget.input_budget !== null && initial_budget.estimated_input_tokens > initial_budget.input_budget) {
+      await this.refresh_context_snapshot(checkpoint_updates);
+      compose_input = await this.gather(turn_context, advance_count);
+      compose_input = { ...compose_input, state: { ...compose_input.state, power_context_blocks: compose_input.state.power_context_blocks.filter(block => !checkpoint_updates.some(update => update.source_power === block.source_power && update.name === block.name)) } };
+      composed = await this.options.composer.compose(compose_input);
+      frozen = this.apply_frozen_system(composed);
+    }
     const request: SessionStepExecutionInput = {
       model,
       system: frozen.system,
@@ -309,6 +319,7 @@ export class StepInput {
               (output as unknown as SessionTurnContextHookValue)?.blocks,
             );
           } catch (error) {
+            if (error && typeof error === "object" && "code" in error && error.code === "SESSION_CONTEXT_REQUIRED") throw error;
             await this.log_power_hook_warning(
               SESSION_HOOK_POINTS.turn_context,
               error,
@@ -371,6 +382,26 @@ export class StepInput {
       this.frozen_blocks = resolve_composed_system_blocks(composed);
     }
     return this.frozen_blocks.map((block) => ({ ...block }));
+  }
+
+  /** 发送前安全检查点，完整替换已声明的同源块并保留原位置顺序。 */
+  private async refresh_context_snapshot(updates: readonly SessionHookContextBlock[]): Promise<void> {
+    const replacements = new Map<string, AgentSessionSystemBlock>();
+    for (const update of updates) {
+      const block = update.checkpoint_block;
+      if (!block || block.source !== "power" || !block.name.startsWith(`${update.source_power}/`)) throw new Error("Invalid required context checkpoint ownership");
+      if (replacements.has(block.name)) throw new Error("Duplicate context checkpoint replacement");
+      replacements.set(block.name, block);
+    }
+    const next = (this.frozen_blocks ?? []).map(block => {
+      const replacement = replacements.get(block.name);
+      if (!replacement) return block;
+      replacements.delete(block.name);
+      return { ...replacement, position: block.position };
+    });
+    if (replacements.size) throw new Error("Required context checkpoint has no frozen baseline; refresh the Session snapshot");
+    await this.write_snapshot(next);
+    this.frozen_blocks = next;
   }
 
   /** 基础 system 保持冻结；当前动态上下文统一追加，供请求和预览共用。 */
@@ -606,6 +637,7 @@ function normalize_power_context_blocks(input: unknown): SessionHookContextBlock
           .filter(Boolean)
       : [];
     const version = String(record.version || "").trim();
+    const checkpoint_block = normalize_power_system_blocks([record.checkpoint_block])[0];
     return [{
       source_power,
       name,
@@ -613,6 +645,7 @@ function normalize_power_context_blocks(input: unknown): SessionHookContextBlock
       trust_level: "reference" as const,
       ...(citations.length > 0 ? { citations } : {}),
       ...(version ? { version } : {}),
+      ...(checkpoint_block ? { checkpoint_block } : {}),
     }];
   });
 }

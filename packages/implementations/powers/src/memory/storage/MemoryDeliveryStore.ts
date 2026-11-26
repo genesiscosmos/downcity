@@ -23,7 +23,7 @@ export class MemoryDeliveryStore {
 
   /** 一次读取待检查订阅；权威修改仍在独立锁内完成。 */
   async list(): Promise<MemoryResultSubscription[]> {
-    return (await this.storage.list("subscriptions")).map((entry) => JSON.parse(entry.content) as MemoryResultSubscription);
+    return (await this.storage.list("records-v2/subscriptions")).map((entry) => JSON.parse(entry.content) as MemoryResultSubscription);
   }
 
   /** 单个订阅的检查、发送和确认在同一执行锁内完成，避免多实例重复工作。 */
@@ -42,6 +42,6 @@ export class MemoryDeliveryStore {
   /** 不接受模型提供的路径或任意文件名。 */
   private key(subscription_id: string): string {
     if (!/^[a-f0-9]{64}$/u.test(subscription_id)) throw new Error("Invalid Memory delivery ID");
-    return `subscriptions/${subscription_id}.json`;
+    return `records-v2/subscriptions/${subscription_id}.json`;
   }
 }

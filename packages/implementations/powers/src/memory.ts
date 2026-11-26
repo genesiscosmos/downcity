@@ -7,17 +7,17 @@
 export { MemoryPower } from "./memory/MemoryPower.js";
 export type { MemoryChange, MemoryChangeHandler } from "./memory/types/MemoryChange.js";
 export type { MemoryDreamOptions, MemoryDreamScope, MemoryDreamView, MemorySignalInput } from "./memory/types/MemoryDream.js";
-export { BuiltinMemoryProvider } from "./memory/providers/BuiltinMemoryProvider.js";
+export { BuiltinMemoryProvider } from "./memory/providers/MemoryRecordsProvider.js";
 export {
   FileMemoryStorageAdapter,
   get_default_file_memory_root_path,
 } from "./memory/adapters/FileMemoryStorageAdapter.js";
 export { MemoryStorageRouter } from "./memory/adapters/MemoryStorageRouter.js";
 export type {
+  MemoryKind, MemoryState, MemoryScope, MemoryScopeType, MemorySource, MemorySourceSelector, MemoryUpdateInput, MemoryWriteResult,
   MemoryActionPayload,
   MemoryDigestInput,
   MemoryForgetInput,
-  MemoryForgetResult,
   MemoryListItem,
   MemoryListInput,
   MemoryListResult,
@@ -32,36 +32,15 @@ export type {
   MemoryRecallResult,
   MemoryRecord,
   MemoryRememberInput,
-  MemoryRememberResult,
   MemoryReviseInput,
-  MemorySourceReference,
   MemoryStatusResult,
-  MemoryType,
-} from "./memory/types/Memory.js";
+} from "./memory/types/MemoryProtocol.js";
 export type {
   MemoryAccessContext,
   MemoryKnowledgeAccess,
   MemoryUserAccessContext,
-  MemoryOwner,
-  MemorySubject,
-  MemorySubjectKind,
-  MemoryWriteTarget,
 } from "./memory/types/MemoryAccess.js";
 export type {
-  MemoryMainviewForgetInput,
-  MemoryMainviewListItem,
-  MemoryMainviewListInput,
-  MemoryMainviewListResult,
-  MemoryMainviewMutationResult,
-  MemoryMainviewReadInput,
-  MemoryMainviewReadResult,
-  MemoryMainviewRememberInput,
-  MemoryMainviewReviseInput,
-  MemoryMainviewScopeInput,
-  MemoryMainviewScopeKind,
-} from "./memory/types/MemoryMainview.js";
-export type {
-  BuiltinMemoryProjectionDraft,
   BuiltinMemoryProviderOptions,
   BuiltinMemoryStorageFactory,
   DefaultFileMemoryRootInput,
@@ -70,11 +49,13 @@ export type {
 export type { MemoryJobView, MemoryJobDetail, MemoryJobChangeDetail, MemoryJobSourceExcerpt } from "./memory/types/MemoryJob.js";
 export type {
   MemoryChangeSet, MemoryCommitReceipt, MemoryCommitProvider,
-  MemoryVersionInput, MemoryVersionResult, MemoryVersionedRecord, MemoryValidity,
-} from "./memory/types/MemoryChangeSet.js";
-export { MemoryVersionConflictError } from "./memory/types/MemoryChangeSet.js";
-export { create_memory_import_changeset } from "./memory/runtime/MemoryCommit.js";
+  MemoryVersionInput, MemoryVersionResult,
+} from "./memory/types/MemoryTransaction.js";
+export { MemoryVersionConflictError } from "./memory/types/MemoryTransaction.js";
 export type {
   MemoryStorageAdapter,
   MemoryStorageEntry,
 } from "./memory/types/MemoryStorage.js";
+
+export { preview_memory_migration, memory_migration_preview_hash, publish_memory_migration } from "./memory/storage/MemoryMigration.js";
+export type { MemoryMigrationMaterial, MemoryMigrationCandidate, MemoryMigrationPreview, MemoryMigrationPublishInput, MemoryMigrationPreservation } from "./memory/types/MemoryMigration.js";

@@ -1,10 +1,10 @@
 /**
- * Agent 私有与 City 共享 Memory Store 的物理路由 Adapter。
+ * User、Agent 与 Workspace Memory Store 的物理路由 Adapter。
  *
  * 关键点（中文）
- * - Provider 只看到一个带 subject 前缀的逻辑 key 空间，物理布局对它不可见。
+ * - Provider 只看到一个带范围前缀的逻辑 key 空间，物理布局对它不可见。
  * - Agent key 去往 `agents/<agent_id>/memory`，按 agent_id 懒加载并初始化独立 Adapter。
- * - City key 去往共享根 `powers/memory`，去掉前缀后与底层 key 完全一致。
+ * - Workspace key 去往共享根 `powers/memory/workspaces/<hex>`，物理布局保持稳定。
  * - Router 不理解 Memory 内容、权限或召回，只负责确定性的双向映射。
  */
 
@@ -13,15 +13,9 @@ import type {
   MemoryStorageEntry,
 } from "@/memory/types/MemoryStorage.js";
 
-/** Agent 私有根与共享根共有的命名空间。 */
-const COMMON_NAMESPACES = ["wiki", "evidence"] as const;
-
-/** Agent 私有根独有的命名空间。 */
-const AGENT_ONLY_NAMESPACE = "capture-jobs";
-
 /** MemoryStorageRouter constructor 参数。 */
 export interface MemoryStorageRouterOptions {
-  /** 跨 Agent 共享的 City Memory Store。 */
+  /** 承载 Workspace 范围的共享 Memory Store。 */
   shared_storage: MemoryStorageAdapter;
 
   /** 平台唯一使用者的独立 memory 目录。 */
@@ -31,7 +25,7 @@ export interface MemoryStorageRouterOptions {
   create_agent_storage: (agent_id: string) => MemoryStorageAdapter;
 }
 
-/** 把 Agent 私有根与共享根暴露为一个带 subject 前缀的逻辑 key 空间。 */
+/** 把 Agent 私有根与共享根暴露为一个带范围前缀的逻辑 key 空间。 */
 export class MemoryStorageRouter implements MemoryStorageAdapter {
   /** Router 稳定名称。 */
   readonly name = "owner-router";
@@ -39,7 +33,7 @@ export class MemoryStorageRouter implements MemoryStorageAdapter {
   /** 跨 Agent 共享 Store。 */
   private readonly shared_storage: MemoryStorageAdapter;
 
-  /** 本地 User Store，与 City 共享目录分离。 */
+  /** 本地 User 独立 Store。 */
   private readonly user_storage: MemoryStorageAdapter;
 
   /** Agent 私有 Store 工厂。 */
@@ -69,6 +63,12 @@ export class MemoryStorageRouter implements MemoryStorageAdapter {
     return await route.storage.has(route.inner_key);
   }
 
+  /** 探针直达完整物理前缀，不使用只枚举部分命名空间的 list 路径。 */
+  async has_entries(prefix: string): Promise<boolean> {
+    const route = await this.resolve_route(prefix);
+    return await route.storage.has_entries(route.inner_key.replace(/\/$/u, ""));
+  }
+
   /** 读取一个完整逻辑 key。 */
   async read(key: string): Promise<string | null> {
     const route = await this.resolve_route(key);
@@ -84,14 +84,12 @@ export class MemoryStorageRouter implements MemoryStorageAdapter {
   /** 枚举一个逻辑前缀下的条目，并把底层 key 还原为完整逻辑 key。 */
   async list(prefix: string): Promise<MemoryStorageEntry[]> {
     const route = await this.resolve_route(prefix);
-    const collected = (await Promise.all(route.list_namespaces.map(async (namespace) => {
-      const entries = await route.storage.list(namespace);
-      return entries.map((entry) => ({
-        key: route.outer_prefix ? `${route.outer_prefix}/${entry.key}`
-          : entry.key.replace(/^users\//u, "user/").replace(/^workspaces\//u, "workspace/"),
-        content: entry.content,
-      }));
-    }))).flat();
+    const collected = (await route.storage.list(route.inner_key)).map((entry) => {
+      const physical_prefix = route.inner_prefix ? `${route.inner_prefix}/` : "";
+      if (!entry.key.startsWith(physical_prefix)) throw new Error("Memory list entry escapes physical scope");
+      const relative_key = entry.key.slice(physical_prefix.length);
+      return { key: `${route.outer_prefix}/${relative_key}`, content: entry.content };
+    });
     return collected.sort((left, right) => left.key.localeCompare(right.key));
   }
 
@@ -121,54 +119,20 @@ export class MemoryStorageRouter implements MemoryStorageAdapter {
   /** 解析完整逻辑 key 的物理归属与双向映射。 */
   private async resolve_route(key: string): Promise<ResolvedMemoryRoute> {
     const segments = normalize_key(key).split("/");
-    if (segments[0] === "agent") {
-      const agent_id = normalize_segment(segments[1] || "");
-      const relative = segments.slice(2);
+    const scope = segments[0];
+    const scope_id = normalize_segment(segments[1] || "");
+    const relative_key = segments.slice(2).join("/");
+    if (scope === "agent" || scope === "user" || scope === "workspace") {
+      const inner_prefix = scope === "workspace" ? `workspaces/${scope_id}` : "";
       return {
-        storage: await this.require_agent_storage(agent_id),
-        inner_key: relative.join("/"),
-        list_namespaces: relative.length === 0
-          ? [...COMMON_NAMESPACES, AGENT_ONLY_NAMESPACE]
-          : [relative[0] || ""],
-        outer_prefix: `agent/${agent_id}`,
+        storage: scope === "agent" ? await this.require_agent_storage(scope_id)
+          : scope === "user" ? this.user_storage : this.shared_storage,
+        inner_key: [inner_prefix, relative_key].filter(Boolean).join("/"),
+        inner_prefix,
+        outer_prefix: `${scope}/${scope_id}`,
       };
     }
-    if (segments[0] === "user") {
-      const subject_id = normalize_segment(segments[1] || "");
-      const relative = segments.slice(2);
-      return {
-        storage: this.user_storage,
-        inner_key: relative.join("/"),
-        list_namespaces: relative.length === 0 ? [...COMMON_NAMESPACES] : [relative[0]!],
-        outer_prefix: `user/${subject_id}`,
-      };
-    }
-    if (segments[0] === "workspace") {
-      const subject_id = normalize_segment(segments[1] || "");
-      const namespace = "workspaces";
-      const relative = segments.slice(2);
-      const base = `${namespace}/${subject_id}`;
-      return {
-        storage: this.shared_storage,
-        inner_key: `${base}/${relative.join("/")}`,
-        list_namespaces: relative.length === 0
-          ? COMMON_NAMESPACES.map((item) => `${base}/${item}`)
-          : [`${base}/${relative[0]}`],
-        outer_prefix: "",
-      };
-    }
-    if (segments[0] === "city") {
-      const relative = segments.slice(1);
-      return {
-        storage: this.shared_storage,
-        inner_key: relative.join("/"),
-        list_namespaces: relative.length === 0
-          ? [...COMMON_NAMESPACES]
-          : [relative[0] || ""],
-        outer_prefix: "city",
-      };
-    }
-    throw new Error(`Unsupported Memory subject key: ${key}`);
+    throw new Error(`Unsupported Memory scope key: ${key}`);
   }
 
   /** 返回指定 Agent 已经初始化完成的私有 Store。 */
@@ -195,8 +159,8 @@ interface ResolvedMemoryRoute {
   /** 发送到底层 Store 的内部 key。 */
   inner_key: string;
 
-  /** 枚举时需要列出的底层命名空间。 */
-  list_namespaces: string[];
+  /** 当前范围在底层 Store 的物理根前缀，User 与 Agent 使用空前缀。 */
+  inner_prefix: string;
 
   /** 把底层条目 key 还原为完整逻辑 key 时使用的前缀。 */
   outer_prefix: string;
@@ -204,17 +168,17 @@ interface ResolvedMemoryRoute {
 
 /** 限制单个逻辑路径段。 */
 function normalize_segment(value: string): string {
-  const segment = String(value || "").trim();
+  const segment = value;
   if (!segment || !/^[A-Za-z0-9_-]+$/u.test(segment)) {
-    throw new Error(`Invalid Memory owner segment: ${value}`);
+    throw new Error(`Invalid Memory scope segment: ${value}`);
   }
   return segment;
 }
 
-/** 规范化 Router 逻辑 key。 */
+/** 严格校验 Router 逻辑 key（范围前缀与内部路径均可）。 */
 function normalize_key(value: string): string {
-  const key = String(value || "").replace(/\\/g, "/").replace(/^\/+/, "").trim();
-  if (!key || key.split("/").some((segment) => !segment || segment === "." || segment === "..")) {
+  const key = value;
+  if (!key || /[\\\s]/u.test(key) || key.split("/").some((segment) => !segment || segment === "." || segment === "..")) {
     throw new Error(`Invalid Memory router key: ${value}`);
   }
   return key;

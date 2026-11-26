@@ -50,10 +50,10 @@ export class MemoryDreaming {
 
   /** 校验宿主真实 Agent/Workspace，不允许存储正文扩大执行身份。 */
   async assert_scope(scope: MemoryDreamScope): Promise<void> {
-    if (scope.target !== "agent" && scope.target !== "current_workspace") throw new Error("Automatic memory requires Agent or Workspace knowledge scope");
+    if (scope.scope !== "agent" && scope.scope !== "workspace") throw new Error("Automatic memory requires Agent or Workspace knowledge scope");
     if (!(await this.host.system.list_agents()).some((agent) => agent.agent_id === scope.agent_id)) throw new Error("Unknown dream Agent");
     if (scope.workspace_id && !(await this.host.system.list_workspaces()).some((workspace) => workspace.workspace_id === scope.workspace_id)) throw new Error("Unknown dream Workspace");
-    if (scope.target === "current_workspace" && !scope.workspace_id) throw new Error("Workspace dream requires an explicit Workspace");
+    if (scope.scope === "workspace" && !scope.workspace_id) throw new Error("Workspace dream requires an explicit Workspace");
   }
 
   /** 明确纠错由宿主管理输入调用，接收不意味着已经提炼或提交。 */
@@ -82,8 +82,8 @@ export class MemoryDreaming {
     for (const scope of scopes) {
       if (!agent_ids.has(scope.agent_id)) continue;
       if (scope.workspace_id !== undefined && !workspace_ids.has(scope.workspace_id)) continue;
-      if (scope.target !== "agent" && scope.target !== "current_workspace") continue;
-      if (scope.target === "current_workspace" && !scope.workspace_id) continue;
+      if (scope.scope !== "agent" && scope.scope !== "workspace") continue;
+      if (scope.scope === "workspace" && !scope.workspace_id) continue;
       const ledger = await this.store.read(scope);
       if (!ledger.enabled) continue;
       const last_error = this.source_error ?? ledger.last_error;
@@ -98,10 +98,10 @@ export class MemoryDreaming {
 
   /** 可信宿主按原 Job 找到本 City 的准确批次，再沿原重试入口执行预算和冷却检查。 */
   async retry_job(job: MemoryJob): Promise<MemoryJobView> {
-    if (job.kind !== "dream" || job.mode !== "knowledge" || job.target === "user") {
+    if (job.kind !== "dream" || job.memory_kind !== "knowledge" || job.scope === "user") {
       throw new Error("Invalid automatic memory Job");
     }
-    const scope: MemoryDreamScope = { agent_id: job.access.agent_id, workspace_id: job.access.workspace_id, target: job.target };
+    const scope: MemoryDreamScope = { agent_id: job.access.agent_id, workspace_id: job.access.workspace_id, scope: job.scope };
     await this.assert_scope(scope);
     const batch = (await this.store.read(scope)).batches.find((item) => item.job_id === job.job_id && item.owner_id === this.owner_id);
     if (!batch) throw new Error("Dream batch belongs to another City or does not exist");

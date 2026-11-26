@@ -33,6 +33,10 @@ export const action_sentences: Readonly<Record<string, Record<PowerActivityDescr
     failed: ["未能记住", "Could not remember this"],
     waiting: ["等待你允许记住这些内容", "Waiting for permission to remember this"],
   },
+  "update": {
+    running: ["正在保存修改", "Saving changes"], complete: ["已保存修改", "Changes saved"],
+    failed: ["未能保存修改", "Could not save changes"], waiting: ["等待允许保存修改", "Waiting to save changes"],
+  },
   "digest": {
     running: ["正在整理会话中的记忆", "Organizing memories from the conversation"],
     complete: ["已安排会话记忆整理", "Scheduled conversation memory processing"],
@@ -102,6 +106,6 @@ export const preparing_sentence: readonly [string, string] = ["正在准备整�
 export function memory_completion_sentence(kind: string): readonly [string, string] {
   if (kind === "remember") return ["已记住", "Remembered"];
   if (kind === "digest") return ["已整理会话记忆", "Organized conversation memories"];
-  if (kind === "profile_optimize" || kind === "optimize") return ["已整理长期记忆", "Organized long-term memories"];
+  if (kind === "optimize") return ["已整理长期记忆", "Organized long-term memories"];
   return ["已更新记忆", "Updated memory"];
 }

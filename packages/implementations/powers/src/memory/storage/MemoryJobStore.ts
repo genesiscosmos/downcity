@@ -3,13 +3,14 @@ import { is_model_reference } from "@downcity/type";
 import { createHash } from "node:crypto";
 import path from "node:path";
 import { with_memory_scope_lock } from "./MemoryScopeLock.js";
+import { canonical_memory_json } from "./MemoryRecordStore.js";
 import { FileMemoryStorageAdapter } from "../adapters/FileMemoryStorageAdapter.js";
 import type { MemoryJob, MemoryJobInput } from "../types/MemoryJob.js";
 
 /** 在写入之前计算请求身份，允许先持久化完成反馈订阅以封闭崩溃窗口。 */
 export function memory_job_identity(input: MemoryJobInput): string {
   return createHash("sha256").update(JSON.stringify([
-    input.access.agent_id, input.access.workspace_id, input.target, input.mode, input.kind, input.request_key,
+    input.access.agent_id, input.access.workspace_id, input.scope, input.memory_kind, input.kind, input.request_key,
   ])).digest("hex");
 }
 
@@ -30,7 +31,7 @@ export class MemoryJobStore {
   /** 校验并解析固定格式的 Job 地址。 */
   private key(job_id: string): string {
     if (!/^[a-f0-9]{64}$/u.test(job_id)) throw new Error("Invalid Memory Job ID");
-    return `jobs/${job_id}.json`;
+    return `records-v2/jobs/${job_id}.json`;
   }
 
   /** 以请求范围和请求键收敛重复提交。 */
@@ -41,8 +42,10 @@ export class MemoryJobStore {
     return await this.serial(async () => {
       const existing = await this.read(job_id);
       if (existing) {
-        const fingerprint = (value: MemoryJobInput) => JSON.stringify({ kind: value.kind, instruction: value.instruction,
-          access: { agent_id: value.access.agent_id, workspace_id: value.access.workspace_id }, target: value.target, mode: value.mode, sources: value.sources, memory_id: value.memory_id });
+        const fingerprint = (value: MemoryJobInput) => canonical_memory_json({ kind: value.kind, instruction: value.instruction,
+          access: { agent_id: value.access.agent_id, workspace_id: value.access.workspace_id }, scope: value.scope, memory_kind: value.memory_kind,
+          memory_id: value.memory_id, expected_version: value.expected_version, inventory: value.inventory, input_scope_version: value.input_scope_version,
+          sources: value.sources.map(source => ({ ...source, bound_source: source.bound_source ? { ...source.bound_source, captured_at: undefined } : undefined })) });
         if (fingerprint(existing) !== fingerprint(input)) throw new Error("Memory request key reused with different input");
         return existing;
       }
@@ -65,7 +68,7 @@ export class MemoryJobStore {
 
   /** 原子替换一个已存在 Job，身份与来源不能经此路径改写。 */
   async update(job_id: string, change: Partial<Pick<MemoryJob,
-    "status" | "attempt" | "session_id" | "turn_id" | "scope_version" | "changes" | "change_details" | "profile_version" | "profile_edits" | "skip_reason" | "memory_ids" | "error"
+    "status" | "attempt" | "session_id" | "turn_id" | "scope_version" | "changes" | "change_details" | "skip_reason" | "memory_ids" | "error"
   >>): Promise<MemoryJob> {
     return await this.serial(async () => {
       const job = await this.read(job_id);
@@ -77,18 +80,18 @@ export class MemoryJobStore {
   }
 
   /** 在同一账本锁内检查执行身份并暂存唯一结果，拒绝并行工具互相覆盖。 */
-  async stage(job_id: string, session_id: string, outcome: Pick<MemoryJob, "changes" | "change_details" | "profile_version" | "profile_edits" | "skip_reason">): Promise<void> {
+  async stage(job_id: string, session_id: string, outcome: Pick<MemoryJob, "changes" | "change_details" | "skip_reason">): Promise<void> {
     await this.serial(async () => {
       const job = await this.read(job_id);
       if (!job || job.session_id !== session_id || job.status !== "running") throw new Error("Memory Job is no longer running in this Session");
-      if (job.changes || job.profile_edits || job.skip_reason) throw new Error("Memory Job already has a staged outcome");
+      if (job.changes || job.skip_reason) throw new Error("Memory Job already has a staged outcome");
       await this.storage.write(this.key(job_id), JSON.stringify({ ...job, ...outcome, updated_at: new Date().toISOString() }));
     });
   }
 
   /** 扫描持久化状态，供恢复及经过范围过滤的管理入口使用。 */
   async list(): Promise<MemoryJob[]> {
-    return (await this.storage.list("jobs")).map((entry) => JSON.parse(entry.content) as MemoryJob)
+    return (await this.storage.list("records-v2/jobs")).map((entry) => JSON.parse(entry.content) as MemoryJob)
       .sort((left, right) => right.created_at.localeCompare(left.created_at));
   }
 

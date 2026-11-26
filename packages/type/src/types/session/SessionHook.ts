@@ -22,6 +22,8 @@ export interface SessionHookContextBlock {
   citations?: string[];
   /** 当前内容块的可选来源版本，用于审计和恢复。 */
   version?: string;
+  /** 预算不足时可在发送前检查点替换的完整同 Power 冻结块；由宿主提供，不能修改其他来源。 */
+  checkpoint_block?: SessionSystemBlock;
 }
 
 /** 当前 Turn 中一条 canonical User Message 的只读文本投影。 */

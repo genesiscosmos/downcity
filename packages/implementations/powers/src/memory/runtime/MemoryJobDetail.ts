@@ -4,9 +4,8 @@
  * 运行恢复后若内存快照不存在，模型必须重新读取，不能把当前值冒充旧值。
  */
 import { z } from "zod";
-import type { MemoryRecord } from "../types/Memory.js";
+import type { MemoryRecord } from "../types/MemoryProtocol.js";
 import type { MemoryJob, MemoryJobChangeDetail, MemoryJobContentSnapshot, MemoryJobSourceExcerpt } from "../types/MemoryJob.js";
-import type { ProfileDocument } from "../types/Profile.js";
 
 /** 模型只能引用输入包内真实存在的连续原文；宿主另行核验出处。 */
 export const memory_source_excerpt_schema = z.object({
@@ -40,12 +39,7 @@ export class MemoryJobSnapshotCache {
   /** 固定 memory_read 实际返回的知识正文，不接收模型提供的旧值。 */
   capture_memory(job: MemoryJob, memory: MemoryRecord): void {
     if (!memory.version) return;
-    this.capture(job, memory.memory_id, { content: memory.content, version: memory.version, validity: memory.validity ?? "active" });
-  }
-
-  /** 固定 memory_sources 实际返回的完整 Profile，供精确编辑匹配。 */
-  capture_profile(job: MemoryJob, profile: ProfileDocument): void {
-    this.capture(job, "profile", { content: profile.content, version: profile.version });
+    this.capture(job, memory.memory_id, { content: memory.content, kind: memory.kind, ...(memory.kind === "knowledge" ? { title: memory.title } : {}), version: memory.version, state: memory.state });
   }
 
   /** 只取当前尝试曾读取的指定版本；缓存缺失时禁止退回当前版本。 */

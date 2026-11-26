@@ -18,9 +18,9 @@ interface MemoryJobChangesProps {
 const TEXT_PAGE_SIZE = 1800;
 const SOURCE_PAGE_SIZE = 3;
 const OPERATION_LABELS: Record<MemoryJobChangeDetail["operation"], string> = {
-  create: "新增知识", update: "更新知识", invalidate: "使知识失效", profile_edit: "编辑核心记忆",
+  create: "新增", update: "更新", invalidate: "撤销", delete: "删除",
 };
-const ROLE_LABELS = { user: "用户原文", agent: "Agent 原文", request: "显式请求原文" };
+const ROLE_LABELS = { user: "用户原文", agent: "Agent 原文", request: "显式请求原文", tool: "工具原文", unknown: "历史来源" };
 
 /** 逐条查看暂存或已提交的差异，成功状态之外均不宣称保存生效。 */
 export function memory_job_changes({ detail, ui }: MemoryJobChangesProps) {
@@ -61,12 +61,12 @@ export function memory_job_changes({ detail, ui }: MemoryJobChangesProps) {
       <Status>{Math.min(change_index + 1, detail.changes.length)} / {detail.changes.length}</Status>
       <Button disabled={change_index + 1 >= detail.changes.length} on_click={() => select_change(change_index + 1)}>下一条差异</Button>
     </Inline>
-    <Row label={OPERATION_LABELS[change.operation]} description={change.topic}
+    <Row label={OPERATION_LABELS[change.operation]} description={change.label}
       trailing={<Status tone={committed ? "success" : "muted"}>{committed ? "已提交差异" : "未确认生效"}</Status>} />
     {change.memory_id ? <Row label="知识 ID" description={change.memory_id} /> : null}
     {change.expected_version ? <Row label="实际读取版本" description={change.expected_version} /> : null}
     <Row label="快照读取时间" description={change.captured_at} />
-    {change.operation === "profile_edit" ? <Callout tone="default">前后内容仅展示精确编辑区域，版本对应当时读取的完整 Profile。</Callout> : null}
+    {false ? <Callout tone="default">前后内容仅展示精确编辑区域，版本对应当时读取的完整 Profile。</Callout> : null}
     {change.operation === "invalidate" ? <Callout tone="default">此操作保留正文并将知识标记为失效，因此前后正文可能相同。</Callout> : null}
     {change.before === null ? <Row label="变更前" description="新增记录，没有旧正文。" />
       : render_snapshot(ui, "变更前", before, current_before_offset, set_before_offset, prefix, before.length - suffix)}
